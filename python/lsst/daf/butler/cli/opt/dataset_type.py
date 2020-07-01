@@ -26,6 +26,19 @@ from ..utils import MWOption, split_commas
 
 
 class dataset_type_option:  # noqa: N801
+    """A decorator that adds a datsety-type option to a click command.
+
+    Parameters
+    ----------
+    help : `str`, optional
+        The help text to use for the option.
+    multiple : `bool`, optional
+        If true, multiple instances of the option may be passed in on the
+        command line, by default False.
+    required : bool, optional
+        If True, the option is required to be passed in on the command line, by
+        default False.
+    """
 
     defaultHelp = "Dataset types(s)"
 

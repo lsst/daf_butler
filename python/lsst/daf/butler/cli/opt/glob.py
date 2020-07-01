@@ -26,13 +26,26 @@ from ..utils import addArgumentHelp, MWOption, split_commas, ParameterType, text
 
 class glob_parameter:  # noqa: N801
     """Decorator to add an glob option or argument to a click command.
+
+    Parameters
+    ----------
+    help : `str`, optional
+        The help text to use for the option.
+    multiple : `bool`, optional
+        If True, multiple instances of the option may be passed in on the
+        command line, by default False.
+    parameterType : `ParameterType`, optional
+        Indicates if the decorator should add a `click.Argument` or a
+        `click.Option`, by default ParameterType.OPTION
+    required : bool, optional
+        If True, the option is required to be passed in on the command line, by
+        default False.
     """
 
     defaultHelp = "GLOB is a string to apply to the search."
     defaultHelpMultiple = "GLOB is one or more strings to apply to the search."
 
-    def __init__(self, parameterType=ParameterType.OPTION, required=False, help=defaultHelp,
-                 multiple=False):
+    def __init__(self, help=defaultHelp, multiple=False, parameterType=ParameterType.OPTION, required=False):
         self.help = help
         self.callback = split_commas if multiple else None
         self.multiple = multiple

@@ -53,27 +53,26 @@ class CliFactory:
         determine if the option should be initialzied with a `parameterType`
         keyword argument, and sets it accordingly (`ParameterType.OPTION` is
         the standard default for parameters so this only sets it for
-        `ARGUMENT`)
+        `ARGUMENT`).
 
         Parameters
         ----------
         optTestBase : `OptTestBase` subclass
             The test being executed.
-        parameterKwargs : `dict` [`str`: `Any`], optional
+        parameterKwargs : `dict` [`str`, `Any`], optional
             A list of keyword arguments to pass to the parameter (Argument or
             Option) constructor.
-        cmdInitKwArgs : `dict` [`str`: `Any`], optional
+        cmdInitKwArgs : `dict` [`str`, `Any`], optional
             A list of keyword arguments to pass to the command constructor.
 
         Returns
         -------
-        cli : a click.Command function.
-            A click command function that can be invoked by the click test
-            invoker.
+        cli : a click.Command.
+            A click command that can be invoked by the click test invoker.
         """
         cliArgs = copy.copy(parameterKwargs) if parameterKwargs is not None else {}
-        if 'parameterType' not in cliArgs and optTestBase.isArgument and optTestBase.isParameter:
-            cliArgs['parameterType'] = ParameterType.ARGUMENT
+        if "parameterType" not in cliArgs and optTestBase.isArgument and optTestBase.isParameter:
+            cliArgs["parameterType"] = ParameterType.ARGUMENT
 
         if cmdInitKwArgs is None:
             cmdInitKwArgs = {}
@@ -95,7 +94,7 @@ class CliFactory:
         determine if the option should be initialzied with a `parameterType`
         keyword argument, and sets it accordingly (`ParameterType.OPTION` is
         the standard default for parameters so this only sets it for
-        `ARGUMENT`)
+        `ARGUMENT`).
 
         Parameters
         ----------
@@ -103,11 +102,11 @@ class CliFactory:
             The test being executed.
         expectedArgs : `list [`Any`], optional
             A list of arguments the mock is expected to be called with, by
-            default None
-        expectedKwargs : `dict` [`str`: `Any`], optional
+            default None.
+        expectedKwargs : `dict` [`str`, `Any`], optional
             A list of keyword arguments the mock is expected to be called with,
-            by default None
-        parameterKwargs : `dict` [`str`: `Any`], optional
+            by default None.
+        parameterKwargs : `dict` [`str`, `Any`], optional
             A list of keyword arguments to pass to the parameter (Argument or
             Option) constructor.
 
@@ -117,8 +116,8 @@ class CliFactory:
             The helper object.
         """
         cliArgs = copy.copy(parameterKwargs) if parameterKwargs is not None else {}
-        if 'parameterType' not in cliArgs and optTestBase.isArgument and optTestBase.isParameter:
-            cliArgs['parameterType'] = ParameterType.ARGUMENT
+        if "parameterType" not in cliArgs and optTestBase.isArgument and optTestBase.isParameter:
+            cliArgs["parameterType"] = ParameterType.ARGUMENT
 
         helper = MockCliTestHelper(mock=MagicMock(),
                                    expectedArgs=expectedArgs,
@@ -174,13 +173,12 @@ class OptTestBase(abc.ABC):
     @abc.abstractmethod
     def optionName(self):
         """The option name, matches the option flag that appears on the command
-        line
-        """
+        line."""
         pass
 
     @property
     def shortOptionName(self):
-        """The short option flag that can be used on the command line
+        """The short option flag that can be used on the command line.
 
         Returns
         -------
@@ -211,7 +209,7 @@ class OptTestBase(abc.ABC):
         values : `list` [`str`]
             A list of values, each item in the list will be passed to the
             command with an option flag. Items in the list may be
-            comma-separated, e.g. ["foo", "bar,baz"]
+            comma-separated, e.g. ["foo", "bar,baz"].
         """
         # This return value matches the value returned by
         # expectedMultipleValues.
@@ -220,14 +218,14 @@ class OptTestBase(abc.ABC):
     @property
     def optionMultipleKeyValues(self):
         """The values to pass for the option flag when calling a test command
-        with multiple key-value inputs"""
+        with multiple key-value inputs."""
         return ["one=two,three=four", "five=six"]
 
     @property
     def expectedVal(self):
         """The expected value to receive in the command function. Typically
         that value is printed to stdout and compared with this value. By
-        default returns the same value as `self.optionValue`"""
+        default returns the same value as `self.optionValue`."""
         if self.isChoice:
             return self.expectedChoiceValues[0]
         return self.optionValue
@@ -247,7 +245,7 @@ class OptTestBase(abc.ABC):
         Returns
         -------
         expectedValues : `list` [`str`]
-            A list of expected values, e.g. ["foo", "bar", "baz"]
+            A list of expected values, e.g. ["foo", "bar", "baz"].
         """
         # This return value matches the value returned by optionMultipleValues.
         return ("foo", "bar", "baz")
@@ -304,7 +302,7 @@ class OptTestBase(abc.ABC):
     def makeInputs(self, optionFlag, values=None):
         """Make the input arguments for a CLI invocation, taking into account
         if the parameter is an Option (use option flags) or an Argument (do not
-        use option flags)
+        use option flags).
 
         Parameters
         ----------
@@ -342,7 +340,7 @@ class OptTestBase(abc.ABC):
         Parameters
         ----------
         cmd : click.Command
-            The command function to call
+            The command function to call.
         args : [`str`]
             The arguments to pass to the function call.
 
@@ -359,14 +357,14 @@ class OptTestBase(abc.ABC):
         verifyFunc(result, verifyArgs)
 
     def verifyCalledWith(self, result, mockInfo):
-        """Verify the command function has been called with specified arguments
-        """
+        """Verify the command function has been called with specified
+        arguments."""
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         mockInfo.mock.assert_called_with(*mockInfo.expectedArgs, **mockInfo.expectedKwargs)
 
     def verifyError(self, result, expectedMsg):
         """Verify the command failed with a non-zero exit code and an expected
-        output message. """
+        output message."""
         self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn(expectedMsg, result.stdout)
 
@@ -449,7 +447,7 @@ class OptMultipleTest(OptTestBase):
     """A mixin that tests an option accepts multiple inputs which may be
     comma separated."""
 
-    # no need to test multiple=False, this gets tested with the 'required'
+    # no need to test multiple=False, this gets tested with the "required"
     # test case.
 
     def test_forMultiple(self):
@@ -465,7 +463,7 @@ class OptMultipleTest(OptTestBase):
                       helper)
 
     def test_forMultiple_defaultSingle(self):
-        """Test that the option's 'multiple' argument defaults to False"""
+        """Test that the option's 'multiple' argument defaults to False."""
         helper = CliFactory.mocked(self,
                                    expectedKwargs={self.optionKey: self.optionValue})
 
@@ -507,7 +505,7 @@ class OptSplitKeyValueTest(OptTestBase):
 
 
 class OptRequiredTest(OptTestBase):
-    """A mixin that tests that an option that accepts a 'required' argument
+    """A mixin that tests that an option that accepts a "required" argument
     and handles that argument correctly.
     """
 
@@ -558,7 +556,7 @@ class OptRequiredTest(OptTestBase):
 
 
 class OptPathTypeTest(OptTestBase):
-    """A mixin that tests options that have `type=click.Path`
+    """A mixin that tests options that have `type=click.Path`.
     """
 
     @staticmethod
@@ -570,8 +568,8 @@ class OptPathTypeTest(OptTestBase):
         ----------
         testObj : `OptTestBase` instance
             The `OptTestBase` subclass that is running the test.
-        testFunc : A callable function that takes no args.
-            The function that executes the test.
+        testFunc : callable
+            The function that executes the test, takes no arguments.
         """
         with testObj.runner.isolated_filesystem():
             if testObj.valueType.exists:
@@ -630,7 +628,7 @@ class OptHelpTest(OptTestBase):
 
     def test_help_optionMetavar(self):
         """Test that a specified metavar prints correctly in the help output
-        for Options. """
+        for Options."""
 
         # For now only run on test cases that define the metavar to test.
         # This could be expanded to get the raw metavar out of the parameter
@@ -671,14 +669,14 @@ class OptHelpTest(OptTestBase):
                 expected = f"{expected} {self.metavar}{' ...' if multiple else ''}"
             parameterKwargs = parameterKwargs = dict(required=required)
             if multiple is not None:
-                parameterKwargs['multiple'] = multiple
-            if 'metavar' in supportedInitArgs:
-                parameterKwargs['metavar'] = self.metavar
+                parameterKwargs["multiple"] = multiple
+            if "metavar" in supportedInitArgs:
+                parameterKwargs["metavar"] = self.metavar
             self.run_test(CliFactory.noOp(self, parameterKwargs=parameterKwargs),
                           ["--help"],
                           self._verify_forHelp,
                           expected)
 
-        for required in (False, True) if 'required' in supportedInitArgs else (None,):
-            for multiple in (False, True) if 'multiple' in supportedInitArgs else (None,):
+        for required in (False, True) if "required" in supportedInitArgs else (None,):
+            for multiple in (False, True) if "multiple" in supportedInitArgs else (None,):
                 doTest(required, multiple)

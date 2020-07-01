@@ -30,14 +30,14 @@ class repo_argument:  # noqa: N801
 
     Parameters
     ----------
-    required : bool, optional
-        Indicates if the caller must pass this argument to the command, by
-        default True.
     help : str, optional
         The help text for this argument to append to the command's help text.
         If None or '' then nothing will be appended to the help text (in which
         case the command should document this argument directly in its help
         text). By default the value of repo_argument.existing_repo.
+    required : bool, optional
+        Indicates if the caller must pass this argument to the command, by
+        default True.
     """
 
     will_create_repo = "REPO is the URI or path to the new repository. " \

@@ -27,31 +27,26 @@ from ...core.utils import iterable
 
 
 class log_level_option:  # noqa: N801
+    """A decorator to add a log_level option to a click.Command.
 
-    defaultHelp = "The Python log level to use."
+    Parameters
+    ----------
+    help : str, optional
+        The help text to use, by default defaultHelp
+    defaultValue : str, optional
+        The default value to use if this option is not required. By default
+        `log_level_option.defaultValue`.
+    required : bool, optional
+        If true then the caller must pass this option when calling the
+        command. By default False.
+    """
 
-    # the default default value
-    defaultValue = "WARNING"
-
-    # the allowed values
     choices = ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
-
+    defaultHelp = "The Python log level to use."
+    defaultValue = "WARNING"
     optionKey = "log_level"
 
-    def __init__(self, help=defaultHelp, required=False, defaultValue=defaultValue):
-        """A decorator to add a log_level option to a click.Command.
-
-        Parameters
-        ----------
-        help : str, optional
-            The help text to use, by default defaultHelp
-        required : bool, optional
-            If true then the caller must pass this option when calling the
-            command. By default False
-        defaultValue : str, optional
-            The default value to use if this option is not required. By default
-            `log_level_option.defaultValue`
-        """
+    def __init__(self, defaultValue=defaultValue, help=defaultHelp, required=False):
         self.help = help
         self.isEager = True
         self.multiple = True

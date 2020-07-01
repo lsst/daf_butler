@@ -25,17 +25,17 @@ from ..utils import MWOption
 
 
 class long_log_option:  # noqa: N801
+    """A decorator to add a long_log option to a click.Command.
+
+    Parameters
+    ----------
+    help : `str`, optional
+        The help text to use for the option.
+    """
 
     defaultHelp = "Make log messages appear in long format."
 
     def __init__(self, help=defaultHelp):
-        """A decorator to add a long_log option to a click.Command.
-
-        Parameters
-        ----------
-        help : str, optional
-            The help text to use, by default defaultHelp
-        """
         self.help = help
 
     def __call__(self, f):

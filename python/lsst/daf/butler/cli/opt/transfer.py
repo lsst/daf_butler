@@ -27,9 +27,20 @@ allowed_types = ["auto", "link", "symlink", "hardlink", "copy", "move", "relsyml
 
 
 class transfer_option:  # noqa: N801
-    def __init__(self, required=False, help=None):
-        self.required = required
+    """A decorator to add a transfer option to a click.Command.
+
+    Parameters
+    ----------
+    help : `str`, optional
+        The help text to use for the option.
+    required : bool, optional
+        If True, the option is required to be passed in on the command line, by
+        default False.
+    """
+
+    def __init__(self, help=None, required=False):
         self.help = "The external data transfer mode." if help is None else help
+        self.required = required
 
     def __call__(self, f):
         return click.option("-t", "--transfer", cls=MWOption,
