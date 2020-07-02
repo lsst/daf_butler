@@ -32,6 +32,7 @@ from lsst.daf.butler.cli.utils import clickResultMsg, split_kv
 
 
 class SplitKvTestCase(unittest.TestCase):
+    """Tests that call split_kv directly."""
 
     def test_single(self):
         self.assertEqual(split_kv("context", "param", "first=1"), {"first": "1"})
@@ -65,27 +66,34 @@ class SplitKvTestCase(unittest.TestCase):
         self.assertEqual(split_kv("context", "param", "first-1,second-2", separator="-"),
                          {"first": "1", "second": "2"})
 
+
+class SplitKvCmdTestCase(unittest.TestCase):
+    """Tests using split_kv with a command."""
+
+    def setUp(self):
+        self.runner = click.testing.CliRunner()
+
     def test_cli(self):
+        mock = MagicMock()
         @click.command()
         @click.option("--value", callback=split_kv, multiple=True)
         def cli(value):
-            click.echo(value)
-        runner = click.testing.CliRunner()
+            mock(value)
 
-        result = runner.invoke(cli, ["--value", "first=1"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "{'first': '1'}\n")
+        result = self.runner.invoke(cli, ["--value", "first=1"])
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with({'first': '1'})
 
-        result = runner.invoke(cli, ["--value", "first=1,second=2"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(eval(result.stdout), {'first': '1', 'second': '2'})
+        result = self.runner.invoke(cli, ["--value", "first=1,second=2"])
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with({'first': '1', 'second': '2'})
 
-        result = runner.invoke(cli, ["--value", "first=1", "--value", "second=2"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(eval(result.stdout), {'first': '1', 'second': '2'})
+        result = self.runner.invoke(cli, ["--value", "first=1", "--value", "second=2"])
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with({'first': '1', 'second': '2'})
 
         # double separator "==" should fail:
-        result = runner.invoke(cli, ["--value", "first==1"])
+        result = self.runner.invoke(cli, ["--value", "first==1"])
         self.assertEqual(result.exit_code, 1)
         self.assertEqual(result.output,
                          "Error: Could not parse key-value pair 'first==1' using separator '=', with "
@@ -103,28 +111,26 @@ class SplitKvTestCase(unittest.TestCase):
         def cli(metasyntactic_var):
             mock(metasyntactic_var)
 
-        runner = click.testing.CliRunner()
-
         # check a valid choice without a kv separator
-        result = runner.invoke(cli, ["--metasyntactic-var", "FOO"])
+        result = self.runner.invoke(cli, ["--metasyntactic-var", "FOO"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with({"": "FOO"})
 
         # check a valid choice with a kv separator
-        result = runner.invoke(cli, ["--metasyntactic-var", "lsst.daf.butler=BAR"])
+        result = self.runner.invoke(cli, ["--metasyntactic-var", "lsst.daf.butler=BAR"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with({"lsst.daf.butler": "BAR"})
 
         # check invalid choices with and wihtout kv separators
         for val in ("BOZ", "lsst.daf.butler=BOZ"):
-            result = runner.invoke(cli, ["--metasyntactic-var", val])
+            result = self.runner.invoke(cli, ["--metasyntactic-var", val])
             self.assertNotEqual(result.exit_code, 0, msg=clickResultMsg(result))
             self.assertIn('Error: Invalid value for "--metasyntactic-var": invalid choice: BOZ. '
                           f'(choose from {", ".join(choices)})',
                           result.output)
 
         # check value normalization (lower case "foo" should become "FOO")
-        result = runner.invoke(cli, ["--metasyntactic-var", "lsst.daf.butler=foo"])
+        result = self.runner.invoke(cli, ["--metasyntactic-var", "lsst.daf.butler=foo"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with({"lsst.daf.butler": "FOO"})
 
@@ -132,33 +138,32 @@ class SplitKvTestCase(unittest.TestCase):
         def split_kv_dash(context, param, values):
             return split_kv(context, param, values, separator="-")
 
+        mock = MagicMock()
         @click.command()
         @click.option("--value", callback=split_kv_dash, multiple=True)
         def cli(value):
-            click.echo(value)
+            mock(value)
 
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--value", "first-1"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "{'first': '1'}\n")
+        result = self.runner.invoke(cli, ["--value", "first-1"])
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with({'first': '1'})
 
     def test_separatorFunctoolsDash(self):
+        mock = MagicMock()
         @click.command()
         @click.option("--value", callback=partial(split_kv, separator="-"), multiple=True)
         def cli(value):
-            click.echo(value)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--value", "first-1", "--value", "second-2"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(eval(result.stdout), {'first': '1', 'second': '2'})
+            mock(value)
+        result = self.runner.invoke(cli, ["--value", "first-1", "--value", "second-2"])
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with({'first': '1', 'second': '2'})
 
     def test_separatorSpace(self):
         @click.command()
         @click.option("--value", callback=partial(split_kv, separator=" "), multiple=True)
         def cli(value):
-            click.echo(value)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--value", "first 1"])
+            pass
+        result = self.runner.invoke(cli, ["--value", "first 1"])
         self.assertEqual(str(result.exception),
                          "' ' is not a supported separator for key-value pairs.")
 
@@ -166,9 +171,8 @@ class SplitKvTestCase(unittest.TestCase):
         @click.command()
         @click.option("--value", callback=partial(split_kv, separator=","), multiple=True)
         def cli(value):
-            click.echo(value)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--value", "first,1"])
+            pass
+        result = self.runner.invoke(cli, ["--value", "first,1"])
         self.assertEqual(str(result.exception),
                          "',' is not a supported separator for key-value pairs.")
 
