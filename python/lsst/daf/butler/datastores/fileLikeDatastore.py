@@ -71,7 +71,6 @@ from lsst.daf.butler import ddl
 from lsst.daf.butler.registry.interfaces import (
     ReadOnlyDatabaseError,
     DatastoreRegistryBridge,
-    FakeDatasetRef,
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
@@ -326,69 +325,6 @@ class FileLikeDatastore(GenericBaseDatastore):
             )
         self._table.insert(*records)
 
-    def getStoredItemInfo(self, ref: DatasetIdRef) -> StoredFileInfo:
-        # Docstring inherited from GenericBaseDatastore
-
-        if ref.id is None:
-            raise RuntimeError("Unable to retrieve information for unresolved DatasetRef")
-
-        where: Dict[str, Union[int, str]] = {"dataset_id": ref.id}
-
-        # If we have no component we want the row from this table without
-        # a component. If we do have a component we either need the row
-        # with no component or the row with the component, depending on how
-        # this dataset was dissassembled.
-
-        # if we are emptying trash we won't have real refs so can't constrain
-        # by component. Will need to fix this to return multiple matches
-        # in future.
-        component = None
-        try:
-            component = ref.datasetType.component()
-        except AttributeError:
-            pass
-        else:
-            if component is None:
-                where["component"] = NULLSTR
-
-        # Look for the dataset_id -- there might be multiple matches
-        # if we have disassembled the dataset.
-        records = list(self._table.fetch(**where))
-        if len(records) == 0:
-            raise KeyError(f"Unable to retrieve location associated with dataset {ref}.")
-
-        # if we are not asking for a component
-        if not component and len(records) != 1:
-            raise RuntimeError(f"Got {len(records)} from location query of dataset {ref}")
-
-        # if we had a FakeDatasetRef we pick the first record regardless
-        if isinstance(ref, FakeDatasetRef):
-            record = records[0]
-        else:
-            records_by_component = {}
-            for r in records:
-                this_component = r["component"] if r["component"] and r["component"] != NULLSTR else None
-                records_by_component[this_component] = r
-
-            # Look for component by name else fall back to the parent
-            for lookup in (component, None):
-                if lookup in records_by_component:
-                    record = records_by_component[lookup]
-                    break
-            else:
-                raise KeyError(f"Unable to retrieve location for component {component} associated with "
-                               f"dataset {ref}.")
-
-        # Convert name of StorageClass to instance
-        storageClass = self.storageClassFactory.getStorageClass(record["storage_class"])
-
-        return StoredFileInfo(formatter=record["formatter"],
-                              path=record["path"],
-                              storageClass=storageClass,
-                              component=component,
-                              checksum=record["checksum"],
-                              file_size=record["file_size"])
-
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
 
@@ -433,35 +369,6 @@ class FileLikeDatastore(GenericBaseDatastore):
     def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
         # Docstring inherited from GenericBaseDatastore
         self._table.delete(dataset_id=ref.id)
-
-    def _get_dataset_location_info(self,
-                                   ref: DatasetRef) -> Tuple[Optional[Location], Optional[StoredFileInfo]]:
-        """Find the `Location` of the requested dataset in the
-        `Datastore` and the associated stored file information.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the required `Dataset`.
-
-        Returns
-        -------
-        location : `Location`
-            Location of the dataset within the datastore.
-            Returns `None` if the dataset can not be located.
-        info : `StoredFileInfo`
-            Stored information about this file and its formatter.
-        """
-        # Get the file information (this will fail if no file)
-        try:
-            storedFileInfo = self.getStoredItemInfo(ref)
-        except KeyError:
-            return None, None
-
-        # Use the path to determine the location
-        location = self.locationFactory.fromPath(storedFileInfo.path)
-
-        return location, storedFileInfo
 
     def _get_dataset_locations_info(self, ref: DatasetIdRef) -> List[Tuple[Location, StoredFileInfo]]:
         r"""Find all the `Location`\ s  of the requested dataset in the
@@ -541,9 +448,6 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         # The storage class we want to use eventually
         refStorageClass = ref.datasetType.storageClass
-
-        # Check that the supplied parameters are suitable for the type read
-        refStorageClass.validateParameters(parameters)
 
         if len(fileLocations) > 1:
             disassembled = True
@@ -629,7 +533,8 @@ class FileLikeDatastore(GenericBaseDatastore):
                                                                           storageClass=storageClass),
                                                            ref.dataId)
         except KeyError as e:
-            raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref}") from e
+            raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref} in datastore "
+                                               f"{self.name}") from e
 
         # Now that we know the formatter, update the location
         location = formatter.makeUpdatedLocation(location)
@@ -887,11 +792,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             if doDisassembly:
 
                 for component, componentStorage in ref.datasetType.storageClass.components.items():
-                    compTypeName = ref.datasetType.componentTypeName(component)
-                    compType = DatasetType(compTypeName, dimensions=ref.datasetType.dimensions,
-                                           storageClass=componentStorage)
-                    compRef = DatasetRef(compType, ref.dataId, id=ref.id, run=ref.run, conform=False)
-
+                    compRef = ref.makeComponentRef(component)
                     compLocation = predictLocation(compRef)
 
                     # Add a URI fragment to indicate this is a guess
@@ -995,10 +896,43 @@ class FileLikeDatastore(GenericBaseDatastore):
         allGetInfo = self._prepare_for_get(ref, parameters)
         refComponent = ref.datasetType.component()
 
-        if len(allGetInfo) > 1 and not refComponent:
+        # Supplied storage class for the component being read
+        refStorageClass = ref.datasetType.storageClass
+
+        # Create mapping from component name to related info
+        allComponents = {i.component: i for i in allGetInfo}
+
+        # By definition the dataset is disassembled if we have more
+        # than one record for it.
+        isDisassembled = len(allGetInfo) > 1
+
+        # Look for the special case where we are disassembled but the
+        # component is a read-only component that was not written during
+        # disassembly. For this scenario we need to check that the
+        # component requested is listed as a read-only component for the
+        # composite storage class
+        isDisassembledReadOnlyComponent = False
+        if isDisassembled and refComponent:
+            # The composite storage class should be accessible through
+            # the component dataset type
+            compositeStorageClass = ref.datasetType.parentStorageClass
+
+            # In the unlikely scenario where the composite storage
+            # class is not known, we can only assume that this is a
+            # normal component. If that assumption is wrong then the
+            # branch below that reads a persisted component will fail
+            # so there is no need to complain here.
+            if compositeStorageClass is not None:
+                isDisassembledReadOnlyComponent = refComponent in compositeStorageClass.readComponents
+
+        if isDisassembled and not refComponent:
             # This was a disassembled dataset spread over multiple files
             # and we need to put them all back together again.
             # Read into memory and then assemble
+
+            # Check that the supplied parameters are suitable for the type read
+            refStorageClass.validateParameters(parameters)
+
             usedParams = set()
             components: Dict[str, Any] = {}
             for getInfo in allGetInfo:
@@ -1029,9 +963,65 @@ class FileLikeDatastore(GenericBaseDatastore):
             return ref.datasetType.storageClass.assembler().handleParameters(inMemoryDataset,
                                                                              parameters=unusedParams)
 
+        elif isDisassembledReadOnlyComponent:
+
+            compositeStorageClass = ref.datasetType.parentStorageClass
+            if compositeStorageClass is None:
+                raise RuntimeError(f"Unable to retrieve read-only component '{refComponent}' since"
+                                   "no composite storage class is available.")
+
+            if refComponent is None:
+                # Mainly for mypy
+                raise RuntimeError(f"Internal error in datastore {self.name}: component can not be None here")
+
+            # Assume that every read-only component can be calculated by
+            # forwarding the request to a single read/write component.
+            # Rather than guessing which rw component is the right one by
+            # scanning each for a read-only component of the same name,
+            # we ask the composite assembler directly which one is best to
+            # use.
+            compositeAssembler = compositeStorageClass.assembler()
+            forwardedComponent = compositeAssembler.selectResponsibleComponent(refComponent,
+                                                                               set(allComponents))
+
+            # Select the relevant component
+            rwInfo = allComponents[forwardedComponent]
+
+            # For now assume that read parameters are validated against
+            # the real component and not the requested component
+            forwardedStorageClass = rwInfo.formatter.fileDescriptor.readStorageClass
+            forwardedStorageClass.validateParameters(parameters)
+
+            # Unfortunately the FileDescriptor inside the formatter will have
+            # the wrong write storage class so we need to create a new one
+            # given the immutability constraint.
+            writeStorageClass = rwInfo.info.storageClass
+
+            # We may need to put some thought into parameters for read
+            # components but for now forward them on as is
+            readFormatter = type(rwInfo.formatter)(FileDescriptor(rwInfo.location,
+                                                                  readStorageClass=refStorageClass,
+                                                                  storageClass=writeStorageClass,
+                                                                  parameters=parameters),
+                                                   ref.dataId)
+
+            # The assembler can not receive any parameter requests for a
+            # read-only component at this time since the assembler will
+            # see the storage class of the read-only component and those
+            # parameters will have to be handled by the formatter on the
+            # forwarded storage class.
+            assemblerParams: Dict[str, Any] = {}
+
+            # Need to created a new info that specifies the read-only
+            # component and associated storage class
+            readInfo = DatastoreFileGetInformation(rwInfo.location, readFormatter,
+                                                   rwInfo.info, assemblerParams,
+                                                   refComponent, refStorageClass)
+
+            return self._read_artifact_into_memory(readInfo, ref, isComponent=True)
+
         else:
             # Single file request or component from that composite file
-            allComponents = {i.component: i for i in allGetInfo}
             for lookup in (refComponent, None):
                 if lookup in allComponents:
                     getInfo = allComponents[lookup]
@@ -1040,7 +1030,24 @@ class FileLikeDatastore(GenericBaseDatastore):
                 raise FileNotFoundError(f"Component {refComponent} not found "
                                         f"for ref {ref} in datastore {self.name}")
 
-            return self._read_artifact_into_memory(getInfo, ref, isComponent=getInfo.component is not None)
+            # Do not need the component itself if already disassembled
+            if isDisassembled:
+                isComponent = False
+            else:
+                isComponent = getInfo.component is not None
+
+            # For a disassembled component we can validate parametersagainst
+            # the component storage class directly
+            if isDisassembled:
+                refStorageClass.validateParameters(parameters)
+            else:
+                # For an assembled composite this could be a read-only
+                # component derived from a real component. The validity
+                # of the parameters is not clear. For now validate against
+                # the composite storage class
+                getInfo.formatter.fileDescriptor.storageClass.validateParameters(parameters)
+
+            return self._read_artifact_into_memory(getInfo, ref, isComponent=isComponent)
 
     @transactional
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
@@ -1076,15 +1083,12 @@ class FileLikeDatastore(GenericBaseDatastore):
         if doDisassembly:
             components = ref.datasetType.storageClass.assembler().disassemble(inMemoryDataset)
             for component, componentInfo in components.items():
-                compTypeName = ref.datasetType.componentTypeName(component)
                 # Don't recurse because we want to take advantage of
                 # bulk insert -- need a new DatasetRef that refers to the
                 # same dataset_id but has the component DatasetType
                 # DatasetType does not refer to the types of components
                 # So we construct one ourselves.
-                compType = DatasetType(compTypeName, dimensions=ref.datasetType.dimensions,
-                                       storageClass=componentInfo.storageClass)
-                compRef = DatasetRef(compType, ref.dataId, id=ref.id, run=ref.run, conform=False)
+                compRef = ref.makeComponentRef(component)
                 storedInfo = self._write_in_memory_to_artifact(componentInfo.component, compRef)
                 artifacts.append((compRef, storedInfo))
         else:

@@ -34,6 +34,7 @@ from typing import (
     Iterable,
     Mapping,
     Optional,
+    Set,
     Tuple,
     Type,
     TYPE_CHECKING,
@@ -361,3 +362,33 @@ class CompositeAssembler:
             raise ValueError(f"Parameters ({parameters}) provided to default implementation.")
 
         return inMemoryDataset
+
+    @classmethod
+    def selectResponsibleComponent(cls, readComponent: str, fromComponents: Set[Optional[str]]) -> str:
+        """Given a possible set of components to choose from, return the
+        component that should be used to calculate the requested read
+        component.
+
+        Parameters
+        ----------
+        readComponent : `str`
+            The component that is being requested.
+        fromComponents : `set` of `str`
+            The available set of component options from which that read
+            component can be derived. `None` can be included but should
+            be ignored.
+
+        Returns
+        -------
+        required : `str`
+            The component that should be used.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if this assembler refuses to answer the question.
+        ValueError
+            Raised if this assembler can not determine a relevant component
+            from the supplied options.
+        """
+        raise NotImplementedError("This assembler does not support read-only components")

@@ -23,7 +23,7 @@ __all__ = ("DatasetTestHelper", "DatastoreTestHelper",
            "BadWriteFormatter", "BadNoWriteFormatter", "MultiDetectorFormatter")
 
 import os
-from lsst.daf.butler import DatasetType, DatasetRef
+from lsst.daf.butler import DatasetType, DatasetRef, StorageClass
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 
 
@@ -39,7 +39,13 @@ class DatasetTestHelper:
     def _makeDatasetRef(self, datasetTypeName, dimensions, storageClass, dataId, *, id=None, run=None,
                         conform=True):
         # helper for makeDatasetRef
-        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+
+        # Pretend we have a parent if this looks like a composite
+        compositeName, componentName = DatasetType.splitDatasetTypeName(datasetTypeName)
+        parentStorageClass = StorageClass("component") if componentName else None
+
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass,
+                                  parentStorageClass=parentStorageClass)
         if id is None:
             self.id += 1
             id = self.id

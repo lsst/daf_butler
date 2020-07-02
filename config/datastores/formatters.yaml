@@ -16,6 +16,7 @@ PhotoCalib: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 TransmissionCurve: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Camera: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Detector: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
+Polygon: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Catalog: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 PeakCatalog: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 SimpleCatalog: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter

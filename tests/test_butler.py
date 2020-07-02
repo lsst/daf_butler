@@ -119,10 +119,10 @@ class ButlerPutGetTests:
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def assertGetComponents(self, butler, datasetRef, components, reference):
-        datasetTypeName = datasetRef.datasetType.name
+        datasetType = datasetRef.datasetType
         dataId = datasetRef.dataId
         for component in components:
-            compTypeName = DatasetType.nameWithComponent(datasetTypeName, component)
+            compTypeName = datasetType.componentTypeName(component)
             result = butler.get(compTypeName, dataId)
             self.assertEqual(result, getattr(reference, component))
 
@@ -267,17 +267,25 @@ class ButlerPutGetTests:
 
         if storageClass.isComposite():
             # Check that components can be retrieved
-            # ref.compfonents will only be populated in certain cases
             metricOut = butler.get(ref.datasetType.name, dataId)
-            compNameS = DatasetType.nameWithComponent(datasetTypeName, "summary")
-            compNameD = DatasetType.nameWithComponent(datasetTypeName, "data")
+            compNameS = ref.datasetType.componentTypeName("summary")
+            compNameD = ref.datasetType.componentTypeName("data")
             summary = butler.get(compNameS, dataId)
             self.assertEqual(summary, metric.summary)
             data = butler.get(compNameD, dataId)
             self.assertEqual(data, metric.data)
 
+            if "counter" in storageClass.readComponents:
+                count = butler.get(ref.datasetType.componentTypeName("counter"), dataId)
+                self.assertEqual(count, len(data))
+
+                count = butler.get(ref.datasetType.componentTypeName("counter"), dataId,
+                                   parameters={"slice": slice(stop)})
+                self.assertEqual(count, stop)
+
             compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
-            self.assertTrue(compRef.hasParentId)
+            summary = butler.getDirect(compRef)
+            self.assertEqual(summary, metric.summary)
 
         # Create a Dataset type that has the same name but is inconsistent.
         inconsistentDatasetType = DatasetType(datasetTypeName, dimensions,
@@ -392,7 +400,8 @@ class ButlerTests(ButlerPutGetTests):
         self.runPutGetTest(storageClass, "test_metric")
 
     def testCompositePutGetConcrete(self):
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+
+        storageClass = self.storageClassFactory.getStorageClass("StructuredCompositeReadCompNoDisassembly")
         butler = self.runPutGetTest(storageClass, "test_metric")
 
         # Should *not* be disassembled
@@ -413,7 +422,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
 
     def testCompositePutGetVirtual(self):
-        storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
+        storageClass = self.storageClassFactory.getStorageClass("StructuredCompositeReadComp")
         butler = self.runPutGetTest(storageClass, "test_metric_comp")
 
         # Should be disassembled
@@ -684,10 +693,8 @@ class ButlerTests(ButlerPutGetTests):
         for args in dimensionEntries:
             butler.registry.insertDimensionData(*args)
 
-        # When a DatasetType is added to the registry entries are created
-        # for each component. Need entries for each component in the test
-        # configuration otherwise validation won't work. The ones that
-        # are deliberately broken will be ignored later.
+        # When a DatasetType is added to the registry entries are not created
+        # for components but querying them can return the components.
         datasetTypeNames = {"metric", "metric2", "metric4", "metric33", "pvi", "paramtest"}
         components = set()
         for datasetTypeName in datasetTypeNames:
