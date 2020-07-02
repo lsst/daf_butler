@@ -22,11 +22,19 @@ from __future__ import annotations
 
 __all__ = ["CachingDimensionRecordStorage"]
 
-from typing import Dict, Optional
+from typing import Dict, Iterable, Optional, Set
 
 import sqlalchemy
 
-from ...core import DataCoordinate, DataId, DimensionElement, DimensionRecord, NamedKeyDict, Timespan
+from ...core import (
+    DataCoordinate,
+    DataCoordinateIterable,
+    DataCoordinateSet,
+    DimensionElement,
+    DimensionRecord,
+    NamedKeyDict,
+    Timespan
+)
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
 
@@ -43,7 +51,7 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
     """
     def __init__(self, nested: DimensionRecordStorage):
         self._nested = nested
-        self._cache: Dict[DataCoordinate, DimensionRecord] = {}
+        self._cache: Dict[DataCoordinate, Optional[DimensionRecord]] = {}
 
     @classmethod
     def initialize(cls, db: Database, element: DimensionElement, *,
@@ -85,12 +93,24 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
             self._cache[record.dataId] = record
         return inserted
 
-    def fetch(self, dataId: DataId) -> Optional[DimensionRecord]:
+    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
-        dataId = DataCoordinate.standardize(dataId, graph=self.element.graph)
-        record = self._cache.get(dataId)
-        if record is None:
-            record = self._nested.fetch(dataId)
-            if record is not None:
-                self._cache[dataId] = record
-        return record
+        missing: Set[DataCoordinate] = set()
+        for dataId in dataIds:
+            # Use ... as sentinal value so we can also cache None == "no such
+            # record exists".
+            record = self._cache.get(dataId, ...)
+            if record is ...:
+                missing.add(dataId)
+            elif record is not None:
+                # Unclear why MyPy can't tell that this isn't ..., but it
+                # thinks it's still a possibility.
+                yield record  # type: ignore
+        if missing:
+            toFetch = DataCoordinateSet(missing, graph=self.element.graph)
+            for record in self._nested.fetch(toFetch):
+                self._cache[record.dataId] = record
+                yield record
+            missing -= self._cache.keys()
+            for dataId in missing:
+                self._cache[dataId] = None

@@ -22,13 +22,12 @@ from __future__ import annotations
 
 __all__ = ["QueryDimensionRecordStorage"]
 
-from typing import Optional
+from typing import Iterable, Optional
 
 import sqlalchemy
 
 from ...core import (
-    DataCoordinate,
-    DataId,
+    DataCoordinateIterable,
     Dimension,
     DimensionElement,
     DimensionRecord,
@@ -146,11 +145,10 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.sync.
         raise TypeError(f"Cannot sync {self.element.name} records.")
 
-    def fetch(self, dataId: DataId) -> Optional[DimensionRecord]:
+    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
         RecordClass = self.element.RecordClass
-        # Given the restrictions imposed at construction, we know there's
-        # nothing to actually fetch: everything we need is in the data ID.
-        if isinstance(dataId, DataCoordinate):
-            dataId = dataId.byName()
-        return RecordClass.fromDict(dataId)
+        for dataId in dataIds:
+            # Given the restrictions imposed at construction, we know there's
+            # nothing to actually fetch: everything we need is in the data ID.
+            yield RecordClass.fromDict(dataId.byName())

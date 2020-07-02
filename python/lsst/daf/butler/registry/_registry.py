@@ -47,6 +47,7 @@ import sqlalchemy
 from ..core import (
     Config,
     DataCoordinate,
+    DataCoordinateIterable,
     DataId,
     DatasetRef,
     DatasetType,
@@ -808,7 +809,14 @@ class Registry:
             record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
             if record is ...:
                 storage = self._dimensions[element]
-                record = storage.fetch(keys)
+                dataIdSet = DataCoordinateIterable.fromScalar(
+                    DataCoordinate.standardize(keys, graph=element.graph)
+                )
+                fetched = tuple(storage.fetch(dataIdSet))
+                try:
+                    (record,) = fetched
+                except ValueError:
+                    record = None
                 records[element.name] = record
             if record is not None:
                 for d in element.implied:
