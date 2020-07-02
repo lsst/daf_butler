@@ -141,6 +141,33 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertNotEqual(DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageA"),
                             DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageB"))
 
+    def testParentPlaceholder(self):
+        """Test that a parent placeholder can be replaced."""
+        storageComp = StorageClass("component")
+        storageParent = StorageClass("Parent")
+        dimensions = self.universe.extract(["instrument"])
+        component = DatasetType("a.b", dimensions, storageComp,
+                                parentStorageClass=DatasetType.PlaceholderParentStorageClass)
+        self.assertIsNotNone(component.parentStorageClass)
+
+        with self.assertRaises(ValueError):
+            component.finalizeParentStorageClass("parent")
+
+        component.finalizeParentStorageClass(storageParent)
+        self.assertEqual(component.parentStorageClass, storageParent)
+
+        component = DatasetType("a.b", dimensions, storageComp,
+                                parentStorageClass=storageParent)
+
+        with self.assertRaises(ValueError):
+            # Can not replace unless a placeholder
+            component.finalizeParentStorageClass(storageComp)
+
+        datasetType = DatasetType("a", dimensions, storageParent)
+        with self.assertRaises(ValueError):
+            # Can not add parent if not component
+            datasetType.finalizeParentStorageClass(storageComp)
+
     def testHashability(self):
         """Test `DatasetType.__hash__`.
 

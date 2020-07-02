@@ -84,7 +84,10 @@ class DatasetType:
     parentStorageClass : `StorageClass` or `str`, optional
         Instance of a `StorageClass` or name of `StorageClass` that defines
         how the composite parent is persisted.  Must be `None` if this
-        is not a component. Mandatory if it is a component.
+        is not a component. Mandatory if it is a component but can be the
+        special temporary placeholder
+        (`DatasetType.PlaceholderParentStorageClass`) to allow
+        construction with an intent to finalize later.
     universe : `DimensionUniverse`, optional
         Set of all known dimensions, used to normalize ``dimensions`` if it
         is not already a `DimensionGraph`.
@@ -94,6 +97,14 @@ class DatasetType:
                  "_parentStorageClass", "_parentStorageClassName")
 
     VALID_NAME_REGEX = re.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$")
+
+    PlaceholderParentStorageClass = StorageClass("PlaceHolder")
+    """Placeholder StorageClass that can be used temporarily for a
+    component.
+
+    This can be useful in pipeline construction where we are creating
+    dataset types without a registry.
+    """
 
     @staticmethod
     def nameWithComponent(datasetTypeName: str, componentName: str) -> str:
@@ -239,6 +250,36 @@ class DatasetType:
         if self._parentStorageClass is None and self._parentStorageClassName is not None:
             self._parentStorageClass = StorageClassFactory().getStorageClass(self._parentStorageClassName)
         return self._parentStorageClass
+
+    def finalizeParentStorageClass(self, newParent: StorageClass) -> None:
+        """Replace the current placeholder parent storage class with
+        the real parent.
+
+        Parameters
+        ----------
+        newParent : `StorageClass`
+            The new parent to be associated with this composite dataset
+            type.  This replaces the temporary placeholder parent that
+            was specified during construction.
+
+        Raises
+        ------
+        ValueError
+            Raised if this dataset type is not a component of a composite.
+            Raised if a StorageClass is not given.
+            Raised if the parent currently associated with the dataset
+            type is not a placeholder.
+        """
+        if not self.isComponent():
+            raise ValueError("Can not set a parent storage class if this is not a component"
+                             f" ({self.name})")
+        if self._parentStorageClass != self.PlaceholderParentStorageClass:
+            raise ValueError(f"This DatasetType has a parent of {self._parentStorageClassName} and"
+                             " is not a placeholder.")
+        if not isinstance(newParent, StorageClass):
+            raise ValueError(f"Supplied parent must be a StorageClass. Got {newParent!r}")
+        self._parentStorageClass = newParent
+        self._parentStorageClassName = newParent.name
 
     @staticmethod
     def splitDatasetTypeName(datasetTypeName: str) -> Tuple[str, Optional[str]]:
