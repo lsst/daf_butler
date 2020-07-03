@@ -88,6 +88,11 @@ class ButlerConfig(Config):
                     uri = ButlerURI(other, forceDirectory=True)
                 uri.updateFile("butler.yaml")
                 other = uri.geturl()
+            elif uri.scheme == "https":
+                if not uri.dirLike and "." not in uri.basename():
+                    uri = ButlerURI(other, forceDirectory=True)
+                uri.updateFile("butler.yaml")
+                other = uri.geturl()
             else:
                 raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")
 
@@ -102,6 +107,9 @@ class ButlerConfig(Config):
         if configFile is not None:
             uri = ButlerURI(configFile)
             if uri.scheme == "s3":
+                uri.updateFile("")
+                self.configDir = uri.geturl()
+            if uri.scheme == "https":
                 uri.updateFile("")
                 self.configDir = uri.geturl()
             else:

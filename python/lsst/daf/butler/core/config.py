@@ -32,19 +32,29 @@ import pprint
 import os
 import yaml
 import sys
+import tempfile
 from yaml.representer import Representer
 import io
 from typing import Sequence, Optional, ClassVar
+import requests
+from urllib.parse import urlunparse
+
 
 try:
     import boto3
 except ImportError:
     boto3 = None
 
+try:
+    import webdav3.client as wc
+except ImportError:
+    wc = None
+
 import lsst.utils
 from lsst.utils import doImport
 from .location import ButlerURI
 from .s3utils import getS3Client
+from .webdavutils import getWebdavClient, getHttpSession
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
@@ -280,6 +290,8 @@ class Config(collections.abc.MutableMapping):
         if uri.path.endswith("yaml"):
             if uri.scheme == "s3":
                 self.__initFromS3YamlFile(uri.geturl())
+            elif uri.scheme == "https":
+                self.__initFromWebdavYamlFile(uri.geturl())
             else:
                 self.__initFromYamlFile(uri.ospath)
         else:
@@ -312,6 +324,33 @@ class Config(collections.abc.MutableMapping):
         response["Body"].name = url
         self.__initFromYaml(response["Body"])
         response["Body"].close()
+
+    def __initFromWebdavYamlFile(self, url):
+        """Load a file at a given S3 Bucket uri and attempts to load it from
+        yaml.
+
+        Parameters
+        ----------
+        path : `str`
+            To a persisted config file.
+        """
+        if wc is None:
+            raise ModuleNotFoundError("webdav3.client not found."
+                                      "Are you sure it is installed?")
+
+        uri = ButlerURI(url)
+        session = getHttpSession()
+        response = session.get(uri.geturl())
+        if response.status_code != 200:
+            raise FileNotFoundError(f"Error retrieving the file at {uri}: status code {response.status_code}")
+
+        # boto3 response is a `StreamingBody`, but not a valid Python IOStream.
+        # Loader will raise an error that the stream has no name. A hackish
+        # solution is to name it explicitly.
+        #response["Body"].name = url
+        self.__initFromYaml(response.content)
+        response.close()
+
 
     def __initFromYamlFile(self, path):
         """Opens a file at a given path and attempts to load it in from yaml.
@@ -833,6 +872,11 @@ class Config(collections.abc.MutableMapping):
                 uri = ButlerURI(uri.geturl(), forceDirectory=True)
             uri.updateFile(defaultFileName)
             self.dumpToS3File(uri, overwrite=overwrite)
+        elif uri.scheme == "https":
+            if not uri.dirLike and "." not in uri.basename():
+                uri = ButlerURI(uri.geturl(), forceDirectory=True)
+            uri.updateFile(defaultFileName)
+            self.dumpToWebdavFile(uri, overwrite=overwrite)
         else:
             raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")
 
@@ -901,6 +945,44 @@ class Config(collections.abc.MutableMapping):
             self.dump(stream)
             stream.seek(0)
             s3.put_object(Bucket=bucket, Key=key, Body=stream.read())
+
+    def dumpToWebdavFile(self, uri, *, overwrite=True):
+        """Writes the config to a file in S3 Bucket.
+
+        Parameters
+        ----------
+        uri : `ButlerURI`
+            S3 URI where the configuration should be stored.
+        overwrite : `bool`, optional
+            If False, a check will be made to see if the key already
+            exists.
+
+        Raises
+        ------
+        FileExistsError
+            Raised if the configuration already exists at this location
+            and overwrite is set to `False`.
+        """
+        if wc is None:
+            raise ModuleNotFoundError("Could not find webdav3.client. "
+                                      "Are you sure it is installed?")
+
+        if uri.scheme != "https":
+            raise ValueError(f"Must provide webdav/HTTPS URI not {uri}")
+        
+        client = getWebdavClient()
+        session = getHttpSession()
+
+        if not overwrite:
+            from .webdavutils import webdavCheckFileExists
+            if webdavCheckFileExists(uri, client)[0]:
+                raise FileExistsError(f"Config already exists at {uri}")
+
+        with io.StringIO() as stream:
+            self.dump(stream)
+            stream.seek(0)
+            #{s3.put_object(Bucket=bucket, Key=key, Body=stream.read())
+            session.put(uri.geturl(), data=stream.read())
 
     @staticmethod
     def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):

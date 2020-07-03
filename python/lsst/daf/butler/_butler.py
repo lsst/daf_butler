@@ -68,6 +68,8 @@ from .core import (
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional, getClassOf, safeMakeDir
 from .core.s3utils import bucketExists
+from .core.webdavutils import folderExists
+from .core.webdavutils import getWebdavClient
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
 from .registry import Registry, RegistryConfig, CollectionType
@@ -339,6 +341,14 @@ class Butler:
             # don't create S3 key when root is at the top-level of an Bucket
             if not uri.path == "/":
                 s3.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
+        elif uri.scheme == "https":
+            # bucket must already exist
+            if not folderExists(uri.relativeToPathRoot):
+                raise ValueError(f"Folder {uri.relativeToPathRoot} does not exist!")
+            client = getWebdavClient()
+            # don't create S3 key when root is at the top-level of an Bucket
+            if not uri.path == "/":
+                client.mkdir(uri.relativeToPathRoot)
         else:
             raise ValueError(f"Unrecognized scheme: {uri.scheme}")
         config = Config(config)
