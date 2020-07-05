@@ -1080,10 +1080,14 @@ class Registry:
         builder : `queries.QueryBuilder`
             Object that can be used to construct and perform advanced queries.
         """
-        return queries.QueryBuilder(summary=summary,
-                                    collections=self._collections,
-                                    dimensions=self._dimensions,
-                                    datasets=self._datasets)
+        return queries.QueryBuilder(
+            summary,
+            queries.RegistryManagers(
+                collections=self._collections,
+                dimensions=self._dimensions,
+                datasets=self._datasets
+            )
+        )
 
     def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
@@ -1181,14 +1185,12 @@ class Registry:
         for datasetType in standardizedDatasetTypes:
             builder.joinDataset(datasetType, collections, isResult=False)
         query = builder.finish()
-        predicate = query.predicate()
-        for row in self._db.query(query.sql):
-            if predicate(row):
-                result = query.extractDataId(row)
-                if expand:
-                    yield self.expandDataId(result, records=standardizedDataId.records)
-                else:
-                    yield result
+        for row in query.rows(self._db):
+            result = query.extractDataId(row)
+            if expand:
+                yield self.expandDataId(result, records=standardizedDataId.records)
+            else:
+                yield result
 
     def queryDatasets(self, datasetType: Any, *,
                       collections: Any,
@@ -1353,13 +1355,11 @@ class Registry:
         if not builder.joinDataset(datasetType, collections, isResult=True, deduplicate=deduplicate):
             return
         query = builder.finish()
-        predicate = query.predicate()
-        for row in self._db.query(query.sql):
-            if predicate(row):
-                dataId = query.extractDataId(row, graph=datasetType.dimensions)
-                if expand:
-                    dataId = self.expandDataId(dataId, records=standardizedDataId.records)
-                yield query.extractDatasetRef(row, datasetType, dataId)
+        for row in query.rows(self._db):
+            dataId = query.extractDataId(row, graph=datasetType.dimensions)
+            if expand:
+                dataId = self.expandDataId(dataId, records=standardizedDataId.records)
+            yield query.extractDatasetRef(row, dataId)
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).

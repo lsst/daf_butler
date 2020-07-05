@@ -22,9 +22,8 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import Any, List, Iterable, Optional, TYPE_CHECKING
+from typing import Any, Iterable, List, Optional
 
-from sqlalchemy.sql import ColumnElement, and_, literal, select, FromClause
 import sqlalchemy.sql
 
 from ...core import (
@@ -37,13 +36,10 @@ from ...core import (
     SimpleQuery,
 )
 
-from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns
+from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns, RegistryManagers
 from .expressions import ClauseVisitor
-from ._query import Query
+from ._query import DirectQuery, DirectQueryUniqueness
 from ..wildcards import CollectionSearch, CollectionQuery
-
-if TYPE_CHECKING:
-    from ..interfaces import CollectionManager, DimensionRecordStorageManager, DatasetRecordStorageManager
 
 
 class QueryBuilder:
@@ -54,26 +50,16 @@ class QueryBuilder:
     ----------
     summary : `QuerySummary`
         Struct organizing the dimensions involved in the query.
-    collections : `CollectionManager`
-        Manager object for collection tables.
-    dimensions : `DimensionRecordStorageManager`
-        Manager for storage backend objects that abstract access to dimension
-        tables.
-    datasets : `DatasetRegistryStorage`
-        Storage backend object that abstracts access to dataset tables.
+    managers : `RegistryManagers`
+        A struct containing the registry manager instances used by the query
+        system.
     """
-
-    def __init__(self, summary: QuerySummary, *,
-                 collections: CollectionManager,
-                 dimensions: DimensionRecordStorageManager,
-                 datasets: DatasetRecordStorageManager):
+    def __init__(self, summary: QuerySummary, managers: RegistryManagers):
         self.summary = summary
-        self._collections = collections
-        self._dimensions = dimensions
-        self._datasets = datasets
-        self._sql: Optional[sqlalchemy.sql.FromClause] = None
-        self._elements: NamedKeyDict[DimensionElement, FromClause] = NamedKeyDict()
+        self._simpleQuery = SimpleQuery()
+        self._elements: NamedKeyDict[DimensionElement, sqlalchemy.sql.FromClause] = NamedKeyDict()
         self._columns = QueryColumns()
+        self._managers = managers
 
     def hasDimensionKey(self, dimension: Dimension) -> bool:
         """Return `True` if the given dimension's primary key column has
@@ -100,7 +86,7 @@ class QueryBuilder:
             associated with a database table (see `DimensionElement.hasTable`).
         """
         assert element not in self._elements, "Element already included in query."
-        storage = self._dimensions[element]
+        storage = self._managers.dimensions[element]
         fromClause = storage.join(
             self,
             regions=self._columns.regions if element in self.summary.spatial else None,
@@ -133,6 +119,8 @@ class QueryBuilder:
             instances to be produced from the query results for this dataset
             type.  If `False`, the existence of datasets of this type is used
             only to constrain the data IDs returned by the query.
+            `joinDataset` may be called with ``isResult=True`` at most one time
+            on a particular `QueryBuilder` instance.
         deduplicate : `bool`, optional
             If `True` (`False` is default), only include the first match for
             each data ID, searching the given collections in order.  Requires
@@ -154,17 +142,18 @@ class QueryBuilder:
             collections = CollectionSearch.fromExpression(collections)
         else:
             collections = CollectionQuery.fromExpression(collections)
-        datasetRecordStorage = self._datasets.find(datasetType.name)
+        datasetRecordStorage = self._managers.datasets.find(datasetType.name)
         if datasetRecordStorage is None:
             # Unrecognized dataset type means no results.  It might be better
             # to raise here, but this is consistent with previous behavior,
             # which is expected by QuantumGraph generation code in pipe_base.
             return False
         subsubqueries = []
-        runKeyName = self._collections.getRunForeignKeyName()
+        runKeyName = self._managers.collections.getRunForeignKeyName()
         baseColumnNames = {"id", runKeyName} if isResult else set()
         baseColumnNames.update(datasetType.dimensions.required.names)
-        for rank, collectionRecord in enumerate(collections.iter(self._collections, datasetType=datasetType)):
+        for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
+                                                                 datasetType=datasetType)):
             ssq = datasetRecordStorage.select(collection=collectionRecord,
                                               dataId=SimpleQuery.Select,
                                               id=SimpleQuery.Select if isResult else None,
@@ -178,6 +167,7 @@ class QueryBuilder:
         if not subsubqueries:
             return False
         subquery = sqlalchemy.sql.union_all(*subsubqueries)
+        columns: Optional[DatasetQueryColumns] = None
         if isResult:
             if deduplicate:
                 # Rewrite the subquery (currently a UNION ALL over
@@ -241,21 +231,22 @@ class QueryBuilder:
                 ).alias(datasetType.name)
             else:
                 subquery = subquery.alias(datasetType.name)
-            self._columns.datasets[datasetType] = DatasetQueryColumns(
+            columns = DatasetQueryColumns(
+                datasetType=datasetType,
                 id=subquery.columns["id"],
                 runKey=subquery.columns[runKeyName],
             )
         else:
             subquery = subquery.alias(datasetType.name)
-        self.joinTable(subquery, datasetType.dimensions.required)
+        self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
         return True
 
-    def joinTable(self, table: FromClause, dimensions: NamedValueSet[Dimension]) -> None:
+    def joinTable(self, table: sqlalchemy.sql.FromClause, dimensions: NamedValueSet[Dimension], *,
+                  datasets: Optional[DatasetQueryColumns] = None) -> None:
         """Join an arbitrary table to the query via dimension relationships.
 
         External calls to this method should only be necessary for tables whose
-        records represent neither dataset nor dimension elements (i.e.
-        extensions to the standard `Registry` schema).
+        records represent neither datasets nor dimension elements.
 
         Parameters
         ----------
@@ -266,12 +257,19 @@ class QueryBuilder:
             The dimensions that relate this table to others that may be in the
             query.  The table must have columns with the names of the
             dimensions.
+        datasets : `DatasetQueryColumns`, optional
+            Columns that identify a dataset that is part of the query results.
         """
         joinOn = self.startJoin(table, dimensions, dimensions.names)
         self.finishJoin(table, joinOn)
+        if datasets is not None:
+            assert self._columns.datasets is None, \
+                "At most one result dataset type can be returned by a query."
+            self._columns.datasets = datasets
 
-    def startJoin(self, table: FromClause, dimensions: Iterable[Dimension], columnNames: Iterable[str]
-                  ) -> List[ColumnElement]:
+    def startJoin(self, table: sqlalchemy.sql.FromClause, dimensions: Iterable[Dimension],
+                  columnNames: Iterable[str]
+                  ) -> List[sqlalchemy.sql.ColumnElement]:
         """Begin a join on dimensions.
 
         Must be followed by call to `finishJoin`.
@@ -321,19 +319,14 @@ class QueryBuilder:
             to form (part of) the ON expression for this JOIN.  Should include
             at least the elements of the list returned by `startJoin`.
         """
-        if joinOn:
-            assert self._sql is not None
-            self._sql = self._sql.join(table, and_(*joinOn))
-        elif self._sql is None:
-            self._sql = table
+        onclause: Optional[sqlalchemy.sql.ColumnElement]
+        if len(joinOn) == 0:
+            onclause = None
+        elif len(joinOn) == 1:
+            onclause = joinOn[0]
         else:
-            # New table is completely unrelated to all already-included
-            # tables.  We need a cross join here but SQLAlchemy does not
-            # have a specific method for that. Using join() without
-            # `onclause` will try to join on FK and will raise an exception
-            # for unrelated tables, so we have to use `onclause` which is
-            # always true.
-            self._sql = self._sql.join(table, literal(True) == literal(True))
+            onclause = sqlalchemy.sql.and_(*joinOn)
+        self._simpleQuery.join(table, onclause=onclause)
 
     def _joinMissingDimensionElements(self) -> None:
         """Join all dimension element tables that were identified as necessary
@@ -365,10 +358,9 @@ class QueryBuilder:
         For internal use by `QueryBuilder` only; will be called (and should
         only by called) by `finish`.
         """
-        whereTerms = []
         if self.summary.expression.tree is not None:
             visitor = ClauseVisitor(self.summary.universe, self._columns, self._elements)
-            whereTerms.append(self.summary.expression.tree.visit(visitor))
+            self._simpleQuery.where.append(self.summary.expression.tree.visit(visitor))
         for dimension, columnsInQuery in self._columns.keys.items():
             if dimension in self.summary.dataId.graph:
                 givenKey = self.summary.dataId[dimension]
@@ -377,7 +369,7 @@ class QueryBuilder:
                 # them equal to each other, but more constraints have a chance
                 # of making things easier on the DB's query optimizer.
                 for columnInQuery in columnsInQuery:
-                    whereTerms.append(columnInQuery == givenKey)
+                    self._simpleQuery.where.append(columnInQuery == givenKey)
             else:
                 # Dimension is not fully identified, but it might be a skypix
                 # dimension that's constrained by a given region.
@@ -387,7 +379,7 @@ class QueryBuilder:
                     for begin, end in dimension.pixelization.envelope(self.summary.whereRegion):
                         givenSkyPixIds.extend(range(begin, end))
                     for columnInQuery in columnsInQuery:
-                        whereTerms.append(columnInQuery.in_(givenSkyPixIds))
+                        self._simpleQuery.where.append(columnInQuery.in_(givenSkyPixIds))
         # If we are given an dataId with a timespan, and there are one or more
         # timespans in the query that aren't given, add a WHERE expression for
         # each of them.
@@ -397,48 +389,33 @@ class QueryBuilder:
             assert givenInterval is not None
             for element, intervalInQuery in self._columns.timespans.items():
                 assert element not in self.summary.dataId.graph.elements
-                whereTerms.append(intervalInQuery.overlaps(givenInterval, ops=sqlalchemy.sql))
-        # AND-together the full WHERE clause, and combine it with the FROM
-        # clause.
-        assert self._sql is not None
-        self._sql = self._sql.where(and_(*whereTerms))
+                self._simpleQuery.where.append(intervalInQuery.overlaps(givenInterval, ops=sqlalchemy.sql))
 
-    def _addSelectClause(self) -> None:
-        """Add a SELECT clause to the query under construction containing all
-        output columns identified by the `QuerySummary` and requested in calls
-        to `joinDataset` with ``isResult=True``.
-
-        For internal use by `QueryBuilder` only; will be called (and should
-        only by called) by `finish`.
-        """
-        columns = []
-        for dimension in self.summary.requested:
-            columns.append(self._columns.getKeyColumn(dimension))
-        for datasetColumns in self._columns.datasets.values():
-            columns.extend(datasetColumns)
-        for regionColumn in self._columns.regions.values():
-            columns.append(regionColumn)
-        self._sql = select(columns).select_from(self._sql)
-
-    def finish(self) -> Query:
+    def finish(self, joinMissing: bool = True) -> DirectQuery:
         """Finish query constructing, returning a new `Query` instance.
 
-        This automatically joins any missing dimension element tables
-        (according to the categorization of the `QuerySummary` the builder was
-        constructed with).
-
-        This consumes the `QueryBuilder`; no other methods should be called
-        after this one.
+        Parameters
+        ----------
+        joinMissing : `bool`, optional
+            If `True` (default), automatically join any missing dimension
+            element tables (according to the categorization of the
+            `QuerySummary` the builder was constructed with).  `False` should
+            only be passed if the caller can independently guarantee that all
+            dimension relationships are already captured in non-dimension
+            tables that have been manually included in the query.
 
         Returns
         -------
         query : `Query`
-            A `Query` object that can be executed (possibly multiple times
-            with different bind parameter values) and used to interpret result
+            A `Query` object that can be executed and used to interpret result
             rows.
         """
-        self._joinMissingDimensionElements()
-        self._addSelectClause()
+        if joinMissing:
+            self._joinMissingDimensionElements()
         self._addWhereClause()
-        return Query(summary=self.summary, sql=self._sql, columns=self._columns,
-                     collections=self._collections)
+        return DirectQuery(graph=self.summary.requested,
+                           uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
+                           whereRegion=self.summary.dataId.region,
+                           simpleQuery=self._simpleQuery,
+                           columns=self._columns,
+                           managers=self._managers)
