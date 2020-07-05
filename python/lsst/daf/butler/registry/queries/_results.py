@@ -31,6 +31,7 @@ from abc import abstractmethod
 from contextlib import contextmanager, ExitStack
 import itertools
 from typing import (
+    Any,
     Callable,
     ContextManager,
     Iterable,
@@ -38,6 +39,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Union,
 )
 
 import sqlalchemy
@@ -248,6 +250,62 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                 for dimension in self.graph.required
             ])
         )
+
+    def findDatasets(self, datasetType: Union[DatasetType, str], collections: Any, *,
+                     deduplicate: bool = True) -> ParentDatasetQueryResults:
+        """Find datasets using the data IDs identified by this query.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType` or `str`
+            Dataset type or the name of one to search for.  Must have
+            dimensions that are a subset of ``self.graph``.
+        collections : `Any`
+            An expression that fully or partially identifies the collections
+            to search for the dataset, such as a `str`, `re.Pattern`, or
+            iterable  thereof.  ``...`` can be used to return all collections.
+            See :ref:`daf_butler_collection_expressions` for more information.
+        deduplicate : `bool`, optional
+            If `True` (default), for each result data ID, only yield one
+            `DatasetRef`, from the first collection in which a dataset of that
+            dataset type appears (according to the order of ``collections``
+            passed in).  If `True`, ``collections`` must not contain regular
+            expressions and may not be ``...``.
+
+        Returns
+        -------
+        datasets : `ParentDatasetQueryResults`
+            A lazy-evaluation object representing dataset query results,
+            iterable over `DatasetRef` objects.  If ``self.hasRecords()``, all
+            nested data IDs in those dataset references will have records as
+            well.
+
+        Raises
+        ------
+        ValueError
+            Raised if ``datasetType.dimensions.issubset(self.graph) is False``.
+        """
+        if not isinstance(datasetType, DatasetType):
+            datasetType = self._query.managers.datasets[datasetType].datasetType
+        # moving component handling down into managers.
+        if not datasetType.dimensions.issubset(self.graph):
+            raise ValueError(f"findDatasets requires that the dataset type have the same dimensions as "
+                             f"the DataCoordinateQueryResult used as input to the search, but "
+                             f"{datasetType.name} has dimensions {datasetType.dimensions}, while the input "
+                             f"dimensions are {self.graph}.")
+        builder = self._query.makeBuilder()
+        if datasetType.isComponent():
+            # We were given a true DatasetType instance, but it's a component.
+            parentName, componentName = datasetType.nameAndComponent()
+            storage = self._query.managers.datasets[parentName]
+            datasetType = storage.datasetType
+            components = [componentName]
+        else:
+            components = [None]
+        builder.joinDataset(datasetType, collections=collections, deduplicate=deduplicate)
+        query = builder.finish(joinMissing=False)
+        return ParentDatasetQueryResults(db=self._db, query=query, components=components,
+                                         records=self._records)
 
 
 class DatasetQueryResults(Iterable[DatasetRef]):
