@@ -21,15 +21,23 @@
 from __future__ import annotations
 
 __all__ = (
+    "ChainedDatasetQueryResults",
     "DataCoordinateQueryResults",
+    "DatasetQueryResults",
+    "ParentDatasetQueryResults",
 )
 
-from contextlib import contextmanager
+from abc import abstractmethod
+from contextlib import contextmanager, ExitStack
+import itertools
 from typing import (
     Callable,
+    ContextManager,
+    Iterable,
     Iterator,
     Mapping,
     Optional,
+    Sequence,
 )
 
 import sqlalchemy
@@ -37,6 +45,8 @@ import sqlalchemy
 from ...core import (
     DataCoordinate,
     DataCoordinateIterable,
+    DatasetRef,
+    DatasetType,
     DimensionGraph,
     DimensionRecord,
     SimpleQuery,
@@ -238,3 +248,193 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                 for dimension in self.graph.required
             ])
         )
+
+
+class DatasetQueryResults(Iterable[DatasetRef]):
+    """An interface for objects that represent the results of queries for
+    datasets.
+    """
+
+    @abstractmethod
+    def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
+        """Group results by parent dataset type.
+
+        Returns
+        -------
+        iter : `Iterator` [ `ParentDatasetQueryResults` ]
+            An iterator over `DatasetQueryResults` instances that are each
+            responsible for a single parent dataset type (either just that
+            dataset type, one or more of its component dataset types, or both).
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def materialize(self) -> ContextManager[DatasetQueryResults]:
+        """Insert this query's results into a temporary table.
+
+        Returns
+        -------
+        context : `typing.ContextManager` [ `DatasetQueryResults` ]
+            A context manager that ensures the temporary table is created and
+            populated in ``__enter__`` (returning a results object backed by
+            that table), and dropped in ``__exit__``.  If ``self`` is already
+            materialized, the context manager may do nothing (reflecting the
+            fact that an outer context manager should already take care of
+            everything else).
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def expanded(self) -> DatasetQueryResults:
+        """Return a `DatasetQueryResults` for which `DataCoordinate.hasResults`
+        returns `True` for all data IDs in returned `DatasetRef` objects.
+
+        Returns
+        -------
+        expanded : `DatasetQueryResults`
+            Either a new `DatasetQueryResults` instance or ``self``, if it is
+            already expanded.
+
+        Notes
+        -----
+        As with `DataCoordinateQueryResults.expanded`, it may be more efficient
+        to call `materialize` before expanding data IDs for very large result
+        sets.
+        """
+        raise NotImplementedError()
+
+
+class ParentDatasetQueryResults(DatasetQueryResults):
+    """An object that represents results from a query for datasets with a
+    single parent `DatasetType`.
+
+    Parameters
+    ----------
+    db : `Database`
+        Database engine to execute queries against.
+    query : `Query`
+        Low-level query object that backs these results.  ``query.datasetType``
+        will be the parent dataset type for this object, and may not be `None`.
+    components : `Sequence` [ `str` or `None` ]
+        Names of components to include in iteration.  `None` may be included
+        (at most once) to include the parent dataset type.
+    records : `Mapping`, optional
+        Mapping containing `DimensionRecord` objects for all dimensions and
+        all data IDs this query will yield.  If `None` (default),
+        `DataCoordinate.hasRecords` will return `False` for all nested data
+        IDs.  This is a nested mapping with `str` names of dimension elements
+        as outer keys, `DimensionRecord` instances as inner values, and
+        ``tuple(record.dataId.values())`` for the inner keys / outer values
+        (where ``record`` is the innermost `DimensionRecord` instance).
+    """
+    def __init__(self, db: Database, query: Query, *,
+                 components: Sequence[Optional[str]],
+                 records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None):
+        self._db = db
+        self._query = query
+        self._components = components
+        self._records = records
+        assert query.datasetType is not None, \
+            "Query used to initialize dataset results must have a dataset."
+        assert query.datasetType.dimensions == query.graph
+
+    __slots__ = ("_db", "_query", "_dimensions", "_components", "_records")
+
+    def __iter__(self) -> Iterator[DatasetRef]:
+        for row in self._query.rows(self._db):
+            parentRef = self._query.extractDatasetRef(row, records=self._records)
+            for component in self._components:
+                if component is None:
+                    yield parentRef
+                else:
+                    yield parentRef.makeComponentRef(component)
+
+    def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
+        # Docstring inherited from DatasetQueryResults.
+        yield self
+
+    @contextmanager
+    def materialize(self) -> Iterator[ParentDatasetQueryResults]:
+        # Docstring inherited from DatasetQueryResults.
+        with self._query.materialize(self._db) as materialized:
+            yield ParentDatasetQueryResults(self._db, materialized,
+                                            components=self._components,
+                                            records=self._records)
+
+    @property
+    def parentDatasetType(self) -> DatasetType:
+        """The parent dataset type for all datasets in this iterable
+        (`DatasetType`).
+        """
+        assert self._query.datasetType is not None
+        return self._query.datasetType
+
+    @property
+    def dataIds(self) -> DataCoordinateQueryResults:
+        """A lazy-evaluation object representing a query for the just the data
+        IDs of the datasets that would be returned by this query
+        (`DataCoordinateQueryResults`).
+
+        The returned object is not in general `zip`-iterable with ``self``;
+        it may be in a different order or have (or not have) duplicates.
+        """
+        return DataCoordinateQueryResults(
+            self._db,
+            self._query.subset(graph=self.parentDatasetType.dimensions, datasets=False, unique=False),
+            records=self._records,
+        )
+
+    def withComponents(self, components: Sequence[Optional[str]]) -> ParentDatasetQueryResults:
+        """Return a new query results object for the same parent datasets but
+        different components.
+
+        components :  `Sequence` [ `str` or `None` ]
+            Names of components to include in iteration.  `None` may be
+            included (at most once) to include the parent dataset type.
+        """
+        return ParentDatasetQueryResults(self._db, self._query, records=self._records,
+                                         components=components)
+
+    def expanded(self) -> ParentDatasetQueryResults:
+        # Docstring inherited from DatasetQueryResults.
+        if self._records is None:
+            records = self.dataIds.expanded()._records
+            return ParentDatasetQueryResults(self._db, self._query, records=records,
+                                             components=self._components)
+        else:
+            return self
+
+
+class ChainedDatasetQueryResults(DatasetQueryResults):
+    """A `DatasetQueryResults` implementation that simply chains together
+    other results objects, each for a different parent dataset type.
+
+    Parameters
+    ----------
+    chain : `Sequence` [ `ParentDatasetQueryResults` ]
+        The underlying results objects this object will chain together.
+    """
+
+    def __init__(self, chain: Sequence[ParentDatasetQueryResults]):
+        self._chain = chain
+
+    __slots__ = ("_chain",)
+
+    def __iter__(self) -> Iterator[DatasetRef]:
+        return itertools.chain.from_iterable(self._chain)
+
+    def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
+        # Docstring inherited from DatasetQueryResults.
+        return iter(self._chain)
+
+    @contextmanager
+    def materialize(self) -> Iterator[ChainedDatasetQueryResults]:
+        # Docstring inherited from DatasetQueryResults.
+        with ExitStack() as stack:
+            yield ChainedDatasetQueryResults(
+                [stack.enter_context(r.materialize()) for r in self._chain]
+            )
+
+    def expanded(self) -> ChainedDatasetQueryResults:
+        # Docstring inherited from DatasetQueryResults.
+        return ChainedDatasetQueryResults([r.expanded() for r in self._chain])
