@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["QuerySummary"]  # other classes here are local to subpackage
+__all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Union
@@ -39,6 +39,11 @@ from ...core import (
     NamedValueSet,
     SkyPixDimension,
     Timespan,
+)
+from ..interfaces import (
+    CollectionManager,
+    DatasetRecordStorageManager,
+    DimensionRecordStorageManager,
 )
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
@@ -233,6 +238,10 @@ class DatasetQueryColumns:
     instances from query results.
     """
 
+    datasetType: DatasetType
+    """The dataset type being queried (`DatasetType`).
+    """
+
     id: ColumnElement
     """Column containing the unique integer ID for this dataset.
     """
@@ -259,7 +268,7 @@ class QueryColumns:
         self.keys = NamedKeyDict()
         self.timespans = NamedKeyDict()
         self.regions = NamedKeyDict()
-        self.datasets = NamedKeyDict()
+        self.datasets = None
 
     keys: NamedKeyDict[Dimension, List[ColumnElement]]
     """Columns that correspond to the primary key values of dimensions
@@ -291,10 +300,10 @@ class QueryColumns:
     in `QuerySummary.spatial`.
     """
 
-    datasets: NamedKeyDict[DatasetType, DatasetQueryColumns]
+    datasets: Optional[DatasetQueryColumns]
     """Columns that can be used to construct `DatasetRef` instances from query
-    results, for each `DatasetType` included in the query
-    (`NamedKeyDict` [ `DatasetType`, `DatasetQueryColumns` ] ).
+    results.
+    (`DatasetQueryColumns` or `None`).
     """
 
     def getKeyColumn(self, dimension: Union[Dimension, str]) -> ColumnElement:
@@ -321,3 +330,22 @@ class QueryColumns:
         # database's perspective this is entirely arbitrary, because the query
         # guarantees they all have equal values.
         return self.keys[dimension][-1]
+
+
+@dataclass
+class RegistryManagers:
+    """Struct used to pass around the manager objects that back a `Registry`
+    and are used internally by the query system.
+    """
+
+    collections: CollectionManager
+    """Manager for collections (`CollectionManager`).
+    """
+
+    datasets: DatasetRecordStorageManager
+    """Manager for datasets and dataset types (`DatasetRecordStorageManager`).
+    """
+
+    dimensions: DimensionRecordStorageManager
+    """Manager for dimensions (`DimensionRecordStorageManager`).
+    """
