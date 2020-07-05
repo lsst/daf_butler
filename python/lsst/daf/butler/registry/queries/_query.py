@@ -23,6 +23,8 @@ from __future__ import annotations
 __all__ = ("Query",)
 
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
+import copy
 import enum
 import itertools
 from typing import (
@@ -40,13 +42,16 @@ import sqlalchemy
 from lsst.sphgeom import Region
 
 from ...core import (
+    addDimensionForeignKey,
     DataCoordinate,
     DatasetRef,
     DatasetType,
+    ddl,
     Dimension,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
+    REGION_FIELD_SPEC,
     SimpleQuery,
 )
 from ..interfaces import Database
@@ -346,6 +351,38 @@ class Query(ABC):
         runRecord = self.managers.collections[row[datasetColumns.runKey]]
         return DatasetRef(datasetColumns.datasetType, dataId, id=row[datasetColumns.id], run=runRecord.name)
 
+    def _makeTableSpec(self, constraints: bool = False) -> ddl.TableSpec:
+        """Helper method for subclass implementations of `materialize`.
+
+        Parameters
+        ----------
+        constraints : `bool`, optional
+            If `True` (`False` is default), define a specification that
+            includes actual foreign key constraints for logical foreign keys.
+            Some database engines do not permit temporary tables to reference
+            normal tables, so this should be `False` when generating a spec
+            for a temporary table unless the database engine is known to
+            support them.
+
+        Returns
+        -------
+        spec : `ddl.TableSpec`
+            Specification for a table that could hold this query's result rows.
+        """
+        unique = self.isUnique()
+        spec = ddl.TableSpec(fields=())
+        for dimension in self.graph:
+            addDimensionForeignKey(spec, dimension, primaryKey=unique, constraint=constraints)
+        for element in self.spatial:
+            field = copy.copy(REGION_FIELD_SPEC)
+            field.name = f"{element.name}_region"
+            spec.fields.add(field)
+        datasetColumns = self.getDatasetColumns()
+        if datasetColumns is not None:
+            self.managers.datasets.addDatasetForeignKey(spec, primaryKey=unique, constraint=constraints)
+            self.managers.collections.addRunForeignKey(spec, nullable=False, constraint=constraints)
+        return spec
+
     def _makeSubsetQueryColumns(self, *, graph: Optional[DimensionGraph] = None,
                                 datasets: bool = True,
                                 unique: bool = False) -> Tuple[DimensionGraph, Optional[QueryColumns]]:
@@ -392,6 +429,38 @@ class Query(ABC):
         if datasets and self.getDatasetColumns() is not None:
             columns.datasets = self.getDatasetColumns()
         return graph, columns
+
+    @contextmanager
+    def materialize(self, db: Database) -> Iterator[MaterializedQuery]:
+        """Execute this query and insert its results into a temporary table.
+
+        Parameters
+        ----------
+        db : `Database`
+            Database engine to execute the query against.
+
+        Returns
+        -------
+        context : `typing.ContextManager` [ `MaterializedQuery` ]
+            A context manager that ensures the temporary table is created and
+            populated in ``__enter__`` (returning a `MaterializedQuery` object
+            backed by that table), and dropped in ``__exit__``.  If ``self``
+            is already a `MaterializedQuery`, ``__enter__`` may just return
+            ``self`` and ``__exit__`` may do nothing (reflecting the fact that
+            an outer context manager should already take care of everything
+            else).
+        """
+        spec = self._makeTableSpec()
+        table = db.makeTemporaryTable(spec)
+        db.insert(table, select=self.sql, names=spec.fields.names)
+        yield MaterializedQuery(table=table,
+                                spatial=self.spatial,
+                                datasetType=self.datasetType,
+                                isUnique=self.isUnique(),
+                                graph=self.graph,
+                                whereRegion=self.whereRegion,
+                                managers=self.managers)
+        db.dropTemporaryTable(table)
 
     @abstractmethod
     def subset(self, *, graph: Optional[DimensionGraph] = None,
@@ -616,4 +685,113 @@ class DirectQuery(Query):
         builder = QueryBuilder(summary, managers=self.managers)
         builder.joinTable(self.sql.alias(), dimensions=self.graph.dimensions,
                           datasets=self.getDatasetColumns())
+        return builder
+
+
+class MaterializedQuery(Query):
+    """A `Query` implementation that represents query results saved in a
+    temporary table.
+
+    `MaterializedQuery` instances should not be constructed directly; use
+    `Query.materialize()` instead.
+
+    Parameters
+    ----------
+    table : `sqlalchemy.schema.Table`
+        SQLAlchemy object represnting the temporary table.
+    spatial : `Iterable` [ `DimensionElement` ]
+        Spatial dimension elements whose regions must overlap for each valid
+        result row (which may reject some rows that are in the table).
+    datasetType : `DatasetType`
+        The `DatasetType` of datasets returned by this query, or `None`
+        if there are no dataset results
+    isUnique : `bool`
+        If `True`, the table's rows are unique, and there is no need to
+        add ``SELECT DISTINCT`` to gaurantee this in results.
+    graph : `DimensionGraph`
+        Dimensions included in the columns of this table.
+    whereRegion : `Region` or `None`
+        A spatial region all result-row regions must overlap to be valid (which
+        may reject some rows that are in the table).
+    managers : `RegistryManagers`
+        A struct containing `Registry` manager helper objects, forwarded to
+        the `Query` constructor.
+    """
+    def __init__(self, *,
+                 table: sqlalchemy.schema.Table,
+                 spatial: Iterable[DimensionElement],
+                 datasetType: Optional[DatasetType],
+                 isUnique: bool,
+                 graph: DimensionGraph,
+                 whereRegion: Optional[Region],
+                 managers: RegistryManagers):
+        super().__init__(graph=graph, whereRegion=whereRegion, managers=managers)
+        self._table = table
+        self._spatial = tuple(spatial)
+        self._datasetType = datasetType
+        self._isUnique = isUnique
+
+    def isUnique(self) -> bool:
+        # Docstring inherited from Query.
+        return self._isUnique
+
+    def getDimensionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited from Query.
+        return self._table.columns[name]
+
+    @property
+    def spatial(self) -> Iterator[DimensionElement]:
+        # Docstring inherited from Query.
+        return iter(self._spatial)
+
+    def getRegionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited from Query.
+        return self._table.columns[f"{name}_region"]
+
+    def getDatasetColumns(self) -> Optional[DatasetQueryColumns]:
+        # Docstring inherited from Query.
+        if self._datasetType is not None:
+            return DatasetQueryColumns(
+                datasetType=self._datasetType,
+                id=self._table.columns["dataset_id"],
+                runKey=self._table.columns[self.managers.collections.getRunForeignKeyName()],
+            )
+        else:
+            return None
+
+    @property
+    def sql(self) -> sqlalchemy.sql.FromClause:
+        # Docstring inherited from Query.
+        return self._table.select()
+
+    @contextmanager
+    def materialize(self, db: Database) -> Iterator[MaterializedQuery]:
+        # Docstring inherited from Query.
+        yield self
+
+    def subset(self, *, graph: Optional[DimensionGraph] = None,
+               datasets: bool = True,
+               unique: bool = False) -> Query:
+        # Docstring inherited from Query.
+        graph, columns = self._makeSubsetQueryColumns(graph=graph, datasets=datasets, unique=unique)
+        if columns is None:
+            return self
+        simpleQuery = SimpleQuery()
+        simpleQuery.join(self._table)
+        return DirectQuery(
+            simpleQuery=simpleQuery,
+            columns=columns,
+            uniqueness=DirectQueryUniqueness.NEEDS_DISTINCT if unique else DirectQueryUniqueness.NOT_UNIQUE,
+            graph=graph,
+            whereRegion=self.whereRegion if not unique else None,
+            managers=self.managers,
+        )
+
+    def makeBuilder(self, summary: Optional[QuerySummary] = None) -> QueryBuilder:
+        # Docstring inherited from Query.
+        from ._builder import QueryBuilder
+        if summary is None:
+            summary = QuerySummary(self.graph, whereRegion=self.whereRegion)
+        builder = QueryBuilder(summary, managers=self.managers)
+        builder.joinTable(self._table, dimensions=self.graph.dimensions, datasets=self.getDatasetColumns())
         return builder
