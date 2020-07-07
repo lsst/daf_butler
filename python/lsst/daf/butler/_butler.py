@@ -550,9 +550,9 @@ class Butler:
             idNumber = datasetRefOrType.id
         else:
             idNumber = None
-        # Expand the data ID first instead of letting registry.findDataset do
-        # it, so we get the result even if it returns None.
-        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
+        # Standardize the data ID first instead of letting registry.findDataset
+        # do it, so we get the result even if no dataset is found.
+        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions, **kwds)
         if collections is None:
             collections = self.collections
             if not collections:
