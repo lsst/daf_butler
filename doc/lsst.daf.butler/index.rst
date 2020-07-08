@@ -15,6 +15,8 @@ Using the Butler
   :maxdepth: 1
 
   configuring.rst
+  datastores.rst
+  formatters.rst
   organizing.rst
   queries.rst
   use-in-tests.rst
