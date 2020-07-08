@@ -113,6 +113,7 @@ class S3Datastore(FileLikeDatastore):
         exists : `bool`
             True if the location can be found, false otherwise.
         """
+        log.debug(f"Checking if file exists: '{location.uri}''")
         exists, _ = s3CheckFileExists(location, client=self.client)
         return exists
 
@@ -124,7 +125,9 @@ class S3Datastore(FileLikeDatastore):
         location : `Location`
             Location of the artifact associated with this datastore.
         """
+        log.debug(f"Deleting file: '{location.uri}''")
         self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
+        log.debug(f"Successfully deleted file: '{location.uri}''")
 
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
@@ -134,8 +137,10 @@ class S3Datastore(FileLikeDatastore):
         # might as well use the HEADER metadata for size comparison instead.
         # s3CheckFileExists would just duplicate GET/LIST charges in this case.
         try:
+            log.debug(f"Reading file: '{location.uri}''")
             response = self.client.get_object(Bucket=location.netloc,
                                               Key=location.relativeToPathRoot)
+            log.debug(f"Successfully read file: '{location.uri}''")
         except self.client.exceptions.ClientError as err:
             errorcode = err.response["ResponseMetadata"]["HTTPStatusCode"]
             # head_object returns 404 when object does not exist only when user
@@ -208,9 +213,10 @@ class S3Datastore(FileLikeDatastore):
         # _toBytes is not implemented
         try:
             serializedDataset = formatter.toBytes(inMemoryDataset)
+            log.debug(f"Writing file directly to: '{location.uri}''")
             self.client.put_object(Bucket=location.netloc, Key=location.relativeToPathRoot,
                                    Body=serializedDataset)
-            log.debug("Wrote file directly to %s", location.uri)
+            log.debug(f"Successfully wrote file directly to {location.uri}")
         except NotImplementedError:
             with tempfile.NamedTemporaryFile(suffix=location.getExtension()) as tmpFile:
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
