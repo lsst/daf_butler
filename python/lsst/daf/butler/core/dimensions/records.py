@@ -34,12 +34,12 @@ from typing import (
 )
 
 from ..timespan import Timespan
-from .coordinate import DataCoordinate
 from .elements import Dimension
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     import astropy.time
     from .elements import DimensionElement
+    from .coordinate import DataCoordinate
 
 
 def _reconstructDimensionRecord(definition: DimensionElement, *args: Any) -> DimensionRecord:
@@ -125,14 +125,15 @@ class DimensionRecord:
     def __init__(self, *args: Any):
         for attrName, value in zip(self.__slots__, args):
             object.__setattr__(self, attrName, value)
+        from .coordinate import DataCoordinate
         if self.definition.required.names == self.definition.graph.required.names:
-            dataId = DataCoordinate(
+            dataId = DataCoordinate.fromRequiredValues(
                 self.definition.graph,
                 args[:len(self.definition.required.names)]
             )
         else:
             assert not isinstance(self.definition, Dimension)
-            dataId = DataCoordinate(
+            dataId = DataCoordinate.fromRequiredValues(
                 self.definition.graph,
                 tuple(getattr(self, name) for name in self.definition.required.names)
             )
@@ -196,7 +197,7 @@ class DimensionRecord:
 
     dataId: DataCoordinate
     """A dict-like identifier for this record's primary keys
-    (`DataCoordinate`).
+    (`MinimalDataCoordinate`).
     """
 
     definition: ClassVar[DimensionElement]

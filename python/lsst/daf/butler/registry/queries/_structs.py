@@ -28,12 +28,12 @@ from typing import Iterator, List, Optional, Union
 from sqlalchemy.sql import ColumnElement
 
 from ...core import (
+    DataCoordinate,
     DatasetType,
     Dimension,
     DimensionElement,
     DimensionGraph,
     DimensionUniverse,
-    ExpandedDataCoordinate,
     NamedKeyDict,
     NamedValueSet,
     SkyPixDimension,
@@ -101,18 +101,18 @@ class QuerySummary:
     requested : `DimensionGraph`
         The dimensions whose primary keys should be included in the result rows
         of the query.
-    dataId : `ExpandedDataCoordinate`, optional
+    dataId : `DataCoordinate`, optional
         A fully-expanded data ID identifying dimensions known in advance.  If
-        not provided, will be set to an empty data ID.
+        not provided, will be set to an empty data ID.  ``dataId.hasRecords()``
+        must return `True`.
     expression : `str` or `QueryWhereExpression`, optional
         A user-provided string WHERE expression.
     """
     def __init__(self, requested: DimensionGraph, *,
-                 dataId: Optional[ExpandedDataCoordinate] = None,
+                 dataId: Optional[DataCoordinate] = None,
                  expression: Optional[Union[str, QueryWhereExpression]] = None):
         self.requested = requested
-        self.dataId = dataId if dataId is not None else ExpandedDataCoordinate(requested.universe.empty, (),
-                                                                               records=NamedKeyDict())
+        self.dataId = dataId if dataId is not None else DataCoordinate.makeEmpty(requested.universe)
         self.expression = (expression if isinstance(expression, QueryWhereExpression)
                            else QueryWhereExpression(requested.universe, expression))
 
@@ -121,9 +121,11 @@ class QuerySummary:
     the query (`DimensionGraph`).
     """
 
-    dataId: ExpandedDataCoordinate
+    dataId: DataCoordinate
     """A data ID identifying dimensions known before query construction
-    (`ExpandedDataCoordinate`).
+    (`DataCoordinate`).
+
+    ``dataId.hasRecords()`` is guaranteed to return `True`.
     """
 
     expression: QueryWhereExpression

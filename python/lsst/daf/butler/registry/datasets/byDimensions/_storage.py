@@ -18,7 +18,6 @@ from lsst.daf.butler import (
     DataCoordinate,
     DatasetRef,
     DatasetType,
-    ExpandedDataCoordinate,
 )
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
 from lsst.daf.butler.registry.simpleQuery import SimpleQuery, Select
@@ -50,7 +49,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._dynamic = dynamic
         self._runKeyColumn = collections.getRunForeignKeyName()
 
-    def insert(self, run: RunRecord, dataIds: Iterable[ExpandedDataCoordinate]) -> Iterator[DatasetRef]:
+    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         staticRow = {
             "dataset_type_id": self._dataset_type_id,

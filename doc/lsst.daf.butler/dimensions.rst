@@ -55,14 +55,13 @@ Different datasets with the same `DatasetType` are always identified by the same
 Many data IDs are simply Python dictionaries that use the string names of dimensions or actual `Dimension` instances as keys.
 Most `Butler` and `Registry` APIs that accept data IDs as input accept both dictionaries and keyword arguments that are added to these dictionaries automatically.
 
-The data IDs returned by the `Butler` or `Registry` (and most of those used internally) are usually instances of the `DataCoordinate` class or its subclass, `ExpandedDataCoordinate`.
-`DataCoordinate` itself is complete but minimal.
-It contains only the keys that correspond to its `DimensionGraph`'s `~DimensionGraph.required` subset --- that is, the minimal set of keys needed to fully identify all other dimensions in the graph.
-Informal dictionary data IDs can be transformed into `DataCoordinate` instances by calling `DataCoordinate.standardize` (which is what most `Butler` and `Registry` APIs that accept data IDs do under the hood).
+The data IDs returned by the `Butler` or `Registry` (and most of those used internally) are usually instances of the `DataCoordinate` class.
+`DataCoordinate` instances can have different states of knowledge about the dimensions they identify.
+They always contain at least the key-value pairs that correspond to its `DimensionGraph`\ 's `~DimensionGraph.required` subset -- that is, the minimal set of keys needed to fully identify all other dimensions in the graph.
+They can also contain key-value pairs for the `~DimensionGraph.implied` subset (a state indicated by `DataCoordinate.hasFull()` returning `True`).
+And if `DataCoordinate.hasRecords` returns `True`, the data ID also holds all of the metadata records associated with its dimensions.
 
-`ExpandedDataCoordinate` is its maximal counterpart.
-While its iteration and views still behave like those of dictionary that maps only *required* dimensions to their primary key values (for compatibility with its base class), one can look up the primary key values for implied dimensions as well.
-`ExpandedDataCoordinate` also has additional attributes that hold all of the metadata fields associated with its dimensions.
+`DataCoordinate` objects can of course be used with standard Python built-in containers, but an interface (`DataCoordinateIterable`) and a few simple adapters (`DataCoordinateSet`, `DataCoordinateSequence`) also exist to provide a bit more functionality for homogenous collections of data IDs (in which all data IDs identify the same dimensions, and generally have the same `~DataCoordinate.hasFull` / `~DataCoordinate.hasRecords` state).
 
 .. _lsst.daf.butler-dimensions_spatial_and_temporal:
 

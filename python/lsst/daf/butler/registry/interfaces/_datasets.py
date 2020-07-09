@@ -38,7 +38,6 @@ from ...core import (
     DatasetRef,
     DatasetType,
     ddl,
-    ExpandedDataCoordinate,
 )
 from ..simpleQuery import Select
 
@@ -62,7 +61,7 @@ class DatasetRecordStorage(ABC):
         self.datasetType = datasetType
 
     @abstractmethod
-    def insert(self, run: RunRecord, dataIds: Iterable[ExpandedDataCoordinate]) -> Iterator[DatasetRef]:
+    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
         """Insert one or more dataset entries into the database.
 
         Parameters
@@ -70,8 +69,8 @@ class DatasetRecordStorage(ABC):
         run : `RunRecord`
             The record object describing the `~CollectionType.RUN` collection
             this dataset will be associated with.
-        dataIds : `Iterable` [ `ExpandedDataCoordinate` ]
-            Expanded data IDs (`ExpandedDataCoordinate` instances) for the
+        dataIds : `Iterable` [ `DataCoordinate` ]
+            Expanded data IDs (`DataCoordinate` instances) for the
             datasets to be added.   The dimensions of all data IDs must be the
             same as ``self.datasetType.dimensions``.
 

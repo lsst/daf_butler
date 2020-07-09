@@ -31,7 +31,7 @@ from typing import (
     Tuple,
 )
 
-from ..dimensions import DataCoordinate, DimensionGraph, ExpandedDataCoordinate
+from ..dimensions import DataCoordinate, DimensionGraph
 from ..configSupport import LookupKey
 from ..utils import immutable
 from ..named import NamedKeyDict
@@ -180,12 +180,12 @@ class DatasetRef:
         """
         return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, conform=False)
 
-    def expanded(self, dataId: ExpandedDataCoordinate) -> DatasetRef:
+    def expanded(self, dataId: DataCoordinate) -> DatasetRef:
         """Return a new `DatasetRef` with the given expanded data ID.
 
         Parameters
         ----------
-        dataId : `ExpandedDataCoordinate`
+        dataId : `DataCoordinate`
             Data ID for the new `DatasetRef`.  Must compare equal to the
             original data ID.
 

@@ -56,8 +56,8 @@ from ..core import (
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
-    ExpandedDataCoordinate,
-    NamedKeyDict,
+    NamedKeyMapping,
+    NameLookupMapping,
     StorageClassFactory,
 )
 from ..core.utils import doImport, iterable, transactional
@@ -764,8 +764,8 @@ class Registry:
         return self._datastoreBridges.findDatastores(ref)
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
-                     records: Optional[Mapping[DimensionElement, Optional[DimensionRecord]]] = None,
-                     **kwargs: Any) -> ExpandedDataCoordinate:
+                     records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
+                     **kwargs: Any) -> DataCoordinate:
         """Expand a dimension-based data ID to include additional information.
 
         Parameters
@@ -778,34 +778,38 @@ class Registry:
             Dimensions that are in ``dataId`` or ``kwds`` but not in ``graph``
             are silently ignored, providing a way to extract and expand a
             subset of a data ID.
-        records : `Mapping` [`DimensionElement`, `DimensionRecord`], optional
+        records : `Mapping` [`str`, `DimensionRecord`], optional
             Dimension record data to use before querying the database for that
-            data.
+            data, keyed by element name.
         **kwargs
             Additional keywords are treated like additional key-value pairs for
             ``dataId``, extending and overriding
 
         Returns
         -------
-        expanded : `ExpandedDataCoordinate`
+        expanded : `DataCoordinate`
             A data ID that includes full metadata for all of the dimensions it
-            identifieds.
+            identifieds, i.e. guarantees that ``expanded.hasRecords()`` and
+            ``expanded.hasFull()`` both return `True`.
         """
         standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions, **kwargs)
-        if isinstance(standardized, ExpandedDataCoordinate):
+        if standardized.hasRecords():
             return standardized
-        elif isinstance(dataId, ExpandedDataCoordinate):
-            records = NamedKeyDict(records) if records is not None else NamedKeyDict()
-            records.update(dataId.records)
+        if records is None:
+            records = {}
+        elif isinstance(records, NamedKeyMapping):
+            records = records.byName()
         else:
-            records = NamedKeyDict(records) if records is not None else NamedKeyDict()
-        keys = dict(standardized.byName())
+            records = dict(records)
+        if isinstance(dataId, DataCoordinate) and dataId.hasRecords():
+            records.update(dataId.records.byName())
+        keys = standardized.byName()
         for element in standardized.graph.primaryKeyTraversalOrder:
             record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
             if record is ...:
                 storage = self._dimensions[element]
                 record = storage.fetch(keys)
-                records[element] = record
+                records[element.name] = record
             if record is not None:
                 for d in element.implied:
                     value = getattr(record, d.name)
@@ -825,8 +829,8 @@ class Registry:
                         "but it is marked alwaysJoin=True; this means one or more dimensions are not "
                         "related."
                     )
-                records.update((d, None) for d in element.implied)
-        return ExpandedDataCoordinate(standardized.graph, standardized.values(), records=records)
+                records.update((name, None) for name in element.implied.names)
+        return DataCoordinate.standardize(keys, graph=standardized.graph).expanded(records=records)
 
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[Mapping[str, Any], DimensionRecord],
@@ -1077,8 +1081,9 @@ class Registry:
             key column of a dimension table) dimension name.  See
             :ref:`daf_butler_dimension_expressions` for more information.
         expand : `bool`, optional
-            If `True` (default) yield `ExpandedDataCoordinate` instead of
-            minimal `DataCoordinate` base-class instances.
+            If `True` (default) yield `DataCoordinate` instances for which
+            `~DataCoordinate.hasRecords` is guaranteed to return `True`,
+            performing extra database fetches as necessary.
         components : `bool`, optional
             If `True`, apply all dataset expression patterns to component
             dataset type names as well.  If `False`, never apply patterns to
@@ -1134,7 +1139,10 @@ class Registry:
             if predicate(row):
                 result = query.extractDataId(row)
                 if expand:
-                    yield self.expandDataId(result, records=standardizedDataId.records)
+                    yield self.expandDataId(
+                        result,
+                        records=standardizedDataId.records,
+                    )
                 else:
                     yield result
 
@@ -1185,8 +1193,9 @@ class Registry:
             ``collections`` must not contain regular expressions and may not
             be `...`.
         expand : `bool`, optional
-            If `True` (default) attach `ExpandedDataCoordinate` instead of
-            minimal `DataCoordinate` base-class instances.
+            If `True` (default) attach `DataCoordinate` instances for which
+            `~DataCoordinate.hasRecords` is guaranteed to return `True`,
+            performing extra database fetches as necessary.
         components : `bool`, optional
             If `True`, apply all dataset expression patterns to component
             dataset type names as well.  If `False`, never apply patterns to
@@ -1307,7 +1316,10 @@ class Registry:
                 if predicate(row):
                     dataId = query.extractDataId(row, graph=datasetType.dimensions)
                     if expand:
-                        dataId = self.expandDataId(dataId, records=standardizedDataId.records)
+                        dataId = self.expandDataId(
+                            dataId,
+                            records=standardizedDataId.records
+                        )
                     yield query.extractDatasetRef(row, datasetType, dataId)[0]
         else:
             # For each data ID, yield only the DatasetRef with the lowest
@@ -1326,7 +1338,10 @@ class Registry:
             # so we do as little expansion as possible.
             if expand:
                 for ref in bestRefs.values():
-                    dataId = self.expandDataId(ref.dataId, records=standardizedDataId.records)
+                    dataId = self.expandDataId(
+                        ref.dataId,
+                        records=standardizedDataId.records
+                    )
                     yield ref.expanded(dataId)
             else:
                 yield from bestRefs.values()

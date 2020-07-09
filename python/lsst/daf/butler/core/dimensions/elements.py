@@ -284,25 +284,25 @@ class DimensionElement:
 
     def __lt__(self, other: DimensionElement) -> bool:
         try:
-            return self.universe._elementIndices[self] < self.universe._elementIndices[other]
+            return self.universe._elementIndices[self.name] < self.universe._elementIndices[other.name]
         except KeyError:
             return NotImplemented
 
     def __le__(self, other: DimensionElement) -> bool:
         try:
-            return self.universe._elementIndices[self] <= self.universe._elementIndices[other]
+            return self.universe._elementIndices[self.name] <= self.universe._elementIndices[other.name]
         except KeyError:
             return NotImplemented
 
     def __gt__(self, other: DimensionElement) -> bool:
         try:
-            return self.universe._elementIndices[self] > self.universe._elementIndices[other]
+            return self.universe._elementIndices[self.name] > self.universe._elementIndices[other.name]
         except KeyError:
             return NotImplemented
 
     def __ge__(self, other: DimensionElement) -> bool:
         try:
-            return self.universe._elementIndices[self] >= self.universe._elementIndices[other]
+            return self.universe._elementIndices[self.name] >= self.universe._elementIndices[other.name]
         except KeyError:
             return NotImplemented
 
