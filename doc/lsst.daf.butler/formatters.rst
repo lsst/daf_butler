@@ -1,8 +1,8 @@
-.. _daf_butler_formatters_assemblers:
+.. _daf_butler_storageclass_formatters_assemblers:
 
-#########################
-Formatters and Assemblers
-#########################
+##########################################
+Storage Classes, Assemblers and Formatters
+##########################################
 
 Formatters and assemblers provide the interface between Butler and the python types it is storing and retrieving.
 A Formatter is responsible for serializing a Python type to an external storage system and reading that serialized form back into Python.
@@ -11,6 +11,8 @@ It is possible for a formatter to be globally configured to use particular param
 On retrieval of datasets read parameters can be used that can, for example, return only a subset of the data.
 
 Assemblers are used to disassemble and reassemble composite datasets and can also be used to process read parameters that adjust how the retrieved dataset might be modified on get.
+
+Deciding which formatter or assembler to use is controlled by the storage class and corresponding dataset type.
 
 Storage Classes
 ===============
@@ -185,15 +187,130 @@ Formatters
 Formatters are responsible for serializing a Python type to a storage system and for reconstructing the Python type from the serialized form.
 A formatter has to implement at minimum a `~lsst.daf.butler.Formatter.read()` method and a `~lsst.daf.butler.Formatter.write()` method.
 The ``write()`` method takes a Python object and serializes it somewhere and the ``read()`` method is optionally given a component name and returns the matching Python object.
-Details of where the artifact may be located within the datastore are passed to the constructor as a `~lsst.daf.butler.FileDescriptor` instance.
+Details of where the artifact may be located within the datastore are passed to the constructor by the datastore as a `~lsst.daf.butler.FileDescriptor` instance.
 
 .. warning::
 
   The formatter system has only been used to write datasets to files or to bytes that would be written to a file.
   The interface may evolve as other types of datastore become available and make use of the formatter system.
 
+When ingesting files from external sources formatters are associated with each incoming file but these formatters are only required to support a `~lsst.daf.butler.Formatter.read()` method.
+They must though declare all the file extensions that they can support.
+This allows the datastore to ensure that the image being ingested has not obviously been associated with a formatter that does not recognize it.
+
+In the current implementation that is focussed entirely on external files in datastores, the location of the serialized data is available to the formatter using the `~lsst.daf.butler.Formatter.fileDescriptor` property.
+This `~lsst.daf.butler.FileDescriptor` property makes the file location available as a `~lsst.daf.butler.Location` and also gives access to read parameters supplied by the caller and also defines the `~lsst.daf.butler.StorageClass` of the dataset being written.
+On read the the storage class used to read the file can be different from the storage class expected to be returned by `~lsst.daf.butler.Datastore`.
+This happens if a composite was written but a component from that composite is being read.
+
+File Extensions
+^^^^^^^^^^^^^^^
+
+Each formatter that reads or writes a file must declare the file extensions that it supports.
+For a formatter that supports a single extension this is most easily achieved by setting the class property `~lsst.daf.butler.Formatter.extension` to that extension.
+In some scenarios a formatter might support multiple formats that are controlled by write parameters.
+In this case the formatter should assign a frozen set to the `~lsst.daf.butler.Formatter.supportedExtensions` class property.
+It is then required that the class implement an instance property for ``extension`` that returns the extension that will be used by this formatter for writing the current dataset.
+
+File vs Bytes
+^^^^^^^^^^^^^
+
+Some datastores can stream bytes from remote storage systems and do not require that a local file is created before the Python object can be created.
+To support this use case an implementer can implement `~lsst.daf.butler.Formatter.fromBytes()` for reading in from a datastore and `~lsst.daf.butler.Formatter.toBytes()` for serializing to a datastore.
+If a formatter raises `NotImplementedError` when these byte-like methods are called the datastore will default to using the `~lsst.daf.butler.Formatter.read()` and `~lsst.daf.butler.Formatter.write()` methods making use of local temporary files.
+
+.. warning::
+
+  This interface has some rough edges since it is not yet possible for the formatter to optionally support bytes directly based on the amount of data involved.
+  Even though bytes may be more efficient for small or medium-sized datasets, in some cases with significant datasets the memory overhead of multiple copies may be excessive and a temporary file would be more prudent.
+  Neither datastore nor the formatter can opt out of using bytes on a per-dataset basis.
+
+FileFormatter Subclass
+^^^^^^^^^^^^^^^^^^^^^^
+
+For many file-based formatter implementations a subclass of `~lsst.daf.butler.Formatter` can be used that has a much simplified interface.
+`~lsst.daf.butler.formatters.file.FileFormatter` allows a formatter implementation to be written using two methods: `~lsst.daf.butler.formatters.file.FileFormatter._readFile()` takes a local path to the file system and the expected Python type, and `~lsst.daf.butler.formatters.file.FileFormatter._writeFile()` takes the in-memory object to be serialized.
+
+Composites are not handled by `~lsst.daf.butler.formatters.file.FileFormatter`.
+
+.. note::
+  I'm not sure I understand why _writeFile() doesn't also take the path rather than requiring FileDescriptor to be used.
+  It's inconsistent with _readFile that does take the local path.
+  It's not much of a simplification as things stand.
+  Need to revisit that.
+
+Write Parameters
+^^^^^^^^^^^^^^^^
+
+Datastores can be configured to specify parameters that can control how a formatter serializes a Python object.
+These configuration parameters are not available to `~lsst.daf.butler.Butler` users as part of `~lsst.daf.butler.Butler.put` since the user does not know how a datastore is configured or which formatter will be used for a particular `~lsst.daf.butler.DatasetType`.
+
+When datastore instantiates the `~lsst.daf.butler.Formatter` the relevant write parameters are supplied.
+These write parameters can be accessed when the data are written and they can control any aspect of the write.
+The only caveat is that the `~lsst.daf.butler.Formatter.read` method must be able to read the resulting file without having to know which write parameters were used to create it.
+The `~lsst.daf.butler.Formatter.read` method can look at the file extension and file metadata but it will not have the write parameters supplied to it by datastore.
+
+Write Recipes
+^^^^^^^^^^^^^
+
+Sometimes you would like a formatter to be configured in the same way for all dataset types that use it but the configuration is very detailed.
+An example of this is the configuration of data compression parameters for FITS files.
+Rather than require that every formatter is explicitly configured with this detail, we have the concept of named write recipes.
+Write recipes have their own configuration section and are associated with a specific formatter class and contain named collections of parameters.
+The write parameters can then specify one of the named recipes by name.
+
+If write recipes are used the formatter should implement a `~lsst.daf.butler.Formatter.validateWriteRecipes` method.
+This method not only checks that the parameters are reasonable, it can also update the parameters with default values to make them self-consistent.
 
 Configuring Formatters
 ^^^^^^^^^^^^^^^^^^^^^^
 
-Formatter configuration matches on dataset type, storage class, or data ID as described in :ref:`daf_butler-config-lookups`.
+Formatter configuration matches on dataset type, storage class, or data ID as described in :ref:`daf_butler-config-lookups` and is present in the ``formatters`` section of the datastore YAML configuration.
+The simplest configuration maps one of these keys to a fully-qualified python formatter class.
+For example:
+
+.. code-block:: yaml
+
+   Defects: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
+   Exposure: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
+
+Here we have two storage classes and they each point to a different formatter.
+
+If a particular entry needs write parameters they can be defined by expanding the hierarchy:
+
+.. code-block:: yaml
+
+  Packages:
+    formatter: lsst.obs.base.formatters.packages.PackagesFormatter
+    parameters:
+      format: yaml
+
+Here the ``Packages`` storage class is associated with a formatter and the write parameters define one ``format`` option.
+
+Sometimes it is required that every usage of a specific formatter should be configured in a uniform way.
+This can be done using the magic ``default`` entry:
+
+.. code-block:: yaml
+
+  default:
+    lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter:
+      # default is the default recipe regardless but this demonstrates
+      # how to specify a default write parameter
+      recipe: lossless
+
+Here we are declaring that every write using the ``FitsExposureFormatter`` should by default be configured to use the ``lossless`` compression write recipe (the ``recipe`` parameter here is not special, but is understood by the formatter to mean a key into the write recipes configurations).
+Parameters associated with a specific entry will be merged with the defaults.
+This can allow lossless compression by default but allow specific dataset types to use lossy compression.
+
+Write recipes also get their own magic key at the top level:
+
+.. code-block:: yaml
+
+  write_recipes:
+    lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter:
+      recipe1:
+        ...
+      recipe2:
+        ...
+
+The write recipes are also grouped by formatter class and the ``...`` represent arbitrary yaml configuration associated with label ``recipe1`` and ``recipe2``.
