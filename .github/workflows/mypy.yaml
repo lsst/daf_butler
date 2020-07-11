@@ -19,9 +19,6 @@ jobs:
       - name: Install
         run: pip install mypy
 
-      - name: Ensure LSST module root
-        run: touch python/lsst/__init__.py
-
       - name: Change to source directory and run mypy
         working-directory: ./python
         run: mypy lsst
