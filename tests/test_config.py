@@ -411,20 +411,6 @@ class ConfigSubsetTestCase(unittest.TestCase):
         with self.assertRaises(KeyError):
             c = ConfigTest()
 
-    def testButlerDir(self):
-        """Test that DAF_BUTLER_DIR is used to locate files."""
-        # with modified_environment(DAF_BUTLER_DIR=self.testDir):
-        #     c = ConfigTestButlerDir()
-        #     self.assertIn("item3", c)
-
-        # Again with a search path
-        with modified_environment(DAF_BUTLER_DIR=self.testDir,
-                                  DAF_BUTLER_CONFIG_PATH=self.configDir2):
-            c = ConfigTestButlerDir()
-            self.assertIn("item3", c)
-            self.assertEqual(c["item3"], "override")
-            self.assertEqual(c["item4"], "new")
-
     def testExternalOverride(self):
         """Ensure that external values win"""
         c = ConfigTest({"item3": "newval"}, searchPaths=(self.configDir,))

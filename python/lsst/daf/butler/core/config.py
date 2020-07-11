@@ -25,11 +25,14 @@ from __future__ import annotations
 
 __all__ = ("Config", "ConfigSubset")
 
+from dataclasses import dataclass
 import collections
 import copy
 import logging
 import pprint
 import os
+import pkg_resources
+import posixpath
 import yaml
 import sys
 from yaml.representer import Representer
@@ -41,7 +44,6 @@ try:
 except ImportError:
     boto3 = None
 
-import lsst.utils
 from lsst.utils import doImport
 from .location import ButlerURI
 from .s3utils import getS3Client
@@ -140,6 +142,66 @@ class Loader(yaml.CSafeLoader):
         return yaml.load(response["Body"], Loader)
 
 
+@dataclass
+class Resource:
+    """A package and a resource within that package."""
+
+    package: str
+    """The package from which this resource is requested."""
+
+    name: str
+    """Full name of the resource."""
+
+    def dirname(self) -> ResourceDir:
+        """Returns the enclosing resource parent directory for this resource.
+
+        Returns
+        -------
+        dir : `ResourceDir`
+            The "directory" corresponding to this resource.
+        """
+        dir = posixpath.split(self.name)[0]
+        return ResourceDir(self.package, dir)
+
+    def exists(self) -> bool:
+        """Check that the resource exists.
+
+        Returns
+        -------
+        exists : `bool`
+            `True` if the resource exists.
+        """
+        return pkg_resources.resource_exists(self.package, self.name)
+
+
+@dataclass
+class ResourceDir:
+    """A "directory" within a package resource."""
+
+    package: str
+    """The package from which this resource is requested."""
+
+    dir: str
+    """A directory path to a resource in this package. Not a full path."""
+
+    def toResource(self, file):
+        """Convert a resource directory to a concrete resource.
+
+        Parameters
+        ----------
+        file : `str`
+            A file within this resource directory to return a concrete
+            `Resource`.
+
+        Returns
+        -------
+        resource : `Resource`
+            A full definition of a resource.
+        """
+        # Resources always use posix paths
+        return Resource(self.package, posixpath.join(self.dir, file))
+
+
 class Config(collections.abc.MutableMapping):
     r"""Implements a datatype that is used by `Butler` for configuration
     parameters.
@@ -203,6 +265,10 @@ class Config(collections.abc.MutableMapping):
     """Key used to indicate that another config should be included at this
     part of the hierarchy."""
 
+    resourcesPackage: str = "lsst.daf.butler"
+    """Package to search for default configuration data.  The resources
+    themselves will be within a ``configs`` resource hierarchy."""
+
     def __init__(self, other=None):
         self._data = {}
         self.configFile = None
@@ -219,10 +285,13 @@ class Config(collections.abc.MutableMapping):
             # if other is a string, assume it is a file path.
             self.__initFromFile(other)
             self._processExplicitIncludes()
+        elif isinstance(other, Resource):
+            # Assume this is a package resources request
+            self.__initFromResource(other)
         else:
             # if the config specified by other could not be recognized raise
             # a runtime error.
-            raise RuntimeError("A Config could not be loaded from other:%s" % other)
+            raise RuntimeError(f"A Config could not be loaded from other: {other}")
 
     def ppprint(self):
         """helper function for debugging, prints a config out in a readable
@@ -268,7 +337,7 @@ class Config(collections.abc.MutableMapping):
         """
         return cls().__initFromYaml(string)
 
-    def __initFromFile(self, path):
+    def __initFromFile(self, path: str) -> None:
         """Load a file from a path or an URI.
 
         Parameters
@@ -283,8 +352,36 @@ class Config(collections.abc.MutableMapping):
             else:
                 self.__initFromYamlFile(uri.ospath)
         else:
-            raise RuntimeError("Unhandled config file type:%s" % uri)
-        self.configFile = str(path)
+            raise RuntimeError(f"Unhandled config file type: {uri}")
+        self.configFile = uri
+
+    def __initFromResource(self, resource: Resource) -> None:
+        """Load a config from a package resource.
+
+        Parameters
+        ----------
+        resource : `Resource`
+            The resource package and path.
+        """
+        if not resource.exists():
+            raise RuntimeError(f"Package resource {resource} does not exist")
+        if resource.name.endswith(".yaml"):
+            self.__initFromYamlResource(resource)
+        else:
+            raise RuntimeError(f"Unhandled config resource type: {resource}")
+        self.configFile = resource
+
+    def __initFromYamlResource(self, resource: Resource) -> None:
+        """Load a config from a YAML package resource.
+
+        Parameters
+        ----------
+        resource : `Resource`
+            The resource package and path.
+        """
+        log.debug("Opening YAML config resource: %s.%s", resource.package, resource.name)
+        with pkg_resources.resource_stream(resource.package, resource.name) as fh:
+            self.__initFromYaml(fh)
 
     def __initFromS3YamlFile(self, url):
         """Load a file at a given S3 Bucket uri and attempts to load it from
@@ -353,7 +450,13 @@ class Config(collections.abc.MutableMapping):
         # Search paths for config files
         searchPaths = [os.path.curdir]
         if self.configFile is not None:
-            searchPaths.append(os.path.abspath(os.path.dirname(self.configFile)))
+            if isinstance(self.configFile, str):
+                configDir = os.path.abspath(os.path.dirname(self.configFile))
+            elif isinstance(self.configFile, (ButlerURI, Resource)):
+                configDir = self.configFile.dirname()
+            else:
+                raise RuntimeError(f"Unexpected type for config file: {self.configFile}")
+            searchPaths.append(configDir)
 
         # Ensure we know what delimiter to use
         names = self.nameTuples()
@@ -385,10 +488,37 @@ class Config(collections.abc.MutableMapping):
                         found = fileName
                     else:
                         for dir in searchPaths:
-                            filePath = os.path.join(dir, fileName)
-                            if os.path.exists(filePath):
-                                found = os.path.normpath(os.path.abspath(filePath))
-                                break
+                            if isinstance(dir, str):
+                                filePath = os.path.join(dir, fileName)
+                                if os.path.exists(filePath):
+                                    found = os.path.normpath(os.path.abspath(filePath))
+                                    break
+                            elif isinstance(dir, ResourceDir):
+                                resource = dir.toResource(fileName)
+                                if resource.exists():
+                                    found = resource
+                                    break
+                            elif isinstance(dir, ButlerURI):
+                                if not dir.scheme:
+                                    filePath = os.path.join(dir.path, fileName)
+                                    if os.path.exists(filePath):
+                                        found = os.path.normpath(os.path.abspath(filePath))
+                                        break
+                                elif dir.scheme == "file":
+                                    # import private helper function
+                                    from .location import posix2os
+                                    filePath = posix2os(posixpath.join(dir.path, fileName))
+                                    if os.path.exists(filePath):
+                                        found = os.path.normpath(os.path.abspath(filePath))
+                                        break
+                                else:
+                                    # S3 is harder because we can't tell if
+                                    # the resource is there until we down
+                                    # load it -- I think this means we down
+                                    # load the bytes and then pass the
+                                    # bytes to the Config constructor.
+                                    raise RuntimeError("Can not currently follow includeConfigs to "
+                                                       f"{dir}")
                     if not found:
                         raise RuntimeError(f"Unable to find referenced include file: {fileName}")
 
@@ -861,7 +991,7 @@ class Config(collections.abc.MutableMapping):
             mode = "x"
         with open(path, mode) as f:
             self.dump(f)
-        self.configFile = path
+        self.configFile = ButlerURI(path)
 
     def dumpToS3File(self, uri, *, overwrite=True):
         """Writes the config to a file in S3 Bucket.
@@ -879,6 +1009,10 @@ class Config(collections.abc.MutableMapping):
         FileExistsError
             Raised if the configuration already exists at this location
             and overwrite is set to `False`.
+
+        Notes
+        -----
+        The name of the config output location is stored in the Config object.
         """
         if boto3 is None:
             raise ModuleNotFoundError("Could not find boto3. "
@@ -901,6 +1035,8 @@ class Config(collections.abc.MutableMapping):
             self.dump(stream)
             stream.seek(0)
             s3.put_object(Bucket=bucket, Key=key, Body=stream.read())
+
+        self.configFile = uri
 
     @staticmethod
     def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):
@@ -1043,7 +1179,8 @@ class ConfigSubset(Config):
         Explicit additional paths to search for defaults. They should
         be supplied in priority order. These paths have higher priority
         than those read from the environment in
-        `ConfigSubset.defaultSearchPaths()`.
+        `ConfigSubset.defaultSearchPaths()`.  Paths can be `str` referring to
+        the local file system, or `ResourceDir`.
     """
 
     component: ClassVar[Optional[str]] = None
@@ -1159,7 +1296,13 @@ class ConfigSubset(Config):
         paths : `list`
             Returns a list of paths to search. The returned order is in
             priority with the highest priority paths first. The butler config
-            directory will always be at the end of the list.
+            configuration resources will not be included here but will
+            always be searched last.
+
+        Notes
+        -----
+        The environment variable is split on the standard ``:`` path separator.
+        This currently makes it incompatible with usage of URIs.
         """
         # We can pick up defaults from multiple search paths
         # We fill defaults by using the butler config path and then
@@ -1170,8 +1313,8 @@ class ConfigSubset(Config):
             externalPaths = os.environ[CONFIG_PATH].split(os.pathsep)
             defaultsPaths.extend(externalPaths)
 
-        # Find the butler configs
-        defaultsPaths.append(os.path.join(lsst.utils.getPackageDir("daf_butler"), "config"))
+        # Add the package defaults as a resource
+        defaultsPaths.append(ResourceDir(cls.resourcesPackage, "configs"))
 
         return defaultsPaths
 
@@ -1188,23 +1331,36 @@ class ConfigSubset(Config):
             Paths to search for the supplied configFile. This path
             is the priority order, such that files read from the
             first path entry will be selected over those read from
-            a later path.
+            a later path. Can contain `str` referring to the local file
+            system or `ResourceDir`.
         configFile : `str`
             File to locate in path. If absolute path it will be read
-            directly and the search path will not be used.
+            directly and the search path will not be used. Can be a URI
+            to an explicit resource (which will ignore the search path)
+            which is assumed to exist.
         """
-        if os.path.isabs(configFile):
-            if os.path.exists(configFile):
-                self.filesRead.append(configFile)
-                self._updateWithOtherConfigFile(configFile)
+        uri = ButlerURI(configFile)
+        if uri.scheme:
+            # Assume this resource exists
+            self._updateWithOtherConfigFile(configFile)
+            self.filesRead.append(configFile)
+        elif os.path.isabs(configFile) and os.path.exists(configFile):
+            self.filesRead.append(configFile)
+            self._updateWithOtherConfigFile(configFile)
         else:
             # Reverse order so that high priority entries
             # update the object last.
             for pathDir in reversed(searchPaths):
-                file = os.path.join(pathDir, configFile)
-                if os.path.exists(file):
-                    self.filesRead.append(file)
-                    self._updateWithOtherConfigFile(file)
+                if isinstance(pathDir, str):
+                    file = os.path.join(pathDir, configFile)
+                    if os.path.exists(file):
+                        self.filesRead.append(file)
+                        self._updateWithOtherConfigFile(file)
+                elif isinstance(pathDir, ResourceDir):
+                    resource = pathDir.toResource(configFile)
+                    if resource.exists():
+                        self.filesRead.append(resource)
+                        self._updateWithOtherConfigFile(resource)
 
     def _updateWithOtherConfigFile(self, file):
         """Read in some defaults and update.
