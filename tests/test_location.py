@@ -114,6 +114,14 @@ class LocationTestCase(unittest.TestCase):
             with self.subTest(uri=uriInfo[0]):
                 self.assertEqual(uri.path, uriInfo[2])
 
+        # Copy constructor
+        uri = ButlerURI("s3://amazon/datastore", forceDirectory=True)
+        uri2 = ButlerURI(uri)
+        self.assertEqual(uri, uri2)
+        uri = ButlerURI("file://amazon/datastore/file.txt")
+        uri2 = ButlerURI(uri)
+        self.assertEqual(uri, uri2)
+
     def testFileLocation(self):
         root = os.path.abspath(os.path.curdir)
         factory = LocationFactory(root)
