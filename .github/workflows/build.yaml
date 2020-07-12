@@ -38,3 +38,10 @@ jobs:
 
       - name: Run tests
         run: pytest -r a -v -n 3
+
+      - name: Install documenteer
+        run: pip install documenteer[pipelines]
+
+      - name: Build documentation
+        working-directory: ./doc
+        run: package-docs build
