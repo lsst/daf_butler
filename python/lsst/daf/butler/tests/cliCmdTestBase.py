@@ -126,11 +126,11 @@ class CliCmdTestBase(abc.ABC):
             followed by arguments, option keys and option values.
         expectedMsg : `str`
             An error message that should be present in stdout after running the
-            subcommand.
+            subcommand. Can be a regular expression string.
         """
         result = self.run_command(inputs)
         self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertIn(expectedMsg, result.stdout)
+        self.assertRegex(result.stdout, expectedMsg)
 
     def test_help(self):
         self.assertFalse(self.command.get_short_help_str().endswith("..."),

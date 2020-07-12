@@ -124,8 +124,9 @@ class SplitKvCmdTestCase(unittest.TestCase):
         for val in ("BOZ", "lsst.daf.butler=BOZ"):
             result = self.runner.invoke(cli, ["--metasyntactic-var", val])
             self.assertNotEqual(result.exit_code, 0, msg=clickResultMsg(result))
-            self.assertIn('Error: Invalid value for "--metasyntactic-var": invalid choice: BOZ. '
-                          f'(choose from {", ".join(choices)})',
+            self.assertRegex(result.output,
+                             r"Error: Invalid value for ['\"]\-\-metasyntactic-var['\"]:")
+            self.assertIn(f" invalid choice: BOZ. (choose from {', '.join(choices)})",
                           result.output)
 
         # check value normalization (lower case "foo" should become "FOO")

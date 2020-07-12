@@ -43,7 +43,7 @@ class CreateTest(CliCmdTestBase, unittest.TestCase):
 
     def test_requiredMissing(self):
         """Test that if the required parameter is missing it fails"""
-        self.run_missing(["create"], 'Error: Missing argument "REPO".')
+        self.run_missing(["create"], r"Error: Missing argument ['\"]REPO['\"].")
 
     def test_all(self):
         """Test all parameters."""
