@@ -29,8 +29,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # We have two cores so we can speed up the testing with xdist
+      - name: Install xdist
+        run: pip install pytest-xdist
+
       - name: Build and install
         run: pip install -v .
 
       - name: Run tests
-        run: pytest -r a -v
+        run: pytest -r a -v -n 3
