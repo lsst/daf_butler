@@ -6,7 +6,10 @@ on:
 
 jobs:
   build_and_test:
-    runs-on: ubuntu-latest
+    # runs-on: ubuntu-latest
+    # Need >= 20.04 for modern sqlite. Can switch to latest when
+    # github change
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
 
