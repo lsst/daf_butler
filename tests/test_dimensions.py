@@ -21,17 +21,55 @@
 
 import unittest
 import copy
+from dataclasses import dataclass
+import os
 import pickle
+from random import Random
 import itertools
+from typing import Iterator, Optional
 
 from lsst.daf.butler import (
+    DataCoordinate,
+    DataCoordinateSequence,
     Dimension,
     DimensionGraph,
     DimensionUniverse,
     makeDimensionElementTableSpec,
     NamedKeyDict,
     NamedValueSet,
+    Registry,
+    YamlRepoImportBackend,
 )
+from lsst.daf.butler.registry import RegistryConfig
+
+DIMENSION_DATA_FILE = os.path.normpath(os.path.join(os.path.dirname(__file__),
+                                                    "data", "registry", "hsc-rc2-subset.yaml"))
+
+
+def loadDimensionData() -> DataCoordinateSequence:
+    """Load dimension data from an export file included in the code repository.
+
+    Returns
+    -------
+    dataIds : `DataCoordinateSet`
+        A set containing all data IDs in the export file.
+    """
+    # Create an in-memory SQLite database and Registry just to import the YAML
+    # data and retreive it as a set of DataCoordinate objects.
+    config = RegistryConfig()
+    config["db"] = "sqlite://"
+    registry = Registry.fromConfig(config, create=True)
+    with open(DIMENSION_DATA_FILE, 'r') as stream:
+        backend = YamlRepoImportBackend(stream, registry)
+    backend.register()
+    backend.load(datastore=None)
+    dimensions = DimensionGraph(registry.dimensions, names=["visit", "detector", "tract", "patch"])
+    return DataCoordinateSequence(
+        dataIds=tuple(registry.queryDimensions(dimensions, expand=True)),
+        graph=dimensions,
+        hasFull=True,
+        hasRecords=True,
+    )
 
 
 class DimensionTestCase(unittest.TestCase):
@@ -210,6 +248,334 @@ class DimensionTestCase(unittest.TestCase):
             graph1 = element1.graph
             graph2 = pickle.loads(pickle.dumps(graph1))
             self.assertIs(graph1, graph2)
+
+
+@dataclass
+class SplitByStateFlags:
+    """A struct that separates data IDs with different states but the same
+    values.
+    """
+
+    minimal: Optional[DataCoordinateSequence] = None
+    """Data IDs that only contain values for required dimensions.
+
+    `DataCoordinateSequence.hasFull()` will return `True` for this if and only
+    if ``minimal.graph.implied`` has no elements.
+    `DataCoordinate.hasRecords()` will always return `False`.
+    """
+
+    complete: Optional[DataCoordinateSequence] = None
+    """Data IDs that contain values for all dimensions.
+
+    `DataCoordinateSequence.hasFull()` will always `True` and
+    `DataCoordinate.hasRecords()` will always return `True` for this attribute.
+    """
+
+    expanded: Optional[DataCoordinateSequence] = None
+    """Data IDs that contain values for all dimensions as well as records.
+
+    `DataCoordinateSequence.hasFull()` and `DataCoordinate.hasRecords()` will
+    always return `True` for this attribute.
+    """
+
+    def chain(self, n: Optional[int] = None) -> Iterator:
+        """Iterate over the data IDs of different types.
+
+        Parameters
+        ----------
+        n : `int`, optional
+            If provided (`None` is default), iterate over only the ``nth``
+            data ID in each attribute.
+
+        Yields
+        ------
+        dataId : `DataCoordinate`
+            A data ID from one of the attributes in this struct.
+        """
+        if n is None:
+            s = slice(None, None)
+        else:
+            s = slice(n, n + 1)
+        if self.minimal is not None:
+            yield from self.minimal[s]
+        if self.complete is not None:
+            yield from self.complete[s]
+        if self.expanded is not None:
+            yield from self.expanded[s]
+
+
+class DataCoordinateTestCase(unittest.TestCase):
+
+    RANDOM_SEED = 10
+
+    @classmethod
+    def setUpClass(cls):
+        cls.allDataIds = loadDimensionData()
+
+    def setUp(self):
+        self.rng = Random(self.RANDOM_SEED)
+
+    def randomDataIds(self, n: int, dataIds: Optional[DataCoordinateSequence] = None):
+        """Select random data IDs from those loaded from test data.
+
+        Parameters
+        ----------
+        n : `int`
+             Number of data IDs to select.
+        dataIds : `DataCoordinateSequence`, optional
+            Data IDs to select from.  Defaults to ``self.allDataIds``.
+
+        Returns
+        -------
+        selected : `DataCoordinateSequence`
+            ``n`` Data IDs randomly selected from ``dataIds`` with replacement.
+        """
+        if dataIds is None:
+            dataIds = self.allDataIds
+        return DataCoordinateSequence(self.rng.sample(dataIds, n),
+                                      graph=dataIds.graph,
+                                      hasFull=dataIds.hasFull(),
+                                      hasRecords=dataIds.hasRecords(),
+                                      check=False)
+
+    def randomDimensionSubset(self, n: int = 3, graph: Optional[DimensionGraph] = None) -> DimensionGraph:
+        """Generate a random `DimensionGraph` that has a subset of the
+        dimensions in a given one.
+
+        Parameters
+        ----------
+        n : `int`
+             Number of dimensions to select, before automatic expansion by
+             `DimensionGraph`.
+        dataIds : `DimensionGraph`, optional
+            Dimensions to select ffrom.  Defaults to ``self.allDataIds.graph``.
+
+        Returns
+        -------
+        selected : `DimensionGraph`
+            ``n`` or more dimensions randomly selected from ``graph`` with
+            replacement.
+        """
+        if graph is None:
+            graph = self.allDataIds.graph
+        return DimensionGraph(
+            graph.universe,
+            names=self.rng.sample(list(graph.dimensions.names), max(n, len(graph.dimensions)))
+        )
+
+    def splitByStateFlags(self, dataIds: Optional[DataCoordinateSequence] = None, *,
+                          expanded: bool = True,
+                          complete: bool = True,
+                          minimal: bool = True) -> SplitByStateFlags:
+        """Given a sequence of data IDs, generate new equivalent sequences
+        containing less information.
+
+        Parameters
+        ----------
+        dataIds : `DataCoordinateSequence`, optional.
+            Data IDs to start from.  Defaults to ``self.allDataIds``.
+            ``dataIds.hasRecords()`` and ``dataIds.hasFull()`` must both return
+            `True`.
+        expanded : `bool`, optional
+            If `True` (default) include the original data IDs that contain all
+            information in the result.
+        complete : `bool`, optional
+            If `True` (default) include data IDs for which ``hasFull()``
+            returns `True` but ``hasRecords()`` does not.
+        minimal : `bool`, optional
+            If `True` (default) include data IDS that only contain values for
+            required dimensions, for which ``hasFull()`` may not return `True`.
+
+        Returns
+        -------
+        split : `SplitByStateFlags`
+            A dataclass holding the indicated data IDs in attributes that
+            correspond to the boolean keyword arguments.
+        """
+        if dataIds is None:
+            dataIds = self.allDataIds
+        assert dataIds.hasFull() and dataIds.hasRecords()
+        result = SplitByStateFlags(expanded=dataIds)
+        if complete:
+            result.complete = DataCoordinateSequence(
+                [DataCoordinate.standardize(e.full.byName(), graph=dataIds.graph) for e in result.expanded],
+                graph=dataIds.graph
+            )
+            self.assertTrue(result.complete.hasFull())
+            self.assertFalse(result.complete.hasRecords())
+        if minimal:
+            result.minimal = DataCoordinateSequence(
+                [DataCoordinate.standardize(e.byName(), graph=dataIds.graph) for e in result.expanded],
+                graph=dataIds.graph
+            )
+            self.assertEqual(result.minimal.hasFull(), not dataIds.graph.implied)
+            self.assertFalse(result.minimal.hasRecords())
+        if not expanded:
+            result.expanded = None
+        return result
+
+    def testMappingInterface(self):
+        """Test that the mapping interface in `DataCoordinate` and (when
+        applicable) its ``full`` property are self-consistent and consistent
+        with the ``graph`` property.
+        """
+        for n in range(5):
+            dimensions = self.randomDimensionSubset()
+            dataIds = self.randomDataIds(n=1).subset(dimensions)
+            split = self.splitByStateFlags(dataIds)
+            for dataId in split.chain():
+                with self.subTest(dataId=dataId):
+                    self.assertEqual(list(dataId.values()), [dataId[d] for d in dataId.keys()])
+                    self.assertEqual(list(dataId.values()), [dataId[d.name] for d in dataId.keys()])
+                    self.assertEqual(dataId.keys(), dataId.graph.required)
+            for dataId in itertools.chain(split.complete, split.expanded):
+                with self.subTest(dataId=dataId):
+                    self.assertTrue(dataId.hasFull())
+                    self.assertEqual(dataId.graph.dimensions, dataId.full.keys())
+                    self.assertEqual(list(dataId.full.values()), [dataId[k] for k in dataId.graph.dimensions])
+
+    def testEquality(self):
+        """Test that different `DataCoordinate` instances with different state
+        flags can be compared with each other and other mappings.
+        """
+        dataIds = self.randomDataIds(n=2)
+        split = self.splitByStateFlags(dataIds)
+        # Iterate over all combinations of different states of DataCoordinate,
+        # with the same underlying data ID values.
+        for a0, b0 in itertools.combinations(split.chain(0), 2):
+            self.assertEqual(a0, b0)
+            self.assertEqual(a0, b0.byName())
+            self.assertEqual(a0.byName(), b0)
+        # Same thing, for a different data ID value.
+        for a1, b1 in itertools.combinations(split.chain(1), 2):
+            self.assertEqual(a1, b1)
+            self.assertEqual(a1, b1.byName())
+            self.assertEqual(a1.byName(), b1)
+        # Iterate over all combinations of different states of DataCoordinate,
+        # with different underlying data ID values.
+        for a0, b1 in itertools.product(split.chain(0), split.chain(1)):
+            self.assertNotEqual(a0, b1)
+            self.assertNotEqual(a1, b0)
+            self.assertNotEqual(a0, b1.byName())
+            self.assertNotEqual(a0.byName(), b1)
+            self.assertNotEqual(a1, b0.byName())
+            self.assertNotEqual(a1.byName(), b0)
+
+    def testStandardize(self):
+        """Test constructing a DataCoordinate from many different kinds of
+        input via `DataCoordinate.standardize` and `DataCoordinate.subset`.
+        """
+        for n in range(5):
+            dimensions = self.randomDimensionSubset()
+            dataIds = self.randomDataIds(n=1).subset(dimensions)
+            split = self.splitByStateFlags(dataIds)
+            for m, dataId in enumerate(split.chain()):
+                # Passing in any kind of DataCoordinate alone just returns
+                # that object.
+                self.assertIs(dataId, DataCoordinate.standardize(dataId))
+                # Same if we also explicitly pass the dimensions we want.
+                self.assertIs(dataId, DataCoordinate.standardize(dataId, graph=dataId.graph))
+                # Same if we pass the dimensions and some irrelevant
+                # kwargs.
+                self.assertIs(dataId, DataCoordinate.standardize(dataId, graph=dataId.graph, htm7=12))
+                # Test constructing a new data ID from this one with a
+                # subset of the dimensions.
+                # This is not possible for some combinations of
+                # dimensions if hasFull is False (see
+                # `DataCoordinate.subset` docs).
+                newDimensions = self.randomDimensionSubset(n=1, graph=dataId.graph)
+                if dataId.hasFull() or dataId.graph.required.issuperset(newDimensions.required):
+                    newDataIds = [
+                        dataId.subset(newDimensions),
+                        DataCoordinate.standardize(dataId, graph=newDimensions),
+                        DataCoordinate.standardize(dataId, graph=newDimensions, htm7=12),
+                    ]
+                    for newDataId in newDataIds:
+                        with self.subTest(newDataId=newDataId, type=type(dataId)):
+                            commonKeys = dataId.keys() & newDataId.keys()
+                            self.assertTrue(commonKeys)
+                            self.assertEqual(
+                                [newDataId[k] for k in commonKeys],
+                                [dataId[k] for k in commonKeys],
+                            )
+                            # This should never "downgrade" from
+                            # Complete to Minimal or Expanded to Complete.
+                            if dataId.hasRecords():
+                                self.assertTrue(newDataId.hasRecords())
+                            if dataId.hasFull():
+                                self.assertTrue(newDataId.hasFull())
+            # Start from a complete data ID, and pass its values in via several
+            # different ways that should be equivalent.
+            for dataId in split.complete:
+                # Split the keys (dimension names) into two random subsets, so
+                # we can pass some as kwargs below.
+                keys1 = set(self.rng.sample(list(dataId.graph.dimensions.names),
+                                            len(dataId.graph.dimensions)//2))
+                keys2 = dataId.graph.dimensions.names - keys1
+                newCompleteDataIds = [
+                    DataCoordinate.standardize(dataId.full.byName(), universe=dataId.universe),
+                    DataCoordinate.standardize(dataId.full.byName(), graph=dataId.graph),
+                    DataCoordinate.standardize(DataCoordinate.makeEmpty(dataId.graph.universe),
+                                               **dataId.full.byName()),
+                    DataCoordinate.standardize(DataCoordinate.makeEmpty(dataId.graph.universe),
+                                               graph=dataId.graph, **dataId.full.byName()),
+                    DataCoordinate.standardize(**dataId.full.byName(), universe=dataId.universe),
+                    DataCoordinate.standardize(graph=dataId.graph, **dataId.full.byName()),
+                    DataCoordinate.standardize(
+                        {k: dataId[k] for k in keys1},
+                        universe=dataId.universe,
+                        **{k: dataId[k] for k in keys2}
+                    ),
+                    DataCoordinate.standardize(
+                        {k: dataId[k] for k in keys1},
+                        graph=dataId.graph,
+                        **{k: dataId[k] for k in keys2}
+                    ),
+                ]
+                for newDataId in newCompleteDataIds:
+                    with self.subTest(dataId=dataId, newDataId=newDataId, type=type(dataId)):
+                        self.assertEqual(dataId, newDataId)
+                        self.assertTrue(newDataId.hasFull())
+
+    def testRegions(self):
+        """Test that data IDs for a few known dimensions have the expected
+        regions.
+        """
+        for dataId in self.randomDataIds(n=4).subset(
+                DimensionGraph(self.allDataIds.universe, names=["visit"])):
+            self.assertIsNotNone(dataId.region)
+            self.assertEqual(dataId.graph.spatial.names, {"visit"})
+            self.assertEqual(dataId.region, dataId.records["visit"].region)
+        for dataId in self.randomDataIds(n=4).subset(
+                DimensionGraph(self.allDataIds.universe, names=["visit", "detector"])):
+            self.assertIsNotNone(dataId.region)
+            self.assertEqual(dataId.graph.spatial.names, {"visit_detector_region"})
+            self.assertEqual(dataId.region, dataId.records["visit_detector_region"].region)
+        for dataId in self.randomDataIds(n=4).subset(
+                DimensionGraph(self.allDataIds.universe, names=["tract"])):
+            self.assertIsNotNone(dataId.region)
+            self.assertEqual(dataId.graph.spatial.names, {"tract"})
+            self.assertEqual(dataId.region, dataId.records["tract"].region)
+        for dataId in self.randomDataIds(n=4).subset(
+                DimensionGraph(self.allDataIds.universe, names=["patch"])):
+            self.assertIsNotNone(dataId.region)
+            self.assertEqual(dataId.graph.spatial.names, {"patch"})
+            self.assertEqual(dataId.region, dataId.records["patch"].region)
+
+    def testTimespans(self):
+        """Test that data IDs for a few known dimensions have the expected
+        timespans.
+        """
+        for dataId in self.randomDataIds(n=4).subset(
+                DimensionGraph(self.allDataIds.universe, names=["visit"])):
+            self.assertIsNotNone(dataId.timespan)
+            self.assertEqual(dataId.graph.temporal.names, {"visit"})
+            self.assertEqual(dataId.timespan, dataId.records["visit"].timespan)
+        for dataId in self.randomDataIds(n=4).subset(
+                DimensionGraph(self.allDataIds.universe, names=["exposure"])):
+            self.assertIsNotNone(dataId.timespan)
+            self.assertEqual(dataId.graph.temporal.names, {"exposure"})
+            self.assertEqual(dataId.timespan, dataId.records["exposure"].timespan)
 
 
 if __name__ == "__main__":
