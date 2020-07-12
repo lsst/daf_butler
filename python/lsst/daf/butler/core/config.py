@@ -57,8 +57,14 @@ log = logging.getLogger(__name__)
 # PATH-like environment variable to use for defaults.
 CONFIG_PATH = "DAF_BUTLER_CONFIG_PATH"
 
+try:
+    yamlLoader = yaml.CSafeLoader
+except AttributeError:
+    # Not all installations have the C library
+    yamlLoader = yaml.SafeLoader
 
-class Loader(yaml.CSafeLoader):
+
+class Loader(yamlLoader):
     """YAML Loader that supports file include directives
 
     Uses ``!include`` directive in a YAML file to point to another
