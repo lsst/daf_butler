@@ -31,6 +31,7 @@ from typing import Iterator, Optional
 from lsst.daf.butler import (
     DataCoordinate,
     DataCoordinateSequence,
+    DataCoordinateSet,
     Dimension,
     DimensionGraph,
     DimensionUniverse,
@@ -571,11 +572,66 @@ class DataCoordinateTestCase(unittest.TestCase):
             self.assertIsNotNone(dataId.timespan)
             self.assertEqual(dataId.graph.temporal.names, {"visit"})
             self.assertEqual(dataId.timespan, dataId.records["visit"].timespan)
-        for dataId in self.randomDataIds(n=4).subset(
-                DimensionGraph(self.allDataIds.universe, names=["exposure"])):
-            self.assertIsNotNone(dataId.timespan)
-            self.assertEqual(dataId.graph.temporal.names, {"exposure"})
-            self.assertEqual(dataId.timespan, dataId.records["exposure"].timespan)
+
+    def testIterableStatusFlags(self):
+        """Test that DataCoordinateSet and DataCoordinateSequence compute
+        their hasFull and hasRecords flags correctly from their elements.
+        """
+        dataIds = self.randomDataIds(n=10)
+        split = self.splitByStateFlags(dataIds)
+        for cls in (DataCoordinateSet, DataCoordinateSequence):
+            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=True).hasFull())
+            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=False).hasFull())
+            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=True).hasRecords())
+            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=False).hasRecords())
+            self.assertTrue(cls(split.complete, graph=dataIds.graph, check=True).hasFull())
+            self.assertTrue(cls(split.complete, graph=dataIds.graph, check=False).hasFull())
+            self.assertFalse(cls(split.complete, graph=dataIds.graph, check=True).hasRecords())
+            self.assertFalse(cls(split.complete, graph=dataIds.graph, check=False).hasRecords())
+            with self.assertRaises(ValueError):
+                cls(split.complete, graph=dataIds.graph, hasRecords=True, check=True)
+            self.assertEqual(cls(split.minimal, graph=dataIds.graph, check=True).hasFull(),
+                             not dataIds.graph.implied)
+            self.assertEqual(cls(split.minimal, graph=dataIds.graph, check=False).hasFull(),
+                             not dataIds.graph.implied)
+            self.assertFalse(cls(split.minimal, graph=dataIds.graph, check=True).hasRecords())
+            self.assertFalse(cls(split.minimal, graph=dataIds.graph, check=False).hasRecords())
+            with self.assertRaises(ValueError):
+                cls(split.minimal, graph=dataIds.graph, hasRecords=True, check=True)
+            if dataIds.graph.implied:
+                with self.assertRaises(ValueError):
+                    cls(split.minimal, graph=dataIds.graph, hasFull=True, check=True)
+
+    def testSetOperations(self):
+        """Test for self-consistency across DataCoordinateSet's operations.
+        """
+        c = self.randomDataIds(n=10).toSet()
+        a = self.randomDataIds(n=20).toSet() | c
+        b = self.randomDataIds(n=20).toSet() | c
+        # Make sure we don't have a particularly unlucky random seed, since
+        # that would make a lot of this test uninteresting.
+        self.assertNotEqual(a, b)
+        self.assertGreater(len(a), 0)
+        self.assertGreater(len(b), 0)
+        # The rest of the tests should not depend on the random seed.
+        self.assertEqual(a, a)
+        self.assertNotEqual(a, a.toSequence())
+        self.assertEqual(a, a.toSequence().toSet())
+        self.assertEqual(a, a.toSequence().toSet())
+        self.assertEqual(b, b)
+        self.assertNotEqual(b, b.toSequence())
+        self.assertEqual(b, b.toSequence().toSet())
+        self.assertEqual(a & b, a.intersection(b))
+        self.assertLessEqual(a & b, a)
+        self.assertLessEqual(a & b, b)
+        self.assertEqual(a | b, a.union(b))
+        self.assertGreaterEqual(a | b, a)
+        self.assertGreaterEqual(a | b, b)
+        self.assertEqual(a - b, a.difference(b))
+        self.assertLessEqual(a - b, a)
+        self.assertLessEqual(b - a, b)
+        self.assertEqual(a ^ b, a.symmetric_difference(b))
+        self.assertGreaterEqual(a ^ b, (a | b) - (a & b))
 
 
 if __name__ == "__main__":
