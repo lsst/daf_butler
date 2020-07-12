@@ -15,6 +15,9 @@ jobs:
         with:
           python-version: 3.7
 
+      - name: Install sqlite
+        run: sudo apt-get install sqlite libyaml-dev
+
       # It seems like pip install of requirements for a URL package
       # does not install those dependencies
       - name: Install sphgeom dependencies
