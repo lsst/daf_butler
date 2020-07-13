@@ -23,10 +23,9 @@
 """
 
 import click
-import click.testing
 import unittest
 
-from lsst.daf.butler.cli.utils import to_upper
+from lsst.daf.butler.cli.utils import LogCliRunner, to_upper
 
 
 @click.command()
@@ -35,7 +34,10 @@ def cli(value):
     click.echo(value)
 
 
-class Suite(unittest.TestCase):
+class ToUpperTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.runner = LogCliRunner()
 
     def test_isolated(self):
         """test the to_upper callback by itself"""
@@ -45,22 +47,19 @@ class Suite(unittest.TestCase):
 
     def test_lowerToUpper(self):
         """test the to_upper callback in an option with a lowercase value"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--value", "debug"])
+        result = self.runner.invoke(cli, ["--value", "debug"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "DEBUG\n")
 
     def test_upperToUpper(self):
         """test the to_upper callback in an option with a uppercase value"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--value", "DEBUG"])
+        result = self.runner.invoke(cli, ["--value", "DEBUG"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "DEBUG\n")
 
     def test_mixedToUpper(self):
         """test the to_upper callback in an option with a mixed-case value"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--value", "DeBuG"])
+        result = self.runner.invoke(cli, ["--value", "DeBuG"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "DEBUG\n")
 

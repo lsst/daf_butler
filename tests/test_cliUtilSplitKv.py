@@ -23,12 +23,11 @@
 """
 
 import click
-import click.testing
 from functools import partial
 import unittest
 from unittest.mock import MagicMock
 
-from lsst.daf.butler.cli.utils import clickResultMsg, split_kv
+from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner, split_kv
 
 
 class SplitKvTestCase(unittest.TestCase):
@@ -71,7 +70,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
     """Tests using split_kv with a command."""
 
     def setUp(self):
-        self.runner = click.testing.CliRunner()
+        self.runner = LogCliRunner()
 
     def test_cli(self):
         mock = MagicMock()

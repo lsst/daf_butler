@@ -20,12 +20,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import abc
-import click
-import click.testing
 import copy
 import os
 
-from ..cli.utils import clickResultMsg, mockEnvVar, Mocker
+from ..cli.utils import clickResultMsg, mockEnvVar, LogCliRunner, Mocker
 from ..cli import butler
 
 
@@ -54,7 +52,7 @@ class CliCmdTestBase(abc.ABC):
         return butler.cli
 
     def setUp(self):
-        self.runner = click.testing.CliRunner(env=mockEnvVar)
+        self.runner = LogCliRunner(env=mockEnvVar)
 
     def makeExpected(self, **kwargs):
         expected = copy.copy(self.defaultExpected)
@@ -62,8 +60,8 @@ class CliCmdTestBase(abc.ABC):
         return expected
 
     def run_command(self, inputs):
-        """Use the CliRunner with the mock environment variable set to execute
-        a butler subcommand and parameters specified in inputs.
+        """Use the LogCliRunner with the mock environment variable set to
+        execute a butler subcommand and parameters specified in inputs.
 
         Parameters
         ----------

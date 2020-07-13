@@ -23,11 +23,11 @@
 """
 
 import click
-import click.testing
 import unittest
 
 from lsst.daf.butler.cli import butler
-from lsst.daf.butler.cli.utils import clickResultMsg, Mocker, mockEnvVar, MWArgument, MWOption, unwrap
+from lsst.daf.butler.cli.utils import (clickResultMsg, LogCliRunner, Mocker, mockEnvVar, MWArgument, MWOption,
+                                       unwrap)
 from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 
 
@@ -36,7 +36,7 @@ class MockerTestCase(unittest.TestCase):
     def test_callMock(self):
         """Test that a mocked subcommand calls the Mocker and can be verified.
         """
-        runner = click.testing.CliRunner(env=mockEnvVar)
+        runner = LogCliRunner(env=mockEnvVar)
         result = runner.invoke(butler.cli, ["create", "repo"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         Mocker.mock.assert_called_with(repo="repo", seed_config=None, standalone=False, override=False,
@@ -59,7 +59,7 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
         directory_argument; verifies that the argument help gets added to the
         command fucntion help, and that it's added in the correct order. See
         addArgumentHelp for more details."""
-        runner = click.testing.CliRunner()
+        runner = LogCliRunner()
         result = runner.invoke(ArgumentHelpGeneratorTestCase.cli, ["--help"])
         expected = """Usage: cli [OPTIONS] [REPO] [DIRECTORY]
 
@@ -111,7 +111,7 @@ class UnwrapStringTestCase(unittest.TestCase):
 class MWOptionTest(unittest.TestCase):
 
     def setUp(self):
-        self.runner = click.testing.CliRunner()
+        self.runner = LogCliRunner()
 
     def test_addElipsisToMultiple(self):
         """Verify that MWOption adds elipsis to the option metavar when
@@ -151,7 +151,7 @@ class MWOptionTest(unittest.TestCase):
 class MWArgumentTest(unittest.TestCase):
 
     def setUp(self):
-        self.runner = click.testing.CliRunner()
+        self.runner = LogCliRunner()
 
     def test_addElipsisToNargs(self):
         """Verify that MWOption adds " ..." after the option metavar when

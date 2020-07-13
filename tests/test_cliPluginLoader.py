@@ -23,7 +23,6 @@
 """
 
 import click
-import click.testing
 from collections import defaultdict
 from contextlib import contextmanager
 import os
@@ -32,7 +31,7 @@ from unittest.mock import patch
 import yaml
 
 from lsst.daf.butler.cli import butler, cmd
-from lsst.daf.butler.cli.utils import command_test_env
+from lsst.daf.butler.cli.utils import command_test_env, LogCliRunner
 
 
 @click.command()
@@ -60,11 +59,13 @@ def duplicate_command_test_env(runner):
 
 class FailedLoadTest(unittest.TestCase):
 
+    def setUp(self):
+        self.runner = LogCliRunner()
+
     def test_unimportablePlugin(self):
-        runner = click.testing.CliRunner()
-        with command_test_env(runner, "test_cliPluginLoader", "non-existant-command-function"):
+        with command_test_env(self.runner, "test_cliPluginLoader", "non-existant-command-function"):
             with self.assertLogs() as cm:
-                result = runner.invoke(butler.cli, "--help")
+                result = self.runner.invoke(butler.cli, "--help")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             expectedErrMsg = "Could not import plugin from " \
                              "test_cliPluginLoader.non_existant_command_function, skipping."
@@ -78,9 +79,8 @@ class FailedLoadTest(unittest.TestCase):
         def cli():
             pass
 
-        runner = click.testing.CliRunner()
         with self.assertLogs() as cm:
-            result = runner.invoke(cli)
+            result = self.runner.invoke(cli)
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         expectedErrMsg = f"Could not import plugin from {FailCLI.localCmdPkg}, skipping."
         self.assertIn(expectedErrMsg, " ".join(cm.output))
@@ -88,27 +88,27 @@ class FailedLoadTest(unittest.TestCase):
 
 class PluginLoaderTest(unittest.TestCase):
 
+    def setUp(self):
+        self.runner = LogCliRunner()
+
     def test_loadAndExecutePluginCommand(self):
         """Test that a plugin command can be loaded and executed."""
-        runner = click.testing.CliRunner()
-        with command_test_env(runner, "test_cliPluginLoader", "command-test"):
-            result = runner.invoke(butler.cli, "command-test")
+        with command_test_env(self.runner, "test_cliPluginLoader", "command-test"):
+            result = self.runner.invoke(butler.cli, "command-test")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(result.stdout, "test command\n")
 
     def test_loadAndExecuteLocalCommand(self):
         """Test that a command in daf_butler can be loaded and executed."""
-        runner = click.testing.CliRunner()
-        with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "test_repo"])
+        with self.runner.isolated_filesystem():
+            result = self.runner.invoke(butler.cli, ["create", "test_repo"])
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertTrue(os.path.exists("test_repo"))
 
     def test_loadTopHelp(self):
         """Test that an expected command is produced by 'butler --help'"""
-        runner = click.testing.CliRunner()
-        with command_test_env(runner, "test_cliPluginLoader", "command-test"):
-            result = runner.invoke(butler.cli, "--help")
+        with command_test_env(self.runner, "test_cliPluginLoader", "command-test"):
+            result = self.runner.invoke(butler.cli, "--help")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertIn("command-test", result.stdout)
 
@@ -134,9 +134,8 @@ class PluginLoaderTest(unittest.TestCase):
         present and verify it fails to run.
         """
         self.maxDiff = None
-        runner = click.testing.CliRunner()
-        with duplicate_command_test_env(runner):
-            result = runner.invoke(butler.cli, ["create", "test_repo"])
+        with duplicate_command_test_env(self.runner):
+            result = self.runner.invoke(butler.cli, ["create", "test_repo"])
             self.assertEqual(result.exit_code, 1, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(result.output, "Error: Command 'create' "
                              "exists in packages lsst.daf.butler.cli.cmd, test_cliPluginLoader. "
