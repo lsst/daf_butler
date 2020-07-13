@@ -21,13 +21,12 @@
 
 import abc
 import click
-import click.testing
 import copy
 import inspect
 import os
 from unittest.mock import MagicMock
 
-from ..cli.utils import clickResultMsg, ParameterType, split_kv_separator
+from ..cli.utils import clickResultMsg, LogCliRunner, ParameterType, split_kv_separator
 from ..core.utils import iterable
 
 
@@ -137,7 +136,7 @@ class OptTestBase(abc.ABC):
     """
 
     def setUp(self):
-        self.runner = click.testing.CliRunner()
+        self.runner = LogCliRunner()
 
     @property
     def valueType(self):
@@ -420,8 +419,11 @@ class OptChoiceTest(OptTestBase):
         choice = self.choices[0]
         while choice in self.choices:
             choice += "foo"
-        self.run_test(cli, [self.optionFlag, choice], self.verifyMissing,
-                      f'Invalid value for "{self.optionFlag}"')
+        if self.shortOptionFlag:
+            expected = f'Invalid value for "{self.shortOptionFlag}" / "{self.optionFlag}"'
+        else:
+            expected = f'Invalid value for "{self.optionFlag}"'
+        self.run_test(cli, [self.optionFlag, choice], self.verifyMissing, expected)
 
 
 class OptCaseInsensitiveTest(OptTestBase):

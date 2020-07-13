@@ -34,7 +34,8 @@ from lsst.daf.butler.tests import (OptFlagTest,
                                    OptSplitKeyValueTest)
 from lsst.daf.butler.cli.opt import (collection_type_option, config_file_option, config_option,
                                      dataset_type_option, directory_argument, glob_parameter,
-                                     log_level_option, long_log_option, repo_argument, verbose_option)
+                                     log_level_option, long_log_option, repo_argument, transfer_option,
+                                     verbose_option)
 
 
 class CollectionTypeTestCase(OptHelpTest,
@@ -132,6 +133,16 @@ class RepoArgumentTestCase(OptHelpTest,
     isArgument = True
     optionClass = repo_argument
     optionName = "repo"
+
+
+class TransferTestCase(OptChoiceTest,
+                       OptHelpTest,
+                       OptRequiredTest,
+                       unittest.TestCase):
+    expectedValDefault = "auto"
+    optionClass = transfer_option
+    optionName = "transfer"
+    shortOptionName = "t"
 
 
 # Doesn't test for required; this is nonsensical for a flag (where
