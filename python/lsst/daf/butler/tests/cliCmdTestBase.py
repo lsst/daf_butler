@@ -84,6 +84,9 @@ class CliCmdTestBase(abc.ABC):
         outcome where exit code = 0 and the mock object has been called with
         the expected arguments.
 
+        Returns the result object for inspection, e.g. sometimes it's useful to
+        be able to inpsect or print `result.output`.
+
         Parameters
         ----------
         inputs : [`str`]
@@ -97,6 +100,11 @@ class CliCmdTestBase(abc.ABC):
             If not None, will run in a temporary directory and create a file
             with the given name, can be used with commands with parameters that
             require a file to exist.
+
+        Returns
+        -------
+        result : `click.testing.Result`
+            The result object produced by invocation of the command under test.
         """
         with self.runner.isolated_filesystem():
             if withTempFile is not None:
@@ -106,6 +114,7 @@ class CliCmdTestBase(abc.ABC):
             result = self.run_command(inputs)
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             Mocker.mock.assert_called_with(**expectedKwargs)
+        return result
 
     def run_missing(self, inputs, expectedMsg):
         """Run the subcommand specified in inputs and verify a failed outcome

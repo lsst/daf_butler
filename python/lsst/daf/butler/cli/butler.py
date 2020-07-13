@@ -26,7 +26,7 @@ import logging
 import os
 import yaml
 
-from .log import Log
+from .cliLog import CliLog
 from .opt import log_level_option
 from lsst.utils import doImport
 
@@ -41,7 +41,6 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
     subcommands at runtime."""
 
     def __init__(self, *args, **kwargs):
-        self.didInitLog = False
         super().__init__(*args, **kwargs)
 
     @property
@@ -122,12 +121,9 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         """Init the logging system and config it for the command.
 
         Subcommands may further configure the log settings."""
-        if not self.didInitLog:
-            # Initialize the logger. This should be called only once.
-            Log.initLog(longlog=LONG_LOG_FLAG in ctx.params)
-            self.didInitLog = True
+        CliLog.initLog(longlog=LONG_LOG_FLAG in ctx.params)
         if log_level_option.optionKey in ctx.params:
-            Log.setLogLevels(ctx.params[log_level_option.optionKey])
+            CliLog.setLogLevels(ctx.params[log_level_option.optionKey])
 
     @staticmethod
     def getPluginList():

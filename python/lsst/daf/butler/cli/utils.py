@@ -20,14 +20,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import click
+from contextlib import contextmanager
 import enum
 import io
 import os
 import textwrap
 import traceback
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import yaml
 
+from .cliLog import CliLog
 from ..core.utils import iterable
 
 
@@ -94,6 +96,21 @@ class Mocker:
         later be verified.
         """
         Mocker.mock(*args, **kwargs)
+
+
+class LogCliRunner(click.testing.CliRunner):
+    """A test runner to use when the logging system will be initialized by code
+    under test, calls CliLog.resetLog(), which undoes any logging setup that
+    was done with the CliLog interface.
+
+    lsst.log modules can not be set back to an uninitialized state (python
+    logging modules can be set back to NOTSET), instead they are set to
+    `CliLog.defaultLsstLogLevel`."""
+
+    def invoke(self, *args, **kwargs):
+        result = super().invoke(*args, **kwargs)
+        CliLog.resetLog()
+        return result
 
 
 def clickResultMsg(result):

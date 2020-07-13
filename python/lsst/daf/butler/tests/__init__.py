@@ -33,3 +33,4 @@ from .cliOptionTestBase import (OptFlagTest,
                                 OptTestBase,
                                 OptSplitKeyValueTest,
                                 OptRequiredTest)
+from .cliLogTestBase import CliLogTestBase

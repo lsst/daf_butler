@@ -25,9 +25,8 @@
 import logging
 import unittest
 
-from lsst.daf.butler.cli.cmd import create
-from lsst.daf.butler.cli.log import Log
-from lsst.daf.butler.tests import CliCmdTestBase
+from lsst.daf.butler.cli.cliLog import CliLog
+from lsst.daf.butler.tests import CliLogTestBase
 
 try:
     import lsst.log as lsstLog
@@ -35,57 +34,27 @@ except ModuleNotFoundError:
     lsstLog = None
 
 
-class ConvertLogLevelTestCase(unittest.TestCase):
-    """Test that the log levels accepted by the log_level_option are translated
-    to lsst.log levels correctly."""
+class CliLogTestCase(CliLogTestBase,
+                     unittest.TestCase):
+    """Test log initialization, reset, and setting log levels on python
+    `logging` and also `lsst.log` if it is setup.
 
-    # convert to lsst log level test is implemented in obs_base, becasue
-    # daf_butler does not depend on lsst.log directly and so it can not be
-    # tested here.
+    This will not test use of `lsst.log` in CI because daf_butler does not
+    directly depend on that package. When running in an environment where
+    `lsst.log` is setup then this will test use of `lsst.log`. This test also
+    runs in obs_base which does provide coverage of python `logging` and
+    `lsst.log` in CI."""
+    pass
+
+
+class ConvertPyLogLevelTestCase(unittest.TestCase):
 
     def test_convertToPyLogLevel(self):
-        self.assertEqual(logging.CRITICAL, Log.getPyLogLevel("CRITICAL"))
-        self.assertEqual(logging.ERROR, Log.getPyLogLevel("ERROR"))
-        self.assertEqual(logging.WARN, Log.getPyLogLevel("WARNING"))
-        self.assertEqual(logging.INFO, Log.getPyLogLevel("INFO"))
-        self.assertEqual(logging.DEBUG, Log.getPyLogLevel("DEBUG"))
-
-
-class LogLevelTestCase(CliCmdTestBase,
-                       unittest.TestCase):
-
-    command = create
-    defaultExpected = dict(repo=None,
-                           seed_config=None,
-                           standalone=False,
-                           override=False,
-                           outfile=None)
-
-    def test_setLevelOnCommand(self):
-        """Test setting the level via the butler command. Set the global level
-        as well as a component level, and get the levels to verify they have
-        been set as expected. Uninitialize the log, and verify that the root
-        logger and component loggers level have been returned to NOTSET."""
-        component = "lsst.daf.butler"
-        self.run_test(["--log-level", "WARNING",
-                       "--log-level", f"{component}=DEBUG",
-                       "create", "foo"],
-                       self.makeExpected(repo="foo"))
-        componentLogger = logging.getLogger(component)
-        self.assertEqual(componentLogger.level, logging.DEBUG)
-        rootLogger = logging.getLogger(None)
-        self.assertEqual(rootLogger.level, logging.WARNING)
-        self.assertEqual(len(rootLogger.handlers), 1,
-                         msg="After init there should be exactly one handler.")
-        Log.uninitLog()
-        self.assertEqual(len(rootLogger.handlers), 1 if lsstLog is None else 0,
-                         msg="After uninit, if the `lsst.log` handler was used it should have been removed, "
-                             "leaving zero handlers. If the `lsst.log` handler was not used then the basic "
-                             "config handler should still be installed, (leaving one handler).")
-        print(len(logging.getLogger().handlers))
-        self.assertEqual(componentLogger.level, logging.NOTSET)
-        self.assertEqual(rootLogger.level, logging.NOTSET)
-
+        self.assertEqual(logging.CRITICAL, CliLog._getPyLogLevel("CRITICAL"))
+        self.assertEqual(logging.ERROR, CliLog._getPyLogLevel("ERROR"))
+        self.assertEqual(logging.WARN, CliLog._getPyLogLevel("WARNING"))
+        self.assertEqual(logging.INFO, CliLog._getPyLogLevel("INFO"))
+        self.assertEqual(logging.DEBUG, CliLog._getPyLogLevel("DEBUG"))
 
 
 if __name__ == "__main__":
