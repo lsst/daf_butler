@@ -35,11 +35,11 @@ def modified_environment(**environ):
     """
     Temporarily set environment variables.
 
-    >>> with modified_environment(DAF_BUTLER_DIR="/somewhere"):
-    ...    os.environ["DAF_BUTLER_DIR"] == "/somewhere"
+    >>> with modified_environment(DAF_BUTLER_CONFIG_PATHS="/somewhere"):
+    ...    os.environ["DAF_BUTLER_CONFIG_PATHS"] == "/somewhere"
     True
 
-    >>> "DAF_BUTLER_DIR" != "/somewhere"
+    >>> "DAF_BUTLER_CONFIG_PATHS" != "/somewhere"
     True
 
     Parameters
