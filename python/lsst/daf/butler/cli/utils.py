@@ -26,6 +26,7 @@ import os
 import textwrap
 import traceback
 from unittest.mock import MagicMock
+import yaml
 
 from ..core.utils import iterable
 
@@ -113,6 +114,31 @@ def clickResultMsg(result):
         traceback.print_tb(result.exception.__traceback__, file=msg)
         msg.seek(0)
     return f"\noutput: {result.output}\nexception: {result.exception}\ntraceback: {msg.read()}"
+
+
+@contextmanager
+def command_test_env(runner, commandModule, commandName):
+    """A context manager that creates (and then cleans up) an environment that
+    provides a CLI plugin command with the given name.
+
+    Parameters
+    ----------
+    runner : click.testing.CliRunner
+        The test runner to use to create the isolated filesystem.
+    commandModule : `str`
+        The importable module that the command can be imported from.
+    commandName : `str`
+        The name of the command being published to import.
+    """
+    with runner.isolated_filesystem():
+        with open("resources.yaml", "w") as f:
+            f.write(yaml.dump({"cmd": {"import": commandModule, "commands": [commandName]}}))
+        # Add a colon to the end of the path on the next line, this tests the
+        # case where the lookup in LoaderCLI._getPluginList generates an empty
+        # string in one of the list entries and verifies that the empty string
+        # is properly stripped out.
+        with patch.dict("os.environ", {"DAF_BUTLER_PLUGINS": f"{os.path.realpath(f.name)}:"}):
+            yield
 
 
 def addArgumentHelp(doc, helpText):
