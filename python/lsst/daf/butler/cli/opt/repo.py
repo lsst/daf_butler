@@ -45,7 +45,9 @@ class repo_argument:  # noqa: N801
     existing_repo = "REPO is the URI or path to an existing data repository root " \
                     "or configuration file."
 
-    def __init__(self, required=False, help=existing_repo):
+    defaultHelp = existing_repo
+
+    def __init__(self, required=False, help=defaultHelp):
         self.required = required
         self.helpText = help
 
