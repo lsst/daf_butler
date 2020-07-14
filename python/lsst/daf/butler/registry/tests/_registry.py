@@ -25,10 +25,16 @@ __all__ = ["RegistryTests"]
 from abc import ABC, abstractmethod
 import os
 import re
+import unittest
 
 import astropy.time
 import sqlalchemy
 from typing import Optional
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 from ...core import (
     DataCoordinate,
@@ -240,6 +246,28 @@ class RegistryTests(ABC):
                 {"instrument": "DummyCam", "id": 1, "full_name": "one",
                  "name_in_raft": "four", "purpose": "SCIENCE"}
             )
+
+    @unittest.skipIf(np is None, "numpy not available.")
+    def testNumpyDataId(self):
+        """Test that we can use a numpy int in a dataId."""
+        registry = self.makeRegistry()
+        dimensionEntries = [
+            ("instrument", {"instrument": "DummyCam"}),
+            ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "abstract_filter": "R"}),
+            # Using an np.int64 here fails unless Records.fromDict is also
+            # patched to look for numbers.Integral
+            ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo", "physical_filter": "d-r"}),
+        ]
+        for args in dimensionEntries:
+            registry.insertDimensionData(*args)
+
+        # Try a normal integer and something that looks like an int but
+        # is not.
+        for visit_id in (42, np.int64(42)):
+            with self.subTest(visit_id=visit_id, id_type=type(visit_id).__name__):
+                expanded = registry.expandDataId({"instrument": "DummyCam", "visit": visit_id})
+                self.assertEqual(expanded["visit"], int(visit_id))
+                self.assertIsInstance(expanded["visit"], int)
 
     def testDataIdRelationships(self):
         """Test that `Registry.expandDataId` raises an exception when the given

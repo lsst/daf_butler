@@ -30,7 +30,6 @@ import shutil
 import pickle
 import string
 import random
-import numpy as np
 
 try:
     import boto3
@@ -868,7 +867,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric3", dimensions, storageClass))
 
-        dataId1 = {"instrument": "DummyCamComp", "visit": np.int64(423)}
+        dataId1 = {"instrument": "DummyCamComp", "visit": 423}
         dataId2 = {"instrument": "DummyCamComp", "visit": 423, "physical_filter": "d-r"}
         dataId3 = {"instrument": "DummyCamComp", "visit": 425}
 
