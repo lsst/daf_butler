@@ -22,9 +22,7 @@
 
 __all__ = ["makeTestRepo", "makeTestCollection", "addDatasetType", "expandUniqueId"]
 
-
-import numpy as np
-
+import random
 from lsst.daf.butler import Butler, Config, DatasetType
 
 
@@ -106,7 +104,7 @@ def makeTestCollection(repo):
     """
     # Create a "random" collection name
     # Speed matters more than cryptographic guarantees
-    collection = "test" + "".join((str(i) for i in np.random.randint(0, 10, size=8)))
+    collection = "test" + str(random.randrange(1_000_000_000))
     return Butler(butler=repo, run=collection)
 
 

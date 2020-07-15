@@ -26,6 +26,7 @@ import unittest
 import tempfile
 import os
 import shutil
+from random import Random
 
 try:
     import matplotlib
@@ -34,7 +35,6 @@ try:
 except ImportError:
     pyplot = None
 
-import numpy as np
 from lsst.daf.butler import Butler, DatasetType
 import filecmp
 
@@ -46,10 +46,13 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 class MatplotlibFormatterTestCase(unittest.TestCase):
     """Test for MatplotlibFormatter.
     """
+    RANDOM_SEED = 10
 
     def setUp(self):
         self.root = tempfile.mkdtemp(dir=TESTDIR)
         Butler.makeRepo(self.root)
+        # Create a random image for testing
+        self.rng = Random(self.RANDOM_SEED)
 
     def tearDown(self):
         if os.path.exists(self.root):
@@ -60,7 +63,11 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
         datasetType = DatasetType("test_plot", [], "Plot",
                                   universe=butler.registry.dimensions)
         butler.registry.registerDatasetType(datasetType)
-        pyplot.imshow(np.random.randn(3, 4))
+        # Does not have to be a random image
+        pyplot.imshow([self.rng.sample(range(50), 10),
+                       self.rng.sample(range(50), 10),
+                       self.rng.sample(range(50), 10),
+                       ])
         ref = butler.put(pyplot.gcf(), datasetType)
         uri = butler.getURI(ref)
         # The test after this will not work if we don't have local file
