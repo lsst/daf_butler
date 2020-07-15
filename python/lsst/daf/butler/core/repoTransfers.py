@@ -320,14 +320,7 @@ class YamlRepoExportBackend(RepoExportBackend):
 
     def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord) -> None:
         # Docstring inherited from RepoExportBackend.saveDimensionData.
-        # Convert astropy time in TAI to datetime in UTC for YAML
-        data_dicts = []
-        for record in data:
-            rec_dict = record.toDict()
-            for key in rec_dict:
-                if isinstance(rec_dict[key], astropy.time.Time):
-                    rec_dict[key] = rec_dict[key].utc.to_datetime()
-            data_dicts += [rec_dict]
+        data_dicts = [record.toDict() for record in data]
         self.data.append({
             "type": "dimension",
             "element": element.name,
@@ -406,6 +399,10 @@ class YamlRepoImportBackend(RepoImportBackend):
                 # convert all datetiem values to astropy
                 for record in data["records"]:
                     for key in record:
+                        # Some older YAML files were produced with native
+                        # YAML support for datetime, we support reading that
+                        # data back. Newer conversion uses _AstropyTimeToYAML
+                        # class with special YAML tag.
                         if isinstance(record[key], datetime):
                             record[key] = astropy.time.Time(record[key], scale="utc")
                 element = self.registry.dimensions[data["element"]]
@@ -498,3 +495,70 @@ class YamlRepoImportBackend(RepoImportBackend):
         # Associate with collections, one collection at a time.
         for collection, refs in collections.items():
             self.registry.associate(collection, refs)
+
+
+class _AstropyTimeToYAML:
+    """Handle conversion of astropy Time to/from YAML representation.
+
+    This class defines methods that convert astropy Time instances to or from
+    YAML representation. On output it converts time to string ISO format in
+    TAI scale with maximum precision defining special YAML tag for it. On
+    input it does inverse transformation. The methods need to be registered
+    with YAML dumper and loader classes.
+
+    Notes
+    -----
+    Python ``yaml`` module defines special helper base class ``YAMLObject``
+    that provides similar functionality but its use is complicated by the need
+    to convert ``Time`` instances to instances of ``YAMLObject`` sub-class
+    before saving them to YAML. This class avoids this intermediate step but
+    it requires separate regisration step.
+    """
+
+    yaml_tag = "!butler_time/tai/iso"  # YAML tag name for Time class
+
+    @classmethod
+    def to_yaml(cls, dumper: yaml.Dumper, data: astropy.time.Time) -> Any:
+        """Convert astropy Time object into YAML format.
+
+        Parameters
+        ----------
+        dumper : `yaml.Dumper`
+            YAML dumper instance.
+        data : `astropy.time.Time`
+            Data to be converted.
+        """
+        if data is not None:
+            # we store time in ISO format but we need full nanosecond
+            # precision so we have to construct intermediate instance to make
+            # sure its precision is set correctly.
+            data = astropy.time.Time(data.tai, precision=9)
+            data = data.to_value("iso")
+        return dumper.represent_scalar(cls.yaml_tag, data)
+
+    @classmethod
+    def from_yaml(cls, loader: yaml.SafeLoader, node: yaml.ScalarNode) -> astropy.time.Time:
+        """Convert YAML node into astropy time
+
+        Parameters
+        ----------
+        loader : `yaml.SafeLoader`
+            Instance of YAML loader class.
+        node : `yaml.ScalarNode`
+            YAML node.
+
+        Returns
+        -------
+        time : `astropy.time.Time`
+            Time instance, can be ``None``.
+        """
+        if node.value is not None:
+            return astropy.time.Time(node.value, format="iso", scale="tai")
+
+
+# Register Time -> YAML conversion method with Dumper class
+yaml.Dumper.add_representer(astropy.time.Time, _AstropyTimeToYAML.to_yaml)
+
+# Register YAML -> Time conversion method with Loader, for our use case we
+# only need SafeLoader.
+yaml.SafeLoader.add_constructor(_AstropyTimeToYAML.yaml_tag, _AstropyTimeToYAML.from_yaml)

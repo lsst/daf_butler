@@ -43,6 +43,7 @@ except ImportError:
         """
         return cls
 
+import astropy.time
 from lsst.utils import doImport
 from lsst.daf.butler.core.utils import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
@@ -158,9 +159,12 @@ class ButlerPutGetTests:
         butler.registry.insertDimensionData("visit_system", {"instrument": "DummyCamComp",
                                                              "id": 1,
                                                              "name": "default"})
+        visit_start = astropy.time.Time("2020-01-01 08:00:00.123456789", scale="tai")
+        visit_end = astropy.time.Time("2020-01-01 08:00:36.66", scale="tai")
         butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
                                                       "name": "fourtwentythree", "physical_filter": "d-r",
-                                                      "visit_system": 1})
+                                                      "visit_system": 1, "datetime_begin": visit_start,
+                                                      "datetime_end": visit_end})
 
         # Add a second visit for some later tests
         butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 424,

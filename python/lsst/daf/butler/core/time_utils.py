@@ -27,8 +27,10 @@ import logging
 import astropy.time
 
 
-# These constants can be used by client code
-EPOCH = astropy.time.Time("1970-01-01 00:00:00", format="iso", scale="tai")
+# These constants can be used by client code.
+# EPOCH is used to construct times as read from database, its precision is
+# used by all those timestamps, set it to 1 microsecond.
+EPOCH = astropy.time.Time("1970-01-01 00:00:00", format="iso", scale="tai", precision=6)
 """Epoch for calculating time delta, this is the minimum time that can be
 stored in the database.
 """
