@@ -65,8 +65,8 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
 
     _TABLE_SPEC: ClassVar[TableSpec] = TableSpec(
         fields=[
-            FieldSpec("name", dtype=sqlalchemy.String, length=1024, primaryKey=True),
-            FieldSpec("value", dtype=sqlalchemy.String, length=65535, nullable=False),
+            FieldSpec("name", dtype=sqlalchemy.String, length=512, primaryKey=True),
+            FieldSpec("value", dtype=sqlalchemy.String, length=12000, nullable=False),
         ],
     )
 
