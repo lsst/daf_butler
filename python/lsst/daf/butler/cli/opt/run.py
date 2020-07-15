@@ -22,12 +22,23 @@
 
 import click
 
+from ..utils import MWOption
+
 
 class run_option:  # noqa: N801
+    """A decorator to add a run option to a click.Command.
+
+    Parameters
+    ----------
+    required : bool, optional
+        If True, the option is required to be passed in on the command line, by
+        default False.
+    """
+
     def __init__(self, required=False):
         self.required = required
 
     def __call__(self, f):
-        return click.option('--output-run',
+        return click.option('--output-run', cls=MWOption,
                             required=self.required,
                             help='The name of the run datasets should be output to.')(f)

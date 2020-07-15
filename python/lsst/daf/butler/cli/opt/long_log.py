@@ -1,8 +1,8 @@
-# This file is part of obs_base.
+# This file is part of daf_butler.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
-# (https://www.lsst.org).
+# (http://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -19,16 +19,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .collection_type import collection_type_option
-from .config import config_option
-from .config_file import config_file_option
-from .dataset_type import dataset_type_option
-from .directory import directory_argument
-from .glob import glob_parameter
-from .log_level import log_level_option
-from .long_log import long_log_option
-from .repo import repo_argument
-from .run import run_option
-from .transfer import transfer_option
-from .verbose import verbose_option
+import click
 
+from ..utils import MWOption
+
+
+class long_log_option:  # noqa: N801
+    """A decorator to add a long_log option to a click.Command.
+
+    Parameters
+    ----------
+    help : `str`, optional
+        The help text to use for the option.
+    """
+
+    defaultHelp = "Make log messages appear in long format."
+
+    def __init__(self, help=defaultHelp):
+        self.help = help
+
+    def __call__(self, f):
+        return click.option("--long-log", cls=MWOption,
+                            help=self.help,
+                            is_flag=True)(f)

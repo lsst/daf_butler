@@ -22,300 +22,138 @@
 """Unit tests for the daf_butler dataset-type CLI option.
 """
 
-import click
-import click.testing
 import unittest
-import yaml
 
-from lsst.daf.butler.tests import CliOptionTestBase
 from lsst.daf.butler.registry import CollectionType
+from lsst.daf.butler.tests import (OptFlagTest,
+                                   OptCaseInsensitiveTest,
+                                   OptChoiceTest,
+                                   OptHelpTest,
+                                   OptMultipleTest,
+                                   OptRequiredTest,
+                                   OptSplitKeyValueTest)
 from lsst.daf.butler.cli.opt import (collection_type_option, config_file_option, config_option,
-                                     dataset_type_option, directory_argument, glob_parameter, verbose_option)
-from lsst.daf.butler.cli.utils import clickResultMsg, ParameterType
+                                     dataset_type_option, directory_argument, glob_parameter,
+                                     log_level_option, long_log_option, repo_argument, transfer_option,
+                                     verbose_option)
 
 
-class CollectionTypeTestCase(CliOptionTestBase):
-
+class CollectionTypeTestCase(OptHelpTest,
+                             OptCaseInsensitiveTest,
+                             OptChoiceTest,
+                             OptRequiredTest,
+                             unittest.TestCase):
     optionClass = collection_type_option
-
-    def setUp(self):
-        super().setUp()
-        CollectionTypeTestCase.collectionType = None
-
-    @staticmethod
-    @click.command()
-    @collection_type_option()
-    def cli(collection_type):
-        CollectionTypeTestCase.collectionType = collection_type
-
-    def verify(self, result, verifyArgs):
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertEqual(CollectionTypeTestCase.collectionType, verifyArgs)
-
-    def test_run(self):
-        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "RUN"],
-                      self.verify, CollectionType.RUN)
-
-    def test_chained(self):
-        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "CHAINED"],
-                      self.verify, CollectionType.CHAINED)
-
-    def test_tagged(self):
-        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "TAGGED"],
-                      self.verify, CollectionType.TAGGED)
-
-    def test_default(self):
-        self.run_test(CollectionTypeTestCase.cli, [],
-                      self.verify, None)
-
-    def test_caseInsensitive(self):
-        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "TaGGeD"],
-                      self.verify, CollectionType.TAGGED)
-
-    def test_help(self):
-        self.help_test()
-        self.custom_help_test()
+    optionName = "collection-type"
+    choices = ["CHAINED", "RUN", "TAGGED"]
+    expectedChoiceValues = [CollectionType.CHAINED, CollectionType.RUN, CollectionType.TAGGED]
 
 
-class ConfigTestCase(CliOptionTestBase):
-
+class ConfigTestCase(OptHelpTest,
+                     OptMultipleTest,
+                     OptRequiredTest,
+                     OptSplitKeyValueTest,
+                     unittest.TestCase):
+    metavar = "test metavar"
+    optionName = "config"
+    shortOptionName = "c"
     optionClass = config_option
-
-    @staticmethod
-    @click.command()
-    @config_option()
-    def cli(config):
-        click.echo(yaml.dump(config), nl=False)
-
-    def test_basic(self):
-        """test arguments"""
-        result = self.runner.invoke(ConfigTestCase.cli, ["--config", "a=1", "-c", "b=2,c=3"])
-        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertEqual(yaml.safe_load(result.stdout), dict(a="1", b="2", c="3"))
-
-    def test_missing(self):
-        @click.command()
-        @config_option(required=True)
-        def cli(config):
-            pass
-
-        result = self.runner.invoke(cli, [])
-        self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertIn('Missing option "-c" / "--config"', result.output)
-
-    def test_help(self):
-        self.help_test()
-        self.custom_help_test()
+    optionMultipleKeyValues = ["one=two,three=four", "five=six"]
 
 
-class ConfigFileTestCase(CliOptionTestBase):
-
+class ConfigFileTestCase(OptHelpTest,
+                         OptMultipleTest,
+                         OptRequiredTest,
+                         unittest.TestCase):
+    optionName = "config-file"
+    shortOptionName = "C"
     optionClass = config_file_option
 
-    @staticmethod
-    @click.command()
-    @config_file_option()
-    def cli(config_file):
-        click.echo(config_file, nl=False)
 
-    def test_basic(self):
-        """test arguments"""
-        result = self.runner.invoke(ConfigFileTestCase.cli, ["--config-file", "path/to/file"])
-        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertEqual("path/to/file", result.stdout)
-
-    def test_missing(self):
-        @click.command()
-        @config_file_option(required=True)
-        def cli(config):
-            pass
-        result = self.runner.invoke(cli, [])
-        self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertIn('Missing option "-C" / "--config-file"', result.output)
-
-    def test_help(self):
-        self.help_test()
-        self.custom_help_test()
-
-
-class DatasetTypeTestCase(CliOptionTestBase):
+class DatasetTypeTestCase(OptHelpTest,
+                          OptMultipleTest,
+                          OptRequiredTest,
+                          unittest.TestCase):
 
     optionClass = dataset_type_option
-
-    @staticmethod
-    @click.command()
-    @dataset_type_option(help="the dataset type")
-    def cli(dataset_type):
-        click.echo(dataset_type, nl=False)
-
-    def verify(self, result, verifyArgs):
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertEqual(result.stdout, verifyArgs)
-
-    def test_single(self):
-        """test a single argument"""
-        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one"], self.verify, "['one']")
-
-    def test_multiple(self):
-        """test multiple arguments, using the long and short option names"""
-        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one", "-d", "two"],
-                      self.verify, "['one', 'two']")
-
-    def test_singlePair(self):
-        """test a single comma-separated value pair"""
-        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one,two"],
-                      self.verify, "['one', 'two']")
-
-    def test_multiplePair(self):
-        """test multiple comma-separated value pairs"""
-        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one,two", "-d", "three,four"],
-                      self.verify, "['one', 'two', 'three', 'four']")
-
-    def test_help(self):
-        # dataset_type_option does not have default help
-        self.custom_help_test()
+    optionName = "dataset-type"
+    shortOptionName = "d"
 
 
-class DirectoryArgumentTestCase(CliOptionTestBase):
-
+class DirectoryArgumentTestCase(OptHelpTest,
+                                OptRequiredTest,
+                                unittest.TestCase):
     optionClass = directory_argument
-
-    def test_required(self):
-        """test arguments"""
-        @click.command()
-        @directory_argument(required=True)
-        def cli(directory):
-            click.echo(directory, nl=False)
-        result = self.runner.invoke(cli, ["this_dir"])
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertEqual("this_dir", result.stdout)
-        result = self.runner.invoke(cli, [])
-        self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertIn('Missing argument "DIRECTORY"', result.stdout)
-
-    def test_notRequired(self):
-        """test arguments"""
-        @click.command()
-        @directory_argument()
-        def cli(directory):
-            click.echo(directory, nl=False)
-        result = self.runner.invoke(cli, ["this_dir"])
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertEqual("this_dir", result.stdout)
-        result = self.runner.invoke(cli, [])
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertEqual("", result.stdout)
-
-    def test_help(self):
-        # directory_argument does not have default help.
-        self.custom_help_test()
+    optionName = "directory"
+    isArgument = True
 
 
-class GlobTestCase(CliOptionTestBase):
-
+class GlobArgumentTestCase(OptHelpTest,
+                           OptRequiredTest,
+                           OptMultipleTest,
+                           unittest.TestCase):
     optionClass = glob_parameter
-
-    def verify(self, result, verifyArgs):
-        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertIn(verifyArgs, result.stdout)
-
-    def verifyMissing(self, result, verifyArgs):
-        self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertIn(verifyArgs, result.stdout)
-
-    def test_glob_argument(self):
-        """test argument"""
-        @click.command()
-        @glob_parameter(parameterType=ParameterType.ARGUMENT)
-        def cli(glob):
-            if glob is None:
-                glob = "None"
-            print(glob)
-
-        self.run_test(cli, ["foo*"], self.verify, "foo*")
-        self.run_test(cli, [], self.verify, "None")
-
-    def test_glob_argument_required(self):
-        """test with argument required"""
-        @click.command()
-        @glob_parameter(parameterType=ParameterType.ARGUMENT, required=True)
-        def cli(glob):
-            print(glob)
-
-        self.run_test(cli, ["foo*"], self.verify, "foo*")
-        self.run_test(cli, [], self.verifyMissing, 'Error: Missing argument "GLOB"')
-
-    def test_glob_option(self):
-        """test option"""
-        @click.command()
-        @glob_parameter()
-        def cli(glob):
-            if glob is None:
-                glob = "None"
-            print(glob)
-
-        self.run_test(cli, ["--glob", "foo*"], self.verify, "foo*")
-        self.run_test(cli, [], self.verify, "None")
-
-    def test_glob_option_required(self):
-        """test with argument required"""
-        @click.command()
-        @glob_parameter(parameterType=ParameterType.ARGUMENT, required=True)
-        def cli(glob):
-            print(glob)
-
-        self.run_test(cli, ["foo*"], self.verify, "foo*")
-        self.run_test(cli, [], self.verifyMissing, 'Error: Missing argument "GLOB"')
-
-    def test_glob_argument_multiple(self):
-        """test with multiple argument values"""
-        @click.command()
-        @glob_parameter(parameterType=ParameterType.ARGUMENT, multiple=True)
-        def cli(glob):
-            print(glob)
-
-        self.run_test(cli, ["foo*", "bar", "b?z"], self.verify, "('foo*', 'bar', 'b?z')")
-
-    def test_glob_option_multiple(self):
-        """test with multiple option values"""
-        @click.command()
-        @glob_parameter(multiple=True)
-        def cli(glob):
-            print(glob)
-
-        self.run_test(cli, ["--glob", "foo*", "--glob", "bar", "--glob", "b?z"], self.verify,
-                      "('foo*', 'bar', 'b?z')")
-
-    def test_help(self):
-        self.help_test()
-        self.custom_help_test()
+    optionName = "glob"
+    isArgument = True
+    isParameter = True
 
 
-class VerboseTestCase(CliOptionTestBase):
+class GlobOptionTestCase(OptHelpTest,
+                         OptRequiredTest,
+                         OptMultipleTest,
+                         unittest.TestCase):
+    optionClass = glob_parameter
+    optionName = "glob"
+    isParameter = True
 
+
+class LogLevelTestCase(OptChoiceTest,
+                       OptHelpTest,
+                       OptCaseInsensitiveTest,
+                       OptRequiredTest,
+                       unittest.TestCase):
+
+    expectedValDefault = {"": log_level_option.defaultValue}
+    optionClass = log_level_option
+    optionName = "log-level"
+    choices = ["DEBUG", "lsst.daf.butler=DEBUG"]
+    expectedChoiceValues = [{'': "DEBUG"}, {"lsst.daf.butler": "DEBUG"}]
+
+
+class LongLogOption(OptFlagTest,
+                    OptHelpTest,
+                    unittest.TestCase):
+    optionClass = long_log_option
+    optionName = "long-log"
+
+
+class RepoArgumentTestCase(OptHelpTest,
+                           OptRequiredTest,
+                           unittest.TestCase):
+    isArgument = True
+    optionClass = repo_argument
+    optionName = "repo"
+
+
+class TransferTestCase(OptChoiceTest,
+                       OptHelpTest,
+                       OptRequiredTest,
+                       unittest.TestCase):
+    expectedValDefault = "auto"
+    optionClass = transfer_option
+    optionName = "transfer"
+    shortOptionName = "t"
+
+
+# Doesn't test for required; this is nonsensical for a flag (where
+# present=True and not-present=False)
+class VerboseTestCase(OptFlagTest,
+                      OptHelpTest,
+                      unittest.TestCase):
     optionClass = verbose_option
-
-    @staticmethod
-    @click.command()
-    @verbose_option()
-    def cli(verbose):
-        print(verbose)
-
-    def verify(self, result, verifyArgs):
-        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertIn(verifyArgs, result.stdout)
-
-    def test_verbose(self):
-        """test arguments"""
-        self.run_test(self.cli, ["--verbose"], self.verify, "True")
-
-    def test_notVerbose(self):
-        """test arguments"""
-        self.run_test(self.cli, [], self.verify, "False")
-
-    def test_help(self):
-        self.help_test()
-        self.custom_help_test()
+    optionName = "verbose"
+    isBool = True
+    expectedValDefault = "False"
 
 
 if __name__ == "__main__":

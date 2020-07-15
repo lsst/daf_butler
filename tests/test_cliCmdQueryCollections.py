@@ -22,13 +22,13 @@
 """Unit tests for daf_butler CLI query-collections command.
 """
 
-import click
 import unittest
 import yaml
 
 from lsst.daf.butler import Butler
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_collections
+from lsst.daf.butler.cli.utils import LogCliRunner
 from lsst.daf.butler.tests import CliCmdTestBase
 
 
@@ -63,7 +63,7 @@ class QueryCollectionsScriptTest(unittest.TestCase):
         run = "ingest/run"
         tag = "ingest"
         expected = {"collections": [run, tag]}
-        runner = click.testing.CliRunner()
+        runner = LogCliRunner()
         with runner.isolated_filesystem():
             butlerCfg = Butler.makeRepo("here")
             # the purpose of this call is to create some collections

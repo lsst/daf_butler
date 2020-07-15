@@ -30,19 +30,16 @@ class directory_argument:  # noqa: N801
 
     Parameters
     ----------
-    required : `bool`, optional
-        Indicates if the caller must pass this argument to the command, by
-        default True.
     help : `str`, optional
-        The help text for this argument to append to the command's help text.
-        If None or '' then nothing will be appended to the help text (in which
-        case the command should document this argument directly in its help
-        text). By default, the value of directory_argument.default_help
+        The help text to use for the option.
+    required : bool, optional
+        If True, the option is required to be passed in on the command line, by
+        default False.
     """
 
-    default_help = "DIRECTORY is the folder containing dataset files."
+    defaultHelp = "DIRECTORY is the folder containing dataset files."
 
-    def __init__(self, required=False, help=default_help):
+    def __init__(self, help=defaultHelp, required=False):
         self.required = required
         self.helpText = help
 

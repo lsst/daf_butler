@@ -23,12 +23,11 @@
 """Unit tests for daf_butler CLI config-validate command.
 """
 
-import click
-import click.testing
 import unittest
 
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.cmd import config_validate
+from lsst.daf.butler.cli.utils import LogCliRunner
 from lsst.daf.butler.tests import CliCmdTestBase
 
 
@@ -40,26 +39,28 @@ class ValidateTest(CliCmdTestBase, unittest.TestCase):
 class ConfigValidateUseTest(unittest.TestCase):
     """Test executing the command."""
 
+    def setUp(self):
+        self.runner = LogCliRunner()
+
     def testConfigValidate(self):
         """Test validating a valid config."""
-        runner = click.testing.CliRunner()
-        with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "here"])
+        with self.runner.isolated_filesystem():
+            result = self.runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             # verify the just-created repo validates without error
-            result = runner.invoke(butler.cli, ["config-validate", "here"])
+            result = self.runner.invoke(butler.cli, ["config-validate", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             self.assertEqual(result.stdout, "No problems encountered with configuration.\n")
 
     def testConfigValidate_ignore(self):
         """Test the ignore flag"""
-        runner = click.testing.CliRunner()
-        with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "here"])
+        with self.runner.isolated_filesystem():
+            result = self.runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             # verify the just-created repo validates without error
-            result = runner.invoke(butler.cli, ["config-validate", "here",
-                                   "--ignore", "storageClasses,repoTransferFormats", "-i", "dimensions"])
+            result = self.runner.invoke(butler.cli, ["config-validate", "here",
+                                                     "--ignore", "storageClasses,repoTransferFormats",
+                                                     "-i", "dimensions"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             self.assertEqual(result.stdout, "No problems encountered with configuration.\n")
 

@@ -44,7 +44,7 @@ from ...script import (butlerImport, createRepo, configDump, configValidate, que
                    "datasets.  If this is not an absolute path, does not exist in the current working "
                    "directory, and --dir is provided, it is assumed to be in that directory.  Defaults "
                    "to \"export.yaml\".",
-              type=click.File('r'))
+              type=click.File("r"))
 def butler_import(*args, **kwargs):
     """Import data into a butler repository."""
     cli_handle_exception(butlerImport, *args, **kwargs)
@@ -83,7 +83,7 @@ def config_dump(*args, **kwargs):
 @click.command(short_help="Validate the configuration files.")
 @repo_argument(required=True)
 @click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
-@dataset_type_option(help="Specific DatasetType(s) to validate.")
+@dataset_type_option(help="Specific DatasetType(s) to validate.", multiple=True)
 @click.option("--ignore", "-i", type=str, multiple=True, callback=split_commas,
               metavar=typeStrAcceptsMultiple,
               help="DatasetType(s) to ignore for validation.")

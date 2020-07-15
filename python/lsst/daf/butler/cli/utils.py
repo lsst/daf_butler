@@ -20,20 +20,25 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import click
+import click.testing
+from contextlib import contextmanager
 import enum
 import io
 import os
+import textwrap
 import traceback
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+import yaml
 
+from .cliLog import CliLog
 from ..core.utils import iterable
 
 
-# CLI_BUTLER_MOCK_ENV is set by some tests as an environment variable, it
+# CLI_MOCK_ENV is set by some tests as an environment variable, it
 # indicates to the cli_handle_exception function that instead of executing the
 # command implementation function it should use the Mocker class for unit test
 # verification.
-mockEnvVarKey = "CLI_BUTLER_MOCK_ENV"
+mockEnvVarKey = "CLI_MOCK_ENV"
 mockEnvVar = {mockEnvVarKey: "1"}
 
 # This is used as the metavar argument to Options that accept multiple string
@@ -60,6 +65,11 @@ def textTypeStr(multiple):
         The type string to use.
     """
     return typeStrAcceptsMultiple if multiple else typeStrAcceptsSingle
+
+
+# For parameters that support key-value inputs, this defines the separator
+# for those inputs.
+split_kv_separator = "="
 
 
 # The ParameterType enum is used to indicate a click Argument or Option (both
@@ -89,6 +99,21 @@ class Mocker:
         Mocker.mock(*args, **kwargs)
 
 
+class LogCliRunner(click.testing.CliRunner):
+    """A test runner to use when the logging system will be initialized by code
+    under test, calls CliLog.resetLog(), which undoes any logging setup that
+    was done with the CliLog interface.
+
+    lsst.log modules can not be set back to an uninitialized state (python
+    logging modules can be set back to NOTSET), instead they are set to
+    `CliLog.defaultLsstLogLevel`."""
+
+    def invoke(self, *args, **kwargs):
+        result = super().invoke(*args, **kwargs)
+        CliLog.resetLog()
+        return result
+
+
 def clickResultMsg(result):
     """Get a standard assert message from a click result
 
@@ -102,7 +127,36 @@ def clickResultMsg(result):
     msg : `str`
         The message string.
     """
-    return f"output: {result.output} exception: {result.exception}"
+    msg = io.StringIO()
+    if result.exception:
+        traceback.print_tb(result.exception.__traceback__, file=msg)
+        msg.seek(0)
+    return f"\noutput: {result.output}\nexception: {result.exception}\ntraceback: {msg.read()}"
+
+
+@contextmanager
+def command_test_env(runner, commandModule, commandName):
+    """A context manager that creates (and then cleans up) an environment that
+    provides a CLI plugin command with the given name.
+
+    Parameters
+    ----------
+    runner : click.testing.CliRunner
+        The test runner to use to create the isolated filesystem.
+    commandModule : `str`
+        The importable module that the command can be imported from.
+    commandName : `str`
+        The name of the command being published to import.
+    """
+    with runner.isolated_filesystem():
+        with open("resources.yaml", "w") as f:
+            f.write(yaml.dump({"cmd": {"import": commandModule, "commands": [commandName]}}))
+        # Add a colon to the end of the path on the next line, this tests the
+        # case where the lookup in LoaderCLI._getPluginList generates an empty
+        # string in one of the list entries and verifies that the empty string
+        # is properly stripped out.
+        with patch.dict("os.environ", {"DAF_BUTLER_PLUGINS": f"{os.path.realpath(f.name)}:"}):
+            yield
 
 
 def addArgumentHelp(doc, helpText):
@@ -162,13 +216,16 @@ def split_commas(context, param, values):
         The passed in values separated by commas and combined into a single
         list.
     """
+    if values is None:
+        return values
     valueList = []
     for value in iterable(values):
         valueList.extend(value.split(","))
-    return valueList
+    return tuple(valueList)
 
 
-def split_kv(context, param, values, separator="="):
+def split_kv(context, param, values, choice=None, multiple=True, normalize=False, separator="=",
+             unseparated_okay=False):
     """Process a tuple of values that are key-value pairs separated by a given
     separator. Multiple pairs may be comma separated. Return a dictionary of
     all the passed-in values.
@@ -187,14 +244,26 @@ def split_kv(context, param, values, separator="="):
     values : [`str`]
         All the values passed for this option. Strings may contain commas,
         which will be treated as delimiters for separate values.
+    choice : `click.Choice`, optional
+        If provided, verify each value is a valid choice using the provided
+        `click.Choice` instance. If None, no verification will be done.
+    multiple : `bool`, optional
+        If true, the value may contain multiple comma-separated values.
+    normalize : `bool`, optional
+        If True and `choice.case_sensitive == False`, normalize the string the
+        user provided to match the choice's case.
     separator : str, optional
         The character that separates key-value pairs. May not be a comma or an
         empty space (for space separators use Click's default implementation
         for tuples; `type=(str, str)`). By default "=".
+    unseparated_okay : `bool`, optional
+        If True, allow values that do not have a separator. They will be
+        returned in the values dict as a tuple of values in the key '', that
+        is: `values[''] = (unseparated_values, )`.
 
     Returns
     -------
-    `dict` : [`str`, `str`]
+    values : `dict` [`str`, `str`]
         The passed-in values in dict form.
 
     Raises
@@ -203,18 +272,45 @@ def split_kv(context, param, values, separator="="):
         Raised if the separator is not found in an entry, or if duplicate keys
         are encountered.
     """
+
+    def norm(val):
+        """If `normalize` is True and `choice` is not `None`, find the value
+        in the available choices and return the value as spelled in the
+        choices.
+
+        Assumes that val exists in choices; `split_kv` uses the `choice`
+        instance to verify val is a valid choice.
+        """
+        if normalize and choice is not None:
+            v = val.casefold()
+            for opt in choice.choices:
+                if opt.casefold() == v:
+                    return opt
+        return val
+
     if separator in (",", " "):
         raise RuntimeError(f"'{separator}' is not a supported separator for key-value pairs.")
-    vals = split_commas(context, param, values)
+    vals = values  # preserve the original argument for error reporting below.
+    if multiple:
+        vals = split_commas(context, param, vals)
     ret = {}
-    for val in vals:
-        try:
-            k, v = val.split(separator)
-        except ValueError:
-            raise click.ClickException(f"Missing or invalid key-value separator in value '{val}'")
-        if k in ret:
-            raise click.ClickException(f"Duplicate entries for '{k}' in '{values}'")
-        ret[k] = v
+    for val in iterable(vals):
+        if unseparated_okay and separator not in val:
+            if choice is not None:
+                choice(val)  # will raise if val is an invalid choice
+            ret[""] = norm(val)
+        else:
+            try:
+                k, v = val.split(separator)
+                if choice is not None:
+                    choice(v)  # will raise if val is an invalid choice
+            except ValueError:
+                raise click.ClickException(
+                    f"Could not parse key-value pair '{val}' using separator '{separator}', "
+                    f"with multiple values {'allowed' if multiple else 'not allowed'}.")
+            if k in ret:
+                raise click.ClickException(f"Duplicate entries for '{k}' in '{values}'")
+            ret[k] = norm(v)
     return ret
 
 
@@ -234,6 +330,37 @@ def to_upper(context, param, value):
         A copy of the passed-in value, converted to upper case.
     """
     return value.upper()
+
+
+def unwrap(val):
+    """Remove newlines and leading whitespace from a multi-line string with
+    a consistent indentation level.
+
+    The first line of the string may be only a newline or may contain text
+    followed by a newline, either is ok. After the first line, each line must
+    begin with a consistant amount of whitespace. So, content of a
+    triple-quoted string may begin immediately after the quotes, or the string
+    may start with a newline. Each line after that must be the same amount of
+    indentation/whitespace followed by text and a newline. The last line may
+    end with a new line but is not required to do so.
+
+    Parameters
+    ----------
+    val : `str`
+        The string to change.
+
+    Returns
+    -------
+    strippedString : `str`
+        The string with newlines, indentation, and leading and trailing
+        whitespace removed.
+    """
+    if not val.startswith("\n"):
+        firstLine, _, val = val.partition("\n")
+        firstLine += " "
+    else:
+        firstLine = ""
+    return (firstLine + textwrap.dedent(val).replace("\n", " ")).strip()
 
 
 def cli_handle_exception(func, *args, **kwargs):
@@ -268,5 +395,48 @@ def cli_handle_exception(func, *args, **kwargs):
         msg = io.StringIO()
         msg.write("An error occurred during command execution:\n")
         traceback.print_exc(file=msg)
-        msg.seek(0)
-        raise click.ClickException(msg.read())
+        raise click.ClickException(msg.getvalue())
+
+
+class MWOption(click.Option):
+    """Overrides click.Option with desired behaviors."""
+
+    def make_metavar(self):
+        """Overrides `click.Option.make_metavar`. Makes the metavar for the
+        help menu. Adds a space and an elipsis after the metavar name if
+        the option accepts multiple inputs, otherwise defers to the base
+        implementation.
+
+        By default click does not add an elipsis when multiple is True and
+        nargs is 1. And when nargs does not equal 1 click adds an elipsis
+        without a space between the metavar and the elipsis, but we prefer a
+        space between.
+        """
+        metavar = super().make_metavar()
+        if self.multiple and self.nargs == 1:
+            metavar += " ..."
+        elif self.nargs != 1:
+            metavar = f"{metavar[:-3]} ..."
+        return metavar
+
+
+class MWArgument(click.Argument):
+    """Overrides click.Argument with desired behaviors."""
+
+    def make_metavar(self):
+        """Overrides `click.Option.make_metavar`. Makes the metavar for the
+        help menu. Always adds a space and an elipsis (' ...') after the
+        metavar name if the option accepts multiple inputs.
+
+        By default click adds an elipsis without a space between the metavar
+        and the elipsis, but we prefer a space between.
+
+        Returns
+        -------
+        metavar : `str`
+            The metavar value.
+        """
+        metavar = super().make_metavar()
+        if self.nargs != 1:
+            metavar = f"{metavar[:-3]} ..."
+        return metavar

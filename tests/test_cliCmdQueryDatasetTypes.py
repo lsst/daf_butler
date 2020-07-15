@@ -22,14 +22,13 @@
 """Unit tests for daf_butler CLI query-collections command.
 """
 
-import click
 import unittest
 import yaml
 
 from lsst.daf.butler import Butler, DatasetType, StorageClass
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_dataset_types
-from lsst.daf.butler.cli.utils import clickResultMsg
+from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
 from lsst.daf.butler.tests import CliCmdTestBase
 
 
@@ -69,7 +68,7 @@ class QueryDatasetTypesScriptTest(unittest.TestCase):
         visitDimension = "visit"
         storageClassName = "testDatasetType"
         expectedNotVerbose = {"datasetTypes": [datasetName]}
-        runner = click.testing.CliRunner()
+        runner = LogCliRunner()
         with runner.isolated_filesystem():
             butlerCfg = Butler.makeRepo("here")
             butler = Butler(butlerCfg, writeable=True)

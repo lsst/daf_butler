@@ -23,7 +23,6 @@
 """
 
 import click
-import click.testing
 from collections import defaultdict
 from contextlib import contextmanager
 import os
@@ -32,32 +31,12 @@ from unittest.mock import patch
 import yaml
 
 from lsst.daf.butler.cli import butler, cmd
+from lsst.daf.butler.cli.utils import command_test_env, LogCliRunner
 
 
 @click.command()
 def command_test():
     click.echo("test command")
-
-
-@contextmanager
-def command_test_env(runner, commandName):
-    """A context manager that creates (and then cleans up) an environment that
-    provides a plugin command named 'command-test'.
-
-    Parameters
-    ----------
-    runner : click.testing.CliRunner
-        The test runner to use to create the isolated filesystem.
-    """
-    with runner.isolated_filesystem():
-        with open("resources.yaml", "w") as f:
-            f.write(yaml.dump({"cmd": {"import": "test_cliPluginLoader", "commands": [commandName]}}))
-        # Add a colon to the end of the path on the next line, this tests the
-        # case where the lookup in LoaderCLI._getPluginList generates an empty
-        # string in one of the list entries and verifies that the empty string
-        # is properly stripped out.
-        with patch.dict("os.environ", {"DAF_BUTLER_PLUGINS": f"{os.path.realpath(f.name)}:"}):
-            yield
 
 
 @contextmanager
@@ -80,51 +59,65 @@ def duplicate_command_test_env(runner):
 
 class FailedLoadTest(unittest.TestCase):
 
+    def setUp(self):
+        self.runner = LogCliRunner()
+
     def test_unimportablePlugin(self):
-        runner = click.testing.CliRunner()
-        with command_test_env(runner, "non-existant-command-function"):
+        with command_test_env(self.runner, "test_cliPluginLoader", "non-existant-command-function"):
             with self.assertLogs() as cm:
-                result = runner.invoke(butler.cli, "--help")
+                result = self.runner.invoke(butler.cli, "--help")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             expectedErrMsg = "Could not import plugin from " \
                              "test_cliPluginLoader.non_existant_command_function, skipping."
-            self.assertIn(expectedErrMsg, cm.output[0])
+            self.assertIn(expectedErrMsg, " ".join(cm.output))
+
+    def test_unimportableLocalPackage(self):
+        class FailCLI(butler.LoaderCLI):
+            localCmdPkg = "lsst.daf.butler.cli.cmds"  # should not be an importable location
+
+        @click.command(cls=FailCLI)
+        def cli():
+            pass
+
+        with self.assertLogs() as cm:
+            result = self.runner.invoke(cli)
+        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        expectedErrMsg = f"Could not import plugin from {FailCLI.localCmdPkg}, skipping."
+        self.assertIn(expectedErrMsg, " ".join(cm.output))
 
 
 class PluginLoaderTest(unittest.TestCase):
 
+    def setUp(self):
+        self.runner = LogCliRunner()
+
     def test_loadAndExecutePluginCommand(self):
         """Test that a plugin command can be loaded and executed."""
-        runner = click.testing.CliRunner()
-        with command_test_env(runner, "command-test"):
-            result = runner.invoke(butler.cli, "command-test")
+        with command_test_env(self.runner, "test_cliPluginLoader", "command-test"):
+            result = self.runner.invoke(butler.cli, "command-test")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(result.stdout, "test command\n")
 
     def test_loadAndExecuteLocalCommand(self):
         """Test that a command in daf_butler can be loaded and executed."""
-        runner = click.testing.CliRunner()
-        with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "test_repo"])
+        with self.runner.isolated_filesystem():
+            result = self.runner.invoke(butler.cli, ["create", "test_repo"])
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertTrue(os.path.exists("test_repo"))
 
     def test_loadTopHelp(self):
         """Test that an expected command is produced by 'butler --help'"""
-        runner = click.testing.CliRunner()
-        with command_test_env(runner, "command-test"):
-            result = runner.invoke(butler.cli, "--help")
+        with command_test_env(self.runner, "test_cliPluginLoader", "command-test"):
+            result = self.runner.invoke(butler.cli, "--help")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertIn("command-test", result.stdout)
 
     def test_getLocalCommands(self):
         """Test getting the daf_butler CLI commands."""
-        localCommands = butler.LoaderCLI._getLocalCommands()
+        localCommands = butler.ButlerCLI().getLocalCommands()
         # the number of local commands should equal the number of functions
         # in cmd.__all__
         self.assertEqual(len(localCommands), len(cmd.__all__))
-        for command, pkg in localCommands.items():
-            self.assertEqual(pkg, ["lsst.daf.butler.cli.cmd"])
 
     def test_mergeCommandLists(self):
         """Verify dicts of command to list-of-source-package get merged
@@ -141,9 +134,8 @@ class PluginLoaderTest(unittest.TestCase):
         present and verify it fails to run.
         """
         self.maxDiff = None
-        runner = click.testing.CliRunner()
-        with duplicate_command_test_env(runner):
-            result = runner.invoke(butler.cli, ["create", "test_repo"])
+        with duplicate_command_test_env(self.runner):
+            result = self.runner.invoke(butler.cli, ["create", "test_repo"])
             self.assertEqual(result.exit_code, 1, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(result.output, "Error: Command 'create' "
                              "exists in packages lsst.daf.butler.cli.cmd, test_cliPluginLoader. "

@@ -24,4 +24,13 @@ from ._dummyRegistry import *
 from ._examplePythonTypes import *
 from ._testRepo import *
 from .cliCmdTestBase import CliCmdTestBase
-from .cliOptionTestBase import CliOptionTestBase
+from .cliOptionTestBase import (OptFlagTest,
+                                OptCaseInsensitiveTest,
+                                OptChoiceTest,
+                                OptHelpTest,
+                                OptMultipleTest,
+                                OptPathTypeTest,
+                                OptTestBase,
+                                OptSplitKeyValueTest,
+                                OptRequiredTest)
+from .cliLogTestBase import CliLogTestBase

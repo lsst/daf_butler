@@ -22,18 +22,47 @@
 
 import click
 
+from ..utils import MWOption, split_commas
+
 
 class config_file_option:  # noqa: N801
+    """A decorator that adds a config-file option to a click command.
+
+    Parameters
+    ----------
+    help : `str`, optional
+        The help text to use for the option.
+    metavar : `str`, optional
+        How the type is represented in the help page.
+    multiple : `bool`, optional
+        If true, multiple instances of the option may be passed in on the
+        command line, by default False.
+    required : bool, optional
+        If True, the option is required to be passed in on the command line, by
+        default False.
+    type : a python type or a `click.ParamType`, optional
+        The type that should be used for the value. Python types will be
+        converted into a `click.ParamType` automatically if supported.
+    """
 
     defaultHelp = "Path to a pex config override to be included after the Instrument config overrides are " \
                   "applied."
+    optionFlags = ("-C", "--config-file")
+    optionKey = "config_file"
 
-    def __init__(self, required=False, help=defaultHelp):
-        self.required = required
+    def __init__(self, help=defaultHelp, metavar=None, multiple=False, required=False, type=None):
+        self.callback = split_commas if multiple else None
         self.help = help
+        self.metavar = metavar
+        self.multiple = multiple
+        self.required = required
+        self.type = type
 
     def __call__(self, f):
-        return click.option("-C", "--config-file",
+        return click.option(*self.optionFlags, cls=MWOption,
+                            callback=self.callback,
+                            help=self.help,
+                            metavar=self.metavar,
+                            multiple=self.multiple,
                             required=self.required,
-                            type=click.STRING,
-                            help=self.help)(f)
+                            type=self.type)(f)

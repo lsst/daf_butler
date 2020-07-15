@@ -20,11 +20,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import abc
-import click
-import click.testing
 import copy
+import os
 
-from ..cli.utils import clickResultMsg, mockEnvVar, Mocker
+from ..cli.utils import clickResultMsg, mockEnvVar, LogCliRunner, Mocker
 from ..cli import butler
 
 
@@ -46,8 +45,14 @@ class CliCmdTestBase(abc.ABC):
         """Get the click.Command being tested."""
         pass
 
+    @property
+    def cli(self):
+        """Get the command line interface function under test, can be
+        overridden to test CLIs other than butler."""
+        return butler.cli
+
     def setUp(self):
-        self.runner = click.testing.CliRunner(env=mockEnvVar)
+        self.runner = LogCliRunner(env=mockEnvVar)
 
     def makeExpected(self, **kwargs):
         expected = copy.copy(self.defaultExpected)
@@ -55,8 +60,8 @@ class CliCmdTestBase(abc.ABC):
         return expected
 
     def run_command(self, inputs):
-        """Use the CliRunner with the mock environment variable set to execute
-        a butler subcommand and parameters specified in inputs.
+        """Use the LogCliRunner with the mock environment variable set to
+        execute a butler subcommand and parameters specified in inputs.
 
         Parameters
         ----------
@@ -70,12 +75,15 @@ class CliCmdTestBase(abc.ABC):
             The Result object contains the results from calling
             self.runner.invoke.
         """
-        return self.runner.invoke(butler.cli, inputs)
+        return self.runner.invoke(self.cli, inputs)
 
-    def run_test(self, inputs, expectedKwargs):
+    def run_test(self, inputs, expectedKwargs, withTempFile=None):
         """Run the subcommand specified in inputs and verify a successful
         outcome where exit code = 0 and the mock object has been called with
         the expected arguments.
+
+        Returns the result object for inspection, e.g. sometimes it's useful to
+        be able to inpsect or print `result.output`.
 
         Parameters
         ----------
@@ -86,10 +94,25 @@ class CliCmdTestBase(abc.ABC):
             The arguments that the subcommand function is expected to have been
             called with. Keys are the argument name and values are the argument
             value.
+        withTempFile : `str`, optional
+            If not None, will run in a temporary directory and create a file
+            with the given name, can be used with commands with parameters that
+            require a file to exist.
+
+        Returns
+        -------
+        result : `click.testing.Result`
+            The result object produced by invocation of the command under test.
         """
-        result = self.run_command(inputs)
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        Mocker.mock.assert_called_with(**expectedKwargs)
+        with self.runner.isolated_filesystem():
+            if withTempFile is not None:
+                os.makedirs(os.path.dirname(withTempFile), exist_ok=True)
+                with open(withTempFile, "w") as _:
+                    pass
+            result = self.run_command(inputs)
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            Mocker.mock.assert_called_with(**expectedKwargs)
+        return result
 
     def run_missing(self, inputs, expectedMsg):
         """Run the subcommand specified in inputs and verify a failed outcome

@@ -22,6 +22,7 @@
 """Unit tests for daf_butler CLI config-dump command.
 """
 
+import os
 import unittest
 import unittest.mock
 
@@ -114,7 +115,7 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
             f.close()
             self.run_test(["import", "here", "foo",
                            "--output-run", "out",
-                           "--export-file", "output.yaml"],
+                           "--export-file", os.path.join(os.getcwd(), "output.yaml")],
                           self.makeExpected(repo="here", directory="foo",
                                             output_run="out",
                                             export_file=unittest.mock.ANY))

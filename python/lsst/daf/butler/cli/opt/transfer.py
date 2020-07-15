@@ -21,18 +21,36 @@
 
 
 import click
-
-allowed_types = ["auto", "link", "symlink", "hardlink", "copy", "move", "relsymlink"]
+from ..utils import MWOption
 
 
 class transfer_option:  # noqa: N801
-    def __init__(self, required=False, help=None):
+    """A decorator to add a transfer option to a click.Command.
+
+    Parameters
+    ----------
+    help : `str`, optional
+        The help text to use for the option.
+    required : bool, optional
+        If True, the option is required to be passed in on the command line, by
+        default False.
+    """
+
+    choices = ["auto", "link", "symlink", "hardlink", "copy", "move", "relsymlink"]
+    defaultHelp = "The external data transfer mode."
+
+    def __init__(self, help=defaultHelp, required=False):
+        self.help = help
         self.required = required
-        self.help = "The external data transfer mode." if help is None else help
 
     def __call__(self, f):
-        return click.option("-t", "--transfer",
-                            default="auto",
-                            type=click.Choice(allowed_types),
-                            required=self.required,
-                            help=self.help)(f)
+        kwargs = dict(help=self.help,
+                      type=click.Choice(self.choices, case_sensitive=False))
+        # If the option is required, do not provide a default value (it
+        # prevents the CLI execution from failing if the option is not
+        # provided).
+        if self.required:
+            kwargs["required"] = True
+        else:
+            kwargs["default"] = "auto"
+        return click.option("-t", "--transfer", cls=MWOption, **kwargs)(f)

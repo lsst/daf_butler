@@ -21,35 +21,52 @@
 
 import click
 
-from ..utils import addArgumentHelp, ParameterType, textTypeStr
+from ..utils import addArgumentHelp, MWOption, split_commas, ParameterType, textTypeStr
 
 
 class glob_parameter:  # noqa: N801
     """Decorator to add an glob option or argument to a click command.
+
+    Parameters
+    ----------
+    help : `str`, optional
+        The help text to use for the option.
+    multiple : `bool`, optional
+        If True, multiple instances of the option may be passed in on the
+        command line, by default False.
+    parameterType : `ParameterType`, optional
+        Indicates if the decorator should add a `click.Argument` or a
+        `click.Option`, by default ParameterType.OPTION
+    required : bool, optional
+        If True, the option is required to be passed in on the command line, by
+        default False.
     """
 
     defaultHelp = "GLOB is a string to apply to the search."
     defaultHelpMultiple = "GLOB is one or more strings to apply to the search."
 
-    def __init__(self, parameterType=ParameterType.OPTION, required=False, help=defaultHelp,
-                 multiple=False):
+    def __init__(self, help=defaultHelp, multiple=False, parameterType=ParameterType.OPTION, required=False):
+        self.help = help
+        self.callback = split_commas if multiple else None
+        self.multiple = multiple
         self.parameterType = parameterType
         self.required = required
-        self.help = help
-        self.multiple = multiple
+
         if self.help == self.defaultHelp and self.multiple:
             self.help = self.defaultHelpMultiple
 
     def __call__(self, f):
         if self.parameterType == ParameterType.OPTION:
-            return click.option("--glob",
-                                multiple=self.multiple,
-                                required=self.required,
+            return click.option("--glob", cls=MWOption,
+                                callback=self.callback,
                                 help=self.help,
-                                metavar=textTypeStr(self.multiple))(f)
+                                metavar=textTypeStr(self.multiple),
+                                multiple=self.multiple,
+                                required=self.required)(f)
         else:
             f.__doc__ = addArgumentHelp(f.__doc__, self.help)
             return click.argument("glob",
-                                  required=self.required,
+                                  callback=self.callback,
+                                  metavar="GLOB ..." if self.multiple else "GLOB",
                                   nargs=-1 if self.multiple else 1,
-                                  metavar="GLOB ..." if self.multiple else "GLOB")(f)
+                                  required=self.required)(f)
