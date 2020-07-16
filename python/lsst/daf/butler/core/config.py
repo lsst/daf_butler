@@ -521,11 +521,15 @@ class Config(collections.abc.MutableMapping):
                                         found = os.path.normpath(os.path.abspath(filePath))
                                         break
                                 else:
-                                    # S3 is harder because we can't tell if
-                                    # the resource is there until we down
-                                    # load it -- I think this means we down
-                                    # load the bytes and then pass the
-                                    # bytes to the Config constructor.
+                                    # For remote resource either we assume
+                                    # the resource always exists even though
+                                    # it likely does not and we pass it
+                                    # directly to the Config constructor here.
+                                    # Else we uses s3utils.s3CheckFileExists
+                                    # Either way a network call is needed.
+                                    # For now no-one is using this
+                                    # functionality and there are no S3 tests
+                                    # for it so defer implementation.
                                     raise RuntimeError("Can not currently follow includeConfigs to "
                                                        f"{dir}")
                     if not found:
