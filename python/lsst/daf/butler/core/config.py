@@ -166,6 +166,8 @@ class Resource:
         dir : `ResourceDir`
             The "directory" corresponding to this resource.
         """
+        # Resources always use POSIX-style path separators
+        # so do not use os.path
         dir = posixpath.split(self.name)[0]
         return ResourceDir(self.package, dir)
 
@@ -204,7 +206,7 @@ class ResourceDir:
         resource : `Resource`
             A full definition of a resource.
         """
-        # Resources always use posix paths
+        # Resources always use posix paths so do not use os.path
         return Resource(self.package, posixpath.join(self.dir, file))
 
 
@@ -513,6 +515,7 @@ class Config(collections.abc.MutableMapping):
                                 elif dir.scheme == "file":
                                     # import private helper function
                                     from .location import posix2os
+                                    # File URIs always use posix path separator
                                     filePath = posix2os(posixpath.join(dir.path, fileName))
                                     if os.path.exists(filePath):
                                         found = os.path.normpath(os.path.abspath(filePath))
