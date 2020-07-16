@@ -74,6 +74,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
 
     def test_cli(self):
         mock = MagicMock()
+
         @click.command()
         @click.option("--value", callback=split_kv, multiple=True)
         def cli(value):
@@ -101,6 +102,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
     def test_choice(self):
         choices = ["FOO", "BAR", "BAZ"]
         mock = MagicMock()
+
         @click.command()
         @click.option("--metasyntactic-var",
                       callback=partial(split_kv,
@@ -139,6 +141,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
             return split_kv(context, param, values, separator="-")
 
         mock = MagicMock()
+
         @click.command()
         @click.option("--value", callback=split_kv_dash, multiple=True)
         def cli(value):
@@ -150,6 +153,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
 
     def test_separatorFunctoolsDash(self):
         mock = MagicMock()
+
         @click.command()
         @click.option("--value", callback=partial(split_kv, separator="-"), multiple=True)
         def cli(value):
@@ -185,6 +189,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
         anything.
         """
         mock = MagicMock()
+
         @click.command()
         @click.option("--value", callback=partial(split_kv, normalize=True))
         def cli(value):
