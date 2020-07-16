@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["MySqlDatabase"]
 
 from contextlib import closing, contextmanager
-from typing import Iterator, Optional
+from typing import Iterable, Iterator, Optional
 
 import sqlalchemy
 
@@ -90,6 +90,11 @@ class MySqlDatabase(Database):
     ) -> Database:
         return cls(connection=connection, origin=origin, namespace=namespace, writeable=writeable)
 
+    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+        # Docstring inherited.
+        for table in tables:
+            self._connection.execute(f"LOCK TABLE {table.key} IN SHARE MODE")
+
     @contextmanager
     def transaction(self, *, interrupting: bool = False) -> Iterator[None]:
         with super().transaction(interrupting=interrupting):
@@ -111,9 +116,17 @@ class MySqlDatabase(Database):
         return self._shrinker.expand(shrunk)
 
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
-        # This is all wrong
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
         if not rows:
             return
-        raise NotImplementedError("No support for replace in MySQL")
+        # This uses special support for UPSERT in MySQL backend:
+        # https://docs.sqlalchemy.org/en/13/dialects/mysql.html#insert-on-duplicate-key-update-upsert
+        query = sqlalchemy.dialects.mysql.dml.insert(table)
+        data = {
+            column.name: getattr(query.inserted, column.name)
+            for column in table.columns
+            if hasattr(query.inserted, column.name)
+        }
+        query = query.on_duplicate_key_update(**data)
+        self._connection.execute(query, *rows)
