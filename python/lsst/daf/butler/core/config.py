@@ -496,12 +496,12 @@ class Config(collections.abc.MutableMapping):
                         found = fileName
                     else:
                         for dir in searchPaths:
+                            # Convert a string directly to a ButlerURI
+                            # to unify the response below
                             if isinstance(dir, str):
-                                filePath = os.path.join(dir, fileName)
-                                if os.path.exists(filePath):
-                                    found = os.path.normpath(os.path.abspath(filePath))
-                                    break
-                            elif isinstance(dir, ResourceDir):
+                                dir = ButlerURI(dir, forceDirectory=True)
+
+                            if isinstance(dir, ResourceDir):
                                 resource = dir.toResource(fileName)
                                 if resource.exists():
                                     found = resource
@@ -532,6 +532,9 @@ class Config(collections.abc.MutableMapping):
                                     # for it so defer implementation.
                                     raise RuntimeError("Can not currently follow includeConfigs to "
                                                        f"{dir}")
+                            else:
+                                log.warning("Do not understand search path entry '%s' of type %s",
+                                            dir, type(dir).__name__)
                     if not found:
                         raise RuntimeError(f"Unable to find referenced include file: {fileName}")
 
