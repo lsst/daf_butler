@@ -22,7 +22,7 @@ To construct a Butler configuration object (`~lsst.daf.butler.ButlerConfig`) fro
   Shell variables will be expanded.
   The contents of these files will then be inserted into the configuration at the same hierarchy as the ``includeConfigs`` directive, with priority given to the values defined explicitly in the parent configuration (for lists of include files later files overwrite content from earlier ones).
 * Each sub configuration class is constructed by supplying the relevant subset of the global config to the component Config constructor.
-* A search path is constructed by concatenating the supplied search path, the environment variable path (``$DAF_BUTLER_CONFIG_PATH``), and the daf_butler config directory (using the ``lsst.daf.butler`` package resource).
+* A search path is constructed by concatenating the supplied search path, the environment variable path (``$DAF_BUTLER_CONFIG_PATH``), and the daf_butler config directory (within the ``lsst.daf.butler`` package resource).
 * Defaults are first read from the config class default file name (e.g., ``registry.yaml`` for `~lsst.daf.butler.Registry`, and ``datastore.yaml`` for `~lsst.daf.butler.Datastore`) and merged in priority order given in the search path.
   Every file of that name found in the search path is read and combined with the others.
 * Then any ``cls``-specific config files are read, overriding the current defaults.
