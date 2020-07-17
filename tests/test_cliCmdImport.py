@@ -64,7 +64,7 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
         """Verify the command fails if either of the positional arguments,
         REPO or DIRECTORY, is missing."""
         self.run_missing(["import", "foo", "--output-run", "out"],
-                         'Error: Missing argument "DIRECTORY".')
+                         r"Error: Missing argument ['\"]DIRECTORY['\"].")
 
 
 class ExportFileCase(CliCmdTestBase, unittest.TestCase):

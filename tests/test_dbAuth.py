@@ -21,7 +21,6 @@
 
 import os
 import unittest
-import lsst.utils.tests
 
 from lsst.daf.butler.registry import DbAuth, DbAuthError
 
@@ -420,14 +419,5 @@ class DbAuthTestCase(unittest.TestCase):
             "%2A%5B%5D@host.example.com:5432/my_database")
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

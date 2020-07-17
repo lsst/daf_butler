@@ -372,7 +372,7 @@ class OptTestBase(abc.ABC):
         has been written to stdout, and that the command exit code is not 0.
         """
         self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertIn(verifyArgs, result.stdout)
+        self.assertRegex(result.stdout, verifyArgs)
 
 
 class OptFlagTest(OptTestBase):
@@ -420,9 +420,9 @@ class OptChoiceTest(OptTestBase):
         while choice in self.choices:
             choice += "foo"
         if self.shortOptionFlag:
-            expected = f'Invalid value for "{self.shortOptionFlag}" / "{self.optionFlag}"'
+            expected = fr"Invalid value for ['\"]{self.shortOptionFlag}['\"] / ['\"]{self.optionFlag}['\"]"
         else:
-            expected = f'Invalid value for "{self.optionFlag}"'
+            expected = fr"Invalid value for ['\"]{self.optionFlag}['\"]"
         self.run_test(cli, [self.optionFlag, choice], self.verifyMissing, expected)
 
 
@@ -513,12 +513,12 @@ class OptRequiredTest(OptTestBase):
 
     def test_required_missing(self):
         if self.isArgument:
-            expected = f'Missing argument "{self.optionName.upper()}"'
+            expected = fr"Missing argument ['\"]{self.optionName.upper()}['\"]"
         else:
             if self.shortOptionFlag:
-                expected = f'Missing option "{self.shortOptionFlag}" / "{self.optionFlag}"'
+                expected = fr"Missing option ['\"]{self.shortOptionFlag}['\"] / ['\"]{self.optionFlag}['\"]"
             else:
-                expected = f'Missing option "--{self.optionName}"'
+                expected = fr"Missing option ['\"]\-\-{self.optionName}['\"]"
 
         self.run_test(CliFactory.noOp(self, parameterKwargs=dict(required=True)),
                       [],

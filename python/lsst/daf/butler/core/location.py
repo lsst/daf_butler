@@ -128,21 +128,33 @@ class ButlerURI:
         is interpreted as is.
     """
 
-    def __init__(self, uri: Union[str, urllib.parse.ParseResult],
+    def __init__(self, uri: Union[str, urllib.parse.ParseResult, ButlerURI],
                  root: Optional[str] = None, forceAbsolute: bool = True, forceDirectory: bool = False):
+        self._uri: urllib.parse.ParseResult
+        self.dirLike: bool
+
+        # Record if we need to post process the URI components
+        # or if the instance is already fully configured
+        is_configured = False
         if isinstance(uri, str):
             parsed = urllib.parse.urlparse(uri)
         elif isinstance(uri, urllib.parse.ParseResult):
             parsed = copy.copy(uri)
+        elif isinstance(uri, ButlerURI):
+            self._uri = copy.copy(uri._uri)
+            self.dirLike = uri.dirLike
+            # No further parsing required
+            is_configured = True
         else:
-            raise ValueError("Supplied URI must be either string or ParseResult")
+            raise ValueError(f"Supplied URI must be string, ButlerURI, or ParseResult but got '{uri!r}'")
 
-        parsed, dirLike = self._fixupPathUri(parsed, root=root,
-                                             forceAbsolute=forceAbsolute,
-                                             forceDirectory=forceDirectory)
+        if not is_configured:
+            parsed, dirLike = self._fixupPathUri(parsed, root=root,
+                                                 forceAbsolute=forceAbsolute,
+                                                 forceDirectory=forceDirectory)
 
-        self.dirLike = dirLike
-        self._uri = parsed
+            self.dirLike = dirLike
+            self._uri = parsed
 
     @property
     def scheme(self) -> str:

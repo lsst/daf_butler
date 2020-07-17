@@ -22,10 +22,15 @@
 """
 Configuration classes specific to the Butler
 """
+from __future__ import annotations
 
 __all__ = ("ButlerConfig",)
 
+import copy
 import os.path
+from typing import (
+    Optional
+)
 
 from .core import (
     ButlerURI,
@@ -68,14 +73,14 @@ class ButlerConfig(Config):
 
     def __init__(self, other=None, searchPaths=None):
 
-        self.configDir = None
+        self.configDir: Optional[ButlerURI] = None
 
         # If this is already a ButlerConfig we assume that defaults
         # have already been loaded.
         if other is not None and isinstance(other, ButlerConfig):
             super().__init__(other)
             # Ensure that the configuration directory propagates
-            self.configDir = other.configDir
+            self.configDir = copy.copy(other.configDir)
             return
 
         if isinstance(other, str):
@@ -101,11 +106,7 @@ class ButlerConfig(Config):
         configFile = butlerConfig.configFile
         if configFile is not None:
             uri = ButlerURI(configFile)
-            if uri.scheme == "s3":
-                uri.updateFile("")
-                self.configDir = uri.geturl()
-            else:
-                self.configDir = os.path.dirname(os.path.abspath(configFile))
+            self.configDir = uri.dirname()
 
         # A Butler config contains defaults defined by each of the component
         # configuration classes. We ask each of them to apply defaults to

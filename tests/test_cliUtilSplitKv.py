@@ -74,6 +74,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
 
     def test_cli(self):
         mock = MagicMock()
+
         @click.command()
         @click.option("--value", callback=split_kv, multiple=True)
         def cli(value):
@@ -101,6 +102,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
     def test_choice(self):
         choices = ["FOO", "BAR", "BAZ"]
         mock = MagicMock()
+
         @click.command()
         @click.option("--metasyntactic-var",
                       callback=partial(split_kv,
@@ -124,8 +126,9 @@ class SplitKvCmdTestCase(unittest.TestCase):
         for val in ("BOZ", "lsst.daf.butler=BOZ"):
             result = self.runner.invoke(cli, ["--metasyntactic-var", val])
             self.assertNotEqual(result.exit_code, 0, msg=clickResultMsg(result))
-            self.assertIn('Error: Invalid value for "--metasyntactic-var": invalid choice: BOZ. '
-                          f'(choose from {", ".join(choices)})',
+            self.assertRegex(result.output,
+                             r"Error: Invalid value for ['\"]\-\-metasyntactic-var['\"]:")
+            self.assertIn(f" invalid choice: BOZ. (choose from {', '.join(choices)})",
                           result.output)
 
         # check value normalization (lower case "foo" should become "FOO")
@@ -138,6 +141,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
             return split_kv(context, param, values, separator="-")
 
         mock = MagicMock()
+
         @click.command()
         @click.option("--value", callback=split_kv_dash, multiple=True)
         def cli(value):
@@ -149,6 +153,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
 
     def test_separatorFunctoolsDash(self):
         mock = MagicMock()
+
         @click.command()
         @click.option("--value", callback=partial(split_kv, separator="-"), multiple=True)
         def cli(value):
@@ -184,6 +189,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
         anything.
         """
         mock = MagicMock()
+
         @click.command()
         @click.option("--value", callback=partial(split_kv, normalize=True))
         def cli(value):

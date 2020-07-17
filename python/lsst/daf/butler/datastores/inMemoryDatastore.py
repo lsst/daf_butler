@@ -96,8 +96,8 @@ class InMemoryDatastore(GenericBaseDatastore):
     """
 
     defaultConfigFile = "datastores/inMemoryDatastore.yaml"
-    """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
-    absolute path. Can be None if no defaults specified.
+    """Path to configuration defaults. Accessed within the ``config`` resource
+    or relative to a search path. Can be None if no defaults specified.
     """
 
     isEphemeral = True

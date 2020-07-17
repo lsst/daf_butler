@@ -8,7 +8,7 @@ The main sections of the YAML file are handled separately by each sub configurat
 Each config specialization, registry, schema, storage class, composites, and dimensions knows the name of the key for its own section of the configuration and knows the names of files providing overrides and defaults for the configuration.
 Additionally, if the sub configuration contains a ``cls`` key, that class is imported and an additional configuration file name can be provided by asking the class for its defaultConfigFile  property.
 All the keys within a sub configuration are processed by the class constructed from ``cls``.
-The primary source of default values comes from ``$DAF_BUTLER_DIR/config`` –- this directory contains YAML files matching the names specified in the sub config classes and also can include names specified by the corresponding component class (for example `~lsst.daf.butler.datastores.posixDatastore.PosixDatastore`  specifies that configuration should be found in ``datastores/posixDatastore.yaml``.
+The primary source of default values comes from the ``config`` resource (accessed using `pkg_resources` and package ``lsst.daf.butler``) –- this directory contains YAML files matching the names specified in the sub config classes and also can include names specified by the corresponding component class (for example `~lsst.daf.butler.datastores.posixDatastore.PosixDatastore`  specifies that configuration should be found in ``datastores/posixDatastore.yaml``.
 There are additional search paths that can be included when a config object is constructed:
 
 1. Explicit list of directory paths to search passed into the constructor.
@@ -22,7 +22,7 @@ To construct a Butler configuration object (`~lsst.daf.butler.ButlerConfig`) fro
   Shell variables will be expanded.
   The contents of these files will then be inserted into the configuration at the same hierarchy as the ``includeConfigs`` directive, with priority given to the values defined explicitly in the parent configuration (for lists of include files later files overwrite content from earlier ones).
 * Each sub configuration class is constructed by supplying the relevant subset of the global config to the component Config constructor.
-* A search path is constructed by concatenating the supplied search path, the environment variable path (``$DAF_BUTLER_CONFIG_PATH``), and the daf_butler config directory (``$DAF_BUTLER_DIR/config``).
+* A search path is constructed by concatenating the supplied search path, the environment variable path (``$DAF_BUTLER_CONFIG_PATH``), and the daf_butler config directory (within the ``lsst.daf.butler`` package resource).
 * Defaults are first read from the config class default file name (e.g., ``registry.yaml`` for `~lsst.daf.butler.Registry`, and ``datastore.yaml`` for `~lsst.daf.butler.Datastore`) and merged in priority order given in the search path.
   Every file of that name found in the search path is read and combined with the others.
 * Then any ``cls``-specific config files are read, overriding the current defaults.

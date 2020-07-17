@@ -49,7 +49,7 @@ class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
 
     def test_requiredMissing(self):
         """Test that if the required parameter is missing it fails"""
-        self.run_missing(["query-dataset-types"], 'Error: Missing argument "REPO".')
+        self.run_missing(["query-dataset-types"], r"Error: Missing argument ['\"]REPO['\"].")
 
     def test_all(self):
         """Test all parameters."""
