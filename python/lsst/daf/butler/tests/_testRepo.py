@@ -78,8 +78,10 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
     if config:
         defaults.update(config)
 
+    # Disable config root by default so that our registry override will
+    # not be ignored.
     # newConfig guards against location-related keywords like outfile
-    newConfig = Butler.makeRepo(root, config=defaults, **kwargs)
+    newConfig = Butler.makeRepo(root, config=defaults, forceConfigRoot=False, **kwargs)
     butler = Butler(newConfig, writeable=True)
     dimensionRecords = _makeRecords(dataIds, butler.registry.dimensions)
     for dimension, records in dimensionRecords.items():
