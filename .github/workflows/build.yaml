@@ -30,14 +30,14 @@ jobs:
         run: pip install -r requirements.txt
 
       # We have two cores so we can speed up the testing with xdist
-      - name: Install xdist
-        run: pip install pytest-xdist
+      - name: Install xdist and openfiles
+        run: pip install pytest-xdist pytest-openfiles
 
       - name: Build and install
         run: pip install -v .
 
       - name: Run tests
-        run: pytest -r a -v -n 3
+        run: pytest -r a -v -n 3 --open-files
 
       - name: Install documenteer
         run: pip install documenteer[pipelines]
