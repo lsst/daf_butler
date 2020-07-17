@@ -24,6 +24,7 @@ __all__ = [
     "Database",
     "ReadOnlyDatabaseError",
     "DatabaseConflictError",
+    "SchemaAlreadyDefinedError",
     "StaticTablesContext",
 ]
 
@@ -85,6 +86,12 @@ class ReadOnlyDatabaseError(RuntimeError):
 class DatabaseConflictError(ConflictingDefinitionError):
     """Exception raised when database content (row values or schema entities)
     are inconsistent with what this client expects.
+    """
+
+
+class SchemaAlreadyDefinedError(RuntimeError):
+    """Exception raised when trying to initialize database schema when some
+    tables already exist.
     """
 
 
@@ -396,6 +403,11 @@ class Database(ABC):
         self._metadata = sqlalchemy.MetaData(schema=self.namespace)
         try:
             context = StaticTablesContext(self)
+            if create and context._tableNames:
+                # Looks like database is already initalized, to avoid danger
+                # of modifying/destroying valid schema we refuse to do
+                # anything in this case
+                raise SchemaAlreadyDefinedError(f"Cannot create tables in non-empty database {self}.")
             yield context
             for table, foreignKey in context._foreignKeys:
                 table.append_constraint(foreignKey)
@@ -404,7 +416,7 @@ class Database(ABC):
                     if self.namespace not in context._inspector.get_schema_names():
                         self._connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
                 # In our tables we have columns that make use of sqlalchemy
-                # Sequence objects. There is currently a bug in sqlalchmey that
+                # Sequence objects. There is currently a bug in sqlalchemy that
                 # causes a deprecation warning to be thrown on a property of
                 # the Sequence object when the repr for the sequence is
                 # created. Here a filter is used to catch these deprecation
@@ -416,9 +428,6 @@ class Database(ABC):
                 for init in context._initializers:
                     init(self)
         except BaseException:
-            # TODO: this is potentially dangerous if we run it on
-            # pre-existing schema.
-            self._metadata.drop_all(self._connection)
             self._metadata = None
             raise
 
