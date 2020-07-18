@@ -6,17 +6,6 @@
 lsst.daf.butler
 ###############
 
-This module provides an abstracted data access interface, known as the Butler.
-It can be used to read and write data without having to know the details of file formats or locations.
-
-.. _lsst.daf.butler-contributing:
-
-Contributing
-============
-
-``lsst.daf.butler`` is developed at https://github.com/lsst/daf_butler.
-You can find Jira issues for this module under the `daf_butler <https://jira.lsstcorp.org/issues/?jql=project%20%3D%20DM%20AND%20component%20%3D%20daf_butler>`_ component.
-
 .. _lsst.daf.butler-using:
 
 Using the Butler
@@ -29,6 +18,22 @@ Using the Butler
   organizing.rst
   queries.rst
   use-in-tests.rst
+
+This module provides an abstracted data access interface, known as the Butler.
+It can be used to read and write data without having to know the details of file formats or locations.
+
+.. _lsst.daf.butler-dev:
+
+Design and Development
+======================
+
+``lsst.daf.butler`` is developed at https://github.com/lsst/daf_butler.
+You can find Jira issues for this module under the `daf_butler <https://jira.lsstcorp.org/issues/?jql=project%20%3D%20DM%20AND%20component%20%3D%20daf_butler>`_ component.
+
+.. toctree::
+   :maxdepth: 1
+
+   dev/dataCoordinate.rst
 
 .. _lsst.daf.butler-scripts:
 
