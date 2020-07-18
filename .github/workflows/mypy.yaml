@@ -20,5 +20,4 @@ jobs:
         run: pip install mypy
 
       - name: Change to source directory and run mypy
-        working-directory: ./python
-        run: mypy lsst
+        run: mypy python/lsst
