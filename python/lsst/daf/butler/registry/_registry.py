@@ -1281,7 +1281,10 @@ class Registry:
             `True`), but will not contain `DimensionRecord` objects
             (`DataCoordinate.hasRecords` returns `False`).  Call
             `DataCoordinateQueryResults.expanded` on the returned object to
-            fetch those.
+            fetch those (and consider using
+            `DataCoordinateQueryResults.materialize` on the returned object
+            first if the expected number of rows is very large).  See
+            documentation for those methods for additional information.
         """
         dimensions = iterable(dimensions)
         standardizedDataId = self.expandDataId(dataId, **kwargs)
