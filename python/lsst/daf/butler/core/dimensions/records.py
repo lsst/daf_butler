@@ -197,7 +197,7 @@ class DimensionRecord:
 
     dataId: DataCoordinate
     """A dict-like identifier for this record's primary keys
-    (`MinimalDataCoordinate`).
+    (`DataCoordinate`).
     """
 
     definition: ClassVar[DimensionElement]
