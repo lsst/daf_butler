@@ -543,9 +543,9 @@ class Registry:
             the dataset within a collection.
         collections
             An expression that fully or partially identifies the collections
-            to search for the dataset, such as a `str`, `re.Pattern`, or
-            iterable  thereof.  `...` can be used to return all collections.
-            See :ref:`daf_butler_collection_expressions` for more information.
+            to search for the dataset, such as a `str`, `DatasetType`, or
+            iterable  thereof.  See :ref:`daf_butler_collection_expressions`
+            for more information.
         **kwargs
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true
