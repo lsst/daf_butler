@@ -30,7 +30,7 @@ import dataclasses
 from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .core import DatasetRef, ExpandedDataCoordinate
+    from .core import DatasetRef, DataCoordinate
     from .butler import Butler
 
 
@@ -81,9 +81,11 @@ class DeferredDatasetHandle:
         return self.butler.getDirect(self.ref, parameters=mergedParameters)
 
     @property
-    def dataId(self) -> ExpandedDataCoordinate:
+    def dataId(self) -> DataCoordinate:
         """The full data ID associated with the dataset
-        (`ExpandedDataCoordinate`).
+        (`DataCoordinate`).
+
+        Guaranteed to contain records.
         """
         return self.ref.dataId
 

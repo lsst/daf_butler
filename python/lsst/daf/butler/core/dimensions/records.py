@@ -28,17 +28,18 @@ from typing import (
     ClassVar,
     Dict,
     Mapping,
+    Tuple,
     TYPE_CHECKING,
     Type,
 )
 
 from ..timespan import Timespan
-from .coordinate import DataCoordinate
 from .elements import Dimension
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     import astropy.time
     from .elements import DimensionElement
+    from .coordinate import DataCoordinate
 
 
 def _reconstructDimensionRecord(definition: DimensionElement, *args: Any) -> DimensionRecord:
@@ -68,9 +69,11 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
     For internal use by `DimensionRecord`.
     """
     from .schema import makeDimensionElementTableSpec
+    fields = tuple(makeDimensionElementTableSpec(definition).fields.names)
     d = {
         "definition": definition,
-        "__slots__": tuple(makeDimensionElementTableSpec(definition).fields.names)
+        "__slots__": fields,
+        "fields": fields,
     }
     if definition.temporal:
         d["timespan"] = property(_makeTimespanFromRecord)
@@ -122,10 +125,18 @@ class DimensionRecord:
     def __init__(self, *args: Any):
         for attrName, value in zip(self.__slots__, args):
             object.__setattr__(self, attrName, value)
-        dataId = DataCoordinate(
-            self.definition.graph,
-            args[:len(self.definition.required.names)]
-        )
+        from .coordinate import DataCoordinate
+        if self.definition.required.names == self.definition.graph.required.names:
+            dataId = DataCoordinate.fromRequiredValues(
+                self.definition.graph,
+                args[:len(self.definition.required.names)]
+            )
+        else:
+            assert not isinstance(self.definition, Dimension)
+            dataId = DataCoordinate.fromRequiredValues(
+                self.definition.graph,
+                tuple(getattr(self, name) for name in self.definition.required.names)
+            )
         object.__setattr__(self, "dataId", dataId)
 
     @classmethod
@@ -161,6 +172,17 @@ class DimensionRecord:
         values = tuple(d.get(k) for k in cls.__slots__)
         return cls(*values)
 
+    def __str__(self) -> str:
+        lines = [f"{self.definition.name}:"]
+        lines.extend(f"  {field}: {getattr(self, field)!r}" for field in self.fields)
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        return "{}.RecordClass({})".format(
+            self.definition.name,
+            ", ".join(repr(getattr(self, field)) for field in self.fields)
+        )
+
     def __reduce__(self) -> tuple:
         args = tuple(getattr(self, name) for name in self.__slots__)
         return (_reconstructDimensionRecord, (self.definition,) + args)
@@ -175,7 +197,9 @@ class DimensionRecord:
 
     dataId: DataCoordinate
     """A dict-like identifier for this record's primary keys
-    (`DataCoordinate`).
+    (`MinimalDataCoordinate`).
     """
 
     definition: ClassVar[DimensionElement]
+
+    fields: ClassVar[Tuple[str, ...]]

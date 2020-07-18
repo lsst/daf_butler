@@ -57,7 +57,7 @@ from .utils import iterable
 from .named import NamedValueSet
 
 if TYPE_CHECKING:
-    from .dimensions import DataCoordinate, DimensionElement, DimensionRecord, ExpandedDataCoordinate
+    from .dimensions import DataCoordinate, DimensionElement, DimensionRecord
     from ..registry import Registry
     from .datastore import Datastore
     from .formatter import FormatterParameter
@@ -137,13 +137,13 @@ class RepoExport:
         self._transfer = transfer
         self._dataset_ids: Set[int] = set()
 
-    def saveDataIds(self, dataIds: Iterable[ExpandedDataCoordinate], *,
+    def saveDataIds(self, dataIds: Iterable[DataCoordinate], *,
                     elements: Optional[Iterable[DimensionElement]] = None) -> None:
         """Export the dimension records associated with one or more data IDs.
 
         Parameters
         ----------
-        dataIds : iterable of `ExpandedDataCoordinate`.
+        dataIds : iterable of `DataCoordinate`.
             Fully-expanded data IDs to export.
         elements : iterable of `DimensionElement`, optional
             Dimension elements whose records should be exported.  If `None`,
@@ -175,8 +175,8 @@ class RepoExport:
         refs : iterable of `DatasetRef`
             References to the datasets to export.  Their `DatasetRef.id`
             attributes must not be `None`.  Duplicates are automatically
-            ignored.  Nested data IDs must be `ExpandedDataCoordinate`
-            instances.
+            ignored.  Nested data IDs must have `DataCoordinate.hasRecords`
+            return `True`.
         elements : iterable of `DimensionElement`, optional
             Dimension elements whose records should be exported; this is
             forwarded to `saveDataIds` when exporting the data IDs of the

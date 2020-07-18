@@ -21,9 +21,9 @@
 from __future__ import annotations
 
 __all__ = (
-    "IndexedTupleDict",
     "NamedKeyDict",
     "NamedKeyMapping",
+    "NameLookupMapping",
     "NamedValueSet",
 )
 
@@ -39,7 +39,6 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSet,
-    Tuple,
     TypeVar,
     Union,
     ValuesView,
@@ -86,7 +85,6 @@ class NamedKeyMapping(Mapping[K, V]):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def byName(self) -> Dict[str, V]:
         """Return a `Mapping` with names as keys and the same values as
         ``self``.
@@ -98,7 +96,7 @@ class NamedKeyMapping(Mapping[K, V]):
             ``self``, with `str` names as keys.  This is always a new object,
             not a view.
         """
-        raise NotImplementedError()
+        return dict(zip(self.names, self.values()))
 
     @abstractmethod
     def __getitem__(self, key: Union[str, K]) -> V:
@@ -108,6 +106,13 @@ class NamedKeyMapping(Mapping[K, V]):
         # Delegating to super is not allowed by typing, because it doesn't
         # accept str, but we know it just delegates to __getitem__, which does.
         return super().get(key, default)  # type: ignore
+
+
+NameLookupMapping = Union[NamedKeyMapping[K, V], Mapping[str, V]]
+"""A type annotation alias for signatures that want to use ``mapping[s]``
+(or ``mapping.get(s)``) where ``s`` is a `str`, and don't care whether
+``mapping.keys()`` returns a named objects or direct `str` instances.
+"""
 
 
 class NamedKeyMutableMapping(NamedKeyMapping[K, V], MutableMapping[K, V]):
@@ -414,74 +419,3 @@ class NamedValueSet(MutableSet[K]):
         """
         if not isinstance(self._dict, MappingProxyType):
             self._dict = MappingProxyType(self._dict)  # type: ignore
-
-
-class IndexedTupleDict(NamedKeyMapping[K, V]):
-    """An immutable mapping that combines a tuple of values with a (possibly
-    shared) mapping from key to tuple index.
-
-    Parameters
-    ----------
-    indices: `NamedKeyDict`
-        Mapping from key to integer index in the values tuple.  This mapping
-        is used as-is, not copied or converted to a true `dict`, which means
-        that the caller must guarantee that it will not be modified by other
-        (shared) owners in the future.
-        The caller is also responsible for guaranteeing that the indices in
-        the mapping are all valid for the given tuple.
-    values: `tuple`
-        Tuple of values for the dictionary.  This may have a length greater
-        than the length of indices; these values are not considered part of
-        the mapping.
-    """
-
-    __slots__ = ("_indices", "_values")
-
-    def __init__(self, indices: NamedKeyDict[K, int], values: Tuple[V, ...]):
-        assert tuple(indices.values()) == tuple(range(len(values)))
-        self._indices = indices
-        self._values = values
-
-    @property
-    def names(self) -> KeysView[str]:
-        return self._indices.names
-
-    def byName(self) -> Dict[str, V]:
-        return dict(zip(self.names, self._values))
-
-    def __getitem__(self, key: Union[str, K]) -> V:
-        return self._values[self._indices[key]]
-
-    def __iter__(self) -> Iterator[K]:
-        return iter(self._indices)
-
-    def __len__(self) -> int:
-        return len(self._indices)
-
-    def __str__(self) -> str:
-        return "{{{}}}".format(", ".join(f"{str(k)}: {str(v)}" for k, v in self.items()))
-
-    def __repr__(self) -> str:
-        return "IndexedTupleDict({{{}}})".format(", ".join(f"{repr(k)}: {repr(v)}" for k, v in self.items()))
-
-    def __contains__(self, key: Any) -> bool:
-        return key in self._indices
-
-    def keys(self) -> KeysView[K]:
-        return self._indices.keys()
-
-    # Tuple meets all requirements of ValuesView, but the Python typing system
-    # doesn't recognize it as substitutable, perhaps because it only really is
-    # for immutable mappings where there's no need to worry about the view
-    # being updated because the mapping changed.
-    def values(self) -> Tuple[V, ...]:   # type: ignore
-        return self._values
-
-    # Let Mapping base class provide items(); we can't do it any more
-    # efficiently ourselves.
-
-    # These private attributes need to have types annotated outside __new__
-    # because mypy hasn't learned (yet) how to infer instance attribute types
-    # there they way it can with __init__.
-    _indices: NamedKeyDict[K, int]
-    _values: Tuple[V, ...]

@@ -305,11 +305,11 @@ class SqliteMemoryRegistryTests(RegistryTests):
         # getRegion for a dataId containing no spatial dimensions should
         # return None
         self.assertIsNone(getRegion({"instrument": "DummyCam"}))
-        # getRegion for a mix of spatial dimensions should return
-        # NotImplemented, at least until we get it implemented.
-        self.assertIs(getRegion({"instrument": "DummyCam", "visit": 0, "detector": 2,
-                                 "skymap": "DummySkyMap", "tract": 0}),
-                      NotImplemented)
+        # Expanding a data ID with a mix of spatial dimensions should not fail,
+        # but it may not be implemented, so we don't test that we can get the
+        # region.
+        registry.expandDataId({"instrument": "DummyCam", "visit": 0, "detector": 2,
+                               "skymap": "DummySkyMap", "tract": 0})
         # Check if we can get the region for a skypix
         self.assertIsInstance(getRegion({"htm9": 1000}), ConvexPolygon)
         # patch_htm7_overlap should not be empty

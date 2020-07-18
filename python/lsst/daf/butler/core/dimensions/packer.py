@@ -31,7 +31,7 @@ from lsst.utils import doImport
 
 from ..config import Config
 from .graph import DimensionGraph
-from .coordinate import DataCoordinate, DataId, ExpandedDataCoordinate
+from .coordinate import DataCoordinate, DataId
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .universe import DimensionUniverse
@@ -43,15 +43,15 @@ class DimensionPacker(metaclass=ABCMeta):
 
     Parameters
     ----------
-    fixed : `ExpandedDataCoordinate`
+    fixed : `DataCoordinate`
         Expanded data ID for the dimensions whose values must remain fixed
         (to these values) in all calls to `pack`, and are used in the results
-        of calls to `unpack`.
+        of calls to `unpack`.  ``fixed.hasRecords()`` must return `True`.
     dimensions : `DimensionGraph`
         The dimensions of data IDs packed by this instance.
     """
 
-    def __init__(self, fixed: ExpandedDataCoordinate, dimensions: DimensionGraph):
+    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGraph):
         self.fixed = fixed
         self.dimensions = dimensions
 
@@ -151,12 +151,12 @@ class DimensionPacker(metaclass=ABCMeta):
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
 
-    fixed: ExpandedDataCoordinate
+    fixed: DataCoordinate
     """The dimensions provided to the packer at construction
-    (`ExpandedDataCoordinate`)
+    (`DataCoordinate`)
 
     The packed ID values are only unique and reversible with these
-    dimensions held fixed.
+    dimensions held fixed.  ``fixed.hasRecords() is True`` is guaranteed.
     """
 
     dimensions: DimensionGraph
@@ -195,15 +195,15 @@ class DimensionPackerFactory:
         clsName = config["cls"]
         return cls(fixed=fixed, dimensions=dimensions, clsName=clsName)
 
-    def __call__(self, fixed: ExpandedDataCoordinate) -> DimensionPacker:
+    def __call__(self, fixed: DataCoordinate) -> DimensionPacker:
         """Construct a `DimensionPacker` instance for the given fixed data ID.
 
         Parameters
         ----------
-        fixed : `ExpandedDataCoordinate`
+        fixed : `DataCoordinate`
             Data ID that provides values for the "fixed" dimensions of the
             packer.  Must be expanded with all metadata known to the
-            `Registry`.
+            `Registry`.  ``fixed.hasRecords()`` must return `True`.
         """
         assert fixed.graph.issuperset(self.fixed)
         if self._cls is None:

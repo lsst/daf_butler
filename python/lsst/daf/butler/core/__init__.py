@@ -20,6 +20,7 @@ from .location import *
 from .mappingFactory import *
 from .named import *
 from .quantum import *
+from .simpleQuery import *
 from .storageClass import *
 from .storedFileInfo import *
 from .dimensions import *

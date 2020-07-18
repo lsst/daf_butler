@@ -18,10 +18,9 @@ from lsst.daf.butler import (
     DataCoordinate,
     DatasetRef,
     DatasetType,
-    ExpandedDataCoordinate,
+    SimpleQuery,
 )
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
-from lsst.daf.butler.registry.simpleQuery import SimpleQuery, Select
 
 if TYPE_CHECKING:
     from ...interfaces import CollectionManager, CollectionRecord, Database, RunRecord
@@ -50,7 +49,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._dynamic = dynamic
         self._runKeyColumn = collections.getRunForeignKeyName()
 
-    def insert(self, run: RunRecord, dataIds: Iterable[ExpandedDataCoordinate]) -> Iterator[DatasetRef]:
+    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         staticRow = {
             "dataset_type_id": self._dataset_type_id,
@@ -87,7 +86,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
     def find(self, collection: CollectionRecord, dataId: DataCoordinate) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         assert dataId.graph == self.datasetType.dimensions
-        sql = self.select(collection=collection, dataId=dataId, id=Select, run=Select).combine()
+        sql = self.select(collection=collection, dataId=dataId, id=SimpleQuery.Select,
+                          run=SimpleQuery.Select).combine()
         row = self._db.query(sql).fetchone()
         if row is None:
             return None
@@ -141,9 +141,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                         *rows)
 
     def select(self, collection: CollectionRecord,
-               dataId: Select.Or[DataCoordinate] = Select,
-               id: Select.Or[Optional[int]] = Select,
-               run: Select.Or[None] = Select,
+               dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
+               id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
+               run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                ) -> SimpleQuery:
         # Docstring inherited from DatasetRecordStorageManager.
         assert collection.type is not CollectionType.CHAINED
@@ -167,8 +167,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # multiple columns, not one, so we need to transform the one Select.Or
         # argument into a dictionary of them.
         kwargs: Dict[str, Any]
-        if dataId is Select:
-            kwargs = {dim.name: Select for dim in self.datasetType.dimensions.required}
+        if dataId is SimpleQuery.Select:
+            kwargs = {dim.name: SimpleQuery.Select for dim in self.datasetType.dimensions.required}
         else:
             kwargs = dict(dataId.byName())
         # We always constrain (never retrieve) the collection from the dynamic

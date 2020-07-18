@@ -22,21 +22,33 @@ from __future__ import annotations
 
 __all__ = ["TableDimensionRecordStorage"]
 
-from typing import Optional
+import itertools
+from typing import Dict, Iterable, Optional
 
 import sqlalchemy
 
 from ...core import (
-    DataId,
+    DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
     makeDimensionElementTableSpec,
     NamedKeyDict,
+    SimpleQuery,
     Timespan,
     TIMESPAN_FIELD_SPECS,
 )
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
+
+
+MAX_FETCH_CHUNK = 1000
+"""Maximum number of data IDs we fetch records at a time.
+
+Barring something database-engine-specific, this sets the size of the actual
+SQL query, not just the number of result rows, because the only way to query
+for multiple data IDs in a single SELECT query via SQLAlchemy is to have an OR
+term in the WHERE clause for each one.
+"""
 
 
 class TableDimensionRecordStorage(DimensionRecordStorage):
@@ -59,6 +71,11 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         self._db = db
         self._table = table
         self._element = element
+        self._fetchColumns: Dict[str, sqlalchemy.sql.ColumnElement] = {
+            dimension.name: self._table.columns[name]
+            for dimension, name in zip(itertools.chain(self._element.required, self._element.implied),
+                                       self._element.RecordClass.__slots__)
+        }
 
     @classmethod
     def initialize(cls, db: Database, element: DimensionElement, *,
@@ -102,23 +119,15 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         builder.finishJoin(self._table, joinOn)
         return self._table
 
-    def fetch(self, dataId: DataId) -> Optional[DimensionRecord]:
+    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
         RecordClass = self.element.RecordClass
-        # I don't know how expensive it is to construct the query below, and
-        # hence how much gain there might be to caching it, so I'm going to
-        # wait for it to appear as a hotspot in a profile before trying that.
-        whereTerms = [self._table.columns[fieldName] == dataId[dimension.name]
-                      for fieldName, dimension in zip(RecordClass.__slots__, self.element.required)]
-        query = sqlalchemy.sql.select(
-            [self._table.columns[name] for name in RecordClass.__slots__]
-        ).select_from(
-            self._table
-        ).where(sqlalchemy.sql.and_(*whereTerms))
-        row = self._db.query(query).fetchone()
-        if row is None:
-            return None
-        return RecordClass(*row)
+        query = SimpleQuery()
+        query.columns.extend(self._table.columns[name] for name in RecordClass.__slots__)
+        query.join(self._table)
+        dataIds.constrain(query, lambda name: self._fetchColumns[name])
+        for row in self._db.query(query.combine()):
+            yield RecordClass(*row)
 
     def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

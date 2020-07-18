@@ -38,15 +38,13 @@ from ...core import (
     DatasetRef,
     DatasetType,
     ddl,
-    ExpandedDataCoordinate,
+    SimpleQuery,
 )
-from ..simpleQuery import Select
 
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
     from ._database import Database, StaticTablesContext
     from ._collections import CollectionManager, CollectionRecord, RunRecord
-    from ..simpleQuery import SimpleQuery
 
 
 class DatasetRecordStorage(ABC):
@@ -62,7 +60,7 @@ class DatasetRecordStorage(ABC):
         self.datasetType = datasetType
 
     @abstractmethod
-    def insert(self, run: RunRecord, dataIds: Iterable[ExpandedDataCoordinate]) -> Iterator[DatasetRef]:
+    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
         """Insert one or more dataset entries into the database.
 
         Parameters
@@ -70,8 +68,8 @@ class DatasetRecordStorage(ABC):
         run : `RunRecord`
             The record object describing the `~CollectionType.RUN` collection
             this dataset will be associated with.
-        dataIds : `Iterable` [ `ExpandedDataCoordinate` ]
-            Expanded data IDs (`ExpandedDataCoordinate` instances) for the
+        dataIds : `Iterable` [ `DataCoordinate` ]
+            Expanded data IDs (`DataCoordinate` instances) for the
             datasets to be added.   The dimensions of all data IDs must be the
             same as ``self.datasetType.dimensions``.
 
@@ -171,16 +169,17 @@ class DatasetRecordStorage(ABC):
 
     @abstractmethod
     def select(self, collection: CollectionRecord,
-               dataId: Select.Or[DataCoordinate] = Select,
-               id: Select.Or[Optional[int]] = Select,
-               run: Select.Or[None] = Select,
+               dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
+               id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
+               run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                ) -> Optional[SimpleQuery]:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
         this `DatasetType`.
 
         All arguments can either be a value that constrains the query or
-        the `Select` tag object to indicate that the value should be returned
-        in the columns in the ``SELECT`` clause.  The default is `Select`.
+        the `SimpleQuery.Select` tag object to indicate that the value should
+        be returned in the columns in the ``SELECT`` clause.  The default is
+        `SimpleQuery.Select`.
 
         Parameters
         ----------

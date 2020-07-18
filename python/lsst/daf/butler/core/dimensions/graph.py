@@ -23,8 +23,10 @@ from __future__ import annotations
 
 __all__ = ["DimensionGraph"]
 
+import itertools
 from typing import (
     Any,
+    Dict,
     Iterable,
     Iterator,
     KeysView,
@@ -35,7 +37,7 @@ from typing import (
     Union,
 )
 
-from ..named import NamedValueSet, NamedKeyDict
+from ..named import NamedValueSet
 from ..utils import immutable
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
@@ -180,16 +182,22 @@ class DimensionGraph:
         # Build mappings from dimension to index; this is really for
         # DataCoordinate, but we put it in DimensionGraph because many
         # (many!) DataCoordinates will share the same DimensionGraph, and
-        # we want them to be lightweight.
-        self._requiredIndices: NamedKeyDict[Dimension, int] = NamedKeyDict(
-            {dimension: i for i, dimension in enumerate(self.required)}
-        )
-        self._dimensionIndices: NamedKeyDict[Dimension, int] = NamedKeyDict(
-            {dimension: i for i, dimension in enumerate(self.dimensions)}
-        )
-        self._elementIndices: NamedKeyDict[DimensionElement, int] = NamedKeyDict(
-            {element: i for i, element in enumerate(self.elements)}
-        )
+        # we want them to be lightweight.  The order here is what's convenient
+        # for DataCoordinate: all required dimensions before all implied
+        # dimensions.
+        self._dataCoordinateIndices: Dict[str, int] = {
+            name: i for i, name in enumerate(itertools.chain(self.required.names, self.implied.names))
+        }
+        # Same for element to index.  These are used for topological-sort
+        # comparison operators in DimensionElement itself.
+        self._elementIndices: Dict[str, int] = {
+            name: i for i, name in enumerate(self.elements.names)
+        }
+        # Same for dimension to index, sorted topologically across required
+        # and implied.  This is used for encode/decode.
+        self._dimensionIndices: Dict[str, int] = {
+            name: i for i, name in enumerate(self.dimensions.names)
+        }
 
     def __getnewargs__(self) -> tuple:
         return (self.universe, None, tuple(self.dimensions.names), False)
@@ -263,7 +271,7 @@ class DimensionGraph:
         dimensions = []
         mask = int.from_bytes(encoded, "big")
         for dimension in universe.dimensions:
-            index = universe._dimensionIndices[dimension]
+            index = universe._dimensionIndices[dimension.name]
             if mask & (1 << index):
                 dimensions.append(dimension)
         return cls(universe, dimensions=dimensions, conform=False)
@@ -279,7 +287,7 @@ class DimensionGraph:
         """
         mask = 0
         for dimension in self.dimensions:
-            index = self.universe._dimensionIndices[dimension]
+            index = self.universe._dimensionIndices[dimension.name]
             mask |= (1 << index)
         return mask.to_bytes(self.universe.getEncodeLength(), byteorder="big")
 

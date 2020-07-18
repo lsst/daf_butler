@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["DimensionRecordStorage", "DimensionRecordStorageManager"]
 
 from abc import ABC, abstractmethod
-from typing import Optional, Type, TYPE_CHECKING
+from typing import Iterable, Optional, Type, TYPE_CHECKING
 
 import sqlalchemy
 
@@ -31,7 +31,7 @@ from ...core import SkyPixDimension
 
 if TYPE_CHECKING:
     from ...core import (
-        DataId,
+        DataCoordinateIterable,
         DimensionElement,
         DimensionRecord,
         DimensionUniverse,
@@ -248,20 +248,20 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def fetch(self, dataId: DataId) -> Optional[DimensionRecord]:
-        """Retrieve a record from storage.
+    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
+        """Retrieve records from storage.
 
         Parameters
         ----------
-        dataId : `DataId`
-            A data ID that identifies the record to be retrieved.  This may
-            be an informal data ID dict or a validated `DataCoordinate`.
+        dataIds : `DataCoordinateIterable`
+            Data IDs that identify the records to be retrieved.
 
         Returns
         -------
-        record : `DimensionRecord` or `None`
-            A record retrieved from storage, or `None` if there is no such
-            record.
+        records : `Iterable` [ `DimensionRecord` ]
+            Record retrieved from storage.  Not all data IDs may have
+            corresponding records (if there are no records that match a data
+            ID), and even if they are, the order of inputs is not preserved.
         """
         raise NotImplementedError()
 

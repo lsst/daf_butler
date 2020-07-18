@@ -430,16 +430,19 @@ class FileTemplate:
             not optional.  Or, `component` is specified but "component" was
             not part of the template.
         """
-        # Extract defined non-None dimensions from the dataId
-        # We attempt to get the "full" dict on the assumption that ref.dataId
-        # is a ExpandedDataCoordinate, as it should be when running
-        # PipelineTasks.  We should probably just require that when formatting
-        # templates (and possibly when constructing DatasetRefs), but doing so
-        # would break a ton of otherwise-useful tests that would need to be
-        # modified to provide a lot more metadata.
-        fields = {k: v for k, v in getattr(ref.dataId, "full", ref.dataId).items() if v is not None}
-
+        # Extract defined non-None dimensions from the dataId.
+        # This guards against Nones being explicitly present in the data ID
+        # (which can happen if, say, an exposure has no filter), as well as
+        # the case where only required dimensions are present (which in this
+        # context should only happen in unit tests; in general we need all
+        # dimensions to fill out templates).
+        fields = {k: ref.dataId.get(k) for k in ref.datasetType.dimensions.names
+                  if ref.dataId.get(k) is not None}
+        # Extra information that can be included using . syntax
+        extras = {}
         if isinstance(ref.dataId, DataCoordinate):
+            if ref.dataId.hasRecords():
+                extras = ref.dataId.records.byName()
             # If there is exactly one SkyPixDimension in the data ID, alias its
             # value with the key "skypix", so we can use that to match any
             # skypix dimension.
@@ -448,12 +451,12 @@ class FileTemplate:
             # not be true in some test code, but that test code is a pain to
             # update to be more like the real world while still providing our
             # only tests of important behavior.
-            skypix = [dimension for dimension in ref.dataId.graph if isinstance(dimension, SkyPixDimension)]
+            skypix = [dimension for dimension in ref.datasetType.dimensions
+                      if isinstance(dimension, SkyPixDimension)]
             if len(skypix) == 1:
-                fields["skypix"] = fields[skypix[0]]
-
-        # Extra information that can be included using . syntax
-        extras = getattr(ref.dataId, "records", {})
+                fields["skypix"] = fields[skypix[0].name]
+                if extras:
+                    extras["skypix"] = extras[skypix[0].name]
 
         datasetType = ref.datasetType
         fields["datasetType"], component = datasetType.nameAndComponent()

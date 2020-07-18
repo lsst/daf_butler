@@ -46,7 +46,7 @@ from .config import processElementsConfig, processSkyPixConfig, DimensionConfig
 from .packer import DimensionPackerFactory
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .coordinate import ExpandedDataCoordinate
+    from .coordinate import DataCoordinate
     from .packer import DimensionPacker
 
 
@@ -203,7 +203,7 @@ class DimensionUniverse(DimensionGraph):
         # passed it was Dimensions; we know better.
         return result  # type: ignore
 
-    def makePacker(self, name: str, dataId: ExpandedDataCoordinate) -> DimensionPacker:
+    def makePacker(self, name: str, dataId: DataCoordinate) -> DimensionPacker:
         """Construct a `DimensionPacker` that can pack data ID dictionaries
         into unique integers.
 
@@ -212,10 +212,11 @@ class DimensionUniverse(DimensionGraph):
         name : `str`
             Name of the packer, matching a key in the "packers" section of the
             dimension configuration.
-        dataId : `ExpandedDataCoordinate`
+        dataId : `DataCoordinate`
             Fully-expanded data ID that identfies the at least the "fixed"
             dimensions of the packer (i.e. those that are assumed/given,
             setting the space over which packed integer IDs are unique).
+            ``dataId.hasRecords()`` must return `True`.
         """
         return self._packers[name](dataId)
 
