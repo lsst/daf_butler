@@ -24,6 +24,7 @@ __all__ = (
     "DataCoordinateQueryResults",
 )
 
+from contextlib import contextmanager
 from typing import (
     Callable,
     Iterator,
@@ -97,6 +98,35 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         # Docstring inherited from DataCoordinateIterable.
         return self._records is not None
 
+    @contextmanager
+    def materialize(self) -> Iterator[DataCoordinateQueryResults]:
+        """Insert this query's results into a temporary table.
+
+        Returns
+        -------
+        context : `typing.ContextManager` [ `DataCoordinateQueryResults` ]
+            A context manager that ensures the temporary table is created and
+            populated in ``__enter__`` (returning a results object backed by
+            that table), and dropped in ``__exit__``.  If ``self`` is already
+            materialized, the context manager may do nothing (reflecting the
+            fact that an outer context manager should already take care of
+            everything else).
+
+        Notes
+        -----
+        When using a very large result set to perform multiple queries (e.g.
+        multiple calls to `subset` with different arguments, or even a single
+        call to `expanded`), it may be much more efficient to start by
+        materializing the query and only then performing the follow up queries.
+        It may also be less efficient, depending on how well database engine's
+        query optimizer can simplify those particular follow-up queries and
+        how efficiently it caches query results even when the are not
+        explicitly inserted into a temporary table.  See `expanded` and
+        `subset` for examples.
+        """
+        with self._query.materialize(self._db) as materialized:
+            yield DataCoordinateQueryResults(self._db, materialized, records=self._records)
+
     def expanded(self) -> DataCoordinateQueryResults:
         """Return a results object for which `hasRecords` returns `True`.
 
@@ -108,6 +138,18 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         results : `DataCoordinateQueryResults`
             A results object for which `hasRecords` returns `True`.  May be
             ``self`` if that is already the case.
+
+        Notes
+        -----
+        For very result sets, it may be much more efficient to call
+        `materialize` before calling `expanded`, to avoid performing the
+        original query multiple times (as a subquery) in the follow-up queries
+        that fetch dimension records.  For example::
+
+            with registry.queryDataIds(...).materialize() as tempDataIds:
+                dataIdsWithRecords = tempDataIds.expanded()
+                for dataId in dataIdsWithRecords:
+                    ...
         """
         if self._records is None:
             records = {}
@@ -152,6 +194,22 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         This method can only return a "near-subset" of the original result rows
         in general because of subtleties in how spatial overlaps are
         implemented; see `Query.subset` for more information.
+
+        When calling `subset` multiple times on the same very large result set,
+        it may be much more efficient to call `materialize` first.  For
+        example::
+
+            dimensions1 = DimensionGraph(...)
+            dimensions2 = DimensionGraph(...)
+            with registry.queryDataIds(...).materialize() as tempDataIds:
+                for dataId1 in tempDataIds.subset(
+                        graph=dimensions1,
+                        unique=True):
+                    ...
+                for dataId2 in tempDataIds.subset(
+                        graph=dimensions2,
+                        unique=True):
+                    ...
         """
         if graph is None:
             graph = self.graph
