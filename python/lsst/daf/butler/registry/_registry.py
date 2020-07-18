@@ -481,10 +481,7 @@ class Registry:
         KeyError
             Requested named DatasetType could not be found in registry.
         """
-        storage = self._datasets.find(name)
-        if storage is None:
-            raise KeyError(f"DatasetType '{name}' could not be found.")
-        return storage.datasetType
+        return self._datasets[name].datasetType
 
     def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
                     collections: Any, **kwargs: Any) -> Optional[DatasetRef]:
@@ -521,19 +518,16 @@ class Registry:
         Raises
         ------
         LookupError
-            Raised if one or more data ID keys are missing or the dataset type
-            does not exist.
+            Raised if one or more data ID keys are missing.
+        KeyError
+            Raised if the dataset type does not exist.
         MissingCollectionError
             Raised if any of ``collections`` does not exist in the registry.
         """
         if isinstance(datasetType, DatasetType):
-            storage = self._datasets.find(datasetType.name)
-            if storage is None:
-                raise LookupError(f"DatasetType '{datasetType}' has not been registered.")
+            storage = self._datasets[datasetType.name]
         else:
-            storage = self._datasets.find(datasetType)
-            if storage is None:
-                raise LookupError(f"DatasetType with name '{datasetType}' has not been registered.")
+            storage = self._datasets[datasetType]
         dataId = DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions,
                                             universe=self.dimensions, **kwargs)
         collections = CollectionSearch.fromExpression(collections)
