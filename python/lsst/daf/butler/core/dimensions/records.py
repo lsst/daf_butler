@@ -172,6 +172,14 @@ class DimensionRecord:
         values = tuple(d.get(k) for k in cls.__slots__)
         return cls(*values)
 
+    def __eq__(self, other: Any) -> bool:
+        if type(other) != type(self):
+            return False
+        return self.dataId == other.dataId
+
+    def __hash__(self) -> int:
+        return hash(self.dataId)
+
     def __str__(self) -> str:
         lines = [f"{self.definition.name}:"]
         lines.extend(f"  {field}: {getattr(self, field)!r}" for field in self.fields)
@@ -201,5 +209,10 @@ class DimensionRecord:
     """
 
     definition: ClassVar[DimensionElement]
+    """The `DimensionElement` whose records this class represents
+    (`DimensionElement`).
+    """
 
     fields: ClassVar[Tuple[str, ...]]
+    """The names of all fields in this class (`tuple` [ `str` ]).
+    """
