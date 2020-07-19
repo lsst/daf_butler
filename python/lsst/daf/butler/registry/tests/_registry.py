@@ -39,6 +39,7 @@ except ImportError:
 
 from ...core import (
     DataCoordinate,
+    DataCoordinateSequence,
     DataCoordinateSet,
     DatasetRef,
     DatasetType,
@@ -1355,3 +1356,143 @@ class RegistryTests(ABC):
                 with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
                                                 deduplicate=True).materialize() as biases:
                     self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+
+    def testEmptyDimensionsQueries(self):
+        """Test Query and QueryResults objects in the case where there are no
+        dimensions.
+        """
+        # Set up test data: one dataset type, two runs, one dataset in each.
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        schema = DatasetType("schema", dimensions=registry.dimensions.empty, storageClass="Catalog")
+        registry.registerDatasetType(schema)
+        dataId = DataCoordinate.makeEmpty(registry.dimensions)
+        run1 = "run1"
+        run2 = "run2"
+        registry.registerRun(run1)
+        registry.registerRun(run2)
+        (dataset1,) = registry.insertDatasets(schema, dataIds=[dataId], run=run1)
+        (dataset2,) = registry.insertDatasets(schema, dataIds=[dataId], run=run2)
+        # Query directly for both of the datasets, and each one, one at a time.
+        self.assertCountEqual(
+            list(registry.queryDatasets(schema, collections=[run1, run2], deduplicate=False)),
+            [dataset1, dataset2]
+        )
+        self.assertEqual(
+            list(registry.queryDatasets(schema, collections=[run1, run2], deduplicate=True)),
+            [dataset1],
+        )
+        self.assertEqual(
+            list(registry.queryDatasets(schema, collections=[run2, run1], deduplicate=True)),
+            [dataset2],
+        )
+        # Query for data IDs with no dimensions.
+        dataIds = registry.queryDataIds([])
+        self.assertEqual(
+            dataIds.toSequence(),
+            DataCoordinateSequence([dataId], registry.dimensions.empty)
+        )
+        # Use queried data IDs to find the datasets.
+        self.assertCountEqual(
+            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+            [dataset1, dataset2],
+        )
+        self.assertEqual(
+            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+            [dataset1],
+        )
+        self.assertEqual(
+            list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+            [dataset2],
+        )
+        # Now materialize the data ID query results and repeat those tests.
+        with dataIds.materialize() as dataIds:
+            self.assertEqual(
+                dataIds.toSequence(),
+                DataCoordinateSequence([dataId], registry.dimensions.empty)
+            )
+            self.assertCountEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                [dataset1, dataset2],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                [dataset1],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                [dataset2],
+            )
+        # Query for non-empty data IDs, then subset that to get the empty one.
+        # Repeat the above tests starting from that.
+        dataIds = registry.queryDataIds(["instrument"]).subset(registry.dimensions.empty, unique=True)
+        self.assertEqual(
+            dataIds.toSequence(),
+            DataCoordinateSequence([dataId], registry.dimensions.empty)
+        )
+        self.assertCountEqual(
+            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+            [dataset1, dataset2],
+        )
+        self.assertEqual(
+            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+            [dataset1],
+        )
+        self.assertEqual(
+            list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+            [dataset2],
+        )
+        with dataIds.materialize() as dataIds:
+            self.assertEqual(
+                dataIds.toSequence(),
+                DataCoordinateSequence([dataId], registry.dimensions.empty)
+            )
+            self.assertCountEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                [dataset1, dataset2],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                [dataset1],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                [dataset2],
+            )
+        # Query for non-empty data IDs, then materialize, then subset to get
+        # the empty one.  Repeat again.
+        with registry.queryDataIds(["instrument"]).materialize() as nonEmptyDataIds:
+            dataIds = nonEmptyDataIds.subset(registry.dimensions.empty, unique=True)
+            self.assertEqual(
+                dataIds.toSequence(),
+                DataCoordinateSequence([dataId], registry.dimensions.empty)
+            )
+            self.assertCountEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                [dataset1, dataset2],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                [dataset1],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                [dataset2],
+            )
+            with dataIds.materialize() as dataIds:
+                self.assertEqual(
+                    dataIds.toSequence(),
+                    DataCoordinateSequence([dataId], registry.dimensions.empty)
+                )
+                self.assertCountEqual(
+                    list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                    [dataset1, dataset2],
+                )
+                self.assertEqual(
+                    list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                    [dataset1],
+                )
+                self.assertEqual(
+                    list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                    [dataset2],
+                )

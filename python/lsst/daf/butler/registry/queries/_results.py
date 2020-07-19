@@ -109,7 +109,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     def hasRecords(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
-        return self._records is not None
+        return self._records is not None or not self._query.graph
 
     @contextmanager
     def materialize(self) -> Iterator[DataCoordinateQueryResults]:
@@ -243,14 +243,16 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     def constrain(self, query: SimpleQuery, columns: Callable[[str], sqlalchemy.sql.ColumnElement]) -> None:
         # Docstring inherited from DataCoordinateIterable.
-        fromClause = self._query.sql.alias("c")
-        query.join(
-            fromClause,
-            onclause=sqlalchemy.sql.and_(*[
-                columns(dimension.name) == fromClause.columns[dimension.name]
-                for dimension in self.graph.required
-            ])
-        )
+        sql = self._query.sql
+        if sql is not None:
+            fromClause = sql.alias("c")
+            query.join(
+                fromClause,
+                onclause=sqlalchemy.sql.and_(*[
+                    columns(dimension.name) == fromClause.columns[dimension.name]
+                    for dimension in self.graph.required
+                ])
+            )
 
     def findDatasets(self, datasetType: Union[DatasetType, str], collections: Any, *,
                      deduplicate: bool = True) -> ParentDatasetQueryResults:

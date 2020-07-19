@@ -38,7 +38,7 @@ from ...core import (
 
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns, RegistryManagers
 from .expressions import ClauseVisitor
-from ._query import DirectQuery, DirectQueryUniqueness
+from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, Query
 from ..wildcards import CollectionSearch, CollectionQuery
 
 
@@ -391,7 +391,7 @@ class QueryBuilder:
                 assert element not in self.summary.dataId.graph.elements
                 self._simpleQuery.where.append(intervalInQuery.overlaps(givenInterval, ops=sqlalchemy.sql))
 
-    def finish(self, joinMissing: bool = True) -> DirectQuery:
+    def finish(self, joinMissing: bool = True) -> Query:
         """Finish query constructing, returning a new `Query` instance.
 
         Parameters
@@ -413,6 +413,8 @@ class QueryBuilder:
         if joinMissing:
             self._joinMissingDimensionElements()
         self._addWhereClause()
+        if self._columns.isEmpty():
+            return EmptyQuery(self.summary.requested.universe, managers=self._managers)
         return DirectQuery(graph=self.summary.requested,
                            uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
                            whereRegion=self.summary.dataId.region,

@@ -51,6 +51,7 @@ from ...core import (
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
+    DimensionUniverse,
     REGION_FIELD_SPEC,
     SimpleQuery,
 )
@@ -198,9 +199,12 @@ class Query(ABC):
 
     @property
     @abstractmethod
-    def sql(self) -> sqlalchemy.sql.FromClause:
+    def sql(self) -> Optional[sqlalchemy.sql.FromClause]:
         """A SQLAlchemy object representing the full query
-        (`sqlalchemy.sql.FromClause`).
+        (`sqlalchemy.sql.FromClause` or `None`).
+
+        This is `None` in the special case where the query has no columns, and
+        only one logical row.
         """
         raise NotImplementedError()
 
@@ -236,7 +240,8 @@ class Query(ABC):
 
         return closure
 
-    def rows(self, db: Database, *, region: Optional[Region] = None) -> Iterator[sqlalchemy.engine.RowProxy]:
+    def rows(self, db: Database, *, region: Optional[Region] = None
+             ) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
         """Execute the query and yield result rows, applying `predicate`.
 
         Parameters
@@ -248,22 +253,24 @@ class Query(ABC):
 
         Yields
         ------
-        row : `sqlalchemy.engine.RowProxy`
-            Result row from the query.
+        row : `sqlalchemy.engine.RowProxy` or `None`
+            Result row from the query.  `None` may yielded exactly once instead
+            of any real rows to indicate an empty query (see `EmptyQuery`).
         """
         predicate = self.predicate(region)
         for row in db.query(self.sql):
             if predicate(row):
                 yield row
 
-    def extractDimensionsTuple(self, row: sqlalchemy.engine.RowProxy,
+    def extractDimensionsTuple(self, row: Optional[sqlalchemy.engine.RowProxy],
                                dimensions: Iterable[Dimension]) -> tuple:
         """Extract a tuple of data ID values from a result row.
 
         Parameters
         ----------
-        row : `sqlalchemy.engine.RowProxy`
-            A result row from a SQLAlchemy SELECT query.
+        row : `sqlalchemy.engine.RowProxy` or `None`
+            A result row from a SQLAlchemy SELECT query, or `None` to indicate
+            the row from an `EmptyQuery`.
         dimensions : `Iterable` [ `Dimension` ]
             The dimensions to include in the returned tuple, in order.
 
@@ -272,9 +279,12 @@ class Query(ABC):
         values : `tuple`
             A tuple of dimension primary key values.
         """
+        if row is None:
+            assert not tuple(dimensions), "Can only utilize empty query row when there are no dimensions."
+            return ()
         return tuple(row[self.getDimensionColumn(dimension.name)] for dimension in dimensions)
 
-    def extractDataId(self, row: sqlalchemy.engine.RowProxy, *,
+    def extractDataId(self, row: Optional[sqlalchemy.engine.RowProxy], *,
                       graph: Optional[DimensionGraph] = None,
                       records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
                       ) -> DataCoordinate:
@@ -282,8 +292,9 @@ class Query(ABC):
 
         Parameters
         ----------
-        row : `sqlalchemy.engine.RowProxy`
-            A result row from a SQLAlchemy SELECT query.
+        row : `sqlalchemy.engine.RowProxy` or `None`
+            A result row from a SQLAlchemy SELECT query, or `None` to indicate
+            the row from an `EmptyQuery`.
         graph : `DimensionGraph`, optional
             The dimensions the returned data ID should identify.  If not
             provided, this will be all dimensions in `QuerySummary.requested`.
@@ -302,6 +313,8 @@ class Query(ABC):
         """
         if graph is None:
             graph = self.graph
+        if not graph:
+            return DataCoordinate.makeEmpty(self.graph.universe)
         dataId = DataCoordinate.fromFullValues(
             graph,
             self.extractDimensionsTuple(row, itertools.chain(graph.required, graph.implied))
@@ -404,10 +417,10 @@ class Query(ABC):
             The dimensions of the new `Query`.  This is exactly the same as
             the argument of the same name, with ``self.graph`` used if that
             argument is `None`.
-        columns : `QueryColumns`
+        columns : `QueryColumns` or `None`
             A struct containing the SQLAlchemy column objects to use in the
             new query, contructed by delegating to other (mostly abstract)
-            methods on ``self``.
+            methods on ``self``.  If `None`, `subset` may return ``self``.
         """
         if graph is None:
             graph = self.graph
@@ -427,7 +440,7 @@ class Query(ABC):
         return graph, columns
 
     @contextmanager
-    def materialize(self, db: Database) -> Iterator[MaterializedQuery]:
+    def materialize(self, db: Database) -> Iterator[Query]:
         """Execute this query and insert its results into a temporary table.
 
         Parameters
@@ -608,6 +621,7 @@ class DirectQuery(Query):
                  managers: RegistryManagers):
         super().__init__(graph=graph, whereRegion=whereRegion, managers=managers)
         assert not simpleQuery.columns, "Columns should always be set on a copy in .sql"
+        assert not columns.isEmpty(), "EmptyQuery must be used when a query would have no columns."
         self._simpleQuery = simpleQuery
         self._columns = columns
         self._uniqueness = uniqueness
@@ -659,11 +673,13 @@ class DirectQuery(Query):
 
     def subset(self, *, graph: Optional[DimensionGraph] = None,
                datasets: bool = True,
-               unique: bool = False) -> DirectQuery:
+               unique: bool = False) -> Query:
         # Docstring inherited from Query.
         graph, columns = self._makeSubsetQueryColumns(graph=graph, datasets=datasets, unique=unique)
         if columns is None:
             return self
+        if columns.isEmpty():
+            return EmptyQuery(self.graph.universe, self.managers)
         return DirectQuery(
             simpleQuery=self._simpleQuery.copy(),
             columns=columns,
@@ -761,7 +777,7 @@ class MaterializedQuery(Query):
         return self._table.select()
 
     @contextmanager
-    def materialize(self, db: Database) -> Iterator[MaterializedQuery]:
+    def materialize(self, db: Database) -> Iterator[Query]:
         # Docstring inherited from Query.
         yield self
 
@@ -772,6 +788,8 @@ class MaterializedQuery(Query):
         graph, columns = self._makeSubsetQueryColumns(graph=graph, datasets=datasets, unique=unique)
         if columns is None:
             return self
+        if columns.isEmpty():
+            return EmptyQuery(self.graph.universe, managers=self.managers)
         simpleQuery = SimpleQuery()
         simpleQuery.join(self._table)
         return DirectQuery(
@@ -791,3 +809,68 @@ class MaterializedQuery(Query):
         builder = QueryBuilder(summary, managers=self.managers)
         builder.joinTable(self._table, dimensions=self.graph.dimensions, datasets=self.getDatasetColumns())
         return builder
+
+
+class EmptyQuery(Query):
+    """A `Query` implementation that handes the special case where the query
+    would have no columns.
+
+    Parameters
+    ----------
+    universe : `DimensionUniverse`
+        Set of all dimensions from which the null set is extracted.
+    managers : `RegistryManagers`
+        A struct containing the registry manager instances used by the query
+        system.
+    """
+    def __init__(self, universe: DimensionUniverse, managers: RegistryManagers):
+        super().__init__(graph=universe.empty, whereRegion=None, managers=managers)
+
+    def isUnique(self) -> bool:
+        # Docstring inherited from Query.
+        return True
+
+    def getDimensionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited from Query.
+        raise KeyError(f"No dimension {name} in query (no dimensions at all, actually).")
+
+    @property
+    def spatial(self) -> Iterator[DimensionElement]:
+        # Docstring inherited from Query.
+        return iter(())
+
+    def getRegionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited from Query.
+        raise KeyError(f"No region for {name} in query (no regions at all, actually).")
+
+    def getDatasetColumns(self) -> Optional[DatasetQueryColumns]:
+        # Docstring inherited from Query.
+        return None
+
+    def rows(self, db: Database, *, region: Optional[Region] = None
+             ) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
+        yield None
+
+    @property
+    def sql(self) -> Optional[sqlalchemy.sql.FromClause]:
+        # Docstring inherited from Query.
+        return None
+
+    @contextmanager
+    def materialize(self, db: Database) -> Iterator[Query]:
+        # Docstring inherited from Query.
+        yield self
+
+    def subset(self, *, graph: Optional[DimensionGraph] = None,
+               datasets: bool = True,
+               unique: bool = False) -> Query:
+        # Docstring inherited from Query.
+        assert graph is None or graph.issubset(self.graph)
+        return self
+
+    def makeBuilder(self, summary: Optional[QuerySummary] = None) -> QueryBuilder:
+        # Docstring inherited from Query.
+        from ._builder import QueryBuilder
+        if summary is None:
+            summary = QuerySummary(self.graph)
+        return QueryBuilder(summary, managers=self.managers)
