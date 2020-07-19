@@ -306,6 +306,11 @@ class QueryColumns:
     (`DatasetQueryColumns` or `None`).
     """
 
+    def isEmpty(self) -> bool:
+        """Return `True` if this query has no columns at all.
+        """
+        return not (self.keys or self.timespans or self.regions or self.datasets is not None)
+
     def getKeyColumn(self, dimension: Union[Dimension, str]) -> ColumnElement:
         """ Return one of the columns in self.keys for the given dimension.
 
