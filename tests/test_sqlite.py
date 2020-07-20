@@ -59,10 +59,12 @@ def isEmptyDatabaseActuallyWriteable(database: SqliteDatabase) -> bool:
     """
     try:
         with database.declareStaticTables(create=True) as context:
-            context.addTable(
+            table = context.addTable(
                 "a",
                 ddl.TableSpec(fields=[ddl.FieldSpec("b", dtype=sqlalchemy.Integer, primaryKey=True)])
             )
+        # Drop created table so that schema remains empty.
+        database._metadata.drop_all(database._connection, tables=[table])
         return True
     except Exception:
         return False

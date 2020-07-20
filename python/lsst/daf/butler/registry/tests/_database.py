@@ -33,6 +33,7 @@ from ..interfaces import (
     Database,
     ReadOnlyDatabaseError,
     DatabaseConflictError,
+    SchemaAlreadyDefinedError
 )
 from ...core import ddl
 
@@ -135,6 +136,23 @@ class DatabaseTests(ABC):
             with existingReadOnlyDatabase.declareStaticTables(create=False) as context:
                 tables = context.addTableTuple(STATIC_TABLE_SPECS)
             self.checkStaticSchema(tables)
+
+    def testDeclareStaticTablesTwice(self):
+        """Tests for `Database.declareStaticSchema` being called twice.
+        """
+        # Create the static schema in a new, empty database.
+        newDatabase = self.makeEmptyDatabase()
+        with newDatabase.declareStaticTables(create=True) as context:
+            tables = context.addTableTuple(STATIC_TABLE_SPECS)
+        self.checkStaticSchema(tables)
+        # Second time it should raise
+        with self.assertRaises(SchemaAlreadyDefinedError):
+            with newDatabase.declareStaticTables(create=True) as context:
+                tables = context.addTableTuple(STATIC_TABLE_SPECS)
+        # Check schema, it should still contain all tables, and maybe some
+        # extra.
+        with newDatabase.declareStaticTables(create=False) as context:
+            self.assertLessEqual(frozenset(STATIC_TABLE_SPECS._fields), context._tableNames)
 
     def testRepr(self):
         """Test that repr does not return a generic thing."""
