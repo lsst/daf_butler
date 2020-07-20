@@ -208,6 +208,15 @@ class Database(ABC):
         self._connection = connection
         self._metadata: Optional[sqlalchemy.schema.MetaData] = None
 
+    def __repr__(self) -> str:
+        # Rather than try to reproduce all the parameters used to create
+        # the object, instead report the more useful information of the
+        # connection URL.
+        uri = str(self._connection.engine.url)
+        if self.namespace:
+            uri += f"#{self.namespace}"
+        return f'{type(self).__name__}("{uri}")'
+
     @classmethod
     def makeDefaultUri(cls, root: str) -> Optional[str]:
         """Create a default connection URI appropriate for the given root

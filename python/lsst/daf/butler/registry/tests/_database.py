@@ -136,6 +136,15 @@ class DatabaseTests(ABC):
                 tables = context.addTableTuple(STATIC_TABLE_SPECS)
             self.checkStaticSchema(tables)
 
+    def testRepr(self):
+        """Test that repr does not return a generic thing."""
+        newDatabase = self.makeEmptyDatabase()
+        rep = repr(newDatabase)
+        # Check that stringification works and gives us something different
+        self.assertNotEqual(rep, str(newDatabase))
+        self.assertNotIn("object at 0x", rep, "Check default repr was not used")
+        self.assertIn("://", rep)
+
     def testDynamicTables(self):
         """Tests for `Database.ensureTableExists` and
         `Database.getExistingTable`.
