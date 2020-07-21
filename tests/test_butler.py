@@ -956,6 +956,31 @@ class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCa
     datastoreName = [f"PosixDatastore@{BUTLER_ROOT_TAG}"]
     registryStr = "/gen3.sqlite3"
 
+    def testExportTransferCopy(self):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        exportButler = self.runPutGetTest(storageClass, "test_metric")
+        # Test that the repo actually has at least one dataset.
+        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
+        self.assertGreater(len(datasets), 0)
+        uris = [exportButler.getURI(d) for d in datasets]
+        datastoreRoot = exportButler.datastore.root
+        if not datastoreRoot.endswith("/"):
+            # datastore should have a root always be ButlerURI
+            datastoreRoot += "/"
+        pathsInStore = [uri.path.replace(datastoreRoot, "") for uri in uris]
+
+        for path in pathsInStore:
+            self.assertTrue(self.checkFileExists(datastoreRoot, path),
+                            f"Checking path {path}")
+
+        for transfer in ("copy", "link", "symlink"):
+            with tempfile.TemporaryDirectory() as exportDir:
+                with exportButler.export(directory=exportDir, format="yaml",
+                                         transfer=transfer) as export:
+                    export.saveDatasets(datasets)
+                    for path in pathsInStore:
+                        self.assertTrue(self.checkFileExists(exportDir, path))
+
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """InMemoryDatastore specialization of a butler"""
