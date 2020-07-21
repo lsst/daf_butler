@@ -2,6 +2,8 @@
 *~
 *.bck
 *.pyc
+.eggs
+*.egg-info
 version.py
 _build.*
 .cache
@@ -17,6 +19,7 @@ bin/*
 .mypy_cache/
 .idea/
 .vscode/
+.python-version
 mypy.log
 build/*
 dist/*
