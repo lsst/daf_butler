@@ -19,9 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import copy
 import unittest
 import os.path
 import posixpath
+import pickle
 
 from lsst.daf.butler import LocationFactory, ButlerURI
 from lsst.daf.butler.core._butlerUri import os2posix, posix2os
@@ -121,6 +123,28 @@ class LocationTestCase(unittest.TestCase):
         uri = ButlerURI("file://amazon/datastore/file.txt")
         uri2 = ButlerURI(uri)
         self.assertEqual(uri, uri2)
+
+        # Copy constructor using subclass
+        uri3 = type(uri)(uri)
+        self.assertEqual(type(uri), type(uri3))
+
+        # Explicit copy
+        uri4 = copy.copy(uri3)
+        self.assertEqual(uri4, uri3)
+        uri4 = copy.deepcopy(uri3)
+        self.assertEqual(uri4, uri3)
+
+    def testButlerUriSerialization(self):
+        """Test that we can pickle and yaml"""
+        uri = ButlerURI("a/b/c/d")
+        uri2 = pickle.loads(pickle.dumps(uri))
+        self.assertEqual(uri, uri2)
+        self.assertFalse(uri2.dirLike)
+
+        uri = ButlerURI("a/b/c/d", forceDirectory=True)
+        uri2 = pickle.loads(pickle.dumps(uri))
+        self.assertEqual(uri, uri2)
+        self.assertTrue(uri2.dirLike)
 
     def testFileLocation(self):
         root = os.path.abspath(os.path.curdir)

@@ -34,6 +34,7 @@ from typing import (
     Any,
     Optional,
     Tuple,
+    Type,
     Union,
 )
 
@@ -109,6 +110,8 @@ class ButlerURI:
     paths into absolute path URIs. Scheme-less URIs are treated as if
     they are local file system paths and are converted to absolute URIs.
 
+    A specialist subclass is created for each supported URI scheme.
+
     Parameters
     ----------
     uri : `str` or `urllib.parse.ParseResult`
@@ -127,33 +130,57 @@ class ButlerURI:
         is interpreted as is.
     """
 
-    def __init__(self, uri: Union[str, urllib.parse.ParseResult, ButlerURI],
-                 root: Optional[str] = None, forceAbsolute: bool = True, forceDirectory: bool = False):
-        self._uri: urllib.parse.ParseResult
-        self.dirLike: bool
+    _pathLib: Type[PurePath] = PurePosixPath
+    """Path library to use for this scheme."""
+
+    _pathModule = posixpath
+    """Path module to use for this scheme."""
+
+    # mypy is confused without this
+    _uri: urllib.parse.ParseResult
+
+    def __new__(cls, uri: Union[str, urllib.parse.ParseResult, ButlerURI],
+                root: Optional[str] = None, forceAbsolute: bool = True,
+                forceDirectory: bool = False) -> ButlerURI:
+        parsed: urllib.parse.ParseResult
+        dirLike: bool
+        subclass: Optional[Type] = None
 
         # Record if we need to post process the URI components
         # or if the instance is already fully configured
-        is_configured = False
         if isinstance(uri, str):
             parsed = urllib.parse.urlparse(uri)
         elif isinstance(uri, urllib.parse.ParseResult):
             parsed = copy.copy(uri)
         elif isinstance(uri, ButlerURI):
-            self._uri = copy.copy(uri._uri)
-            self.dirLike = uri.dirLike
-            # No further parsing required
-            is_configured = True
+            parsed = copy.copy(uri._uri)
+            dirLike = uri.dirLike
+            # No further parsing required and we know the subclass
+            subclass = type(uri)
         else:
             raise ValueError(f"Supplied URI must be string, ButlerURI, or ParseResult but got '{uri!r}'")
 
-        if not is_configured:
-            parsed, dirLike = self._fixupPathUri(parsed, root=root,
-                                                 forceAbsolute=forceAbsolute,
-                                                 forceDirectory=forceDirectory)
+        if subclass is None:
+            parsed, dirLike = cls._fixupPathUri(parsed, root=root,
+                                                forceAbsolute=forceAbsolute,
+                                                forceDirectory=forceDirectory)
 
-            self.dirLike = dirLike
-            self._uri = parsed
+            # Work out the subclass from the URI scheme
+            if not parsed.scheme:
+                subclass = ButlerSchemelessURI
+            elif parsed.scheme == "file":
+                subclass = ButlerFileURI
+            elif parsed.scheme == "s3":
+                subclass = ButlerS3URI
+            else:
+                subclass = ButlerGenericURI
+
+        # Now create an instance of the correct subclass and set the
+        # attributes directly
+        self = object.__new__(subclass)  # , parsed, dirLike)
+        self._uri = parsed
+        self.dirLike = dirLike
+        return self
 
     @property
     def scheme(self) -> str:
@@ -173,9 +200,7 @@ class ButlerURI:
     @property
     def ospath(self) -> str:
         """Path component of the URI localized to current OS."""
-        if self.scheme == 's3':
-            raise AttributeError('S3 URIs have no OS path.')
-        return posix2os(self._uri.path)
+        raise AttributeError(f"Non-file URI ({self}) has no local OS path.")
 
     @property
     def relativeToPathRoot(self) -> str:
@@ -184,10 +209,7 @@ class ButlerURI:
         Effectively, this is the path property with posix separator stripped
         from the left hand side of the path.
         """
-        if not self.scheme:
-            p = PurePath(self.path)
-        else:
-            p = PurePosixPath(self.path)
+        p = self._pathLib(self.path)
         relToRoot = str(p.relative_to(p.root))
         if self.dirLike and not relToRoot.endswith("/"):
             relToRoot += "/"
@@ -231,10 +253,7 @@ class ButlerURI:
             Last `self.path` component. Tail will be empty if path ends on a
             separator. Tail will never contain separators.
         """
-        if self.scheme:
-            head, tail = posixpath.split(self.path)
-        else:
-            head, tail = os.path.split(self.path)
+        head, tail = self._pathModule.split(self.path)
         headuri = self._uri._replace(path=head)
         return self.__class__(headuri, forceDirectory=True), tail
 
@@ -292,12 +311,8 @@ class ButlerURI:
         Updates the URI in place.
         Updates the ButlerURI.dirLike attribute.
         """
-        pathclass = posixpath if self.scheme else os.path
-
-        # Mypy can't work out that these specific modules support split
-        # and join
-        dir, _ = pathclass.split(self.path)  # type: ignore
-        newpath = pathclass.join(dir, newfile)  # type: ignore
+        dir, _ = self._pathModule.split(self.path)
+        newpath = self._pathModule.join(dir, newfile)
 
         self.dirLike = False
         self._uri = self._uri._replace(path=newpath)
@@ -313,10 +328,7 @@ class ButlerURI:
             as a single extension such that ``file.fits.gz`` will return
             a value of ``.fits.gz``.
         """
-        if not self.scheme:
-            extensions = PurePath(self.path).suffixes
-        else:
-            extensions = PurePosixPath(self.path).suffixes
+        extensions = self._pathLib(self.path).suffixes
         return "".join(extensions)
 
     def __str__(self) -> str:
@@ -329,6 +341,17 @@ class ButlerURI:
         if not isinstance(other, ButlerURI):
             return False
         return self.geturl() == other.geturl()
+
+    def __copy__(self) -> ButlerURI:
+        # Implement here because the __new__ method confuses things
+        return type(self)(str(self))
+
+    def __deepcopy__(self, memo: Any) -> ButlerURI:
+        # Implement here because the __new__ method confuses things
+        return self.__copy__()
+
+    def __getnewargs__(self) -> Tuple:
+        return (str(self),)
 
     @staticmethod
     def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
@@ -458,3 +481,34 @@ class ButlerURI:
             raise RuntimeError("ButlerURI.dirLike attribute not set successfully.")
 
         return parsed, dirLike
+
+
+class ButlerFileURI(ButlerURI):
+    """URI for explicit ``file`` scheme."""
+
+    @property
+    def ospath(self) -> str:
+        """Path component of the URI localized to current OS."""
+        return posix2os(self._uri.path)
+
+
+class ButlerS3URI(ButlerURI):
+    """S3 URI"""
+    pass
+
+
+class ButlerGenericURI(ButlerURI):
+    """Generic URI with a defined scheme"""
+    pass
+
+
+class ButlerSchemelessURI(ButlerURI):
+    """Scheme-less URI referring to the local file system"""
+
+    _pathLib = PurePath
+    _pathModule = os.path
+
+    @property
+    def ospath(self) -> str:
+        """Path component of the URI localized to current OS."""
+        return self.path
