@@ -63,7 +63,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# settings for "backoff" retry decorators.
+# settings for "backoff" retry decorators. these retries are belt-and-suspenders along
+# with the retries built into Boto3, to account for semantic differences in errors between
+# S3-like providers.
 retryable_io_errors = (
     # http.client
     ImproperConnectionState, HTTPException, 
