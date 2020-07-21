@@ -40,10 +40,23 @@ from typing import (
     Optional,
     Type,
     Union,
+    Callable
 )
 
 # https://pypi.org/project/backoff/
-import backoff
+try:
+    import backoff
+except ImportError:
+    class Backoff():
+        @staticmethod
+        def expo() -> None:
+            return None
+
+        @staticmethod
+        def on_exception(func: Callable, *args: Any, **kwargs: Any) -> Callable:
+            return func
+
+    backoff = Backoff
 
 from lsst.daf.butler import (
     ButlerURI,
