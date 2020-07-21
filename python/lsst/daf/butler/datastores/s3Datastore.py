@@ -49,8 +49,8 @@ try:
 except ImportError:
     class Backoff():
         @staticmethod
-        def expo() -> None:
-            return None
+        def expo(func: Callable, *args: Any, **kwargs: Any) -> Callable:
+            return func
 
         @staticmethod
         def on_exception(func: Callable, *args: Any, **kwargs: Any) -> Callable:
