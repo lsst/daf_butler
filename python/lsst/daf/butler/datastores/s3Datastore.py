@@ -30,13 +30,33 @@ import os
 import pathlib
 import tempfile
 
+from botocore.exceptions import ClientError
+from http.client import ImproperConnectionState, HTTPException
+from urllib3.exceptions import RequestError, HTTPError
+
 from typing import (
     TYPE_CHECKING,
     Any,
     Optional,
     Type,
     Union,
+    Callable
 )
+
+# https://pypi.org/project/backoff/
+try:
+    import backoff
+except ImportError:
+    class Backoff():
+        @staticmethod
+        def expo() -> None:
+            return None
+
+        @staticmethod
+        def on_exception(func: Callable, *args: Any, **kwargs: Any) -> Callable:
+            return func
+
+    backoff = Backoff
 
 from lsst.daf.butler import (
     ButlerURI,
@@ -55,6 +75,24 @@ if TYPE_CHECKING:
     from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
+
+# settings for "backoff" retry decorators. these retries are belt-and-
+# suspenders along with the retries built into Boto3, to account for
+# semantic differences in errors between S3-like providers.
+retryable_io_errors = (
+    # http.client
+    ImproperConnectionState, HTTPException,
+    # urllib3.exceptions
+    RequestError, HTTPError,
+    # built-ins
+    TimeoutError, ConnectionError)
+retryable_client_errors = (
+    # botocore.exceptions
+    ClientError,
+    # built-ins
+    PermissionError)
+all_retryable_errors = retryable_client_errors + retryable_io_errors
+max_retry_time = 60
 
 
 class S3Datastore(FileLikeDatastore):
@@ -99,6 +137,7 @@ class S3Datastore(FileLikeDatastore):
             # missing. Further discussion can make this happen though.
             raise IOError(f"Bucket {self.locationFactory.netloc} does not exist!")
 
+    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
         location.
@@ -117,6 +156,7 @@ class S3Datastore(FileLikeDatastore):
         exists, _ = s3CheckFileExists(location, client=self.client)
         return exists
 
+    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
     def _delete_artifact(self, location: Location) -> None:
         """Delete the artifact from the datastore.
 
@@ -129,6 +169,7 @@ class S3Datastore(FileLikeDatastore):
         self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
         log.debug("Successfully deleted file: %s", location.uri)
 
+    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
         location = getInfo.location
@@ -198,6 +239,7 @@ class S3Datastore(FileLikeDatastore):
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
                                       isComponent=isComponent)
 
+    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
 
@@ -311,9 +353,9 @@ class S3Datastore(FileLikeDatastore):
                     self.client.delete(Bucket=srcUri.netloc, Key=relpath)
 
         # the file should exist on the bucket by now
-        exists, size = s3CheckFileExists(path=tgtLocation.relativeToPathRoot,
-                                         bucket=tgtLocation.netloc,
-                                         client=self.client)
+        _, size = s3CheckFileExists(path=tgtLocation.relativeToPathRoot,
+                                    bucket=tgtLocation.netloc,
+                                    client=self.client)
 
         return StoredFileInfo(formatter=formatter, path=tgtLocation.pathInStore,
                               storageClass=ref.datasetType.storageClass,

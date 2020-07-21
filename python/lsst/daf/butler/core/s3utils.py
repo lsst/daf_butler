@@ -37,6 +37,11 @@ try:
 except ImportError:
     boto3 = None
 
+try:
+    import botocore
+except ImportError:
+    botocore = None
+
 from .location import ButlerURI, Location
 
 
@@ -56,15 +61,27 @@ def getS3Client() -> boto3.client:
     if boto3 is None:
         raise ModuleNotFoundError("Could not find boto3. "
                                   "Are you sure it is installed?")
+    if botocore is None:
+        raise ModuleNotFoundError("Could not find botocore. "
+                                  "Are you sure it is installed?")
 
     endpoint = os.environ.get("S3_ENDPOINT_URL", None)
     if not endpoint:
         endpoint = None  # Handle ""
-    return boto3.client("s3", endpoint_url=endpoint)
+
+    config = botocore.config.Config(
+        read_timeout=180,
+        retries={
+            'mode': 'adaptive',
+            'max_attempts': 10
+        }
+    )
+
+    return boto3.client("s3", endpoint_url=endpoint, config=config)
 
 
 def s3CheckFileExists(path: Union[Location, ButlerURI, str], bucket: Optional[str] = None,
-                      client: Optional[boto3.cient] = None) -> Tuple[bool, int]:
+                      client: Optional[boto3.client] = None) -> Tuple[bool, int]:
     """Returns (True, filesize) if file exists in the bucket and (False, -1) if
     the file is not found.
 
