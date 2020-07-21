@@ -63,22 +63,24 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# settings for "backoff" retry decorators. these retries are belt-and-suspenders along
-# with the retries built into Boto3, to account for semantic differences in errors between
-# S3-like providers.
+# settings for "backoff" retry decorators. these retries are belt-and-
+# suspenders along with the retries built into Boto3, to account for
+# semantic differences in errors between S3-like providers.
 retryable_io_errors = (
     # http.client
-    ImproperConnectionState, HTTPException, 
+    ImproperConnectionState, HTTPException,
     # urllib3.exceptions
-    RequestError, HTTPError, 
+    RequestError, HTTPError,
     # built-ins
     TimeoutError, ConnectionError)
 retryable_client_errors = (
     # botocore.exceptions
-    ClientError, 
+    ClientError,
     # built-ins
     PermissionError)
+all_retryable_errors = retryable_client_errors + retryable_io_errors
 max_retry_time = 60
+
 
 class S3Datastore(FileLikeDatastore):
     """Basic S3 Object Storage backed Datastore.
@@ -154,7 +156,7 @@ class S3Datastore(FileLikeDatastore):
         self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
         log.debug("Successfully deleted file: %s", location.uri)
 
-    @backoff.on_exception(backoff.expo, retryable_client_errors + retryable_io_errors, max_time=max_retry_time)
+    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
         location = getInfo.location
@@ -224,7 +226,7 @@ class S3Datastore(FileLikeDatastore):
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
                                       isComponent=isComponent)
 
-    @backoff.on_exception(backoff.expo, retryable_client_errors + retryable_io_errors, max_time=max_retry_time)
+    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
 
@@ -338,9 +340,9 @@ class S3Datastore(FileLikeDatastore):
                     self.client.delete(Bucket=srcUri.netloc, Key=relpath)
 
         # the file should exist on the bucket by now
-        exists, size = s3CheckFileExists(path=tgtLocation.relativeToPathRoot,
-                                         bucket=tgtLocation.netloc,
-                                         client=self.client)
+        _, size = s3CheckFileExists(path=tgtLocation.relativeToPathRoot,
+                                    bucket=tgtLocation.netloc,
+                                    client=self.client)
 
         return StoredFileInfo(formatter=formatter, path=tgtLocation.pathInStore,
                               storageClass=ref.datasetType.storageClass,
