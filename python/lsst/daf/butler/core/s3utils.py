@@ -81,7 +81,7 @@ def getS3Client() -> boto3.client:
 
 
 def s3CheckFileExists(path: Union[Location, ButlerURI, str], bucket: Optional[str] = None,
-                      client: Optional[boto3.cient] = None) -> Tuple[bool, int]:
+                      client: Optional[boto3.client] = None) -> Tuple[bool, int]:
     """Returns (True, filesize) if file exists in the bucket and (False, -1) if
     the file is not found.
 
