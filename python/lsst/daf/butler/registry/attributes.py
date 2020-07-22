@@ -39,11 +39,19 @@ from .interfaces import (
     Database,
     ButlerAttributeExistsError,
     ButlerAttributeManager,
-    StaticTablesContext
+    StaticTablesContext,
+    VersionedExtension,
+    VersionTuple
 )
 
 
-class DefaultButlerAttributeManager(ButlerAttributeManager):
+# This manager is supposed to have super-stable schema that never changes
+# but there may be cases when we need data migration on this table so we
+# keep version for it as well.
+_VERSION = VersionTuple(0, 1, 0)
+
+
+class DefaultButlerAttributeManager(ButlerAttributeManager, VersionedExtension):
     """An implementation of `ButlerAttributeManager` that stores attributes
     in a database table.
 
@@ -114,3 +122,18 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         ])
         for row in self._db.query(sql):
             yield row[0], row[1]
+
+    def empty(self) -> bool:
+        # Docstring inherited from ButlerAttributeManager.
+        sql = sqlalchemy.sql.select([sqlalchemy.sql.func.count()]).select_from(self._table)
+        row = self._db.query(sql).fetchone()
+        return row[0] == 0
+
+    @classmethod
+    def currentVersion(cls) -> Optional[VersionTuple]:
+        # Docstring inherited from VersionedExtension.
+        return _VERSION
+
+    def schemaDigest(self) -> Optional[str]:
+        # Docstring inherited from VersionedExtension.
+        return self._defaultSchemaDigest([self._table])

@@ -24,10 +24,21 @@ from typing import Optional
 
 from ...core import NamedKeyDict
 from ...core.dimensions import DimensionElement, DimensionUniverse
-from ..interfaces import Database, StaticTablesContext, DimensionRecordStorageManager, DimensionRecordStorage
+from ..interfaces import (
+    Database,
+    StaticTablesContext,
+    DimensionRecordStorageManager,
+    DimensionRecordStorage,
+    VersionedExtension,
+    VersionTuple
+)
 
 
-class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
+# This has to be updated on every schema change
+_VERSION = VersionTuple(0, 1, 0)
+
+
+class StaticDimensionRecordStorageManager(DimensionRecordStorageManager, VersionedExtension):
     """An implementation of `DimensionRecordStorageManager` for single-layer
     `Registry` and the base layers of multi-layer `Registry`.
 
@@ -80,3 +91,12 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited from DimensionRecordStorageManager.
         for storage in self._records.values():
             storage.clearCaches()
+
+    @classmethod
+    def currentVersion(cls) -> Optional[VersionTuple]:
+        # Docstring inherited from VersionedExtension.
+        return _VERSION
+
+    def schemaDigest(self) -> Optional[str]:
+        # Docstring inherited from VersionedExtension.
+        return None

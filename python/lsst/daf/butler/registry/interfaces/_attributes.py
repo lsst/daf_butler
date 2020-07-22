@@ -158,3 +158,14 @@ class ButlerAttributeManager(ABC):
             Corresponding attribute value.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def empty(self) -> bool:
+        """Check whether attributes set is empty.
+
+        Returns
+        -------
+        empty : `bool`
+            True if there are no any attributes defined.
+        """
+        raise NotImplementedError()
