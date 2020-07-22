@@ -131,8 +131,6 @@ class CliLog:
 
         Parameters
         ----------
-        longlog : `bool`
-            If True then make log messages appear in "long format"
         logLevels : `list` of `tuple`
             per-component logging levels, each item in the list is a tuple
             (component, level), `component` is a logger name or an empty string
