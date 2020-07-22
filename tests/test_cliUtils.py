@@ -27,7 +27,7 @@ import unittest
 
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.utils import (clickResultMsg, LogCliRunner, Mocker, mockEnvVar, MWArgument, MWOption,
-                                       option_section, unwrap)
+                                       MWPath, option_section, unwrap)
 from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 
 
@@ -214,6 +214,52 @@ Section break between metasyntactic variables.
         """
         result = self.runner.invoke(self.cli, [])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+
+class MWPathTest(unittest.TestCase):
+
+    def getCmd(self, exists):
+        @click.command()
+        @click.option("--name", type=MWPath(exists=exists))
+        def cmd(name):
+            pass
+        return cmd
+
+    def setUp(self):
+        self.runner = click.testing.CliRunner()
+
+    def test_exist(self):
+        """Test the exist argument, verify that True means the file must exist,
+        False means the file must not exist, and None means that the file may
+        or may not exist."""
+        with self.runner.isolated_filesystem():
+            mustExistCmd = self.getCmd(exists=True)
+            mayExistCmd = self.getCmd(exists=None)
+            mustNotExistCmd = self.getCmd(exists=False)
+            args = ["--name", "foo.txt"]
+
+            result = self.runner.invoke(mustExistCmd, args)
+            self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertRegex(result.output, """['"]foo.txt['"] does not exist.""")
+
+            result = self.runner.invoke(mayExistCmd, args)
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+            result = self.runner.invoke(mustNotExistCmd, args)
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+            # isolated_filesystem runs in a temporary directory, when it is
+            # removed everything inside will be removed.
+            with open("foo.txt", "w") as _:
+                result = self.runner.invoke(mustExistCmd, args)
+                self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+                result = self.runner.invoke(mayExistCmd, args)
+                self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+                result = self.runner.invoke(mustNotExistCmd, args)
+                self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
+                self.assertIn('"foo.txt" should not exist.', result.output)
 
 
 if __name__ == "__main__":

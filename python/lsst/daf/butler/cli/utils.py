@@ -420,6 +420,43 @@ class option_section:  # noqa: N801
                             cls=OptionSection)(f)
 
 
+class MWPath(click.Path):
+    """Overrides click.Path to implement file-does-not-exist checking.
+
+    Changes the definition of ``exists` so that `True` indicates the location
+    (file or directory) must exist, `False` indicates the location must *not*
+    exist, and `None` indicates that the file may exist or not. The standard
+    definition for the `click.Path` ``exists`` parameter is that for `True` a
+    location must exist, but `False` means it is not required to exist (not
+    that it is required to not exist).
+
+    Parameters
+    ----------
+    exists : `True`, `False`, or `None`
+        If `True`, the location (file or directory) indicated by the caller
+        must exist. If `False` the location must not exist. If `None`, the
+        location may exist or not.
+
+    For other parameters see `click.Path`.
+    """
+
+    def __init__(self, exists=None, file_okay=True, dir_okay=True,
+                 writable=False, readable=True, resolve_path=False,
+                 allow_dash=False, path_type=None):
+        self.mustNotExist = exists is False
+        if exists is None:
+            exists = False
+        super().__init__(exists, file_okay, dir_okay, writable, readable,
+                         resolve_path, allow_dash, path_type)
+
+    def convert(self, value, param, ctx):
+        """Called by click.ParamType to "convert values through types".
+        `click.Path` uses this step to verify Path conditions."""
+        if self.mustNotExist and os.path.exists(value):
+            self.fail(f'{self.path_type} "{value}" should not exist.')
+        return super().convert(value, param, ctx)
+
+
 class MWOption(click.Option):
     """Overrides click.Option with desired behaviors."""
 
