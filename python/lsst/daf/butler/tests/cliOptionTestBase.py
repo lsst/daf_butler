@@ -26,7 +26,7 @@ import inspect
 import os
 from unittest.mock import MagicMock
 
-from ..cli.utils import clickResultMsg, LogCliRunner, ParameterType, split_kv_separator
+from ..cli.utils import clickResultMsg, LogCliRunner, MWPath, ParameterType, split_kv_separator
 from ..core.utils import iterable
 
 
@@ -167,6 +167,14 @@ class OptTestBase(abc.ABC):
         option.
         """
         return f"-{self.shortOptionName}" if self.shortOptionName else None
+
+    @property
+    def helpOptionFlags(self):
+        """The option flag(s) as they are formatted in help text output.
+        """
+        if self.optionName and self.shortOptionName:
+            return f'"{self.shortOptionFlag}" / "{self.optionFlag}"'
+        return f'"{self.optionFlag}"'
 
     @property
     @abc.abstractmethod
@@ -445,6 +453,67 @@ class OptCaseInsensitiveTest(OptTestBase):
                       helper)
 
 
+class OptFloatTest(OptTestBase):
+    """A mixin that tests an option restricts its type to float"""
+
+    def testValid(self):
+        """Verify that the minimum and maximum values are accepted.
+
+        If min is not provided, use an arbitrary small number, and similar for
+        max.
+        """
+        helper = CliFactory.mocked(self,
+                                   expectedKwargs={self.optionKey: self.expectedVal})
+        self.run_test(helper.cli,
+                      self.makeInputs(self.optionFlag, self.optionValue),
+                      self.verifyCalledWith,
+                      helper)
+
+    def testInvalidValue(self):
+        """Verify that invalid values are rejeceted."""
+        helper = CliFactory.mocked(self)
+        self.run_test(helper.cli,
+                      self.makeInputs(self.optionFlag, "foo"),
+                      self.verifyError,
+                      "foo is not a valid floating point value")
+
+
+class OptIntRangeTest(OptTestBase):
+    """A mixin that tests an option restricts its type according to a
+    click.IntRange """
+
+    def testExtents(self):
+        """Verify that the minimum and maximum values are accepted.
+
+        If min is not provided, use an arbitrary small number, and similar for
+        max.
+        """
+        for val in (self.valueType.min if self.valueType.min is not None else -99999999999,
+                    self.valueType.max if self.valueType.max is not None else 99999999999):
+            helper = CliFactory.mocked(self,
+                                       expectedKwargs={self.optionKey: val})
+            self.run_test(helper.cli,
+                          self.makeInputs(self.optionFlag, val),
+                          self.verifyCalledWith,
+                          helper)
+
+    def testInvalidValues(self):
+        """Verify that invalid values are rejeceted. If min is provided, test
+        a number less than min, and similar for max. Test a letter and a
+        floating point number."""
+        vals = ["a", "3.14"]
+        if self.valueType.min is not None:
+            vals.append(self.valueType.min - 1)
+        if self.valueType.max is not None:
+            vals.append(self.valueType.max + 1)
+        for val in vals:
+            helper = CliFactory.mocked(self)
+            self.run_test(helper.cli,
+                          self.makeInputs(self.optionFlag, val),
+                          self.verifyError,
+                          "")  # the error strings are too varied, don't test.
+
+
 class OptMultipleTest(OptTestBase):
     """A mixin that tests an option accepts multiple inputs which may be
     comma separated."""
@@ -535,7 +604,7 @@ class OptRequiredTest(OptTestBase):
                           self.verifyCalledWith,
                           helper)
 
-        if type(self.valueType) == click.Path:
+        if type(self.valueType) == click.Path or type(self.valueType) == MWPath:
             OptPathTypeTest.runForPathType(self, doTest)
         else:
             doTest(self)
@@ -558,7 +627,7 @@ class OptRequiredTest(OptTestBase):
 
 
 class OptPathTypeTest(OptTestBase):
-    """A mixin that tests options that have `type=click.Path`.
+    """A mixin that tests options that have `type=click.Path` or `MWPath`.
     """
 
     @staticmethod
@@ -599,6 +668,34 @@ class OptPathTypeTest(OptTestBase):
                           helper)
 
         OptPathTypeTest.runForPathType(self, doTest)
+
+    def test_existsFalse(self):
+        """If the expected path type's `exists` arg is false, that an error
+        occurs if the path or file exists."""
+        if self.valueType.exists is None:
+            # If the Path type does not care if the file or dir exists or not
+            # then there's nothing to test here.
+            return
+        elif self.valueType.exists is True:
+            expectedMsg = \
+                f'Invalid value for {self.helpOptionFlags}: File "{self.optionValue}" does not exist.'
+        elif self.valueType.exists is False:
+            expectedMsg = \
+                f'Invalid value for {self.helpOptionFlags}: "{self.optionValue}" should not exist.'
+        with self.runner.isolated_filesystem():
+            # If the file is not supposed to exist, make it to provoke an
+            # error.
+            if self.valueType.exists is False:
+                if self.valueType.dir_okay:
+                    os.makedirs(self.optionValue)
+                elif self.valueType.file_okay:
+                    with open(self.optionValue, "w") as _:
+                        pass
+
+            self.run_test(CliFactory.noOp(self),
+                          self.makeInputs(self.optionFlag, self.optionValue),
+                          self.verifyError,
+                          expectedMsg)
 
 
 class OptHelpTest(OptTestBase):
