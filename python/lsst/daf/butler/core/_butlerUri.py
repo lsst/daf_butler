@@ -574,7 +574,8 @@ class ButlerSchemelessURI(ButlerURI):
         # Ensure that this becomes a file URI if it is already absolute
         if os.path.isabs(expandedPath):
             replacements["scheme"] = "file"
-            replacements["path"] = os2posix(os.path.normpath(expandedPath))
+            # Keep in OS form for now to simplify later logic
+            replacements["path"] = os.path.normpath(expandedPath)
         elif forceAbsolute:
             # This can stay in OS path form, do not change to file
             # scheme.
@@ -589,19 +590,18 @@ class ButlerSchemelessURI(ButlerURI):
 
         # normpath strips trailing "/" which makes it hard to keep
         # track of directory vs file when calling replaceFile
-        # find the appropriate separator
-        if "scheme" in replacements:
-            sep = posixpath.sep
-        else:
-            sep = os.sep
 
         # add the trailing separator only if explicitly required or
         # if it was stripped by normpath. Acknowledge that trailing
         # separator exists.
-        endsOnSep = expandedPath.endswith(os.sep) and not replacements["path"].endswith(sep)
+        endsOnSep = expandedPath.endswith(os.sep) and not replacements["path"].endswith(os.sep)
         if (forceDirectory or endsOnSep or dirLike):
             dirLike = True
-            replacements["path"] += sep
+            replacements["path"] += os.sep
+
+        if "scheme" in replacements:
+            # This is now meant to be a URI path so force to posix
+            replacements["path"] = os2posix(replacements["path"])
 
         # ParseResult is a NamedTuple so _replace is standard API
         parsed = parsed._replace(**replacements)
