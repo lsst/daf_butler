@@ -116,6 +116,13 @@ class LocationTestCase(unittest.TestCase):
             with self.subTest(uri=uriInfo[0]):
                 self.assertEqual(uri.path, uriInfo[2])
 
+        # Check that schemeless can become file scheme
+        schemeless = ButlerURI("relative/path.ext")
+        filescheme = ButlerURI("/absolute/path.ext")
+        self.assertFalse(schemeless.scheme)
+        self.assertEqual(filescheme.scheme, "file")
+        self.assertNotEqual(type(schemeless), type(filescheme))
+
         # Copy constructor
         uri = ButlerURI("s3://amazon/datastore", forceDirectory=True)
         uri2 = ButlerURI(uri)

@@ -161,10 +161,6 @@ class ButlerURI:
             raise ValueError(f"Supplied URI must be string, ButlerURI, or ParseResult but got '{uri!r}'")
 
         if subclass is None:
-            parsed, dirLike = cls._fixupPathUri(parsed, root=root,
-                                                forceAbsolute=forceAbsolute,
-                                                forceDirectory=forceDirectory)
-
             # Work out the subclass from the URI scheme
             if not parsed.scheme:
                 subclass = ButlerSchemelessURI
@@ -175,9 +171,18 @@ class ButlerURI:
             else:
                 subclass = ButlerGenericURI
 
+            parsed, dirLike = subclass._fixupPathUri(parsed, root=root,
+                                                     forceAbsolute=forceAbsolute,
+                                                     forceDirectory=forceDirectory)
+
+            # It is possible for the class to change from schemeless
+            # to file so handle that
+            if parsed.scheme == "file":
+                subclass = ButlerFileURI
+
         # Now create an instance of the correct subclass and set the
         # attributes directly
-        self = object.__new__(subclass)  # , parsed, dirLike)
+        self = object.__new__(subclass)
         self._uri = parsed
         self.dirLike = dirLike
         return self
@@ -357,25 +362,23 @@ class ButlerURI:
     def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
                       forceAbsolute: bool = False,
                       forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
-        """Fix up relative paths in URI instances.
+        """Correct any issues with the supplied URI.
 
         Parameters
         ----------
         parsed : `~urllib.parse.ParseResult`
             The result from parsing a URI using `urllib.parse`.
-        root : `str`, optional
-            Path to use as root when converting relative to absolute.
-            If `None`, it will be the current working directory. This
-            is a local file system path, not a URI.
-        forceAbsolute : `bool`, optional
-            If `True`, scheme-less relative URI will be converted to an
-            absolute path using a ``file`` scheme. If `False` scheme-less URI
-            will remain scheme-less and will not be updated to ``file`` or
-            absolute path. URIs with a defined scheme will not be affected
-            by this parameter.
+        root : `str`, ignored
+            Not used by the this implementation since all URIs are
+            absolute except for those representing the local file system.
+        forceAbsolute : `bool`, ignored.
+            Not used by this implementation. URIs are generally always
+            absolute.
         forceDirectory : `bool`, optional
             If `True` forces the URI to end with a separator, otherwise given
-            URI is interpreted as is.
+            URI is interpreted as is. Specifying that the URI is conceptually
+            equivalent to a directory can break some ambiguities when
+            interpreting the last element of a path.
 
         Returns
         -------
@@ -399,75 +402,6 @@ class ButlerURI:
         """
         # assume we are not dealing with a directory like URI
         dirLike = False
-        if not parsed.scheme or parsed.scheme == "file":
-
-            # Replacement values for the URI
-            replacements = {}
-
-            if root is None:
-                root = os.path.abspath(os.path.curdir)
-
-            if not parsed.scheme:
-                # if there was no scheme this is a local OS file path
-                # which can support tilde expansion.
-                expandedPath = os.path.expanduser(parsed.path)
-
-                # Ensure that this is a file URI if it is already absolute
-                if os.path.isabs(expandedPath):
-                    replacements["scheme"] = "file"
-                    replacements["path"] = os2posix(os.path.normpath(expandedPath))
-                elif forceAbsolute:
-                    # This can stay in OS path form, do not change to file
-                    # scheme.
-                    replacements["path"] = os.path.normpath(os.path.join(root, expandedPath))
-                else:
-                    # No change needed for relative local path staying relative
-                    # except normalization
-                    replacements["path"] = os.path.normpath(expandedPath)
-                    # normalization of empty path returns "." so we are dirLike
-                    if expandedPath == "":
-                        dirLike = True
-
-                # normpath strips trailing "/" which makes it hard to keep
-                # track of directory vs file when calling replaceFile
-                # find the appropriate separator
-                if "scheme" in replacements:
-                    sep = posixpath.sep
-                else:
-                    sep = os.sep
-
-                # add the trailing separator only if explicitly required or
-                # if it was stripped by normpath. Acknowledge that trailing
-                # separator exists.
-                endsOnSep = expandedPath.endswith(os.sep) and not replacements["path"].endswith(sep)
-                if (forceDirectory or endsOnSep or dirLike):
-                    dirLike = True
-                    replacements["path"] += sep
-
-            elif parsed.scheme == "file":
-                # file URI implies POSIX path separators so split as POSIX,
-                # then join as os, and convert to abspath. Do not handle
-                # home directories since "file" scheme is explicitly documented
-                # to not do tilde expansion.
-                sep = posixpath.sep
-                if posixpath.isabs(parsed.path):
-                    if forceDirectory:
-                        parsed = parsed._replace(path=parsed.path+sep)
-                        dirLike = True
-                    return copy.copy(parsed), dirLike
-
-                replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
-
-                # normpath strips trailing "/" so put it back if necessary
-                # Acknowledge that trailing separator exists.
-                if forceDirectory or (parsed.path.endswith(sep) and not replacements["path"].endswith(sep)):
-                    replacements["path"] += sep
-                    dirLike = True
-            else:
-                raise RuntimeError("Unexpectedly got confused by URI scheme")
-
-            # ParseResult is a NamedTuple so _replace is standard API
-            parsed = parsed._replace(**replacements)
 
         # URI is dir-like if explicitly stated or if it ends on a separator
         endsOnSep = parsed.path.endswith(posixpath.sep)
@@ -476,9 +410,6 @@ class ButlerURI:
             # only add the separator if it's not already there
             if not endsOnSep:
                 parsed = parsed._replace(path=parsed.path+posixpath.sep)
-
-        if dirLike is None:
-            raise RuntimeError("ButlerURI.dirLike attribute not set successfully.")
 
         return parsed, dirLike
 
@@ -490,6 +421,81 @@ class ButlerFileURI(ButlerURI):
     def ospath(self) -> str:
         """Path component of the URI localized to current OS."""
         return posix2os(self._uri.path)
+
+    @staticmethod
+    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
+                      forceAbsolute: bool = False,
+                      forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
+        """Fix up relative paths in URI instances.
+
+        Parameters
+        ----------
+        parsed : `~urllib.parse.ParseResult`
+            The result from parsing a URI using `urllib.parse`.
+        root : `str`, optional
+            Path to use as root when converting relative to absolute.
+            If `None`, it will be the current working directory. This
+            is a local file system path, not a URI.  It is only used if
+            a file-scheme is used incorrectly with a relative path.
+        forceAbsolute : `bool`, ignored
+            Has no effect for this subclass. ``file`` URIs are always
+            absolute.
+        forceDirectory : `bool`, optional
+            If `True` forces the URI to end with a separator, otherwise given
+            URI is interpreted as is.
+
+        Returns
+        -------
+        modified : `~urllib.parse.ParseResult`
+            Update result if a URI is being handled.
+        dirLike : `bool`
+            `True` if given parsed URI has a trailing separator or
+            forceDirectory is True. Otherwise `False`.
+
+        Notes
+        -----
+        Relative paths are explicitly not supported by RFC8089 but `urllib`
+        does accept URIs of the form ``file:relative/path.ext``. They need
+        to be turned into absolute paths before they can be used.  This is
+        always done regardless of the ``forceAbsolute`` parameter.
+        """
+        # assume we are not dealing with a directory like URI
+        dirLike = False
+
+        # file URI implies POSIX path separators so split as POSIX,
+        # then join as os, and convert to abspath. Do not handle
+        # home directories since "file" scheme is explicitly documented
+        # to not do tilde expansion.
+        sep = posixpath.sep
+
+        # For an absolute path all we need to do is check if we need
+        # to force the directory separator
+        if posixpath.isabs(parsed.path):
+            if forceDirectory and not parsed.path.endswith(sep):
+                parsed = parsed._replace(path=parsed.path+sep)
+                dirLike = True
+            return copy.copy(parsed), dirLike
+
+        # Relative path so must fix it to be compliant with the standard
+
+        # Replacement values for the URI
+        replacements = {}
+
+        if root is None:
+            root = os.path.abspath(os.path.curdir)
+
+        replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
+
+        # normpath strips trailing "/" so put it back if necessary
+        # Acknowledge that trailing separator exists.
+        if forceDirectory or (parsed.path.endswith(sep) and not replacements["path"].endswith(sep)):
+            replacements["path"] += sep
+            dirLike = True
+
+        # ParseResult is a NamedTuple so _replace is standard API
+        parsed = parsed._replace(**replacements)
+
+        return parsed, dirLike
 
 
 class ButlerS3URI(ButlerURI):
@@ -512,3 +518,92 @@ class ButlerSchemelessURI(ButlerURI):
     def ospath(self) -> str:
         """Path component of the URI localized to current OS."""
         return self.path
+
+    @staticmethod
+    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
+                      forceAbsolute: bool = False,
+                      forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
+        """Fix up relative paths for local file system.
+
+        Parameters
+        ----------
+        parsed : `~urllib.parse.ParseResult`
+            The result from parsing a URI using `urllib.parse`.
+        root : `str`, optional
+            Path to use as root when converting relative to absolute.
+            If `None`, it will be the current working directory. This
+            is a local file system path, not a URI.
+        forceAbsolute : `bool`, optional
+            If `True`, scheme-less relative URI will be converted to an
+            absolute path using a ``file`` scheme. If `False` scheme-less URI
+            will remain scheme-less and will not be updated to ``file`` or
+            absolute path.
+        forceDirectory : `bool`, optional
+            If `True` forces the URI to end with a separator, otherwise given
+            URI is interpreted as is.
+
+        Returns
+        -------
+        modified : `~urllib.parse.ParseResult`
+            Update result if a URI is being handled.
+        dirLike : `bool`
+            `True` if given parsed URI has a trailing separator or
+            forceDirectory is True. Otherwise `False`.
+
+        Notes
+        -----
+        Relative paths are explicitly not supported by RFC8089 but `urllib`
+        does accept URIs of the form ``file:relative/path.ext``. They need
+        to be turned into absolute paths before they can be used.  This is
+        always done regardless of the ``forceAbsolute`` parameter.
+
+        Scheme-less paths are normalized.
+        """
+        # assume we are not dealing with a directory URI
+        dirLike = False
+
+        # Replacement values for the URI
+        replacements = {}
+
+        if root is None:
+            root = os.path.abspath(os.path.curdir)
+
+        # this is a local OS file path which can support tilde expansion.
+        expandedPath = os.path.expanduser(parsed.path)
+
+        # Ensure that this becomes a file URI if it is already absolute
+        if os.path.isabs(expandedPath):
+            replacements["scheme"] = "file"
+            replacements["path"] = os2posix(os.path.normpath(expandedPath))
+        elif forceAbsolute:
+            # This can stay in OS path form, do not change to file
+            # scheme.
+            replacements["path"] = os.path.normpath(os.path.join(root, expandedPath))
+        else:
+            # No change needed for relative local path staying relative
+            # except normalization
+            replacements["path"] = os.path.normpath(expandedPath)
+            # normalization of empty path returns "." so we are dirLike
+            if expandedPath == "":
+                dirLike = True
+
+        # normpath strips trailing "/" which makes it hard to keep
+        # track of directory vs file when calling replaceFile
+        # find the appropriate separator
+        if "scheme" in replacements:
+            sep = posixpath.sep
+        else:
+            sep = os.sep
+
+        # add the trailing separator only if explicitly required or
+        # if it was stripped by normpath. Acknowledge that trailing
+        # separator exists.
+        endsOnSep = expandedPath.endswith(os.sep) and not replacements["path"].endswith(sep)
+        if (forceDirectory or endsOnSep or dirLike):
+            dirLike = True
+            replacements["path"] += sep
+
+        # ParseResult is a NamedTuple so _replace is standard API
+        parsed = parsed._replace(**replacements)
+
+        return parsed, dirLike
