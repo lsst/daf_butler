@@ -28,6 +28,7 @@ import os
 import textwrap
 import traceback
 from unittest.mock import MagicMock, patch
+import uuid
 import yaml
 
 from .cliLog import CliLog
@@ -398,6 +399,27 @@ def cli_handle_exception(func, *args, **kwargs):
         raise click.ClickException(msg.getvalue())
 
 
+class option_section:  # noqa: N801
+    """Decorator to add a section label between options in the help text of a
+    command.
+
+    Parameters
+    ----------
+    sectionText : `str`
+        The text to print in the section identifier.
+    """
+
+    def __init__(self, sectionText):
+        self.sectionText = "\n" + sectionText
+
+    def __call__(self, f):
+        # Generate a parameter declaration that will be unique for this
+        # section.
+        return click.option(f"--option-section-{str(uuid.uuid4())}",
+                            sectionText=self.sectionText,
+                            cls=OptionSection)(f)
+
+
 class MWOption(click.Option):
     """Overrides click.Option with desired behaviors."""
 
@@ -440,3 +462,36 @@ class MWArgument(click.Argument):
         if self.nargs != 1:
             metavar = f"{metavar[:-3]} ..."
         return metavar
+
+
+class OptionSection(MWOption):
+    """Implements an Option that prints a section label in the help text and
+    does not pass any value to the command function.
+
+    This class does a bit of hackery to add a section label to a click command
+    help output: first, `expose_value` is set to `False` so that no value is
+    passed to the command function. Second, this class overrides
+    `click.Option.get_help_record` to return the section label string without
+    any prefix so that it stands out as a section label.
+
+    The intention for this implementation is to do minimally invasive overrides
+    of the click classes so as to be robust and easy to fix if the click
+    internals change.
+
+    Parameters
+    ----------
+    sectionName : `str`
+        The parameter declaration for this option. It is not shown to the user,
+        it must be unique within the command. If using the `section` decorator
+        to add a section to a command's options, the section name is
+        auto-generated.
+    sectionText : `str`
+        The text to print in the section identifier.
+    """
+
+    def __init__(self, sectionName, sectionText):
+        super().__init__(sectionName, expose_value=False)
+        self.sectionText = sectionText
+
+    def get_help_record(self, ctx):
+        return (self.sectionText, "")

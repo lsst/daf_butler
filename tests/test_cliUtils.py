@@ -27,7 +27,7 @@ import unittest
 
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.utils import (clickResultMsg, LogCliRunner, Mocker, mockEnvVar, MWArgument, MWOption,
-                                       unwrap)
+                                       option_section, unwrap)
 from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 
 
@@ -173,6 +173,47 @@ class MWArgumentTest(unittest.TestCase):
                 expectedOutut = (f"Usage: cmd [OPTIONS] {'THINGS' if required else '[THINGS]'}"
                                  f"{' ...' if numberOfArgs != 1 else ''}")
                 self.assertIn(expectedOutut, result.output)
+
+
+class SectionOptionTest(unittest.TestCase):
+
+    @staticmethod
+    @click.command()
+    @click.option("--foo")
+    @option_section("Section break between metasyntactic variables.")
+    @click.option("--bar")
+    def cli(foo, bar):
+        pass
+
+    def setUp(self):
+        self.runner = click.testing.CliRunner()
+
+    def test_section_help(self):
+        """Verify that the section break is printed in the help output in the
+        expected location and with expected formatting."""
+        result = self.runner.invoke(self.cli, ["--help"])
+        # \x20 is a space, added explicity below to prevent the
+        # normally-helpful editor setting "remove trailing whitespace" from
+        # stripping it out in this case. (The blank line with 2 spaces is an
+        # artifact of how click and our code generate help text.)
+        expected = """Options:
+  --foo TEXT
+\x20\x20
+Section break between metasyntactic variables.
+  --bar TEXT"""
+        self.assertIn(expected, result.output)
+
+    def test_section_function(self):
+        """Verify that the section does not cause any arguments to be passed to
+        the command function.
+
+        The command function `cli` implementation inputs `foo` and `bar`, but
+        does accept an argument for the section. When the command is invoked
+        and the function called it should result in exit_code=0 (not 1 with a
+        missing argument error).
+        """
+        result = self.runner.invoke(self.cli, [])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
 
 if __name__ == "__main__":
