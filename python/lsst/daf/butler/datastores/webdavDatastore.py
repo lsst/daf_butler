@@ -27,8 +27,6 @@ __all__ = ("WebdavDatastore", )
 
 import logging
 import urllib3
-# TODO remove warning disable below
-urllib3.disable_warnings()
 import os
 import pathlib
 import tempfile
@@ -50,7 +48,14 @@ from lsst.daf.butler import (
 )
 
 from .fileLikeDatastore import FileLikeDatastore
-from lsst.daf.butler.core.webdavutils import getWebdavClient, getHttpSession, webdavCheckFileExists, folderExists
+from webdav3.exceptions import WebDavException
+
+from lsst.daf.butler.core.webdavutils import (
+    getWebdavClient,
+    getHttpSession,
+    webdavCheckFileExists,
+    folderExists,
+)
 
 if TYPE_CHECKING:
     from .fileLikeDatastore import DatastoreFileGetInformation
@@ -58,6 +63,8 @@ if TYPE_CHECKING:
     from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
+urllib3.disable_warnings()
+
 
 class WebdavDatastore(FileLikeDatastore):
     """Basic Webdav Storage backed Datastore.
@@ -95,8 +102,9 @@ class WebdavDatastore(FileLikeDatastore):
         if not folderExists(root.relativeToPathRoot):
             try:
                 self.client.mkdir(root.relativeToPathRoot)
-            except WebDavException as exception:
-                raise IOError(f"Folder {root.relativeToPathRoot} could not be created, check that you have access to it.")
+            except WebDavException:
+                raise IOError(f"Folder {root.relativeToPathRoot} could not be created, \
+                            check that you have sufficient permission.")
 
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
@@ -112,7 +120,8 @@ class WebdavDatastore(FileLikeDatastore):
         exists : `bool`
             True if the location can be found, false otherwise.
         """
-        exists, _ = webdavCheckFileExists(location.relativeToPathRoot, client=self.client)
+        exists, _ = webdavCheckFileExists(location.relativeToPathRoot,
+                                          client=self.client)
         return exists
 
     def _delete_artifact(self, location: Location) -> None:
@@ -140,7 +149,8 @@ class WebdavDatastore(FileLikeDatastore):
             if errorcode == 404:
                 errmsg = f"Dataset with Id {ref.id} does not exists at expected location {location.uri}."
                 raise FileNotFoundError(errmsg)
-            raise FileNotFoundError(f"There was an error getting file at {location.uri}, status code : {errorcode}")
+            raise FileNotFoundError(f"There was an error getting file at {location.uri}, \
+                                    status code : {errorcode}")
 
         storedFileInfo = getInfo.info
         if len(response.content) != storedFileInfo.file_size:
@@ -259,7 +269,6 @@ class WebdavDatastore(FileLikeDatastore):
                     os.remove(srcUri.ospath)
             elif srcUri.scheme == "https":
                 relpath = srcUri.relativeToPathRoot
-                copySrc = srcUri.geturl()
                 self.client.copy(remote_path_from=relpath,
                                  remote_path_to=tgtLocation.relativeToPathRoot)
                 if transfer == "move":

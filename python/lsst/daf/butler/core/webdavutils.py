@@ -26,7 +26,6 @@ __all__ = ("getHttpSession", "getWebdavClient", "webdavCheckFileExists", "folder
 import os
 import requests
 import urllib3
-urllib3.disable_warnings()
 
 from typing import (
     Optional,
@@ -39,10 +38,12 @@ try:
 except ImportError:
     wc = None
 
-
 from webdav3.exceptions import WebDavException
 
 from .location import ButlerURI, Location
+
+urllib3.disable_warnings()
+
 
 def getHttpSession() -> requests.Session:
     """Create a requests.Session pre-configured with environment variable data
@@ -55,35 +56,41 @@ def getHttpSession() -> requests.Session:
     Notes
     -----
     The WEBDAV_AUTH_METHOD must be set to obtain a session.
-    Depending on the chosen method, additional environment variables are required:
-    X509: must set WEBDAV_PROXY_CERT (path to proxy certificate used to authenticate requests)
-    TOKEN: must set WEBDAV_BEARER_TOKEN (bearer token used to authenticate requests, as a single string)
-    """    
+    Depending on the chosen method, additional
+    environment variables are required:
+
+    X509: must set WEBDAV_PROXY_CERT
+    (path to proxy certificate used to authenticate requests)
+
+    TOKEN: must set WEBDAV_BEARER_TOKEN
+    (bearer token used to authenticate requests, as a single string)
+    """
     s = requests.Session()
 
-    try: 
+    try:
         env_auth_method = os.environ['WEBDAV_AUTH_METHOD']
-    except KeyError:  
-        raise KeyError("Environment variable WEBDAV_AUTH_METHOD is not set, please use values X509 or TOKEN") 
+    except KeyError:
+        raise KeyError("Environment variable WEBDAV_AUTH_METHOD is not set, please use values X509 or TOKEN")
 
     if env_auth_method == "X509":
-        try: 
+        try:
             proxy_cert = os.environ['WEBDAV_PROXY_CERT']
-        except KeyError:  
-            raise KeyError("Environment variable WEBDAV_PROXY_CERT is not set") 
+        except KeyError:
+            raise KeyError("Environment variable WEBDAV_PROXY_CERT is not set")
         s.cert = (proxy_cert, proxy_cert)
     elif env_auth_method == "TOKEN":
-        try: 
+        try:
             bearer_token = os.environ['WEBDAV_BEARER_TOKEN']
-        except KeyError:  
-            raise KeyError("Environment variable WEBDAV_BEARER_TOKEN is not set") 
-        s.headers = {'Authorization':'Bearer ' + bearer_token}
+        except KeyError:
+            raise KeyError("Environment variable WEBDAV_BEARER_TOKEN is not set")
+        s.headers = {'Authorization': 'Bearer ' + bearer_token}
     else:
         raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
 
     s.verify = False
 
     return s
+
 
 def getWebdavClient() -> wc.Client:
     """Create a Webdav client with the specified endpoint
@@ -95,48 +102,53 @@ def getWebdavClient() -> wc.Client:
 
     Notes
     -----
-    The endpoint URL is from the environment variable WEBDAV_ENDPOINT_URL (which must be set).
+    The endpoint URL is from the environment variable WEBDAV_ENDPOINT_URL
+    (which must be set).
     The WEBDAV_AUTH_METHOD must also be set to obtain a client.
-    Depending on the chosen method, additional environment variables are required:
-    X509: must set WEBDAV_PROXY_CERT (path to proxy certificate used to authenticate requests)
-    TOKEN: must set WEBDAV_BEARER_TOKEN (bearer token used to authenticate requests, as a single string)
+
+    Depending on the chosen method, additional
+    environment variables are required:
+
+    X509: must set WEBDAV_PROXY_CERT
+    (path to proxy certificate used to authenticate requests)
+
+    TOKEN: must set WEBDAV_BEARER_TOKEN
+    (bearer token used to authenticate requests, as a single string)
     """
     if wc is None:
         raise ModuleNotFoundError("Could not find webdav.client. "
                                   "Are you sure it is installed?")
 
-    try: 
+    try:
         env_auth_method = os.environ['WEBDAV_AUTH_METHOD']
-    except KeyError:  
-        raise KeyError("Environment variable WEBDAV_AUTH_METHOD is not set, please use values X509 or TOKEN") 
+    except KeyError:
+        raise KeyError("Environment variable WEBDAV_AUTH_METHOD is not set, please use values X509 or TOKEN")
 
-    try: 
+    try:
         env_webdav_endpoint = os.environ['WEBDAV_ENDPOINT_URL']
-    except KeyError:  
-        raise KeyError("Environment variable WEBDAV_ENDPOINT_URL is not set") 
-    
-    if env_auth_method == "X509":
-        try: 
-            env_webdav_cert = os.environ['WEBDAV_PROXY_CERT']
-        except KeyError:  
-            raise KeyError("Environment variable WEBDAV_PROXY_CERT is not set") 
+    except KeyError:
+        raise KeyError("Environment variable WEBDAV_ENDPOINT_URL is not set")
 
+    if env_auth_method == "X509":
+        try:
+            env_webdav_cert = os.environ['WEBDAV_PROXY_CERT']
+        except KeyError:
+            raise KeyError("Environment variable WEBDAV_PROXY_CERT is not set")
         options = {
             'webdav_hostname': env_webdav_endpoint,
             'cert_path': env_webdav_cert,
             'key_path': env_webdav_cert,
-            'verbose'    : False
+            'verbose': False
         }
     elif env_auth_method == "TOKEN":
-        try: 
+        try:
             env_webdav_token = os.environ['WEBDAV_BEARER_TOKEN']
-        except KeyError:  
-            raise KeyError("Environment variable WEBDAV_BEARER_TOKEN is not set") 
-
+        except KeyError:
+            raise KeyError("Environment variable WEBDAV_BEARER_TOKEN is not set")
         options = {
             'webdav_hostname': env_webdav_endpoint,
             'webdav_token': env_webdav_token,
-            'verbose'    : False
+            'verbose': False
         }
     else:
         raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
@@ -144,17 +156,19 @@ def getWebdavClient() -> wc.Client:
     try:
         client = wc.Client(options)
     except WebDavException as exception:
-        raise ValueError(f"Failure to create webdav client, please check your WEBDAV_ENDPOINT_URL and other environment variables") from exception   
-        
+        raise ValueError(f"Failure to create webdav client, \
+                            please check your WEBDAV_ENDPOINT_URL \
+                            and other environment variables") from exception
+
     client.verify = False
 
     return client
 
 
 def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
-                      client: Optional[wc.Client] = None) -> Tuple[bool, int]:
-    """Returns (True, filesize) if file exists in the Webdav repository and (False, -1) if
-    the file is not found.
+                          client: Optional[wc.Client] = None) -> Tuple[bool, int]:
+    """Returns (True, filesize) if file exists in the Webdav repository
+    and (False, -1) if the file is not found.
 
     Parameters
     ----------
@@ -189,7 +203,7 @@ def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
         except WebDavException as exception:
             raise ValueError(f"Failed to retrieve size of file, please check your permissions") from exception
         return (True, size)
-    
+
     return (False, -1)
 
 

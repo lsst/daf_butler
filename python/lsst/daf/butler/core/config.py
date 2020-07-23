@@ -32,11 +32,9 @@ import pprint
 import os
 import yaml
 import sys
-import tempfile
 from yaml.representer import Representer
 import io
 from typing import Sequence, Optional, ClassVar
-import requests
 
 try:
     import boto3
@@ -152,7 +150,8 @@ class Loader(yaml.CSafeLoader):
             session = getHttpSession()
             response = session.get(fileuri.geturl())
             if response.status_code != 200:
-                raise FileNotFoundError(f"Error retrieving the file at {fileuri}: status code {response.status_code}")
+                raise FileNotFoundError(f"Error retrieving the file at {fileuri}: \
+                                        status code {response.status_code}")
             return yaml.load(response.content, Loader)
 
 
@@ -350,13 +349,8 @@ class Config(collections.abc.MutableMapping):
         if response.status_code != 200:
             raise FileNotFoundError(f"Error retrieving the file at {uri}: status code {response.status_code}")
 
-        # boto3 response is a `StreamingBody`, but not a valid Python IOStream.
-        # Loader will raise an error that the stream has no name. A hackish
-        # solution is to name it explicitly.
-        #response["Body"].name = url
         self.__initFromYaml(response.content)
         response.close()
-
 
     def __initFromYamlFile(self, path):
         """Opens a file at a given path and attempts to load it in from yaml.
@@ -975,7 +969,7 @@ class Config(collections.abc.MutableMapping):
 
         if uri.scheme != "https":
             raise ValueError(f"Must provide webdav/HTTPS URI not {uri}")
-        
+
         client = getWebdavClient()
         session = getHttpSession()
 
