@@ -237,20 +237,19 @@ class LocationTestCase(unittest.TestCase):
         head, tail = uri.split()
         self.assertEqual((head.geturl(), tail), (f"file://{posixRelFilePath}/", "file.ext"))
 
-        # check head can be empty
-        curDir = os.path.abspath(os.path.curdir) + os.sep
+        # check head can be empty and we do not get an absolute path back
         uri = ButlerURI("file.ext", forceAbsolute=False)
         head, tail = uri.split()
-        self.assertEqual((head.geturl(), tail), (curDir, "file.ext"))
+        self.assertEqual((head.geturl(), tail), ("./", "file.ext"))
 
-        # ensure empty path is not a problem and conforms to os.path.split
+        # ensure empty path splits to a directory URL
         uri = ButlerURI("", forceAbsolute=False)
         head, tail = uri.split()
-        self.assertEqual((head.geturl(), tail), (curDir, ""))
+        self.assertEqual((head.geturl(), tail), ("./", ""))
 
         uri = ButlerURI(".", forceAbsolute=False)
         head, tail = uri.split()
-        self.assertEqual((head.geturl(), tail), (curDir, "."))
+        self.assertEqual((head.geturl(), tail), ("./", "."))
 
 
 if __name__ == "__main__":

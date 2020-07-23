@@ -278,7 +278,12 @@ class ButlerURI(ABC):
         """
         head, tail = self._pathModule.split(self.path)
         headuri = self._uri._replace(path=head)
-        return self.__class__(headuri, forceDirectory=True), tail
+
+        # Schemeless is special in that it can be a relative path
+        # We need to ensure that it stays that way. All other URIs will
+        # be absolute already.
+        forceAbsolute = self._pathModule.isabs(self.path)
+        return self.__class__(headuri, forceDirectory=True, forceAbsolute=forceAbsolute), tail
 
     def basename(self) -> str:
         """Returns the base name, last element of path, of the URI. If URI ends
