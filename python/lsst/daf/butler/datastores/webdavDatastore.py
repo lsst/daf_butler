@@ -101,7 +101,7 @@ class WebdavDatastore(FileLikeDatastore):
             # ACL LocationConstraints, Permissions and other configuration
             # parameters, so for now we do not create a bucket if one is
             # missing. Further discussion can make this happen though.
-            raise IOError(f"Folder {root.relativeToPathRoot} does not exist!")
+            raise IOError(f"Folder {root.relativeToPathRoot} does not exist on root, or you don't have access to it.")
 
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified

@@ -37,8 +37,6 @@ from yaml.representer import Representer
 import io
 from typing import Sequence, Optional, ClassVar
 import requests
-from urllib.parse import urlunparse
-
 
 try:
     import boto3
