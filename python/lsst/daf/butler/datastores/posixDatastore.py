@@ -356,10 +356,16 @@ class PosixDatastore(FileLikeDatastore):
         if transfer is not None and directory is None:
             raise RuntimeError(f"Cannot export using transfer mode {transfer} with no "
                                "export directory given")
-        if transfer is not None and directory is not None:
+
+        # Force the directory to be a URI object
+        directoryUri: Optional[ButlerURI] = None
+        if directory is not None:
+            directoryUri = ButlerURI(directory, forceDirectory=True)
+
+        if transfer is not None and directoryUri is not None:
             # mypy needs the second test
-            if not os.path.exists(directory):
-                raise FileNotFoundError(f"Export directory {directory} does not exist")
+            if not directoryUri.exists():
+                raise FileNotFoundError(f"Export location {directory} does not exist")
 
         if transfer == "auto":
             transfer = "link"
@@ -372,38 +378,15 @@ class PosixDatastore(FileLikeDatastore):
             if len(fileLocations) > 1:
                 raise NotImplementedError(f"Can not export disassembled datasets such as {ref}")
             location, storedFileInfo = fileLocations[0]
-            exportPath = None
             if transfer is None:
                 # TODO: do we also need to return the readStorageClass somehow?
                 # We will use the path in store directly
                 pass
-            elif transfer in ("copy", "link", "symlink", "hardlink"):
-                # We are going to transfer the file using the same
-                # path as datastore uses but in the export directory
-                assert directory is not None  # mypy needs this
-                exportPath = os.path.join(directory, location.pathInStore)
-                exportDir = os.path.dirname(exportPath)
-                # Should not be a softlink but play it safe
-                storePath = os.path.realpath(location.path)
-                if not os.path.exists(exportDir):
-                    safeMakeDir(exportDir)
-                if transfer == "copy":
-                    shutil.copy(location.path, exportPath)
-                elif transfer == "symlink":
-                    os.symlink(storePath, exportPath)
-                elif transfer == "hardlink":
-                    os.link(storePath, exportPath)
-                elif transfer == "link":
-                    try:
-                        os.link(storePath, exportPath)
-                    except OSError:
-                        os.symlink(storePath, exportPath)
-                else:
-                    raise RuntimeError(f"Unexpected transfer mode encountered: {transfer}")
-
             else:
-                # TODO: add support for other transfer modes.  If we support
-                # moving, this method should become transactional.
-                raise NotImplementedError(f"Transfer mode '{transfer}' not yet supported.")
+                # mypy needs help
+                assert directoryUri is not None, "directoryUri must be defined to get here"
+                storeUri = ButlerURI(location.uri)
+                exportUri = directoryUri.join(location.pathInStore)
+                exportUri.transfer_from(storeUri, transfer=transfer)
 
             yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)
