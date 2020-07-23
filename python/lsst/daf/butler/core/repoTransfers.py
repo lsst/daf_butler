@@ -339,6 +339,7 @@ class YamlRepoExportBackend(RepoExportBackend):
             "name": datasetType.name,
             "dimensions": [d.name for d in datasetType.dimensions],
             "storage_class": datasetType.storageClass.name,
+            "is_calibration": datasetType.isCalibration(),
         })
         self.data.append({
             "type": "run",
@@ -420,7 +421,9 @@ class YamlRepoImportBackend(RepoImportBackend):
             elif data["type"] == "dataset_type":
                 self.datasetTypes.add(
                     DatasetType(data["name"], dimensions=data["dimensions"],
-                                storageClass=data["storage_class"], universe=self.registry.dimensions)
+                                storageClass=data["storage_class"],
+                                isCalibration=data.get("is_calibration", False),
+                                universe=self.registry.dimensions)
                 )
             elif data["type"] == "dataset":
                 # Save raw dataset data for a second loop, so we can ensure we
