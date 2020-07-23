@@ -141,6 +141,27 @@ class LocationTestCase(unittest.TestCase):
         uri4 = copy.deepcopy(uri3)
         self.assertEqual(uri4, uri3)
 
+    def testUriJoin(self):
+        uri = ButlerURI("a/b/c/d", forceDirectory=True, forceAbsolute=False)
+        uri2 = uri.join("e/f/g.txt")
+        self.assertEqual(str(uri2), "a/b/c/d/e/f/g.txt", f"Checking joined URI {uri} -> {uri2}")
+
+        uri = ButlerURI("a/b/c/d/old.txt", forceAbsolute=False)
+        uri2 = uri.join("e/f/g.txt")
+        self.assertEqual(str(uri2), "a/b/c/d/e/f/g.txt", f"Checking joined URI {uri} -> {uri2}")
+
+        uri = ButlerURI("a/b/c/d", forceDirectory=True, forceAbsolute=True)
+        uri2 = uri.join("e/f/g.txt")
+        self.assertTrue(str(uri2).endswith("a/b/c/d/e/f/g.txt"), f"Checking joined URI {uri} -> {uri2}")
+
+        uri = ButlerURI("s3://bucket/a/b/c/d", forceDirectory=True)
+        uri2 = uri.join("newpath/newfile.txt")
+        self.assertEqual(str(uri2), "s3://bucket/a/b/c/d/newpath/newfile.txt")
+
+        uri = ButlerURI("s3://bucket/a/b/c/d/old.txt")
+        uri2 = uri.join("newpath/newfile.txt")
+        self.assertEqual(str(uri2), "s3://bucket/a/b/c/d/newpath/newfile.txt")
+
     def testButlerUriSerialization(self):
         """Test that we can pickle and yaml"""
         uri = ButlerURI("a/b/c/d")

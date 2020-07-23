@@ -358,6 +358,33 @@ class ButlerURI:
         extensions = self._pathLib(self.path).suffixes
         return "".join(extensions)
 
+    def join(self, path: str) -> ButlerURI:
+        """Create a new `ButlerURI` with additional path components including
+        a file.
+
+        Parameters
+        ----------
+        path : `str`
+            Additional file components to append to the current URI. Assumed
+            to include a file at the end.
+
+        Returns
+        -------
+        new : `ButlerURI`
+            New URI with any file at the end replaced with the new path
+            components.
+
+        Notes
+        -----
+        File URIs assume the path component is local file system. All other
+        URIs assume POSIX separators.
+        """
+        new = self.dirname()
+        # Assume path is posix
+        newpath = posixpath.join(new.path, path)
+        new._uri = self._uri._replace(path=newpath)
+        return new
+
     def exists(self) -> bool:
         """Indicate that the resource is available.
 
@@ -783,6 +810,33 @@ class ButlerSchemelessURI(ButlerFileURI):
     def ospath(self) -> str:
         """Path component of the URI localized to current OS."""
         return self.path
+
+    def join(self, path: str) -> ButlerURI:
+        """Create a new `ButlerURI` with additional path components including
+        a file.
+
+        Parameters
+        ----------
+        path : `str`
+            Additional file components to append to the current URI. Assumed
+            to include a file at the end.
+
+        Returns
+        -------
+        new : `ButlerURI`
+            New URI with any file at the end replaced with the new path
+            components.
+
+        Notes
+        -----
+        File URIs assume the path component is local file system. All other
+        URIs assume POSIX separators.
+        """
+        new = self.dirname()
+        # Assume os path completely
+        newpath = os.path.join(new.path, path)
+        new._uri = self._uri._replace(path=newpath)
+        return new
 
     @staticmethod
     def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
