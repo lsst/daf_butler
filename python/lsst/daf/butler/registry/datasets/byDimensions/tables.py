@@ -168,6 +168,16 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                         "dimensions used to identify dataset of this type."
                     ),
                 ),
+                ddl.FieldSpec(
+                    name="tag_association_table",
+                    dtype=sqlalchemy.String,
+                    length=128,
+                    nullable=False,
+                    doc=(
+                        "Name of the table that holds associations between "
+                        "datasets of this type and most types of collections."
+                    ),
+                ),
             ],
             unique=[("name",)],
         ),
