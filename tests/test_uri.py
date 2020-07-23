@@ -64,7 +64,7 @@ class FileURITestCase(unittest.TestCase):
 
     def testTransfer(self):
         src = ButlerURI(os.path.join(self.tmpdir, "test.txt"))
-        content = "Content"
+        content = "Content is some content\nwith something to say\n\n"
         with open(src.ospath, "w") as fd:
             print(content, file=fd)
 
@@ -81,6 +81,14 @@ class FileURITestCase(unittest.TestCase):
                 self.assertTrue(os.path.islink(dest.ospath), f"Check that {dest} is symlink")
 
             os.remove(dest.ospath)
+
+        b = src.read()
+        self.assertEqual(b.decode(), new_content)
+
+        nbytes = 10
+        subset = src.read(size=nbytes)
+        self.assertEqual(len(subset), nbytes)
+        self.assertEqual(subset.decode(), content[:nbytes])
 
         with self.assertRaises(ValueError):
             src.transfer_from(src, transfer="unknown")
@@ -131,7 +139,7 @@ class S3URITestCase(unittest.TestCase):
 
     def testTransfer(self):
         src = ButlerURI(os.path.join(self.tmpdir, "test.txt"))
-        content = "Content"
+        content = "Content is some content\nwith something to say\n\n"
         with open(src.ospath, "w") as fd:
             print(content, file=fd)
 
@@ -152,6 +160,14 @@ class S3URITestCase(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             dest2.transfer_from(local, transfer="symlink")
+
+        b = dest.read()
+        self.assertEqual(b.decode(), new_content)
+
+        nbytes = 10
+        subset = dest.read(size=nbytes)
+        self.assertEqual(len(subset), nbytes)  # Extra byte comes back
+        self.assertEqual(subset.decode(), content[:nbytes])
 
 
 if __name__ == "__main__":

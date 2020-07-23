@@ -414,6 +414,17 @@ class ButlerURI:
         """
         raise NotImplementedError()
 
+    def read(self, size: int = -1) -> bytes:
+        """Open the resource and return the contents in bytes.
+
+        Parameters
+        ----------
+        size : `int`, optional
+            The number of bytes to read. Negative or omitted indicates
+            that all data should be read.
+        """
+        raise NotImplementedError()
+
     def __str__(self) -> str:
         return self.geturl()
 
@@ -543,6 +554,11 @@ class ButlerFileURI(ButlerURI):
             Always returns `False` (this is not a temporary file).
         """
         return self.ospath, False
+
+    def read(self, size: int = -1) -> bytes:
+        # Docstring inherits
+        with open(self.ospath, "rb") as fh:
+            return fh.read(size)
 
     def transfer_from(self, src: ButlerURI, transfer: str) -> None:
         """Transfer the current resource to a local file.
@@ -717,6 +733,15 @@ class ButlerS3URI(ButlerURI):
         exists, _ = s3CheckFileExists(self, client=self.client)
         return exists
 
+    def read(self, size: int = -1) -> bytes:
+        args = {}
+        if size > 0:
+            args["Range"] = f"bytes=0-{size-1}"
+        response = self.client.get_object(Bucket=self.netloc,
+                                          Key=self.relativeToPathRoot,
+                                          **args)
+        return response["Body"].read()
+
     def as_local(self) -> Tuple[str, bool]:
         """Download object from S3 and place in temporary directory.
 
@@ -794,12 +819,22 @@ class ButlerHttpURI(ButlerURI):
         temporary : `bool`
             Always returns `True`. This is always a temporary file.
         """
-        r = requests.get(self.geturl())
+        r = requests.get(self.geturl(), stream=True)
         if r.status_code != 200:
             raise FileNotFoundError(f"Unable to download resource {self}; status code: {r.status_code}")
         with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
-            tmpFile.write(r.content)
+            for chunk in r.iter_content():
+                tmpFile.write(chunk)
         return tmpFile.name, True
+
+    def read(self, size: int = -1) -> bytes:
+        # Docstring inherits
+        stream = True if size > 0 else False
+        r = requests.get(self.geturl(), stream=stream)
+        if not stream:
+            return r.content
+        else:
+            return next(r.iter_content(chunk_size=size))
 
 
 class ButlerGenericURI(ButlerURI):
