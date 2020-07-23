@@ -40,13 +40,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                  dataset_type_id: int,
                  collections: CollectionManager,
                  static: StaticDatasetTablesTuple,
-                 dynamic: sqlalchemy.sql.Table):
+                 tags: sqlalchemy.sql.Table):
         super().__init__(datasetType=datasetType)
         self._dataset_type_id = dataset_type_id
         self._db = db
         self._collections = collections
         self._static = static
-        self._dynamic = dynamic
+        self._tags = tags
         self._runKeyColumn = collections.getRunForeignKeyName()
 
     def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
@@ -63,18 +63,18 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                                          returnIds=True)
             assert datasetIds is not None
             # Combine the generated dataset_id values and data ID fields to
-            # form rows to be inserted into the dynamic table.
-            protoDynamicRow = {
+            # form rows to be inserted into the tags table.
+            protoTagsRow = {
                 "dataset_type_id": self._dataset_type_id,
                 self._collections.getCollectionForeignKeyName(): run.key,
             }
-            dynamicRows = [
-                dict(protoDynamicRow, dataset_id=dataset_id, **dataId.byName())
+            tagsRows = [
+                dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
                 for dataId, dataset_id in zip(dataIds, datasetIds)
             ]
-            # Insert those rows into the dynamic table.  This is where we'll
+            # Insert those rows into the tags table.  This is where we'll
             # get any unique constraint violations.
-            self._db.insert(self._dynamic, *dynamicRows)
+            self._db.insert(self._tags, *tagsRows)
         for dataId, datasetId in zip(dataIds, datasetIds):
             yield DatasetRef(
                 datasetType=self.datasetType,
@@ -123,7 +123,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
             rows.append(row)
-        self._db.replace(self._dynamic, *rows)
+        self._db.replace(self._tags, *rows)
 
     def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorage.
@@ -137,7 +137,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             }
             for dataset in datasets
         ]
-        self._db.delete(self._dynamic, ["dataset_id", self._collections.getCollectionForeignKeyName()],
+        self._db.delete(self._tags, ["dataset_id", self._collections.getCollectionForeignKeyName()],
                         *rows)
 
     def select(self, collection: CollectionRecord,
@@ -159,11 +159,11 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             **{self._runKeyColumn: run}
         )
         # If and only if the collection is a RUN, we constrain it in the static
-        # table (and also the dynamic table below)
+        # table (and also the tags table below)
         if collection.type is CollectionType.RUN:
             query.where.append(self._static.dataset.columns[self._runKeyColumn]
                                == collection.key)
-        # We get or constrain the data ID from the dynamic table, but that's
+        # We get or constrain the data ID from the tags table, but that's
         # multiple columns, not one, so we need to transform the one Select.Or
         # argument into a dictionary of them.
         kwargs: Dict[str, Any]
@@ -171,13 +171,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             kwargs = {dim.name: SimpleQuery.Select for dim in self.datasetType.dimensions.required}
         else:
             kwargs = dict(dataId.byName())
-        # We always constrain (never retrieve) the collection from the dynamic
+        # We always constrain (never retrieve) the collection from the tags
         # table.
         kwargs[self._collections.getCollectionForeignKeyName()] = collection.key
-        # And now we finally join in the dynamic table.
+        # And now we finally join in the tags table.
         query.join(
-            self._dynamic,
-            onclause=(self._static.dataset.columns.id == self._dynamic.columns.dataset_id),
+            self._tags,
+            onclause=(self._static.dataset.columns.id == self._tags.columns.dataset_id),
             **kwargs
         )
         return query
@@ -187,10 +187,10 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # This query could return multiple rows (one for each tagged collection
         # the dataset is in, plus one for its run collection), and we don't
         # care which of those we get.
-        sql = self._dynamic.select().where(
+        sql = self._tags.select().where(
             sqlalchemy.sql.and_(
-                self._dynamic.columns.dataset_id == id,
-                self._dynamic.columns.dataset_type_id == self._dataset_type_id
+                self._tags.columns.dataset_id == id,
+                self._tags.columns.dataset_type_id == self._dataset_type_id
             )
         ).limit(1)
         row = self._db.query(sql).fetchone()
