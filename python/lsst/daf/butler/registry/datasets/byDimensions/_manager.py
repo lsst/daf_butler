@@ -28,7 +28,7 @@ from lsst.daf.butler.registry.interfaces import (
     VersionTuple
 )
 
-from .tables import makeStaticTableSpecs, addDatasetForeignKey, makeDynamicTableName, makeDynamicTableSpec
+from .tables import makeStaticTableSpecs, addDatasetForeignKey, makeTagTableName, makeTagTableSpec
 from ._storage import ByDimensionsDatasetRecordStorage
 
 if TYPE_CHECKING:
@@ -104,10 +104,10 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             name = row[c.name]
             dimensions = DimensionGraph.decode(row[c.dimensions_encoded], universe=universe)
             datasetType = DatasetType(name, dimensions, row[c.storage_class])
-            dynamic = self._db.getExistingTable(row[c.tag_association_table],
-                                                makeDynamicTableSpec(datasetType, type(self._collections)))
+            tags = self._db.getExistingTable(row[c.tag_association_table],
+                                             makeTagTableSpec(datasetType, type(self._collections)))
             storage = ByDimensionsDatasetRecordStorage(db=self._db, datasetType=datasetType,
-                                                       static=self._static, dynamic=dynamic,
+                                                       static=self._static, tags=tags,
                                                        dataset_type_id=row["id"],
                                                        collections=self._collections)
             byName[datasetType.name] = storage
@@ -150,7 +150,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
                              f" Rejecting {datasetType.name}")
         storage = self._byName.get(datasetType.name)
         if storage is None:
-            dynamicTableName = makeDynamicTableName(datasetType)
+            tagTableName = makeTagTableName(datasetType)
             row, inserted = self._db.sync(
                 self._static.dataset_type,
                 keys={"name": datasetType.name},
@@ -159,17 +159,17 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
                     "storage_class": datasetType.storageClass.name,
                 },
                 extra={
-                    "tag_association_table": dynamicTableName,
+                    "tag_association_table": tagTableName,
                 },
                 returning=["id", "tag_association_table"],
             )
             assert row is not None
-            dynamic = self._db.ensureTableExists(
-                dynamicTableName,
-                makeDynamicTableSpec(datasetType, type(self._collections)),
+            tags = self._db.ensureTableExists(
+                tagTableName,
+                makeTagTableSpec(datasetType, type(self._collections)),
             )
             storage = ByDimensionsDatasetRecordStorage(db=self._db, datasetType=datasetType,
-                                                       static=self._static, dynamic=dynamic,
+                                                       static=self._static, tags=tags,
                                                        dataset_type_id=row["id"],
                                                        collections=self._collections)
             self._byName[datasetType.name] = storage
