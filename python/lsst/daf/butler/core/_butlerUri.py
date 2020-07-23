@@ -148,8 +148,11 @@ class ButlerURI:
     _pathModule = posixpath
     """Path module to use for this scheme."""
 
-    transferModes: Tuple[str, ...] = ("copy",)
+    transferModes: Tuple[str, ...] = ("copy", "auto")
     """Transfer modes supported by this implementation."""
+
+    transferDefault: str = "copy"
+    """Default mode to use for transferring if ``auto`` is specified."""
 
     # mypy is confused without this
     _uri: urllib.parse.ParseResult
@@ -518,7 +521,8 @@ class ButlerURI:
 class ButlerFileURI(ButlerURI):
     """URI for explicit ``file`` scheme."""
 
-    transferModes = ("copy", "link", "symlink", "hardlink", "relsymlink")
+    transferModes = ("copy", "link", "symlink", "hardlink", "relsymlink", "auto")
+    transferDefault: str = "link"
 
     @property
     def ospath(self) -> str:
@@ -567,9 +571,15 @@ class ButlerFileURI(ButlerURI):
         # as_local handles that.
         local_src, is_temporary = src.as_local()
 
+        # Default transfer mode depends on whether we have a temporary
+        # file or not.
+        if transfer == "auto":
+            transfer = self.transferDefault if not is_temporary else "copy"
+
         # Follow soft links
         local_src = os.path.realpath(local_src)
 
+        # All the modes involving linking use "link" somewhere
         if "link" in transfer and is_temporary:
             raise RuntimeError("Can not use local file system transfer mode"
                                f" {transfer} for remote resource ({src})")
@@ -740,6 +750,9 @@ class ButlerS3URI(ButlerURI):
         # Fail early to prevent delays if remote resources are requested
         if transfer not in self.transferModes:
             raise ValueError(f"Transfer mode '{transfer}' not supported by URI scheme {self.scheme}")
+
+        if transfer == "auto":
+            transfer = self.transferDefault
 
         if isinstance(src, type(self)):
             # Looks like an S3 remote uri so we can use direct copy
