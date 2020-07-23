@@ -25,18 +25,31 @@ __all__ = ("ButlerURI",)
 
 import os
 import os.path
+import shutil
 import urllib
 import posixpath
 from pathlib import Path, PurePath, PurePosixPath
+import requests
+import tempfile
+from abc import ABC, abstractmethod
 import copy
 
 from typing import (
+    TYPE_CHECKING,
     Any,
     Optional,
     Tuple,
     Type,
     Union,
 )
+
+from .utils import safeMakeDir
+
+if TYPE_CHECKING:
+    try:
+        import boto3
+    except ImportError:
+        pass
 
 # Determine if the path separator for the OS looks like POSIX
 IS_POSIX = os.sep == posixpath.sep
@@ -103,7 +116,7 @@ def posix2os(posix: Union[PurePath, str]) -> str:
     return os.path.join(*paths)
 
 
-class ButlerURI:
+class ButlerURI(ABC):
     """Convenience wrapper around URI parsers.
 
     Provides access to URI components and can convert file
@@ -135,6 +148,9 @@ class ButlerURI:
 
     _pathModule = posixpath
     """Path module to use for this scheme."""
+
+    transferModes = ("copy",)
+    """Transfer modes supported by this implementation."""
 
     # mypy is confused without this
     _uri: urllib.parse.ParseResult
@@ -168,6 +184,8 @@ class ButlerURI:
                 subclass = ButlerFileURI
             elif parsed.scheme == "s3":
                 subclass = ButlerS3URI
+            elif parsed.scheme.startswith("http"):
+                subclass = ButlerHttpURI
             else:
                 subclass = ButlerGenericURI
 
@@ -336,6 +354,32 @@ class ButlerURI:
         extensions = self._pathLib(self.path).suffixes
         return "".join(extensions)
 
+    @abstractmethod
+    def exists(self) -> bool:
+        """Indicate that the resource is available.
+
+        Returns
+        -------
+        exists : `bool`
+            `True` if the resource exists.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def as_local(self) -> str:
+        """Return the location of the (possibly remote) resource in the
+        local file system.
+
+        Returns
+        -------
+        path : `str`
+            If this is a remote resource, it will be a copy of the resource
+            on the local file system, probably in a temporary directory.
+            For a local resource this should be the actual path to the
+            resource.
+        """
+        raise NotImplementedError()
+
     def __str__(self) -> str:
         return self.geturl()
 
@@ -413,14 +457,132 @@ class ButlerURI:
 
         return parsed, dirLike
 
+    def transfer_from(self, src: ButlerURI, transfer: str) -> None:
+        """Transfer the current resource to a new location.
+
+        Parameters
+        ----------
+        src : `ButlerURI`
+            Source URI.
+        transfer : `str`
+            Mode to use for transferring the resource. Generically there are
+            many standard options: copy, link, symlink, hardlink, relsymlink.
+            Not all URIs support all modes.
+
+        Notes
+        -----
+        Conceptually this is hard to scale as the number of URI schemes
+        grow.  The destination URI is more important than the source URI
+        since that is where all the transfer modes are relevant (with the
+        complication that "move" deletes the source).
+
+        Local file to local file is the fundamental use case but every
+        other scheme has to support "copy" to local file (with implicit
+        support for "move") and copy from local file.
+        All the "link" options tend to be specific to local file systems.
+        """
+        raise NotImplementedError(f"No transfer modes supported by URI scheme {self.scheme}")
+
 
 class ButlerFileURI(ButlerURI):
     """URI for explicit ``file`` scheme."""
+
+    transferModes = ("copy", "link", "symlink", "hardlink", "relsymlink")
 
     @property
     def ospath(self) -> str:
         """Path component of the URI localized to current OS."""
         return posix2os(self._uri.path)
+
+    def exists(self) -> bool:
+        return os.path.exists(self.ospath)
+
+    def as_local(self) -> str:
+        """Return the local path of the file.
+
+        Returns
+        -------
+        path : `str`
+            The local path to this file.
+        temporary : `bool`
+            Always returns `False` (this is not a temporary file).
+        """
+        return self.ospath, False
+
+    def transfer_from(self, src: ButlerURI, transfer: str) -> None:
+        """Transfer the current resource to a local file.
+
+        Parameters
+        ----------
+        src : `ButlerURI`
+            Source URI.
+        transfer : `str`
+            Mode to use for transferring the resource. Supports the following
+            options: copy, link, symlink, hardlink, relsymlink.
+
+        Notes
+        -----
+        "move" is currently disabled. For the general case it is the riskiest
+        option to implement.
+        """
+        if transfer == "move":
+            raise ValueError("move transfers not currently supported")
+
+        # Fail early to prevent delays if remote resources are requested
+        if transfer not in self.transferModes:
+            raise ValueError(f"Transfer mode '{transfer}' not supported by URI scheme {self.scheme}")
+
+        # We do not have to special case ButlerFileURI here because
+        # as_local handles that.
+        local_src, is_temporary = src.as_local()
+
+        # Follow soft links
+        local_src = os.path.realpath(local_src)
+
+        if "link" in transfer and is_temporary:
+            raise RuntimeError("Can not use local file system transfer mode"
+                               f" {transfer} for remote resource ({src})")
+
+        # For temporary files we can own them
+        if is_temporary and transfer == "copy":
+            transfer = "move"
+
+        newFullPath = os.path.realpath(self.ospath)
+        if os.path.exists(newFullPath):
+            raise FileExistsError(f"Destination path '{newFullPath}' already exists.")
+        outputDir = os.path.dirname(newFullPath)
+        if not os.path.isdir(outputDir):
+            # Must create the directory
+            safeMakeDir(outputDir)
+
+        if transfer == "move":
+            shutil.move(local_src, newFullPath)
+        elif transfer == "copy":
+            shutil.copy(local_src, newFullPath)
+        elif transfer == "link":
+            # Try hard link and if that fails use a symlink
+            try:
+                os.link(local_src, newFullPath)
+            except OSError:
+                # Read through existing symlinks
+                os.symlink(local_src, newFullPath)
+        elif transfer == "hardlink":
+            os.link(local_src, newFullPath)
+        elif transfer == "symlink":
+            # Read through existing symlinks
+            os.symlink(local_src, newFullPath)
+        elif transfer == "relsymlink":
+            # This is a standard symlink but using a relative path
+            # Need the directory name to give to relative root
+            # A full file path confuses it into an extra ../
+            newFullPathRoot, _ = os.path.split(newFullPath)
+            relPath = os.path.relpath(local_src, newFullPathRoot)
+            os.symlink(relPath, newFullPath)
+        else:
+            raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
+
+        if is_temporary and os.path.exists(local_src):
+            os.remove(local_src)
 
     @staticmethod
     def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
@@ -500,15 +662,114 @@ class ButlerFileURI(ButlerURI):
 
 class ButlerS3URI(ButlerURI):
     """S3 URI"""
-    pass
+
+    @property
+    def client(self) -> boto3.client:
+        """Client object to address remote resource."""
+        # Defer import for circular dependencies
+        from .s3utils import getS3Client
+        return getS3Client()
+
+    def exists(self) -> bool:
+        # s3utils itself imports ButlerURI so defer this import
+        from .s3utils import s3CheckFileExists
+        exists, _ = s3CheckFileExists(self, client=self.client)
+        return exists
+
+    def as_local(self) -> str:
+        """Download object from S3 and place in temporary directory.
+
+        Returns
+        -------
+        path : `str`
+            Path to local temporary file.
+        temporary : `bool`
+            Always returns `True`. This is always a temporary file.
+        """
+        with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
+            self.client.download_fileobj(self.netloc, self.relativeToPathRoot, tmpFile)
+        return tmpFile.name, True
+
+    def transfer_from(self, src: ButlerURI, transfer: str = "copy") -> None:
+        """Transfer the current resource to an S3 bucket.
+
+        Parameters
+        ----------
+        src : `ButlerURI`
+            Source URI.
+        transfer : `str`
+            Mode to use for transferring the resource. Supports the following
+            options: copy.
+
+        Notes
+        -----
+        "move" is currently disabled. For the general case it is the riskiest
+        option to implement.
+        """
+        # Fail early to prevent delays if remote resources are requested
+        if transfer not in self.transferModes:
+            raise ValueError(f"Transfer mode '{transfer}' not supported by URI scheme {self.scheme}")
+
+        if isinstance(src, type(self)):
+            # Looks like an S3 remote uri so we can use direct copy
+            # note that boto3.resource.meta.copy is cleverer than the low
+            # level copy_object
+            copy_source = {
+                "Bucket": src.netloc,
+                "Key": src.relativeToPathRoot,
+            }
+            self.client.copy_object(CopySource=copy_source, Bucket=self.netloc, Key=self.relativeToPathRoot)
+        else:
+            # Use local file and upload it
+            local_src, is_temporary = src.as_local()
+
+            # resource.meta.upload_file seems like the right thing
+            # but we have a low level client
+            with open(local_src, "rb") as fh:
+                self.client.put_object(Bucket=self.netloc,
+                                       Key=self.relativeToPathRoot, Body=fh)
+            if is_temporary:
+                os.remove(local_src)
+
+
+class ButlerHttpURI(ButlerURI):
+    """General HTTP(S) resource."""
+
+    def exists(self) -> bool:
+        """Check that a remote HTTP resource exists."""
+        header = requests.head(self.geturl())
+        return True if header.status_code == 200 else False
+
+    def as_local(self) -> str:
+        """Download object over HTTP and place in temporary directory.
+
+        Returns
+        -------
+        path : `str`
+            Path to local temporary file.
+        temporary : `bool`
+            Always returns `True`. This is always a temporary file.
+        """
+        r = requests.get(self.geturl())
+        if r.status_code != 200:
+            raise FileNotFoundError(f"Unable to download resource {self}; status code: {r.status_code}")
+        with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
+            tmpFile.write(r.content)
+        return tmpFile.name, True
 
 
 class ButlerGenericURI(ButlerURI):
     """Generic URI with a defined scheme"""
-    pass
+
+    def exists(self) -> bool:
+        """Test for existence and always return False."""
+        return False
+
+    def as_local(self) -> str:
+        raise RuntimeError(f"Do not know how to retrieve data for URI '{self}'")
 
 
-class ButlerSchemelessURI(ButlerURI):
+class ButlerSchemelessURI(ButlerFileURI):
     """Scheme-less URI referring to the local file system"""
 
     _pathLib = PurePath
