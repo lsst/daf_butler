@@ -21,8 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("getWebdavClient", "webdavCheckFileExists", "folderExists", "setAwsEnvCredentials",
-           "unsetAwsEnvCredentials")
+__all__ = ("getHttpSession", "getWebdavClient", "webdavCheckFileExists", "folderExists")
 
 import os
 import requests
@@ -46,7 +45,20 @@ from webdav3.exceptions import WebDavException
 from .location import ButlerURI, Location
 
 def getHttpSession() -> requests.Session:
-    
+    """Create a requests.Session pre-configured with environment variable data
+
+    Returns
+    -------
+    s : `requests.Session`
+        An http session used to execute requests.
+
+    Notes
+    -----
+    The WEBDAV_AUTH_METHOD must be set to obtain a session.
+    Depending on the chosen method, additional environment variables are required:
+    X509: must set WEBDAV_PROXY_CERT (path to proxy certificate used to authenticate requests)
+    TOKEN: must set WEBDAV_BEARER_TOKEN (bearer token used to authenticate requests, as a single string)
+    """    
     s = requests.Session()
 
     try: 
@@ -74,17 +86,20 @@ def getHttpSession() -> requests.Session:
     return s
 
 def getWebdavClient() -> wc.Client:
-    """Create a S3 client with AWS (default) or the specified endpoint
+    """Create a Webdav client with the specified endpoint
 
     Returns
     -------
-    s3client : `botocore.client.S3`
-        A client of the S3 service.
+    client : `webdav3.client`
+        A client of the Webdav service.
 
     Notes
     -----
-    The endpoint URL is from the environment variable S3_ENDPOINT_URL.
-    If none is specified, the default AWS one is used.
+    The endpoint URL is from the environment variable WEBDAV_ENDPOINT_URL (which must be set).
+    The WEBDAV_AUTH_METHOD must also be set to obtain a client.
+    Depending on the chosen method, additional environment variables are required:
+    X509: must set WEBDAV_PROXY_CERT (path to proxy certificate used to authenticate requests)
+    TOKEN: must set WEBDAV_BEARER_TOKEN (bearer token used to authenticate requests, as a single string)
     """
     if wc is None:
         raise ModuleNotFoundError("Could not find webdav.client. "
@@ -138,33 +153,26 @@ def getWebdavClient() -> wc.Client:
 
 def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
                       client: Optional[wc.Client] = None) -> Tuple[bool, int]:
-    """Returns (True, filesize) if file exists in the bucket and (False, -1) if
+    """Returns (True, filesize) if file exists in the Webdav repository and (False, -1) if
     the file is not found.
 
     Parameters
     ----------
     path : `Location`, `ButlerURI` or `str`
-        Location or ButlerURI containing the bucket name and filepath.
-    bucket : `str`, optional
-        Name of the bucket in which to look. If provided, path will be assumed
-        to correspond to be relative to the given bucket.
-    client : `boto3.client`, optional
-        S3 Client object to query, if not supplied boto3 will try to resolve
-        the credentials as in order described in its manual_.
+        Location or ButlerURI containing the endpoint URL and filepath.
+    client : `webdav3.client`, optional
+        Webdav Client object to query.
 
     Returns
     -------
     exists : `bool`
-        True if key exists, False otherwise.
+        True if file exists, False otherwise.
     size : `int`
-        Size of the key, if key exists, in bytes, otherwise -1
+        Size of the file, if file exists, in bytes, otherwise -1
 
     Notes
     -----
-    S3 Paths are sensitive to leading and trailing path separators.
-
-    .. _manual: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/\
-    configuration.html#configuring-credentials
+    Webdav Paths are sensitive to leading and trailing path separators.
     """
     if wc is None:
         raise ModuleNotFoundError("Could not find webdav3.client. "
@@ -179,31 +187,26 @@ def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
         try:
             size = client.info(filepath)["size"]
         except WebDavException as exception:
-            raise ValueError(f"Failed to retrieve size of file, check your permissions") from exception
+            raise ValueError(f"Failed to retrieve size of file, please check your permissions") from exception
         return (True, size)
     
     return (False, -1)
 
 
 def folderExists(folderName: str, client: Optional[wc.Client] = None) -> bool:
-    """Check if the S3 bucket with the given name actually exists.
+    """Check if the Webdav repository with the given name actually exists.
 
     Parameters
     ----------
-    bucketName : `str`
-        Name of the S3 Bucket
-    client : `boto3.client`, optional
-        S3 Client object to query, if not supplied boto3 will try to resolve
-        the credentials as in order described in its manual_.
+    folderName : `str`
+        Name of the Webdav folder
+    client : `webdav3.client`, optional
+        Webdav Client object to query.
 
     Returns
     -------
     exists : `bool`
-        True if it exists, False if no Bucket with specified parameters is
-        found.
-
-    .. _manual: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/\
-    configuration.html#configuring-credentials
+        True if it exists, False if no folder is found.
     """
     if wc is None:
         raise ModuleNotFoundError("Could not find webdav3.client. "
@@ -212,45 +215,5 @@ def folderExists(folderName: str, client: Optional[wc.Client] = None) -> bool:
     if client is None:
         client = getWebdavClient()
 
-    return client.check(folderName)
-
-
-def setAwsEnvCredentials(accessKeyId: str = 'dummyAccessKeyId',
-                         secretAccessKey: str = "dummySecretAccessKey") -> bool:
-    """Set AWS credentials environmental variables AWS_ACCESS_KEY_ID and
-    AWS_SECRET_ACCESS_KEY.
-
-    Parameters
-    ----------
-    accessKeyId : `str`
-        Value given to AWS_ACCESS_KEY_ID environmental variable. Defaults to
-        'dummyAccessKeyId'
-    secretAccessKey : `str`
-        Value given to AWS_SECRET_ACCESS_KEY environmental variable. Defaults
-        to 'dummySecretAccessKey'
-
-    Returns
-    -------
-    setEnvCredentials : `bool`
-        True when environmental variables were set, False otherwise.
-
-    Notes
-    -----
-    If either AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY are not set, both
-    values are overwritten.
-    """
-    if "AWS_ACCESS_KEY_ID" not in os.environ or "AWS_SECRET_ACCESS_KEY" not in os.environ:
-        os.environ["AWS_ACCESS_KEY_ID"] = accessKeyId
-        os.environ["AWS_SECRET_ACCESS_KEY"] = secretAccessKey
-        return True
-    return False
-
-
-def unsetAwsEnvCredentials() -> None:
-    """Unsets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environmental
-    variables.
-    """
-    if "AWS_ACCESS_KEY_ID" in os.environ:
-        del os.environ["AWS_ACCESS_KEY_ID"]
-    if "AWS_SECRET_ACCESS_KEY" in os.environ:
-        del os.environ["AWS_SECRET_ACCESS_KEY"]
+    exists = client.check(folderName)
+    return exists

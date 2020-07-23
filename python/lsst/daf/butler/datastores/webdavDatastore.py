@@ -58,8 +58,6 @@ if TYPE_CHECKING:
     from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
-#log.setLevel(logging.DEBUG)
-
 
 class WebdavDatastore(FileLikeDatastore):
     """Basic Webdav Storage backed Datastore.
@@ -81,7 +79,6 @@ class WebdavDatastore(FileLikeDatastore):
 
     Notes
     -----
-    TODO
     """
 
     defaultConfigFile = "datastores/webdavDatastore.yaml"
@@ -96,12 +93,10 @@ class WebdavDatastore(FileLikeDatastore):
         self.client = getWebdavClient()
         self.session = getHttpSession()
         if not folderExists(root.relativeToPathRoot):
-            # PosixDatastore creates the root directory if one does not exist.
-            # Calling s3 client.create_bucket is possible but also requires
-            # ACL LocationConstraints, Permissions and other configuration
-            # parameters, so for now we do not create a bucket if one is
-            # missing. Further discussion can make this happen though.
-            raise IOError(f"Folder {root.relativeToPathRoot} does not exist on root, or you don't have access to it.")
+            try:
+                self.client.mkdir(root.relativeToPathRoot)
+            except WebDavException as exception:
+                raise IOError(f"Folder {root.relativeToPathRoot} could not be created, check that you have access to it.")
 
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
@@ -134,29 +129,17 @@ class WebdavDatastore(FileLikeDatastore):
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
         location = getInfo.location
 
-        # since we have to make a GET request to S3 anyhow (for download) we
-        # might as well use the HEADER metadata for size comparison instead.
-        # webdavCheckFileExists would just duplicate GET/LIST charges in this case.
         response = self.session.get(location.uri)
         if response.status_code != 200:
             errorcode = response.status_code
-            # head_object returns 404 when object does not exist only when user
-            # has s3:ListBucket permission. If list permission does not exist a
-            # 403 is returned. In practical terms this usually means that the
-            # file does not exist, but it could also mean user lacks GetObject
-            # permission. It's hard to tell which case is it.
-            # docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
-            # Unit tests right now demand FileExistsError is raised, but this
-            # should be updated to PermissionError like in webdavCheckFileExists.
             if errorcode == 403:
                 raise FileNotFoundError(f"Dataset with Id {ref.id} not accessible at "
-                                        f"expected location {location.uri}. Forbidden HEAD "
+                                        f"expected location {location.uri}. Forbidden "
                                         "operation error occured. Verify permissions are granted for "
-                                        "your IAM user and that file exists. ")
+                                        "your user and that file exists. ")
             if errorcode == 404:
                 errmsg = f"Dataset with Id {ref.id} does not exists at expected location {location.uri}."
                 raise FileNotFoundError(errmsg)
-            # other errors are reraised also, but less descriptively
             raise FileNotFoundError(f"There was an error getting file at {location.uri}, status code : {errorcode}")
 
         storedFileInfo = getInfo.info
@@ -165,12 +148,8 @@ class WebdavDatastore(FileLikeDatastore):
                                " match recorded size of {}".format(location.path, len(response.content),
                                                                    storedFileInfo.file_size))
 
-        # download the data as bytes
         serializedDataset = response.content
 
-        # format the downloaded bytes into appropriate object directly, or via
-        # tempfile (when formatter does not support to/from/Bytes). This is S3
-        # equivalent of PosixDatastore formatter.read try-except block.
         formatter = getInfo.formatter
         try:
             result = formatter.fromBytes(serializedDataset,
@@ -197,16 +176,10 @@ class WebdavDatastore(FileLikeDatastore):
     def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
 
-        # in PosixDatastore a directory can be created by `safeMakeDir`. In S3
-        # `Keys` instead only look like directories, but are not. We check if
-        # an *exact* full key already exists before writing instead. The insert
-        # key operation is equivalent to creating the dir and the file.
         if webdavCheckFileExists(location, client=self.client,)[0]:
             raise FileExistsError(f"Cannot write file for ref {ref} as "
                                   f"output file {location.uri} exists.")
 
-        # upload the file directly from bytes or by using a temporary file if
-        # _toBytes is not implemented
         try:
             serializedDataset = formatter.toBytes(inMemoryDataset)
             self.session.put(location.uri, data=serializedDataset)
@@ -224,6 +197,7 @@ class WebdavDatastore(FileLikeDatastore):
 
         # Register a callback to try to delete the uploaded data if
         # the ingest fails below
+        # TODO : understand why this deletes all files after upload
         #self._transaction.registerUndo("write", self.client.clean(location.relativeToPathRoot))
 
         # URI is needed to resolve what ingest case are we dealing with
@@ -239,10 +213,6 @@ class WebdavDatastore(FileLikeDatastore):
         # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
         if transfer not in (None, "move", "copy"):
             raise NotImplementedError(f"Transfer mode {transfer} not supported.")
-        # ingest can occur from file->s3 and s3->s3 (source can be file or s3,
-        # target will always be s3). File has to exist at target location. Two
-        # Schemeless URIs are assumed to obey os.path rules. Equivalent to
-        # os.path.exists(fullPath) check in PosixDatastore.
         srcUri = ButlerURI(path)
         if srcUri.scheme == 'file' or not srcUri.scheme:
             if not os.path.exists(srcUri.ospath):
@@ -257,8 +227,8 @@ class WebdavDatastore(FileLikeDatastore):
             rootUri = ButlerURI(self.root)
             if srcUri.scheme == "file":
                 raise RuntimeError(f"'{srcUri}' is not inside repository root '{rootUri}'. "
-                                   "Ingesting local data to S3Datastore without upload "
-                                   "to S3 is not allowed.")
+                                   "Ingesting local data to WebdavDatastore without upload "
+                                   "to Webdav is not allowed.")
             elif srcUri.scheme == "https":
                 if not srcUri.path.startswith(rootUri.path):
                     raise RuntimeError(f"'{srcUri}' is not inside repository root '{rootUri}'.")
@@ -289,16 +259,11 @@ class WebdavDatastore(FileLikeDatastore):
                 if transfer == "move":
                     os.remove(srcUri.ospath)
             elif srcUri.scheme == "https":
-                # source is another S3 Bucket
                 relpath = srcUri.relativeToPathRoot
                 copySrc = srcUri.geturl()
                 self.client.copy(remote_path_from=relpath,
                                  remote_path_to=tgtLocation.relativeToPathRoot)
                 if transfer == "move":
-                    # https://github.com/boto/boto3/issues/507 - there is no
-                    # way of knowing if the file was actually deleted except
-                    # for checking all the keys again, reponse is  HTTP 204 OK
-                    # response all the time
                     self.client.clean(relpath)
 
         # the file should exist on the bucket by now

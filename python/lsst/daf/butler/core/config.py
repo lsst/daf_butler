@@ -945,14 +945,14 @@ class Config(collections.abc.MutableMapping):
             s3.put_object(Bucket=bucket, Key=key, Body=stream.read())
 
     def dumpToWebdavFile(self, uri, *, overwrite=True):
-        """Writes the config to a file in S3 Bucket.
+        """Writes the config to a file in Webdav folder.
 
         Parameters
         ----------
         uri : `ButlerURI`
-            S3 URI where the configuration should be stored.
+            Webdav URI where the configuration should be stored.
         overwrite : `bool`, optional
-            If False, a check will be made to see if the key already
+            If False, a check will be made to see if the file already
             exists.
 
         Raises
@@ -979,7 +979,6 @@ class Config(collections.abc.MutableMapping):
         with io.StringIO() as stream:
             self.dump(stream)
             stream.seek(0)
-            #{s3.put_object(Bucket=bucket, Key=key, Body=stream.read())
             session.put(uri.geturl(), data=stream.read())
 
     @staticmethod

@@ -342,13 +342,10 @@ class Butler:
             if not uri.path == "/":
                 s3.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
         elif uri.scheme == "https":
-            # bucket must already exist
+            client = getWebdavClient()
+            client.mkdir(uri.relativeToPathRoot)
             if not folderExists(uri.relativeToPathRoot):
                 raise ValueError(f"Folder {uri.relativeToPathRoot} does not exist!")
-            client = getWebdavClient()
-            # don't create S3 key when root is at the top-level of an Bucket
-            if not uri.path == "/":
-                client.mkdir(uri.relativeToPathRoot)
         else:
             raise ValueError(f"Unrecognized scheme: {uri.scheme}")
         config = Config(config)

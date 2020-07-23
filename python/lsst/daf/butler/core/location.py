@@ -164,6 +164,8 @@ class ButlerURI:
         """Path component of the URI localized to current OS."""
         if self.scheme == 's3':
             raise AttributeError('S3 URIs have no OS path.')
+        if self.scheme == 'https':
+            raise AttributeError('Webdav URIs have no OS path.')
         return posix2os(self._uri.path)
 
     @property
