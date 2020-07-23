@@ -31,7 +31,6 @@ import posixpath
 from pathlib import Path, PurePath, PurePosixPath
 import requests
 import tempfile
-from abc import ABC, abstractmethod
 import copy
 
 from typing import (
@@ -116,7 +115,7 @@ def posix2os(posix: Union[PurePath, str]) -> str:
     return os.path.join(*paths)
 
 
-class ButlerURI(ABC):
+class ButlerURI:
     """Convenience wrapper around URI parsers.
 
     Provides access to URI components and can convert file
@@ -149,7 +148,7 @@ class ButlerURI(ABC):
     _pathModule = posixpath
     """Path module to use for this scheme."""
 
-    transferModes = ("copy",)
+    transferModes: Tuple[str, ...] = ("copy",)
     """Transfer modes supported by this implementation."""
 
     # mypy is confused without this
@@ -359,7 +358,6 @@ class ButlerURI(ABC):
         extensions = self._pathLib(self.path).suffixes
         return "".join(extensions)
 
-    @abstractmethod
     def exists(self) -> bool:
         """Indicate that the resource is available.
 
@@ -370,8 +368,7 @@ class ButlerURI(ABC):
         """
         raise NotImplementedError()
 
-    @abstractmethod
-    def as_local(self) -> str:
+    def as_local(self) -> Tuple[str, bool]:
         """Return the location of the (possibly remote) resource in the
         local file system.
 
@@ -382,6 +379,8 @@ class ButlerURI(ABC):
             on the local file system, probably in a temporary directory.
             For a local resource this should be the actual path to the
             resource.
+        is_temporary : `bool`
+            Indicates if the local path is a temporary file or not.
         """
         raise NotImplementedError()
 
@@ -502,7 +501,7 @@ class ButlerFileURI(ButlerURI):
     def exists(self) -> bool:
         return os.path.exists(self.ospath)
 
-    def as_local(self) -> str:
+    def as_local(self) -> Tuple[str, bool]:
         """Return the local path of the file.
 
         Returns
@@ -681,7 +680,7 @@ class ButlerS3URI(ButlerURI):
         exists, _ = s3CheckFileExists(self, client=self.client)
         return exists
 
-    def as_local(self) -> str:
+    def as_local(self) -> Tuple[str, bool]:
         """Download object from S3 and place in temporary directory.
 
         Returns
@@ -745,7 +744,7 @@ class ButlerHttpURI(ButlerURI):
         header = requests.head(self.geturl())
         return True if header.status_code == 200 else False
 
-    def as_local(self) -> str:
+    def as_local(self) -> Tuple[str, bool]:
         """Download object over HTTP and place in temporary directory.
 
         Returns
@@ -770,7 +769,7 @@ class ButlerGenericURI(ButlerURI):
         """Test for existence and always return False."""
         return False
 
-    def as_local(self) -> str:
+    def as_local(self) -> Tuple[str, bool]:
         raise RuntimeError(f"Do not know how to retrieve data for URI '{self}'")
 
 
