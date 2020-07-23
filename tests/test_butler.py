@@ -916,7 +916,10 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         self.runImportExportTest(storageClass)
 
     def runImportExportTest(self, storageClass):
+        """This test does an export to a temp directory and an import back
+        into a new temp directory repo. It does not assume a posix datastore"""
         exportButler = self.runPutGetTest(storageClass, "test_metric")
+        print("Root:", exportButler.datastore.root)
         # Test that the repo actually has at least one dataset.
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)
@@ -927,18 +930,19 @@ class FileLikeDatastoreButlerTests(ButlerTests):
             # TODO: When PosixDatastore supports transfer-on-exist, add tests
             # for that.
             exportFile = os.path.join(exportDir, "exports.yaml")
-            with exportButler.export(filename=exportFile) as export:
+            with exportButler.export(filename=exportFile, directory=exportDir, transfer="auto") as export:
                 export.saveDatasets(datasets)
             self.assertTrue(os.path.exists(exportFile))
             with tempfile.TemporaryDirectory() as importDir:
-                Butler.makeRepo(importDir, config=Config(self.configFile))
+                # We always want this to be a local posix butler
+                Butler.makeRepo(importDir, config=Config(os.path.join(TESTDIR, "config/basic/butler.yaml")))
                 # Calling script.butlerImport tests the implementation of the
                 # butler command line interface "import" subcommand. Functions
                 # in the script folder are generally considered protected and
                 # should not be used as public api.
                 with open(exportFile, "r") as f:
                     script.butlerImport(importDir, output_run="ingest/run", export_file=f,
-                                        directory=exportButler.datastore.root, transfer="symlink")
+                                        directory=exportDir, transfer="auto")
                 importButler = Butler(importDir, run="ingest/run")
                 for ref in datasets:
                     with self.subTest(ref=ref):
@@ -957,6 +961,7 @@ class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCa
     registryStr = "/gen3.sqlite3"
 
     def testExportTransferCopy(self):
+        """Test local export using all transfer modes"""
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         exportButler = self.runPutGetTest(storageClass, "test_metric")
         # Test that the repo actually has at least one dataset.
@@ -973,7 +978,7 @@ class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCa
             self.assertTrue(self.checkFileExists(datastoreRoot, path),
                             f"Checking path {path}")
 
-        for transfer in ("copy", "link", "symlink"):
+        for transfer in ("copy", "link", "symlink", "relsymlink"):
             with tempfile.TemporaryDirectory() as exportDir:
                 with exportButler.export(directory=exportDir, format="yaml",
                                          transfer=transfer) as export:
@@ -1200,10 +1205,6 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         uri = ButlerURI(root)
         uri.updateFile(relpath)
         return s3CheckFileExists(uri)[0]
-
-    @unittest.expectedFailure
-    def testImportExport(self):
-        super().testImportExport()
 
 
 if __name__ == "__main__":
