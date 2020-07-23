@@ -152,3 +152,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             # Given the restrictions imposed at construction, we know there's
             # nothing to actually fetch: everything we need is in the data ID.
             yield RecordClass.fromDict(dataId.byName())
+
+    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+        # Docstring inherited from DimensionRecordStorage.digestTables.
+        return []

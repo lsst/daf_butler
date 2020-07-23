@@ -1058,8 +1058,9 @@ class RegistryTests(ABC):
     def testAttributeManager(self):
         """Test basic functionality of attribute manager.
         """
-        # number of attributes with schema versions in a fresh database
-        VERSION_COUNT = 17
+        # number of attributes with schema versions in a fresh database,
+        # 6 managers with 3 records per manager
+        VERSION_COUNT = 6 * 3
 
         registry = self.makeRegistry()
         attributes = registry._attributes

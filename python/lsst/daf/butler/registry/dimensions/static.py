@@ -20,7 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
+
+import sqlalchemy
 
 from ...core import NamedKeyDict
 from ...core.dimensions import DimensionElement, DimensionUniverse
@@ -99,4 +101,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager, Version
 
     def schemaDigest(self) -> Optional[str]:
         # Docstring inherited from VersionedExtension.
-        return None
+        tables: List[sqlalchemy.schema.Table] = []
+        for recStorage in self._records.values():
+            tables += recStorage.digestTables()
+        return self._defaultSchemaDigest(tables)

@@ -144,3 +144,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
             compared={k: getattr(record, k) for k in record.__slots__[n:]},
         )
         return inserted
+
+    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+        # Docstring inherited from DimensionRecordStorage.digestTables.
+        return [self._table]

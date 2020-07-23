@@ -114,3 +114,7 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
             missing -= self._cache.keys()
             for dataId in missing:
                 self._cache[dataId] = None
+
+    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+        # Docstring inherited from DimensionRecordStorage.digestTables.
+        return self._nested.digestTables()

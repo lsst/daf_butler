@@ -265,6 +265,17 @@ class DimensionRecordStorage(ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+        """Return tables used for schema digest.
+
+        Returns
+        -------
+        tables : `Iterable` [ `sqlalchemy.schema.Table` ]
+            Possibly empty set of tables for schema digest calculations.
+        """
+        raise NotImplementedError()
+
 
 class DimensionRecordStorageManager(ABC):
     """An interface for managing the dimension records in a `Registry`.
