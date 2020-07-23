@@ -197,8 +197,7 @@ class WebdavDatastore(FileLikeDatastore):
 
         # Register a callback to try to delete the uploaded data if
         # the ingest fails below
-        # TODO : understand why this deletes all files after upload
-        #self._transaction.registerUndo("write", self.client.clean(location.relativeToPathRoot))
+        self._transaction.registerUndo("write", self.client.clean, location.relativeToPathRoot)
 
         # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(location.uri, ref, formatter=formatter)
