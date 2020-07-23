@@ -145,7 +145,15 @@ class Loader(yaml.CSafeLoader):
             # The name is used to resolve the "!include" filename location to
             # download. A hackish solution is to name it explicitly.
             response["Body"].name = fileuri.geturl()
-        return yaml.load(response["Body"], Loader)
+            return yaml.load(response["Body"], Loader)
+        elif fileuri.scheme == "https":
+            if wc is None:
+                raise ModuleNotFoundError("Could not find webdav3.client. Are you sure it is installed?")
+            session = getHttpSession()
+            response = session.get(fileuri.geturl())
+            if response.status_code != 200:
+                raise FileNotFoundError(f"Error retrieving the file at {fileuri}: status code {response.status_code}")
+            return yaml.load(response.content, Loader)
 
 
 class Config(collections.abc.MutableMapping):
