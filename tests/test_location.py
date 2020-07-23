@@ -76,6 +76,13 @@ class LocationTestCase(unittest.TestCase):
             ("s3://bucketname/rootDir/relative/file.ext", True, False, "s3",
              "bucketname", "/rootDir/relative/file.ext")
         ))
+        # 5) Webdav scheme (ensured dirs and fully specified URIs work)
+        uriStrings.extend((
+            ("https://test.webdavurl.com/rootDir/", True, False, "https", "test.webdavurl.com", "/rootDir/"),
+            ("https://test.webdavurl.com/rootDir", True, True, "https", "test.webdavurl.com", "/rootDir/"),
+            ("https://test.webdavurl.com/rootDir/relative/file.ext", True, False, "https",
+             "test.webdavurl.com", "/rootDir/relative/file.ext")
+        ))
 
         for uriInfo in uriStrings:
             uri = ButlerURI(uriInfo[0], root=testRoot, forceAbsolute=uriInfo[1],
