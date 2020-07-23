@@ -24,8 +24,8 @@ from __future__ import annotations
 __all__ = (
     "addDatasetForeignKey",
     "makeStaticTableSpecs",
-    "makeDynamicTableName",
-    "makeDynamicTableSpec",
+    "makeTagTableName",
+    "makeTagTableSpec",
     "StaticDatasetTablesTuple",
 )
 
@@ -211,9 +211,9 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
     return specs
 
 
-def makeDynamicTableName(datasetType: DatasetType) -> str:
-    """Construct the name for a dynamic (DatasetType-dependent) table used by
-    the classes in this package.
+def makeTagTableName(datasetType: DatasetType) -> str:
+    """Construct the name for a dynamic (DatasetType-dependent) tag table used
+    by the classes in this package.
 
     Parameters
     ----------
@@ -229,9 +229,9 @@ def makeDynamicTableName(datasetType: DatasetType) -> str:
     return f"dataset_collection_{datasetType.dimensions.encode().hex()}"
 
 
-def makeDynamicTableSpec(datasetType: DatasetType, collections: Type[CollectionManager]) -> ddl.TableSpec:
-    """Construct the specification for a dynamic (DatasetType-dependent) table
-    used by the classes in this package.
+def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManager]) -> ddl.TableSpec:
+    """Construct the specification for a dynamic (DatasetType-dependent) tag
+    table used by the classes in this package.
 
     Parameters
     ----------
