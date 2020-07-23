@@ -91,10 +91,14 @@ class DatasetType:
     universe : `DimensionUniverse`, optional
         Set of all known dimensions, used to normalize ``dimensions`` if it
         is not already a `DimensionGraph`.
+    isCalibration : `bool`, optional
+        If `True`, this dataset type may be included in
+        `~CollectionType.CALIBRATION~ collections.
     """
 
     __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName",
-                 "_parentStorageClass", "_parentStorageClassName")
+                 "_parentStorageClass", "_parentStorageClassName",
+                 "_isCalibration")
 
     VALID_NAME_REGEX = re.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$")
 
@@ -129,7 +133,8 @@ class DatasetType:
     def __init__(self, name: str, dimensions: Union[DimensionGraph, Iterable[Dimension]],
                  storageClass: Union[StorageClass, str],
                  parentStorageClass: Optional[Union[StorageClass, str]] = None, *,
-                 universe: Optional[DimensionUniverse] = None):
+                 universe: Optional[DimensionUniverse] = None,
+                 isCalibration: bool = False):
         if self.VALID_NAME_REGEX.match(name) is None:
             raise ValueError(f"DatasetType name '{name}' is invalid.")
         self._name = name
@@ -176,6 +181,7 @@ class DatasetType:
                              " storage class")
         if parentStorageClass is not None and componentName is None:
             raise ValueError(f"Parent storage class specified by {self._name} is not a composite")
+        self._isCalibration = isCalibration
 
     def __repr__(self) -> str:
         parent = ""
@@ -250,6 +256,18 @@ class DatasetType:
         if self._parentStorageClass is None and self._parentStorageClassName is not None:
             self._parentStorageClass = StorageClassFactory().getStorageClass(self._parentStorageClassName)
         return self._parentStorageClass
+
+    def isCalibration(self) -> bool:
+        """Return whether datasets of this type may be included in calibration
+        collections.
+
+        Returns
+        -------
+        flag : `bool`
+            `True` if datasets of this type may be included in calibration
+            collections.
+        """
+        return self._isCalibration
 
     def finalizeParentStorageClass(self, newParent: StorageClass) -> None:
         """Replace the current placeholder parent storage class with
