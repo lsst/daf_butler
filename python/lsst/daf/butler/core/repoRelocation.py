@@ -27,7 +27,7 @@ __all__ = ("BUTLER_ROOT_TAG", "replaceRoot")
 
 import os.path
 from typing import Optional, Union
-from .location import ButlerURI
+from ._butlerUri import ButlerURI
 
 BUTLER_ROOT_TAG = "<butlerRoot>"
 """The special string to be used in configuration files to indicate that

@@ -34,7 +34,7 @@ except ImportError:
 
 from lsst.daf.butler.core.s3utils import (getS3Client, bucketExists, s3CheckFileExists,
                                           setAwsEnvCredentials, unsetAwsEnvCredentials)
-from lsst.daf.butler.core.location import Location, ButlerURI
+from lsst.daf.butler import Location, ButlerURI
 
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")

@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     from .configSupport import LookupKey
     from .repoTransfers import FileDataset
     from .storageClass import StorageClass
-    from .location import ButlerURI
+    from ._butlerUri import ButlerURI
 
 
 class DatastoreConfig(ConfigSubset):

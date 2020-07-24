@@ -42,7 +42,7 @@ except ImportError:
     boto3 = None
 
 from lsst.utils import doImport
-from .location import ButlerURI
+from ._butlerUri import ButlerURI
 from .s3utils import getS3Client
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
