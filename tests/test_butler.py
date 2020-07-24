@@ -1034,7 +1034,7 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
         config = Config(configFile1)
         config["root"] = self.dir1
         configFile2 = os.path.join(self.dir2, "butler2.yaml")
-        config.dumpToFile(configFile2)
+        config.dumpToUri(configFile2)
         os.remove(configFile1)
         self.tmpConfigFile = configFile2
 
