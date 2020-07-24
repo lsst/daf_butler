@@ -236,12 +236,11 @@ class Registry:
         return self._dimensions.universe
 
     @contextlib.contextmanager
-    def transaction(self) -> Iterator[None]:
+    def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
         """Return a context manager that represents a transaction.
         """
-        # TODO make savepoint=False the default.
         try:
-            with self._db.transaction():
+            with self._db.transaction(savepoint=savepoint):
                 yield
         except BaseException:
             # TODO: this clears the caches sometimes when we wouldn't actually

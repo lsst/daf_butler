@@ -634,7 +634,7 @@ class RegistryTests(ABC):
             # This should be added and (ultimately) committed.
             registry.insertDimensionData(dimension, dataId1)
             with self.assertRaises(sqlalchemy.exc.IntegrityError):
-                with registry.transaction():
+                with registry.transaction(savepoint=True):
                     # This does not conflict, and should succeed (but not
                     # be committed).
                     registry.insertDimensionData(dimension, dataId2)

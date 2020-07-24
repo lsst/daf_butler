@@ -82,8 +82,8 @@ class PostgresqlDatabase(Database):
         return cls(connection=connection, origin=origin, namespace=namespace, writeable=writeable)
 
     @contextmanager
-    def transaction(self, *, interrupting: bool = False) -> Iterator[None]:
-        with super().transaction(interrupting=interrupting):
+    def transaction(self, *, interrupting: bool = False, savepoint: bool = False) -> Iterator[None]:
+        with super().transaction(interrupting=interrupting, savepoint=savepoint):
             if not self.isWriteable():
                 with closing(self._connection.connection.cursor()) as cursor:
                     cursor.execute("SET TRANSACTION READ ONLY")
