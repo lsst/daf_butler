@@ -564,6 +564,27 @@ class ConfigSubsetTestCase(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 Config(os.path.join(self.configDir, "configIncludesEnv.yaml"))
 
+    def testResource(self):
+        c = Config("resource://lsst.daf.butler/configs/datastore.yaml")
+        self.assertIn("datastore", c)
+
+        # Test that we can include a resource URI
+        yaml = """
+toplevel: true
+resource: !include resource://lsst.daf.butler/configs/datastore.yaml
+"""
+        c = Config.fromYaml(yaml)
+        self.assertIn(("resource", "datastore", "cls"), c)
+
+        # Test that we can include a resource URI with includeConfigs
+        yaml = """
+toplevel: true
+resource:
+  includeConfigs: resource://lsst.daf.butler/configs/datastore.yaml
+"""
+        c = Config.fromYaml(yaml)
+        self.assertIn(("resource", "datastore", "cls"), c)
+
 
 class FileWriteConfigTestCase(unittest.TestCase):
 

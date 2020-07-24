@@ -27,6 +27,7 @@ import os
 import os.path
 import shutil
 import urllib
+import pkg_resources
 import posixpath
 from pathlib import Path, PurePath, PurePosixPath
 import requests
@@ -188,6 +189,9 @@ class ButlerURI:
                 subclass = ButlerS3URI
             elif parsed.scheme.startswith("http"):
                 subclass = ButlerHttpURI
+            elif parsed.scheme == "resource":
+                # Rules for scheme names disasllow pkg_resource
+                subclass = ButlerPackageResourceURI
             else:
                 subclass = ButlerGenericURI
 
@@ -819,6 +823,23 @@ class ButlerS3URI(ButlerURI):
                                        Key=self.relativeToPathRoot, Body=fh)
             if is_temporary:
                 os.remove(local_src)
+
+
+class ButlerPackageResourceURI(ButlerURI):
+    """URI referring to a Python package resource.
+
+    These URIs look like: ``resource://lsst.daf.butler/configs/file.yaml``
+    where the network location is the Python package and the path is the
+    resource name.
+    """
+
+    def exists(self) -> bool:
+        """Check that the python resource exists."""
+        return pkg_resources.resource_exists(self.netloc, self.relativeToPathRoot)
+
+    def read(self, size: int = -1) -> bytes:
+        with pkg_resources.resource_stream(self.netloc, self.relativeToPathRoot) as fh:
+            return fh.read(size)
 
 
 class ButlerHttpURI(ButlerURI):

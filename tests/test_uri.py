@@ -93,6 +93,24 @@ class FileURITestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             src.transfer_from(src, transfer="unknown")
 
+    def testResource(self):
+        u = ButlerURI("resource://lsst.daf.butler/configs/datastore.yaml")
+        self.assertTrue(u.exists(), f"Check {u} exists")
+
+        content = u.read().decode()
+        self.assertTrue(content.startswith("datastore:"))
+
+        truncated = u.read(size=9).decode()
+        self.assertEqual(truncated, "datastore")
+
+        d = ButlerURI("resource://lsst.daf.butler/configs", forceDirectory=True)
+        self.assertTrue(u.exists(), f"Check directory {d} exists")
+
+        j = d.join("datastore.yaml")
+        self.assertEqual(u, j)
+        self.assertFalse(j.dirLike)
+        self.assertFalse(d.join("not-there.yaml").exists())
+
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
