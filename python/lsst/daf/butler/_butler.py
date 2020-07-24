@@ -66,8 +66,7 @@ from .core import (
     ValidationError,
 )
 from .core.repoRelocation import BUTLER_ROOT_TAG
-from .core.utils import transactional, getClassOf, safeMakeDir
-from .core.s3utils import bucketExists
+from .core.utils import transactional, getClassOf
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
 from .registry import Registry, RegistryConfig, CollectionType
@@ -325,22 +324,10 @@ class Butler:
         if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
 
-        # for "file" schemes we are assuming POSIX semantics for paths, for
-        # schemeless URIs we are assuming os.path semantics.
+        # Ensure that the root of the repository exists or can be made
         uri = ButlerURI(root, forceDirectory=True)
-        if uri.scheme == "file" or not uri.scheme:
-            if not os.path.isdir(uri.ospath):
-                safeMakeDir(uri.ospath)
-        elif uri.scheme == "s3":
-            # bucket must already exist
-            if not bucketExists(uri.netloc):
-                raise ValueError(f"Bucket {uri.netloc} does not exist!")
-            s3 = boto3.client("s3")
-            # don't create S3 key when root is at the top-level of an Bucket
-            if not uri.path == "/":
-                s3.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
-        else:
-            raise ValueError(f"Unrecognized scheme: {uri.scheme}")
+        uri.mkdir()
+
         config = Config(config)
 
         # If we are creating a new repo from scratch with relative roots,
