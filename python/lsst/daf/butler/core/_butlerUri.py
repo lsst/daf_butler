@@ -398,6 +398,18 @@ class ButlerURI:
         """
         raise NotImplementedError()
 
+    def isabs(self) -> bool:
+        """Indicate that the resource is fully specified.
+
+        For non-schemeless URIs this is always true.
+
+        Returns
+        -------
+        isabs : `bool`
+            `True` in all cases except schemeless URI.
+        """
+        return True
+
     def as_local(self) -> Tuple[str, bool]:
         """Return the location of the (possibly remote) resource in the
         local file system.
@@ -885,6 +897,18 @@ class ButlerSchemelessURI(ButlerFileURI):
         newpath = os.path.join(new.path, path)
         new._uri = self._uri._replace(path=newpath)
         return new
+
+    def isabs(self) -> bool:
+        """Indicate that the resource is fully specified.
+
+        For non-schemeless URIs this is always true.
+
+        Returns
+        -------
+        isabs : `bool`
+            `True` if the file is absolute, `False` otherwise.
+        """
+        return os.path.isabs(self.ospath)
 
     @staticmethod
     def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
