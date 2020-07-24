@@ -29,6 +29,7 @@ __all__ = (
     "StaticDatasetTablesTuple",
 )
 
+import copy
 from typing import (
     Any,
     Optional,
@@ -44,7 +45,7 @@ from lsst.daf.butler import (
     ddl,
     DimensionUniverse,
 )
-from lsst.daf.butler import addDimensionForeignKey
+from lsst.daf.butler import addDimensionForeignKey, TIMESPAN_FIELD_SPECS
 from lsst.daf.butler.registry.interfaces import CollectionManager
 
 
@@ -178,6 +179,18 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                         "datasets of this type and most types of collections."
                     ),
                 ),
+                ddl.FieldSpec(
+                    name="calibration_association_table",
+                    dtype=sqlalchemy.String,
+                    length=128,
+                    nullable=True,
+                    doc=(
+                        "Name of the table that holds associations between "
+                        "datasets of this type and CALIBRATION collections.  "
+                        "NULL values indicate dataset types with "
+                        "isCalibration=False."
+                    ),
+                ),
             ],
             unique=[("name",)],
         ),
@@ -229,6 +242,25 @@ def makeTagTableName(datasetType: DatasetType) -> str:
     return f"dataset_collection_{datasetType.dimensions.encode().hex()}"
 
 
+def makeCalibTableName(datasetType: DatasetType) -> str:
+    """Construct the name for a dynamic (DatasetType-dependent) tag + validity
+    range table used by the classes in this package.
+
+    Parameters
+    ----------
+    datasetType : `DatasetType`
+        Dataset type to construct a name for.  Multiple dataset types may
+        share the same table.
+
+    Returns
+    -------
+    name : `str`
+        Name for the table.
+    """
+    assert datasetType.isCalibration()
+    return f"dataset_collection_{datasetType.dimensions.encode().hex()}"
+
+
 def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManager]) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag
     table used by the classes in this package.
@@ -272,4 +304,69 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
         constraint.append(fieldSpec.name)
     # Actually add the unique constraint.
     tableSpec.unique.add(tuple(constraint))
+    return tableSpec
+
+
+def makeCalibTableSpec(datasetType: DatasetType, collections: Type[CollectionManager]) -> ddl.TableSpec:
+    """Construct the specification for a dynamic (DatasetType-dependent) tag +
+    validity range table used by the classes in this package.
+
+    Parameters
+    ----------
+    datasetType : `DatasetType`
+        Dataset type to construct a spec for.  Multiple dataset types may
+        share the same table.
+
+    Returns
+    -------
+    spec : `ddl.TableSpec`
+        Specification for the table.
+
+    Notes
+    -----
+    This creates an association table with both begin and end columns for the
+    validity range, and uses the combination of (dataset_id, collection_<key>,
+    begin_datetime) as the primary key.  It also defines an index for temporal
+    lookups on (dataset_type_id, collection_<key>, <data-id-fields>,
+    begin_datetime, end_datetime).  This is not defined as a unique constraint
+    only because the actual invariant is _more_ than just a unique constraint
+    (it's that all ranges must be disjoint given other columns the same), and
+    so we need outside-the-database logic to enforce that anyway (as long as
+    we aren't assuming engine-specific range-operation functionality).
+    """
+    tableSpec = ddl.TableSpec(
+        fields=[
+            # Foreign key fields to dataset, collection, and usually dimension
+            # tables added below.  The dataset_type_id field here is redundant
+            # with the one in the main monolithic dataset table, but this bit
+            # of denormalization lets us define what should be a much more
+            # useful index.
+            ddl.FieldSpec("dataset_type_id", dtype=sqlalchemy.BigInteger, nullable=False),
+        ],
+        foreignKeys=[
+            ddl.ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",)),
+        ]
+    )
+    indexed = ["dataset_type_id"]
+    # Add foreign key fields to dataset table (part of the primary key).
+    addDatasetForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE")
+    # Add foreign key fields to collection table (part of the primary key
+    # and the temporal lookup index).
+    fieldSpec = collections.addCollectionForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE")
+    indexed.append(fieldSpec.name)
+    # Add dimension fields (part of the temporal lookup index, but not the
+    # primary key).
+    for dimension in datasetType.dimensions.required:
+        fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
+        indexed.append(fieldSpec.name)
+    # Add validity-range fields (both are part of the temporal lookup index,
+    # only the start is part of the primary key).
+    beginFieldSpec, endFieldSpec = copy.copy(TIMESPAN_FIELD_SPECS)
+    beginFieldSpec.primaryKey = True
+    beginFieldSpec.nullable = True
+    endFieldSpec.nullable = False
+    tableSpec.fields.add(beginFieldSpec)
+    tableSpec.fields.add(endFieldSpec)
+    indexed.append(beginFieldSpec.name)
+    indexed.append(endFieldSpec.name)
     return tableSpec

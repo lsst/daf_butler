@@ -40,13 +40,15 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                  dataset_type_id: int,
                  collections: CollectionManager,
                  static: StaticDatasetTablesTuple,
-                 tags: sqlalchemy.sql.Table):
+                 tags: sqlalchemy.schema.Table,
+                 calibs: Optional[sqlalchemy.schema.Table]):
         super().__init__(datasetType=datasetType)
         self._dataset_type_id = dataset_type_id
         self._db = db
         self._collections = collections
         self._static = static
         self._tags = tags
+        self._calibs = calibs
         self._runKeyColumn = collections.getRunForeignKeyName()
 
     def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
