@@ -444,6 +444,20 @@ class ButlerURI:
         """
         raise NotImplementedError()
 
+    def write(self, data: bytes, overwrite: bool = True) -> None:
+        """Write the supplied bytes to the new resource.
+
+        Parameters
+        ----------
+        data : `bytes`
+            The bytes to write to the resource. The entire contents of the
+            resource will be replaced.
+        overwrite : `bool`, optional
+            If `True` the resource will be overwritten if it exists. Otherwise
+            the write will fail.
+        """
+        raise NotImplementedError()
+
     def __str__(self) -> str:
         return self.geturl()
 
@@ -578,6 +592,14 @@ class ButlerFileURI(ButlerURI):
         # Docstring inherits
         with open(self.ospath, "rb") as fh:
             return fh.read(size)
+
+    def write(self, data: bytes, overwrite: bool = True) -> None:
+        if overwrite:
+            mode = "wb"
+        else:
+            mode = "xb"
+        with open(self.ospath, mode) as f:
+            f.write(data)
 
     def transfer_from(self, src: ButlerURI, transfer: str) -> None:
         """Transfer the current resource to a local file.
@@ -765,6 +787,13 @@ class ButlerS3URI(ButlerURI):
         body = response["Body"].read()
         response["Body"].close()
         return body
+
+    def write(self, data: bytes, overwrite: bool = True) -> None:
+        if not overwrite:
+            if self.exists():
+                raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
+        self.client.put_object(Bucket=self.netloc, Key=self.relativeToPathRoot,
+                               Body=data)
 
     def as_local(self) -> Tuple[str, bool]:
         """Download object from S3 and place in temporary directory.

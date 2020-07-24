@@ -58,15 +58,16 @@ class FileURITestCase(unittest.TestCase):
         self.assertFalse(uri.exists(), f"{uri} should not exist")
         self.assertEqual(uri.ospath, file)
 
-        with open(file, "w") as fd:
-            print("Content", file=fd)
+        content = "abcdefghijklmnopqrstuv\n"
+        uri.write(content.encode())
+        self.assertTrue(os.path.exists(file), "File should exist locally")
         self.assertTrue(uri.exists(), f"{uri} should now exist")
+        self.assertEqual(uri.read().decode(), content)
 
     def testTransfer(self):
         src = ButlerURI(os.path.join(self.tmpdir, "test.txt"))
         content = "Content is some content\nwith something to say\n\n"
-        with open(src.ospath, "w") as fd:
-            print(content, file=fd)
+        src.write(content.encode())
 
         for mode in ("copy", "link", "hardlink", "symlink", "relsymlink"):
             dest = ButlerURI(os.path.join(self.tmpdir, f"dest_{mode}.txt"))
@@ -75,7 +76,7 @@ class FileURITestCase(unittest.TestCase):
 
             with open(dest.ospath, "r") as fh:
                 new_content = fh.read()
-            self.assertEqual(new_content, content + "\n")
+            self.assertEqual(new_content, content)
 
             if "symlink" in mode:
                 self.assertTrue(os.path.islink(dest.ospath), f"Check that {dest} is symlink")
@@ -158,8 +159,7 @@ class S3URITestCase(unittest.TestCase):
     def testTransfer(self):
         src = ButlerURI(os.path.join(self.tmpdir, "test.txt"))
         content = "Content is some content\nwith something to say\n\n"
-        with open(src.ospath, "w") as fd:
-            print(content, file=fd)
+        src.write(content.encode())
 
         dest = ButlerURI(self.makeS3Uri("test.txt"))
         self.assertFalse(dest.exists())
@@ -174,7 +174,7 @@ class S3URITestCase(unittest.TestCase):
         local.transfer_from(dest2, transfer="copy")
         with open(local.ospath, "r") as fd:
             new_content = fd.read()
-        self.assertEqual(new_content, content + "\n")
+        self.assertEqual(new_content, content)
 
         with self.assertRaises(ValueError):
             dest2.transfer_from(local, transfer="symlink")
@@ -186,6 +186,11 @@ class S3URITestCase(unittest.TestCase):
         subset = dest.read(size=nbytes)
         self.assertEqual(len(subset), nbytes)  # Extra byte comes back
         self.assertEqual(subset.decode(), content[:nbytes])
+
+        s3write = ButlerURI(self.makeS3Uri("created.txt"))
+        content = "abcdefghijklmnopqrstuv\n"
+        s3write.write(content.encode())
+        self.assertEqual(s3write.read().decode(), content)
 
 
 if __name__ == "__main__":
