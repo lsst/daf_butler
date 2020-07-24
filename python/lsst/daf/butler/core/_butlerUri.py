@@ -458,6 +458,12 @@ class ButlerURI:
         """
         raise NotImplementedError()
 
+    def mkdir(self) -> None:
+        """For a dir-like URI, create the directory resource if it does not
+        already exist.
+        """
+        raise NotImplementedError()
+
     def __str__(self) -> str:
         return self.geturl()
 
@@ -600,6 +606,12 @@ class ButlerFileURI(ButlerURI):
             mode = "xb"
         with open(self.ospath, mode) as f:
             f.write(data)
+
+    def mkdir(self) -> None:
+        if not os.path.exists(self.ospath):
+            safeMakeDir(self.ospath)
+        elif not os.path.isdir(self.ospath):
+            raise FileExistsError(f"URI {self} exists but is not a directory!")
 
     def transfer_from(self, src: ButlerURI, transfer: str) -> None:
         """Transfer the current resource to a local file.
@@ -803,6 +815,19 @@ class ButlerS3URI(ButlerURI):
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
         self.client.put_object(Bucket=self.netloc, Key=self.relativeToPathRoot,
                                Body=data)
+
+    def mkdir(self) -> None:
+        # Defer import for circular dependencies
+        from .s3utils import bucketExists
+        if not bucketExists(self.netloc):
+            raise ValueError(f"Bucket {self.netloc} does not exist for {self}!")
+
+        if not self.dirLike:
+            raise ValueError("Can not create a 'directory' for file-like URI {self}")
+
+        # don't create S3 key when root is at the top-level of an Bucket
+        if not self.path == "/":
+            self.client.put_object(Bucket=self.netloc, Key=self.relativeToPathRoot)
 
     def as_local(self) -> Tuple[str, bool]:
         """Download object from S3 and place in temporary directory.

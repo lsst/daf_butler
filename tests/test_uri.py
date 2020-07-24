@@ -64,6 +64,15 @@ class FileURITestCase(unittest.TestCase):
         self.assertTrue(uri.exists(), f"{uri} should now exist")
         self.assertEqual(uri.read().decode(), content)
 
+    def testMkdir(self):
+        tmpdir = ButlerURI(self.tmpdir)
+        newdir = tmpdir.join("newdir/seconddir")
+        newdir.mkdir()
+        self.assertTrue(newdir.exists())
+        newfile = newdir.join("temp.txt")
+        newfile.write("Data".encode())
+        self.assertTrue(newfile.exists())
+
     def testTransfer(self):
         src = ButlerURI(os.path.join(self.tmpdir, "test.txt"))
         content = "Content is some content\nwith something to say\n\n"
