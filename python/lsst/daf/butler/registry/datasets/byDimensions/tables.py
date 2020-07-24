@@ -31,8 +31,10 @@ __all__ = (
 
 from typing import (
     Any,
+    List,
     Optional,
     Type,
+    Union,
 )
 
 from collections import namedtuple
@@ -44,7 +46,7 @@ from lsst.daf.butler import (
     ddl,
     DimensionUniverse,
 )
-from lsst.daf.butler import addDimensionForeignKey
+from lsst.daf.butler import addDimensionForeignKey, DatabaseTimespanRepresentation
 from lsst.daf.butler.registry.interfaces import CollectionManager
 
 
@@ -178,6 +180,18 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                         "datasets of this type and most types of collections."
                     ),
                 ),
+                ddl.FieldSpec(
+                    name="calibration_association_table",
+                    dtype=sqlalchemy.String,
+                    length=128,
+                    nullable=True,
+                    doc=(
+                        "Name of the table that holds associations between "
+                        "datasets of this type and CALIBRATION collections.  "
+                        "NULL values indicate dataset types with "
+                        "isCalibration=False."
+                    ),
+                ),
             ],
             unique=[("name",)],
         ),
@@ -229,6 +243,25 @@ def makeTagTableName(datasetType: DatasetType) -> str:
     return f"dataset_tags_{datasetType.dimensions.encode().hex()}"
 
 
+def makeCalibTableName(datasetType: DatasetType) -> str:
+    """Construct the name for a dynamic (DatasetType-dependent) tag + validity
+    range table used by the classes in this package.
+
+    Parameters
+    ----------
+    datasetType : `DatasetType`
+        Dataset type to construct a name for.  Multiple dataset types may
+        share the same table.
+
+    Returns
+    -------
+    name : `str`
+        Name for the table.
+    """
+    assert datasetType.isCalibration()
+    return f"dataset_calibs_{datasetType.dimensions.encode().hex()}"
+
+
 def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManager]) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag
     table used by the classes in this package.
@@ -238,6 +271,9 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
     datasetType : `DatasetType`
         Dataset type to construct a spec for.  Multiple dataset types may
         share the same table.
+    collections : `type` [ `CollectionManager` ]
+        `CollectionManager` subclass that can be used to construct foreign keys
+        to the run and/or collection tables.
 
     Returns
     -------
@@ -272,4 +308,76 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
         constraint.append(fieldSpec.name)
     # Actually add the unique constraint.
     tableSpec.unique.add(tuple(constraint))
+    return tableSpec
+
+
+def makeCalibTableSpec(datasetType: DatasetType, collections: Type[CollectionManager],
+                       tsRepr: Type[DatabaseTimespanRepresentation]) -> ddl.TableSpec:
+    """Construct the specification for a dynamic (DatasetType-dependent) tag +
+    validity range table used by the classes in this package.
+
+    Parameters
+    ----------
+    datasetType : `DatasetType`
+        Dataset type to construct a spec for.  Multiple dataset types may
+        share the same table.
+    collections : `type` [ `CollectionManager` ]
+        `CollectionManager` subclass that can be used to construct foreign keys
+        to the run and/or collection tables.
+
+    Returns
+    -------
+    spec : `ddl.TableSpec`
+        Specification for the table.
+    """
+    tableSpec = ddl.TableSpec(
+        fields=[
+            # This table has no natural primary key, compound or otherwise, so
+            # we add an autoincrement key.  We may use this field a bit
+            # internally, but its presence is an implementation detail and it
+            # shouldn't appear as a foreign key in any other tables.
+            ddl.FieldSpec("id", dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True),
+            # Foreign key fields to dataset, collection, and usually dimension
+            # tables added below.  The dataset_type_id field here is redundant
+            # with the one in the main monolithic dataset table, but this bit
+            # of denormalization lets us define what should be a much more
+            # useful index.
+            ddl.FieldSpec("dataset_type_id", dtype=sqlalchemy.BigInteger, nullable=False),
+        ],
+        foreignKeys=[
+            ddl.ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",)),
+        ]
+    )
+    # Record fields that should go in the temporal lookup index/constraint,
+    # starting with the dataset type.
+    index: List[Union[str, Type[DatabaseTimespanRepresentation]]] = ["dataset_type_id"]
+    # Add foreign key fields to dataset table (not part of the temporal
+    # lookup/constraint).
+    addDatasetForeignKey(tableSpec, nullable=False, onDelete="CASCADE")
+    # Add foreign key fields to collection table (part of the temporal lookup
+    # index/constraint).
+    fieldSpec = collections.addCollectionForeignKey(tableSpec, nullable=False, onDelete="CASCADE")
+    index.append(fieldSpec.name)
+    # Add dimension fields (part of the temporal lookup index.constraint).
+    for dimension in datasetType.dimensions.required:
+        fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
+        index.append(fieldSpec.name)
+    # Add validity-range field(s) (part of the temporal lookup
+    # index/constraint).
+    tsFieldSpecs = tsRepr.makeFieldSpecs(nullable=False)
+    for fieldSpec in tsFieldSpecs:
+        tableSpec.fields.add(fieldSpec)
+    if tsRepr.hasExclusionConstraint():
+        # This database's timespan representation can define a database-level
+        # constraint that prevents overlapping validity ranges for entries with
+        # the same DatasetType, collection, and data ID.
+        # This also creates an index.
+        index.append(tsRepr)
+        tableSpec.exclusion.add(tuple(index))
+    else:
+        # No database-level constraint possible.  We'll have to simulate that
+        # in our DatasetRecordStorage.certify() implementation, and just create
+        # a regular index here in the hope that helps with lookups.
+        index.extend(fieldSpec.name for fieldSpec in tsFieldSpecs)
+        tableSpec.indexes.add(tuple(index))  # type: ignore
     return tableSpec
