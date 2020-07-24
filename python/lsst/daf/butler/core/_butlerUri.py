@@ -728,11 +728,20 @@ class ButlerFileURI(ButlerURI):
         # to not do tilde expansion.
         sep = posixpath.sep
 
+        # For local file system we can explicitly check to see if this
+        # really is a directory. The URI might point to a location that
+        # does not exists yet but all that matters is if it is a directory
+        # then we make sure use that fact. No need to do the check if
+        # we are already being told.
+        if not forceDirectory and posixpath.isdir(parsed.path):
+            forceDirectory = True
+
         # For an absolute path all we need to do is check if we need
         # to force the directory separator
         if posixpath.isabs(parsed.path):
-            if forceDirectory and not parsed.path.endswith(sep):
-                parsed = parsed._replace(path=parsed.path+sep)
+            if forceDirectory:
+                if not parsed.path.endswith(sep):
+                    parsed = parsed._replace(path=parsed.path+sep)
                 dirLike = True
             return copy.copy(parsed), dirLike
 
@@ -745,14 +754,6 @@ class ButlerFileURI(ButlerURI):
             root = os.path.abspath(os.path.curdir)
 
         replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
-
-        # For local file system we can explicitly check to see if this
-        # really is a directory. The URI might point to a location that
-        # does not exists yet but all that matters is if it is a directory
-        # then we make sure use that fact. No need to do the check if
-        # we are already being told.
-        if not forceDirectory and posixpath.isdir(replacements["path"]):
-            forceDirectory = True
 
         # normpath strips trailing "/" so put it back if necessary
         # Acknowledge that trailing separator exists.
@@ -1064,7 +1065,8 @@ class ButlerSchemelessURI(ButlerFileURI):
         endsOnSep = expandedPath.endswith(os.sep) and not replacements["path"].endswith(os.sep)
         if (forceDirectory or endsOnSep or dirLike):
             dirLike = True
-            replacements["path"] += os.sep
+            if not replacements["path"].endswith(os.sep):
+                replacements["path"] += os.sep
 
         if "scheme" in replacements:
             # This is now meant to be a URI path so force to posix
