@@ -749,10 +749,15 @@ class ButlerS3URI(ButlerURI):
         args = {}
         if size > 0:
             args["Range"] = f"bytes=0-{size-1}"
-        response = self.client.get_object(Bucket=self.netloc,
-                                          Key=self.relativeToPathRoot,
-                                          **args)
-        return response["Body"].read()
+        try:
+            response = self.client.get_object(Bucket=self.netloc,
+                                              Key=self.relativeToPathRoot,
+                                              **args)
+        except (self.client.exceptions.NoSuchKey, self.client.exceptions.NoSuchBucket) as err:
+            raise FileNotFoundError(f"No such resource: {self}") from err
+        body = response["Body"].read()
+        response["Body"].close()
+        return body
 
     def as_local(self) -> Tuple[str, bool]:
         """Download object from S3 and place in temporary directory.
