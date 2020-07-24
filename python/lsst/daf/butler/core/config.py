@@ -25,14 +25,11 @@ from __future__ import annotations
 
 __all__ = ("Config", "ConfigSubset")
 
-from dataclasses import dataclass
 import collections
 import copy
 import logging
 import pprint
 import os
-import pkg_resources
-import posixpath
 import yaml
 import sys
 from yaml.representer import Representer
@@ -128,86 +125,13 @@ class Loader(yamlLoader):
 
         log.debug("Opening YAML file via !include: %s", fileuri)
 
-        if not fileuri.scheme or fileuri.scheme == "file":
-            with open(fileuri.ospath, "r") as f:
-                return yaml.load(f, Loader)
-        elif fileuri.scheme == "s3":
-            if boto3 is None:
-                raise ModuleNotFoundError("Could not find boto3. Are you sure it is installed?")
-            s3 = getS3Client()
-            try:
-                response = s3.get_object(Bucket=fileuri.netloc, Key=fileuri.relativeToPathRoot)
-            except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
-                raise FileNotFoundError(f'No such file or directory: {fileuri}') from err
+        # Read all the data from the resource
+        data = fileuri.read()
 
-            # boto3 response is a `StreamingBody`, but not a valid Python
-            # IOStream. Loader will raise an error that the stream has no name.
-            # The name is used to resolve the "!include" filename location to
-            # download. A hackish solution is to name it explicitly.
-            response["Body"].name = fileuri.geturl()
-        return yaml.load(response["Body"], Loader)
-
-
-@dataclass
-class Resource:
-    """A package and a resource within that package."""
-
-    package: str
-    """The package from which this resource is requested."""
-
-    name: str
-    """Full name of the resource."""
-
-    def dirname(self) -> ResourceDir:
-        """Returns the enclosing resource parent directory for this resource.
-
-        Returns
-        -------
-        dir : `ResourceDir`
-            The "directory" corresponding to this resource.
-        """
-        # Resources always use POSIX-style path separators
-        # so do not use os.path
-        dir = posixpath.split(self.name)[0]
-        return ResourceDir(self.package, dir)
-
-    def exists(self) -> bool:
-        """Check that the resource exists.
-
-        Returns
-        -------
-        exists : `bool`
-            `True` if the resource exists.
-        """
-        return pkg_resources.resource_exists(self.package, self.name)
-
-
-@dataclass
-class ResourceDir:
-    """A "directory" within a package resource."""
-
-    package: str
-    """The package from which this resource is requested."""
-
-    dir: str
-    """A directory path to a resource in this package. Not a full path."""
-
-    def toResource(self, file):
-        """Convert a resource directory to a concrete resource.
-
-        Parameters
-        ----------
-        file : `str`
-            A file within this resource directory to return a concrete
-            `Resource`.
-
-        Returns
-        -------
-        resource : `Resource`
-            A full definition of a resource.
-        """
-        # Resources always use posix paths so do not use os.path
-        return Resource(self.package, posixpath.join(self.dir, file))
+        # Store the bytes into a BytesIO so we can attach a .name
+        stream = io.BytesIO(data)
+        stream.name = fileuri.geturl()
+        return yaml.load(stream, Loader)
 
 
 class Config(collections.abc.MutableMapping):
@@ -289,13 +213,10 @@ class Config(collections.abc.MutableMapping):
             self.configFile = other.configFile
         elif isinstance(other, collections.abc.Mapping):
             self.update(other)
-        elif isinstance(other, str):
-            # if other is a string, assume it is a file path.
-            self.__initFromFile(other)
+        elif isinstance(other, (str, ButlerURI)):
+            # if other is a string, assume it is a file path/URI
+            self.__initFromUri(other)
             self._processExplicitIncludes()
-        elif isinstance(other, Resource):
-            # Assume this is a package resources request
-            self.__initFromResource(other)
         else:
             # if the config specified by other could not be recognized raise
             # a runtime error.
@@ -343,92 +264,29 @@ class Config(collections.abc.MutableMapping):
         c : `Config`
             Newly-constructed Config.
         """
-        return cls().__initFromYaml(string)
+        new_config = cls().__initFromYaml(string)
+        new_config._processExplicitIncludes()
+        return new_config
 
-    def __initFromFile(self, path: str) -> None:
+    def __initFromUri(self, path: str) -> None:
         """Load a file from a path or an URI.
 
         Parameters
         ----------
         path : `str`
-            Path or an URI to a persisted config file.
+            Path or a URI to a persisted config file.
         """
         uri = ButlerURI(path)
         if uri.path.endswith("yaml"):
-            if uri.scheme == "s3":
-                self.__initFromS3YamlFile(uri.geturl())
-            else:
-                self.__initFromYamlFile(uri.ospath)
+            log.debug("Opening YAML config file: %s", uri.geturl())
+            content = uri.read()
+            # Use a stream so we can name it
+            stream = io.BytesIO(content)
+            stream.name = uri.geturl()
+            self.__initFromYaml(stream)
         else:
             raise RuntimeError(f"Unhandled config file type: {uri}")
         self.configFile = uri
-
-    def __initFromResource(self, resource: Resource) -> None:
-        """Load a config from a package resource.
-
-        Parameters
-        ----------
-        resource : `Resource`
-            The resource package and path.
-        """
-        if not resource.exists():
-            raise RuntimeError(f"Package resource {resource} does not exist")
-        if resource.name.endswith(".yaml"):
-            self.__initFromYamlResource(resource)
-        else:
-            raise RuntimeError(f"Unhandled config resource type: {resource}")
-        self.configFile = resource
-
-    def __initFromYamlResource(self, resource: Resource) -> None:
-        """Load a config from a YAML package resource.
-
-        Parameters
-        ----------
-        resource : `Resource`
-            The resource package and path.
-        """
-        log.debug("Opening YAML config resource: %s.%s", resource.package, resource.name)
-        with pkg_resources.resource_stream(resource.package, resource.name) as fh:
-            self.__initFromYaml(fh)
-
-    def __initFromS3YamlFile(self, url):
-        """Load a file at a given S3 Bucket uri and attempts to load it from
-        yaml.
-
-        Parameters
-        ----------
-        path : `str`
-            To a persisted config file.
-        """
-        if boto3 is None:
-            raise ModuleNotFoundError("boto3 not found."
-                                      "Are you sure it is installed?")
-
-        uri = ButlerURI(url)
-        s3 = getS3Client()
-        try:
-            response = s3.get_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
-        except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
-            raise FileNotFoundError(f"No such file or directory: {uri}") from err
-
-        # boto3 response is a `StreamingBody`, but not a valid Python IOStream.
-        # Loader will raise an error that the stream has no name. A hackish
-        # solution is to name it explicitly.
-        response["Body"].name = url
-        self.__initFromYaml(response["Body"])
-        response["Body"].close()
-
-    def __initFromYamlFile(self, path):
-        """Opens a file at a given path and attempts to load it in from yaml.
-
-        Parameters
-        ----------
-        path : `str`
-            To a persisted config file in YAML format.
-        """
-        log.debug("Opening YAML config file: %s", path)
-        with open(path, "r") as f:
-            self.__initFromYaml(f)
 
     def __initFromYaml(self, stream):
         """Loads a YAML config from any readable stream that contains one.
@@ -456,11 +314,9 @@ class Config(collections.abc.MutableMapping):
         includeConfigs directive and process the includes."""
 
         # Search paths for config files
-        searchPaths = [os.path.curdir]
+        searchPaths = [ButlerURI(os.path.curdir, forceDirectory=True)]
         if self.configFile is not None:
-            if isinstance(self.configFile, str):
-                configDir = os.path.abspath(os.path.dirname(self.configFile))
-            elif isinstance(self.configFile, (ButlerURI, Resource)):
+            if isinstance(self.configFile, ButlerURI):
                 configDir = self.configFile.dirname()
             else:
                 raise RuntimeError(f"Unexpected type for config file: {self.configFile}")
@@ -485,53 +341,20 @@ class Config(collections.abc.MutableMapping):
                 # Read each file assuming it is a reference to a file
                 # The file can be relative to config file or cwd
                 # ConfigSubset search paths are not used
-                # At some point these might be URIs which we will have to
-                # assume resolve explicitly
                 subConfigs = []
                 for fileName in includes:
-                    # Expand any shell variables
-                    fileName = os.path.expandvars(fileName)
+                    # Expand any shell variables -- this could be URI
+                    fileName = ButlerURI(os.path.expandvars(fileName), forceAbsolute=False)
                     found = None
-                    if os.path.isabs(fileName):
+                    if fileName.isabs():
                         found = fileName
                     else:
                         for dir in searchPaths:
-                            # Convert a string directly to a ButlerURI
-                            # to unify the response below
-                            if isinstance(dir, str):
-                                dir = ButlerURI(dir, forceDirectory=True)
-
-                            if isinstance(dir, ResourceDir):
-                                resource = dir.toResource(fileName)
-                                if resource.exists():
-                                    found = resource
-                                    break
-                            elif isinstance(dir, ButlerURI):
-                                if not dir.scheme:
-                                    filePath = os.path.join(dir.path, fileName)
-                                    if os.path.exists(filePath):
-                                        found = os.path.normpath(os.path.abspath(filePath))
-                                        break
-                                elif dir.scheme == "file":
-                                    # import private helper function
-                                    from .location import posix2os
-                                    # File URIs always use posix path separator
-                                    filePath = posix2os(posixpath.join(dir.path, fileName))
-                                    if os.path.exists(filePath):
-                                        found = os.path.normpath(os.path.abspath(filePath))
-                                        break
-                                else:
-                                    # For remote resource either we assume
-                                    # the resource always exists even though
-                                    # it likely does not and we pass it
-                                    # directly to the Config constructor here.
-                                    # Else we uses s3utils.s3CheckFileExists
-                                    # Either way a network call is needed.
-                                    # For now no-one is using this
-                                    # functionality and there are no S3 tests
-                                    # for it so defer implementation.
-                                    raise RuntimeError("Can not currently follow includeConfigs to "
-                                                       f"{dir}")
+                            if isinstance(dir, ButlerURI):
+                                specific = dir.join(fileName.path)
+                                # Remote resource check might be expensive
+                                if specific.exists():
+                                    found = specific
                             else:
                                 log.warning("Do not understand search path entry '%s' of type %s",
                                             dir, type(dir).__name__)
@@ -971,7 +794,7 @@ class Config(collections.abc.MutableMapping):
             uri = ButlerURI(uri)
 
         if not uri.scheme or uri.scheme == "file":
-            if os.path.isdir(uri.path) and updateFile:
+            if os.path.isdir(uri.ospath) and updateFile:
                 uri = ButlerURI(os.path.join(uri.ospath, defaultFileName))
             self.dumpToFile(uri.ospath, overwrite=overwrite)
         elif uri.scheme == "s3":
@@ -1196,7 +1019,7 @@ class ConfigSubset(Config):
         be supplied in priority order. These paths have higher priority
         than those read from the environment in
         `ConfigSubset.defaultSearchPaths()`.  Paths can be `str` referring to
-        the local file system, or `ResourceDir`.
+        the local file system or URIs, `ButlerURI`.
     """
 
     component: ClassVar[Optional[str]] = None
@@ -1330,8 +1153,8 @@ class ConfigSubset(Config):
             defaultsPaths.extend(externalPaths)
 
         # Add the package defaults as a resource
-        defaultsPaths.append(ResourceDir(cls.resourcesPackage, "configs"))
-
+        defaultsPaths.append(ButlerURI(f"resource://{cls.resourcesPackage}/configs",
+                                       forceDirectory=True))
         return defaultsPaths
 
     def _updateWithConfigsFromPath(self, searchPaths, configFile):
@@ -1343,40 +1166,35 @@ class ConfigSubset(Config):
 
         Parameters
         ----------
-        searchPaths : `list`
+        searchPaths : `list` of `ButlerURI`, `str`
             Paths to search for the supplied configFile. This path
             is the priority order, such that files read from the
             first path entry will be selected over those read from
             a later path. Can contain `str` referring to the local file
-            system or `ResourceDir`.
-        configFile : `str`
+            system or a URI string.
+        configFile : `ButlerURI`
             File to locate in path. If absolute path it will be read
             directly and the search path will not be used. Can be a URI
             to an explicit resource (which will ignore the search path)
             which is assumed to exist.
         """
         uri = ButlerURI(configFile)
-        if uri.scheme:
+        if uri.isabs() and uri.exists():
             # Assume this resource exists
             self._updateWithOtherConfigFile(configFile)
             self.filesRead.append(configFile)
-        elif os.path.isabs(configFile) and os.path.exists(configFile):
-            self.filesRead.append(configFile)
-            self._updateWithOtherConfigFile(configFile)
         else:
             # Reverse order so that high priority entries
             # update the object last.
             for pathDir in reversed(searchPaths):
-                if isinstance(pathDir, str):
-                    file = os.path.join(pathDir, configFile)
-                    if os.path.exists(file):
+                if isinstance(pathDir, (str, ButlerURI)):
+                    pathDir = ButlerURI(pathDir, forceDirectory=True)
+                    file = pathDir.join(configFile)
+                    if file.exists():
                         self.filesRead.append(file)
                         self._updateWithOtherConfigFile(file)
-                elif isinstance(pathDir, ResourceDir):
-                    resource = pathDir.toResource(configFile)
-                    if resource.exists():
-                        self.filesRead.append(resource)
-                        self._updateWithOtherConfigFile(resource)
+                else:
+                    raise ValueError(f"Unexpected search path type encountered: {pathDir!r}")
 
     def _updateWithOtherConfigFile(self, file):
         """Read in some defaults and update.
@@ -1387,7 +1205,7 @@ class ConfigSubset(Config):
 
         Parameters
         ----------
-        file : `Config`, `str`, or `dict`
+        file : `Config`, `str`, `ButlerURI`, or `dict`
             Entity that can be converted to a `ConfigSubset`.
         """
         # Use this class to read the defaults so that subsetting can happen
