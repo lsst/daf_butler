@@ -489,3 +489,55 @@ class DatabaseTests(ABC):
         row3 = {"name": "a3", "region": None}
         db.replace(tables.a, row3, row2a, row1)
         self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2a, row3])
+
+    def testTransactionNesting(self):
+        """Test that transactions can be nested with the behavior in the
+        presence of exceptions working as documented.
+        """
+        db = self.makeEmptyDatabase(origin=1)
+        with db.declareStaticTables(create=True) as context:
+            tables = context.addTableTuple(STATIC_TABLE_SPECS)
+        # Insert one row so we can trigger integrity errors by trying to insert
+        # a duplicate of it below.
+        db.insert(tables.a, {"name": "a1"})
+        # First test: error recovery via explicit savepoint=True in the inner
+        # transaction.
+        with db.transaction():
+            # This insert should succeed, and should not be rolled back because
+            # the assertRaises context should catch any exception before it
+            # propagates up to the outer transaction.
+            db.insert(tables.a, {"name": "a2"})
+            with self.assertRaises(sqlalchemy.exc.IntegrityError):
+                with db.transaction(savepoint=True):
+                    # This insert should succeed, but should be rolled back.
+                    db.insert(tables.a, {"name": "a4"})
+                    # This insert should fail (duplicate primary key), raising
+                    # an exception.
+                    db.insert(tables.a, {"name": "a1"})
+        self.assertCountEqual(
+            [dict(r) for r in db.query(tables.a.select()).fetchall()],
+            [{"name": "a1", "region": None}, {"name": "a2", "region": None}],
+        )
+        # Second test: error recovery via implicit savepoint=True, when the
+        # innermost transaction is inside a savepoint=True transaction.
+        with db.transaction():
+            # This insert should succeed, and should not be rolled back
+            # because the assertRaises context should catch any
+            # exception before it propagates up to the outer
+            # transaction.
+            db.insert(tables.a, {"name": "a3"})
+            with self.assertRaises(sqlalchemy.exc.IntegrityError):
+                with db.transaction(savepoint=True):
+                    # This insert should succeed, but should be rolled back.
+                    db.insert(tables.a, {"name": "a4"})
+                    with db.transaction():
+                        # This insert should succeed, but should be rolled
+                        # back.
+                        db.insert(tables.a, {"name": "a5"})
+                        # This insert should fail (duplicate primary key),
+                        # raising an exception.
+                        db.insert(tables.a, {"name": "a1"})
+        self.assertCountEqual(
+            [dict(r) for r in db.query(tables.a.select()).fetchall()],
+            [{"name": "a1", "region": None}, {"name": "a2", "region": None}, {"name": "a3", "region": None}],
+        )
