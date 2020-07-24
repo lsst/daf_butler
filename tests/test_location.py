@@ -270,7 +270,7 @@ class LocationTestCase(unittest.TestCase):
 
         uri = ButlerURI(".", forceAbsolute=False)
         head, tail = uri.split()
-        self.assertEqual((head.geturl(), tail), ("./", "."))
+        self.assertEqual((head.geturl(), tail), ("./", ""))
 
 
 if __name__ == "__main__":

@@ -746,6 +746,14 @@ class ButlerFileURI(ButlerURI):
 
         replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
 
+        # For local file system we can explicitly check to see if this
+        # really is a directory. The URI might point to a location that
+        # does not exists yet but all that matters is if it is a directory
+        # then we make sure use that fact. No need to do the check if
+        # we are already being told.
+        if not forceDirectory and posixpath.isdir(replacements["path"]):
+            forceDirectory = True
+
         # normpath strips trailing "/" so put it back if necessary
         # Acknowledge that trailing separator exists.
         if forceDirectory or (parsed.path.endswith(sep) and not replacements["path"].endswith(sep)):
@@ -1041,6 +1049,14 @@ class ButlerSchemelessURI(ButlerFileURI):
 
         # normpath strips trailing "/" which makes it hard to keep
         # track of directory vs file when calling replaceFile
+
+        # For local file system we can explicitly check to see if this
+        # really is a directory. The URI might point to a location that
+        # does not exists yet but all that matters is if it is a directory
+        # then we make sure use that fact. No need to do the check if
+        # we are already being told.
+        if not forceDirectory and os.path.isdir(replacements["path"]):
+            forceDirectory = True
 
         # add the trailing separator only if explicitly required or
         # if it was stripped by normpath. Acknowledge that trailing
