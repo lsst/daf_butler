@@ -83,6 +83,20 @@ class FileURITestCase(unittest.TestCase):
         self.assertFalse(child.scheme)
         self.assertEqual(child.relative_to(parent), "c/d.txt")
 
+        # File URI and schemeless URI
+        parent = ButlerURI("file:/a/b/c/")
+        child = ButlerURI("e/f/g.txt", forceAbsolute=False)
+
+        # If the child is relative and the parent is absolute we assume
+        # that the child is a child of the parent unless it uses ".."
+        self.assertEqual(child.relative_to(parent), "e/f/g.txt")
+
+        child = ButlerURI("../e/f/g.txt", forceAbsolute=False)
+        self.assertFalse(child.relative_to(parent))
+
+        child = ButlerURI("../c/e/f/g.txt", forceAbsolute=False)
+        self.assertEqual(child.relative_to(parent), "e/f/g.txt")
+
     def testMkdir(self):
         tmpdir = ButlerURI(self.tmpdir)
         newdir = tmpdir.join("newdir/seconddir")
