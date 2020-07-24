@@ -230,14 +230,9 @@ class PosixDatastore(FileLikeDatastore):
             Path relative to datastore root. Returns `None` if the file is
             outside the root.
         """
-        if os.path.isabs(path):
-            absRoot = os.path.abspath(self.root)
-            if os.path.commonpath([absRoot, path]) != absRoot:
-                return None
-            return os.path.relpath(path, absRoot)
-        elif path.startswith(os.path.pardir):
-            return None
-        return path
+        pathUri = ButlerURI(path, forceAbsolute=False)
+        rootUri = ButlerURI(self.root, forceDirectory=True, forceAbsolute=True)
+        return pathUri.relative_to(rootUri)
 
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
         # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
