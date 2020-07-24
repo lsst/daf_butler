@@ -382,10 +382,13 @@ class ButlerURI:
         File URIs assume the path component is local file system. All other
         URIs assume POSIX separators.
         """
-        new = self.dirname()
+        new = self.dirname()  # By definition a directory URI
         # Assume path is posix
         newpath = posixpath.join(new.path, path)
         new._uri = self._uri._replace(path=newpath)
+        # Declare the new URI not be dirLike unless path ended in /
+        if not path.endswith("/"):
+            new.dirLike = False
         return new
 
     def exists(self) -> bool:
@@ -901,6 +904,8 @@ class ButlerSchemelessURI(ButlerFileURI):
         # Assume os path completely
         newpath = os.path.join(new.path, path)
         new._uri = self._uri._replace(path=newpath)
+        if not path.endswith(os.sep):
+            new.dirLike = False
         return new
 
     def isabs(self) -> bool:
