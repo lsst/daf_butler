@@ -64,6 +64,25 @@ class FileURITestCase(unittest.TestCase):
         self.assertTrue(uri.exists(), f"{uri} should now exist")
         self.assertEqual(uri.read().decode(), content)
 
+    def testRelative(self):
+        """Check that we can get subpaths back from two URIs"""
+        parent = ButlerURI(self.tmpdir, forceDirectory=True, forceAbsolute=True)
+        child = ButlerURI(os.path.join(self.tmpdir, "dir1", "file.txt"), forceAbsolute=True)
+
+        self.assertEqual(child.relative_to(parent), "dir1/file.txt")
+
+        not_child = ButlerURI("/a/b/dir1/file.txt")
+        self.assertFalse(not_child.relative_to(parent))
+
+        not_directory = ButlerURI(os.path.join(self.tmpdir, "dir1", "file2.txt"))
+        self.assertFalse(child.relative_to(not_directory))
+
+        # Relative URIs
+        parent = ButlerURI("a/b/", forceAbsolute=False)
+        child = ButlerURI("a/b/c/d.txt", forceAbsolute=False)
+        self.assertFalse(child.scheme)
+        self.assertEqual(child.relative_to(parent), "c/d.txt")
+
     def testMkdir(self):
         tmpdir = ButlerURI(self.tmpdir)
         newdir = tmpdir.join("newdir/seconddir")
@@ -196,10 +215,24 @@ class S3URITestCase(unittest.TestCase):
         self.assertEqual(len(subset), nbytes)  # Extra byte comes back
         self.assertEqual(subset.decode(), content[:nbytes])
 
+    def testWrite(self):
         s3write = ButlerURI(self.makeS3Uri("created.txt"))
         content = "abcdefghijklmnopqrstuv\n"
         s3write.write(content.encode())
         self.assertEqual(s3write.read().decode(), content)
+
+    def testRelative(self):
+        """Check that we can get subpaths back from two URIs"""
+        parent = ButlerURI(self.makeS3Uri("rootdir"), forceDirectory=True)
+        child = ButlerURI(self.makeS3Uri("rootdir/dir1/file.txt"))
+
+        self.assertEqual(child.relative_to(parent), "dir1/file.txt")
+
+        not_child = ButlerURI(self.makeS3Uri("/a/b/dir1/file.txt"))
+        self.assertFalse(not_child.relative_to(parent))
+
+        not_s3 = ButlerURI(os.path.join(self.tmpdir, "dir1", "file2.txt"))
+        self.assertFalse(child.relative_to(not_s3))
 
 
 if __name__ == "__main__":

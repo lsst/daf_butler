@@ -395,6 +395,34 @@ class ButlerURI:
             new.dirLike = False
         return new
 
+    def relative_to(self, other: ButlerURI) -> Optional[str]:
+        """Return the relative path from this URI to the other URI.
+
+        Parameters
+        ----------
+        other : `ButlerURI`
+            URI to use to calculate the relative path. Must be a parent
+            of this URI.
+
+        Returns
+        -------
+        subpath : `str`
+            The sub path of this URI relative to the supplied other URI.
+            Returns `None` if there is no parent child relationship.
+            Scheme and netloc must match.
+        """
+        if self.scheme != other.scheme or self.netloc != other.netloc:
+            return None
+
+        enclosed_path = self._pathLib(self.relativeToPathRoot)
+        parent_path = other.relativeToPathRoot
+        subpath: Optional[str]
+        try:
+            subpath = str(enclosed_path.relative_to(parent_path))
+        except ValueError:
+            subpath = None
+        return subpath
+
     def exists(self) -> bool:
         """Indicate that the resource is available.
 
