@@ -752,9 +752,15 @@ class ButlerFileURI(ButlerURI):
         if is_temporary and transfer == "copy":
             transfer = "move"
 
-        newFullPath = os.path.realpath(self.ospath)
-        if os.path.exists(newFullPath):
-            raise FileExistsError(f"Destination path '{newFullPath}' already exists.")
+        # The output location should not exist
+        if self.exists():
+            raise FileExistsError(f"Destination path '{self}' already exists. Transfer "
+                                  f"from {src} cannot be completed.")
+
+        # Make the path absolute (but don't follow links since that
+        # would possibly cause us to end up in the wrong place if the
+        # file existed already as a soft link)
+        newFullPath = os.path.abspath(self.ospath)
         outputDir = os.path.dirname(newFullPath)
         if not os.path.isdir(outputDir):
             # Must create the directory
