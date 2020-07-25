@@ -979,12 +979,13 @@ class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCa
                             f"Checking path {path}")
 
         for transfer in ("copy", "link", "symlink", "relsymlink"):
-            with tempfile.TemporaryDirectory() as exportDir:
+            with tempfile.TemporaryDirectory(dir=TESTDIR) as exportDir:
                 with exportButler.export(directory=exportDir, format="yaml",
                                          transfer=transfer) as export:
                     export.saveDatasets(datasets)
                     for path in pathsInStore:
-                        self.assertTrue(self.checkFileExists(exportDir, path))
+                        self.assertTrue(self.checkFileExists(exportDir, path),
+                                        f"Check that mode {transfer} exported files")
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):

@@ -47,7 +47,9 @@ class FileURITestCase(unittest.TestCase):
     """Concrete tests for local files"""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        # Use a local tempdir because on macOS the temp dirs use symlinks
+        # so relsymlink gets quite confused.
+        self.tmpdir = tempfile.mkdtemp(dir=TESTDIR)
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir, ignore_errors=True)
@@ -114,7 +116,7 @@ class FileURITestCase(unittest.TestCase):
         for mode in ("copy", "link", "hardlink", "symlink", "relsymlink"):
             dest = ButlerURI(os.path.join(self.tmpdir, f"dest_{mode}.txt"))
             dest.transfer_from(src, transfer=mode)
-            self.assertTrue(dest.exists())
+            self.assertTrue(dest.exists(), f"Check that {dest} exists (transfer={mode})")
 
             with open(dest.ospath, "r") as fh:
                 new_content = fh.read()
