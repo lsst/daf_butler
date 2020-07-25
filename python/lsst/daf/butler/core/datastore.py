@@ -162,7 +162,14 @@ class DatastoreTransaction:
         while self._log:
             ev = self._log.pop()
             try:
-                log.debug("Rolling back transaction: %s", ev.name)
+                log.debug("Rolling back transaction: %s: %s(%s,%s)", ev.name,
+                          ev.undoFunc,
+                          ",".join(str(a) for a in ev.args),
+                          ",".join(f"{k}={v}" for k, v in ev.kwargs.items()))
+            except Exception:
+                # In case we had a problem in stringification of arguments
+                log.warning("Rolling back transaction: %s", ev.name)
+            try:
                 ev.undoFunc(*ev.args, **ev.kwargs)
             except BaseException as e:
                 # Deliberately swallow error that may occur in unrolling

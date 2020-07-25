@@ -823,25 +823,25 @@ class ButlerFileURI(ButlerURI):
             transaction = NoTransaction()
 
         if transfer == "move":
-            with transaction.undoWith("move", shutil.move, newFullPath, local_src):
+            with transaction.undoWith(f"move from {local_src}", shutil.move, newFullPath, local_src):
                 shutil.move(local_src, newFullPath)
         elif transfer == "copy":
-            with transaction.undoWith("copy", os.remove, newFullPath):
+            with transaction.undoWith(f"copy from {local_src}", os.remove, newFullPath):
                 shutil.copy(local_src, newFullPath)
         elif transfer == "link":
             # Try hard link and if that fails use a symlink
-            with transaction.undoWith("link", os.remove, newFullPath):
+            with transaction.undoWith(f"link to {local_src}", os.remove, newFullPath):
                 try:
                     os.link(local_src, newFullPath)
                 except OSError:
                     # Read through existing symlinks
                     os.symlink(local_src, newFullPath)
         elif transfer == "hardlink":
-            with transaction.undoWith("hardlink", os.remove, newFullPath):
+            with transaction.undoWith(f"hardlink to {local_src}", os.remove, newFullPath):
                 os.link(local_src, newFullPath)
         elif transfer == "symlink":
             # Read through existing symlinks
-            with transaction.undoWith("symlink", os.remove, newFullPath):
+            with transaction.undoWith(f"symlink to {local_src}", os.remove, newFullPath):
                 os.symlink(local_src, newFullPath)
         elif transfer == "relsymlink":
             # This is a standard symlink but using a relative path
@@ -849,7 +849,7 @@ class ButlerFileURI(ButlerURI):
             # A full file path confuses it into an extra ../
             newFullPathRoot = os.path.dirname(newFullPath)
             relPath = os.path.relpath(local_src, newFullPathRoot)
-            with transaction.undoWith("relsymlink", os.remove, newFullPath):
+            with transaction.undoWith(f"relsymlink to {local_src}", os.remove, newFullPath):
                 os.symlink(relPath, newFullPath)
         else:
             raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
