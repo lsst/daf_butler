@@ -56,7 +56,7 @@ from lsst.daf.butler import ButlerURI
 from lsst.daf.butler import script
 from lsst.daf.butler.registry import MissingCollectionError
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
-from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
+from lsst.daf.butler.core.s3utils import (setAwsEnvCredentials,
                                           unsetAwsEnvCredentials)
 
 from lsst.daf.butler.tests import MultiDetectorFormatter, MetricsExample
@@ -838,14 +838,14 @@ class FileLikeDatastoreButlerTests(ButlerTests):
     by datastores that inherit from FileLikeDatastore.
     """
 
-    def checkFileExists(self, root, path):
+    def checkFileExists(self, root, relpath):
         """Checks if file exists at a given path (relative to root).
 
         Test testPutTemplates verifies actual physical existance of the files
-        in the requested location. For POSIXDatastore this test is equivalent
-        to `os.path.exists` call.
+        in the requested location.
         """
-        return os.path.exists(os.path.join(root, path))
+        uri = ButlerURI(root, forceDirectory=True)
+        return uri.join(relpath).exists()
 
     def testPutTemplates(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
@@ -877,8 +877,10 @@ class FileLikeDatastoreButlerTests(ButlerTests):
 
         # Put with exactly the data ID keys needed
         ref = butler.put(metric, "metric1", dataId1)
+        uri = butler.getURI(ref)
         self.assertTrue(self.checkFileExists(butler.datastore.root,
-                                             "ingest/metric1/d-r/DummyCamComp_423.pickle"))
+                                             "ingest/metric1/??#?/d-r/DummyCamComp_423.pickle"),
+                        f"Checking existence of {uri}")
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -888,8 +890,10 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         # defining them  to behave now; the important thing is that they
         # must be consistent).
         ref = butler.put(metric, "metric2", dataId2)
+        uri = butler.getURI(ref)
         self.assertTrue(self.checkFileExists(butler.datastore.root,
-                                             "ingest/metric2/d-r/DummyCamComp_v423.pickle"))
+                                             "ingest/metric2/d-r/DummyCamComp_v423.pickle"),
+                        f"Checking existence of {uri}")
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -968,13 +972,12 @@ class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCa
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)
         uris = [exportButler.getURI(d) for d in datasets]
-        datastoreRoot = exportButler.datastore.root
-        if not datastoreRoot.endswith("/"):
-            # datastore should have a root always be ButlerURI
-            datastoreRoot += "/"
-        pathsInStore = [uri.path.replace(datastoreRoot, "") for uri in uris]
+        datastoreRoot = ButlerURI(exportButler.datastore.root, forceDirectory=True)
+
+        pathsInStore = [uri.relative_to(datastoreRoot) for uri in uris]
 
         for path in pathsInStore:
+            # Assume local file system
             self.assertTrue(self.checkFileExists(datastoreRoot, path),
                             f"Checking path {path}")
 
@@ -1195,17 +1198,6 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         # unset any potentially set dummy credentials
         if self.usingDummyCredentials:
             unsetAwsEnvCredentials()
-
-    def checkFileExists(self, root, relpath):
-        """Checks if file exists at a given path (relative to root).
-
-        Test testPutTemplates verifies actual physical existance of the files
-        in the requested location. For S3Datastore this test is equivalent to
-        `lsst.daf.butler.core.s3utils.s3checkFileExists` call.
-        """
-        uri = ButlerURI(root)
-        uri.updateFile(relpath)
-        return s3CheckFileExists(uri)[0]
 
 
 if __name__ == "__main__":

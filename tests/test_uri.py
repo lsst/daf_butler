@@ -23,6 +23,7 @@ import os
 import shutil
 import tempfile
 import unittest
+import urllib.parse
 
 try:
     import boto3
@@ -155,6 +156,80 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(u, j)
         self.assertFalse(j.dirLike)
         self.assertFalse(d.join("not-there.yaml").exists())
+
+    def testEscapes(self):
+        """Special characters in file paths"""
+        src = ButlerURI("bbb/???/test.txt", root=self.tmpdir, forceAbsolute=True)
+        self.assertFalse(src.scheme)
+        src.write(b"Some content")
+        self.assertTrue(src.exists())
+
+        # Use the internal API to force to a file
+        file = src._force_to_file()
+        self.assertTrue(file.exists())
+        self.assertIn("???", file.ospath)
+        self.assertNotIn("???", file.path)
+
+        file.updateFile("tests??.txt")
+        self.assertNotIn("??.txt", file.path)
+        file.write(b"Other content")
+        self.assertEqual(file.read(), b"Other content")
+
+        src.updateFile("tests??.txt")
+        self.assertIn("??.txt", src.path)
+        self.assertEqual(file.read(), src.read(), f"reading from {file.ospath} and {src.ospath}")
+
+        # File URI and schemeless URI
+        parent = ButlerURI("file:" + urllib.parse.quote("/a/b/c/de/??/"))
+        child = ButlerURI("e/f/g.txt", forceAbsolute=False)
+        self.assertEqual(child.relative_to(parent), "e/f/g.txt")
+
+        child = ButlerURI("e/f??#/g.txt", forceAbsolute=False)
+        self.assertEqual(child.relative_to(parent), "e/f??#/g.txt")
+
+        child = ButlerURI("file:" + urllib.parse.quote("/a/b/c/de/??/e/f??#/g.txt"))
+        self.assertEqual(child.relative_to(parent), "e/f??#/g.txt")
+
+        self.assertEqual(child.relativeToPathRoot, "a/b/c/de/??/e/f??#/g.txt")
+
+        # Schemeless so should not quote
+        dir = ButlerURI("bbb/???/", root=self.tmpdir, forceAbsolute=True, forceDirectory=True)
+        self.assertIn("???", dir.ospath)
+        self.assertIn("???", dir.path)
+        self.assertFalse(dir.scheme)
+
+        # dir.join() morphs into a file scheme
+        new = dir.join("test_j.txt")
+        self.assertIn("???", new.ospath, f"Checking {new}")
+        new.write(b"Content")
+
+        new2name = "###/test??.txt"
+        new2 = dir.join(new2name)
+        self.assertIn("???", new2.ospath)
+        new2.write(b"Content")
+        self.assertTrue(new2.ospath.endswith(new2name))
+        self.assertEqual(new.read(), new2.read())
+
+        fdir = dir._force_to_file()
+        self.assertNotIn("???", fdir.path)
+        self.assertIn("???", fdir.ospath)
+        self.assertEqual(fdir.scheme, "file")
+        fnew = dir.join("test_jf.txt")
+        fnew.write(b"Content")
+
+        fnew2 = fdir.join(new2name)
+        fnew2.write(b"Content")
+        self.assertTrue(fnew2.ospath.endswith(new2name))
+        self.assertNotIn("###", fnew2.path)
+
+        self.assertEqual(fnew.read(), fnew2.read())
+
+        # Test that children relative to schemeless and file schemes
+        # still return the same unquoted name
+        self.assertEqual(fnew2.relative_to(fdir), new2name)
+        self.assertEqual(fnew2.relative_to(dir), new2name)
+        self.assertEqual(new2.relative_to(fdir), new2name, f"{new2} vs {fdir}")
+        self.assertEqual(new2.relative_to(dir), new2name)
 
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")

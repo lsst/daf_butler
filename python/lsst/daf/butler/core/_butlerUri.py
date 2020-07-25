@@ -184,6 +184,14 @@ class ButlerURI:
     transferDefault: str = "copy"
     """Default mode to use for transferring if ``auto`` is specified."""
 
+    quotePaths = True
+    """True if path-like elements modifying a URI should be quoted.
+
+    All non-schemeless URIs have to internally use quoted paths. Therefore
+    if a new file name is given (e.g. to updateFile or join) a decision must
+    be made whether to quote it to be consistent.
+    """
+
     # mypy is confused without this
     _uri: urllib.parse.ParseResult
 
@@ -197,6 +205,13 @@ class ButlerURI:
         # Record if we need to post process the URI components
         # or if the instance is already fully configured
         if isinstance(uri, str):
+            # Since local file names can have special characters in them
+            # we need to quote them for the parser but we can unquote
+            # later. Assume that all other URI schemes are quoted.
+            # Since sometimes people write file:/a/b and not file:///a/b
+            # we should not quote in the explicit case of file:
+            if "://" not in uri and not uri.startswith("file:"):
+                uri = urllib.parse.quote(uri)
             parsed = urllib.parse.urlparse(uri)
         elif isinstance(uri, urllib.parse.ParseResult):
             parsed = copy.copy(uri)
@@ -266,12 +281,14 @@ class ButlerURI:
 
         Effectively, this is the path property with posix separator stripped
         from the left hand side of the path.
+
+        Always unquotes.
         """
         p = self._pathLib(self.path)
         relToRoot = str(p.relative_to(p.root))
         if self.dirLike and not relToRoot.endswith("/"):
             relToRoot += "/"
-        return relToRoot
+        return urllib.parse.unquote(relToRoot)
 
     @property
     def fragment(self) -> str:
@@ -318,7 +335,7 @@ class ButlerURI:
         # We need to ensure that it stays that way. All other URIs will
         # be absolute already.
         forceAbsolute = self._pathModule.isabs(self.path)
-        return self.__class__(headuri, forceDirectory=True, forceAbsolute=forceAbsolute), tail
+        return ButlerURI(headuri, forceDirectory=True, forceAbsolute=forceAbsolute), tail
 
     def basename(self) -> str:
         """Returns the base name, last element of path, of the URI. If URI ends
@@ -372,8 +389,11 @@ class ButlerURI:
         Notes
         -----
         Updates the URI in place.
-        Updates the ButlerURI.dirLike attribute.
+        Updates the ButlerURI.dirLike attribute. The new file path will
+        be quoted if necessary.
         """
+        if self.quotePaths:
+            newfile = urllib.parse.quote(newfile)
         dir, _ = self._pathModule.split(self.path)
         newpath = self._pathModule.join(dir, newfile)
 
@@ -402,7 +422,8 @@ class ButlerURI:
         ----------
         path : `str`
             Additional file components to append to the current URI. Assumed
-            to include a file at the end.
+            to include a file at the end. Will be quoted depending on the
+            associated URI scheme.
 
         Returns
         -------
@@ -412,15 +433,22 @@ class ButlerURI:
 
         Notes
         -----
-        File URIs assume the path component is local file system. All other
-        URIs assume POSIX separators.
+        Schemeless URIs assume local path separator but all other URIs assume
+        POSIX separator if the supplied path has directory structure. It
+        may be this never becomes a problem but datastore templates assume
+        POSIX separator is being used.
         """
         new = self.dirname()  # By definition a directory URI
-        # Assume path is posix
-        newpath = posixpath.normpath(posixpath.join(new.path, path))
-        new._uri = self._uri._replace(path=newpath)
+
+        # new should be asked about quoting, not self, since dirname can
+        # change the URI scheme for schemeless -> file
+        if new.quotePaths:
+            path = urllib.parse.quote(path)
+
+        newpath = self._pathModule.normpath(self._pathModule.join(new.path, path))
+        new._uri = new._uri._replace(path=newpath)
         # Declare the new URI not be dirLike unless path ended in /
-        if not path.endswith("/"):
+        if not path.endswith(self._pathModule.sep):
             new.dirLike = False
         return new
 
@@ -450,6 +478,8 @@ class ButlerURI:
             subpath = str(enclosed_path.relative_to(parent_path))
         except ValueError:
             subpath = None
+        else:
+            subpath = urllib.parse.unquote(subpath)
         return subpath
 
     def exists(self) -> bool:
@@ -646,8 +676,11 @@ class ButlerFileURI(ButlerURI):
 
     @property
     def ospath(self) -> str:
-        """Path component of the URI localized to current OS."""
-        return posix2os(self._uri.path)
+        """Path component of the URI localized to current OS.
+
+        Will unquote URI path since a formal URI must include the quoting.
+        """
+        return urllib.parse.unquote(posix2os(self._uri.path))
 
     def exists(self) -> bool:
         # Uses os.path.exists so if there is a soft link that points
@@ -743,6 +776,9 @@ class ButlerFileURI(ButlerURI):
             return fh.read(size)
 
     def write(self, data: bytes, overwrite: bool = True) -> None:
+        dir = os.path.dirname(self.ospath)
+        if not os.path.exists(dir):
+            safeMakeDir(dir)
         if overwrite:
             mode = "wb"
         else:
@@ -947,6 +983,9 @@ class ButlerFileURI(ButlerURI):
         # ParseResult is a NamedTuple so _replace is standard API
         parsed = parsed._replace(**replacements)
 
+        if parsed.params or parsed.query:
+            log.warning("Additional items unexpectedly encountered in file URI: %s", parsed.geturl())
+
         return parsed, dirLike
 
 
@@ -1147,40 +1186,12 @@ class ButlerSchemelessURI(ButlerFileURI):
 
     _pathLib = PurePath
     _pathModule = os.path
+    quotePaths = False
 
     @property
     def ospath(self) -> str:
         """Path component of the URI localized to current OS."""
         return self.path
-
-    def join(self, path: str) -> ButlerURI:
-        """Create a new `ButlerURI` with additional path components including
-        a file.
-
-        Parameters
-        ----------
-        path : `str`
-            Additional file components to append to the current URI. Assumed
-            to include a file at the end.
-
-        Returns
-        -------
-        new : `ButlerURI`
-            New URI with any file at the end replaced with the new path
-            components.
-
-        Notes
-        -----
-        File URIs assume the path component is local file system. All other
-        URIs assume POSIX separators.
-        """
-        new = self.dirname()
-        # Assume os path completely
-        newpath = os.path.normpath(os.path.join(new.path, path))
-        new._uri = self._uri._replace(path=newpath)
-        if not path.endswith(os.sep):
-            new.dirLike = False
-        return new
 
     def isabs(self) -> bool:
         """Indicate that the resource is fully specified.
@@ -1197,6 +1208,8 @@ class ButlerSchemelessURI(ButlerFileURI):
     def _force_to_file(self) -> ButlerFileURI:
         """Force a schemeless URI to a file URI and returns a new URI.
 
+        This will include URI quoting of the path.
+
         Returns
         -------
         file : `ButlerFileURI`
@@ -1211,7 +1224,7 @@ class ButlerSchemelessURI(ButlerFileURI):
         """
         if not self.isabs():
             raise RuntimeError(f"Internal error: Can not force {self} to absolute file URI")
-        uri = self._uri._replace(scheme="file", path=os2posix(self.path))
+        uri = self._uri._replace(scheme="file", path=urllib.parse.quote(os2posix(self.path)))
         # mypy really wants a ButlerFileURI to be returned here
         return ButlerURI(uri, forceDirectory=self.dirLike)  # type: ignore
 
@@ -1265,7 +1278,8 @@ class ButlerSchemelessURI(ButlerFileURI):
             root = os.path.abspath(os.path.curdir)
 
         # this is a local OS file path which can support tilde expansion.
-        expandedPath = os.path.expanduser(parsed.path)
+        # we quoted it in the constructor so unquote here
+        expandedPath = os.path.expanduser(urllib.parse.unquote(parsed.path))
 
         # Ensure that this becomes a file URI if it is already absolute
         if os.path.isabs(expandedPath):
@@ -1306,9 +1320,13 @@ class ButlerSchemelessURI(ButlerFileURI):
 
         if "scheme" in replacements:
             # This is now meant to be a URI path so force to posix
-            replacements["path"] = os2posix(replacements["path"])
+            # and quote
+            replacements["path"] = urllib.parse.quote(os2posix(replacements["path"]))
 
         # ParseResult is a NamedTuple so _replace is standard API
         parsed = parsed._replace(**replacements)
+
+        if parsed.params or parsed.fragment or parsed.query:
+            log.warning("Additional items unexpectedly encountered in schemeless URI: %s", parsed.geturl())
 
         return parsed, dirLike
