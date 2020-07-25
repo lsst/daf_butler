@@ -28,7 +28,6 @@ __all__ = ("PosixDatastore", )
 import hashlib
 import logging
 import os
-import shutil
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -255,58 +254,28 @@ class PosixDatastore(FileLikeDatastore):
         if self._transaction is None:
             raise RuntimeError("Ingest called without transaction enabled")
 
-        fullPath = os.path.normpath(os.path.join(self.root, path))
-        if transfer is not None:
+        # Calculate the full path to the source
+        srcUri = ButlerURI(path, root=self.root, forceAbsolute=True)
+        if transfer is None:
+            # File should exist already
+            rootUri = ButlerURI(self.root, forceDirectory=True)
+            pathInStore = srcUri.relative_to(rootUri)
+            if pathInStore is None:
+                raise RuntimeError(f"Unexpectedly learned that {srcUri} is not within datastore {rootUri}")
+            if not rootUri.exists():
+                raise RuntimeError(f"Unexpectedly discovered that {srcUri} does not exist inside datastore"
+                                   f" {rootUri}")
+            path = pathInStore
+            fullPath = srcUri.ospath
+        elif transfer is not None:
             # Work out the name we want this ingested file to have
             # inside the datastore
-            location = self._calculate_ingested_datastore_name(ButlerURI(fullPath), ref, formatter)
+            location = self._calculate_ingested_datastore_name(srcUri, ref, formatter)
+            path = location.pathInStore
+            fullPath = location.path
+            targetUri = ButlerURI(location.uri)
+            targetUri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction)
 
-            newPath = location.pathInStore
-            newFullPath = location.path
-            if os.path.exists(newFullPath):
-                raise FileExistsError(f"File '{newFullPath}' already exists.")
-            storageDir = os.path.dirname(newFullPath)
-            if not os.path.isdir(storageDir):
-                # Do not attempt to reverse directory creation
-                # because of race conditions with other processes running
-                # ingest in parallel.
-                safeMakeDir(storageDir)
-            if transfer == "move":
-                with self._transaction.undoWith("move", shutil.move, newFullPath, fullPath):
-                    shutil.move(fullPath, newFullPath)
-            elif transfer == "copy":
-                with self._transaction.undoWith("copy", os.remove, newFullPath):
-                    shutil.copy(fullPath, newFullPath)
-            elif transfer == "link":
-                with self._transaction.undoWith("link", os.unlink, newFullPath):
-                    realPath = os.path.realpath(fullPath)
-                    # Try hard link and if that fails use a symlink
-                    try:
-                        os.link(realPath, newFullPath)
-                    except OSError:
-                        # Read through existing symlinks
-                        os.symlink(realPath, newFullPath)
-            elif transfer == "hardlink":
-                with self._transaction.undoWith("hardlink", os.unlink, newFullPath):
-                    os.link(os.path.realpath(fullPath), newFullPath)
-            elif transfer == "symlink":
-                with self._transaction.undoWith("symlink", os.unlink, newFullPath):
-                    # Read through existing symlinks
-                    os.symlink(os.path.realpath(fullPath), newFullPath)
-            elif transfer == "relsymlink":
-                # This is a standard symlink but using a relative path
-                fullPath = os.path.realpath(fullPath)
-
-                # Need the directory name to give to relative root
-                # A full file path confuses it into an extra ../
-                newFullPathRoot, _ = os.path.split(newFullPath)
-                relPath = os.path.relpath(fullPath, newFullPathRoot)
-                with self._transaction.undoWith("relsymlink", os.unlink, newFullPath):
-                    os.symlink(relPath, newFullPath)
-            else:
-                raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
-            path = newPath
-            fullPath = newFullPath
         checksum = self.computeChecksum(fullPath) if self.useChecksum else None
         stat = os.stat(fullPath)
         size = stat.st_size
