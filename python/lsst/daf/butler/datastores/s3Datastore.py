@@ -311,7 +311,9 @@ class S3Datastore(FileLikeDatastore):
         srcUri = ButlerURI(path)
         if transfer is None:
             # The source file is already in the datastore but we have
-            # to work out the path relative to the root of the datastore
+            # to work out the path relative to the root of the datastore.
+            # Because unlike for file to file ingest we can get absolute
+            # URIs here
             rootUri = ButlerURI(self.root, forceDirectory=True)
             pathInStore = srcUri.relative_to(rootUri)
             if pathInStore is None:
