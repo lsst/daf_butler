@@ -87,8 +87,7 @@ class Location:
     def uri(self) -> str:
         """URI string corresponding to fully-specified location in datastore.
         """
-        uriPath = os2posix(self.path)
-        return self._datastoreRootUri.replace(path=uriPath).geturl()
+        return self._datastoreRootUri.join(self.path).geturl()
 
     @property
     def path(self) -> str:
