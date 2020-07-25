@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("ButlerURI",)
 
+import contextlib
 import os
 import os.path
 import shutil
@@ -33,10 +34,13 @@ from pathlib import Path, PurePath, PurePosixPath
 import requests
 import tempfile
 import copy
+import logging
 
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
+    Iterator,
     Optional,
     Tuple,
     Type,
@@ -50,6 +54,10 @@ if TYPE_CHECKING:
         import boto3
     except ImportError:
         pass
+    from .datastore import DatastoreTransaction
+
+
+log = logging.getLogger(__name__)
 
 # Determine if the path separator for the OS looks like POSIX
 IS_POSIX = os.sep == posixpath.sep
@@ -116,6 +124,22 @@ def posix2os(posix: Union[PurePath, str]) -> str:
     return os.path.join(*paths)
 
 
+class NoTransaction:
+    """A simple emulation of the `DatastoreTransaction` class.
+
+    Does nothing.
+    """
+
+    def __init__(self) -> None:
+        return
+
+    @contextlib.contextmanager
+    def undoWith(self, name: str, undoFunc: Callable, *args: Any, **kwargs: Any) -> Iterator[None]:
+        """No-op context manager to replace `DatastoreTransaction`
+        """
+        yield None
+
+
 class ButlerURI:
     """Convenience wrapper around URI parsers.
 
@@ -149,8 +173,13 @@ class ButlerURI:
     _pathModule = posixpath
     """Path module to use for this scheme."""
 
-    transferModes: Tuple[str, ...] = ("copy", "auto")
-    """Transfer modes supported by this implementation."""
+    transferModes: Tuple[str, ...] = ("copy", "auto", "move")
+    """Transfer modes supported by this implementation.
+
+    Move is special in that it is generally a copy followed by an unlink.
+    Whether that unlink works depends critically on whether the source URI
+    implements unlink. If it does not the move will be reported as a failure.
+    """
 
     transferDefault: str = "copy"
     """Default mode to use for transferring if ``auto`` is specified."""
@@ -433,6 +462,10 @@ class ButlerURI:
         """
         raise NotImplementedError()
 
+    def remove(self) -> None:
+        """Remove the resource."""
+        raise NotImplementedError()
+
     def isabs(self) -> bool:
         """Indicate that the resource is fully specified.
 
@@ -569,7 +602,8 @@ class ButlerURI:
 
         return parsed, dirLike
 
-    def transfer_from(self, src: ButlerURI, transfer: str) -> None:
+    def transfer_from(self, src: ButlerURI, transfer: str,
+                      transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
         """Transfer the current resource to a new location.
 
         Parameters
@@ -580,6 +614,9 @@ class ButlerURI:
             Mode to use for transferring the resource. Generically there are
             many standard options: copy, link, symlink, hardlink, relsymlink.
             Not all URIs support all modes.
+        transaction : `DatastoreTransaction`, optional
+            A transaction object that can (depending on implementation)
+            rollback transfers on error.  Not guaranteed to be implemented.
 
         Notes
         -----
@@ -592,6 +629,11 @@ class ButlerURI:
         other scheme has to support "copy" to local file (with implicit
         support for "move") and copy from local file.
         All the "link" options tend to be specific to local file systems.
+
+        "move" is a "copy" where the remote resource is deleted at the end.
+        Whether this works depends on the source URI rather than the
+        destination URI.  Reverting a move on transaction rollback is
+        expected to be problematic if a remote resource was involved.
         """
         raise NotImplementedError(f"No transfer modes supported by URI scheme {self.scheme}")
 
@@ -599,7 +641,7 @@ class ButlerURI:
 class ButlerFileURI(ButlerURI):
     """URI for explicit ``file`` scheme."""
 
-    transferModes = ("copy", "link", "symlink", "hardlink", "relsymlink", "auto")
+    transferModes = ("copy", "link", "symlink", "hardlink", "relsymlink", "auto", "move")
     transferDefault: str = "link"
 
     @property
@@ -608,7 +650,13 @@ class ButlerFileURI(ButlerURI):
         return posix2os(self._uri.path)
 
     def exists(self) -> bool:
+        # Uses os.path.exists so if there is a soft link that points
+        # to a file that no longer exists this will return False
         return os.path.exists(self.ospath)
+
+    def remove(self) -> None:
+        """Remove the resource."""
+        os.remove(self.ospath)
 
     def as_local(self) -> Tuple[str, bool]:
         """Return the local path of the file.
@@ -708,7 +756,8 @@ class ButlerFileURI(ButlerURI):
         elif not os.path.isdir(self.ospath):
             raise FileExistsError(f"URI {self} exists but is not a directory!")
 
-    def transfer_from(self, src: ButlerURI, transfer: str) -> None:
+    def transfer_from(self, src: ButlerURI, transfer: str,
+                      transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
         """Transfer the current resource to a local file.
 
         Parameters
@@ -718,18 +767,15 @@ class ButlerFileURI(ButlerURI):
         transfer : `str`
             Mode to use for transferring the resource. Supports the following
             options: copy, link, symlink, hardlink, relsymlink.
-
-        Notes
-        -----
-        "move" is currently disabled. For the general case it is the riskiest
-        option to implement.
+        transaction : `DatastoreTransaction`, optional
+            If a transaction is provided, undo actions will be registered.
         """
-        if transfer == "move":
-            raise ValueError("move transfers not currently supported")
-
         # Fail early to prevent delays if remote resources are requested
         if transfer not in self.transferModes:
             raise ValueError(f"Transfer mode '{transfer}' not supported by URI scheme {self.scheme}")
+
+        log.debug(f"Transferring {src} [exists: {src.exists()}] -> "
+                  f"{self} [exists: {self.exists()}] (transfer={transfer})")
 
         # We do not have to special case ButlerFileURI here because
         # as_local handles that.
@@ -741,7 +787,10 @@ class ButlerFileURI(ButlerURI):
             transfer = self.transferDefault if not is_temporary else "copy"
 
         # Follow soft links
-        local_src = os.path.realpath(local_src)
+        local_src = os.path.realpath(os.path.normpath(local_src))
+
+        if not os.path.exists(local_src):
+            raise FileNotFoundError(f"Source URI {src} does not exist")
 
         # All the modes involving linking use "link" somewhere
         if "link" in transfer and is_temporary:
@@ -749,6 +798,7 @@ class ButlerFileURI(ButlerURI):
                                f" {transfer} for remote resource ({src})")
 
         # For temporary files we can own them
+        requested_transfer = transfer
         if is_temporary and transfer == "copy":
             transfer = "move"
 
@@ -763,36 +813,56 @@ class ButlerFileURI(ButlerURI):
         newFullPath = os.path.abspath(self.ospath)
         outputDir = os.path.dirname(newFullPath)
         if not os.path.isdir(outputDir):
-            # Must create the directory
+            # Must create the directory -- this can not be rolled back
+            # since another transfer running concurrently may
+            # be relying on this existing.
             safeMakeDir(outputDir)
 
+        if transaction is None:
+            # Use a no-op transaction to reduce code duplication
+            transaction = NoTransaction()
+
         if transfer == "move":
-            shutil.move(local_src, newFullPath)
+            with transaction.undoWith("move", shutil.move, newFullPath, local_src):
+                shutil.move(local_src, newFullPath)
         elif transfer == "copy":
-            shutil.copy(local_src, newFullPath)
+            with transaction.undoWith("copy", os.remove, newFullPath):
+                shutil.copy(local_src, newFullPath)
         elif transfer == "link":
             # Try hard link and if that fails use a symlink
-            try:
-                os.link(local_src, newFullPath)
-            except OSError:
-                # Read through existing symlinks
-                os.symlink(local_src, newFullPath)
+            with transaction.undoWith("link", os.remove, newFullPath):
+                try:
+                    os.link(local_src, newFullPath)
+                except OSError:
+                    # Read through existing symlinks
+                    os.symlink(local_src, newFullPath)
         elif transfer == "hardlink":
-            os.link(local_src, newFullPath)
+            with transaction.undoWith("hardlink", os.remove, newFullPath):
+                os.link(local_src, newFullPath)
         elif transfer == "symlink":
             # Read through existing symlinks
-            os.symlink(local_src, newFullPath)
+            with transaction.undoWith("symlink", os.remove, newFullPath):
+                os.symlink(local_src, newFullPath)
         elif transfer == "relsymlink":
             # This is a standard symlink but using a relative path
             # Need the directory name to give to relative root
             # A full file path confuses it into an extra ../
-            newFullPathRoot, _ = os.path.split(newFullPath)
+            newFullPathRoot = os.path.dirname(newFullPath)
             relPath = os.path.relpath(local_src, newFullPathRoot)
-            os.symlink(relPath, newFullPath)
+            with transaction.undoWith("relsymlink", os.remove, newFullPath):
+                os.symlink(relPath, newFullPath)
         else:
             raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
 
+        # This was an explicit move requested from a remote resource
+        # try to remove that resource. We check is_temporary because
+        # the local file would have been moved by shutil.move already.
+        if requested_transfer == "move" and is_temporary:
+            # Transactions do not work here
+            src.remove()
+
         if is_temporary and os.path.exists(local_src):
+            # This should never happen since we have moved it above
             os.remove(local_src)
 
     @staticmethod
@@ -896,6 +966,15 @@ class ButlerS3URI(ButlerURI):
         exists, _ = s3CheckFileExists(self, client=self.client)
         return exists
 
+    def remove(self) -> None:
+        """Remove the resource."""
+
+        # https://github.com/boto/boto3/issues/507 - there is no
+        # way of knowing if the file was actually deleted except
+        # for checking all the keys again, reponse is  HTTP 204 OK
+        # response all the time
+        self.client.delete(Bucket=self.netloc, Key=self.relativeToPathRoot)
+
     def read(self, size: int = -1) -> bytes:
         args = {}
         if size > 0:
@@ -944,7 +1023,8 @@ class ButlerS3URI(ButlerURI):
             self.client.download_fileobj(self.netloc, self.relativeToPathRoot, tmpFile)
         return tmpFile.name, True
 
-    def transfer_from(self, src: ButlerURI, transfer: str = "copy") -> None:
+    def transfer_from(self, src: ButlerURI, transfer: str = "copy",
+                      transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
         """Transfer the current resource to an S3 bucket.
 
         Parameters
@@ -954,15 +1034,18 @@ class ButlerS3URI(ButlerURI):
         transfer : `str`
             Mode to use for transferring the resource. Supports the following
             options: copy.
-
-        Notes
-        -----
-        "move" is currently disabled. For the general case it is the riskiest
-        option to implement.
+        transaction : `DatastoreTransaction`, optional
+            Currently unused.
         """
         # Fail early to prevent delays if remote resources are requested
         if transfer not in self.transferModes:
             raise ValueError(f"Transfer mode '{transfer}' not supported by URI scheme {self.scheme}")
+
+        log.debug(f"Transferring {src} [exists: {src.exists()}] -> "
+                  f"{self} [exists: {self.exists()}] (transfer={transfer})")
+
+        if self.exists():
+            raise FileExistsError(f"Destination path '{self}' already exists.")
 
         if transfer == "auto":
             transfer = self.transferDefault
@@ -987,6 +1070,12 @@ class ButlerS3URI(ButlerURI):
                                        Key=self.relativeToPathRoot, Body=fh)
             if is_temporary:
                 os.remove(local_src)
+
+        # This was an explicit move requested from a remote resource
+        # try to remove that resource
+        if transfer == "move":
+            # Transactions do not work here
+            src.remove()
 
 
 class ButlerPackageResourceURI(ButlerURI):
