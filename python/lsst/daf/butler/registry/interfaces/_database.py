@@ -321,7 +321,8 @@ class Database(ABC):
         raise NotImplementedError()
 
     @contextmanager
-    def transaction(self, *, interrupting: bool = False, savepoint: bool = False) -> Iterator:
+    def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
+                    lock: Iterable[str] = ()) -> Iterator:
         """Return a context manager that represents a transaction.
 
         Parameters
@@ -341,6 +342,13 @@ class Database(ABC):
             outer transaction block was created with ``savepoint=True``, all
             inner blocks will be as well (regardless of the actual value
             passed).  This has no effect if this is the outermost transaction.
+        lock : `Iterable` [ `str` ], optional
+            A list of table names that should be locked for the duration of
+            the transaction.  This lock prevents concurrent writes to these
+            tables, but not reads.  Only valid when this is the outermost
+            transaction.  Implementations are permitted to lock more tables
+            than those requested (in particular, SQLite will always lock the
+            entire database).
 
         Notes
         -----
@@ -348,6 +356,8 @@ class Database(ABC):
         instances _must_ go through this method, or transaction state will not
         be correctly managed.
         """
+        lock = tuple(lock)
+        interrupting = interrupting or bool(lock)
         assert not (interrupting and self._connection.in_transaction()), (
             "Logic error in transaction nesting: an operation that would "
             "interrupt the active transaction context has been requested."
@@ -368,6 +378,8 @@ class Database(ABC):
             # Use a regular (non-savepoint) transaction only for the outermost
             # context.
             trans = self._connection.begin()
+        if lock:
+            self._lockTables(lock)
         try:
             yield
             trans.commit()
@@ -377,6 +389,16 @@ class Database(ABC):
         finally:
             if not self._connection.in_transaction():
                 self._connection.info.pop(_IN_SAVEPOINT_TRANSACTION, None)
+
+    @abstractmethod
+    def _lockTables(self, tables: Tuple[str, ...]) -> None:
+        """Acquire shared locks on the given tables, preventing write access
+        from other connections until the end of this connection's active
+        transaction.
+
+        This method is always called just after a transaction is started.
+        """
+        raise NotImplementedError()
 
     @contextmanager
     def declareStaticTables(self, *, create: bool) -> Iterator[StaticTablesContext]:

@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["PostgresqlDatabase"]
 
 from contextlib import contextmanager, closing
-from typing import Iterator, Optional
+from typing import Iterable, Iterator, Optional, Tuple
 
 import sqlalchemy
 
@@ -82,12 +82,17 @@ class PostgresqlDatabase(Database):
         return cls(connection=connection, origin=origin, namespace=namespace, writeable=writeable)
 
     @contextmanager
-    def transaction(self, *, interrupting: bool = False, savepoint: bool = False) -> Iterator[None]:
-        with super().transaction(interrupting=interrupting, savepoint=savepoint):
+    def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
+                    lock: Iterable[str] = ()) -> Iterator[None]:
+        with super().transaction(interrupting=interrupting, savepoint=savepoint, lock=lock):
             if not self.isWriteable():
                 with closing(self._connection.connection.cursor()) as cursor:
                     cursor.execute("SET TRANSACTION READ ONLY")
             yield
+
+    def _lockTables(self, tables: Tuple[str, ...]) -> None:
+        # Docstring inherited from Database.
+        self._connection.execute(f"LOCK TABLE {', '.join(tables)} IN SHARE MODE")
 
     def isWriteable(self) -> bool:
         return self._writeable

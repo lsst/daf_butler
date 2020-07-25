@@ -22,9 +22,9 @@ from __future__ import annotations
 
 __all__ = ["SqliteDatabase"]
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 import copy
-from typing import Any, ContextManager, Dict, Iterable, List, Optional
+from typing import Any, ContextManager, Dict, Iterable, Iterator, List, Optional, Tuple
 from dataclasses import dataclass
 import os
 import urllib.parse
@@ -37,6 +37,9 @@ from ..interfaces import Database, ReadOnlyDatabaseError, StaticTablesContext
 from ...core import ddl
 
 
+_DO_BEGIN_IMMEDIATE = "DO_BEGIN_IMMEDIATE"
+
+
 def _onSqlite3Connect(dbapiConnection: sqlite3.Connection,
                       connectionRecord: sqlalchemy.pool._ConnectionRecord) -> None:
     assert isinstance(dbapiConnection, sqlite3.Connection)
@@ -45,16 +48,18 @@ def _onSqlite3Connect(dbapiConnection: sqlite3.Connection,
     # Enable foreign keys
     with closing(dbapiConnection.cursor()) as cursor:
         cursor.execute("PRAGMA foreign_keys=ON;")
-        cursor.execute("PRAGMA busy_timeout = 300000;")  # in ms, so 5min (way longer than should be needed)
+        cursor.execute("PRAGMA busy_timeout = 30000;")  # in ms, so 5min (way longer than should be needed)
 
 
 def _onSqlite3Begin(connection: sqlalchemy.engine.Connection) -> sqlalchemy.engine.Connection:
     assert connection.dialect.name == "sqlite"
     # Replace pysqlite's buggy transaction handling that never BEGINs with our
-    # own that does, and tell SQLite to try to acquire a lock as soon as we
-    # start a transaction (this should lead to more blocking and fewer
-    # deadlocks).
-    connection.execute("BEGIN IMMEDIATE")
+    # own that does.  And if we were asked to lock a table in transaction(),
+    # tell SQLite to try to acquire a whole-database lock immediately.
+    if connection.info.get(_DO_BEGIN_IMMEDIATE, False):
+        connection.execute("BEGIN IMMEDIATE")
+    else:
+        connection.execute("BEGIN")
     return connection
 
 
@@ -247,6 +252,24 @@ class SqliteDatabase(Database):
     def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
                        namespace: Optional[str] = None, writeable: bool = True) -> Database:
         return cls(connection=connection, origin=origin, writeable=writeable, namespace=namespace)
+
+    @contextmanager
+    def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
+                    lock: Iterable[str] = ()) -> Iterator:
+        # Docstring inherited from Database.
+        lock = tuple(lock)
+        self._connection.info[_DO_BEGIN_IMMEDIATE] = bool(lock)
+        with super().transaction(interrupting=interrupting, savepoint=savepoint, lock=lock):
+            self._connection.info[_DO_BEGIN_IMMEDIATE] = False
+            yield
+
+    def _lockTables(self, tables: Tuple[str, ...]) -> None:
+        # Docstring inherited from Database.
+        # SQLite can't do direct table locking, so we make this a no-op, and
+        # override transaction() to tell our _onSqlite3Begin hook to do
+        # BEGIN IMMEDIATE instead of just BEGIN, hence locking the entire
+        # database.
+        pass
 
     def isWriteable(self) -> bool:
         return self._writeable
