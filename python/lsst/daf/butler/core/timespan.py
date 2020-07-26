@@ -25,6 +25,8 @@ __all__ = ("Timespan", "TIMESPAN_FIELD_SPECS", "TIMESPAN_MIN", "TIMESPAN_MAX")
 import operator
 from typing import Any, Generic, Optional, TypeVar
 
+import sqlalchemy
+
 from . import ddl, time_utils
 
 
@@ -117,22 +119,38 @@ class Timespan(BaseTimespan[Optional[T]]):
             be a `bool`.  If ``ops`` is `sqlachemy.sql`, it will be a boolean
             column expression.
         """
-        # Silence flake8 below because we use "== None" to invoke SQLAlchemy
-        # operator overloads.
-        # Silence mypy below because this whole method is very much dynamically
-        # typed.
-        return ops.and_(
-            ops.or_(
-                self.end == None,  # noqa: E711
-                other.begin == None,  # noqa: E711
-                self.end >= other.begin,  # type: ignore
-            ),
-            ops.or_(
-                self.begin == None,  # noqa: E711
-                other.end == None,  # noqa: E711
-                other.end >= self.begin,  # type: ignore
-            ),
-        )
+        # Once upon a time, we thought we could write one piece of logic that
+        # Just Worked whether the inputs were SQLAlchemy column expressions or
+        # Python literals, as long as the user passed the right module as
+        # `ops`.  That was wrong; those modules aren't really at all
+        # substitutable in the ways we need (`operator` chokes on gt/lt with
+        # `None`, and `operator.or_` can only take two args).  But we preserve
+        # that interface anyway to avoid breaking other code.
+        if ops is operator:
+            # All values must be Python literals, not sqlalchemy columns.
+            # Python will complain for us if that isn't the case.
+            return (
+                (self.end is None or other.begin is None or self.end > other.begin)
+                and (self.begin is None or other.end is None or other.end > self.begin)
+            )
+        elif ops is sqlalchemy.sql:
+            # Silence flake8 below because we use "== None" to invoke
+            # SQLAlchemy operator overloads.  Silence mypy below because this
+            # whole method is very much dynamically typed.
+            return ops.and_(
+                ops.or_(
+                    self.end == None,  # noqa: E711
+                    other.begin == None,  # noqa: E711
+                    self.end > other.begin,  # type: ignore
+                ),
+                ops.or_(
+                    self.begin == None,  # noqa: E711
+                    other.end == None,  # noqa: E711
+                    other.end > self.begin,  # type: ignore
+                ),
+            )
+        else:
+            raise TypeError(f"Unrecognized operator suite '{ops}'.")
 
     def intersection(*args: Timespan[Any]) -> Optional[Timespan]:
         """Return a new `Timespan` that is contained by all of the given ones.
@@ -172,7 +190,7 @@ class Timespan(BaseTimespan[Optional[T]]):
                 end = ends[0]
             else:
                 end = min(*ends) if ends else None
-            if begin is not None and end is not None and begin > end:
+            if begin is not None and end is not None and begin >= end:
                 return None
             return Timespan(begin=begin, end=end)
 
