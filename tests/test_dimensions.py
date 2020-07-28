@@ -35,7 +35,6 @@ from lsst.daf.butler import (
     Dimension,
     DimensionGraph,
     DimensionUniverse,
-    makeDimensionElementTableSpec,
     NamedKeyDict,
     NamedValueSet,
     Registry,
@@ -187,7 +186,7 @@ class DimensionTestCase(unittest.TestCase):
         tableSpecs = NamedKeyDict({})
         for element in self.universe.elements:
             if element.hasTable and element.viewOf is None:
-                tableSpecs[element] = makeDimensionElementTableSpec(element)
+                tableSpecs[element] = element.RecordClass.fields.makeTableSpec()
         for element, tableSpec in tableSpecs.items():
             for dep in element.required:
                 with self.subTest(element=element.name, dep=dep.name):
@@ -226,7 +225,6 @@ class DimensionTestCase(unittest.TestCase):
                                      tableSpecs[foreignKey.table].fields[target].length)
                     self.assertEqual(tableSpec.fields[source].nbytes,
                                      tableSpecs[foreignKey.table].fields[target].nbytes)
-            self.assertEqual(tuple(tableSpec.fields.names), element.RecordClass.__slots__)
 
     def testPickling(self):
         # Pickling and copying should always yield the exact same object within

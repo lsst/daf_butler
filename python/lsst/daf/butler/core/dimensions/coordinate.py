@@ -522,10 +522,10 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             record = self._record(element.name)
             # DimensionRecord subclasses for temporal elements always have
             # .timespan, but they're dynamic so this can't be type-checked.
-            if record is None or record.timespan is None:  # type:ignore
+            if record is None or record.timespan is None:
                 return None
             else:
-                timespans.append(record.timespan)  # type:ignore
+                timespans.append(record.timespan)
         return Timespan.intersection(*timespans)
 
     def pack(self, name: str, *, returnMaxBits: bool = False) -> Union[Tuple[int, int], int]:

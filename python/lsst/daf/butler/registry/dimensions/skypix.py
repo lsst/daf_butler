@@ -101,7 +101,7 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
         RecordClass = self._dimension.RecordClass
         for dataId in dataIds:
             index = dataId[self._dimension.name]
-            yield RecordClass(index, self._dimension.pixelization.pixel(index))
+            yield RecordClass(id=index, region=self._dimension.pixelization.pixel(index))
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.

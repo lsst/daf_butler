@@ -31,7 +31,6 @@ from ...core import (
     Dimension,
     DimensionElement,
     DimensionRecord,
-    makeDimensionElementTableSpec,
     NamedKeyDict,
     Timespan,
 )
@@ -60,7 +59,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         self._db = db
         self._element = element
         self._target = element.universe[element.viewOf]
-        self._targetSpec = makeDimensionElementTableSpec(self._target)
+        self._targetSpec = self._target.RecordClass.fields.makeTableSpec()
         self._query = None  # Constructed on first use.
         if element not in self._target.graph.dimensions:
             raise NotImplementedError("Query-backed dimension must be a dependency of its target.")
@@ -132,8 +131,8 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             # results.
             return
         self._ensureQuery()
-        joinOn = builder.startJoin(self._query, list(self.element.required),
-                                   self.element.RecordClass.__slots__)
+        joinOn = builder.startJoin(self._query, self.element.required,
+                                   self.element.RecordClass.fields.required.names)
         builder.finishJoin(self._query, joinOn)
         return self._query
 
@@ -151,7 +150,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         for dataId in dataIds:
             # Given the restrictions imposed at construction, we know there's
             # nothing to actually fetch: everything we need is in the data ID.
-            yield RecordClass.fromDict(dataId.byName())
+            yield RecordClass(**dataId.byName())
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.

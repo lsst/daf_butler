@@ -220,7 +220,7 @@ class RegistryTests(ABC):
         dimension2 = registry.dimensions[dimensionName2]
         dimensionValue2 = {"name": "DummyCam_i", "abstract_filter": "i"}
         # Missing required dependency ("instrument") should fail
-        with self.assertRaises(sqlalchemy.exc.IntegrityError):
+        with self.assertRaises(KeyError):
             registry.insertDimensionData(dimensionName2, dimensionValue2)
         # Adding required dependency should fix the failure
         dimensionValue2["instrument"] = "DummyCam"

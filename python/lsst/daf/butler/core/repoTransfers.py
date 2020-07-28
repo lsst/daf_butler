@@ -325,7 +325,7 @@ class YamlRepoExportBackend(RepoExportBackend):
 
     def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord) -> None:
         # Docstring inherited from RepoExportBackend.saveDimensionData.
-        data_dicts = [record.toDict() for record in data]
+        data_dicts = [record.toDict(splitTimespan=True) for record in data]
         self.data.append({
             "type": "dimension",
             "element": element.name,
@@ -413,7 +413,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                 element = self.registry.dimensions[data["element"]]
                 RecordClass: Type[DimensionRecord] = element.RecordClass
                 self.dimensions[element].extend(
-                    RecordClass.fromDict(r) for r in data["records"]
+                    RecordClass(**r) for r in data["records"]
                 )
             elif data["type"] == "run":
                 self.runs.append(data["name"])

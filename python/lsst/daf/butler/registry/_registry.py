@@ -899,7 +899,7 @@ class Registry:
         if conform:
             if isinstance(element, str):
                 element = self.dimensions[element]
-            records = [row if isinstance(row, DimensionRecord) else element.RecordClass.fromDict(row)
+            records = [row if isinstance(row, DimensionRecord) else element.RecordClass(**row)
                        for row in data]
         else:
             # Ignore typing since caller said to trust them with conform=False.
@@ -945,7 +945,7 @@ class Registry:
         if conform:
             if isinstance(element, str):
                 element = self.dimensions[element]
-            record = row if isinstance(row, DimensionRecord) else element.RecordClass.fromDict(row)
+            record = row if isinstance(row, DimensionRecord) else element.RecordClass(**row)
         else:
             # Ignore typing since caller said to trust them with conform=False.
             record = row  # type: ignore

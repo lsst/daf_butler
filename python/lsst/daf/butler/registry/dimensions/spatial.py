@@ -31,7 +31,6 @@ from ...core import (
     ddl,
     DimensionElement,
     DimensionRecord,
-    makeDimensionElementTableSpec,
     NamedKeyDict,
     NamedValueSet,
     REGION_FIELD_SPEC,
@@ -107,7 +106,7 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         return cls(
             db,
             element,
-            table=method(element.name, makeDimensionElementTableSpec(element)),
+            table=method(element.name, element.RecordClass.fields.makeTableSpec()),
             commonSkyPixOverlapTable=method(
                 _OVERLAP_TABLE_NAME_PATTERN.format(element.name, element.universe.commonSkyPix.name),
                 _makeOverlapTableSpec(element, element.universe.commonSkyPix)
