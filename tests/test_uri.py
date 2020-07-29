@@ -123,7 +123,7 @@ class FileURITestCase(unittest.TestCase):
                 new_content = fh.read()
             self.assertEqual(new_content, content)
 
-            if "symlink" in mode:
+            if mode in ("symlink", "relsymlink"):
                 self.assertTrue(os.path.islink(dest.ospath), f"Check that {dest} is symlink")
 
             os.remove(dest.ospath)
