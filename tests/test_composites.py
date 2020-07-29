@@ -43,10 +43,8 @@ class TestCompositesConfig(unittest.TestCase):
         self.assertIn("default", c)
         # Check merging has worked
         rootKey = "disassembled"
-        self.assertIn(f".{rootKey}.calexp", c)
         self.assertIn(f".{rootKey}.dummyTrue", c)
         self.assertIn(f".{rootKey}.StructuredComposite", c)
-        self.assertIn(f".{rootKey}.ExposureF", c)
 
         # Check that all entries are booleans (this is meant to be enforced
         # internally)
