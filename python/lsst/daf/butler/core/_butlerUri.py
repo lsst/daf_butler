@@ -243,8 +243,12 @@ class ButlerURI:
             elif parsed.scheme == "resource":
                 # Rules for scheme names disasllow pkg_resource
                 subclass = ButlerPackageResourceURI
+            elif parsed.scheme == "mem":
+                # in-memory datastore object
+                subclass = ButlerInMemoryURI
             else:
-                subclass = ButlerGenericURI
+                raise NotImplementedError(f"No URI support for scheme: '{parsed.scheme}'"
+                                          " in {parsed.geturl()}")
 
             parsed, dirLike = subclass._fixupPathUri(parsed, root=root,
                                                      forceAbsolute=forceAbsolute,
@@ -1185,12 +1189,16 @@ class ButlerHttpURI(ButlerURI):
             return next(r.iter_content(chunk_size=size))
 
 
-class ButlerGenericURI(ButlerURI):
-    """Generic URI with a defined scheme"""
+class ButlerInMemoryURI(ButlerURI):
+    """Internal in-memory datastore URI (`mem://`).
+
+    Not used for any real purpose other than indicating that the dataset
+    is in memory.
+    """
 
     def exists(self) -> bool:
         """Test for existence and always return False."""
-        return False
+        return True
 
     def as_local(self) -> Tuple[str, bool]:
         raise RuntimeError(f"Do not know how to retrieve data for URI '{self}'")
