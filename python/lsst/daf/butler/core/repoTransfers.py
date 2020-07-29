@@ -329,7 +329,7 @@ class YamlRepoExportBackend(RepoExportBackend):
         self.data.append({
             "type": "dimension",
             "element": element.name,
-            "records": data_dicts,  # TODO: encode regions
+            "records": data_dicts,
         })
 
     def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset) -> None:
