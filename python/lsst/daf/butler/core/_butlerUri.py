@@ -40,6 +40,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    cast,
     Iterator,
     Optional,
     Tuple,
@@ -777,9 +778,12 @@ class ButlerFileURI(ButlerURI):
         if self.scheme == other.scheme:
             return super().relative_to(other)
 
-        # Force everything to file
-        # mypy does not know that only ButlerFileURI can do force_to_file
-        return self._force_to_file().relative_to(other._force_to_file())  # type: ignore
+        # if one is schemeless and the other is not the base implementation
+        # will fail so we need to fix that -- they are both absolute so
+        # forcing to file is fine.
+        # Use a cast to convince mypy that other has to be a ButlerFileURI
+        # in order to get to this part of the code.
+        return self._force_to_file().relative_to(cast(ButlerFileURI, other)._force_to_file())
 
     def read(self, size: int = -1) -> bytes:
         # Docstring inherits
