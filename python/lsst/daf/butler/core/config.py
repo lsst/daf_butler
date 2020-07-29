@@ -271,7 +271,7 @@ class Config(collections.abc.MutableMapping):
             Path or a URI to a persisted config file.
         """
         uri = ButlerURI(path)
-        if uri.path.endswith("yaml"):
+        if uri.getExtension() == ".yaml":
             log.debug("Opening YAML config file: %s", uri.geturl())
             content = uri.read()
             # Use a stream so we can name it
