@@ -71,7 +71,7 @@ def os2posix(ospath: str) -> str:
 
     Parameters
     ----------
-    path : `str`
+    ospath : `str`
         Path using the local path separator.
 
     Returns
@@ -98,7 +98,7 @@ def posix2os(posix: Union[PurePath, str]) -> str:
 
     Parameters
     ----------
-    posix : `str`
+    posix : `str`, `PurePath`
         Path using the POSIX path separator.
 
     Returns
@@ -191,6 +191,12 @@ class ButlerURI:
     if a new file name is given (e.g. to updateFile or join) a decision must
     be made whether to quote it to be consistent.
     """
+
+    # This is not an ABC with abstract methods because the __new__ being
+    # a factory confuses mypy such that it assumes that every constructor
+    # returns a ButlerURI and then determines that all the abstract methods
+    # are still abstract. If they are not marked abstract but just raise
+    # mypy is fine with it.
 
     # mypy is confused without this
     _uri: urllib.parse.ParseResult
@@ -741,6 +747,12 @@ class ButlerFileURI(ButlerURI):
             starts with ".." (in which case the path is combined and tested).
             If both URIs are relative, the relative paths are compared
             for commonality.
+
+        Notes
+        -----
+        By definition a relative path will be relative to the enclosing
+        absolute parent URI. It will be returned unchanged if it does not
+        use a parent directory specification.
         """
         # We know self is a file so check the other. Anything other than
         # file or schemeless means by definition these have no paths in common
@@ -760,9 +772,8 @@ class ButlerFileURI(ButlerURI):
             childUri = other.join(self.path)
             return childUri.relative_to(other)
 
-        # if one is schemeless and the other is not the base implementation
-        # will fail so we need to fix that -- they are both absolute so
-        # forcing to file is fine
+        # By this point if the schemes are identical we can use the
+        # base class implementation.
         if self.scheme == other.scheme:
             return super().relative_to(other)
 
