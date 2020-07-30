@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     from .configSupport import LookupKey
     from .repoTransfers import FileDataset
     from .storageClass import StorageClass
-    from .location import ButlerURI
+    from ._butlerUri import ButlerURI
 
 
 class DatastoreConfig(ConfigSubset):
@@ -158,13 +158,21 @@ class DatastoreTransaction:
     def rollback(self) -> None:
         """Roll back all events in this transaction.
         """
+        log = logging.getLogger(__name__)
         while self._log:
             ev = self._log.pop()
+            try:
+                log.debug("Rolling back transaction: %s: %s(%s,%s)", ev.name,
+                          ev.undoFunc,
+                          ",".join(str(a) for a in ev.args),
+                          ",".join(f"{k}={v}" for k, v in ev.kwargs.items()))
+            except Exception:
+                # In case we had a problem in stringification of arguments
+                log.warning("Rolling back transaction: %s", ev.name)
             try:
                 ev.undoFunc(*ev.args, **ev.kwargs)
             except BaseException as e:
                 # Deliberately swallow error that may occur in unrolling
-                log = logging.getLogger(__name__)
                 log.warning("Exception: %s caught while unrolling: %s", e, ev.name)
                 pass
 

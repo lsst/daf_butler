@@ -19,12 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import copy
 import unittest
 import os.path
 import posixpath
+import pickle
 
 from lsst.daf.butler import LocationFactory, ButlerURI
-from lsst.daf.butler.core.location import os2posix, posix2os
+from lsst.daf.butler.core._butlerUri import os2posix, posix2os
 
 
 class LocationTestCase(unittest.TestCase):
@@ -114,6 +116,13 @@ class LocationTestCase(unittest.TestCase):
             with self.subTest(uri=uriInfo[0]):
                 self.assertEqual(uri.path, uriInfo[2])
 
+        # Check that schemeless can become file scheme
+        schemeless = ButlerURI("relative/path.ext")
+        filescheme = ButlerURI("/absolute/path.ext")
+        self.assertFalse(schemeless.scheme)
+        self.assertEqual(filescheme.scheme, "file")
+        self.assertNotEqual(type(schemeless), type(filescheme))
+
         # Copy constructor
         uri = ButlerURI("s3://amazon/datastore", forceDirectory=True)
         uri2 = ButlerURI(uri)
@@ -121,6 +130,49 @@ class LocationTestCase(unittest.TestCase):
         uri = ButlerURI("file://amazon/datastore/file.txt")
         uri2 = ButlerURI(uri)
         self.assertEqual(uri, uri2)
+
+        # Copy constructor using subclass
+        uri3 = type(uri)(uri)
+        self.assertEqual(type(uri), type(uri3))
+
+        # Explicit copy
+        uri4 = copy.copy(uri3)
+        self.assertEqual(uri4, uri3)
+        uri4 = copy.deepcopy(uri3)
+        self.assertEqual(uri4, uri3)
+
+    def testUriJoin(self):
+        uri = ButlerURI("a/b/c/d", forceDirectory=True, forceAbsolute=False)
+        uri2 = uri.join("e/f/g.txt")
+        self.assertEqual(str(uri2), "a/b/c/d/e/f/g.txt", f"Checking joined URI {uri} -> {uri2}")
+
+        uri = ButlerURI("a/b/c/d/old.txt", forceAbsolute=False)
+        uri2 = uri.join("e/f/g.txt")
+        self.assertEqual(str(uri2), "a/b/c/d/e/f/g.txt", f"Checking joined URI {uri} -> {uri2}")
+
+        uri = ButlerURI("a/b/c/d", forceDirectory=True, forceAbsolute=True)
+        uri2 = uri.join("e/f/g.txt")
+        self.assertTrue(str(uri2).endswith("a/b/c/d/e/f/g.txt"), f"Checking joined URI {uri} -> {uri2}")
+
+        uri = ButlerURI("s3://bucket/a/b/c/d", forceDirectory=True)
+        uri2 = uri.join("newpath/newfile.txt")
+        self.assertEqual(str(uri2), "s3://bucket/a/b/c/d/newpath/newfile.txt")
+
+        uri = ButlerURI("s3://bucket/a/b/c/d/old.txt")
+        uri2 = uri.join("newpath/newfile.txt")
+        self.assertEqual(str(uri2), "s3://bucket/a/b/c/d/newpath/newfile.txt")
+
+    def testButlerUriSerialization(self):
+        """Test that we can pickle and yaml"""
+        uri = ButlerURI("a/b/c/d")
+        uri2 = pickle.loads(pickle.dumps(uri))
+        self.assertEqual(uri, uri2)
+        self.assertFalse(uri2.dirLike)
+
+        uri = ButlerURI("a/b/c/d", forceDirectory=True)
+        uri2 = pickle.loads(pickle.dumps(uri))
+        self.assertEqual(uri, uri2)
+        self.assertTrue(uri2.dirLike)
 
     def testFileLocation(self):
         root = os.path.abspath(os.path.curdir)
@@ -206,20 +258,19 @@ class LocationTestCase(unittest.TestCase):
         head, tail = uri.split()
         self.assertEqual((head.geturl(), tail), (f"file://{posixRelFilePath}/", "file.ext"))
 
-        # check head can be empty
-        curDir = os.path.abspath(os.path.curdir) + os.sep
+        # check head can be empty and we do not get an absolute path back
         uri = ButlerURI("file.ext", forceAbsolute=False)
         head, tail = uri.split()
-        self.assertEqual((head.geturl(), tail), (curDir, "file.ext"))
+        self.assertEqual((head.geturl(), tail), ("./", "file.ext"))
 
-        # ensure empty path is not a problem and conforms to os.path.split
+        # ensure empty path splits to a directory URL
         uri = ButlerURI("", forceAbsolute=False)
         head, tail = uri.split()
-        self.assertEqual((head.geturl(), tail), (curDir, ""))
+        self.assertEqual((head.geturl(), tail), ("./", ""))
 
         uri = ButlerURI(".", forceAbsolute=False)
         head, tail = uri.split()
-        self.assertEqual((head.geturl(), tail), (curDir, "."))
+        self.assertEqual((head.geturl(), tail), ("./", ""))
 
 
 if __name__ == "__main__":

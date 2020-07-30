@@ -56,7 +56,7 @@ from lsst.daf.butler import ButlerURI
 from lsst.daf.butler import script
 from lsst.daf.butler.registry import MissingCollectionError
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
-from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
+from lsst.daf.butler.core.s3utils import (setAwsEnvCredentials,
                                           unsetAwsEnvCredentials)
 
 from lsst.daf.butler.tests import MultiDetectorFormatter, MetricsExample
@@ -838,14 +838,14 @@ class FileLikeDatastoreButlerTests(ButlerTests):
     by datastores that inherit from FileLikeDatastore.
     """
 
-    def checkFileExists(self, root, path):
+    def checkFileExists(self, root, relpath):
         """Checks if file exists at a given path (relative to root).
 
         Test testPutTemplates verifies actual physical existance of the files
-        in the requested location. For POSIXDatastore this test is equivalent
-        to `os.path.exists` call.
+        in the requested location.
         """
-        return os.path.exists(os.path.join(root, path))
+        uri = ButlerURI(root, forceDirectory=True)
+        return uri.join(relpath).exists()
 
     def testPutTemplates(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
@@ -877,8 +877,10 @@ class FileLikeDatastoreButlerTests(ButlerTests):
 
         # Put with exactly the data ID keys needed
         ref = butler.put(metric, "metric1", dataId1)
+        uri = butler.getURI(ref)
         self.assertTrue(self.checkFileExists(butler.datastore.root,
-                                             "ingest/metric1/d-r/DummyCamComp_423.pickle"))
+                                             "ingest/metric1/??#?/d-r/DummyCamComp_423.pickle"),
+                        f"Checking existence of {uri}")
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -888,8 +890,10 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         # defining them  to behave now; the important thing is that they
         # must be consistent).
         ref = butler.put(metric, "metric2", dataId2)
+        uri = butler.getURI(ref)
         self.assertTrue(self.checkFileExists(butler.datastore.root,
-                                             "ingest/metric2/d-r/DummyCamComp_v423.pickle"))
+                                             "ingest/metric2/d-r/DummyCamComp_v423.pickle"),
+                        f"Checking existence of {uri}")
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -916,7 +920,10 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         self.runImportExportTest(storageClass)
 
     def runImportExportTest(self, storageClass):
+        """This test does an export to a temp directory and an import back
+        into a new temp directory repo. It does not assume a posix datastore"""
         exportButler = self.runPutGetTest(storageClass, "test_metric")
+        print("Root:", exportButler.datastore.root)
         # Test that the repo actually has at least one dataset.
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)
@@ -927,18 +934,19 @@ class FileLikeDatastoreButlerTests(ButlerTests):
             # TODO: When PosixDatastore supports transfer-on-exist, add tests
             # for that.
             exportFile = os.path.join(exportDir, "exports.yaml")
-            with exportButler.export(filename=exportFile) as export:
+            with exportButler.export(filename=exportFile, directory=exportDir, transfer="auto") as export:
                 export.saveDatasets(datasets)
             self.assertTrue(os.path.exists(exportFile))
             with tempfile.TemporaryDirectory() as importDir:
-                Butler.makeRepo(importDir, config=Config(self.configFile))
+                # We always want this to be a local posix butler
+                Butler.makeRepo(importDir, config=Config(os.path.join(TESTDIR, "config/basic/butler.yaml")))
                 # Calling script.butlerImport tests the implementation of the
                 # butler command line interface "import" subcommand. Functions
                 # in the script folder are generally considered protected and
                 # should not be used as public api.
                 with open(exportFile, "r") as f:
                     script.butlerImport(importDir, output_run="ingest/run", export_file=f,
-                                        directory=exportButler.datastore.root, transfer="symlink")
+                                        directory=exportDir, transfer="auto")
                 importButler = Butler(importDir, run="ingest/run")
                 for ref in datasets:
                     with self.subTest(ref=ref):
@@ -955,6 +963,32 @@ class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCa
     datastoreStr = ["/tmp"]
     datastoreName = [f"PosixDatastore@{BUTLER_ROOT_TAG}"]
     registryStr = "/gen3.sqlite3"
+
+    def testExportTransferCopy(self):
+        """Test local export using all transfer modes"""
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        exportButler = self.runPutGetTest(storageClass, "test_metric")
+        # Test that the repo actually has at least one dataset.
+        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
+        self.assertGreater(len(datasets), 0)
+        uris = [exportButler.getURI(d) for d in datasets]
+        datastoreRoot = ButlerURI(exportButler.datastore.root, forceDirectory=True)
+
+        pathsInStore = [uri.relative_to(datastoreRoot) for uri in uris]
+
+        for path in pathsInStore:
+            # Assume local file system
+            self.assertTrue(self.checkFileExists(datastoreRoot, path),
+                            f"Checking path {path}")
+
+        for transfer in ("copy", "link", "symlink", "relsymlink"):
+            with tempfile.TemporaryDirectory(dir=TESTDIR) as exportDir:
+                with exportButler.export(directory=exportDir, format="yaml",
+                                         transfer=transfer) as export:
+                    export.saveDatasets(datasets)
+                    for path in pathsInStore:
+                        self.assertTrue(self.checkFileExists(exportDir, path),
+                                        f"Check that mode {transfer} exported files")
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
@@ -1004,7 +1038,7 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
         config = Config(configFile1)
         config["root"] = self.dir1
         configFile2 = os.path.join(self.dir2, "butler2.yaml")
-        config.dumpToFile(configFile2)
+        config.dumpToUri(configFile2)
         os.remove(configFile1)
         self.tmpConfigFile = configFile2
 
@@ -1164,21 +1198,6 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         # unset any potentially set dummy credentials
         if self.usingDummyCredentials:
             unsetAwsEnvCredentials()
-
-    def checkFileExists(self, root, relpath):
-        """Checks if file exists at a given path (relative to root).
-
-        Test testPutTemplates verifies actual physical existance of the files
-        in the requested location. For S3Datastore this test is equivalent to
-        `lsst.daf.butler.core.s3utils.s3checkFileExists` call.
-        """
-        uri = ButlerURI(root)
-        uri.updateFile(relpath)
-        return s3CheckFileExists(uri)[0]
-
-    @unittest.expectedFailure
-    def testImportExport(self):
-        super().testImportExport()
 
 
 if __name__ == "__main__":

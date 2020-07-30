@@ -4,6 +4,7 @@ Core code for butler.
 
 # Do not export the utility routines from utils and queries.
 
+from ._butlerUri import *
 from .assembler import *
 from .config import *
 from .configSupport import LookupKey

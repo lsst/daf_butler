@@ -1278,3 +1278,42 @@ class FileLikeDatastore(GenericBaseDatastore):
                 self.templates[lookupKey].validateTemplate(entity)
             except FileTemplateValidationError as e:
                 raise DatastoreValidationError(e) from e
+
+    def export(self, refs: Iterable[DatasetRef], *,
+               directory: Optional[Union[ButlerURI, str]] = None,
+               transfer: Optional[str] = "auto") -> Iterable[FileDataset]:
+        # Docstring inherited from Datastore.export.
+        if transfer is not None and directory is None:
+            raise RuntimeError(f"Cannot export using transfer mode {transfer} with no "
+                               "export directory given")
+
+        # Force the directory to be a URI object
+        directoryUri: Optional[ButlerURI] = None
+        if directory is not None:
+            directoryUri = ButlerURI(directory, forceDirectory=True)
+
+        if transfer is not None and directoryUri is not None:
+            # mypy needs the second test
+            if not directoryUri.exists():
+                raise FileNotFoundError(f"Export location {directory} does not exist")
+
+        for ref in refs:
+            fileLocations = self._get_dataset_locations_info(ref)
+            if not fileLocations:
+                raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
+            # For now we can not export disassembled datasets
+            if len(fileLocations) > 1:
+                raise NotImplementedError(f"Can not export disassembled datasets such as {ref}")
+            location, storedFileInfo = fileLocations[0]
+            if transfer is None:
+                # TODO: do we also need to return the readStorageClass somehow?
+                # We will use the path in store directly
+                pass
+            else:
+                # mypy needs help
+                assert directoryUri is not None, "directoryUri must be defined to get here"
+                storeUri = ButlerURI(location.uri)
+                exportUri = directoryUri.join(location.pathInStore)
+                exportUri.transfer_from(storeUri, transfer=transfer)
+
+            yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)

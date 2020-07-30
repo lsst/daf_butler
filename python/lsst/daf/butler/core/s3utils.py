@@ -42,7 +42,8 @@ try:
 except ImportError:
     botocore = None
 
-from .location import ButlerURI, Location
+from .location import Location
+from ._butlerUri import ButlerURI
 
 
 def getS3Client() -> boto3.client:

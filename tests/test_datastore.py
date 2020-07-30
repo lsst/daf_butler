@@ -462,6 +462,11 @@ class DatastoreTests(DatastoreTestsBase):
 
     def runIngestTest(self, func, expectOutput=True):
         metrics, ref = self._prepareIngestTest()
+        # The file will be deleted after the test.
+        # For symlink tests this leads to a situation where the datastore
+        # points to a file that does not exist. This will make os.path.exist
+        # return False but then the new symlink will fail with
+        # FileExistsError later in the code so the test still passes.
         with lsst.utils.tests.getTempFilePath(".yaml", expectOutput=expectOutput) as path:
             with open(path, 'w') as fd:
                 yaml.dump(metrics._asdict(), stream=fd)
@@ -537,14 +542,14 @@ class DatastoreTests(DatastoreTestsBase):
                         # datastore for auto mode
                         datastore.ingest(FileDataset(path="../this-file-does-not-exist.yaml", refs=ref),
                                          transfer=mode)
-                    self.assertFalse(datastore.exists(ref))
+                    self.assertFalse(datastore.exists(ref), f"Checking not in datastore using mode {mode}")
 
                 def failOutputExists(obj, path, ref):
                     """Can't ingest files if transfer destination already
                     exists."""
                     with self.assertRaises(FileExistsError):
                         datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
-                    self.assertFalse(datastore.exists(ref))
+                    self.assertFalse(datastore.exists(ref), f"Checking not in datastore using mode {mode}")
 
                 def failNotImplemented(obj, path, ref):
                     with self.assertRaises(NotImplementedError):
