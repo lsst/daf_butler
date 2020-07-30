@@ -73,10 +73,12 @@ def replaceRoot(configRoot: str, butlerRoot: Optional[Union[ButlerURI, str]]) ->
         raise ValueError(f"Required to replace {BUTLER_ROOT_TAG} in '{configRoot}' "
                          "but a replacement has not been defined")
 
-    # Use absolute file path if this uses file scheme, else use unchanged
+    # Use absolute file path if this refers to a local file, else use
+    # unchanged since all other URI schemes are absolute
     uri = ButlerURI(butlerRoot)
     if not uri.scheme or uri.scheme == "file":
-        butlerRoot = os.path.abspath(uri.path)
+        # This will be a local file with URI quoting removed
+        butlerRoot = os.path.abspath(uri.ospath)
 
     assert butlerRoot is not None
     return configRoot.replace(BUTLER_ROOT_TAG, str(butlerRoot))
