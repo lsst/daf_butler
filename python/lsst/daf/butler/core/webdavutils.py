@@ -201,7 +201,10 @@ def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
     if client is None:
         client = getWebdavClient()
 
-    filepath = path.relativeToPathRoot
+    if isinstance(path, str):
+        filepath = path
+    elif isinstance(path, (ButlerURI, Location)):
+        filepath = path.relativeToPathRoot
 
     if client.check(filepath):
         try:
