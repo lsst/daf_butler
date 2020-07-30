@@ -1010,7 +1010,7 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
-    datastoreStr = ["datastore='InMemory", "/PosixDatastore_1,", "/PosixDatastore_2'"]
+    datastoreStr = ["datastore='InMemory", "/PosixDatastore_1/,", "/PosixDatastore_2/'"]
     datastoreName = ["InMemoryDatastore@", f"PosixDatastore@{BUTLER_ROOT_TAG}/PosixDatastore_1",
                      "SecondDatastore"]
     registryStr = "/gen3.sqlite3"
