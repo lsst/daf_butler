@@ -289,6 +289,11 @@ class ButlerURI:
         return self._uri.path
 
     @property
+    def unquoted_path(self) -> str:
+        """The path component of the URI with any URI quoting reversed."""
+        return urllib.parse.unquote(self._uri.path)
+
+    @property
     def ospath(self) -> str:
         """Path component of the URI localized to current OS."""
         raise AttributeError(f"Non-file URI ({self}) has no local OS path.")
