@@ -76,12 +76,12 @@ class LocationTestCase(unittest.TestCase):
             ("s3://bucketname/rootDir/relative/file.ext", True, False, "s3",
              "bucketname", "/rootDir/relative/file.ext")
         ))
-        # 5) Webdav scheme (ensured dirs and fully specified URIs work)
+        # 5) Webdav scheme
         uriStrings.extend((
-            ("https://test.webdavurl.com/rootDir/", True, False, "https", "test.webdavurl.com", "/rootDir/"),
-            ("https://test.webdavurl.com/rootDir", True, True, "https", "test.webdavurl.com", "/rootDir/"),
-            ("https://test.webdavurl.com/rootDir/relative/file.ext", True, False, "https",
-             "test.webdavurl.com", "/rootDir/relative/file.ext")
+            ("https://www.lsst.org/rootDir/", True, False, "https", "www.lsst.org", "/rootDir/"),
+            ("https://www.lsst.org/rootDir", True, True, "https", "www.lsst.org", "/rootDir/"),
+            ("https://www.lsst.org/rootDir/relative/file.ext", True, False, "https",
+             "www.lsst.org", "/rootDir/relative/file.ext")
         ))
 
         for uriInfo in uriStrings:
@@ -268,12 +268,14 @@ class LocationTestCase(unittest.TestCase):
         testPaths = ("/absolute/file.ext", "/absolute/",
                      "file:///absolute/file.ext", "file:///absolute/",
                      "s3://bucket/root/file.ext", "s3://bucket/root/",
+                     "https://www.lsst.org/root/file.ext", "https://www.lsst.org/root/",
                      "relative/file.ext", "relative/")
 
         osRelExpected = os.path.join(testRoot, "relative")
         expected = (("file:///absolute/", "file.ext"), ("file:///absolute/", ""),
                     ("file:///absolute/", "file.ext"), ("file:///absolute/", ""),
                     ("s3://bucket/root/", "file.ext"), ("s3://bucket/root/", ""),
+                    ("https://www.lsst.org/root/", "file.ext"), ("https://www.lsst.org/root/", ""),
                     (f"file://{osRelExpected}/", "file.ext"), (f"file://{osRelExpected}/", ""))
 
         for p, e in zip(testPaths, expected):
