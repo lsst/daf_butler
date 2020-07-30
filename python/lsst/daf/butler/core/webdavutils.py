@@ -26,6 +26,7 @@ __all__ = ("getHttpSession", "getWebdavClient", "webdavCheckFileExists", "folder
 import os
 import requests
 import urllib3
+import logging
 
 from typing import (
     Optional,
@@ -42,6 +43,7 @@ from webdav3.exceptions import WebDavException
 
 from .location import ButlerURI, Location
 
+log = logging.getLogger(__name__)
 urllib3.disable_warnings()
 
 
@@ -66,6 +68,7 @@ def getHttpSession() -> requests.Session:
     (bearer token used to authenticate requests, as a single string)
     """
     s = requests.Session()
+    log.debug("Creating new HTTP session")
 
     try:
         env_auth_method = os.environ['WEBDAV_AUTH_METHOD']
@@ -88,6 +91,7 @@ def getHttpSession() -> requests.Session:
         raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
 
     s.verify = False
+    log.debug("Session configured and ready to use")
 
     return s
 
@@ -115,6 +119,7 @@ def getWebdavClient() -> wc.Client:
     TOKEN: must set WEBDAV_BEARER_TOKEN
     (bearer token used to authenticate requests, as a single string)
     """
+    log.debug("Creating new Webdav client")
     if wc is None:
         raise ModuleNotFoundError("Could not find webdav.client. "
                                   "Are you sure it is installed?")
@@ -161,6 +166,7 @@ def getWebdavClient() -> wc.Client:
                             and other environment variables") from exception
 
     client.verify = False
+    log.debug("Webdav client configured and ready to use")
 
     return client
 
@@ -202,8 +208,10 @@ def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
             size = client.info(filepath)["size"]
         except WebDavException as exception:
             raise ValueError(f"Failed to retrieve size of file, please check your permissions") from exception
+        log.debug("File %s exists with size %s", filepath, size)
         return (True, size)
 
+    log.debug("File %s does not exist", filepath)
     return (False, -1)
 
 
@@ -230,4 +238,6 @@ def folderExists(folderName: str, client: Optional[wc.Client] = None) -> bool:
         client = getWebdavClient()
 
     exists = client.check(folderName)
+    log.debug("Folder %s exists: %s", folderName, exists)
+
     return exists

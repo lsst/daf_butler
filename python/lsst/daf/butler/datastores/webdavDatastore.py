@@ -152,6 +152,7 @@ class WebdavDatastore(FileLikeDatastore):
             raise FileNotFoundError(f"There was an error getting file at {location.uri}, \
                                     status code : {errorcode}")
 
+        log.debug("Successful read on file %s", location.uri)
         storedFileInfo = getInfo.info
         if len(response.content) != storedFileInfo.file_size:
             raise RuntimeError("Integrity failure in Datastore. Size of file {} ({}) does not"
@@ -167,6 +168,7 @@ class WebdavDatastore(FileLikeDatastore):
         except NotImplementedError:
             # formatter might not always have an extension so mypy complains
             # We can either ignore the complaint or use a temporary location
+            log.debug("Formatter does not have extension, using temporary file.")
             tmpLoc = Location(".", "temp")
             tmpLoc = formatter.makeUpdatedLocation(tmpLoc)
             with tempfile.NamedTemporaryFile(suffix=tmpLoc.getExtension()) as tmpFile:
