@@ -49,7 +49,7 @@ class Location:
         else a POSIX separator.
     """
 
-    __slots__ = ("_datastoreRootUri", "_path")
+    __slots__ = ("_datastoreRootUri", "_path", "_uri")
 
     def __init__(self, datastoreRootUri: Union[ButlerURI, str], path: str):
         if isinstance(datastoreRootUri, str):
@@ -74,8 +74,11 @@ class Location:
 
         self._path = path
 
+        # Internal cache of the full location as a ButlerURI
+        self._uri: Optional[ButlerURI] = None
+
     def __str__(self) -> str:
-        return self.uri
+        return str(self.uri)
 
     def __repr__(self) -> str:
         uri = self._datastoreRootUri.geturl()
@@ -83,10 +86,12 @@ class Location:
         return f"{self.__class__.__name__}({uri!r}, {path!r})"
 
     @property
-    def uri(self) -> str:
-        """URI string corresponding to fully-specified location in datastore.
+    def uri(self) -> ButlerURI:
+        """URI corresponding to fully-specified location in datastore.
         """
-        return self._datastoreRootUri.join(self._path).geturl()
+        if self._uri is None:
+            self._uri = self._datastoreRootUri.join(self._path)
+        return self._uri
 
     @property
     def path(self) -> str:
@@ -97,8 +102,7 @@ class Location:
         quoting. If a file URI scheme is being used the path will be returned
         with the local OS path separator.
         """
-        # Create new full URI to location
-        full = self._datastoreRootUri.join(self._path)
+        full = self.uri
         try:
             return full.ospath
         except AttributeError:
@@ -125,8 +129,7 @@ class Location:
         Effectively, this is the path property with POSIX separator stripped
         from the left hand side of the path.  Will be unquoted.
         """
-        full = self._datastoreRootUri.join(self._path)
-        return full.relativeToPathRoot
+        return self.uri.relativeToPathRoot
 
     def updateExtension(self, ext: Optional[str]) -> None:
         """Update the file extension associated with this `Location`.
@@ -156,6 +159,9 @@ class Location:
 
         self._path = path + ext
 
+        # Clear the URI cache so it can be recreated with the new path
+        self._uri = None
+
     def getExtension(self) -> str:
         """Return the file extension(s) associated with this location.
 
@@ -167,7 +173,7 @@ class Location:
             as a single extension such that ``file.fits.gz`` will return
             a value of ``.fits.gz``.
         """
-        return ButlerURI(self.path).getExtension()
+        return self.uri.getExtension()
 
 
 class LocationFactory:
