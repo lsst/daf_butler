@@ -209,6 +209,23 @@ class LocationTestCase(unittest.TestCase):
         self.assertEqual(loc1.pathInStore, pathInStore)
         self.assertTrue(loc1.uri.startswith("file:///"))
 
+    def testQuotedRoot(self):
+        """Test we can handle quoted characters."""
+        root = "/a/b/c+1/d"
+        factory = LocationFactory(root)
+
+        pathInStore = "relative/path/file.ext.gz"
+
+        for pathInStore in ("relative/path/file.ext.gz",
+                            "relative/path+2/file.ext.gz",
+                            "relative/path+3/file#.ext.gz"):
+            loc1 = factory.fromPath(pathInStore)
+
+            self.assertEqual(loc1.pathInStore, pathInStore)
+            self.assertEqual(loc1.path, os.path.join(root, pathInStore))
+            self.assertIn("%", loc1.uri)
+            self.assertEqual(loc1.getExtension(), ".ext.gz")
+
     def testHttpLocation(self):
         root = "https://www.lsst.org/butler/datastore"
         factory = LocationFactory(root)
