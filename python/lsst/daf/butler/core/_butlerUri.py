@@ -349,10 +349,14 @@ class ButlerURI:
             ButlerURI rules.
         tail : `str`
             Last `self.path` component. Tail will be empty if path ends on a
-            separator. Tail will never contain separators.
+            separator. Tail will never contain separators. It will be
+            unquoted.
         """
         head, tail = self._pathModule.split(self.path)
         headuri = self._uri._replace(path=head)
+
+        # The file part should never include quoted metacharacters
+        tail = urllib.parse.unquote(tail)
 
         # Schemeless is special in that it can be a relative path
         # We need to ensure that it stays that way. All other URIs will

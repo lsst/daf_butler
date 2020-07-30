@@ -331,6 +331,18 @@ class S3URITestCase(unittest.TestCase):
         not_s3 = ButlerURI(os.path.join(self.tmpdir, "dir1", "file2.txt"))
         self.assertFalse(child.relative_to(not_s3))
 
+    def testQuoting(self):
+        """Check that quoting works."""
+        parent = ButlerURI(self.makeS3Uri("rootdir"), forceDirectory=True)
+        subpath = "rootdir/dir1+/file?.txt"
+        child = ButlerURI(self.makeS3Uri(urllib.parse.quote(subpath)))
+
+        self.assertEqual(child.relative_to(parent), "dir1+/file?.txt")
+        self.assertEqual(child.basename(), "file?.txt")
+        self.assertEqual(child.relativeToPathRoot, subpath)
+        self.assertIn("%", child.path)
+        self.assertEqual(child.unquoted_path, "/" + subpath)
+
 
 if __name__ == "__main__":
     unittest.main()
