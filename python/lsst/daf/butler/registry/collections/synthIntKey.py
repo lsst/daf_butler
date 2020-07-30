@@ -27,6 +27,7 @@ from typing import (
     Dict,
     Iterable,
     Optional,
+    Type,
     TYPE_CHECKING,
 )
 
@@ -38,28 +39,34 @@ from ._base import (
     makeRunTableSpec,
     makeCollectionChainTableSpec,
 )
-from ...core import ddl
+from ...core import DatabaseTimespanRepresentation, ddl
 from ..interfaces import CollectionRecord, VersionTuple
 
 if TYPE_CHECKING:
     from ..interfaces import Database, StaticTablesContext
 
 
-_TABLES_SPEC = CollectionTablesTuple(
-    collection=ddl.TableSpec(
-        fields=[
-            ddl.FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True, autoincrement=True),
-            ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
-            ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
-        ],
-        unique=[("name",)],
-    ),
-    run=makeRunTableSpec("collection_id", sqlalchemy.BigInteger),
-    collection_chain=makeCollectionChainTableSpec("collection_id", sqlalchemy.BigInteger),
-)
+_KEY_FIELD_SPEC = ddl.FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True,
+                                autoincrement=True)
+
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(0, 1, 0)
+
+
+def _makeTableSpecs(tsRepr: Type[DatabaseTimespanRepresentation]) -> CollectionTablesTuple:
+    return CollectionTablesTuple(
+        collection=ddl.TableSpec(
+            fields=[
+                _KEY_FIELD_SPEC,
+                ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
+                ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
+            ],
+            unique=[("name",)],
+        ),
+        run=makeRunTableSpec("collection_id", sqlalchemy.BigInteger, tsRepr),
+        collection_chain=makeCollectionChainTableSpec("collection_id", sqlalchemy.BigInteger),
+    )
 
 
 class SynthIntKeyCollectionManager(DefaultCollectionManager):
@@ -86,8 +93,11 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext) -> SynthIntKeyCollectionManager:
         # Docstring inherited from CollectionManager.
-        return cls(db, tables=context.addTableTuple(_TABLES_SPEC),  # type: ignore
-                   collectionIdName="collection_id")
+        return cls(
+            db,
+            tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
+            collectionIdName="collection_id"
+        )
 
     @classmethod
     def getCollectionForeignKeyName(cls, prefix: str = "collection") -> str:
@@ -105,8 +115,9 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
                                 constraint: bool = True,
                                 **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
-        original = _TABLES_SPEC.collection.fields["collection_id"]
-        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype, **kwargs)
+        original = _KEY_FIELD_SPEC
+        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype,
+                             autoincrement=False, **kwargs)
         tableSpec.fields.add(copy)
         if constraint:
             tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
@@ -119,8 +130,9 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
                          constraint: bool = True,
                          **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
-        original = _TABLES_SPEC.run.fields["collection_id"]
-        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype, **kwargs)
+        original = _KEY_FIELD_SPEC
+        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype,
+                             autoincrement=False, **kwargs)
         tableSpec.fields.add(copy)
         if constraint:
             tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),

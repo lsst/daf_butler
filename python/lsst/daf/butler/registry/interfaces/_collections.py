@@ -36,8 +36,6 @@ from typing import (
     TYPE_CHECKING,
 )
 
-import astropy.time
-
 from ...core import ddl, Timespan
 from ..wildcards import CollectionSearch
 from .._collectionType import CollectionType
@@ -96,7 +94,7 @@ class RunRecord(CollectionRecord):
 
     @abstractmethod
     def update(self, host: Optional[str] = None,
-               timespan: Optional[Timespan[astropy.time.Time]] = None) -> None:
+               timespan: Optional[Timespan] = None) -> None:
         """Update the database record for this run with new execution
         information.
 
@@ -125,7 +123,7 @@ class RunRecord(CollectionRecord):
 
     @property
     @abstractmethod
-    def timespan(self) -> Timespan[astropy.time.Time]:
+    def timespan(self) -> Timespan:
         """Begin and end timestamps for the period over which the run was
         produced.  `None`/``NULL`` values are interpreted as infinite
         bounds.

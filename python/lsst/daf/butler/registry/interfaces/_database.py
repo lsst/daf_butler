@@ -41,6 +41,7 @@ from typing import (
     Sequence,
     Set,
     Tuple,
+    Type,
 )
 import uuid
 import warnings
@@ -48,7 +49,7 @@ import warnings
 import astropy.time
 import sqlalchemy
 
-from ...core import ddl, time_utils
+from ...core import DatabaseTimespanRepresentation, ddl, time_utils
 from .._exceptions import ConflictingDefinitionError
 
 _IN_SAVEPOINT_TRANSACTION = "IN_SAVEPOINT_TRANSACTION"
@@ -889,6 +890,42 @@ class Database(ABC):
             self._tempTables.remove(table.key)
         else:
             raise TypeError(f"Table {table.key} was not created by makeTemporaryTable.")
+
+    @classmethod
+    def getTimespanRepresentation(cls) -> Type[DatabaseTimespanRepresentation]:
+        """Return a `type` that encapsulates the way `Timespan` objects are
+        recommended to be stored in this database.
+
+        `Database` does not automatically use the return type of this method
+        anywhere else; calling code is responsible for making sure that DDL
+        and queries are consistent with it.
+
+        Returns
+        -------
+        tsRepr : `type` (`DatabaseTimespanRepresention` subclass)
+            A type that encapsultes the way `Timespan` objects should be
+            stored in this database.
+
+        Notes
+        -----
+        There are two big reasons we've decided to keep timespan-mangling logic
+        outside the `Database` implementations, even though the choice of
+        representation is ultimately up to a `Database` implementation:
+
+         - Timespans appear in relatively few tables and queries in our
+           typical usage, and the code that operates on them is already aware
+           that it is working with timespans.  In contrast, a
+           timespan-representation-aware implementation of, say, `insert`,
+           would need to have extra logic to identify when timespan-mangling
+           needed to occur, which would usually be useless overhead.
+
+         - SQLAlchemy's rich SELECT query expression system has no way to wrap
+           multiple columns in a single expression object (the ORM does, but
+           we are not using the ORM).  So we would have to wrap _much_ more of
+           that code in our own interfaces to encapsulate timespan
+           representations there.
+        """
+        return DatabaseTimespanRepresentation.Compound
 
     def sync(self, table: sqlalchemy.schema.Table, *,
              keys: Dict[str, Any],

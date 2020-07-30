@@ -396,7 +396,7 @@ class QueryBuilder:
             assert givenInterval is not None
             for element, intervalInQuery in self._columns.timespans.items():
                 assert element not in self.summary.dataId.graph.elements
-                self._simpleQuery.where.append(intervalInQuery.overlaps(givenInterval, ops=sqlalchemy.sql))
+                self._simpleQuery.where.append(intervalInQuery.overlaps(givenInterval))
 
     def finish(self, joinMissing: bool = True) -> Query:
         """Finish query constructing, returning a new `Query` instance.

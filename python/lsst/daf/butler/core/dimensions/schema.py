@@ -27,11 +27,11 @@ __all__ = (
 
 import copy
 
-from typing import Tuple, TYPE_CHECKING
+from typing import Tuple, Type, TYPE_CHECKING
 
 from .. import ddl
 from ..named import NamedValueSet
-from ..timespan import TIMESPAN_FIELD_SPECS
+from ..timespan import DatabaseTimespanRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .elements import DimensionElement, Dimension
@@ -184,28 +184,38 @@ class DimensionElementFields:
         # Add fields for regions and/or timespans.
         if element.spatial is not None:
             self._tableSpec.fields.add(REGION_FIELD_SPEC)
-            names.append("region")
+            names.append(REGION_FIELD_SPEC.name)
         if element.temporal is not None:
-            for fieldSpec in TIMESPAN_FIELD_SPECS:
-                self._tableSpec.fields.add(fieldSpec)
-            names.append("timespan")
+            names.append(DatabaseTimespanRepresentation.NAME)
         self.names = tuple(names)
 
-    def makeTableSpec(self) -> ddl.TableSpec:
+    def makeTableSpec(self, tsRepr: Type[DatabaseTimespanRepresentation]) -> ddl.TableSpec:
         """Construct a complete specification for a table that could hold the
         records of this element.
+
+        Parameters
+        ----------
+        tsRepr : `type` (`DatabaseTimespanRepresentation` subclass)
+            Class object that specifies how timespans are represented in the
+            database.
 
         Returns
         -------
         spec : `ddl.TableSpec`
             Specification for a table.
-
-        Notes
-        -----
-        In the future, this method may take additional arguments to reflect
-        database-specific aspects of the table specification.
         """
-        return self._tableSpec
+        if self.element.temporal is not None:
+            spec = ddl.TableSpec(
+                fields=NamedValueSet(self._tableSpec.fields),
+                unique=self._tableSpec.unique,
+                indexes=self._tableSpec.indexes,
+                foreignKeys=self._tableSpec.foreignKeys,
+            )
+            for fieldSpec in tsRepr.makeFieldSpecs(nullable=True):
+                spec.fields.add(fieldSpec)
+        else:
+            spec = self._tableSpec
+        return spec
 
     element: DimensionElement
     """The dimension element these fields correspond to (`DimensionElement`).

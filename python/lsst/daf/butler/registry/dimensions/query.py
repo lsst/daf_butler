@@ -27,12 +27,12 @@ from typing import Iterable, Optional
 import sqlalchemy
 
 from ...core import (
+    DatabaseTimespanRepresentation,
     DataCoordinateIterable,
     Dimension,
     DimensionElement,
     DimensionRecord,
     NamedKeyDict,
-    Timespan,
 )
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
@@ -59,7 +59,9 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         self._db = db
         self._element = element
         self._target = element.universe[element.viewOf]
-        self._targetSpec = self._target.RecordClass.fields.makeTableSpec()
+        self._targetSpec = self._target.RecordClass.fields.makeTableSpec(
+            tsRepr=self._db.getTimespanRepresentation(),
+        )
         self._query = None  # Constructed on first use.
         if element not in self._target.graph.dimensions:
             raise NotImplementedError("Query-backed dimension must be a dependency of its target.")
@@ -119,7 +121,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         assert regions is None, "Should be guaranteed by constructor checks."

@@ -27,13 +27,12 @@ from typing import Dict, Iterable, Optional
 import sqlalchemy
 
 from ...core import (
+    DatabaseTimespanRepresentation,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
     NamedKeyDict,
     SimpleQuery,
-    Timespan,
-    TIMESPAN_FIELD_SPECS,
 )
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
@@ -79,7 +78,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
     def initialize(cls, db: Database, element: DimensionElement, *,
                    context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
         # Docstring inherited from DimensionRecordStorage.
-        spec = element.RecordClass.fields.makeTableSpec()
+        spec = element.RecordClass.fields.makeTableSpec(tsRepr=db.getTimespanRepresentation())
         if context is not None:
             table = context.addTable(element.name, spec)
         else:
@@ -99,19 +98,16 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         assert regions is None, "This implementation does not handle spatial joins."
         joinOn = builder.startJoin(self._table, self.element.dimensions,
                                    self.element.RecordClass.fields.dimensions.names)
         if timespans is not None:
-            timespanInTable: Timespan[sqlalchemy.sql.ColumnElement] = Timespan(
-                begin=self._table.columns[TIMESPAN_FIELD_SPECS.begin.name],
-                end=self._table.columns[TIMESPAN_FIELD_SPECS.end.name],
-            )
+            timespanInTable = self._db.getTimespanRepresentation().fromSelectable(self._table)
             for timespanInQuery in timespans.values():
-                joinOn.append(timespanInQuery.overlaps(timespanInTable, ops=sqlalchemy.sql))
+                joinOn.append(timespanInQuery.overlaps(timespanInTable))
             timespans[self.element] = timespanInTable
         builder.finishJoin(self._table, joinOn)
         return self._table
@@ -124,26 +120,24 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         if self.element.spatial is not None:
             query.columns.append(self._table.columns["region"])
         if self.element.temporal is not None:
-            query.columns.extend(self._table.columns[f.name] for f in TIMESPAN_FIELD_SPECS)
+            tsRepr = self._db.getTimespanRepresentation()
+            query.columns.extend(self._table.columns[name] for name in tsRepr.getFieldNames())
         query.join(self._table)
         dataIds.constrain(query, lambda name: self._fetchColumns[name])
         for row in self._db.query(query.combine()):
             values = dict(row)
             if self.element.temporal is not None:
-                values["timespan"] = Timespan(
-                    begin=values.pop(TIMESPAN_FIELD_SPECS.begin.name),
-                    end=values.pop(TIMESPAN_FIELD_SPECS.end.name),
-                )
+                values[DatabaseTimespanRepresentation.NAME] = tsRepr.extract(values)
             yield RecordClass(**values)
 
     def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         elementRows = [record.toDict() for record in records]
         if self.element.temporal is not None:
+            tsRepr = self._db.getTimespanRepresentation()
             for row in elementRows:
-                timespan = row.pop("timespan")
-                row[TIMESPAN_FIELD_SPECS.begin.name] = timespan.begin
-                row[TIMESPAN_FIELD_SPECS.end.name] = timespan.end
+                timespan = row.pop(DatabaseTimespanRepresentation.NAME)
+                tsRepr.update(timespan, result=row)
         with self._db.transaction():
             self._db.insert(self._table, *elementRows)
 
@@ -154,9 +148,9 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         for name in record.fields.required.names:
             keys[name] = compared.pop(name)
         if self.element.temporal is not None:
-            timespan = compared.pop("timespan")
-            compared[TIMESPAN_FIELD_SPECS.begin.name] = timespan.begin
-            compared[TIMESPAN_FIELD_SPECS.end.name] = timespan.end
+            tsRepr = self._db.getTimespanRepresentation()
+            timespan = compared.pop(DatabaseTimespanRepresentation.NAME)
+            tsRepr.update(timespan, result=compared)
         _, inserted = self._db.sync(
             self._table,
             keys=keys,

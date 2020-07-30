@@ -27,12 +27,12 @@ from typing import Iterable, Optional
 import sqlalchemy
 
 from ...core import (
+    DatabaseTimespanRepresentation,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
     NamedKeyDict,
     SkyPixDimension,
-    Timespan,
 )
 from ..queries import QueryBuilder
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
@@ -72,7 +72,7 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
     ) -> None:
         if builder.hasDimensionKey(self._dimension):
             # If joining some other element or dataset type already brought in

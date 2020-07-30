@@ -29,6 +29,7 @@ import itertools
 from typing import Iterator, Optional
 
 from lsst.daf.butler import (
+    DatabaseTimespanRepresentation,
     DataCoordinate,
     DataCoordinateSequence,
     DataCoordinateSet,
@@ -186,7 +187,9 @@ class DimensionTestCase(unittest.TestCase):
         tableSpecs = NamedKeyDict({})
         for element in self.universe.elements:
             if element.hasTable and element.viewOf is None:
-                tableSpecs[element] = element.RecordClass.fields.makeTableSpec()
+                tableSpecs[element] = element.RecordClass.fields.makeTableSpec(
+                    tsRepr=DatabaseTimespanRepresentation.Compound
+                )
         for element, tableSpec in tableSpecs.items():
             for dep in element.required:
                 with self.subTest(element=element.name, dep=dep.name):

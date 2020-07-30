@@ -23,7 +23,6 @@ from __future__ import annotations
 __all__ = ()
 
 from abc import abstractmethod
-import astropy.time
 from collections import namedtuple
 import itertools
 from typing import (
@@ -33,14 +32,14 @@ from typing import (
     Iterable,
     Iterator,
     Optional,
+    Type,
     TYPE_CHECKING,
     TypeVar,
 )
 
 import sqlalchemy
 
-from ...core import ddl
-from ...core.timespan import Timespan, TIMESPAN_FIELD_SPECS
+from ...core import DatabaseTimespanRepresentation, ddl, Timespan
 from .._collectionType import CollectionType
 from ..interfaces import (
     ChainedCollectionRecord,
@@ -86,7 +85,8 @@ def _makeCollectionForeignKey(sourceColumnName: str, collectionIdName: str,
 CollectionTablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run", "collection_chain"])
 
 
-def makeRunTableSpec(collectionIdName: str, collectionIdType: type) -> ddl.TableSpec:
+def makeRunTableSpec(collectionIdName: str, collectionIdType: type,
+                     tsRepr: Type[DatabaseTimespanRepresentation]) -> ddl.TableSpec:
     """Define specification for "run" table.
 
     Parameters
@@ -96,6 +96,10 @@ def makeRunTableSpec(collectionIdName: str, collectionIdType: type) -> ddl.Table
     collectionIdType
         Type of the PK column in the collections table, one of the
         `sqlalchemy` types.
+    tsRepr : `type` [ `DatabaseTimespanRepresentation` ]
+        Subclass of `DatabaseTimespanRepresentation` that encapsulates how
+        timespans are stored in this database.
+
 
     Returns
     -------
@@ -108,17 +112,18 @@ def makeRunTableSpec(collectionIdName: str, collectionIdType: type) -> ddl.Table
     column is the same in both collections and run tables. The names of
     non-identifying columns containing run metadata are fixed.
     """
-    return ddl.TableSpec(
+    result = ddl.TableSpec(
         fields=[
             ddl.FieldSpec(collectionIdName, dtype=collectionIdType, primaryKey=True),
-            TIMESPAN_FIELD_SPECS.begin,
-            TIMESPAN_FIELD_SPECS.end,
             ddl.FieldSpec("host", dtype=sqlalchemy.String, length=128),
         ],
         foreignKeys=[
             _makeCollectionForeignKey(collectionIdName, collectionIdName, onDelete="CASCADE"),
         ],
     )
+    for fieldSpec in tsRepr.makeFieldSpecs(nullable=True):
+        result.fields.add(fieldSpec)
+    return result
 
 
 def makeCollectionChainTableSpec(collectionIdName: str, collectionIdType: type) -> ddl.TableSpec:
@@ -185,7 +190,7 @@ class DefaultRunRecord(RunRecord):
     """
     def __init__(self, db: Database, key: Any, name: str, *, table: sqlalchemy.schema.Table,
                  idColumnName: str, host: Optional[str] = None,
-                 timespan: Optional[Timespan[astropy.time.Time]] = None):
+                 timespan: Optional[Timespan] = None):
         super().__init__(key=key, name=name, type=CollectionType.RUN)
         self._db = db
         self._table = table
@@ -196,16 +201,15 @@ class DefaultRunRecord(RunRecord):
         self._idName = idColumnName
 
     def update(self, host: Optional[str] = None,
-               timespan: Optional[Timespan[astropy.time.Time]] = None) -> None:
+               timespan: Optional[Timespan] = None) -> None:
         # Docstring inherited from RunRecord.
         if timespan is None:
             timespan = Timespan(begin=None, end=None)
         row = {
             self._idName: self.key,
-            TIMESPAN_FIELD_SPECS.begin.name: timespan.begin,
-            TIMESPAN_FIELD_SPECS.end.name: timespan.end,
-            "host": host
+            "host": host,
         }
+        self._db.getTimespanRepresentation().update(timespan, result=row)
         count = self._db.update(self._table, {self._idName: self.key}, row)
         if count != 1:
             raise RuntimeError(f"Run update affected {count} records; expected exactly one.")
@@ -218,7 +222,7 @@ class DefaultRunRecord(RunRecord):
         return self._host
 
     @property
-    def timespan(self) -> Timespan[astropy.time.Time]:
+    def timespan(self) -> Timespan:
         # Docstring inherited from RunRecord.
         return self._timespan
 
@@ -330,6 +334,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         # in place, for exception safety.
         records = []
         chains = []
+        tsRepr = self._db.getTimespanRepresentation()
         for row in self._db.query(sql).fetchall():
             collection_id = row[self._tables.collection.columns[self._collectionIdName]]
             name = row[self._tables.collection.columns.name]
@@ -343,10 +348,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                     table=self._tables.run,
                     idColumnName=self._collectionIdName,
                     host=row[self._tables.run.columns.host],
-                    timespan=Timespan(
-                        begin=row[self._tables.run.columns[TIMESPAN_FIELD_SPECS.begin.name]],
-                        end=row[self._tables.run.columns[TIMESPAN_FIELD_SPECS.end.name]],
-                    )
+                    timespan=tsRepr.extract(row),
                 )
             elif type is CollectionType.CHAINED:
                 record = DefaultChainedCollectionRecord(db=self._db,
@@ -374,10 +376,11 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
             assert row is not None
             collection_id = row[self._collectionIdName]
             if type is CollectionType.RUN:
+                tsRepr = self._db.getTimespanRepresentation()
                 row, _ = self._db.sync(
                     self._tables.run,
                     keys={self._collectionIdName: collection_id},
-                    returning=["host", TIMESPAN_FIELD_SPECS.begin.name, TIMESPAN_FIELD_SPECS.end.name],
+                    returning=("host",) + tsRepr.getFieldNames(),
                 )
                 assert row is not None
                 record = DefaultRunRecord(
@@ -387,10 +390,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                     table=self._tables.run,
                     idColumnName=self._collectionIdName,
                     host=row["host"],
-                    timespan=Timespan(
-                        row[TIMESPAN_FIELD_SPECS.begin.name],
-                        row[TIMESPAN_FIELD_SPECS.end.name]
-                    ),
+                    timespan=tsRepr.extract(row),
                 )
             elif type is CollectionType.CHAINED:
                 record = DefaultChainedCollectionRecord(db=self._db, key=collection_id, name=name,

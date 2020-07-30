@@ -32,7 +32,7 @@ from typing import (
 )
 
 from .elements import Dimension
-from ..timespan import Timespan
+from ..timespan import Timespan, DatabaseTimespanRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .elements import DimensionElement
@@ -54,13 +54,13 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
 
     For internal use by `DimensionRecord`.
     """
-    from .schema import DimensionElementFields
+    from .schema import DimensionElementFields, REGION_FIELD_SPEC
     fields = DimensionElementFields(definition)
     slots = list(fields.standard.names)
     if definition.spatial:
-        slots.append("region")
+        slots.append(REGION_FIELD_SPEC.name)
     if definition.temporal:
-        slots.append("timespan")
+        slots.append(DatabaseTimespanRepresentation.NAME)
     d = {
         "definition": definition,
         "__slots__": tuple(slots),

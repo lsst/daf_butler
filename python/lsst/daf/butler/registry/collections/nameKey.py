@@ -25,6 +25,7 @@ __all__ = ["NameKeyCollectionManager"]
 from typing import (
     Any,
     Optional,
+    Type,
     TYPE_CHECKING,
 )
 
@@ -36,25 +37,32 @@ from ._base import (
     makeRunTableSpec,
     makeCollectionChainTableSpec,
 )
-from ...core import ddl
+
+from ...core import DatabaseTimespanRepresentation, ddl
 from ..interfaces import VersionTuple
 
 if TYPE_CHECKING:
     from ..interfaces import CollectionRecord, Database, StaticTablesContext
 
-_TABLES_SPEC = CollectionTablesTuple(
-    collection=ddl.TableSpec(
-        fields=[
-            ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, primaryKey=True),
-            ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
-        ],
-    ),
-    run=makeRunTableSpec("name", sqlalchemy.String),
-    collection_chain=makeCollectionChainTableSpec("name", sqlalchemy.String),
-)
+
+_KEY_FIELD_SPEC = ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, primaryKey=True)
+
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(0, 1, 0)
+
+
+def _makeTableSpecs(tsRepr: Type[DatabaseTimespanRepresentation]) -> CollectionTablesTuple:
+    return CollectionTablesTuple(
+        collection=ddl.TableSpec(
+            fields=[
+                _KEY_FIELD_SPEC,
+                ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
+            ],
+        ),
+        run=makeRunTableSpec("name", sqlalchemy.String, tsRepr),
+        collection_chain=makeCollectionChainTableSpec("name", sqlalchemy.String),
+    )
 
 
 class NameKeyCollectionManager(DefaultCollectionManager):
@@ -70,7 +78,11 @@ class NameKeyCollectionManager(DefaultCollectionManager):
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext) -> NameKeyCollectionManager:
         # Docstring inherited from CollectionManager.
-        return cls(db, tables=context.addTableTuple(_TABLES_SPEC), collectionIdName="name")  # type: ignore
+        return cls(
+            db,
+            tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
+            collectionIdName="name",
+        )
 
     @classmethod
     def getCollectionForeignKeyName(cls, prefix: str = "collection") -> str:
@@ -88,7 +100,7 @@ class NameKeyCollectionManager(DefaultCollectionManager):
                                 constraint: bool = True,
                                 **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
-        original = _TABLES_SPEC.collection.fields["name"]
+        original = _KEY_FIELD_SPEC
         copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype,
                              length=original.length, **kwargs)
         tableSpec.fields.add(copy)
@@ -103,7 +115,7 @@ class NameKeyCollectionManager(DefaultCollectionManager):
                          constraint: bool = True,
                          **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
-        original = _TABLES_SPEC.run.fields["name"]
+        original = _KEY_FIELD_SPEC
         copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype,
                              length=original.length, **kwargs)
         tableSpec.fields.add(copy)

@@ -42,8 +42,6 @@ from typing import (
     Union,
 )
 
-import astropy.time
-
 from lsst.sphgeom import Region
 from ..named import NamedKeyMapping, NameLookupMapping, NamedValueSet
 from ..timespan import Timespan
@@ -506,7 +504,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return _intersectRegions(*regions)
 
     @property
-    def timespan(self) -> Optional[Timespan[astropy.time.Time]]:
+    def timespan(self) -> Optional[Timespan]:
         """The temporal interval associated with this data ID
         (`Timespan` or `None`).
 
