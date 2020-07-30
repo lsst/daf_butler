@@ -35,6 +35,7 @@ import requests
 import tempfile
 import copy
 import logging
+import re
 
 from typing import (
     TYPE_CHECKING,
@@ -65,6 +66,9 @@ IS_POSIX = os.sep == posixpath.sep
 
 # Root path for this operating system
 OS_ROOT_PATH = Path().resolve().root
+
+# Regex for looking for URI escapes
+ESCAPES_RE = re.compile(r"%[A-F0-9]{2}")
 
 
 def os2posix(ospath: str) -> str:
@@ -218,7 +222,10 @@ class ButlerURI:
             # Since sometimes people write file:/a/b and not file:///a/b
             # we should not quote in the explicit case of file:
             if "://" not in uri and not uri.startswith("file:"):
-                uri = urllib.parse.quote(uri)
+                if ESCAPES_RE.search(uri):
+                    log.warning("Possible double encoding of %s", uri)
+                else:
+                    uri = urllib.parse.quote(uri)
             parsed = urllib.parse.urlparse(uri)
         elif isinstance(uri, urllib.parse.ParseResult):
             parsed = copy.copy(uri)

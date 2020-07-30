@@ -231,6 +231,12 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(new2.relative_to(fdir), new2name, f"{new2} vs {fdir}")
         self.assertEqual(new2.relative_to(dir), new2name)
 
+        # Check for double quoting
+        plus_path = "/a/b/c+d/"
+        with self.assertLogs(level="WARNING"):
+            uri = ButlerURI(urllib.parse.quote(plus_path), forceDirectory=True)
+        self.assertEqual(uri.ospath, plus_path)
+
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
