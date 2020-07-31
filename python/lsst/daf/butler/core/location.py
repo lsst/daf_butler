@@ -26,7 +26,6 @@ __all__ = ("Location", "LocationFactory")
 import os
 import os.path
 import posixpath
-from pathlib import PurePath, PurePosixPath
 import types
 
 from typing import (
@@ -34,7 +33,7 @@ from typing import (
     Union,
 )
 
-from ._butlerUri import ButlerURI, os2posix, posix2os
+from ._butlerUri import ButlerURI
 
 
 class Location:
@@ -50,7 +49,7 @@ class Location:
         else a POSIX separator.
     """
 
-    __slots__ = ("_datastoreRootUri", "_path")
+    __slots__ = ("_datastoreRootUri", "_path", "_uri")
 
     def __init__(self, datastoreRootUri: Union[ButlerURI, str], path: str):
         if isinstance(datastoreRootUri, str):
@@ -64,7 +63,7 @@ class Location:
         self._datastoreRootUri = datastoreRootUri
 
         pathModule: types.ModuleType
-        if self._datastoreRootUri.scheme == "file":
+        if not self._datastoreRootUri.scheme:
             pathModule = os.path
         else:
             pathModule = posixpath
@@ -75,8 +74,11 @@ class Location:
 
         self._path = path
 
+        # Internal cache of the full location as a ButlerURI
+        self._uri: Optional[ButlerURI] = None
+
     def __str__(self) -> str:
-        return self.uri
+        return str(self.uri)
 
     def __repr__(self) -> str:
         uri = self._datastoreRootUri.geturl()
@@ -84,26 +86,27 @@ class Location:
         return f"{self.__class__.__name__}({uri!r}, {path!r})"
 
     @property
-    def uri(self) -> str:
-        """URI string corresponding to fully-specified location in datastore.
+    def uri(self) -> ButlerURI:
+        """URI corresponding to fully-specified location in datastore.
         """
-        return self._datastoreRootUri.join(self.path).geturl()
+        if self._uri is None:
+            self._uri = self._datastoreRootUri.join(self._path)
+        return self._uri
 
     @property
     def path(self) -> str:
         """Path corresponding to location.
 
         This path includes the root of the `Datastore`, but does not include
-        non-path components of the root URI.  If a file URI scheme is being
-        used the path will be returned with the local OS path separator.
+        non-path components of the root URI.  Paths will not include URI
+        quoting. If a file URI scheme is being used the path will be returned
+        with the local OS path separator.
         """
-        if not self._datastoreRootUri.scheme:
-            # Entirely local file system
-            return os.path.normpath(os.path.join(self._datastoreRootUri.path, self.pathInStore))
-        elif self._datastoreRootUri.scheme == "file":
-            return os.path.normpath(os.path.join(posix2os(self._datastoreRootUri.path), self.pathInStore))
-        else:
-            return posixpath.join(self._datastoreRootUri.path, self.pathInStore)
+        full = self.uri
+        try:
+            return full.ospath
+        except AttributeError:
+            return full.unquoted_path
 
     @property
     def pathInStore(self) -> str:
@@ -124,14 +127,9 @@ class Location:
         location.
 
         Effectively, this is the path property with POSIX separator stripped
-        from the left hand side of the path.
+        from the left hand side of the path.  Will be unquoted.
         """
-        if self._datastoreRootUri.scheme == 'file' or not self._datastoreRootUri.scheme:
-            p = PurePath(os2posix(self.path))
-        else:
-            p = PurePosixPath(self.path)
-        stripped = p.relative_to(p.root)
-        return str(posix2os(stripped))
+        return self.uri.relativeToPathRoot
 
     def updateExtension(self, ext: Optional[str]) -> None:
         """Update the file extension associated with this `Location`.
@@ -161,6 +159,9 @@ class Location:
 
         self._path = path + ext
 
+        # Clear the URI cache so it can be recreated with the new path
+        self._uri = None
+
     def getExtension(self) -> str:
         """Return the file extension(s) associated with this location.
 
@@ -172,11 +173,7 @@ class Location:
             as a single extension such that ``file.fits.gz`` will return
             a value of ``.fits.gz``.
         """
-        if not self._datastoreRootUri.scheme:
-            extensions = PurePath(self.path).suffixes
-        else:
-            extensions = PurePath(self.path).suffixes
-        return "".join(extensions)
+        return self.uri.getExtension()
 
 
 class LocationFactory:

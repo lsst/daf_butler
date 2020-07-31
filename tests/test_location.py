@@ -184,30 +184,53 @@ class LocationTestCase(unittest.TestCase):
 
         self.assertEqual(loc1.path, os.path.join(root, pathInStore))
         self.assertEqual(loc1.pathInStore, pathInStore)
-        self.assertTrue(loc1.uri.startswith("file:///"))
-        self.assertTrue(loc1.uri.endswith("file.ext"))
+        self.assertTrue(loc1.uri.geturl().startswith("file:///"))
+        self.assertTrue(loc1.uri.geturl().endswith("file.ext"))
         loc1.updateExtension("fits")
-        self.assertTrue(loc1.uri.endswith("file.fits"), f"Checking 'fits' extension in {loc1.uri}")
+        self.assertTrue(loc1.uri.geturl().endswith("file.fits"),
+                        f"Checking 'fits' extension in {loc1.uri}")
         loc1.updateExtension("fits.gz")
-        self.assertTrue(loc1.uri.endswith("file.fits.gz"), f"Checking 'fits.gz' extension in {loc1.uri}")
+        self.assertEqual(loc1.uri.basename(), "file.fits.gz")
+        self.assertTrue(loc1.uri.geturl().endswith("file.fits.gz"),
+                        f"Checking 'fits.gz' extension in {loc1.uri}")
+        self.assertEqual(loc1.getExtension(), ".fits.gz")
         loc1.updateExtension(".jpeg")
-        self.assertTrue(loc1.uri.endswith("file.jpeg"), f"Checking 'jpeg' extension in {loc1.uri}")
+        self.assertTrue(loc1.uri.geturl().endswith("file.jpeg"),
+                        f"Checking 'jpeg' extension in {loc1.uri}")
         loc1.updateExtension(None)
-        self.assertTrue(loc1.uri.endswith("file.jpeg"), f"Checking unchanged extension in {loc1.uri}")
+        self.assertTrue(loc1.uri.geturl().endswith("file.jpeg"),
+                        f"Checking unchanged extension in {loc1.uri}")
         loc1.updateExtension("")
-        self.assertTrue(loc1.uri.endswith("file"), f"Checking no extension in {loc1.uri}")
+        self.assertTrue(loc1.uri.geturl().endswith("file"), f"Checking no extension in {loc1.uri}")
+        self.assertEqual(loc1.getExtension(), "")
 
     def testRelativeRoot(self):
         root = os.path.abspath(os.path.curdir)
         factory = LocationFactory(os.path.curdir)
-        print(f"Factory created: {factory}")
 
         pathInStore = "relative/path/file.ext"
         loc1 = factory.fromPath(pathInStore)
 
         self.assertEqual(loc1.path, os.path.join(root, pathInStore))
         self.assertEqual(loc1.pathInStore, pathInStore)
-        self.assertTrue(loc1.uri.startswith("file:///"))
+        self.assertEqual(loc1.uri.scheme, "file")
+
+    def testQuotedRoot(self):
+        """Test we can handle quoted characters."""
+        root = "/a/b/c+1/d"
+        factory = LocationFactory(root)
+
+        pathInStore = "relative/path/file.ext.gz"
+
+        for pathInStore in ("relative/path/file.ext.gz",
+                            "relative/path+2/file.ext.gz",
+                            "relative/path+3/file#.ext.gz"):
+            loc1 = factory.fromPath(pathInStore)
+
+            self.assertEqual(loc1.pathInStore, pathInStore)
+            self.assertEqual(loc1.path, os.path.join(root, pathInStore))
+            self.assertIn("%", str(loc1.uri))
+            self.assertEqual(loc1.getExtension(), ".ext.gz")
 
     def testHttpLocation(self):
         root = "https://www.lsst.org/butler/datastore"
@@ -219,10 +242,10 @@ class LocationTestCase(unittest.TestCase):
 
         self.assertEqual(loc1.path, posixpath.join("/butler/datastore", pathInStore))
         self.assertEqual(loc1.pathInStore, pathInStore)
-        self.assertTrue(loc1.uri.startswith("https://"))
-        self.assertTrue(loc1.uri.endswith("file.ext"))
+        self.assertEqual(loc1.uri.scheme, "https")
+        self.assertEqual(loc1.uri.basename(), "file.ext")
         loc1.updateExtension("fits")
-        self.assertTrue(loc1.uri.endswith("file.fits"))
+        self.assertTrue(loc1.uri.basename(), "file.fits")
 
     def testPosix2OS(self):
         """Test round tripping of the posix to os.path conversion helpers."""

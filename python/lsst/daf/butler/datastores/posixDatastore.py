@@ -84,11 +84,11 @@ class PosixDatastore(FileLikeDatastore):
         super().__init__(config, bridgeManager, butlerRoot)
 
         # Check that root is a valid URI for this datastore
-        root = ButlerURI(self.root)
+        root = ButlerURI(self.root, forceDirectory=True)
         if root.scheme and root.scheme != "file":
             raise ValueError(f"Root location must only be a file URI not {self.root}")
 
-        self.root = root.path
+        self.root = root.ospath
         if not os.path.isdir(self.root):
             if "create" not in self.config or not self.config["create"]:
                 raise ValueError(f"No valid root at: {self.root}")
@@ -247,7 +247,7 @@ class PosixDatastore(FileLikeDatastore):
             path = pathx
         return path
 
-    def _extractIngestInfo(self, path: str, ref: DatasetRef, *,
+    def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
                            formatter: Union[Formatter, Type[Formatter]],
                            transfer: Optional[str] = None) -> StoredFileInfo:
         # Docstring inherited from FileLikeDatastore._extractIngestInfo.

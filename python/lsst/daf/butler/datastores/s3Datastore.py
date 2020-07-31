@@ -304,7 +304,7 @@ class S3Datastore(FileLikeDatastore):
                                    f"within datastore ({rootUri})")
         return path
 
-    def _extractIngestInfo(self, path: str, ref: DatasetRef, *,
+    def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
                            formatter: Union[Formatter, Type[Formatter]],
                            transfer: Optional[str] = None) -> StoredFileInfo:
         # Docstring inherited from FileLikeDatastore._extractIngestInfo.

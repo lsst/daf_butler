@@ -231,6 +231,12 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(new2.relative_to(fdir), new2name, f"{new2} vs {fdir}")
         self.assertEqual(new2.relative_to(dir), new2name)
 
+        # Check for double quoting
+        plus_path = "/a/b/c+d/"
+        with self.assertLogs(level="WARNING"):
+            uri = ButlerURI(urllib.parse.quote(plus_path), forceDirectory=True)
+        self.assertEqual(uri.ospath, plus_path)
+
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
@@ -324,6 +330,18 @@ class S3URITestCase(unittest.TestCase):
 
         not_s3 = ButlerURI(os.path.join(self.tmpdir, "dir1", "file2.txt"))
         self.assertFalse(child.relative_to(not_s3))
+
+    def testQuoting(self):
+        """Check that quoting works."""
+        parent = ButlerURI(self.makeS3Uri("rootdir"), forceDirectory=True)
+        subpath = "rootdir/dir1+/file?.txt"
+        child = ButlerURI(self.makeS3Uri(urllib.parse.quote(subpath)))
+
+        self.assertEqual(child.relative_to(parent), "dir1+/file?.txt")
+        self.assertEqual(child.basename(), "file?.txt")
+        self.assertEqual(child.relativeToPathRoot, subpath)
+        self.assertIn("%", child.path)
+        self.assertEqual(child.unquoted_path, "/" + subpath)
 
 
 if __name__ == "__main__":

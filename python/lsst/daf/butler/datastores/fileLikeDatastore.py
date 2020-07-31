@@ -578,7 +578,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         raise NotImplementedError("Must be implemented by subclasses.")
 
     @abstractmethod
-    def _extractIngestInfo(self, path: str, ref: DatasetRef, *,
+    def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
                            formatter: Union[Formatter, Type[Formatter]],
                            transfer: Optional[str] = None) -> StoredFileInfo:
         """Relocate (if necessary) and extract `StoredFileInfo` from a
@@ -586,8 +586,8 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         Parameters
         ----------
-        path : `str`
-            Path of a file to be ingested.
+        path : `str` or `ButlerURI`
+            URI or path of a file to be ingested.
         ref : `DatasetRef`
             Reference for the dataset being ingested.  Guaranteed to have
             ``dataset_id not None`.
@@ -796,14 +796,14 @@ class FileLikeDatastore(GenericBaseDatastore):
                     compLocation = predictLocation(compRef)
 
                     # Add a URI fragment to indicate this is a guess
-                    components[component] = ButlerURI(compLocation.uri + "#predicted")
+                    components[component] = ButlerURI(compLocation.uri.geturl() + "#predicted")
 
             else:
 
                 location = predictLocation(ref)
 
                 # Add a URI fragment to indicate this is a guess
-                primary = ButlerURI(location.uri + "#predicted")
+                primary = ButlerURI(location.uri.geturl() + "#predicted")
 
             return primary, components
 
