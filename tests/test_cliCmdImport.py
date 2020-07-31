@@ -111,13 +111,12 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
         # here it will be a different instance and not compare equal. We test
         # that variable via the mocker.side_effect used in self.read_test.
         with self.runner.isolated_filesystem():
-            f = open("output.yaml", "w")
-            f.write("foobarbaz")
-            f.close()
+            with open("output.yaml", "w") as f:
+                f.write("foobarbaz")
             self.run_test(["import", "here", "foo",
                            "--output-run", "out",
                            "--skip-dimensions", "instrument", "-s", "detector",
-                           "--export-file", os.path.join(os.getcwd(), "output.yaml")],
+                           "--export-file", os.path.abspath("output.yaml")],
                           self.makeExpected(repo="here", directory="foo",
                                             output_run="out", skip_dimensions=("instrument", "detector"),
                                             export_file=unittest.mock.ANY))
