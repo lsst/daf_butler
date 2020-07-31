@@ -285,7 +285,8 @@ class RepoImportBackend(ABC):
 
     @abstractmethod
     def load(self, datastore: Optional[Datastore], *,
-             directory: Optional[str] = None, transfer: Optional[str] = None) -> None:
+             directory: Optional[str] = None, transfer: Optional[str] = None,
+             skip_dimensions: Optional[Set] = None) -> None:
         """Import information associated with the backend into the given
         registry and datastore.
 
@@ -301,6 +302,10 @@ class RepoImportBackend(ABC):
             File all dataset paths are relative to.
         transfer : `str`, optional
             Transfer mode forwarded to `Datastore.ingest`.
+        skip_dimensions : `set`, optional
+            Dimensions that should be skipped and not imported. This can
+            be useful when importing into a registry that already knows
+            about a specific instrument.
         """
         raise NotImplementedError()
 
@@ -450,9 +455,12 @@ class YamlRepoImportBackend(RepoImportBackend):
             self.registry.registerDatasetType(datasetType)
 
     def load(self, datastore: Optional[Datastore], *,
-             directory: Optional[str] = None, transfer: Optional[str] = None) -> None:
+             directory: Optional[str] = None, transfer: Optional[str] = None,
+             skip_dimensions: Optional[Set] = None) -> None:
         # Docstring inherited from RepoImportBackend.load.
         for element, dimensionRecords in self.dimensions.items():
+            if skip_dimensions and element in skip_dimensions:
+                continue
             self.registry.insertDimensionData(element, *dimensionRecords)
         # Mapping from collection name to list of DatasetRefs to associate.
         collections = defaultdict(list)

@@ -45,6 +45,9 @@ from ...script import (butlerImport, createRepo, configDump, configValidate, que
                    "directory, and --dir is provided, it is assumed to be in that directory.  Defaults "
                    "to \"export.yaml\".",
               type=click.File("r"))
+@click.option("--skip-dimensions", "-s", type=str, multiple=True, callback=split_commas,
+              metavar=typeStrAcceptsMultiple,
+              help="Dimensions that should be skipped during import")
 def butler_import(*args, **kwargs):
     """Import data into a butler repository."""
     cli_handle_exception(butlerImport, *args, **kwargs)
