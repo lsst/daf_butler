@@ -37,6 +37,7 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
                            transfer="auto",
                            output_run=None,
                            directory=None,
+                           skip_dimensions=(),
                            export_file=None)
 
     command = butler_import
@@ -115,9 +116,10 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
             f.close()
             self.run_test(["import", "here", "foo",
                            "--output-run", "out",
+                           "--skip-dimensions", "instrument", "-s", "detector",
                            "--export-file", os.path.join(os.getcwd(), "output.yaml")],
                           self.makeExpected(repo="here", directory="foo",
-                                            output_run="out",
+                                            output_run="out", skip_dimensions=("instrument", "detector"),
                                             export_file=unittest.mock.ANY))
             self.assertEqual("foobarbaz", ExportFileCase.didRead)
 

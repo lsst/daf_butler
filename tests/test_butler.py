@@ -946,7 +946,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
                 # should not be used as public api.
                 with open(exportFile, "r") as f:
                     script.butlerImport(importDir, output_run="ingest/run", export_file=f,
-                                        directory=exportDir, transfer="auto")
+                                        directory=exportDir, transfer="auto", skip_dimensions=None)
                 importButler = Butler(importDir, run="ingest/run")
                 for ref in datasets:
                     with self.subTest(ref=ref):
