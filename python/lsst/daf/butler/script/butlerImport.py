@@ -22,7 +22,7 @@
 from .. import Butler
 
 
-def butlerImport(repo, directory, export_file, output_run, transfer):
+def butlerImport(repo, directory, export_file, output_run, transfer, skip_dimensions):
     """Import data into a butler repository.
 
     Parameters
@@ -41,10 +41,17 @@ def butlerImport(repo, directory, export_file, output_run, transfer):
     output_run : `str`, or None
         The path to the location, the run, where datasets should be put.
     transfer : `str`, or None
-            The external data transfer type.
+        The external data transfer type.
+    skip_dimensions : `list`, or `None`
+        Dimensions that should be skipped.
     """
     butler = Butler(repo, run=output_run, writeable=True)
+
+    if skip_dimensions is not None:
+        skip_dimensions = set(skip_dimensions)
+
     butler.import_(directory=directory,
                    filename=export_file,
                    transfer=transfer,
-                   format="yaml")
+                   format="yaml",
+                   skip_dimensions=skip_dimensions)

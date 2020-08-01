@@ -40,6 +40,7 @@ from typing import (
     Mapping,
     MutableMapping,
     Optional,
+    Set,
     TextIO,
     Tuple,
     Union,
@@ -1276,7 +1277,8 @@ class Butler:
     def import_(self, *, directory: Optional[str] = None,
                 filename: Union[str, TextIO, None] = None,
                 format: Optional[str] = None,
-                transfer: Optional[str] = None):
+                transfer: Optional[str] = None,
+                skip_dimensions: Optional[Set] = None):
         """Import datasets exported from a different butler repository.
 
         Parameters
@@ -1294,7 +1296,9 @@ class Butler:
             File format for the database information file.  If `None`, the
             extension of ``filename`` will be used.
         transfer : `str`, optional
-            Transfer mode passed to `Datastore.export`.
+            Transfer mode passed to `Datastore.ingest`.
+        skip_dimensions : `set`, optional
+            Names of dimensions that should be skipped and not imported.
 
         Raises
         ------
@@ -1319,7 +1323,8 @@ class Butler:
             backend = BackendClass(importStream, self.registry)
             backend.register()
             with self.transaction():
-                backend.load(self.datastore, directory=directory, transfer=transfer)
+                backend.load(self.datastore, directory=directory, transfer=transfer,
+                             skip_dimensions=skip_dimensions)
 
         if isinstance(filename, str):
             with open(filename, "r") as stream:
