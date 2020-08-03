@@ -42,6 +42,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    Union,
 )
 import uuid
 import warnings
@@ -662,6 +663,37 @@ class Database(ABC):
             ondelete=spec.onDelete
         )
 
+    def _convertExclusionConstraintSpec(self, table: str,
+                                        spec: Tuple[Union[str, Type[DatabaseTimespanRepresentation]], ...],
+                                        metadata: sqlalchemy.MetaData) -> sqlalchemy.schema.Constraint:
+        """Convert a `tuple` from `ddl.TableSpec.exclusion` into a SQLAlchemy
+        constraint representation.
+
+        Parameters
+        ----------
+        table : `str`
+            Name of the table this constraint is being added to.
+        spec : `tuple` [ `str` or `type` ]
+            A tuple of `str` column names and the `type` object returned by
+            `getTimespanRepresentation` (which must appear exactly once),
+            indicating the order of the columns in the index used to back the
+            constraint.
+        metadata : `sqlalchemy.MetaData`
+            SQLAlchemy representation of the DDL schema this constraint is
+            being added to.
+
+        Returns
+        -------
+        constraint : `sqlalchemy.schema.Constraint`
+            SQLAlchemy representation of the constraint.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if this database does not support exclusion constraints.
+        """
+        raise NotImplementedError(f"Database {self} does not support exclusion constraints.")
+
     def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
                           **kwds: Any) -> sqlalchemy.schema.Table:
         """Convert a `TableSpec` to a `sqlalchemy.schema.Table`.
@@ -725,6 +757,9 @@ class Database(ABC):
             )
             for fk in spec.foreignKeys if fk.addIndex and fk.source not in allIndexes
         )
+
+        args.extend(self._convertExclusionConstraintSpec(name, excl, metadata) for excl in spec.exclusion)
+
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {name}."
         return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwds)
 

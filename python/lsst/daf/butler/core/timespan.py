@@ -233,6 +233,18 @@ class DatabaseTimespanRepresentation(ABC):
         raise NotImplementedError()
 
     @classmethod
+    def hasExclusionConstraint(cls) -> bool:
+        """Return `True` if this representation supports exclusion constraints.
+
+        Returns
+        -------
+        supported : `bool`
+            If `True`, defining a constraint via `ddl.TableSpec.exclusion` that
+            includes the fields of this representation is allowed.
+        """
+        return False
+
+    @classmethod
     @abstractmethod
     def fromSelectable(cls: Type[S], selectable: sqlalchemy.sql.FromClause) -> S:
         """Construct an instance of this class that proxies the columns of

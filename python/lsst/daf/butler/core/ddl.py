@@ -38,7 +38,7 @@ from base64 import b64encode, b64decode
 import logging
 from math import ceil
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, List, Optional, Set, Tuple, Type, Union
+from typing import Any, Callable, Iterable, List, Optional, Set, Tuple, Type, TYPE_CHECKING, Union
 
 import sqlalchemy
 import astropy.time
@@ -49,6 +49,9 @@ from .exceptions import ValidationError
 from . import time_utils
 from .utils import iterable, stripIfNotNone
 from .named import NamedValueSet
+
+if TYPE_CHECKING:
+    from .timespan import DatabaseTimespanRepresentation
 
 
 _LOG = logging.getLogger(__name__)
@@ -353,6 +356,12 @@ class TableSpec:
         Indexes for the table.
     foreignKeys : `Iterable` [ `ForeignKeySpec` ], optional
         Foreign key constraints for the table.
+    exclusion : `Iterable` [ `tuple` [ `str` or `type` ] ]
+        Special constraints that prohibit overlaps between timespans over rows
+        where other columns are equal.  These take the same form as unique
+        constraints, but each tuple may contain a single
+        `DatabaseTimespanRepresentation` subclass representing a timespan
+        column.
     recycleIds : bool, optional
         If `True`, allow databases that might normally recycle autoincrement
         IDs to do so (usually better for performance) on any autoincrement
@@ -365,6 +374,7 @@ class TableSpec:
         unique: Iterable[Tuple[str, ...]] = (),
         indexes: Iterable[Tuple[str, ...]] = (),
         foreignKeys: Iterable[ForeignKeySpec] = (),
+        exclusion: Iterable[Tuple[Union[str, Type[DatabaseTimespanRepresentation]], ...]] = (),
         recycleIds: bool = True,
         doc: Optional[str] = None,
     ):
@@ -372,6 +382,7 @@ class TableSpec:
         self.unique = set(unique)
         self.indexes = set(indexes)
         self.foreignKeys = list(foreignKeys)
+        self.exclusion = set(exclusion)
         self.recycleIds = recycleIds
         self.doc = doc
 
@@ -386,6 +397,15 @@ class TableSpec:
 
     foreignKeys: List[ForeignKeySpec]
     """Foreign key constraints for the table."""
+
+    exclusion: Set[Tuple[Union[str, Type[DatabaseTimespanRepresentation]], ...]]
+    """Exclusion constraints for the table.
+
+    Exclusion constraints behave mostly like unique constraints, but may
+    contain a database-native Timespan column that is restricted to not overlap
+    across rows (for identical combinations of any non-Timespan columns in the
+    constraint).
+    """
 
     recycleIds: bool = True
     """If `True`, allow databases that might normally recycle autoincrement IDs
