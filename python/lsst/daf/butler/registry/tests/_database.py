@@ -23,8 +23,11 @@ from __future__ import annotations
 __all__ = ["DatabaseTests"]
 
 from abc import ABC, abstractmethod
+import asyncio
 from collections import namedtuple
-from typing import ContextManager
+from concurrent.futures import ThreadPoolExecutor
+from typing import ContextManager, Iterable, Set, Tuple
+import warnings
 
 import sqlalchemy
 
@@ -568,3 +571,120 @@ class DatabaseTests(ABC):
             [dict(r) for r in db.query(tables.a.select()).fetchall()],
             [{"name": "a1", "region": None}, {"name": "a2", "region": None}, {"name": "a3", "region": None}],
         )
+
+    def testTransactionLocking(self):
+        """Test that `Database.transaction` can be used to acquire a lock
+        that prohibits concurrent writes.
+        """
+        db1 = self.makeEmptyDatabase(origin=1)
+        with db1.declareStaticTables(create=True) as context:
+            tables1 = context.addTableTuple(STATIC_TABLE_SPECS)
+
+        async def side1(lock: Iterable[str] = ()) -> Tuple[Set[str], Set[str]]:
+            """One side of the concurrent locking test.
+
+            This optionally locks the table (and maybe the whole database),
+            does a select for its contents, inserts a new row, and then selects
+            again, with some waiting in between to make sure the other side has
+            a chance to _attempt_ to insert in between.  If the locking is
+            enabled and works, the difference between the selects should just
+            be the insert done on this thread.
+            """
+            # Give Side2 a chance to create a connection
+            await asyncio.sleep(1.0)
+            with db1.transaction(lock=lock):
+                names1 = {row["name"] for row in db1.query(tables1.a.select()).fetchall()}
+                # Give Side2 a chance to insert (which will be blocked if
+                # we've acquired a lock).
+                await asyncio.sleep(2.0)
+                db1.insert(tables1.a, {"name": "a1"})
+                names2 = {row["name"] for row in db1.query(tables1.a.select()).fetchall()}
+            return names1, names2
+
+        async def side2() -> None:
+            """The other side of the concurrent locking test.
+
+            This side just waits a bit and then tries to insert a row into the
+            table that the other side is trying to lock.  Hopefully that
+            waiting is enough to give the other side a chance to acquire the
+            lock and thus make this side block until the lock is released.  If
+            this side manages to do the insert before side1 acquires the lock,
+            we'll just warn about not succeeding at testing the locking,
+            because we can only make that unlikely, not impossible.
+            """
+            def toRunInThread():
+                """SQLite locking isn't asyncio-friendly unless we actually
+                run it in another thread.  And SQLite gets very unhappy if
+                we try to use a connection from multiple threads, so we have
+                to create the new connection here instead of out in the main
+                body of the test function.
+                """
+                db2 = self.getNewConnection(db1, writeable=True)
+                with db2.declareStaticTables(create=False) as context:
+                    tables2 = context.addTableTuple(STATIC_TABLE_SPECS)
+                with db2.transaction():
+                    db2.insert(tables2.a, {"name": "a2"})
+
+            await asyncio.sleep(2.0)
+            loop = asyncio.get_running_loop()
+            with ThreadPoolExecutor() as pool:
+                await loop.run_in_executor(pool, toRunInThread)
+
+        async def testProblemsWithNoLocking() -> None:
+            """Run side1 and side2 with no locking, attempting to demonstrate
+            the problem that locking is supposed to solve.  If we get unlucky
+            with scheduling, side2 will just happen to insert after side1 is
+            done, and we won't have anything definitive.  We just warn in that
+            case because we really don't want spurious test failures.
+            """
+            task1 = asyncio.create_task(side1())
+            task2 = asyncio.create_task(side2())
+
+            names1, names2 = await task1
+            await task2
+            if "a2" in names1:
+                warnings.warn("Unlucky scheduling in no-locking test: concurrent INSERT "
+                              "happened before first SELECT.")
+                self.assertEqual(names1, {"a2"})
+                self.assertEqual(names2, {"a1", "a2"})
+            elif "a2" not in names2:
+                warnings.warn("Unlucky scheduling in no-locking test: concurrent INSERT "
+                              "happened after second SELECT even without locking.")
+                self.assertEqual(names1, set())
+                self.assertEqual(names2, {"a1"})
+            else:
+                # This is the expected case: both INSERTS happen between the
+                # two SELECTS.  If we don't get this almost all of the time we
+                # should adjust the sleep amounts.
+                self.assertEqual(names1, set())
+                self.assertEqual(names2, {"a1", "a2"})
+
+        asyncio.run(testProblemsWithNoLocking())
+
+        # Clean up after first test.
+        db1.delete(tables1.a, ["name"], {"name": "a1"}, {"name": "a2"})
+
+        async def testSolutionWithLocking() -> None:
+            """Run side1 and side2 with locking, which should make side2 block
+            its insert until side2 releases its lock.
+            """
+            task1 = asyncio.create_task(side1(lock=[tables1.a]))
+            task2 = asyncio.create_task(side2())
+
+            names1, names2 = await task1
+            await task2
+            if "a2" in names1:
+                warnings.warn("Unlucky scheduling in locking test: concurrent INSERT "
+                              "happened before first SELECT.")
+                self.assertEqual(names1, {"a2"})
+                self.assertEqual(names2, {"a1", "a2"})
+            else:
+                # This is the expected case: the side2 INSERT happens after the
+                # last SELECT on side1.  This can also happen due to unlucky
+                # scheduling, and we have no way to detect that here, but the
+                # similar "no-locking" test has at least some chance of being
+                # affected by the same problem and warning about it.
+                self.assertEqual(names1, set())
+                self.assertEqual(names2, {"a1"})
+
+        asyncio.run(testSolutionWithLocking())

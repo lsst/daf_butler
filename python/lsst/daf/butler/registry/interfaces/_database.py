@@ -337,7 +337,8 @@ class Database(ABC):
         raise NotImplementedError()
 
     @contextmanager
-    def transaction(self, *, interrupting: bool = False, savepoint: bool = False) -> Iterator:
+    def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
+                    lock: Iterable[sqlalchemy.schema.Table] = ()) -> Iterator:
         """Return a context manager that represents a transaction.
 
         Parameters
@@ -357,6 +358,11 @@ class Database(ABC):
             outer transaction block was created with ``savepoint=True``, all
             inner blocks will be as well (regardless of the actual value
             passed).  This has no effect if this is the outermost transaction.
+        lock : `Iterable` [ `sqlalchemy.schema.Table` ], optional
+            A list of tables to lock for the duration of this transaction.
+            These locks are guaranteed to prevent concurrent writes, but only
+            prevent concurrent reads if the database engine requires that in
+            order to block concurrent writes.
 
         Notes
         -----
@@ -384,6 +390,7 @@ class Database(ABC):
             # Use a regular (non-savepoint) transaction always for the
             # outermost context, as well as when a savepoint was not requested.
             trans = self._connection.begin()
+        self._lockTables(lock)
         try:
             yield
             trans.commit()
@@ -393,6 +400,23 @@ class Database(ABC):
         finally:
             if not self._connection.in_transaction():
                 self._connection.info.pop(_IN_SAVEPOINT_TRANSACTION, None)
+
+    @abstractmethod
+    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+        """Acquire locks on the given tables.
+
+        This is an implementation hook for subclasses, called by `transaction`.
+        It should not be called directly by other code.
+
+        Parameters
+        ----------
+        tables : `Iterable` [ `sqlalchemy.schema.Table` ], optional
+            A list of tables to lock for the duration of this transaction.
+            These locks are guaranteed to prevent concurrent writes, but only
+            prevent concurrent reads if the database engine requires that in
+            order to block concurrent writes.
+        """
+        raise NotImplementedError()
 
     @contextmanager
     def declareStaticTables(self, *, create: bool) -> Iterator[StaticTablesContext]:

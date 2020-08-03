@@ -133,6 +133,11 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
             self.assertFalse(roFromUri.isWriteable())
             self.assertFalse(isEmptyDatabaseActuallyWriteable(roFromUri))
 
+    def testTransactionLocking(self):
+        # This (inherited) test can't run on SQLite because of our use of an
+        # aggressive locking strategy there.
+        pass
+
 
 class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
     """Tests for `SqliteDatabase` using an in-memory database.
@@ -172,6 +177,11 @@ class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
         # We don't support read-only in-memory databases.
         with self.assertRaises(NotImplementedError):
             SqliteDatabase.connect(filename=None, writeable=False)
+
+    def testTransactionLocking(self):
+        # This (inherited) test can't run on SQLite because of our use of an
+        # aggressive locking strategy there.
+        pass
 
 
 class SqliteFileRegistryTests(RegistryTests):

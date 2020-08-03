@@ -257,6 +257,14 @@ class SqliteDatabase(Database):
         else:
             return "SQLite3@:memory:"
 
+    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+        # Docstring inherited.
+        # Our SQLite database always acquires full-database locks at the
+        # beginning of a transaction, so there's no need to acquire table-level
+        # locks - which is good, because SQLite doesn't have table-level
+        # locking.
+        pass
+
     # MyPy claims that the return type here isn't covariant with the return
     # type of the base class method, which is formally correct but irrelevant
     # - the base class return type is _GeneratorContextManager, but only
