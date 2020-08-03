@@ -1172,7 +1172,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         """
         log.debug("Emptying trash in datastore %s", self.name)
         # Context manager will empty trash iff we finish it without raising.
-        with self._bridge.emptyTrash() as trashed:
+        with self.bridge.emptyTrash() as trashed:
             for ref in trashed:
                 fileLocations = self._get_dataset_locations_info(ref)
 
