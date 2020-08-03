@@ -31,7 +31,6 @@ from ..interfaces import (
     StaticTablesContext,
     DimensionRecordStorageManager,
     DimensionRecordStorage,
-    VersionedExtension,
     VersionTuple
 )
 
@@ -40,7 +39,7 @@ from ..interfaces import (
 _VERSION = VersionTuple(0, 1, 0)
 
 
-class StaticDimensionRecordStorageManager(DimensionRecordStorageManager, VersionedExtension):
+class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     """An implementation of `DimensionRecordStorageManager` for single-layer
     `Registry` and the base layers of multi-layer `Registry`.
 

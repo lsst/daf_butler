@@ -35,7 +35,6 @@ from lsst.daf.butler.registry.interfaces import (
     DatastoreRegistryBridge,
     DatastoreRegistryBridgeManager,
     FakeDatasetRef,
-    VersionedExtension,
     VersionTuple,
 )
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
@@ -201,7 +200,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         self._db.delete(self._tables.dataset_location_trash, ["dataset_id", "datastore_name"], *rows)
 
 
-class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager, VersionedExtension):
+class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
     """An implementation of `DatastoreRegistryBridgeManager` that uses the same
     two tables for all non-ephemeral datastores.
 

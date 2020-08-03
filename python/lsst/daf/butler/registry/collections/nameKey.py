@@ -37,7 +37,7 @@ from ._base import (
     makeCollectionChainTableSpec,
 )
 from ...core import ddl
-from ..interfaces import VersionedExtension, VersionTuple
+from ..interfaces import VersionTuple
 
 if TYPE_CHECKING:
     from ..interfaces import CollectionRecord, Database, StaticTablesContext
@@ -57,7 +57,7 @@ _TABLES_SPEC = CollectionTablesTuple(
 _VERSION = VersionTuple(0, 1, 0)
 
 
-class NameKeyCollectionManager(DefaultCollectionManager, VersionedExtension):
+class NameKeyCollectionManager(DefaultCollectionManager):
     """A `CollectionManager` implementation that uses collection names for
     primary/foreign keys and aggressively loads all collection/run records in
     the database into memory.

@@ -40,7 +40,6 @@ from .interfaces import (
     ButlerAttributeExistsError,
     ButlerAttributeManager,
     StaticTablesContext,
-    VersionedExtension,
     VersionTuple
 )
 
@@ -51,7 +50,7 @@ from .interfaces import (
 _VERSION = VersionTuple(0, 1, 0)
 
 
-class DefaultButlerAttributeManager(ButlerAttributeManager, VersionedExtension):
+class DefaultButlerAttributeManager(ButlerAttributeManager):
     """An implementation of `ButlerAttributeManager` that stores attributes
     in a database table.
 

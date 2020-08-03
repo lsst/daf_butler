@@ -127,7 +127,7 @@ class ButlerVersionsManager:
             if isinstance(manager, VersionedExtension):
                 self._managers[name] = manager
             else:
-                # All regular manages need to support versioning mechanism.
+                # All regular managers need to support versioning mechanism.
                 _LOG.warning("extension %r does not implement VersionedExtension", name)
         self._emptyFlag: Optional[bool] = None
 

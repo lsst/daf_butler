@@ -28,6 +28,7 @@ from typing import Iterable, Optional, Type, TYPE_CHECKING
 import sqlalchemy
 
 from ...core import SkyPixDimension
+from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import (
@@ -277,7 +278,7 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
 
-class DimensionRecordStorageManager(ABC):
+class DimensionRecordStorageManager(VersionedExtension):
     """An interface for managing the dimension records in a `Registry`.
 
     `DimensionRecordStorageManager` primarily serves as a container and factory

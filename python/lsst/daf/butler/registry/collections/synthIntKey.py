@@ -39,7 +39,7 @@ from ._base import (
     makeCollectionChainTableSpec,
 )
 from ...core import ddl
-from ..interfaces import CollectionRecord, VersionedExtension, VersionTuple
+from ..interfaces import CollectionRecord, VersionTuple
 
 if TYPE_CHECKING:
     from ..interfaces import Database, StaticTablesContext
@@ -62,7 +62,7 @@ _TABLES_SPEC = CollectionTablesTuple(
 _VERSION = VersionTuple(0, 1, 0)
 
 
-class SynthIntKeyCollectionManager(DefaultCollectionManager, VersionedExtension):
+class SynthIntKeyCollectionManager(DefaultCollectionManager):
     """A `CollectionManager` implementation that uses synthetic primary key
     (auto-incremented integer) for collections table.
 

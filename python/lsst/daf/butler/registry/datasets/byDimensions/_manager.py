@@ -25,7 +25,6 @@ from lsst.daf.butler.registry import ConflictingDefinitionError
 from lsst.daf.butler.registry.interfaces import (
     DatasetRecordStorage,
     DatasetRecordStorageManager,
-    VersionedExtension,
     VersionTuple
 )
 
@@ -45,7 +44,7 @@ if TYPE_CHECKING:
 _VERSION = VersionTuple(0, 1, 0)
 
 
-class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager, VersionedExtension):
+class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
     """A manager class for datasets that uses one dataset-collection table for
     each group of dataset types that share the same dimensions.
 

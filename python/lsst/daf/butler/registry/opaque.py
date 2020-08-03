@@ -41,7 +41,6 @@ from .interfaces import (
     OpaqueTableStorageManager,
     OpaqueTableStorage,
     StaticTablesContext,
-    VersionedExtension,
     VersionTuple
 )
 
@@ -90,7 +89,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         self._db.delete(self._table, where.keys(), where)
 
 
-class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager, VersionedExtension):
+class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
     """An implementation of `OpaqueTableStorageManager` that simply creates a
     true table for each different named opaque logical table.
 
