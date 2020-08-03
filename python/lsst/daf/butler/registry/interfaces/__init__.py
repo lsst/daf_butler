@@ -26,3 +26,4 @@ from ._collections import *
 from ._datasets import *
 from ._bridge import *
 from ._attributes import *
+from ._versioning import *

@@ -27,6 +27,7 @@ __all__ = (
 
 from collections import defaultdict
 import contextlib
+import logging
 import sys
 from typing import (
     Any,
@@ -71,7 +72,7 @@ from ._collectionType import CollectionType
 from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
 from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch, Ellipsis
 from .interfaces import ChainedCollectionRecord, RunRecord
-from .versions import ButlerVersionsManager
+from .versions import ButlerVersionsManager, DigestMismatchError
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -86,13 +87,35 @@ if TYPE_CHECKING:
     )
 
 
+_LOG = logging.getLogger(__name__)
+
+
 class Registry:
     """Registry interface.
 
     Parameters
     ----------
-    config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
-        Registry configuration
+    database : `Database`
+        Database instance to store Registry.
+    universe : `DimensionUniverse`
+        Full set of dimensions for Registry.
+    attributes : `type`
+        Manager class implementing `ButlerAttributeManager`.
+    opaque : `type`
+        Manager class implementing `OpaqueTableStorageManager`.
+    dimensions : `type`
+        Manager class implementing `DimensionRecordStorageManager`.
+    collections : `type`
+        Manager class implementing `CollectionManager`.
+    datasets : `type`
+        Manager class implementing `DatasetRecordStorageManager`.
+    datastoreBridges : `type`
+        Manager class implementing `DatastoreRegistryBridgeManager`.
+    writeable : `bool`, optional
+        If True then Registry will support write operations.
+    create : `bool`, optional
+        If True then database schema will be initialized, it must be empty
+        before instantiating Registry.
     """
 
     defaultConfigFile: Optional[str] = None
@@ -140,11 +163,10 @@ class Registry:
         collections = doImport(config["managers", "collections"])
         datasets = doImport(config["managers", "datasets"])
         datastoreBridges = doImport(config["managers", "datastores"])
-        versions = ButlerVersionsManager.fromConfig(config.get("schema_versions"))
 
         return cls(database, universe, dimensions=dimensions, attributes=attributes, opaque=opaque,
                    collections=collections, datasets=datasets, datastoreBridges=datastoreBridges,
-                   versions=versions, writeable=writeable, create=create)
+                   writeable=writeable, create=create)
 
     def __init__(self, database: Database, universe: DimensionUniverse, *,
                  attributes: Type[ButlerAttributeManager],
@@ -153,7 +175,6 @@ class Registry:
                  collections: Type[CollectionManager],
                  datasets: Type[DatasetRecordStorageManager],
                  datastoreBridges: Type[DatastoreRegistryBridgeManager],
-                 versions: ButlerVersionsManager,
                  writeable: bool = True,
                  create: bool = False):
         self._db = database
@@ -170,14 +191,32 @@ class Registry:
                                                                  opaque=self._opaque,
                                                                  datasets=datasets,
                                                                  universe=self.dimensions)
-            context.addInitializer(lambda db: versions.storeVersions(self._attributes))
+            versions = ButlerVersionsManager(
+                self._attributes,
+                dict(
+                    attributes=self._attributes,
+                    opaque=self._opaque,
+                    dimensions=self._dimensions,
+                    collections=self._collections,
+                    datasets=self._datasets,
+                    datastores=self._datastoreBridges,
+                )
+            )
+            # store managers and their versions in attributes table
+            context.addInitializer(lambda db: versions.storeManagersConfig())
+            context.addInitializer(lambda db: versions.storeManagersVersions())
 
-        # This call does not do anything right now as we do not have a way to
-        # split tables between sub-schemas yet.
-        versions.checkVersionDigests()
         if not create:
             # verify that configured versions are compatible with schema
-            versions.checkStoredVersions(self._attributes, writeable)
+            versions.checkManagersConfig()
+            versions.checkManagersVersions(writeable)
+            try:
+                versions.checkManagersDigests()
+            except DigestMismatchError as exc:
+                # potentially digest mismatch is a serious error but during
+                # development it could be benign, treat this as warning for
+                # now.
+                _LOG.warning(f"Registry schema digest mismatch: {exc}")
 
         self._collections.refresh()
         self._datasets.refresh(universe=self._dimensions.universe)

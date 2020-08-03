@@ -37,6 +37,7 @@ from ._base import (
     makeCollectionChainTableSpec,
 )
 from ...core import ddl
+from ..interfaces import VersionTuple
 
 if TYPE_CHECKING:
     from ..interfaces import CollectionRecord, Database, StaticTablesContext
@@ -52,6 +53,9 @@ _TABLES_SPEC = CollectionTablesTuple(
     collection_chain=makeCollectionChainTableSpec("name", sqlalchemy.String),
 )
 
+# This has to be updated on every schema change
+_VERSION = VersionTuple(0, 1, 0)
+
 
 class NameKeyCollectionManager(DefaultCollectionManager):
     """A `CollectionManager` implementation that uses collection names for
@@ -59,7 +63,7 @@ class NameKeyCollectionManager(DefaultCollectionManager):
     the database into memory.
 
     Most of the logic, including caching policy, is implemented in the base
-    class, this class only adds customisations specific to this particular
+    class, this class only adds customizations specific to this particular
     table schema.
     """
 
@@ -105,3 +109,12 @@ class NameKeyCollectionManager(DefaultCollectionManager):
     def _getByName(self, name: str) -> Optional[CollectionRecord]:
         # Docstring inherited from DefaultCollectionManager.
         return self._records.get(name)
+
+    @classmethod
+    def currentVersion(cls) -> Optional[VersionTuple]:
+        # Docstring inherited from VersionedExtension.
+        return _VERSION
+
+    def schemaDigest(self) -> Optional[str]:
+        # Docstring inherited from VersionedExtension.
+        return self._defaultSchemaDigest(self._tables)

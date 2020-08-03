@@ -25,7 +25,7 @@ __all__ = ("MonolithicDatastoreRegistryBridgeManager", "MonolithicDatastoreRegis
 from collections import namedtuple
 from contextlib import contextmanager
 import copy
-from typing import cast, Dict, Iterable, Iterator, List, Type, TYPE_CHECKING
+from typing import cast, Dict, Iterable, Iterator, List, Optional, Type, TYPE_CHECKING
 
 import sqlalchemy
 
@@ -35,6 +35,7 @@ from lsst.daf.butler.registry.interfaces import (
     DatastoreRegistryBridge,
     DatastoreRegistryBridgeManager,
     FakeDatasetRef,
+    VersionTuple,
 )
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 
@@ -55,6 +56,9 @@ _TablesTuple = namedtuple(
         "dataset_location_trash",
     ]
 )
+
+# This has to be updated on every schema change
+_VERSION = VersionTuple(0, 1, 0)
 
 
 def _makeTableSpecs(datasets: Type[DatasetRecordStorageManager]) -> _TablesTuple:
@@ -254,3 +258,12 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         for name, bridge in self._ephemeral.items():
             if ref in bridge:
                 yield name
+
+    @classmethod
+    def currentVersion(cls) -> Optional[VersionTuple]:
+        # Docstring inherited from VersionedExtension.
+        return _VERSION
+
+    def schemaDigest(self) -> Optional[str]:
+        # Docstring inherited from VersionedExtension.
+        return self._defaultSchemaDigest(self._tables)

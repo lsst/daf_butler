@@ -40,6 +40,7 @@ from ...core import (
     ddl,
     SimpleQuery,
 )
+from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
@@ -215,7 +216,7 @@ class DatasetRecordStorage(ABC):
     """
 
 
-class DatasetRecordStorageManager(ABC):
+class DatasetRecordStorageManager(VersionedExtension):
     """An interface that manages the tables that describe datasets.
 
     `DatasetRecordStorageManager` primarily serves as a container and factory

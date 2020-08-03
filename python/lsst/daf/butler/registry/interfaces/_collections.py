@@ -28,7 +28,7 @@ __all__ = [
     "RunRecord",
 ]
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import (
     Any,
     Iterator,
@@ -41,6 +41,7 @@ import astropy.time
 from ...core import ddl, Timespan
 from ..wildcards import CollectionSearch
 from .._collectionType import CollectionType
+from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ._database import Database, StaticTablesContext
@@ -241,7 +242,7 @@ class ChainedCollectionRecord(CollectionRecord):
         raise NotImplementedError()
 
 
-class CollectionManager(ABC):
+class CollectionManager(VersionedExtension):
     """An interface for managing the collections (including runs) in a
     `Registry`.
 

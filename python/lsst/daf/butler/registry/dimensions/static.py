@@ -20,11 +20,23 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
+
+import sqlalchemy
 
 from ...core import NamedKeyDict
 from ...core.dimensions import DimensionElement, DimensionUniverse
-from ..interfaces import Database, StaticTablesContext, DimensionRecordStorageManager, DimensionRecordStorage
+from ..interfaces import (
+    Database,
+    StaticTablesContext,
+    DimensionRecordStorageManager,
+    DimensionRecordStorage,
+    VersionTuple
+)
+
+
+# This has to be updated on every schema change
+_VERSION = VersionTuple(0, 1, 0)
 
 
 class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
@@ -80,3 +92,15 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited from DimensionRecordStorageManager.
         for storage in self._records.values():
             storage.clearCaches()
+
+    @classmethod
+    def currentVersion(cls) -> Optional[VersionTuple]:
+        # Docstring inherited from VersionedExtension.
+        return _VERSION
+
+    def schemaDigest(self) -> Optional[str]:
+        # Docstring inherited from VersionedExtension.
+        tables: List[sqlalchemy.schema.Table] = []
+        for recStorage in self._records.values():
+            tables += recStorage.digestTables()
+        return self._defaultSchemaDigest(tables)

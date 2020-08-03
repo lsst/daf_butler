@@ -36,7 +36,17 @@ from typing import (
 import sqlalchemy
 
 from ..core.ddl import TableSpec, FieldSpec
-from .interfaces import Database, OpaqueTableStorageManager, OpaqueTableStorage, StaticTablesContext
+from .interfaces import (
+    Database,
+    OpaqueTableStorageManager,
+    OpaqueTableStorage,
+    StaticTablesContext,
+    VersionTuple
+)
+
+
+# This has to be updated on every schema change
+_VERSION = VersionTuple(0, 1, 0)
 
 
 class ByNameOpaqueTableStorage(OpaqueTableStorage):
@@ -131,3 +141,12 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
             result = ByNameOpaqueTableStorage(name=name, table=table, db=self._db)
             self._storage[name] = result
         return result
+
+    @classmethod
+    def currentVersion(cls) -> Optional[VersionTuple]:
+        # Docstring inherited from VersionedExtension.
+        return _VERSION
+
+    def schemaDigest(self) -> Optional[str]:
+        # Docstring inherited from VersionedExtension.
+        return self._defaultSchemaDigest([self._metaTable])
