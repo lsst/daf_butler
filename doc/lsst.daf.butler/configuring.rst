@@ -41,7 +41,7 @@ There is a command available to allow you to see how all these overrides and inc
 
 .. prompt:: bash
 
-   dumpButlerConfig.py --subset .registry.db ./repo/butler.yaml
+   butler config-dump --subset .registry.db ./repo/butler.yaml
 
 Note the leading "``.``" to indicate that you are using a "``.``" delimiter to specify the hierarchy within the configuration.
 

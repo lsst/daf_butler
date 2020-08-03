@@ -4,6 +4,8 @@
 Storage Classes, Assemblers and Formatters
 ##########################################
 
+.. py:currentmodule:: lsst.daf.butler
+
 Formatters and assemblers provide the interface between Butler and the python types it is storing and retrieving.
 A Formatter is responsible for serializing a Python type to an external storage system and reading that serialized form back into Python.
 The serialization can be stored to a local file system or cloud storage or even a database.
@@ -18,7 +20,7 @@ Storage Classes
 ===============
 
 A Storage Class is fundamental to informing Butler how to deal with specific Python types.
-Each `~lsst.daf.butler.DatasetType` is associated with a `~lsst.daf.butler.StorageClass`.
+Each `DatasetType` is associated with a `StorageClass`.
 This storage class declares the Python type, any components it may have (read-only or read-write), and an assembler that can be used to process read parameters.
 
 Composites
@@ -27,7 +29,7 @@ Composites
 A composite storage class declares that the Python type consists of discrete components that can be accessed individually.
 Each of these components must declare its storage class as well.
 
-For example, if a ``pvi`` dataset type has been associated with an ``ExposureF`` storage class, the user can `~lsst.daf.butler.Butler.get()` the full ``pvi`` and access the components as they would normally for an `~lsst.afw.image.ExposureF`, or if the user solely want the metadata header from the exposure they can ask for ``pvi.metadata`` and just get that.
+For example, if a ``pvi`` dataset type has been associated with an ``ExposureF`` storage class, the user can `Butler.get()` the full ``pvi`` and access the components as they would normally for an `~lsst.afw.image.ExposureF`, or if the user solely want the metadata header from the exposure they can ask for ``pvi.metadata`` and just get that.
 The implementation details of how that metadata is retrieved depend on the details of how the dataset was serialized within the datastore.
 
 Composites must declare **all** the components for the Python type and Butler requires that if a composite is dissassembled into its components and then reassembled to form the composite again, this operation must be lossless.
@@ -49,7 +51,7 @@ If your Python type has useful components that can be accessed but which do not 
 Read Parameters
 ^^^^^^^^^^^^^^^
 
-A storage class definition includes read parameters that can control how a particular storage class is modified by `~lsst.daf.butler.Butler.get()` before being returned to the caller.
+A storage class definition includes read parameters that can control how a particular storage class is modified by `Butler.get()` before being returned to the caller.
 These read parameters can be thought of as being understood by the Python type being returned and modifying it in a way that still returns that identical Python type.
 The canonical example of this is subsetting where the caller passes in a bounding box that reduces the size of the image being returned.
 
@@ -57,7 +59,7 @@ If a parameter would change the Python type its functionality should be encapsul
 
 .. note::
 
-  Parameters that control how to serialize a dataset into an artifact within the datastore are not supported by user code doing a `~lsst.daf.butler.Butler.put()`.
+  Parameters that control how to serialize a dataset into an artifact within the datastore are not supported by user code doing a `Butler.put()`.
   This is because a user storing a dataset does not know which formatter the datastore has been configured to use or even if a dataset will be persisted.
   For example, the caller has no real idea whether a particular compression option is supported or not because they have no visibility into whether the file written is in HDF5 or FITS or plain text.
   For this reason write parameters are part of formatter configuration.
@@ -120,7 +122,7 @@ You can do this using YAML anchors and references but the preferred approach is 
        image: ImageI
        mask: MaskX
 
-If this approach is used the `~lsst.daf.butler.StorageClass` Python class created by `~lsst.daf.butler.StorageClassFactory` will inherit from the specific parent class and not the generic `~lsst.daf.butler.StorageClass`.
+If this approach is used the `StorageClass` Python class created by `StorageClassFactory` will inherit from the specific parent class and not the generic `StorageClass`.
 
 Assemblers
 ==========
@@ -130,17 +132,17 @@ Assemblers
   The base class is called CompositeAssembler because it was first developed for composites.
   Now might be a good time to rebrand it since non-composites need one if they use read parameters.
 
-Every `~lsst.daf.butler.StorageClass` that defines read parameters or components (read/write or read) must also specify an `~lsst.daf.butler.CompositeAssembler` class.
-This class should inherit from the `~lsst.daf.butler.CompositeAssembler` base class.
+Every `StorageClass` that defines read parameters or components (read/write or read) must also specify an `CompositeAssembler` class.
+This class should inherit from the `CompositeAssembler` base class.
 
 Composite Disassembly
 ^^^^^^^^^^^^^^^^^^^^^
 
-A composite is declared by specifying components in the `~lsst.daf.butler.StorageClass` definition.
-Assemblers must provide at minimum a `~lsst.daf.butler.CompositeAssembler.getComponent()` method to enable a specific component to be extracted from the composite Python type.
+A composite is declared by specifying components in the `StorageClass` definition.
+Assemblers must provide at minimum a `CompositeAssembler.getComponent()` method to enable a specific component to be extracted from the composite Python type.
 Datastores can be configured to prefer to write composite datasets out as the individual components and to reconstruct the composite on read.
 This can lead to more efficient use of datastore bandwidth (especially an issue for an S3-like storage rather than a local file system) if a pipeline always takes as input a component and does not require the full dataset or if a user in the science platform wants to retrieve the metadata for many datasets.
-To allow this the assembler subclass must provide `~lsst.daf.butler.CompositeAssembler.assemble()` and `~lsst.daf.butler.CompositeAssembler.disassemble()`.
+To allow this the assembler subclass must provide `CompositeAssembler.assemble()` and `CompositeAssembler.disassemble()`.
 
 Datastores can be configured to always disassemble composites or never disassemble them.
 Additionally datastores can choose to only disassemble specific storage classes or dataset types.
@@ -154,70 +156,70 @@ Read-only Components
 ^^^^^^^^^^^^^^^^^^^^
 
 Just as for components of a composite, if a storage class defines read-only components, it must also specify an assembler to support the calculation of that derived component.
-This should be implemented in the `~lsst.daf.butler.CompositeAssembler.getComponent()` method.
+This should be implemented in the `CompositeAssembler.getComponent()` method.
 
 Additionally, if the storage class refers to a composite, the datastore can be configured to disassemble the dataset into discrete artifacts.
 Since read-only components are derived and are not persisted themselves the datastore needs to be told which component should be used to calculate this derived quantity.
-To enable this the assembler must implement `~lsst.daf.butler.CompositeAssembler.selectResponsibleComponent()`.
+To enable this the assembler must implement `CompositeAssembler.selectResponsibleComponent()`.
 This method is given the name of the read-only component and a list of all available persisted components and must return one and only one relevant component.
 The datastore will then make a component request to the formatter associated with that component.
 
 .. note::
 
-  All assemblers must support read/write components and read components in the `~lsst.daf.butler.CompositeAssembler.getComponent()` implementation method.
+  All assemblers must support read/write components and read components in the `CompositeAssembler.getComponent()` implementation method.
   As a corollary, all storage classes using components must define an assembler.
 
 Read Parameters
 ^^^^^^^^^^^^^^^
 
-Read parameters are used to adjust what is returned by the `~lsst.daf.butler.Butler.get()` call but there is a requirement that whatever those read parameters do to modify the `~lsst.daf.butler.Butler.get()` the Python type returned must match the type associated with the `~lsst.daf.butler.Butler.StorageClass` associated with the `~lsst.daf.butler.Butler.DatasetType`.
+Read parameters are used to adjust what is returned by the `Butler.get()` call but there is a requirement that whatever those read parameters do to modify the `Butler.get()` the Python type returned must match the type associated with the `Butler.StorageClass` associated with the `Butler.DatasetType`.
 For example this means that a read parameter that subsets an image is valid because the type returned would still be an image.
 
-If read parameters are defined then a `~lsst.daf.butler.CompositeAssembler.handleParameters()` method must be defined that understands how to apply these parameters to the Python object and should return a modified copy.
-This method must be written even if a `~lsst.daf.butler.Formatter` is to be used.
+If read parameters are defined then a `CompositeAssembler.handleParameters()` method must be defined that understands how to apply these parameters to the Python object and should return a modified copy.
+This method must be written even if a `Formatter` is to be used.
 There are two reasons for this, firstly, there is no guarantee that a particular formatter implementation will understand the parameter (and no requirement for that to be the case), and secondly there is no guarantee that a formatter will be involved in retrieval of the dataset.
 In-memory datastores never involve a file artifact so whilst composite disassembly is never an issue, an assembler must at least provide the parameter handler to allow the user to configure such a datastore.
 
 For read-only components parameters are handled by the composite component prior to deriving the read-only component.
-The assembler `~lsst.daf.butler.CompositeAssembler.handleParameters()` method will only be called in this situation if no formatter is used (such as with an in-memory datastore).
+The assembler `CompositeAssembler.handleParameters()` method will only be called in this situation if no formatter is used (such as with an in-memory datastore).
 
 Formatters
 ==========
 
 Formatters are responsible for serializing a Python type to a storage system and for reconstructing the Python type from the serialized form.
-A formatter has to implement at minimum a `~lsst.daf.butler.Formatter.read()` method and a `~lsst.daf.butler.Formatter.write()` method.
+A formatter has to implement at minimum a `Formatter.read()` method and a `Formatter.write()` method.
 The ``write()`` method takes a Python object and serializes it somewhere and the ``read()`` method is optionally given a component name and returns the matching Python object.
-Details of where the artifact may be located within the datastore are passed to the constructor by the datastore as a `~lsst.daf.butler.FileDescriptor` instance.
+Details of where the artifact may be located within the datastore are passed to the constructor by the datastore as a `FileDescriptor` instance.
 
 .. warning::
 
   The formatter system has only been used to write datasets to files or to bytes that would be written to a file.
   The interface may evolve as other types of datastore become available and make use of the formatter system.
 
-When ingesting files from external sources formatters are associated with each incoming file but these formatters are only required to support a `~lsst.daf.butler.Formatter.read()` method.
+When ingesting files from external sources formatters are associated with each incoming file but these formatters are only required to support a `Formatter.read()` method.
 They must though declare all the file extensions that they can support.
 This allows the datastore to ensure that the image being ingested has not obviously been associated with a formatter that does not recognize it.
 
-In the current implementation that is focussed entirely on external files in datastores, the location of the serialized data is available to the formatter using the `~lsst.daf.butler.Formatter.fileDescriptor` property.
-This `~lsst.daf.butler.FileDescriptor` property makes the file location available as a `~lsst.daf.butler.Location` and also gives access to read parameters supplied by the caller and also defines the `~lsst.daf.butler.StorageClass` of the dataset being written.
-On read the the storage class used to read the file can be different from the storage class expected to be returned by `~lsst.daf.butler.Datastore`.
+In the current implementation that is focussed entirely on external files in datastores, the location of the serialized data is available to the formatter using the `Formatter.fileDescriptor` property.
+This `FileDescriptor` property makes the file location available as a `Location` and also gives access to read parameters supplied by the caller and also defines the `StorageClass` of the dataset being written.
+On read the the storage class used to read the file can be different from the storage class expected to be returned by `Datastore`.
 This happens if a composite was written but a component from that composite is being read.
 
 File Extensions
 ^^^^^^^^^^^^^^^
 
 Each formatter that reads or writes a file must declare the file extensions that it supports.
-For a formatter that supports a single extension this is most easily achieved by setting the class property `~lsst.daf.butler.Formatter.extension` to that extension.
+For a formatter that supports a single extension this is most easily achieved by setting the class property `Formatter.extension` to that extension.
 In some scenarios a formatter might support multiple formats that are controlled by write parameters.
-In this case the formatter should assign a frozen set to the `~lsst.daf.butler.Formatter.supportedExtensions` class property.
+In this case the formatter should assign a frozen set to the `Formatter.supportedExtensions` class property.
 It is then required that the class implement an instance property for ``extension`` that returns the extension that will be used by this formatter for writing the current dataset.
 
 File vs Bytes
 ^^^^^^^^^^^^^
 
 Some datastores can stream bytes from remote storage systems and do not require that a local file is created before the Python object can be created.
-To support this use case an implementer can implement `~lsst.daf.butler.Formatter.fromBytes()` for reading in from a datastore and `~lsst.daf.butler.Formatter.toBytes()` for serializing to a datastore.
-If a formatter raises `NotImplementedError` when these byte-like methods are called the datastore will default to using the `~lsst.daf.butler.Formatter.read()` and `~lsst.daf.butler.Formatter.write()` methods making use of local temporary files.
+To support this use case an implementer can implement `Formatter.fromBytes()` for reading in from a datastore and `Formatter.toBytes()` for serializing to a datastore.
+If a formatter raises `NotImplementedError` when these byte-like methods are called the datastore will default to using the `Formatter.read()` and `Formatter.write()` methods making use of local temporary files.
 
 .. warning::
 
@@ -228,10 +230,10 @@ If a formatter raises `NotImplementedError` when these byte-like methods are cal
 FileFormatter Subclass
 ^^^^^^^^^^^^^^^^^^^^^^
 
-For many file-based formatter implementations a subclass of `~lsst.daf.butler.Formatter` can be used that has a much simplified interface.
-`~lsst.daf.butler.formatters.file.FileFormatter` allows a formatter implementation to be written using two methods: `~lsst.daf.butler.formatters.file.FileFormatter._readFile()` takes a local path to the file system and the expected Python type, and `~lsst.daf.butler.formatters.file.FileFormatter._writeFile()` takes the in-memory object to be serialized.
+For many file-based formatter implementations a subclass of `Formatter` can be used that has a much simplified interface.
+`~formatters.file.FileFormatter` allows a formatter implementation to be written using two methods: `~formatters.file.FileFormatter._readFile()` takes a local path to the file system and the expected Python type, and `~formatters.file.FileFormatter._writeFile()` takes the in-memory object to be serialized.
 
-Composites are not handled by `~lsst.daf.butler.formatters.file.FileFormatter`.
+Composites are not handled by `~formatters.file.FileFormatter`.
 
 .. note::
   I'm not sure I understand why _writeFile() doesn't also take the path rather than requiring FileDescriptor to be used.
@@ -243,12 +245,12 @@ Write Parameters
 ^^^^^^^^^^^^^^^^
 
 Datastores can be configured to specify parameters that can control how a formatter serializes a Python object.
-These configuration parameters are not available to `~lsst.daf.butler.Butler` users as part of `~lsst.daf.butler.Butler.put` since the user does not know how a datastore is configured or which formatter will be used for a particular `~lsst.daf.butler.DatasetType`.
+These configuration parameters are not available to `Butler` users as part of `Butler.put` since the user does not know how a datastore is configured or which formatter will be used for a particular `DatasetType`.
 
-When datastore instantiates the `~lsst.daf.butler.Formatter` the relevant write parameters are supplied.
+When datastore instantiates the `Formatter` the relevant write parameters are supplied.
 These write parameters can be accessed when the data are written and they can control any aspect of the write.
-The only caveat is that the `~lsst.daf.butler.Formatter.read` method must be able to read the resulting file without having to know which write parameters were used to create it.
-The `~lsst.daf.butler.Formatter.read` method can look at the file extension and file metadata but it will not have the write parameters supplied to it by datastore.
+The only caveat is that the `Formatter.read` method must be able to read the resulting file without having to know which write parameters were used to create it.
+The `Formatter.read` method can look at the file extension and file metadata but it will not have the write parameters supplied to it by datastore.
 
 Write Recipes
 ^^^^^^^^^^^^^
@@ -259,7 +261,7 @@ Rather than require that every formatter is explicitly configured with this deta
 Write recipes have their own configuration section and are associated with a specific formatter class and contain named collections of parameters.
 The write parameters can then specify one of the named recipes by name.
 
-If write recipes are used the formatter should implement a `~lsst.daf.butler.Formatter.validateWriteRecipes` method.
+If write recipes are used the formatter should implement a `Formatter.validateWriteRecipes` method.
 This method not only checks that the parameters are reasonable, it can also update the parameters with default values to make them self-consistent.
 
 Configuring Formatters

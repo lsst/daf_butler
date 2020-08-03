@@ -4,10 +4,12 @@
 Datastore Configuration
 #######################
 
-A Butler `~lsst.daf.butler.Datastore` is configured in the ``datastore`` section of the top-level Butler YAML configuration.
+.. py:currentmodule:: lsst.daf.butler
+
+A Butler `Datastore` is configured in the ``datastore`` section of the top-level Butler YAML configuration.
 The only mandatory entry in the datastore configuration is the ``cls`` key.
 This specifies the fully qualified class name of the Python class implementing the datastore.
-The default is to use the `~lsst.daf.butler.datastores.posixDatastore.PosixDatastore`.
+The default is to use the `~datastores.posixDatastore.PosixDatastore`.
 All other keys depend on the specific datastore class that is selected.
 
 The default configuration values can be inspected at ``$DAF_BUTLER_DIR/config`` and current values can be obtained by calling ``butler config-dump`` on a butler repository.
@@ -15,7 +17,7 @@ The default configuration values can be inspected at ``$DAF_BUTLER_DIR/config`` 
 File-Based Datastores
 =====================
 
-The file-based datastores (for example `~lsst.daf.butler.datastores.posixDatastore.PosixDatastore` and `~lsst.daf.butler.datastores.s3Datastore.S3Datastore`) share configuration since they use formatters to serialize datasets to file artifacts using file name template schemes and also support composite disassembly.
+The file-based datastores (for example `~datastores.posixDatastore.PosixDatastore` and `~datastores.s3Datastore.S3Datastore`) share configuration since they use formatters to serialize datasets to file artifacts using file name template schemes and also support composite disassembly.
 
 The supported configurations are:
 
@@ -31,16 +33,16 @@ create
 templates
     The template to use to construct "files" within the datastore.
     The template uses data dimensions to do this.
-    Generally the default setting will be usable although it can be tuned per `~lsst.daf.butler.DatasetType`, `~lsst.daf.butler.StorageClass` or data ID.
+    Generally the default setting will be usable although it can be tuned per `DatasetType`, `StorageClass` or data ID.
 formatters
-    Mapping of `~lsst.daf.butler.DatasetType`, `~lsst.daf.butler.StorageClass` or data ID to a specific formatter class that understands the associated Python type and will serialize it to a file artifact.
+    Mapping of `DatasetType`, `StorageClass` or data ID to a specific formatter class that understands the associated Python type and will serialize it to a file artifact.
     The formatters section also supports the definitions of write recipes (bulk configurations that can be selected for specific formatters) and write parameters (parameters that control how the dataset is serialized; note it is required that all serialized artifacts be readable by a formatter without knowing which write parameters were used).
 constraints
-    Specify `~lsst.daf.butler.DatasetType`, `~lsst.daf.butler.StorageClass` or data ID that will be accepted or rejected by this datastore.
+    Specify `DatasetType`, `StorageClass` or data ID that will be accepted or rejected by this datastore.
 composites
     Controls whether composite datasets are disassembled by the datastore.
     By default composites are not disassembled.
-    Disassembly can be controlled by `~lsst.daf.butler.DatasetType`, `~lsst.daf.butler.StorageClass` or data ID.
+    Disassembly can be controlled by `DatasetType`, `StorageClass` or data ID.
 
 .. _daf_butler-config-lookups:
 
@@ -52,17 +54,17 @@ The order is:
 
 #. If there is an ``instrument`` in the data ID the first look up will be for a key that matches ``instrument<INSTRUMENT_NAME>``.
    If there is a match the items within that part of the hierarchy will be matched in preference to those at the top-level.
-#. The highest priority is then the `~lsst.daf.butler.DatasetType` name.
-#. If the `~lsst.daf.butler.DatasetType` corresponds to a component of a composite the composite name will then be checked.
+#. The highest priority is then the `DatasetType` name.
+#. If the `DatasetType` corresponds to a component of a composite the composite name will then be checked.
 #. If there is still no match the dimensions will be used.
    Dimensions are specified by the presence of a ``+`` as a separator.
-   For example ``instrument+physical_filter+visit`` would match any `~lsst.daf.butler.DatasetType` that uses those three dimensions.
-#. The final match is against the `~lsst.daf.butler.StorageClass` name.
+   For example ``instrument+physical_filter+visit`` would match any `DatasetType` that uses those three dimensions.
+#. The final match is against the `StorageClass` name.
 
 In-Memory Datastore
 ===================
 
-The `~lsst.daf.butler.datastores.inMemoryDatastore.InMemoryDatastore` currently only supports the ``constraints`` field.
+The `~datastores.inMemoryDatastore.InMemoryDatastore` currently only supports the ``constraints`` field.
 This allows the datastore to accept specific dataset types.
 
 In the future more features will be added to allow some form of cache expiry.
@@ -75,5 +77,5 @@ The datastore will be sent to every datastore in the chain and success is report
 When a dataset is retrieved each datastore is asked for the dataset in turn and the first match is sufficient.
 This allows an in-memory datastore to be combined with a file-based datastore to enable simple in-memory retrieval for a dataset that has been persisted to disk.
 
-`~lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore` has a ``datastores`` key that contains a list of datastore configurations that can match the ``datastore`` contents from other datastores.
-Additionally, a `~lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore` can also support ``constraints`` definitions.
+`~datastores.chainedDatastore.ChainedDatastore` has a ``datastores`` key that contains a list of datastore configurations that can match the ``datastore`` contents from other datastores.
+Additionally, a `~datastores.chainedDatastore.ChainedDatastore` can also support ``constraints`` definitions.
