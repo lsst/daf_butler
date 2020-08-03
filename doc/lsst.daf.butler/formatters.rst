@@ -16,6 +16,10 @@ Assemblers are used to disassemble and reassemble composite datasets and can als
 
 Deciding which formatter or assembler to use is controlled by the storage class and corresponding dataset type.
 
+.. note::
+
+  When discussing configuration below, the default configuration values can be inspected at ``$DAF_BUTLER_DIR/python/lsst/daf/butler/configs`` (they can be accessed directly as Python package resources) and current values can be obtained by calling ``butler config-dump`` on a Butler repository.
+
 Storage Classes
 ===============
 
