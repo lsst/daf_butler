@@ -125,7 +125,10 @@ class VersionedExtension(ABC):
         -------
         digest : `str` or `None`
             String representation of the digest of the schema, ``None`` should
-            be returned if schema digest is not to be saved or checked.
+            be returned if schema digest is not to be saved or checked. The
+            length of the returned string cannot exceed the length of the
+            "value" column of butler attributes table, currently 65535
+            characters.
 
         Notes
         -----
