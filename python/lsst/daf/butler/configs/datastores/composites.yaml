@@ -8,6 +8,6 @@ default: false
 # Types can be StorageClass names or DatasetType names, with DatasetType
 # name always taking preference over StorageClass name.
 disassembled:
-  ExposureI: false
-  ExposureF: false
-  calexp: false
+  # This is a place holder to seed the mapping so that specific configs
+  # can override and allows this default to be used as documentation
+  __null__: false

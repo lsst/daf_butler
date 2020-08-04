@@ -83,9 +83,18 @@ class CompositesMap:
         assert isinstance(config, CompositesConfig)
         self.config = config
 
+        # Pre-filter the disassembly lookup table to remove the
+        # placeholder __ key we added for documentation.
+        # It should be harmless but might confuse validation
+        # Retain the entry as a Config so change in place
+        disassemblyMap = self.config[DISASSEMBLY_KEY]
+        for k in set(disassemblyMap):
+            if k.startswith("__"):
+                del disassemblyMap[k]
+
         # Calculate the disassembly lookup table -- no need to process
         # the values
-        self._lut = processLookupConfigs(self.config[DISASSEMBLY_KEY], universe=universe)
+        self._lut = processLookupConfigs(disassemblyMap, universe=universe)
 
     def shouldBeDisassembled(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
         """Given some choices, indicate whether the entity should be

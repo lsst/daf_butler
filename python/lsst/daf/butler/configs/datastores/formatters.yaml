@@ -26,11 +26,13 @@ DataFrame: lsst.daf.butler.formatters.parquet.ParquetFormatter
 Defects: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 QECurve: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 CrosstalkCalib: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
-ImageF: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
-ImageU: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
+Image: lsst.obs.base.formatters.fitsExposure.FitsImageFormatter
+ImageF: lsst.obs.base.formatters.fitsExposure.FitsImageFormatter
+ImageU: lsst.obs.base.formatters.fitsExposure.FitsImageFormatter
 DecoratedImageU: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
-MaskX: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
-MaskedImageF: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
+Mask: lsst.obs.base.formatters.fitsExposure.FitsMaskFormatter
+MaskX: lsst.obs.base.formatters.fitsExposure.FitsMaskFormatter
+MaskedImageF: lsst.obs.base.formatters.fitsMaskedImage.FitsMaskedImageFormatter
 Exposure: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
 ExposureF: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
 ExposureI: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
