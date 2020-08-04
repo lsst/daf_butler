@@ -898,11 +898,8 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         butler.datastore.templates.validateTemplates([ref])
 
         # Now use a file template that will not result in unique filenames
-        ref = butler.put(metric, "metric3", dataId1)
-
-        # Check the template based on dimensions. This one is a bad template
         with self.assertRaises(FileTemplateValidationError):
-            butler.datastore.templates.validateTemplates([ref])
+            butler.put(metric, "metric3", dataId1)
 
     def testImportExport(self):
         # Run put/get tests just to create and populate a repo.

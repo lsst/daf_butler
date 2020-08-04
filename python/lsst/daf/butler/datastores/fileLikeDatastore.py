@@ -527,6 +527,10 @@ class FileLikeDatastore(GenericBaseDatastore):
         except KeyError as e:
             raise DatasetTypeNotSupportedError(f"Unable to find template for {ref}") from e
 
+        # Validate the template to protect against filenames from different
+        # dataIds returning the same and causing overwrite confusion.
+        template.validateTemplate(ref)
+
         location = self.locationFactory.fromPath(template.format(ref))
 
         # Get the formatter based on the storage class
