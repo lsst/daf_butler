@@ -584,9 +584,9 @@ class DatastoreTests(DatastoreTestsBase):
 
                     uri = datastore.getURI(ref)
                     self.assertTrue(not uri.scheme or uri.scheme == "file", f"Check {uri.scheme}")
-                    self.assertTrue(os.path.islink(uri.path))
+                    self.assertTrue(os.path.islink(uri.ospath), f"Check {uri} is a symlink")
 
-                    linkTarget = os.readlink(uri.path)
+                    linkTarget = os.readlink(uri.ospath)
                     if mode == "relsymlink":
                         self.assertFalse(os.path.isabs(linkTarget))
                     else:
