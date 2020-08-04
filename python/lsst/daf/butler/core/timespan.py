@@ -26,7 +26,7 @@ __all__ = (
 )
 
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Dict, Mapping, NamedTuple, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, ClassVar, Dict, Iterator, Mapping, NamedTuple, Optional, Tuple, Type, TypeVar, Union
 
 import astropy.time
 import sqlalchemy
@@ -62,6 +62,25 @@ class Timespan(NamedTuple):
 
     `None` should be interpreted as +infinity.
     """
+
+    def __str__(self) -> str:
+        if self.begin is None:
+            head = "(-∞, "
+        else:
+            head = f"[{self.begin}, "
+        if self.end is None:
+            tail = "∞)"
+        else:
+            tail = f"{self.end})"
+        return head + tail
+
+    def __repr__(self) -> str:
+        # astropy.time.Time doesn't have an eval-friendly __repr__, so we
+        # simulate our own here to make Timespan's __repr__ eval-friendly.
+        tmpl = "astropy.time.Time('{t}', scale='{t.scale}', format='{t.format}')"
+        begin = tmpl.format(t=self.begin) if self.begin is not None else None
+        end = tmpl.format(t=self.end) if self.end is not None else None
+        return f"Timespan(begin={begin}, end={end})"
 
     def overlaps(self, other: Timespan) -> Any:
         """Test whether this timespan overlaps another.
@@ -121,6 +140,38 @@ class Timespan(NamedTuple):
             if begin is not None and end is not None and begin >= end:
                 return None
             return Timespan(begin=begin, end=end)
+
+    def difference(self, other: Timespan) -> Iterator[Timespan]:
+        """Return the one or two timespans that cover the interval(s) that are
+        in ``self`` but not ``other``.
+
+        This is implemented as an iterator because the result may be zero, one,
+        or two `Timespan` objects, depending on the relationship between the
+        operands.
+
+        Parameters
+        ----------
+        other : `Timespan`
+            Timespan to subtract.
+
+        Yields
+        ------
+        result : `Timespan`
+            A `Timespan` that is contained by ``self`` but does not overlap
+            ``other``.
+        """
+        if other.begin is not None:
+            if self.begin is None or self.begin < other.begin:
+                if self.end is not None and self.end < other.begin:
+                    yield self
+                else:
+                    yield Timespan(begin=self.begin, end=other.begin)
+        if other.end is not None:
+            if self.end is None or self.end > other.end:
+                if self.begin is not None and self.begin > other.end:
+                    yield self
+                else:
+                    yield Timespan(begin=other.end, end=self.end)
 
 
 class DatabaseTimespanRepresentation(ABC):
