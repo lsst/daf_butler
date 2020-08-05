@@ -66,11 +66,13 @@ data:
         purpose: "WAVEFRONT"
   -
     type: dataset_type
-    name: permaflat
+    name: flat
     dimensions: [instrument, detector, physical_filter, abstract_filter]
     storage_class: Exposure
+    is_calibration: true
   -
     type: dataset_type
-    name: permabias
+    name: bias
     dimensions: [instrument, detector]
     storage_class: Exposure
+    is_calibration: true
