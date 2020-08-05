@@ -312,7 +312,7 @@ class RegistryTests(ABC):
         self.loadData(registry, "base.yaml")
         run = "test"
         registry.registerRun(run)
-        datasetType = registry.getDatasetType("permabias")
+        datasetType = registry.getDatasetType("bias")
         dataId = {"instrument": "Cam1", "detector": 2}
         ref, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
         outRef = registry.getDataset(ref.id)
@@ -329,7 +329,7 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         run = "test"
-        datasetType = registry.getDatasetType("permabias")
+        datasetType = registry.getDatasetType("bias")
         dataId = {"instrument": "Cam1", "detector": 4}
         registry.registerRun(run)
         inputRef, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
@@ -362,44 +362,44 @@ class RegistryTests(ABC):
         # First query for all dataset types; components should only be included
         # when components=True.
         self.assertEqual(
-            {"permabias", "permaflat"},
+            {"bias", "flat"},
             NamedValueSet(registry.queryDatasetTypes()).names
         )
         self.assertEqual(
-            {"permabias", "permaflat"},
+            {"bias", "flat"},
             NamedValueSet(registry.queryDatasetTypes(components=False)).names
         )
         self.assertLess(
-            {"permabias", "permaflat", "permabias.wcs", "permaflat.photoCalib"},
+            {"bias", "flat", "bias.wcs", "flat.photoCalib"},
             NamedValueSet(registry.queryDatasetTypes(components=True)).names
         )
         # Use a pattern that can match either parent or components.  Again,
         # components are only returned if components=True.
         self.assertEqual(
-            {"permabias"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"))).names
+            {"bias"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"))).names
         )
         self.assertEqual(
-            {"permabias"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"), components=False)).names
+            {"bias"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=False)).names
         )
         self.assertLess(
-            {"permabias", "permabias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"), components=True)).names
+            {"bias", "bias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=True)).names
         )
         # This pattern matches only a component.  In this case we also return
         # that component dataset type if components=None.
         self.assertEqual(
-            {"permabias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"))).names
+            {"bias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"))).names
         )
         self.assertEqual(
             set(),
-            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"), components=False)).names
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=False)).names
         )
         self.assertEqual(
-            {"permabias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"), components=True)).names
+            {"bias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=True)).names
         )
 
     def testComponentLookups(self):
@@ -412,21 +412,21 @@ class RegistryTests(ABC):
         # Registry), and check for consistency with
         # DatasetRef.makeComponentRef.
         collection = "imported_g"
-        parentType = registry.getDatasetType("permabias")
-        childType = registry.getDatasetType("permabias.wcs")
+        parentType = registry.getDatasetType("bias")
+        childType = registry.getDatasetType("bias.wcs")
         parentRefResolved = registry.findDataset(parentType, collections=collection,
                                                  instrument="Cam1", detector=1)
         self.assertIsInstance(parentRefResolved, DatasetRef)
         self.assertEqual(childType, parentRefResolved.makeComponentRef("wcs").datasetType)
         # Search for a single dataset with findDataset.
-        childRef1 = registry.findDataset("permabias.wcs", collections=collection,
+        childRef1 = registry.findDataset("bias.wcs", collections=collection,
                                          dataId=parentRefResolved.dataId)
         self.assertEqual(childRef1, parentRefResolved.makeComponentRef("wcs"))
         # Search for detector data IDs constrained by component dataset
         # existence with queryDataIds.
         dataIds = registry.queryDataIds(
             ["detector"],
-            datasets=["permabias.wcs"],
+            datasets=["bias.wcs"],
             collections=collection,
         ).toSet()
         self.assertEqual(
@@ -441,7 +441,7 @@ class RegistryTests(ABC):
         )
         # Search for multiple datasets of a single type with queryDatasets.
         childRefs2 = set(registry.queryDatasets(
-            "permabias.wcs",
+            "bias.wcs",
             collections=collection,
         ))
         self.assertEqual(
@@ -457,7 +457,7 @@ class RegistryTests(ABC):
         self.loadData(registry, "datasets.yaml")
         run1 = "imported_g"
         run2 = "imported_r"
-        datasetType = "permabias"
+        datasetType = "bias"
         # Find some datasets via their run's collection.
         dataId1 = {"instrument": "Cam1", "detector": 1}
         ref1 = registry.findDataset(datasetType, dataId1, collections=run1)
@@ -506,7 +506,7 @@ class RegistryTests(ABC):
         self.assertIsNone(registry.findDataset(datasetType, dataId3, collections=tag1))
         # Register a chained collection that searches:
         # 1. 'tag1'
-        # 2. 'run1', but only for the permaflat dataset
+        # 2. 'run1', but only for the flat dataset
         # 3. 'run2'
         chain1 = "chain1"
         registry.registerCollection(chain1, type=CollectionType.CHAINED)
@@ -522,35 +522,35 @@ class RegistryTests(ABC):
         with self.assertRaises(ValueError):
             registry.setCollectionChain(chain1, [tag1, chain1])
         # Add the child collections.
-        registry.setCollectionChain(chain1, [tag1, (run1, "permaflat"), run2])
+        registry.setCollectionChain(chain1, [tag1, (run1, "flat"), run2])
         self.assertEqual(
             list(registry.getCollectionChain(chain1)),
             [(tag1, DatasetTypeRestriction.any),
-             (run1, DatasetTypeRestriction.fromExpression("permaflat")),
+             (run1, DatasetTypeRestriction.fromExpression("flat")),
              (run2, DatasetTypeRestriction.any)]
         )
         # Searching for dataId1 or dataId2 in the chain should return ref1 and
         # ref2, because both are in tag1.
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain1), ref1)
         self.assertEqual(registry.findDataset(datasetType, dataId2, collections=chain1), ref2)
-        # Now disassociate ref2 from tag1.  The search (for permabias) with
+        # Now disassociate ref2 from tag1.  The search (for bias) with
         # dataId2 in chain1 should then:
         # 1. not find it in tag1
-        # 2. not look in tag2, because it's restricted to permaflat here
+        # 2. not look in tag2, because it's restricted to flat here
         # 3. find a different dataset in run2
         registry.disassociate(tag1, [ref2])
         ref2b = registry.findDataset(datasetType, dataId2, collections=chain1)
         self.assertNotEqual(ref2b, ref2)
         self.assertEqual(ref2b, registry.findDataset(datasetType, dataId2, collections=run2))
-        # Look in the chain for a permaflat that is in run1; should get the
+        # Look in the chain for a flat that is in run1; should get the
         # same ref as if we'd searched run1 directly.
         dataId3 = {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}
-        self.assertEqual(registry.findDataset("permaflat", dataId3, collections=chain1),
-                         registry.findDataset("permaflat", dataId3, collections=run1),)
+        self.assertEqual(registry.findDataset("flat", dataId3, collections=chain1),
+                         registry.findDataset("flat", dataId3, collections=run1),)
         # Define a new chain so we can test recursive chains.
         chain2 = "chain2"
         registry.registerCollection(chain2, type=CollectionType.CHAINED)
-        registry.setCollectionChain(chain2, [(run2, "permabias"), chain1])
+        registry.setCollectionChain(chain2, [(run2, "bias"), chain1])
         # Query for collections matching a regex.
         self.assertCountEqual(
             list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),
@@ -561,19 +561,19 @@ class RegistryTests(ABC):
             list(registry.queryCollections([re.compile("imported_."), "chain1"], flattenChains=False)),
             ["imported_r", "imported_g", "chain1"]
         )
-        # Search for permabias with dataId1 should find it via tag1 in chain2,
+        # Search for bias with dataId1 should find it via tag1 in chain2,
         # recursing, because is not in run1.
         self.assertIsNone(registry.findDataset(datasetType, dataId1, collections=run2))
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain2), ref1)
-        # Search for permabias with dataId2 should find it in run2 (ref2b).
+        # Search for bias with dataId2 should find it in run2 (ref2b).
         self.assertEqual(registry.findDataset(datasetType, dataId2, collections=chain2), ref2b)
-        # Search for a permaflat that is in run2.  That should not be found
-        # at the front of chain2, because of the restriction to permabias
+        # Search for a flat that is in run2.  That should not be found
+        # at the front of chain2, because of the restriction to bias
         # on run2 there, but it should be found in at the end of chain1.
         dataId4 = {"instrument": "Cam1", "detector": 3, "physical_filter": "Cam1-R2"}
-        ref4 = registry.findDataset("permaflat", dataId4, collections=run2)
+        ref4 = registry.findDataset("flat", dataId4, collections=run2)
         self.assertIsNotNone(ref4)
-        self.assertEqual(ref4, registry.findDataset("permaflat", dataId4, collections=chain2))
+        self.assertEqual(ref4, registry.findDataset("flat", dataId4, collections=chain2))
         # Deleting a collection that's part of a CHAINED collection is not
         # allowed, and is exception-safe.
         with self.assertRaises(Exception):
@@ -1121,34 +1121,34 @@ class RegistryTests(ABC):
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
         self.assertCountEqual(
-            list(registry.queryDatasets("permabias", collections=["imported_g", "imported_r"])),
+            list(registry.queryDatasets("bias", collections=["imported_g", "imported_r"])),
             [
-                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_r"),
-                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_r"),
-                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
             ]
         )
         self.assertCountEqual(
-            list(registry.queryDatasets("permabias", collections=["imported_g", "imported_r"],
+            list(registry.queryDatasets("bias", collections=["imported_g", "imported_r"],
                                         deduplicate=True)),
             [
-                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
             ]
         )
         self.assertCountEqual(
-            list(registry.queryDatasets("permabias", collections=["imported_r", "imported_g"],
+            list(registry.queryDatasets("bias", collections=["imported_r", "imported_g"],
                                         deduplicate=True)),
             [
-                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_r"),
-                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_r"),
-                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
             ]
         )
 
@@ -1159,8 +1159,8 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
-        bias = registry.getDatasetType("permabias")
-        flat = registry.getDatasetType("permaflat")
+        bias = registry.getDatasetType("bias")
+        flat = registry.getDatasetType("flat")
         # Obtain expected results from methods other than those we're testing
         # here.  That includes:
         # - the dimensions of the data IDs we want to query:
