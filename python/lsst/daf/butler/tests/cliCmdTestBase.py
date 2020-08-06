@@ -105,8 +105,11 @@ class CliCmdTestBase(abc.ABC):
         """
         with self.runner.isolated_filesystem():
             if withTempFile is not None:
-                os.makedirs(os.path.dirname(withTempFile), exist_ok=True)
+                directory, filename = os.path.split(withTempFile)
+                if directory:
+                    os.makedirs(os.path.dirname(withTempFile), exist_ok=True)
                 with open(withTempFile, "w") as _:
+                    # just need to make the file, don't need to keep it open.
                     pass
             result = self.run_command(inputs)
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
