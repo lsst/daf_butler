@@ -32,16 +32,14 @@ class CliCmdTestBase(abc.ABC):
     and call their respective script fucntions correctly.
     """
 
-    @classmethod
-    @property
+    @staticmethod
     @abc.abstractmethod
-    def defaultExpected(cls):
+    def defaultExpected():
         pass
 
-    @classmethod
-    @property
+    @staticmethod
     @abc.abstractmethod
-    def command(cls):
+    def command():
         """Get the click.Command being tested."""
         pass
 
@@ -54,8 +52,9 @@ class CliCmdTestBase(abc.ABC):
     def setUp(self):
         self.runner = LogCliRunner(env=mockEnvVar)
 
-    def makeExpected(self, **kwargs):
-        expected = copy.copy(self.defaultExpected)
+    @classmethod
+    def makeExpected(cls, **kwargs):
+        expected = copy.copy(cls.defaultExpected())
         expected.update(kwargs)
         return expected
 
@@ -133,7 +132,7 @@ class CliCmdTestBase(abc.ABC):
         self.assertRegex(result.stdout, expectedMsg)
 
     def test_help(self):
-        self.assertFalse(self.command.get_short_help_str().endswith("..."),
+        self.assertFalse(self.command().get_short_help_str().endswith("..."),
                          msg="The command help message is being truncated to "
-                         f"\"{self.command.get_short_help_str()}\". It should be shortened, or define "
+                         f"\"{self.command().get_short_help_str()}\". It should be shortened, or define "
                          "@command(short_help=\"something short and helpful\")")

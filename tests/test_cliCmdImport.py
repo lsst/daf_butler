@@ -33,14 +33,18 @@ from lsst.daf.butler.cli.utils import Mocker
 
 class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
-    defaultExpected = dict(repo=None,
-                           transfer="auto",
-                           output_run=None,
-                           directory=None,
-                           skip_dimensions=(),
-                           export_file=None)
+    @staticmethod
+    def defaultExpected():
+        return dict(repo=None,
+                    transfer="auto",
+                    output_run=None,
+                    directory=None,
+                    skip_dimensions=(),
+                    export_file=None)
 
-    command = butler_import
+    @staticmethod
+    def command():
+        return butler_import
 
     def test_minimal(self):
         """Test only the required parameters, and omit the optional parameters.
@@ -72,13 +76,17 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
 
     didRead = None
 
-    defaultExpected = dict(repo=None,
-                           transfer="auto",
-                           output_run=None,
-                           directory=None,
-                           export_file=None)
+    @staticmethod
+    def defaultExpected():
+        return dict(repo=None,
+                    transfer="auto",
+                    output_run=None,
+                    directory=None,
+                    export_file=None)
 
-    command = butler_import
+    @staticmethod
+    def command():
+        return butler_import
 
     def setUp(self):
         # add a side effect to Mocker so that it will call our method when it

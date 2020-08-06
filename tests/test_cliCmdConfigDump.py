@@ -33,8 +33,14 @@ from lsst.daf.butler.tests import CliCmdTestBase
 
 
 class ConfigDumpTest(CliCmdTestBase, unittest.TestCase):
-    defaultExpected = dict()
-    command = config_dump
+
+    @staticmethod
+    def defaultExpected():
+        return dict()
+
+    @staticmethod
+    def command():
+        return config_dump
 
 
 class ConfigDumpUseTest(unittest.TestCase):

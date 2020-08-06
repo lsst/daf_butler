@@ -123,8 +123,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
 
         Subcommands may further configure the log settings."""
         CliLog.initLog(longlog=LONG_LOG_FLAG in ctx.params)
-        if log_level_option.optionKey in ctx.params:
-            CliLog.setLogLevels(ctx.params[log_level_option.optionKey])
+        if log_level_option.optionKey() in ctx.params:
+            CliLog.setLogLevels(ctx.params[log_level_option.optionKey()])
 
     @staticmethod
     def getPluginList():
