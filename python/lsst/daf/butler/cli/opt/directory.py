@@ -37,11 +37,13 @@ class directory_argument:  # noqa: N801
         default False.
     """
 
-    defaultHelp = "DIRECTORY is the folder containing dataset files."
+    @staticmethod
+    def defaultHelp():
+        return "DIRECTORY is the folder containing dataset files."
 
-    def __init__(self, help=defaultHelp, required=False):
+    def __init__(self, help=None, required=False):
         self.required = required
-        self.helpText = help
+        self.helpText = help or self.defaultHelp()
 
     def __call__(self, f):
         f.__doc__ = addArgumentHelp(f.__doc__, self.helpText)

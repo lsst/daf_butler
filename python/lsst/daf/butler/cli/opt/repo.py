@@ -45,11 +45,13 @@ class repo_argument:  # noqa: N801
     existing_repo = "REPO is the URI or path to an existing data repository root " \
                     "or configuration file."
 
-    defaultHelp = existing_repo
+    @staticmethod
+    def defaultHelp():
+        return repo_argument.existing_repo
 
-    def __init__(self, required=False, help=defaultHelp):
+    def __init__(self, required=False, help=None):
         self.required = required
-        self.helpText = help
+        self.helpText = help or self.defaultHelp()
 
     def __call__(self, f):
         f.__doc__ = addArgumentHelp(f.__doc__, self.helpText)
