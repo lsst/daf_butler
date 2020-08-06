@@ -100,6 +100,10 @@ class Mocker:
         """
         Mocker.mock(*args, **kwargs)
 
+    @classmethod
+    def reset(cls):
+        cls.mock.reset_mock()
+
 
 class LogCliRunner(click.testing.CliRunner):
     """A test runner to use when the logging system will be initialized by code
