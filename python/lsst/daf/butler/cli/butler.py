@@ -24,6 +24,7 @@ import click
 from collections import defaultdict
 import logging
 import os
+import traceback
 import yaml
 
 from .cliLog import CliLog
@@ -173,7 +174,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             return doImport(pluginName)
         except Exception as err:
             log.warning("Could not import plugin from %s, skipping.", pluginName)
-            log.debug("Plugin import exception: %s", err)
+            log.debug("Plugin import exception: %s\nTraceback:\n%s", err,
+                      "".join(traceback.format_tb(err.__traceback__)))
             return None
 
     @staticmethod
