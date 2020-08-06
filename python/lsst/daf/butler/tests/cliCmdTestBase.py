@@ -22,6 +22,7 @@
 import abc
 import copy
 import os
+from unittest.mock import call
 
 from ..cli.utils import clickResultMsg, mockEnvVar, LogCliRunner, Mocker
 from ..cli import butler
@@ -113,7 +114,11 @@ class CliCmdTestBase(abc.ABC):
                     pass
             result = self.run_command(inputs)
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            Mocker.mock.assert_called_with(**expectedKwargs)
+            if isinstance(expectedKwargs, (list, tuple)):
+                calls = (call(**e) for e in expectedKwargs)
+            else:
+                calls = (call(**expectedKwargs),)
+            Mocker.mock.assert_has_calls(list(calls))
         return result
 
     def run_missing(self, inputs, expectedMsg):
