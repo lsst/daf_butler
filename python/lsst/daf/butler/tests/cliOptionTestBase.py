@@ -714,7 +714,7 @@ class OptHelpTest(OptTestBase):
         self.run_test(CliFactory.noOp(self, cmdInitKwArgs=self.wideTerminal),
                       ["--help"],
                       self._verify_forHelp,
-                      self.optionClass.defaultHelp)
+                      self.optionClass.defaultHelp())
 
     def test_help_custom(self):
         helpText = "foobarbaz"

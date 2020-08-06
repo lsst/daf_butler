@@ -22,10 +22,10 @@
 
 import click
 
-from ..utils import MWOption, split_commas
+from ..utils import MWOption, MWOptionDecorator, split_commas
 
 
-class dataset_type_option:  # noqa: N801
+class dataset_type_option(MWOptionDecorator):  # noqa: N801
     """A decorator that adds a datsety-type option to a click command.
 
     Parameters
@@ -40,16 +40,22 @@ class dataset_type_option:  # noqa: N801
         default False.
     """
 
-    defaultHelp = "Dataset types(s)"
+    @staticmethod
+    def defaultHelp():
+        return "Dataset types(s)"
 
-    def __init__(self, help=defaultHelp, multiple=False, required=False):
+    @staticmethod
+    def optionFlags():
+        return ("-d", "--dataset-type")
+
+    def __init__(self, help=None, multiple=False, required=False):
         self.callback = split_commas if multiple else None
-        self.help = help
+        self.help = help or self.defaultHelp()
         self.multiple = multiple
         self.required = required
 
     def __call__(self, f):
-        return click.option("-d", "--dataset-type", cls=MWOption,
+        return click.option(*self.optionFlags(), cls=MWOption,
                             callback=self.callback,
                             help=self.help,
                             multiple=self.multiple,

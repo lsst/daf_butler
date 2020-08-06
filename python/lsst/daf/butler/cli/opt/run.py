@@ -22,10 +22,10 @@
 
 import click
 
-from ..utils import MWOption
+from ..utils import MWOption, MWOptionDecorator
 
 
-class run_option:  # noqa: N801
+class run_option(MWOptionDecorator):  # noqa: N801
     """A decorator to add a run option to a click.Command.
 
     Parameters
@@ -35,10 +35,19 @@ class run_option:  # noqa: N801
         default False.
     """
 
-    def __init__(self, required=False):
+    @staticmethod
+    def defaultHelp():
+        return "The name of the run datasets should be output to."
+
+    @staticmethod
+    def optionFlags():
+        return ("--output-run",)
+
+    def __init__(self, help=None, required=False):
+        self.help = help or self.defaultHelp()
         self.required = required
 
     def __call__(self, f):
-        return click.option('--output-run', cls=MWOption,
+        return click.option(*self.optionFlags(), cls=MWOption,
                             required=self.required,
-                            help='The name of the run datasets should be output to.')(f)
+                            help=self.help)(f)

@@ -175,6 +175,58 @@ class MWArgumentTest(unittest.TestCase):
                 self.assertIn(expectedOutut, result.output)
 
 
+class MWOptionDecoratorTest(unittest.TestCase):
+
+    def makeTestOption(self, flags, expectedFlag, expectedKey):
+
+        class test_option(MWOptionDecorator):  # noqa: N801
+
+            @staticmethod
+            def defaultHelp():
+                return "default help"
+
+            @staticmethod
+            def optionFlags():
+                return flags
+
+        class Expected:
+
+            def __init__(self):
+                self.flag = expectedFlag
+                self.flags = flags
+                self.key = expectedKey
+
+        return test_option, Expected()
+
+    def test(self):
+        """Verify the helper funcs in MWOptionDecorator return the correct
+        value. Also verifies values can be extracted from click.Option as
+        expected."""
+        tests = (self.makeTestOption(("-t",), "-t", "t"),  # <- one flag, short:
+                 # one flag, long:
+                 self.makeTestOption(("--test-val",), "--test-val", "test_val"),
+                 # one short, one long:
+                 self.makeTestOption(("-t", "--test-val"), "--test-val", "test_val"),
+                 # same, opposite order:
+                 self.makeTestOption(("--test-val", "-t"), "--test-val", "test_val"),
+                 # two longer option flags, reverse alphabetical order (first
+                 # flag is still picked):
+                 self.makeTestOption(("--test-val", "--alternate-opt"), "--test-val", "test_val"),
+                 # multiple short and long flags:
+                 self.makeTestOption(("-t", "--test-val", "-a", "--alternate-opt"), "--test-val", "test_val"),
+                 # declare alternate kwarg name:
+                 self.makeTestOption(("--test-val", "alternate_name"), "--test-val", "alternate_name"))
+
+        for test_option, expected in tests:
+            self.assertEqual(test_option.defaultHelp(), "default help")
+            # key is extracted from click.Option
+            self.assertEqual(test_option.optionKey(), expected.key)
+            # flag is generated from the flags extracted from click.Option
+            self.assertEqual(test_option.flag(), expected.flag)
+            # optionFlags is set in the MWOptionDecorator class.
+            self.assertEqual(test_option.optionFlags(), expected.flags)
+
+
 class SectionOptionTest(unittest.TestCase):
 
     @staticmethod

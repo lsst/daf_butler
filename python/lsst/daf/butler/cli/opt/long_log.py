@@ -21,10 +21,10 @@
 
 import click
 
-from ..utils import MWOption
+from ..utils import MWOption, MWOptionDecorator
 
 
-class long_log_option:  # noqa: N801
+class long_log_option(MWOptionDecorator):  # noqa: N801
     """A decorator to add a long_log option to a click.Command.
 
     Parameters
@@ -33,12 +33,18 @@ class long_log_option:  # noqa: N801
         The help text to use for the option.
     """
 
-    defaultHelp = "Make log messages appear in long format."
+    @staticmethod
+    def defaultHelp():
+        return "Make log messages appear in long format."
 
-    def __init__(self, help=defaultHelp):
-        self.help = help
+    @staticmethod
+    def optionFlags():
+        return ("--long-log",)
+
+    def __init__(self, help=None):
+        self.help = help or self.defaultHelp()
 
     def __call__(self, f):
-        return click.option("--long-log", cls=MWOption,
+        return click.option(*self.optionFlags(), cls=MWOption,
                             help=self.help,
                             is_flag=True)(f)

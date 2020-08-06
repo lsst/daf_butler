@@ -22,11 +22,11 @@
 import click
 from functools import partial
 
-from ..utils import MWOption, split_kv
+from ..utils import MWOption, MWOptionDecorator, split_kv
 from ...core.utils import iterable
 
 
-class log_level_option:  # noqa: N801
+class log_level_option(MWOptionDecorator):  # noqa: N801
     """A decorator to add a log_level option to a click.Command.
 
     Parameters
@@ -42,19 +42,25 @@ class log_level_option:  # noqa: N801
     """
 
     choices = ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
-    defaultHelp = "The Python log level to use."
     defaultValue = "WARNING"
-    optionKey = "log_level"
 
-    def __init__(self, defaultValue=defaultValue, help=defaultHelp, required=False):
-        self.help = help
+    @staticmethod
+    def defaultHelp():
+        return "The Python log level to use."
+
+    @staticmethod
+    def optionFlags():
+        return ("--log-level",)
+
+    def __init__(self, defaultValue=defaultValue, help=None, required=False):
+        self.help = help or self.defaultHelp()
         self.isEager = True
         self.multiple = True
         self.required = required
         self.default = None if required else defaultValue
 
     def __call__(self, f):
-        return click.option("--log-level", cls=MWOption,
+        return click.option(*self.optionFlags(), cls=MWOption,
                             callback=partial(split_kv,
                                              choice=click.Choice(self.choices, case_sensitive=False),
                                              normalize=True,

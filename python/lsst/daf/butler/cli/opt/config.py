@@ -24,12 +24,13 @@ import click
 from functools import partial
 
 from ..utils import (MWOption,
+                     MWOptionDecorator,
                      split_commas,
                      split_kv as split_kv_func,
                      split_kv_separator)
 
 
-class config_option:  # noqa: N801
+class config_option(MWOptionDecorator):  # noqa: N801
     """A decorator that adds a config option to a click command.
 
     Parameters
@@ -49,12 +50,16 @@ class config_option:  # noqa: N801
         at the comma, by default False.
     """
 
-    defaultHelp = "Config override, as a key-value pair."
-    optionFlags = ("-c", "--config")
-    optionKey = "config"
+    @staticmethod
+    def defaultHelp():
+        return "Config override, as a key-value pair."
 
-    def __init__(self, help=defaultHelp, metavar=None, multiple=False, required=False, split_kv=False):
-        self.help = help
+    @staticmethod
+    def optionFlags():
+        return ("-c", "--config")
+
+    def __init__(self, help=None, metavar=None, multiple=False, required=False, split_kv=False):
+        self.help = help or self.defaultHelp()
         self.metavar = metavar
         self.multiple = multiple
         self.required = required
@@ -68,7 +73,7 @@ class config_option:  # noqa: N801
             self.callback = None
 
     def __call__(self, f):
-        return click.option(*self.optionFlags, cls=MWOption,
+        return click.option(*self.optionFlags(), cls=MWOption,
                             callback=self.callback,
                             help=self.help,
                             metavar=self.metavar,

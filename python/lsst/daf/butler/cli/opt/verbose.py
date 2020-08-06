@@ -20,10 +20,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import click
-from ..utils import MWOption
+from ..utils import MWOption, MWOptionDecorator
 
 
-class verbose_option:  # noqa: N801
+class verbose_option(MWOptionDecorator):  # noqa: N801
     """Decorator to add a verbose option to a click command.
 
     Parameters
@@ -35,14 +35,20 @@ class verbose_option:  # noqa: N801
         default False.
     """
 
-    defaultHelp = "Increase verbosity."
+    @staticmethod
+    def defaultHelp():
+        return "Increase verbosity."
 
-    def __init__(self, help=defaultHelp, required=False):
-        self.help = help
+    @staticmethod
+    def optionFlags():
+        return ("-v", "--verbose")
+
+    def __init__(self, help=None, required=False):
+        self.help = help or self.defaultHelp()
         self.required = required
 
     def __call__(self, f):
-        return click.option("-v", "--verbose", cls=MWOption,
+        return click.option(*self.optionFlags(), cls=MWOption,
                             required=self.required,
                             is_flag=True,
                             help=self.help)(f)

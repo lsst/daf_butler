@@ -21,10 +21,10 @@
 
 import click
 
-from ..utils import addArgumentHelp, MWOption, split_commas, ParameterType, textTypeStr
+from ..utils import addArgumentHelp, MWOption, MWOptionDecorator, split_commas, ParameterType, textTypeStr
 
 
-class glob_parameter:  # noqa: N801
+class glob_parameter(MWOptionDecorator):  # noqa: N801
     """Decorator to add an glob option or argument to a click command.
 
     Parameters
@@ -42,11 +42,18 @@ class glob_parameter:  # noqa: N801
         default False.
     """
 
-    defaultHelp = "GLOB is a string to apply to the search."
     defaultHelpMultiple = "GLOB is one or more strings to apply to the search."
 
-    def __init__(self, help=defaultHelp, multiple=False, parameterType=ParameterType.OPTION, required=False):
-        self.help = help
+    @staticmethod
+    def defaultHelp():
+        return "GLOB is a string to apply to the search."
+
+    @staticmethod
+    def optionFlags():
+        return ("--glob",)
+
+    def __init__(self, help=None, multiple=False, parameterType=ParameterType.OPTION, required=False):
+        self.help = help or self.defaultHelp()
         self.callback = split_commas if multiple else None
         self.multiple = multiple
         self.parameterType = parameterType
@@ -57,7 +64,7 @@ class glob_parameter:  # noqa: N801
 
     def __call__(self, f):
         if self.parameterType == ParameterType.OPTION:
-            return click.option("--glob", cls=MWOption,
+            return click.option(*self.optionFlags(), cls=MWOption,
                                 callback=self.callback,
                                 help=self.help,
                                 metavar=textTypeStr(self.multiple),

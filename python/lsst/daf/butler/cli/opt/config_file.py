@@ -22,10 +22,10 @@
 
 import click
 
-from ..utils import MWOption, split_commas
+from ..utils import MWOption, MWOptionDecorator, split_commas, unwrap
 
 
-class config_file_option:  # noqa: N801
+class config_file_option(MWOptionDecorator):  # noqa: N801
     """A decorator that adds a config-file option to a click command.
 
     Parameters
@@ -45,21 +45,25 @@ class config_file_option:  # noqa: N801
         converted into a `click.ParamType` automatically if supported.
     """
 
-    defaultHelp = "Path to a pex config override to be included after the Instrument config overrides are " \
-                  "applied."
-    optionFlags = ("-C", "--config-file")
-    optionKey = "config_file"
+    @staticmethod
+    def defaultHelp():
+        return unwrap("""Path to a pex config override to be included after the Instrument config overrides
+                      are applied.""")
 
-    def __init__(self, help=defaultHelp, metavar=None, multiple=False, required=False, type=None):
+    @staticmethod
+    def optionFlags():
+        return ("-C", "--config-file")
+
+    def __init__(self, help=None, metavar=None, multiple=False, required=False, type=None):
         self.callback = split_commas if multiple else None
-        self.help = help
+        self.help = help or self.defaultHelp()
         self.metavar = metavar
         self.multiple = multiple
         self.required = required
         self.type = type
 
     def __call__(self, f):
-        return click.option(*self.optionFlags, cls=MWOption,
+        return click.option(*self.optionFlags(), cls=MWOption,
                             callback=self.callback,
                             help=self.help,
                             metavar=self.metavar,

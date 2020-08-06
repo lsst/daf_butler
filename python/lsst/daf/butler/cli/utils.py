@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import abc
 import click
 import click.testing
 from contextlib import contextmanager
@@ -532,3 +533,63 @@ class OptionSection(MWOption):
 
     def get_help_record(self, ctx):
         return (self.sectionText, "")
+
+
+class MWOptionDecorator(abc.ABC):
+
+    _name = None
+    _opts = None
+
+    @staticmethod
+    @abc.abstractmethod
+    def defaultHelp():
+        """The help default help text to use for the Option.
+
+        Returns
+        -------
+        defaultHelp : `str`
+            The default help text.
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    @abc.abstractmethod
+    def optionFlags():
+        """The flags that become the param_decls of a click.Parameter.
+
+        Returns
+        -------
+        flags : `tuple` [`str`]
+            The flags to use.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def _update(cls):
+        """Use the click.Option to generate the kwarg name and the list of
+        flags.
+        """
+        if cls._name is None:
+            p = click.Option(cls.optionFlags())
+            cls._name = p.name
+            cls._opts = p.opts
+
+    @classmethod
+    def optionKey(cls):
+        """Get the keyword argument name for an option flag."""
+        cls._update()
+        return cls._name
+
+    @classmethod
+    def flag(cls):
+        """Get the option flag. Prefers the first flag that begins with two
+        dashes if one is declared, otherwise uses the first flag that begins
+        with a single dash."""
+        cls._update()
+        ret = None
+        for opt in cls._opts:
+            if opt.startswith("--"):
+                return opt
+            if ret is None and opt.startswith("-"):
+                ret = opt
+        return ret

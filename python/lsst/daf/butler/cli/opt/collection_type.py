@@ -22,11 +22,11 @@
 
 import click
 
-from lsst.daf.butler.cli.utils import MWOption
+from ..utils import MWOption, MWOptionDecorator
 from lsst.daf.butler.registry import CollectionType
 
 
-class collection_type_option:  # noqa: N801
+class collection_type_option(MWOptionDecorator):  # noqa: N801
     """Decorator to add a collection type option to a click command.
 
     Converts the type option from string to a CollectionType enum value.
@@ -38,9 +38,15 @@ class collection_type_option:  # noqa: N801
         If true, the option is required to be passed in on the command line.
     """
 
-    defaultHelp = "If provided, only list collections of this type."
-
     choices = ["CHAINED", "RUN", "TAGGED"]
+
+    @staticmethod
+    def defaultHelp():
+        return "If provided, only list collections of this type."
+
+    @staticmethod
+    def optionFlags():
+        return ("--collection-type",)
 
     def makeCollectionType(self, context, param, value):
         if value is None:
@@ -53,12 +59,12 @@ class collection_type_option:  # noqa: N801
         if value == "TAGGED":
             return CollectionType.TAGGED
 
-    def __init__(self, help=defaultHelp, required=False):
+    def __init__(self, help=None, required=False):
         self.required = required
-        self.help = help
+        self.help = help or self.defaultHelp()
 
     def __call__(self, f):
-        return click.option("--collection-type", cls=MWOption,
+        return click.option(*self.optionFlags(), cls=MWOption,
                             required=self.required,
                             type=click.Choice(self.choices, case_sensitive=False),
                             callback=self.makeCollectionType,
