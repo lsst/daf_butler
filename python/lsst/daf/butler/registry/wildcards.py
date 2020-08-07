@@ -32,6 +32,7 @@ import itertools
 import operator
 import re
 from typing import (
+    AbstractSet,
     Any,
     Callable,
     ClassVar,
@@ -409,7 +410,7 @@ def _yieldCollectionRecords(
     record: CollectionRecord,
     restriction: DatasetTypeRestriction,
     datasetType: Optional[DatasetType] = None,
-    collectionType: Optional[CollectionType] = None,
+    collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
     done: Optional[Set[str]] = None,
     flattenChains: bool = True,
     includeChains: Optional[bool] = None,
@@ -430,9 +431,8 @@ def _yieldCollectionRecords(
     datasetType : `DatasetType`, optional
         If given, a `DatasetType` instance that must be included in
         ``restriction`` in order to yield ``record``.
-    collectionType : `CollectionType`, optional
-        If given, a `CollectionType` enumeration value that must match
-        ``record.type`` in order for ``record`` to be yielded.
+    collectionTypes : `AbstractSet` [ `CollectionType` ], optional
+        If provided, only yield collections of these types.
     done : `set` [ `str` ], optional
         A `set` of already-yielded collection names; if provided, ``record``
         will only be yielded if it is not already in ``done``, and ``done``
@@ -455,7 +455,7 @@ def _yieldCollectionRecords(
     if done is None:
         done = set()
     includeChains = includeChains if includeChains is not None else not flattenChains
-    if collectionType is None or record.type is collectionType:
+    if record.type in collectionTypes:
         done.add(record.name)
         if record.type is not CollectionType.CHAINED or includeChains:
             yield record, restriction
@@ -466,7 +466,7 @@ def _yieldCollectionRecords(
         yield from record.children.iterPairs(  # type: ignore
             manager,
             datasetType=datasetType,
-            collectionType=collectionType,
+            collectionTypes=collectionTypes,
             done=done,
             flattenChains=flattenChains,
             includeChains=includeChains,
@@ -561,7 +561,7 @@ class CollectionSearch:
     def iterPairs(
         self, manager: CollectionManager, *,
         datasetType: Optional[DatasetType] = None,
-        collectionType: Optional[CollectionType] = None,
+        collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
         done: Optional[Set[str]] = None,
         flattenChains: bool = True,
         includeChains: Optional[bool] = None,
@@ -587,7 +587,7 @@ class CollectionSearch:
                     manager.find(name),
                     restriction,
                     datasetType=datasetType,
-                    collectionType=collectionType,
+                    collectionTypes=collectionTypes,
                     done=done,
                     flattenChains=flattenChains,
                     includeChains=includeChains,
@@ -596,7 +596,7 @@ class CollectionSearch:
     def iter(
         self, manager: CollectionManager, *,
         datasetType: Optional[DatasetType] = None,
-        collectionType: Optional[CollectionType] = None,
+        collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
         done: Optional[Set[str]] = None,
         flattenChains: bool = True,
         includeChains: Optional[bool] = None,
@@ -616,8 +616,8 @@ class CollectionSearch:
         datasetType : `DatasetType`, optional
             If given, only yield collections whose dataset type restrictions
             include this dataset type.
-        collectionType : `CollectionType`, optional
-            If given, only yield collections of this type.
+        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
+            If provided, only yield collections of these types.
         done : `set`, optional
             A `set` containing the names of all collections already yielded;
             any collections whose names are already present in this set will
@@ -638,7 +638,7 @@ class CollectionSearch:
         record : `CollectionRecord`
             Matching collection records.
         """
-        for record, _ in self.iterPairs(manager, datasetType=datasetType, collectionType=collectionType,
+        for record, _ in self.iterPairs(manager, datasetType=datasetType, collectionTypes=collectionTypes,
                                         done=done, flattenChains=flattenChains, includeChains=includeChains):
             yield record
 
@@ -746,7 +746,7 @@ class CollectionQuery:
     def iterPairs(
         self, manager: CollectionManager, *,
         datasetType: Optional[DatasetType] = None,
-        collectionType: Optional[CollectionType] = None,
+        collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
         flattenChains: bool = True,
         includeChains: Optional[bool] = None,
     ) -> Iterator[Tuple[CollectionRecord, DatasetTypeRestriction]]:
@@ -770,7 +770,7 @@ class CollectionQuery:
                     record,
                     DatasetTypeRestriction.any,
                     datasetType=datasetType,
-                    collectionType=collectionType,
+                    collectionTypes=collectionTypes,
                     flattenChains=flattenChains,
                     includeChains=includeChains,
                 )
@@ -779,7 +779,7 @@ class CollectionQuery:
             yield from self._search.iterPairs(
                 manager,
                 datasetType=datasetType,
-                collectionType=collectionType,
+                collectionTypes=collectionTypes,
                 done=done,
                 flattenChains=flattenChains,
                 includeChains=includeChains,
@@ -791,7 +791,7 @@ class CollectionQuery:
                         record,
                         DatasetTypeRestriction.any,
                         datasetType=datasetType,
-                        collectionType=collectionType,
+                        collectionTypes=collectionTypes,
                         done=done,
                         flattenChains=flattenChains,
                         includeChains=includeChains,
@@ -800,7 +800,7 @@ class CollectionQuery:
     def iter(
         self, manager: CollectionManager, *,
         datasetType: Optional[DatasetType] = None,
-        collectionType: Optional[CollectionType] = None,
+        collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
         flattenChains: bool = True,
         includeChains: Optional[bool] = None,
     ) -> Iterator[CollectionRecord]:
@@ -819,8 +819,8 @@ class CollectionQuery:
         datasetType : `DatasetType`, optional
             If given, only yield collections whose dataset type restrictions
             include this dataset type.
-        collectionType : `CollectionType`, optional
-            If given, only yield collections of this type.
+        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
+            If provided, only yield collections of these types.
         flattenChains : `bool`, optional
             If `True` (default) recursively yield the child collections of
             `~CollectionType.CHAINED` collections.
@@ -835,7 +835,7 @@ class CollectionQuery:
         record : `CollectionRecord`
             Matching collection records.
         """
-        for record, _ in self.iterPairs(manager, datasetType=datasetType, collectionType=collectionType,
+        for record, _ in self.iterPairs(manager, datasetType=datasetType, collectionTypes=collectionTypes,
                                         flattenChains=flattenChains, includeChains=includeChains):
             yield record
 

@@ -178,7 +178,7 @@ class ChainedCollectionRecord(CollectionRecord):
             Raised when the child collections contain a cycle.
         """
         for record in children.iter(manager, flattenChains=True, includeChains=True,
-                                    collectionType=CollectionType.CHAINED):
+                                    collectionTypes={CollectionType.CHAINED}):
             if record == self:
                 raise ValueError(f"Cycle in collection chaining when defining '{self.name}'.")
         self._update(manager, children)

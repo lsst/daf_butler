@@ -34,8 +34,8 @@ def queryCollections(repo, glob, collection_type, flatten_chains, include_chains
     glob : iterable [`str`]
         A list of glob-style search string that fully or partially identify
         the dataset type names to search for.
-    collection_type : `CollectionType` or `None`
-        If provided, only return collections of this type.
+    collection_type : `Iterable` [ `CollectionType` ], optional
+        If provided, only return collections of these types.
     flatten_chains : `bool`
         If `True` (`False` is default), recursively yield the child collections
         of matching `~CollectionType.CHAINED` collections.
@@ -57,7 +57,7 @@ def queryCollections(repo, glob, collection_type, flatten_chains, include_chains
     kwargs = {}
     if expression:
         kwargs["expression"] = expression
-    collections = butler.registry.queryCollections(collectionType=collection_type,
+    collections = butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
                                                    flattenChains=flatten_chains,
                                                    includeChains=include_chains,
                                                    **kwargs)
