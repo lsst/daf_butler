@@ -30,22 +30,32 @@ from lsst.daf.butler.registry import CollectionType
 
 class CollectionTypeCallback:
 
-    collectionTypes = dict(CHAINED=CollectionType.CHAINED,
-                           RUN=CollectionType.RUN,
-                           TAGGED=CollectionType.TAGGED)
+    collectionTypes = CollectionType.__members__.keys()
 
     @staticmethod
-    def makeCollectionType(context, param, value):
-        if value is None:
-            return value
-        try:
-            return CollectionTypeCallback.collectionTypes[value.upper()]
-        except KeyError:
-            raise ValueError(f"Invalid collection type: {value}")
+    def makeCollectionTypes(context, param, value):
+        if not value:
+            # Click seems to demand that the default be an empty tuple, rather
+            # than a sentinal like None.  The behavior that we want is that
+            # not passing this option at all passes all collection types, while
+            # passing it uses only the passed collection types.  That works
+            # fine for now, since there's no command-line option to subtract
+            # collection types, and hence the only way to get an empty tuple
+            # is as the default.
+            return tuple(CollectionType.all())
+        result = []
+        for item in split_commas(context, param, value):
+            item = item.upper()
+            try:
+                result.append(CollectionType.__members__[item])
+            except KeyError:
+                raise KeyError(f"{item} is not a valid CollectionType.") from None
+        return tuple(result)
 
 
 collection_type_option = MWOptionDecorator("--collection-type",
-                                           callback=CollectionTypeCallback.makeCollectionType,
+                                           callback=CollectionTypeCallback.makeCollectionTypes,
+                                           multiple=True,
                                            help="If provided, only list collections of this type.",
                                            type=click.Choice(CollectionTypeCallback.collectionTypes,
                                                              case_sensitive=False))

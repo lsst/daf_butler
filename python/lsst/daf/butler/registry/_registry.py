@@ -1021,7 +1021,7 @@ class Registry:
 
     def queryCollections(self, expression: Any = ...,
                          datasetType: Optional[DatasetType] = None,
-                         collectionType: Optional[CollectionType] = None,
+                         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
                          flattenChains: bool = False,
                          includeChains: Optional[bool] = None) -> Iterator[str]:
         """Iterate over the collections whose names match an expression.
@@ -1039,8 +1039,8 @@ class Registry:
             this dataset type according to ``expression``.  If this is
             not provided, any dataset type restrictions in ``expression`` are
             ignored.
-        collectionType : `CollectionType`, optional
-            If provided, only yield collections of this type.
+        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
+            If provided, only yield collections of these types.
         flattenChains : `bool`, optional
             If `True` (`False` is default), recursively yield the child
             collections of matching `~CollectionType.CHAINED` collections.
@@ -1055,7 +1055,8 @@ class Registry:
             The name of a collection that matches ``expression``.
         """
         query = CollectionQuery.fromExpression(expression)
-        for record in query.iter(self._collections, datasetType=datasetType, collectionType=collectionType,
+        for record in query.iter(self._collections, datasetType=datasetType,
+                                 collectionTypes=frozenset(collectionTypes),
                                  flattenChains=flattenChains, includeChains=includeChains):
             yield record.name
 
