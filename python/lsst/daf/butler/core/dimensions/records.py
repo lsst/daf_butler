@@ -209,5 +209,10 @@ class DimensionRecord:
     """
 
     definition: ClassVar[DimensionElement]
+    """The `DimensionElement` whose records this class represents
+    (`DimensionElement`).
+    """
 
     fields: ClassVar[Tuple[str, ...]]
+    """The names of all fields in this class (`tuple` [ `str` ]).
+    """
