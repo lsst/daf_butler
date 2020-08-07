@@ -26,7 +26,6 @@ __all__ = ("getHttpSession", "isWebdavEndpoint", "webdavCheckFileExists",
 
 import os
 import requests
-import urllib3
 import logging
 
 from typing import (
@@ -38,7 +37,6 @@ from typing import (
 from .location import ButlerURI, Location
 
 log = logging.getLogger(__name__)
-urllib3.disable_warnings()
 
 
 def getHttpSession() -> requests.Session:
@@ -60,6 +58,9 @@ def getHttpSession() -> requests.Session:
 
     TOKEN: must set WEBDAV_BEARER_TOKEN
     (bearer token used to authenticate requests, as a single string)
+
+    NB: requests will read CA certificates in the REQUESTS_CA_BUNDLE env variable.
+    It must be manually exported according to the system CA directory.
     """
     s = requests.Session()
     log.debug("Creating new HTTP session")
@@ -84,7 +85,7 @@ def getHttpSession() -> requests.Session:
     else:
         raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
 
-    s.verify = False
+    # s.verify = False
     log.debug("Session configured and ready to use")
 
     return s
@@ -144,7 +145,7 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
 
     filepath = getFileURL(path)
 
-    r = requests.options(filepath, verify=False)
+    r = requests.options(filepath)
     return True if 'DAV' in r.headers else False
 
 
