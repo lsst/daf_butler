@@ -25,7 +25,7 @@
 import unittest
 import yaml
 
-from lsst.daf.butler import Butler
+from lsst.daf.butler import Butler, CollectionType
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_collections
 from lsst.daf.butler.cli.utils import LogCliRunner
@@ -37,7 +37,7 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
     @staticmethod
     def defaultExpected():
         return dict(repo=None,
-                    collection_type=None,
+                    collection_type=tuple(CollectionType.__members__.values()),
                     flatten_chains=False,
                     glob=(),
                     include_chains=None)
@@ -55,10 +55,13 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
     def test_all(self):
         """Test all parameters"""
         self.run_test(["query-collections", "here", "foo*",
+                       "--collection-type", "TAGGED",
+                       "--collection-type", "RUN",
                        "--flatten-chains",
                        "--include-chains"],
                       self.makeExpected(repo="here",
                                         glob=("foo*",),
+                                        collection_type=(CollectionType.TAGGED, CollectionType.RUN),
                                         flatten_chains=True,
                                         include_chains=True))
 
@@ -83,6 +86,11 @@ class QueryCollectionsScriptTest(unittest.TestCase):
             # name matches with the specified pattern are returned.
             result = runner.invoke(cli, ["query-collections", "here", "t*"])
             self.assertEqual({"collections": [tag]}, yaml.safe_load(result.output))
+
+            # Verify that with a collection type argument, only collections of
+            # that type are returned.
+            result = runner.invoke(cli, ["query-collections", "here", "--collection-type", "RUN"])
+            self.assertEqual({"collections": [run]}, yaml.safe_load(result.output))
 
 
 if __name__ == "__main__":

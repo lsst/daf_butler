@@ -19,11 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = [
     "CollectionType",
 ]
 
 import enum
+from typing import FrozenSet
 
 
 class CollectionType(enum.IntEnum):
@@ -51,3 +54,9 @@ class CollectionType(enum.IntEnum):
     """A ``CHAINED`` collection is simply an ordered list of other collections
     to be searched.  These may include other ``CHAINED`` collections.
     """
+
+    @classmethod
+    def all(cls) -> FrozenSet[CollectionType]:
+        """Return a `frozenset` containing all members.
+        """
+        return frozenset(cls.__members__.values())
