@@ -54,7 +54,6 @@ from .utils import safeMakeDir
 if TYPE_CHECKING:
     try:
         import boto3
-        import webdav3 as wc
     except ImportError:
         pass
     from .datastore import DatastoreTransaction
@@ -248,15 +247,6 @@ class ButlerURI:
                 subclass = ButlerS3URI
             elif parsed.scheme.startswith("http"):
                 subclass = ButlerHttpURI
-            elif parsed.scheme.startswith("dav"):
-                subclass = ButlerWebdavURI
-                # dav:// scheme is used in Butler to differentiate with generic HTTP datastores,
-                # but cannot be used with http clients, so we replace it with http:// scheme
-                if parsed.scheme == "dav":
-                    newscheme = "http"
-                elif parsed.scheme == "davs":
-                    newscheme = "https"
-                parsed = parsed._replace(scheme=newscheme)
             elif parsed.scheme == "resource":
                 # Rules for scheme names disasllow pkg_resource
                 subclass = ButlerPackageResourceURI
@@ -1203,10 +1193,32 @@ class ButlerPackageResourceURI(ButlerURI):
 class ButlerHttpURI(ButlerURI):
     """General HTTP(S) resource."""
 
+    @property
+    def session(self) -> requests.Session:
+        """Client object to address remote resource."""
+        from .webdavutils import getHttpSession, isWebdavEndpoint
+        if isWebdavEndpoint(self):
+            return getHttpSession()
+        return requests.Session()
+
     def exists(self) -> bool:
         """Check that a remote HTTP resource exists."""
-        header = requests.head(self.geturl())
-        return True if header.status_code == 200 else False
+        r = self.session.head(self.geturl())
+        return True if r.status_code == 200 else False
+
+    def mkdir(self) -> None:
+
+        if not self.exists():
+            r = self.session.request('MKCOL', self.geturl())
+            if r.status_code != 201:
+                raise ValueError(f"Can not create directory {self}, status code: {r.status_code}")
+
+    def remove(self) -> None:
+        """Remove the resource."""
+
+        r = self.session.delete(self.geturl())
+        if r.status_code not in [200, 202, 204]:
+            raise FileNotFoundError(f"Unable to delete resource {self}; status code: {r.status_code}")
 
     def as_local(self) -> Tuple[str, bool]:
         """Download object over HTTP and place in temporary directory.
@@ -1218,7 +1230,7 @@ class ButlerHttpURI(ButlerURI):
         temporary : `bool`
             Always returns `True`. This is always a temporary file.
         """
-        r = requests.get(self.geturl(), stream=True)
+        r = self.session.get(self.geturl(), stream=True)
         if r.status_code != 200:
             raise FileNotFoundError(f"Unable to download resource {self}; status code: {r.status_code}")
         with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
@@ -1229,74 +1241,17 @@ class ButlerHttpURI(ButlerURI):
     def read(self, size: int = -1) -> bytes:
         # Docstring inherits
         stream = True if size > 0 else False
-        r = requests.get(self.geturl(), stream=stream)
+        r = self.session.get(self.geturl(), stream=stream)
         if not stream:
             return r.content
         else:
             return next(r.iter_content(chunk_size=size))
 
-
-class ButlerWebdavURI(ButlerURI):
-    """Webdav URI"""
-
-    @property
-    def client(self) -> wc.client:
-        """Client object to address remote resource."""
-        # Defer import for circular dependencies
-        from .webdavutils import getWebdavClient
-        return getWebdavClient()
-    
-    @property
-    def session(self) -> requests.Session:
-        """Session object to address remote resource."""
-        from .webdavutils import getHttpSession
-        return getHttpSession()
-
-    def exists(self) -> bool:
-        from .webdavutils import webdavCheckFileExists
-        exists, _ = webdavCheckFileExists(self, client=self.client)
-        return exists
-
-    def mkdir(self) -> None:
-
-        from .webdavutils import folderExists
-        if not folderExists(self.relativeToPathRoot):
-            self.client.mkdir(self.relativeToPathRoot)
-
-    def remove(self) -> None:
-        """Remove the resource."""
-
-        self.client.clean(self.relativeToPathRoot)
-
-    def read(self, size: int = -1) -> bytes:
-        args = {}
-        if size > 0:
-            args["Range"] = f"bytes=0-{size-1}"
-        response = self.session.get(urllib.parse.urlunparse(self._uri))
-        if response.status_code != 200:
-            raise FileNotFoundError(f"Error retrieving the file at {uri}: status code {response.status_code}")        body = response["Body"].read()
-        response.close()
-        return response.content
-
     def write(self, data: bytes, overwrite: bool = True) -> None:
         if not overwrite:
             if self.exists():
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
-        self.session.put(urllib.parse.urlunparse(self._uri), data=data)
-
-    def as_local(self) -> Tuple[str, bool]:
-        """Download object from Webdav and place in temporary directory.
-
-        Returns
-        -------
-        path : `str`
-            Path to local temporary file.
-        temporary : `bool`
-            Always returns `True`. This is always a temporary file.
-        """
-        with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
-            self.client.download_sync(remote_path=self.relativeToPathRoot, local_path=tmpFile)
-        return tmpFile.name, True
+        self.session.put(self.geturl(), data=data)
 
     def transfer_from(self, src: ButlerURI, transfer: str = "copy",
                       transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
@@ -1326,19 +1281,17 @@ class ButlerWebdavURI(ButlerURI):
             transfer = self.transferDefault
 
         if isinstance(src, type(self)):
-            self.client.copy(remote_path_from=src.relativeToPathRoot, remote_path_to=self.relativeToPathRoot)
+            if transfer == "move":
+                self.session.request('MOVE', src.geturl(), headers={'Destination': self.geturl()})
+            else:
+                self.session.request('COPY', src.geturl(), headers={'Destination': self.geturl()})
         else:
             # Use local file and upload it
             local_src, is_temporary = src.as_local()
-            self.client.upload_sync(remote_path=self.relativeToPathRoot, local_path=local_src)
+            files = {'file': open(local_src, 'rb')}
+            self.session.post(self.geturl(), files=files)
             if is_temporary:
                 os.remove(local_src)
-
-        # This was an explicit move requested from a remote resource
-        # try to remove that resource
-        if transfer == "move":
-            # Transactions do not work here
-            src.remove()
 
 
 class ButlerInMemoryURI(ButlerURI):

@@ -1,34 +1,6 @@
 datastore:
   cls: lsst.daf.butler.datastores.webdavDatastore.WebdavDatastore
-  root: https://anywebdavurl/butlerRoot
-  templates:
-    default: "{run:/}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit:?}"
-    calexp: "{run:/}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
-    metric: "{run:/}/{datasetType}.{component:?}/{instrument:?}_{datasetType}_v{visit:08d}_f{physical_filter}_d{detector:?}_{component:?}"
-    test_metric_comp: "{run:/}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
-    metric2: "{run:/}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit.name:?}"
-    metric3: "{run:/}/{datasetType}/{instrument}"
-    metric4: "{run:/}/{component:?}_{instrument}_{physical_filter}_{visit:08d}"
-    physical_filter+: "{run:/}/{instrument}_{physical_filter}"
-    instrument<DummyCamComp>:
-      metric33: "{run:/}/{instrument}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
-  formatters:
-    StructuredDataDictYaml: lsst.daf.butler.formatters.yaml.YamlFormatter
-    StructuredDataListYaml: lsst.daf.butler.formatters.yaml.YamlFormatter
-    StructuredDataDictJson: lsst.daf.butler.formatters.json.JsonFormatter
-    StructuredDataListJson: lsst.daf.butler.formatters.json.JsonFormatter
-    StructuredDataDictPickle: lsst.daf.butler.formatters.pickle.PickleFormatter
-    StructuredDataListPickle: lsst.daf.butler.formatters.pickle.PickleFormatter
-    StructuredData: lsst.daf.butler.formatters.yaml.YamlFormatter
-    StructuredDataNoComponents: lsst.daf.butler.formatters.pickle.PickleFormatter
-    StructuredDataJson: lsst.daf.butler.formatters.json.JsonFormatter
-    StructuredDataPickle: lsst.daf.butler.formatters.pickle.PickleFormatter
-    ThingOne: lsst.daf.butler.formatters.yaml.YamlFormatter
-    datasetType.component: lsst.daf.butler.formatters.yaml.YamlFormatter
-    pvi: lsst.daf.butler.formatters.pickle.PickleFormatter
-    instrument<DummyHSC>:
-      pvi: lsst.daf.butler.formatters.json.JsonFormatter
-      StructuredData: lsst.daf.butler.formatters.pickle.PickleFormatter
-      DummySC: lsst.daf.butler.formatters.yaml.YamlFormatter
-      visit+physical_filter+instrument: lsst.daf.butler.formatters.pickle.PickleFormatter
+  root: https://some.webdav.server/butlerRoot
+  templates: !include templates.yaml
+  formatters: !include formatters.yaml
   composites: !include composites.yaml

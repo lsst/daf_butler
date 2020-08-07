@@ -76,7 +76,7 @@ class LocationTestCase(unittest.TestCase):
             ("s3://bucketname/rootDir/relative/file.ext", True, False, "s3",
              "bucketname", "/rootDir/relative/file.ext")
         ))
-        # 5) Webdav scheme
+        # 5) HTTPS scheme
         uriStrings.extend((
             ("https://www.lsst.org/rootDir/", True, False, "https", "www.lsst.org", "/rootDir/"),
             ("https://www.lsst.org/rootDir", True, True, "https", "www.lsst.org", "/rootDir/"),
