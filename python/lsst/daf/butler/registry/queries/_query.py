@@ -698,6 +698,12 @@ class DirectQuery(Query):
         from ._builder import QueryBuilder
         if summary is None:
             summary = QuerySummary(self.graph, whereRegion=self.whereRegion)
+        if not summary.requested.issubset(self.graph):
+            raise NotImplementedError(
+                f"Query.makeBuilder does not yet support augmenting dimensions "
+                f"({summary.requested.dimensions}) beyond those originally included in the query "
+                f"({self.graph.dimensions})."
+            )
         builder = QueryBuilder(summary, managers=self.managers)
         builder.joinTable(self.sql.alias(), dimensions=self.graph.dimensions,
                           datasets=self.getDatasetColumns())
@@ -810,6 +816,12 @@ class MaterializedQuery(Query):
         from ._builder import QueryBuilder
         if summary is None:
             summary = QuerySummary(self.graph, whereRegion=self.whereRegion)
+        if not summary.requested.issubset(self.graph):
+            raise NotImplementedError(
+                f"Query.makeBuilder does not yet support augmenting dimensions "
+                f"({summary.requested.dimensions}) beyond those originally included in the query "
+                f"({self.graph.dimensions})."
+            )
         builder = QueryBuilder(summary, managers=self.managers)
         builder.joinTable(self._table, dimensions=self.graph.dimensions, datasets=self.getDatasetColumns())
         return builder
@@ -877,4 +889,10 @@ class EmptyQuery(Query):
         from ._builder import QueryBuilder
         if summary is None:
             summary = QuerySummary(self.graph)
+        if not summary.requested.issubset(self.graph):
+            raise NotImplementedError(
+                f"Query.makeBuilder does not yet support augmenting dimensions "
+                f"({summary.requested.dimensions}) beyond those originally included in the query "
+                f"({self.graph.dimensions})."
+            )
         return QueryBuilder(summary, managers=self.managers)

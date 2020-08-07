@@ -260,6 +260,13 @@ class QueryBuilder:
         datasets : `DatasetQueryColumns`, optional
             Columns that identify a dataset that is part of the query results.
         """
+        unexpectedDimensions = NamedValueSet(dimensions - self.summary.requested.dimensions)
+        unexpectedDimensions.discard(self.summary.universe.commonSkyPix)
+        if unexpectedDimensions:
+            raise NotImplementedError(
+                f"QueryBuilder does not yet support joining in dimensions {unexpectedDimensions} that "
+                f"were not provided originally to the QuerySummary object passed at construction."
+            )
         joinOn = self.startJoin(table, dimensions, dimensions.names)
         self.finishJoin(table, joinOn)
         if datasets is not None:
