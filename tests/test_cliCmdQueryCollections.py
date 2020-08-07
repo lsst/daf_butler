@@ -25,7 +25,7 @@
 import unittest
 import yaml
 
-from lsst.daf.butler import Butler
+from lsst.daf.butler import Butler, CollectionType
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_collections
 from lsst.daf.butler.cli.utils import LogCliRunner
@@ -37,7 +37,7 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
     @staticmethod
     def defaultExpected():
         return dict(repo=None,
-                    collection_type=None,
+                    collection_type=tuple(CollectionType.all()),
                     flatten_chains=False,
                     include_chains=None)
 

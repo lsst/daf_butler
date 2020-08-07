@@ -30,8 +30,8 @@ def queryCollections(repo, collection_type, flatten_chains, include_chains):
     repo : `str`
         URI to the location of the repo or URI to a config file describing the
         repo and its location.
-    collection_type : `CollectionType` or `None`
-        If provided, only return collections of this type.
+    collection_type : `Iterable` [ `CollectionType` ], optional
+        If provided, only return collections of these types.
     flatten_chains : `bool`
         If `True` (`False` is default), recursively yield the child collections
         of matching `~CollectionType.CHAINED` collections.
@@ -47,7 +47,7 @@ def queryCollections(repo, collection_type, flatten_chains, include_chains):
         collection names.
     """
     butler = Butler(repo)
-    collections = butler.registry.queryCollections(collectionType=collection_type,
+    collections = butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
                                                    flattenChains=flatten_chains,
                                                    includeChains=include_chains)
     return {'collections': list(collections)}
