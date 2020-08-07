@@ -26,7 +26,6 @@ from __future__ import annotations
 __all__ = ("WebdavDatastore", )
 
 import logging
-import urllib3
 import os
 import pathlib
 import tempfile
@@ -62,7 +61,6 @@ if TYPE_CHECKING:
     from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
-urllib3.disable_warnings()
 
 
 class WebdavDatastore(FileLikeDatastore):
@@ -100,7 +98,7 @@ class WebdavDatastore(FileLikeDatastore):
             try:
                 self.root.mkdir()
             except ValueError:
-                raise IOError(f"Can not create directory {self.root}, check permissions.")
+                raise ValueError(f"Can not create directory {self.root}, check permissions.")
 
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
@@ -164,15 +162,11 @@ class WebdavDatastore(FileLikeDatastore):
             result = formatter.fromBytes(serializedDataset,
                                          component=getInfo.component if isComponent else None)
         except NotImplementedError:
-            # formatter might not always have an extension so mypy complains
-            # We can either ignore the complaint or use a temporary location
             log.debug("Formatter does not have extension, using temporary file.")
             tmpLoc = Location(".", "temp")
             tmpLoc = formatter.makeUpdatedLocation(tmpLoc)
             with tempfile.NamedTemporaryFile(suffix=tmpLoc.getExtension()) as tmpFile:
                 tmpFile.write(serializedDataset)
-                # Flush the write. Do not close the file because that
-                # will delete it.
                 tmpFile.flush()
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
                 result = formatter.read(component=getInfo.component if isComponent else None)
@@ -205,21 +199,16 @@ class WebdavDatastore(FileLikeDatastore):
         if self._transaction is None:
             raise RuntimeError("Attempting to write artifact without transaction enabled")
 
-        # Register a callback to try to delete the uploaded data if
-        # the ingest fails below
         self._transaction.registerUndo("write", webdavDeleteFile, location)
 
-        # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(location.uri, ref, formatter=formatter)
 
     def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> Optional[str]:
-        # Docstring inherited from base class
         if transfer != "auto":
             return transfer
         return "copy"
 
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
-        # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
         if transfer not in (None, "move", "copy"):
             raise NotImplementedError(f"Transfer mode {transfer} not supported.")
         srcUri = ButlerURI(path)
@@ -246,7 +235,6 @@ class WebdavDatastore(FileLikeDatastore):
     def _extractIngestInfo(self, path: str, ref: DatasetRef, *,
                            formatter: Union[Formatter, Type[Formatter]],
                            transfer: Optional[str] = None) -> StoredFileInfo:
-        # Docstring inherited from FileLikeDatastore._extractIngestInfo.
         srcUri = ButlerURI(path)
 
         if transfer is None:
@@ -257,8 +245,6 @@ class WebdavDatastore(FileLikeDatastore):
         else:
             assert transfer == "move" or transfer == "copy", "Should be guaranteed by _standardizeIngestPath"
 
-            # Work out the name we want this ingested file to have
-            # inside the datastore
             tgtLocation = self._calculate_ingested_datastore_name(srcUri, ref, formatter)
 
             if srcUri.scheme == "file":
@@ -273,7 +259,6 @@ class WebdavDatastore(FileLikeDatastore):
                 else:
                     self.session.request('COPY', srcUri.geturl(), headers={'Destination': tgtLocation.uri})
 
-        # the file should exist on the bucket by now
         exists, size = webdavCheckFileExists(tgtLocation, session=self.session)
 
         return StoredFileInfo(formatter=formatter, path=tgtLocation.pathInStore,
