@@ -672,8 +672,7 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
     ----------
     dataIds : `collections.abc.Sequence` [ `DataCoordinate` ]
         A sequence of `DataCoordinate` instances, with dimensions equal to
-        ``graph``.  If this is a mutable object, the caller must be able to
-        guarantee that it will not be modified by any other holders.
+        ``graph``.
     graph : `DimensionGraph`
         Dimensions identified by all data IDs in the set.
     hasFull : `bool`, optional
@@ -698,7 +697,7 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
     def __init__(self, dataIds: Sequence[DataCoordinate], graph: DimensionGraph, *,
                  hasFull: Optional[bool] = None, hasRecords: Optional[bool] = None,
                  check: bool = True):
-        super().__init__(dataIds, graph, hasFull=hasFull, hasRecords=hasRecords, check=check)
+        super().__init__(tuple(dataIds), graph, hasFull=hasFull, hasRecords=hasRecords, check=check)
 
     _dataIds: Sequence[DataCoordinate]
 

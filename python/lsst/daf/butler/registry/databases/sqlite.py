@@ -24,7 +24,7 @@ __all__ = ["SqliteDatabase"]
 
 from contextlib import closing
 import copy
-from typing import Any, ContextManager, Dict, List, Optional
+from typing import Any, ContextManager, Dict, Iterable, List, Optional
 from dataclasses import dataclass
 import os
 import urllib.parse
@@ -338,9 +338,16 @@ class SqliteDatabase(Database):
         return super()._convertTableSpec(name, spec, metadata, **kwargs)
 
     def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
+               select: Optional[sqlalchemy.sql.Select] = None,
+               names: Optional[Iterable[str]] = None,
                ) -> Optional[List[int]]:
         autoincr = self._autoincr.get(table.name)
         if autoincr is not None:
+            if select is not None:
+                raise NotImplementedError(
+                    "Cannot do INSERT INTO ... SELECT on a SQLite table with a simulated autoincrement "
+                    "compound primary key"
+                )
             # This table has a compound primary key that includes an
             # autoincrement.  That doesn't work natively in SQLite, so we
             # insert into a single-column table and use those IDs.
@@ -389,10 +396,10 @@ class SqliteDatabase(Database):
                 else:
                     return None
         else:
-            return super().insert(table, *rows, returnIds=returnIds)
+            return super().insert(table, *rows, select=select, names=names, returnIds=returnIds)
 
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
-        if not self.isWriteable():
+        if not (self.isWriteable() or table.key in self._tempTables):
             raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
         if not rows:
             return

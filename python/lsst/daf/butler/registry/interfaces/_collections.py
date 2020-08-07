@@ -279,7 +279,9 @@ class CollectionManager(VersionedExtension):
     @classmethod
     @abstractmethod
     def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
-                                onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
+                                onDelete: Optional[str] = None,
+                                constraint: bool = True,
+                                **kwargs: Any) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the collection
         table.
 
@@ -295,7 +297,11 @@ class CollectionManager(VersionedExtension):
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
-        **kwds
+        constraint: `bool`, optional
+            If `False` (`True` is default), add a field that can be joined to
+            the collection primary key, but do not add a foreign key
+            constraint.
+        **kwargs
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are
             otherwise provided).
@@ -310,7 +316,9 @@ class CollectionManager(VersionedExtension):
     @classmethod
     @abstractmethod
     def addRunForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "run",
-                         onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
+                         onDelete: Optional[str] = None,
+                         constraint: bool = True,
+                         **kwargs: Any) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the run
         table.
 
@@ -326,6 +334,9 @@ class CollectionManager(VersionedExtension):
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
+        constraint: `bool`, optional
+            If `False` (`True` is default), add a field that can be joined to
+            the run primary key, but do not add a foreign key constraint.
         **kwds
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are

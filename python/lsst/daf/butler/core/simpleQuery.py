@@ -97,8 +97,16 @@ class SimpleQuery:
         """
         if self._from is None:
             self._from = table
-        else:
+        elif onclause is not None:
             self._from = self._from.join(table, onclause=onclause, isouter=isouter, full=full)
+        else:
+            # New table is completely unrelated to all already-included
+            # tables.  We need a cross join here but SQLAlchemy does not
+            # have a specific method for that. Using join() without
+            # `onclause` will try to join on FK and will raise an exception
+            # for unrelated tables, so we have to use `onclause` which is
+            # always true.
+            self._from = self._from.join(table, sqlalchemy.sql.literal(True))
         for name, arg in kwargs.items():
             if arg is self.Select:
                 self.columns.append(table.columns[name].label(name))

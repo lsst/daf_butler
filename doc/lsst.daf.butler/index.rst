@@ -132,9 +132,6 @@ Database backends
 .. automodapi:: lsst.daf.butler.registry.databases.postgresql
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.registry.databases.oracle
-   :no-main-docstr:
-   :headings: ^"
 
 Support API
 -----------

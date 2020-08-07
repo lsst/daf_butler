@@ -70,7 +70,7 @@ Spatial and Temporal Dimensions
 
 Dimensions can be *spatial* or *temporal* (or both, or neither), meaning that each record is associated with a region on the sky or a timespan (respectively).
 The overlaps between regions and timespans define many-to-many relationships between dimensions that --- along with the one-to-many ID-based dependencies --- generally provide a way to fully relate any set of dimensions.
-This produces a natural, concise query system; dimension relationships can be used to construct the full ``JOIN`` clause of a SQL ``SELECT`` with no input from the user, allowing them to specify just the ``WHERE`` clause (see `Registry.queryDimensions` and `Registry.queryDatasets`).
+This produces a natural, concise query system; dimension relationships can be used to construct the full ``JOIN`` clause of a SQL ``SELECT`` with no input from the user, allowing them to specify just the ``WHERE`` clause (see `Registry.queryDataIds` and `Registry.queryDatasets`).
 It is also possible to associate a region or timespan with a combination of dimensions (such as the region for a visit and a detector), by defining a `DimensionElement` for that combination.
 
 One kind of spatial dimension is special: a `SkyPixDimension` represents a complete pixelization of the sky, as defined by an `lsst.sphgeom.Pixelization` object.

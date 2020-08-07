@@ -20,13 +20,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["QuerySummary"]  # other classes here are local to subpackage
+__all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Union
 
 from sqlalchemy.sql import ColumnElement
 
+from lsst.sphgeom import Region
 from ...core import (
     DataCoordinate,
     DatasetType,
@@ -38,6 +39,11 @@ from ...core import (
     NamedValueSet,
     SkyPixDimension,
     Timespan,
+)
+from ..interfaces import (
+    CollectionManager,
+    DatasetRecordStorageManager,
+    DimensionRecordStorageManager,
 )
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
@@ -107,14 +113,21 @@ class QuerySummary:
         must return `True`.
     expression : `str` or `QueryWhereExpression`, optional
         A user-provided string WHERE expression.
+    whereRegion : `lsst.sphgeom.Region`, optional
+        A spatial region that all rows must overlap.  If `None` and ``dataId``
+        is not `None`, ``dataId.region`` will be used.
     """
     def __init__(self, requested: DimensionGraph, *,
                  dataId: Optional[DataCoordinate] = None,
-                 expression: Optional[Union[str, QueryWhereExpression]] = None):
+                 expression: Optional[Union[str, QueryWhereExpression]] = None,
+                 whereRegion: Optional[Region] = None):
         self.requested = requested
         self.dataId = dataId if dataId is not None else DataCoordinate.makeEmpty(requested.universe)
         self.expression = (expression if isinstance(expression, QueryWhereExpression)
                            else QueryWhereExpression(requested.universe, expression))
+        if whereRegion is None and self.dataId is not None:
+            whereRegion = self.dataId.region
+        self.whereRegion = whereRegion
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
@@ -126,6 +139,11 @@ class QuerySummary:
     (`DataCoordinate`).
 
     ``dataId.hasRecords()`` is guaranteed to return `True`.
+    """
+
+    whereRegion: Optional[Region]
+    """A spatial region that all result rows must overlap
+    (`lsst.sphgeom.Region` or `None`).
     """
 
     expression: QueryWhereExpression
@@ -220,6 +238,10 @@ class DatasetQueryColumns:
     instances from query results.
     """
 
+    datasetType: DatasetType
+    """The dataset type being queried (`DatasetType`).
+    """
+
     id: ColumnElement
     """Column containing the unique integer ID for this dataset.
     """
@@ -229,16 +251,9 @@ class DatasetQueryColumns:
     this dataset.
     """
 
-    rank: Optional[ColumnElement] = None
-    """Column containing the index into the ordered sequence of given
-    collections for the collection in which this dataset was found.
-    """
-
     def __iter__(self) -> Iterator[ColumnElement]:
         yield self.id
         yield self.runKey
-        if self.rank is not None:
-            yield self.rank
 
 
 @dataclass
@@ -253,7 +268,7 @@ class QueryColumns:
         self.keys = NamedKeyDict()
         self.timespans = NamedKeyDict()
         self.regions = NamedKeyDict()
-        self.datasets = NamedKeyDict()
+        self.datasets = None
 
     keys: NamedKeyDict[Dimension, List[ColumnElement]]
     """Columns that correspond to the primary key values of dimensions
@@ -285,11 +300,16 @@ class QueryColumns:
     in `QuerySummary.spatial`.
     """
 
-    datasets: NamedKeyDict[DatasetType, DatasetQueryColumns]
+    datasets: Optional[DatasetQueryColumns]
     """Columns that can be used to construct `DatasetRef` instances from query
-    results, for each `DatasetType` included in the query
-    (`NamedKeyDict` [ `DatasetType`, `DatasetQueryColumns` ] ).
+    results.
+    (`DatasetQueryColumns` or `None`).
     """
+
+    def isEmpty(self) -> bool:
+        """Return `True` if this query has no columns at all.
+        """
+        return not (self.keys or self.timespans or self.regions or self.datasets is not None)
 
     def getKeyColumn(self, dimension: Union[Dimension, str]) -> ColumnElement:
         """ Return one of the columns in self.keys for the given dimension.
@@ -315,3 +335,22 @@ class QueryColumns:
         # database's perspective this is entirely arbitrary, because the query
         # guarantees they all have equal values.
         return self.keys[dimension][-1]
+
+
+@dataclass
+class RegistryManagers:
+    """Struct used to pass around the manager objects that back a `Registry`
+    and are used internally by the query system.
+    """
+
+    collections: CollectionManager
+    """Manager for collections (`CollectionManager`).
+    """
+
+    datasets: DatasetRecordStorageManager
+    """Manager for datasets and dataset types (`DatasetRecordStorageManager`).
+    """
+
+    dimensions: DimensionRecordStorageManager
+    """Manager for dimensions (`DimensionRecordStorageManager`).
+    """
