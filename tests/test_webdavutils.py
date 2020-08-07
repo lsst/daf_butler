@@ -20,67 +20,96 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
-from unittest.mock import MagicMock
-
-try:
-    import webdav3.client as wc
-except ImportError:
-    wc = None
-
-from lsst.daf.butler.core.webdavutils import (folderExists, webdavCheckFileExists)
-from lsst.daf.butler.core.location import Location, ButlerURI
+import requests
+import responses
 
 
-@unittest.skipIf(not wc, "Warning: WebDav client module not found!")
+from lsst.daf.butler.core.webdavutils import (folderExists, webdavCheckFileExists,
+                                              getFileURL, webdavDeleteFile, isWebdavEndpoint)
+from lsst.daf.butler import Location, ButlerURI
+
+
 class WebdavUtilsTestCase(unittest.TestCase):
     """Test for the Webdav related utilities.
     """
-    serverURI = "www.lsst.org"
+    session = requests.Session()
+    serverRoot = "www.lsst.org"
+    wrongRoot = "www.lsstwithoutwebdav.org"
     existingfolderName = "testFolder"
+    notExistingfolderName = "testFolder_not_exist"
     existingfileName = "testFileName"
-
-    def folderDoesExist(*args, **kwargs):
-        if args[1] == "testFolder":
-            return True
-        return False
-
-    def fileDoesExist(*args, **kwargs):
-        if args[1] == "testFolder/testFileName":
-            return True
-        return False
+    notExistingfileName = "testFileName_not_exist"
 
     def setUp(self):
+        # Used by folderExists()
+        responses.add(responses.HEAD, f"https://{self.serverRoot}/{self.existingfolderName}", status=200)
+        responses.add(responses.HEAD, f"https://{self.serverRoot}/{self.notExistingfolderName}", status=404)
 
-        self.client = MagicMock()
-        self.client.getWebdavClient.return_value = self.client
+        # Used by webdavCheckFileExists()
+        responses.add(responses.HEAD,
+                      f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}",
+                      status=200, headers={'Content-Length': '1024'})
+        responses.add(responses.HEAD,
+                      f"https://{self.serverRoot}/{self.existingfolderName}/{self.notExistingfileName}",
+                      status=404)
 
+        # Used by webdavDeleteFile()
+        responses.add(responses.DELETE,
+                      f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}",
+                      status=200)
+        responses.add(responses.DELETE,
+                      f"https://{self.serverRoot}/{self.existingfolderName}/{self.notExistingfileName}",
+                      status=404)
+
+        # Used by isWebdavEndpoint()
+        responses.add(responses.OPTIONS, f"https://{self.serverRoot}", status=200, headers={'DAV': '1,2,3'})
+        responses.add(responses.OPTIONS, f"https://{self.wrongRoot}", status=200)
+
+    @responses.activate
     def testFolderExists(self):
 
-        self.client.check.side_effect = self.folderDoesExist
-        self.assertTrue(folderExists(f"{self.existingfolderName}", self.client))
-        self.assertFalse(folderExists(f"{self.existingfolderName}_no_exist", self.client))
+        self.assertTrue(folderExists(f"https://{self.serverRoot}/{self.existingfolderName}",
+                        session=self.session))
+        self.assertFalse(folderExists(f"https://{self.serverRoot}/{self.notExistingfolderName}",
+                         session=self.session))
 
+    @responses.activate
     def testWebdavCheckFileExists(self):
 
-        self.client.check.side_effect = self.fileDoesExist
-        self.assertTrue(webdavCheckFileExists(f"{self.existingfolderName}/{self.existingfileName}",
-                                              self.client)[0])
-        self.assertFalse(webdavCheckFileExists(self.existingfolderName + "/"
-                                               + self.existingfileName + "_NO_EXIST", self.client)[0])
+        self.assertTrue(webdavCheckFileExists(
+                        f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}",
+                        session=self.session)[0])
+        self.assertFalse(webdavCheckFileExists(
+                         f"https://{self.serverRoot}/{self.existingfolderName}/{self.notExistingfileName}",
+                         session=self.session)[0])
 
-        datastoreRootUri = f"https://{self.serverURI}/"
-        uri = f"{self.existingfolderName}/{self.existingfileName}"
+    @responses.activate
+    def testWebdavDeleteFile(self):
 
-        buri = ButlerURI(f"http://{self.serverURI}/{uri}")
-        location = Location(datastoreRootUri, f"{self.existingfolderName}/{self.existingfileName}")
+        self.assertIsNone(webdavDeleteFile(
+                          f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}",
+                          session=self.session))
+        with self.assertRaises(FileNotFoundError):
+            webdavDeleteFile(
+                f"https://{self.serverRoot}/{self.existingfolderName}/{self.notExistingfileName}",
+                session=self.session)
 
-        self.assertTrue(webdavCheckFileExists(client=self.client, path=buri)[0])
-        # just to make sure the overloaded keyword works correctly
-        self.assertTrue(webdavCheckFileExists(buri, self.client)[0])
-        self.assertTrue(webdavCheckFileExists(location, self.client)[0])
+    @responses.activate
+    def testIsWebdavEndpoint(self):
 
-        # make sure supplying strings resolves correctly too
-        self.assertTrue(webdavCheckFileExists(uri, client=self.client)[0])
+        self.assertTrue(isWebdavEndpoint(f"https://{self.serverRoot}"))
+        self.assertFalse(isWebdavEndpoint(f"https://{self.wrongRoot}"))
+
+    @responses.activate
+    def testGetFileURL(self):
+
+        s = f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}"
+        buri = ButlerURI(f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}")
+        loc = Location(f"https://{self.serverRoot}/", f"{self.existingfolderName}/{self.existingfileName}")
+
+        self.assertEqual(getFileURL(s), s)
+        self.assertEqual(getFileURL(buri), s)
+        self.assertEqual(getFileURL(loc), s)
 
 
 if __name__ == "__main__":
