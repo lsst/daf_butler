@@ -149,4 +149,4 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
 
     def schemaDigest(self) -> Optional[str]:
         # Docstring inherited from VersionedExtension.
-        return self._defaultSchemaDigest([self._metaTable])
+        return self._defaultSchemaDigest([self._metaTable], self._db.dialect)

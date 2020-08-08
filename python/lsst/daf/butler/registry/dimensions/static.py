@@ -103,4 +103,4 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         tables: List[sqlalchemy.schema.Table] = []
         for recStorage in self._records.values():
             tables += recStorage.digestTables()
-        return self._defaultSchemaDigest(tables)
+        return self._defaultSchemaDigest(tables, self._db.dialect)

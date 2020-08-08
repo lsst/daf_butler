@@ -446,6 +446,13 @@ class Database(ABC):
         """
         raise NotImplementedError()
 
+    @property
+    def dialect(self) -> sqlalchemy.engine.Dialect:
+        """The SQLAlchemy dialect for this database engine
+        (`sqlalchemy.engine.Dialect`).
+        """
+        return self._connection.dialect
+
     def shrinkDatabaseEntityName(self, original: str) -> str:
         """Return a version of the given name that fits within this database
         engine's length limits for table, constraint, indexes, and sequence
