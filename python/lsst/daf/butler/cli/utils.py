@@ -361,12 +361,15 @@ def unwrap(val):
         The string with newlines, indentation, and leading and trailing
         whitespace removed.
     """
-    if not val.startswith("\n"):
-        firstLine, _, val = val.partition("\n")
-        firstLine += " "
-    else:
-        firstLine = ""
-    return (firstLine + textwrap.dedent(val).replace("\n", " ")).strip()
+    def splitSection(val):
+        if not val.startswith("\n"):
+            firstLine, _, val = val.partition("\n")
+            firstLine += " "
+        else:
+            firstLine = ""
+        return (firstLine + textwrap.dedent(val).replace("\n", " ")).strip()
+
+    return "\n\n".join([splitSection(s) for s in val.split("\n\n")])
 
 
 def cli_handle_exception(func, *args, **kwargs):

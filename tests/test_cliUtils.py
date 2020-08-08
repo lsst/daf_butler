@@ -107,6 +107,15 @@ class UnwrapStringTestCase(unittest.TestCase):
             """
         self.assertEqual(unwrap(testStr), "foo bar baz")
 
+    def test_lineBreaks(self):
+        testStr = """foo bar
+                  baz
+
+                  boz
+
+                  qux"""
+        self.assertEqual(unwrap(testStr), "foo bar baz\n\nboz\n\nqux")
+
 
 class MWOptionTest(unittest.TestCase):
 
