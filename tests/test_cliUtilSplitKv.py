@@ -33,37 +33,83 @@ from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner, split_kv
 class SplitKvTestCase(unittest.TestCase):
     """Tests that call split_kv directly."""
 
-    def test_single(self):
+    def test_single_dict(self):
+        """Test that a single kv pair converts to a dict."""
         self.assertEqual(split_kv("context", "param", "first=1"), {"first": "1"})
 
-    def test_multiple(self):
+    def test_single_tuple(self):
+        """Test that a single kv pair converts to a tuple when
+        return_type=tuple."""
+        self.assertEqual(split_kv("context", "param", "first=1", return_type=tuple), (("first", "1"),))
+
+    def test_multiple_dict(self):
+        """Test that multiple comma separated kv pairs convert to a dict."""
         self.assertEqual(split_kv("context", "param", "first=1,second=2"), {"first": "1", "second": "2"})
 
+    def test_multiple_tuple(self):
+        """Test that multiple comma separated kv pairs convert to a tuple when
+        return_type=tuple."""
+        self.assertEqual(split_kv("context", "param", "first=1,second=2", return_type=tuple),
+                         (("first", "1"), ("second", "2")))
+
     def test_unseparated(self):
+        """Test that a value without a key converts to a kv pair with an empty
+        string key."""
         self.assertEqual(split_kv("context", "param", "first,second=2", unseparated_okay=True),
                          {"": "first", "second": "2"})
 
     def test_notMultiple(self):
+        """Test that multiple values are rejected if multiple=False."""
         with self.assertRaisesRegex(click.ClickException, "Could not parse key-value pair "
                                     "'first=1,second=2' using separator '=', with multiple values not "
                                     "allowed."):
             split_kv("context", "param", "first=1,second=2", multiple=False)
 
     def test_wrongSeparator(self):
+        """Test that an input with the wrong separator raises."""
         with self.assertRaises(click.ClickException):
             split_kv("context", "param", "first-1")
 
     def test_missingSeparator(self):
+        """Test that an input with no separator raises when
+        unseparated_okay=False (this is the default value)."""
         with self.assertRaises(click.ClickException):
             split_kv("context", "param", "first 1")
 
+    def test_unseparatedOkay(self):
+        """Test that that the default key is used for values without a
+        separator when unseparated_okay=True."""
+        self.assertEqual(split_kv("context", "param", "foo", unseparated_okay=True),
+                         {"": "foo"})
+
+    def test_unseparatedOkay_list(self):
+        """Test that that the default key is used for values without a
+        separator when unseparated_okay=True and the return_type is tuple."""
+        self.assertEqual(split_kv("context", "param", "foo,bar", unseparated_okay=True, return_type=tuple),
+                         (("", "foo"), ("", "bar")))
+
+    def test_unseparatedOkay_defaultKey(self):
+        """Test that that the default key can be set and is used for values
+        without a separator when unseparated_okay=True."""
+        self.assertEqual(split_kv("context", "param", "foo", unseparated_okay=True, default_key=...),
+                         {...: "foo"})
+
     def test_duplicateKeys(self):
+        # todo don't we want dulicate keys to aggregate into a list?
+        """Test that values with duplicate keys raise."""
         with self.assertRaises(click.ClickException):
             split_kv("context", "param", "first=1,first=2")
 
     def test_dashSeparator(self):
+        """Test that specifying a spearator is accepted and converts to a dict.
+        """
         self.assertEqual(split_kv("context", "param", "first-1,second-2", separator="-"),
                          {"first": "1", "second": "2"})
+
+    def test_reverseKv(self):
+        self.assertEqual(split_kv("context", "param", "first=1,second", unseparated_okay=True,
+                                  default_key="key", reverse_kv=True),
+                         {"1": "first", "second": "key"})
 
 
 class SplitKvCmdTestCase(unittest.TestCase):

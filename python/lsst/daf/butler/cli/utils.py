@@ -231,7 +231,7 @@ def split_commas(context, param, values):
 
 
 def split_kv(context, param, values, choice=None, multiple=True, normalize=False, separator="=",
-             unseparated_okay=False):
+             unseparated_okay=False, return_type=dict, default_key="", reverse_kv=False):
     """Process a tuple of values that are key-value pairs separated by a given
     separator. Multiple pairs may be comma separated. Return a dictionary of
     all the passed-in values.
@@ -252,12 +252,14 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
         which will be treated as delimiters for separate values.
     choice : `click.Choice`, optional
         If provided, verify each value is a valid choice using the provided
-        `click.Choice` instance. If None, no verification will be done.
+        `click.Choice` instance. If None, no verification will be done. By
+        default None
     multiple : `bool`, optional
-        If true, the value may contain multiple comma-separated values.
+        If true, the value may contain multiple comma-separated values. By
+        default True.
     normalize : `bool`, optional
         If True and `choice.case_sensitive == False`, normalize the string the
-        user provided to match the choice's case.
+        user provided to match the choice's case. By default False.
     separator : str, optional
         The character that separates key-value pairs. May not be a comma or an
         empty space (for space separators use Click's default implementation
@@ -265,7 +267,24 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
     unseparated_okay : `bool`, optional
         If True, allow values that do not have a separator. They will be
         returned in the values dict as a tuple of values in the key '', that
-        is: `values[''] = (unseparated_values, )`.
+        is: `values[''] = (unseparated_values, )`. By default False.
+    return_type : `type`, must be `dict` or `tuple`
+        The type of the value that should be returned.
+        If `dict` then the returned object will be a dict, for each item in
+        values, the value to the left of the separator will be the key and the
+        value to the right of the separator will be the value.
+        If `tuple` then the returned object will be a tuple. Each item in the
+        tuple will be 2-item tuple, the first item will be the value to the
+        left of the separator and the second item will be the value to the
+        right. By default `dict`.
+    default_key : `Any`
+        The key to use if a value is passed that is not a key-value pair.
+        (Passing values that are not key-value pairs requires
+        ``unseparated_okay`` to be `True`.)
+    reverse_kv : bool
+        If true then for each item in values, the value to the left of the
+        separator is treated as the value and the value to the right of the
+        separator is treated as the key. By default False.
 
     Returns
     -------
@@ -294,17 +313,50 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
                     return opt
         return val
 
+    class RetDict:
+
+        def __init__(self):
+            self.ret = {}
+
+        def add(self, key, val):
+            if reverse_kv:
+                key, val = val, key
+            if key in self.ret:
+                raise click.ClickException(f"Duplicate entries for '{k}' in '{values}'")
+            self.ret[key] = val
+
+        def get(self):
+            return self.ret
+
+    class RetTuple:
+
+        def __init__(self):
+            self.ret = []
+
+        def add(self, key, val):
+            if reverse_kv:
+                key, val = val, key
+            self.ret.append((key, val))
+
+        def get(self):
+            return tuple(self.ret)
+
     if separator in (",", " "):
         raise RuntimeError(f"'{separator}' is not a supported separator for key-value pairs.")
     vals = values  # preserve the original argument for error reporting below.
+    if return_type is dict:
+        ret = RetDict()
+    elif return_type is tuple:
+        ret = RetTuple()
+    else:
+        raise click.ClickException(f"Internal error: invalid return type '{return_type}' for split_kv.")
     if multiple:
         vals = split_commas(context, param, vals)
-    ret = {}
     for val in iterable(vals):
         if unseparated_okay and separator not in val:
             if choice is not None:
                 choice(val)  # will raise if val is an invalid choice
-            ret[""] = norm(val)
+            ret.add(default_key, norm(val))
         else:
             try:
                 k, v = val.split(separator)
@@ -314,10 +366,8 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
                 raise click.ClickException(
                     f"Could not parse key-value pair '{val}' using separator '{separator}', "
                     f"with multiple values {'allowed' if multiple else 'not allowed'}.")
-            if k in ret:
-                raise click.ClickException(f"Duplicate entries for '{k}' in '{values}'")
-            ret[k] = norm(v)
-    return ret
+            ret.add(k, norm(v))
+    return ret.get()
 
 
 def to_upper(context, param, value):
