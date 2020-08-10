@@ -444,20 +444,11 @@ class FileTemplate:
         if isinstance(ref.dataId, DataCoordinate):
             if ref.dataId.hasRecords():
                 extras = ref.dataId.records.byName()
-            # If there is exactly one SkyPixDimension in the data ID, alias its
-            # value with the key "skypix", so we can use that to match any
-            # skypix dimension.
-            # We restrict this behavior to the (real-world) case where the
-            # data ID is a DataCoordinate, not just a dict.  That should only
-            # not be true in some test code, but that test code is a pain to
-            # update to be more like the real world while still providing our
-            # only tests of important behavior.
-            skypix = [dimension for dimension in ref.datasetType.dimensions
-                      if isinstance(dimension, SkyPixDimension)]
-            if len(skypix) == 1:
-                fields["skypix"] = fields[skypix[0].name]
+            skypix_alias = self._determine_skypix_alias(ref)
+            if skypix_alias is not None:
+                fields["skypix"] = fields[skypix_alias]
                 if extras:
-                    extras["skypix"] = extras[skypix[0].name]
+                    extras["skypix"] = extras[skypix_alias]
 
         datasetType = ref.datasetType
         fields["datasetType"], component = datasetType.nameAndComponent()
@@ -655,3 +646,39 @@ class FileTemplate:
                                               f" {allfields} is not a superset of {minimal}.")
 
         return
+
+    def _determine_skypix_alias(self, entity: Union[DatasetRef, DatasetType]) -> Optional[str]:
+        """Given a `DatasetRef` return the dimension name that refers to a sky
+        pixel.
+
+        Parameters
+        ----------
+        ref : `DatasetRef` or `DatasetType`
+            The entity to examine.
+
+        Returns
+        -------
+        alias : `str`
+            If there is a sky pixelization in the supplied dataId, return
+            its name, else returns `None`.  Will return `None` also if there
+            is more than one sky pix dimension in the data ID or if the
+            dataID is not a `DataCoordinate`
+        """
+        alias = None
+
+        if isinstance(entity, DatasetRef):
+            entity = entity.datasetType
+
+        # If there is exactly one SkyPixDimension in the data ID, alias its
+        # value with the key "skypix", so we can use that to match any
+        # skypix dimension.
+        # We restrict this behavior to the (real-world) case where the
+        # data ID is a DataCoordinate, not just a dict.  That should only
+        # not be true in some test code, but that test code is a pain to
+        # update to be more like the real world while still providing our
+        # only tests of important behavior.
+        skypix = [dimension for dimension in entity.dimensions
+                  if isinstance(dimension, SkyPixDimension)]
+        if len(skypix) == 1:
+            alias = skypix[0].name
+        return alias
