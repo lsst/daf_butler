@@ -634,6 +634,14 @@ class FileTemplate:
             except AttributeError:
                 return
 
+        # Replace specific skypix dimensions with generic one
+        skypix_alias = self._determine_skypix_alias(entity)
+        if skypix_alias is not None:
+            minimal.add("skypix")
+            maximal.add("skypix")
+            minimal.remove(skypix_alias)
+            maximal.remove(skypix_alias)
+
         required = self.fields(optionals=False)
 
         # Calculate any field usage that does not match a dimension
