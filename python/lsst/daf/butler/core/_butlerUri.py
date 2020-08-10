@@ -1177,24 +1177,30 @@ class ButlerHttpURI(ButlerURI):
         """Client object to address remote resource."""
         from .webdavutils import getHttpSession, isWebdavEndpoint
         if isWebdavEndpoint(self):
+            log.debug("%s looks like a Webdav endpoint.", self.geturl())
             return getHttpSession()
+        
+        log.debug("%s looks like a standard HTTP endpoint.", self.geturl())
         return requests.Session()
 
     def exists(self) -> bool:
         """Check that a remote HTTP resource exists."""
+        log.debug("Checking if resource exists: %s", self.geturl())
         r = self.session.head(self.geturl())
+
         return True if r.status_code == 200 else False
 
     def mkdir(self) -> None:
 
         if not self.exists():
+            log.debug("Creating new directory: %s", self.geturl())
             r = self.session.request('MKCOL', self.geturl())
             if r.status_code != 201:
                 raise ValueError(f"Can not create directory {self}, status code: {r.status_code}")
 
     def remove(self) -> None:
         """Remove the resource."""
-
+        log.debug("Removing resource: %s", self.geturl())
         r = self.session.delete(self.geturl())
         if r.status_code not in [200, 202, 204]:
             raise FileNotFoundError(f"Unable to delete resource {self}; status code: {r.status_code}")
@@ -1209,6 +1215,7 @@ class ButlerHttpURI(ButlerURI):
         temporary : `bool`
             Always returns `True`. This is always a temporary file.
         """
+        log.debug("Downloading remote resource as local file: %s", self.geturl())
         r = self.session.get(self.geturl(), stream=True)
         if r.status_code != 200:
             raise FileNotFoundError(f"Unable to download resource {self}; status code: {r.status_code}")
@@ -1218,7 +1225,7 @@ class ButlerHttpURI(ButlerURI):
         return tmpFile.name, True
 
     def read(self, size: int = -1) -> bytes:
-        # Docstring inherits
+        log.debug("Reading from remote resource: %s", self.geturl())
         stream = True if size > 0 else False
         r = self.session.get(self.geturl(), stream=stream)
         if not stream:
@@ -1227,6 +1234,7 @@ class ButlerHttpURI(ButlerURI):
             return next(r.iter_content(chunk_size=size))
 
     def write(self, data: bytes, overwrite: bool = True) -> None:
+        log.debug("Writing to remote resource: %s", self.geturl())
         if not overwrite:
             if self.exists():
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")

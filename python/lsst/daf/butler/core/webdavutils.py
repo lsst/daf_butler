@@ -63,7 +63,7 @@ def getHttpSession() -> requests.Session:
     It must be manually exported according to the system CA directory.
     """
     s = requests.Session()
-    log.debug("Creating new HTTP session")
+    log.debug("Creating new HTTP session...")
 
     try:
         env_auth_method = os.environ['WEBDAV_AUTH_METHOD']
@@ -86,7 +86,7 @@ def getHttpSession() -> requests.Session:
         raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
 
     # s.verify = False
-    log.debug("Session configured and ready to use")
+    log.debug("Session configured and ready.")
 
     return s
 
@@ -98,6 +98,8 @@ def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
         session = getHttpSession()
 
     filepath = getFileURL(path)
+
+    log.debug("Checking if file exists: %s", filepath)
 
     r = session.head(filepath)
     return (True, r.headers['Content-Length']) if r.status_code == 200 else (False, -1)
@@ -111,6 +113,7 @@ def webdavDeleteFile(path: Union[Location, ButlerURI, str],
 
     filepath = getFileURL(path)
 
+    log.debug("Removing file: %s", filepath)
     r = session.delete(filepath)
     if r.status_code not in [200, 202, 204]:
         raise FileNotFoundError(f"Unable to delete resource {filepath}; status code: {r.status_code}")
@@ -137,6 +140,7 @@ def folderExists(path: Union[Location, ButlerURI, str],
 
     filepath = getFileURL(path)
 
+    log.debug("Checking if folder exists: %s", filepath)
     r = session.head(filepath)
     return True if r.status_code == 200 else False
 
@@ -145,6 +149,7 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
 
     filepath = getFileURL(path)
 
+    log.debug("Detecting HTTP endpoint type...")
     r = requests.options(filepath)
     return True if 'DAV' in r.headers else False
 
