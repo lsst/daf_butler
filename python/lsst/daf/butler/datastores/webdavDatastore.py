@@ -144,7 +144,8 @@ class WebdavDatastore(FileLikeDatastore):
                                         "operation error occured. Verify permissions are granted for "
                                         "your user and that file exists. ")
             if errorcode == 404:
-                errmsg = f"Dataset with Id {ref.id} does not exists at expected location {location.uri.geturl()}."
+                errmsg = f"Dataset with Id {ref.id} does not exists at expected location \
+                         {location.uri.geturl()}."
                 raise FileNotFoundError(errmsg)
             raise FileNotFoundError(f"There was an error getting file at {location.uri.geturl()}, \
                                     status code : {errorcode}")
@@ -256,9 +257,11 @@ class WebdavDatastore(FileLikeDatastore):
                     os.remove(srcUri.ospath)
             elif srcUri.scheme.startswith("http"):
                 if transfer == "move":
-                    self.session.request('MOVE', srcUri.geturl(), headers={'Destination': tgtLocation.uri.geturl()})
+                    self.session.request('MOVE', srcUri.geturl(),
+                                        headers={'Destination': tgtLocation.uri.geturl()})
                 else:
-                    self.session.request('COPY', srcUri.geturl(), headers={'Destination': tgtLocation.uri.geturl()})
+                    self.session.request('COPY', srcUri.geturl(),
+                                        headers={'Destination': tgtLocation.uri.geturl()})
 
         exists, size = webdavCheckFileExists(tgtLocation, session=self.session)
 
