@@ -24,10 +24,13 @@
 
 import click
 import unittest
+from unittest.mock import call, MagicMock
+
 
 from lsst.daf.butler.cli import butler
-from lsst.daf.butler.cli.utils import (clickResultMsg, LogCliRunner, Mocker, mockEnvVar, MWArgument, MWOption,
-                                       MWPath, option_section, unwrap)
+from lsst.daf.butler.cli.utils import (clickResultMsg, ForwardOptions, LogCliRunner, Mocker, mockEnvVar,
+                                       MWArgument, MWCommand, MWCtxObj, MWOption, MWOptionDecorator, MWPath,
+                                       option_section, unwrap)
 from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 
 
@@ -321,6 +324,109 @@ class MWPathTest(unittest.TestCase):
                 result = self.runner.invoke(mustNotExistCmd, args)
                 self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
                 self.assertIn('"foo.txt" should not exist.', result.output)
+
+
+class ForwardObjectsTest(unittest.TestCase):
+
+    mock = MagicMock()
+
+    class test_option(MWOptionDecorator):  # noqa: N801
+        """Decorator that adds a a test option to a command."""
+
+        @staticmethod
+        def defaultHelp():
+            return "default help"
+
+        @staticmethod
+        def optionFlags():
+            return ("-t", "--test", "--atest")
+
+        def __call__(self, f):
+            return click.option(*self.optionFlags(), cls=MWOption, forward=self.forward,
+                                help=self.defaultHelp())(f)
+
+    @click.group(chain=True)
+    def cli():
+        pass
+
+    @staticmethod
+    @cli.command(cls=MWCommand)
+    @click.pass_context
+    @test_option(forward=True)
+    def forwards(ctx, **kwargs):
+        """A subcommand that forwards its test_option value to future
+        subcommands."""
+        def processor(objs):
+            newKwargs = objs.update(ctx.command.params, MWCtxObj.getFrom(ctx).args, **kwargs)
+            ForwardObjectsTest.mock("forwards", **newKwargs)
+            return objs
+        return processor
+
+    @staticmethod
+    @cli.command(cls=MWCommand)
+    @click.pass_context
+    @test_option()  # default value of "foward" arg is False
+    def no_forward(ctx, **kwargs):
+        """A subcommand that accepts test_option but does not forward the value
+        to future subcommands."""
+        def processor(objs):
+            newKwargs = objs.update(ctx.command.params, MWCtxObj.getFrom(ctx).args, **kwargs)
+            ForwardObjectsTest.mock("no_forward", **newKwargs)
+            return objs
+        return processor
+
+    @staticmethod
+    @cli.command(cls=MWCommand)
+    @click.pass_context
+    def no_test_option(ctx, **kwargs):
+        """A subcommand that does not accept test_option."""
+        def processor(objs):
+            newKwargs = objs.update(ctx.command.params, MWCtxObj.getFrom(ctx).args, **kwargs)
+            ForwardObjectsTest.mock("no_test_option", **newKwargs)
+            return objs
+        return processor
+
+    @staticmethod
+    @cli.resultcallback()
+    def processCli(processors):
+        """Executes the subcommand 'processor' functions for all the
+        subcommands in the chained command group."""
+        objs = ForwardOptions()
+        for processor in processors:
+            objs = processor(objs)
+
+    def setUp(self):
+        self.runner = click.testing.CliRunner()
+        self.mock.reset_mock()
+
+    def testForward(self):
+        """Test that an option can be forward from one option to another."""
+        result = self.runner.invoke(self.cli, ["forwards", "-t", "foo", "forwards"])
+        print(result.output)
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.mock.assert_has_calls((call("forwards", test="foo"),
+                                    call("forwards", test="foo")))
+
+    def testNoForward(self):
+        """Test that when a subcommand that forwards an option value is called
+        before an option that does not use that option, that the stored option
+        does not get passed to the option that does not use it."""
+        result = self.runner.invoke(self.cli, ["forwards", "-t", "foo", "no-forward"])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.mock.assert_has_calls((call("forwards", test="foo"),
+                                    call("no_forward", test="foo")))
+
+    def testForwardThrough(self):
+        """Test that forwarded option values persist when a subcommand that
+        does not use that value is called between subcommands that do use the
+        value."""
+        result = self.runner.invoke(self.cli, ["forwards", "-t", "foo",
+                                               "no-test-option",
+                                               "forwards"])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.mock.assert_has_calls((call("forwards", test="foo"),
+                                    call("no_test_option"),
+                                    call("forwards", test="foo")))
 
 
 if __name__ == "__main__":

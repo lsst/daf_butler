@@ -23,6 +23,7 @@ import abc
 import click
 import click.testing
 from contextlib import contextmanager
+import copy
 import enum
 import io
 import os
@@ -518,6 +519,12 @@ class MWPath(click.Path):
 class MWOption(click.Option):
     """Overrides click.Option with desired behaviors."""
 
+    def __init__(self, *args, **kwargs):
+        # `forward` indicates weather a subcommand should forward the value of
+        # this option to the next subcommand or not.
+        self.forward = kwargs.pop("forward", False)
+        super().__init__(*args, **kwargs)
+
     def make_metavar(self):
         """Overrides `click.Option.make_metavar`. Makes the metavar for the
         help menu. Adds a space and an elipsis after the metavar name if
@@ -528,6 +535,10 @@ class MWOption(click.Option):
         nargs is 1. And when nargs does not equal 1 click adds an elipsis
         without a space between the metavar and the elipsis, but we prefer a
         space between.
+
+        Does not get called for some option types (e.g. flag) so metavar
+        transformation that must apply to all types should be applied in
+        get_help_record.
         """
         metavar = super().make_metavar()
         if self.multiple and self.nargs == 1:
@@ -535,6 +546,15 @@ class MWOption(click.Option):
         elif self.nargs != 1:
             metavar = f"{metavar[:-3]} ..."
         return metavar
+
+    def get_help_record(self, ctx):
+        """Overrides `click.Option.get_help_record`. Adds "(f)" to this
+        option's metavar text if its associated subcommand forwards this option
+        value to the next subcommand."""
+        rv = super().get_help_record(ctx)
+        if self.forward:
+            rv = (rv[0] + " (f)",) + rv[1:]
+        return rv
 
 
 class MWArgument(click.Argument):
@@ -597,6 +617,9 @@ class MWOptionDecorator(abc.ABC):
     _name = None
     _opts = None
 
+    def __init__(self, forward=False):
+        self.forward = forward
+
     @staticmethod
     @abc.abstractmethod
     def defaultHelp():
@@ -650,3 +673,157 @@ class MWOptionDecorator(abc.ABC):
             if ret is None and opt.startswith("-"):
                 ret = opt
         return ret
+
+
+class MWCommand(click.Command):
+    """Command subclass that stores a copy of the args list for use by the
+    command."""
+
+    def parse_args(self, ctx, args):
+        MWCtxObj.getFrom(ctx).args = copy.copy(args)
+        super().parse_args(ctx, args)
+
+
+class MWCtxObj():
+    """Helper object for managing the `click.Context.obj` parameter, allows
+    obj data to be managed in a consistent way.
+
+    `Context.obj` defaults to None. `MWCtxObj.getFrom(ctx)` can be used to
+    initialize the obj if needed and return a new or existing MWCtxObj.
+
+    Attributes
+    ----------
+    args : `list` [`str`]
+        The list of arguments (argument values, option flags, and option
+        values), split using whitespace, that were passed in on the command
+        line for the subcommand represented by the parent context object.
+    """
+
+    def __init__(self):
+
+        self.args = None
+
+    @staticmethod
+    def getFrom(ctx):
+        """If needed, initialize `ctx.obj` with a new MWCtxObj, and return the
+        new or already existing MWCtxObj."""
+        if ctx.obj is not None:
+            return ctx.obj
+        ctx.obj = MWCtxObj()
+        return ctx.obj
+
+
+class ForwardOptions:
+    """Captures CLI options to be forwarded from one subcommand to future
+    subcommands executed as part of a single CLI command invocation
+    (called "chained commands").
+
+    Attributes
+    ----------
+    functionKwargs : `dict` [`str`, `str`]
+        The cached kwargs (argument name and argument value) from subcommands
+        that were called with values passed in as options on the command line.
+    """
+
+    def __init__(self):
+        self.functionKwargs = {}
+
+    @staticmethod
+    def _getKwargsToSave(mwOptions, arguments, **kwargs):
+        """Get kwargs that should be cached for use by subcommands invoked in
+        the future.
+
+        Parameters
+        ----------
+        mwOptions : `list` or `tuple` [`MWOption`]
+            The options supported by the current command. For each option, its
+            kwarg will be cached if the option's `forward` parameter is `True`.
+        arguments : `list` [`str`]
+            The arguments that were passed in on the command line for the
+            current subcommand, split on whitespace into a list of arguments,
+            option flags, and option values.
+
+        Returns
+        -------
+        `dict` [`str`, `str`]
+            The kwargs that should be cached.
+        """
+        saveableOptions = [opt for opt in mwOptions if opt.forward]
+        argumentSet = set(arguments)
+        passedOptions = [opt for opt in saveableOptions if set(opt.opts).intersection(argumentSet)]
+        return {opt.name: kwargs[opt.name] for opt in passedOptions}
+
+    def _getKwargsToUse(self, mwOptions, arguments, **kwargs):
+        """Get kwargs that should be used by the current subcommand.
+
+        Parameters
+        ----------
+        mwOptions : `list` or `tuple` [`MWOption`]
+            The options supported by the current subcommand.
+        arguments : `list` [`str`]
+            The arguments that were passed in on the command line for the
+            current subcommand, split on whitespace into a list of arguments,
+            option flags, and option values.
+
+        Returns
+        -------
+        `dict` [`str`, `str`]
+            kwargs that add the cached kwargs accepted by the current command
+            to the kwargs that were provided by CLI arguments. When a kwarg is
+            present in both places, the CLI argument kwarg value is used.
+        """
+        argumentSet = set(arguments)
+        # get the cached value for options that were not passed in as CLI
+        # arguments:
+        cachedValues = {opt.name: self.functionKwargs[opt.name] for opt in mwOptions
+                        if not set(opt.opts).intersection(argumentSet) and opt.name in self.functionKwargs}
+        updatedKwargs = copy.copy(kwargs)
+        updatedKwargs.update(cachedValues)
+        return updatedKwargs
+
+    def _save(self, mwOptions, arguments, **kwargs):
+        """Save the current forwardable CLI options.
+
+        Parameters
+        ----------
+        mwOptions : `list` or `tuple` [`MWOption`]
+            The options, which are accepted by the current command, that may be
+            saved.
+        arguments : `list` [`str`]
+            The arguments that were passed in on the command line for the
+            current subcommand, split on whitespace into a list of arguments,
+            option flags, and option values.
+        kwargs : `dict` [`str`, `str`]
+            Arguments that were passed into a command function. Indicated
+            option arguments will be extracted and cached.
+        """
+        self.functionKwargs.update(self._getKwargsToSave(mwOptions, arguments, **kwargs))
+
+    def update(self, mwOptions, arguments, **kwargs):
+        """Update what options are forwarded, drop non-forwarded options, and
+        update cached kwargs with new values in kwargs, and returns a new dict
+        that adds cached kwargs to the passed-in kwargs.
+
+        Parameters
+        ----------
+        mwOptions : `list` or `tuple` [`MWOption`]
+            The options that will be forwarded.
+        arguments : `list` [`str`]
+            The arguments that were passed in on the command line for the
+            current subcommand, split on whitespace into a list of arguments,
+            option flags, and option values.
+        kwargs : `dict` [`str`, `str`]
+            Arguments that were passed into a command function. A new dict will
+            be created and returned that adds cached kwargs to the passed-in
+            non-default-value kwargs.
+
+        Returns
+        -------
+        kwargs : dict [`str`, `str`]
+            kwargs that add the cached kwargs accepted by the current command
+            to the kwargs that were provided by CLI arguments. When a kwarg is
+            present in both places, the CLI argument kwarg value is used.
+        """
+        kwargsToUse = self._getKwargsToUse(mwOptions, arguments, **kwargs)
+        self._save(mwOptions, arguments, **kwargs)
+        return kwargsToUse
