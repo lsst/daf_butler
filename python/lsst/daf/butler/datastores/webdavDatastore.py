@@ -93,6 +93,7 @@ class WebdavDatastore(FileLikeDatastore):
     def __init__(self, config: Union[DatastoreConfig, str],
                  bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         super().__init__(config, bridgeManager, butlerRoot)
+        self.root = ButlerURI(butlerRoot)
         self.session = getHttpSession()
         if not folderExists(self.root, session=self.session):
             try:
@@ -126,7 +127,7 @@ class WebdavDatastore(FileLikeDatastore):
         location : `Location`
             Location of the artifact associated with this datastore.
         """
-        r = self.session.delete(location.uri)
+        r = self.session.delete(location.uri.geturl())
         if r.status_code not in [200, 202, 204]:
             raise FileNotFoundError(f"Unable to delete resource {self}; status code: {r.status_code}")
 
@@ -134,7 +135,7 @@ class WebdavDatastore(FileLikeDatastore):
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
         location = getInfo.location
 
-        response = self.session.get(location.uri)
+        response = self.session.get(location.uri.geturl())
         if response.status_code != 200:
             errorcode = response.status_code
             if errorcode == 403:
@@ -143,12 +144,12 @@ class WebdavDatastore(FileLikeDatastore):
                                         "operation error occured. Verify permissions are granted for "
                                         "your user and that file exists. ")
             if errorcode == 404:
-                errmsg = f"Dataset with Id {ref.id} does not exists at expected location {location.uri}."
+                errmsg = f"Dataset with Id {ref.id} does not exists at expected location {location.uri.geturl()}."
                 raise FileNotFoundError(errmsg)
-            raise FileNotFoundError(f"There was an error getting file at {location.uri}, \
+            raise FileNotFoundError(f"There was an error getting file at {location.uri.geturl()}, \
                                     status code : {errorcode}")
 
-        log.debug("Successful read on file %s", location.uri)
+        log.debug("Successful read on file %s", location.uri.geturl())
         storedFileInfo = getInfo.info
         if len(response.content) != storedFileInfo.file_size:
             raise RuntimeError("Integrity failure in Datastore. Size of file {} ({}) does not"
@@ -186,14 +187,14 @@ class WebdavDatastore(FileLikeDatastore):
 
         try:
             serializedDataset = formatter.toBytes(inMemoryDataset)
-            self.session.put(location.uri, data=serializedDataset)
+            self.session.put(location.uri.geturl(), data=serializedDataset)
             log.debug("Wrote file directly to %s", location.uri)
         except NotImplementedError:
             with tempfile.NamedTemporaryFile(suffix=location.getExtension()) as tmpFile:
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
                 formatter.write(inMemoryDataset)
                 with open(tmpFile.name, 'rb') as f:
-                    self.session.put(location.uri, data=f)
+                    self.session.put(location.uri.geturl(), data=f)
                 log.debug("Wrote file to %s via a temporary directory.", location.uri)
 
         if self._transaction is None:
@@ -201,7 +202,7 @@ class WebdavDatastore(FileLikeDatastore):
 
         self._transaction.registerUndo("write", webdavDeleteFile, location)
 
-        return self._extractIngestInfo(location.uri, ref, formatter=formatter)
+        return self._extractIngestInfo(location.uri.geturl(), ref, formatter=formatter)
 
     def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> Optional[str]:
         if transfer != "auto":
@@ -250,14 +251,14 @@ class WebdavDatastore(FileLikeDatastore):
             if srcUri.scheme == "file":
                 # source is on local disk.
                 with open(srcUri.ospath, 'rb') as f:
-                    self.session.put(tgtLocation.uri, data=f)
+                    self.session.put(tgtLocation.uri.geturl(), data=f)
                 if transfer == "move":
                     os.remove(srcUri.ospath)
             elif srcUri.scheme.startswith("http"):
                 if transfer == "move":
-                    self.session.request('MOVE', srcUri.geturl(), headers={'Destination': tgtLocation.uri})
+                    self.session.request('MOVE', srcUri.geturl(), headers={'Destination': tgtLocation.uri.geturl()})
                 else:
-                    self.session.request('COPY', srcUri.geturl(), headers={'Destination': tgtLocation.uri})
+                    self.session.request('COPY', srcUri.geturl(), headers={'Destination': tgtLocation.uri.geturl()})
 
         exists, size = webdavCheckFileExists(tgtLocation, session=self.session)
 

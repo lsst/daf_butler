@@ -81,7 +81,7 @@ def getHttpSession() -> requests.Session:
             bearer_token = os.environ['WEBDAV_BEARER_TOKEN']
         except KeyError:
             raise KeyError("Environment variable WEBDAV_BEARER_TOKEN is not set")
-        s.headers = {'Authorization': 'Bearer ' + bearer_token}
+        s.headers = CaseInsensitiveDict({'Authorization': 'Bearer ' + bearer_token})
     else:
         raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
 
@@ -102,7 +102,7 @@ def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
     log.debug("Checking if file exists: %s", filepath)
 
     r = session.head(filepath)
-    return (True, r.headers['Content-Length']) if r.status_code == 200 else (False, -1)
+    return (True, int(r.headers['Content-Length'])) if r.status_code == 200 else (False, -1)
 
 
 def webdavDeleteFile(path: Union[Location, ButlerURI, str],
