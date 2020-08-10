@@ -234,7 +234,7 @@ class WebdavDatastore(FileLikeDatastore):
                     raise RuntimeError(f"'{srcUri}' is not inside repository root '{rootUri}'.")
         return path
 
-    def _extractIngestInfo(self, path: str, ref: DatasetRef, *,
+    def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
                            formatter: Union[Formatter, Type[Formatter]],
                            transfer: Optional[str] = None) -> StoredFileInfo:
         srcUri = ButlerURI(path)
@@ -258,10 +258,10 @@ class WebdavDatastore(FileLikeDatastore):
             elif srcUri.scheme.startswith("http"):
                 if transfer == "move":
                     self.session.request('MOVE', srcUri.geturl(),
-                                        headers={'Destination': tgtLocation.uri.geturl()})
+                                         headers={'Destination': tgtLocation.uri.geturl()})
                 else:
                     self.session.request('COPY', srcUri.geturl(),
-                                        headers={'Destination': tgtLocation.uri.geturl()})
+                                         headers={'Destination': tgtLocation.uri.geturl()})
 
         exists, size = webdavCheckFileExists(tgtLocation, session=self.session)
 
