@@ -27,6 +27,7 @@ __all__ = ("getHttpSession", "isWebdavEndpoint", "webdavCheckFileExists",
 import os
 import requests
 import logging
+from requests.structures import CaseInsensitiveDict
 
 from typing import (
     Optional,

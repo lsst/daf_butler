@@ -93,11 +93,11 @@ class WebdavDatastore(FileLikeDatastore):
     def __init__(self, config: Union[DatastoreConfig, str],
                  bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         super().__init__(config, bridgeManager, butlerRoot)
-        self.root = ButlerURI(butlerRoot)
+        b = ButlerURI(self.root)
         self.session = getHttpSession()
         if not folderExists(self.root, session=self.session):
             try:
-                self.root.mkdir()
+                b.mkdir()
             except ValueError:
                 raise ValueError(f"Can not create directory {self.root}, check permissions.")
 
