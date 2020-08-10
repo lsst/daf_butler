@@ -45,11 +45,12 @@ from .config import Config
 from .configSupport import processLookupConfigs, LookupKey
 from .exceptions import ValidationError
 from .dimensions import SkyPixDimension, DataCoordinate
+from .datasets import DatasetRef
+from .storageClass import StorageClass
 
 if TYPE_CHECKING:
     from .dimensions import DimensionUniverse
-    from .datasets import DatasetType, DatasetRef
-    from .storageClass import StorageClass
+    from .datasets import DatasetType
 
 log = logging.getLogger(__name__)
 
@@ -602,6 +603,10 @@ class FileTemplate:
         if not hasattr(entity, "dimensions"):
             return
 
+        # Mypy does not know about hasattr so help it out
+        if entity is None:
+            return
+
         # if this entity represents a component then insist that component
         # is present in the template. If the entity is not a component
         # make sure that component is not mandatory.
@@ -620,14 +625,17 @@ class FileTemplate:
         except AttributeError:
             pass
 
+        # From here on we need at least a DatasetType
+        # Mypy doesn't understand the AttributeError clause below
+        if isinstance(entity, StorageClass):
+            return
+
         # Get the dimension links to get the full set of available field names
         # Fall back to dataId keys if we have them but no links.
         # dataId keys must still be present in the template
-        # Ignore warnings from mypy concerning StorageClass and DatasetType
-        # not supporting the full API.
         try:
-            minimal = set(entity.dimensions.required.names)  # type: ignore
-            maximal = set(entity.dimensions.names)  # type: ignore
+            minimal = set(entity.dimensions.required.names)
+            maximal = set(entity.dimensions.names)
         except AttributeError:
             try:
                 minimal = set(entity.dataId.keys())  # type: ignore
