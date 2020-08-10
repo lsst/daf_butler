@@ -59,7 +59,7 @@ def getHttpSession() -> requests.Session:
     TOKEN: must set WEBDAV_BEARER_TOKEN
     (bearer token used to authenticate requests, as a single string)
 
-    NB: requests will read CA certificates in the REQUESTS_CA_BUNDLE env variable.
+    NB: requests will read CA certificates in REQUESTS_CA_BUNDLE
     It must be manually exported according to the system CA directory.
     """
     s = requests.Session()

@@ -1179,7 +1179,7 @@ class ButlerHttpURI(ButlerURI):
         if isWebdavEndpoint(self):
             log.debug("%s looks like a Webdav endpoint.", self.geturl())
             return getHttpSession()
-        
+
         log.debug("%s looks like a standard HTTP endpoint.", self.geturl())
         return requests.Session()
 
