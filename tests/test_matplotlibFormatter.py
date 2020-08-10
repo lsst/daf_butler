@@ -70,13 +70,14 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
                        ])
         ref = butler.put(pyplot.gcf(), datasetType)
         uri = butler.getURI(ref)
-        # The test after this will not work if we don't have local file
-        self.assertEqual(uri.scheme, "file", "Testing returned URI: {uri}")
+
+        # Following test needs a local file
+        local = uri.as_local()[0]
         with tempfile.NamedTemporaryFile(suffix=".png") as file:
             pyplot.gcf().savefig(file.name)
             self.assertTrue(
                 filecmp.cmp(
-                    uri.path,
+                    local,
                     file.name,
                     shallow=True
                 )

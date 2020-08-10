@@ -8,7 +8,7 @@ Querying datasets
 =================
 
 Datasets in a butler-managed data repository are identified by the combination of their *dataset type* and *data ID* within a *collection*.
-The `Registry` class's query methods (`~Registry.queryDatasetTypes`, `~Registry.queryCollections`, `~Registry.queryDimensions`, and `~Registry.queryDatasets`) allow these to be specified either fully or partially in various ways.
+The `Registry` class's query methods (`~Registry.queryDatasetTypes`, `~Registry.queryCollections`, `~Registry.queryDataIds`, and `~Registry.queryDatasets`) allow these to be specified either fully or partially in various ways.
 
 .. _daf_butler_dataset_type_expressions:
 
@@ -80,7 +80,7 @@ The grammar is based on standard SQL; it is a subset of SQL expression language 
 Expression structure
 ^^^^^^^^^^^^^^^^^^^^
 
-The expression is passed as a string via the ``where`` arguments of `~Registry.queryDimensions` and `~Registry.queryDatasets`.
+The expression is passed as a string via the ``where`` arguments of `~Registry.queryDataIds` and `~Registry.queryDatasets`.
 The string contains a single boolean expression which evaluates to true or
 false (if it is a valid expression). Expression can contain a bunch of
 standard logical operators, comparisons, literals, and identifiers which are

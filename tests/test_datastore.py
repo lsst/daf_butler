@@ -584,9 +584,9 @@ class DatastoreTests(DatastoreTestsBase):
 
                     uri = datastore.getURI(ref)
                     self.assertTrue(not uri.scheme or uri.scheme == "file", f"Check {uri.scheme}")
-                    self.assertTrue(os.path.islink(uri.path))
+                    self.assertTrue(os.path.islink(uri.ospath), f"Check {uri} is a symlink")
 
-                    linkTarget = os.readlink(uri.path)
+                    linkTarget = os.readlink(uri.ospath)
                     if mode == "relsymlink":
                         self.assertFalse(os.path.isabs(linkTarget))
                     else:
@@ -672,9 +672,8 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
         expectedUri = datastore.getURI(ref, predict=True)
         self.assertEqual(expectedUri.fragment, "predicted")
 
-        expectedFile = expectedUri.path
-        self.assertTrue(expectedFile.endswith(".yaml"),
-                        f"Is there a file extension in {expectedUri}")
+        self.assertEqual(expectedUri.getExtension(), ".yaml",
+                         f"Is there a file extension in {expectedUri}")
 
         # Try formatter that fails and formatter that fails and leaves
         # a file behind
@@ -690,19 +689,20 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
                     datastore.put(metrics, ref)
 
                 # Check that there is no file on disk
-                self.assertFalse(os.path.exists(expectedFile), f"Check for existence of {expectedFile}")
+                self.assertFalse(expectedUri.exists(), f"Check for existence of {expectedUri}")
 
                 # Check that there is a directory
-                self.assertTrue(os.path.exists(os.path.dirname(expectedFile)),
-                                f"Check for existence of directory {os.path.dirname(expectedFile)}")
+                dir = expectedUri.dirname()
+                self.assertTrue(dir.exists(),
+                                f"Check for existence of directory {dir}")
 
         # Force YamlFormatter and check that this time a file is written
         datastore.formatterFactory.registerFormatter(ref.datasetType, YamlFormatter,
                                                      overwrite=True)
         datastore.put(metrics, ref)
-        self.assertTrue(os.path.exists(expectedFile), f"Check for existence of {expectedFile}")
+        self.assertTrue(expectedUri.exists(), f"Check for existence of {expectedUri}")
         datastore.remove(ref)
-        self.assertFalse(os.path.exists(expectedFile), f"Check for existence of now removed {expectedFile}")
+        self.assertFalse(expectedUri.exists(), f"Check for existence of now removed {expectedUri}")
 
 
 class InMemoryDatastoreTestCase(DatastoreTests, unittest.TestCase):

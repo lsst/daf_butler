@@ -22,28 +22,29 @@
 from __future__ import annotations
 
 __all__ = [
-    "ButlerVersionsManager", "IncompatibleVersionError", "MissingVersionError"
+    "ButlerVersionsManager",
+    "IncompatibleVersionError",
+    "MissingVersionError",
+    "MissingManagerError",
+    "ManagerMismatchError",
+    "DigestMismatchError",
 ]
 
-import hashlib
 import logging
 from typing import (
-    TYPE_CHECKING,
-    Iterable,
-    List,
+    Any,
     Mapping,
     MutableMapping,
-    NamedTuple,
     Optional,
+    TYPE_CHECKING,
 )
 
-import sqlalchemy
+from .interfaces import VersionTuple, VersionedExtension
 
 if TYPE_CHECKING:
     from .interfaces import (
         ButlerAttributeManager,
     )
-    from ..core import Config
 
 
 _LOG = logging.getLogger(__name__)
@@ -63,50 +64,23 @@ class IncompatibleVersionError(RuntimeError):
     pass
 
 
-class VersionTuple(NamedTuple):
-    """Class representing a version number.
-
-    Parameters
-    ----------
-    major, minor, patch : `int`
-        Version number componenets
+class MissingManagerError(RuntimeError):
+    """Exception raised when manager name is missing from registry.
     """
-    major: int
-    minor: int
-    patch: int
+    pass
 
-    @classmethod
-    def fromString(cls, versionStr: str) -> VersionTuple:
-        """Extract version number from a string.
 
-        Parameters
-        ----------
-        versionStr : `str`
-            Version number in string form "X.Y.Z", all componenets must be
-            present.
+class ManagerMismatchError(RuntimeError):
+    """Exception raised when configured manager name does not match name
+    stored in the database.
+    """
+    pass
 
-        Returns
-        -------
-        version : `VersionTuple`
-            Parsed version tuple.
 
-        Raises
-        ------
-        ValueError
-            Raised if string has an invalid format.
-        """
-        try:
-            version = tuple(int(v) for v in versionStr.split("."))
-        except ValueError as exc:
-            raise ValueError(f"Invalid version  string '{versionStr}'") from exc
-        if len(version) != 3:
-            raise ValueError(f"Invalid version  string '{versionStr}', must consist of three numbers")
-        return cls(*version)
-
-    def __str__(self) -> str:
-        """Transform version tuple into a canonical string form.
-        """
-        return f"{self.major}.{self.minor}.{self.patch}"
+class DigestMismatchError(RuntimeError):
+    """Exception raised when schema digest is not equal to stored digest.
+    """
+    pass
 
 
 class VersionInfo:
@@ -138,37 +112,72 @@ class ButlerVersionsManager:
 
     Parameters
     ----------
-    versions : `dict` [`str`, `VersionInfo`]
-        Mapping of the group name to corresponding schema version and digest.
-        Group represents a piece of overall database schema, group names are
-        typically defined by configuration.
+    attributes : `ButlerAttributeManager`
+        Attribute manager instance.
+    managers : `dict` [`str`, `VersionedExtension`]
+        Mapping of extension type as defined in configuration (e.g.
+        "collections") to corresponding instance of manager.
     """
-    def __init__(self, versions: Mapping[str, VersionInfo]):
-        self._versions = versions
-        self._tablesGroups: MutableMapping[str, List[sqlalchemy.schema.Table]] = {}
+    def __init__(self, attributes: ButlerAttributeManager,
+                 managers: Mapping[str, Any]):
+        self._attributes = attributes
+        self._managers: MutableMapping[str, VersionedExtension] = {}
+        # we only care about managers implementing VersionedExtension interface
+        for name, manager in managers.items():
+            if isinstance(manager, VersionedExtension):
+                self._managers[name] = manager
+            else:
+                # All regular managers need to support versioning mechanism.
+                _LOG.warning("extension %r does not implement VersionedExtension", name)
+        self._emptyFlag: Optional[bool] = None
 
     @classmethod
-    def fromConfig(cls, schemaVersionConfig: Optional[Config]) -> ButlerVersionsManager:
-        """Make `ButlerVersionsManager` instance based on configuration.
+    def _managerConfigKey(cls, name: str) -> str:
+        """Return key used to store manager config.
 
         Parameters
         ----------
-        schemaVersionConfig : `Config` or `None`
-            Configuration object describing schema versions, typically
-            "schema_versions" sub-object of registry configuration.
+        name : `str`
+            Name of the namager type, e.g. "dimensions"
 
         Returns
         -------
-        manager : `ButlerVersionsManager`
-            New instance of the versions manager.
+        key : `str`
+            Name of the key in attributes table.
         """
-        versions = {}
-        if schemaVersionConfig:
-            for key, vdict in schemaVersionConfig.items():
-                version = VersionTuple.fromString(vdict["version"])
-                digest = vdict.get("digest")
-                versions[key] = VersionInfo(version, digest)
-        return cls(versions)
+        return f"config:registry.managers.{name}"
+
+    @classmethod
+    def _managerVersionKey(cls, extension: VersionedExtension) -> str:
+        """Return key used to store manager version.
+
+        Parameters
+        ----------
+        extension : `VersionedExtension`
+            Instance of the extension.
+
+        Returns
+        -------
+        key : `str`
+            Name of the key in attributes table.
+        """
+        return "version:" + extension.extensionName()
+
+    @classmethod
+    def _managerDigestKey(cls, extension: VersionedExtension) -> str:
+        """Return key used to store manager schema digest.
+
+        Parameters
+        ----------
+        extension : `VersionedExtension`
+            Instance of the extension.
+
+        Returns
+        -------
+        key : `str`
+            Name of the key in attributes table.
+        """
+        return "schema_digest:" + extension.extensionName()
 
     @staticmethod
     def checkCompatibility(old_version: VersionTuple, new_version: VersionTuple, update: bool) -> bool:
@@ -193,117 +202,103 @@ class ButlerVersionsManager:
         # patch difference does not matter
         return True
 
-    @staticmethod
-    def schemaDigest(tables: Iterable[sqlalchemy.schema.Table]) -> str:
-        """Calculate digest for a schema.
+    def storeManagersConfig(self) -> None:
+        """Store configured extension names in attributes table.
 
-        Parameters
-        ----------
-        tables : iterable [`sqlalchemy.schema.Table`]
-            Set of tables comprising the schema.
-
-        Returns
-        -------
-        digest : `str`
-            String representation of the digest of the schema.
-
-        Notes
-        -----
-        It is not specified what kind of implementation is used to calculate
-        digest string. The only requirement for that is that result should be
-        stable over time as this digest string will be stored in the
-        configuration and probably in the database too. It should detect (by
-        producing different digests) sensible changes to the schema, but it
-        also should be stable w.r.t. changes that do not actually change the
-        schema (e.g. change in the order of columns or keys.) Current
-        implementation is likely incomplete in that it does not detect all
-        possible changes (e.g. some constraints may not be included into
-        total digest). Digest checking is optional and can be disabled in
-        configuration if configured digest is an empty string, we should delay
-        activating that check until we have a stable implementation for this
-        method.
+        For each extension we store a record with the key
+        "config:registry.managers.{name}" and fully qualified class name as a
+        value.
         """
+        for name, extension in self._managers.items():
+            key = self._managerConfigKey(name)
+            value = extension.extensionName()
+            self._attributes.set(key, value)
+            _LOG.debug("saved manager config %s=%s", key, value)
+        self._emptyFlag = False
 
-        def tableSchemaRepr(table: sqlalchemy.schema.Table) -> str:
-            """Make string representation of a single table schema.
-            """
-            tableSchemaRepr = [table.name]
-            schemaReps = []
-            for column in table.columns:
-                columnRep = f"COL,{column.name},{column.type}"
-                if column.primary_key:
-                    columnRep += ",PK"
-                if column.nullable:
-                    columnRep += ",NULL"
-                schemaReps += [columnRep]
-            for fkConstr in table.foreign_key_constraints:
-                fkRep = f"FK,{fkConstr.name}"
-                for fk in fkConstr.elements:
-                    fkRep += f"{fk.column.name}->{fk.target_fullname}"
-                schemaReps += [fkRep]
-            schemaReps.sort()
-            tableSchemaRepr += schemaReps
-            return ";".join(tableSchemaRepr)
+    def storeManagersVersions(self) -> None:
+        """Store current manager versions in registry arttributes.
 
-        md5 = hashlib.md5()
-        tableSchemas = sorted(tableSchemaRepr(table) for table in tables)
-        for tableRepr in tableSchemas:
-            md5.update(tableRepr.encode())
-        digest = md5.hexdigest()
-        return digest
+        For each extension we store two records:
 
-    def addTable(self, group: str, table: sqlalchemy.schema.Table) -> None:
-        """Add a table to specified schema group.
-
-        Table schema added to a group will be used when calculating digest
-        for that group.
-
-        Parameters
-        ----------
-        group : `str`
-            Schema group name, e.g. "core", or " dimensions".
-        table : `sqlalchemy.schema.Table`
-            Table schema.
+            - record with the key "version:{fullExtensionName}" and version
+              number in its string format as a value,
+            - record with the key "schema_digest:{fullExtensionName}" and
+              schema digest as a value.
         """
-        self._tablesGroups.setdefault(group, []).append(table)
+        for extension in self._managers.values():
 
-    def storeVersions(self, attributes: ButlerAttributeManager) -> None:
-        """Store configured schema versions in registry arttributes.
+            version = extension.currentVersion()
+            if version:
+                key = self._managerVersionKey(extension)
+                value = str(version)
+                self._attributes.set(key, value)
+                _LOG.debug("saved manager version %s=%s", key, value)
 
-        Parameters
-        ----------
-        attributes : `ButlerAttributeManager`
-            Attribute manager instance.
+            digest = extension.schemaDigest()
+            if digest is not None:
+                key = self._managerDigestKey(extension)
+                self._attributes.set(key, digest)
+                _LOG.debug("saved manager schema digest %s=%s", key, digest)
+
+        self._emptyFlag = False
+
+    @property
+    def _attributesEmpty(self) -> bool:
+        """True if attributes table is empty.
         """
-        for key, vInfo in self._versions.items():
-            # attribute name reflects configuration path in "registry" config
-            attributes.set(f"schema_versions.{key}.version", str(vInfo.version))
-            # TODO: we could also store digest in the database but I'm not
-            # sure that digest calculation is stable enough at this point.
+        # There are existing repositories where attributes table was not
+        # filled, we don't want to force schema migration in this case yet
+        # (and we don't have tools) so we allow this as valid use case and
+        # skip all checks but print a warning.
+        if self._emptyFlag is None:
+            self._emptyFlag = self._attributes.empty()
+            if self._emptyFlag:
+                _LOG.warning("Attributes table is empty, schema may need an upgrade.")
+        return self._emptyFlag
 
-    def checkVersionDigests(self) -> None:
-        """Compare current schema digest to a configured digest.
+    def checkManagersConfig(self) -> None:
+        """Compare configured manager names with stored in database.
 
-        It calculates digest to all schema groups using tables added to each
-        group with `addTable` method. If digest is different from a configured
-        digest for the same group it generates logging warning message.
+        Raises
+        ------
+        ManagerMismatchError
+            Raised if manager names are different.
+        MissingManagerError
+            Raised if database has no stored manager name.
         """
-        for group, tables in self._tablesGroups.items():
-            if group in self._versions:
-                configDigest = self._versions[group].digest
-                if configDigest:
-                    digest = self.schemaDigest(tables)
-                    if digest != configDigest:
-                        _LOG.warning("Digest mismatch for %s schema. Configured digest: '%s', "
-                                     "actual digest '%s'.", group, configDigest, digest)
+        if self._attributesEmpty:
+            return
 
-    def checkStoredVersions(self, attributes: ButlerAttributeManager, writeable: bool) -> None:
+        missing = []
+        mismatch = []
+        for name, extension in self._managers.items():
+            key = self._managerConfigKey(name)
+            storedMgr = self._attributes.get(key)
+            _LOG.debug("found manager config %s=%s", key, storedMgr)
+            if storedMgr is None:
+                missing.append(name)
+                continue
+            if extension.extensionName() != storedMgr:
+                mismatch.append(
+                    f"{name}: configured {extension.extensionName()}, stored: {storedMgr}"
+                )
+        if missing:
+            raise MissingManagerError(
+                "Cannot find stored configuration for managers: "
+                + ", ".join(missing)
+            )
+        if mismatch:
+            raise ManagerMismatchError(
+                "Configured managers do not match registry-stored names:\n"
+                + "\n".join(missing)
+            )
+
+    def checkManagersVersions(self, writeable: bool) -> None:
         """Compare configured versions with the versions stored in database.
 
         Parameters
         ----------
-        attributes : `ButlerAttributeManager`
-            Attribute manager instance.
         writeable : `bool`
             If ``True`` then read-write access needs to be checked.
 
@@ -314,13 +309,43 @@ class ButlerVersionsManager:
         MissingVersionError
             Raised if database has no stored version for one or more groups.
         """
-        for key, vInfo in self._versions.items():
-            storedVersionStr = attributes.get(f"schema_versions.{key}.version")
-            if storedVersionStr is None:
-                raise MissingVersionError(f"Failed to read version number for group {key}")
-            storedVersion = VersionTuple.fromString(storedVersionStr)
-            if not self.checkCompatibility(storedVersion, vInfo.version, writeable):
-                raise IncompatibleVersionError(
-                    f"Configured version {vInfo.version} is not compatible with stored version "
-                    f"{storedVersion} for group {key}"
-                )
+        if self._attributesEmpty:
+            return
+
+        for extension in self._managers.values():
+            version = extension.currentVersion()
+            if version:
+                key = self._managerVersionKey(extension)
+                storedVersionStr = self._attributes.get(key)
+                _LOG.debug("found manager version %s=%s, current version %s", key, storedVersionStr, version)
+                if storedVersionStr is None:
+                    raise MissingVersionError(f"Failed to read version number {key}")
+                storedVersion = VersionTuple.fromString(storedVersionStr)
+                if not self.checkCompatibility(storedVersion, version, writeable):
+                    raise IncompatibleVersionError(
+                        f"Configured version {version} is not compatible with stored version "
+                        f"{storedVersion} for extension {extension.extensionName()}"
+                    )
+
+    def checkManagersDigests(self) -> None:
+        """Compare current schema digests with digests stored in database.
+
+        Raises
+        ------
+        DigestMismatchError
+            Raised if digests are not equal.
+        """
+        if self._attributesEmpty:
+            return
+
+        for extension in self._managers.values():
+            digest = extension.schemaDigest()
+            if digest is not None:
+                key = self._managerDigestKey(extension)
+                storedDigest = self._attributes.get(key)
+                _LOG.debug("found manager schema digest %s=%s, current digest %s", key, storedDigest, digest)
+                if storedDigest != digest:
+                    raise DigestMismatchError(
+                        f"Current schema digest '{digest}' is not the same as stored digest "
+                        f"'{storedDigest}' for extension {extension.extensionName()}"
+                    )

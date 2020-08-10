@@ -115,8 +115,11 @@ class DatastoreFileGetInformation:
     info: StoredFileInfo
     """Stored information about this file and its formatter."""
 
-    assemblerParams: dict
+    assemblerParams: Dict[str, Any]
     """Parameters to use for post-processing the retrieved dataset."""
+
+    formatterParams: Dict[str, Any]
+    """Parameters that were understood by the associated formatter."""
 
     component: Optional[str]
     """The component to be retrieved (can be `None`)."""
@@ -474,7 +477,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                                                      storageClass=writeStorageClass, parameters=parameters),
                                       ref.dataId)
 
-            _, notFormatterParams = formatter.segregateParameters()
+            formatterParams, notFormatterParams = formatter.segregateParameters()
 
             # Of the remaining parameters, extract the ones supported by
             # this StorageClass (for components not all will be handled)
@@ -486,7 +489,8 @@ class FileLikeDatastore(GenericBaseDatastore):
             component = storedFileInfo.component if storedFileInfo.component else refComponent
 
             fileGetInfo.append(DatastoreFileGetInformation(location, formatter, storedFileInfo,
-                                                           assemblerParams, component, readStorageClass))
+                                                           assemblerParams, formatterParams,
+                                                           component, readStorageClass))
 
         return fileGetInfo
 
@@ -933,12 +937,17 @@ class FileLikeDatastore(GenericBaseDatastore):
             # Check that the supplied parameters are suitable for the type read
             refStorageClass.validateParameters(parameters)
 
+            # We want to keep track of all the parameters that were not used
+            # by formatters.  We assume that if any of the component formatters
+            # use a parameter that we do not need to apply it again in the
+            # assembler.
             usedParams = set()
+
             components: Dict[str, Any] = {}
             for getInfo in allGetInfo:
                 # assemblerParams are parameters not understood by the
                 # associated formatter.
-                usedParams.update(set(getInfo.assemblerParams))
+                usedParams.update(set(getInfo.formatterParams))
 
                 component = getInfo.component
 
@@ -1015,7 +1024,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             # Need to created a new info that specifies the read-only
             # component and associated storage class
             readInfo = DatastoreFileGetInformation(rwInfo.location, readFormatter,
-                                                   rwInfo.info, assemblerParams,
+                                                   rwInfo.info, assemblerParams, {},
                                                    refComponent, refStorageClass)
 
             return self._read_artifact_into_memory(readInfo, ref, isComponent=True)

@@ -22,6 +22,7 @@
 from ._query import *
 from ._builder import *
 from ._structs import *
+from ._results import *
 
 # Symbols from other modules intentionally not lifted to package scope,
 # as they're all internal.

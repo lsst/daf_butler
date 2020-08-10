@@ -23,6 +23,7 @@ from __future__ import annotations
 __all__ = ["RegistryTests"]
 
 from abc import ABC, abstractmethod
+import itertools
 import os
 import re
 import unittest
@@ -38,6 +39,8 @@ except ImportError:
 
 from ...core import (
     DataCoordinate,
+    DataCoordinateSequence,
+    DataCoordinateSet,
     DatasetRef,
     DatasetType,
     DimensionGraph,
@@ -420,25 +423,26 @@ class RegistryTests(ABC):
                                          dataId=parentRefResolved.dataId)
         self.assertEqual(childRef1, parentRefResolved.makeComponentRef("wcs"))
         # Search for detector data IDs constrained by component dataset
-        # existence with queryDimensions.
-        dataIds = set(registry.queryDimensions(
+        # existence with queryDataIds.
+        dataIds = registry.queryDataIds(
             ["detector"],
             datasets=["permabias.wcs"],
             collections=collection,
-            expand=False,
-        ))
+        ).toSet()
         self.assertEqual(
             dataIds,
-            {
-                DataCoordinate.standardize(instrument="Cam1", detector=d, graph=parentType.dimensions)
-                for d in (1, 2, 3)
-            }
+            DataCoordinateSet(
+                {
+                    DataCoordinate.standardize(instrument="Cam1", detector=d, graph=parentType.dimensions)
+                    for d in (1, 2, 3)
+                },
+                parentType.dimensions,
+            )
         )
         # Search for multiple datasets of a single type with queryDatasets.
         childRefs2 = set(registry.queryDatasets(
             "permabias.wcs",
             collections=collection,
-            expand=False,
         ))
         self.assertEqual(
             {ref.unresolved() for ref in childRefs2},
@@ -736,11 +740,11 @@ class RegistryTests(ABC):
             dimensions=(rawType.dimensions.required | calexpType.dimensions.required)
         )
         # Test that single dim string works as well as list of str
-        rows = list(registry.queryDimensions("visit", datasets=rawType, collections=run1, expand=True))
-        rowsI = list(registry.queryDimensions(["visit"], datasets=rawType, collections=run1, expand=True))
+        rows = registry.queryDataIds("visit", datasets=rawType, collections=run1).expanded().toSet()
+        rowsI = registry.queryDataIds(["visit"], datasets=rawType, collections=run1).expanded().toSet()
         self.assertEqual(rows, rowsI)
         # with empty expression
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1, expand=True))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1).expanded().toSet()
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
@@ -757,7 +761,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # second collection
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=tagged2))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=tagged2).toSet()
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
@@ -767,7 +771,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # with two input datasets
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=[run1, tagged2]))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=[run1, tagged2]).toSet()
         self.assertEqual(len(set(rows)), 6*3)   # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
@@ -777,30 +781,30 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # limit to single visit
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
-                                             where="visit = 10"))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
+                                     where="visit = 10").toSet()
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # more limiting expression, using link names instead of Table.column
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
-                                             where="visit = 10 and detector > 1"))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
+                                     where="visit = 10 and detector > 1").toSet()
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (2, 3))
 
         # expression excludes everything
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
-                                             where="visit > 1000"))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
+                                     where="visit > 1000").toSet()
         self.assertEqual(len(rows), 0)
 
         # Selecting by physical_filter, this is not in the dimensions, but it
         # is a part of the full expression so it should work too.
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
-                                             where="physical_filter = 'dummy_r'"))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
+                                     where="physical_filter = 'dummy_r'").toSet()
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (110, 111))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (11,))
@@ -870,8 +874,8 @@ class RegistryTests(ABC):
                     registry.insertDatasets(calexpType, dataIds=[dataId], run=run)
 
         # with empty expression
-        rows = list(registry.queryDimensions(dimensions,
-                                             datasets=[calexpType, mergeType], collections=run))
+        rows = registry.queryDataIds(dimensions,
+                                     datasets=[calexpType, mergeType], collections=run).toSet()
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("skymap", "tract", "patch", "abstract_filter"))
@@ -880,18 +884,18 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["abstract_filter"] for dataId in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
-        rows = list(registry.queryDimensions(dimensions,
-                                             datasets=[calexpType, mergeType], collections=run,
-                                             where="tract IN (1, 5) AND patch IN (2, 7)"))
+        rows = registry.queryDataIds(dimensions,
+                                     datasets=[calexpType, mergeType], collections=run,
+                                     where="tract IN (1, 5) AND patch IN (2, 7)").toSet()
         self.assertEqual(len(rows), 2*2*2)   # 2 tracts x 2 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 7))
         self.assertCountEqual(set(dataId["abstract_filter"] for dataId in rows), ("i", "r"))
 
         # limit to single filter
-        rows = list(registry.queryDimensions(dimensions,
-                                             datasets=[calexpType, mergeType], collections=run,
-                                             where="abstract_filter = 'i'"))
+        rows = registry.queryDataIds(dimensions,
+                                     datasets=[calexpType, mergeType], collections=run,
+                                     where="abstract_filter = 'i'").toSet()
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 4, 6, 7))
@@ -899,9 +903,9 @@ class RegistryTests(ABC):
 
         # expression excludes everything, specifying non-existing skymap is
         # not a fatal error, it's operator error
-        rows = list(registry.queryDimensions(dimensions,
-                                             datasets=[calexpType, mergeType], collections=run,
-                                             where="skymap = 'Mars'"))
+        rows = registry.queryDataIds(dimensions,
+                                     datasets=[calexpType, mergeType], collections=run,
+                                     where="skymap = 'Mars'").toSet()
         self.assertEqual(len(rows), 0)
 
     def testSpatialMatch(self):
@@ -938,7 +942,7 @@ class RegistryTests(ABC):
         )
 
         # without data this should run OK but return empty set
-        rows = list(registry.queryDimensions(dimensions, datasets=calexpType, collections=collection))
+        rows = registry.queryDataIds(dimensions, datasets=calexpType, collections=collection).toSet()
         self.assertEqual(len(rows), 0)
 
     def testCalibrationLabelIndirection(self):
@@ -1048,7 +1052,7 @@ class RegistryTests(ABC):
             dict(instrument="DummyCam", name="dummy_i2", abstract_filter="i"),
             dict(instrument="DummyCam", name="dummy_r", abstract_filter="r"),
         )
-        rows = list(registry.queryDimensions(["abstract_filter"]))
+        rows = registry.queryDataIds(["abstract_filter"]).toSet()
         self.assertCountEqual(
             rows,
             [DataCoordinate.standardize(abstract_filter="i", universe=registry.dimensions),
@@ -1058,8 +1062,9 @@ class RegistryTests(ABC):
     def testAttributeManager(self):
         """Test basic functionality of attribute manager.
         """
-        # number of attributes with schema versions in a fresh database
-        VERSION_COUNT = 0
+        # number of attributes with schema versions in a fresh database,
+        # 6 managers with 3 records per manager
+        VERSION_COUNT = 6 * 3
 
         registry = self.makeRegistry()
         attributes = registry._attributes
@@ -1107,3 +1112,388 @@ class RegistryTests(ABC):
         items = dict(attributes.items())
         for key, value in data:
             self.assertEqual(items[key], value)
+
+    def testQueryDatasetsDeduplication(self):
+        """Test that the deduplicate option to queryDatasets selects datasets
+        from collections in the order given".
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        self.assertCountEqual(
+            list(registry.queryDatasets("permabias", collections=["imported_g", "imported_r"])),
+            [
+                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_r"),
+                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_r"),
+                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+            ]
+        )
+        self.assertCountEqual(
+            list(registry.queryDatasets("permabias", collections=["imported_g", "imported_r"],
+                                        deduplicate=True)),
+            [
+                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+            ]
+        )
+        self.assertCountEqual(
+            list(registry.queryDatasets("permabias", collections=["imported_r", "imported_g"],
+                                        deduplicate=True)),
+            [
+                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_r"),
+                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_r"),
+                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+            ]
+        )
+
+    def testQueryResults(self):
+        """Test querying for data IDs and then manipulating the QueryResults
+        object returned to perform other queries.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        bias = registry.getDatasetType("permabias")
+        flat = registry.getDatasetType("permaflat")
+        # Obtain expected results from methods other than those we're testing
+        # here.  That includes:
+        # - the dimensions of the data IDs we want to query:
+        expectedGraph = DimensionGraph(registry.dimensions, names=["detector", "physical_filter"])
+        # - the dimensions of some other data IDs we'll extract from that:
+        expectedSubsetGraph = DimensionGraph(registry.dimensions, names=["detector"])
+        # - the data IDs we expect to obtain from the first queries:
+        expectedDataIds = DataCoordinateSet(
+            {
+                DataCoordinate.standardize(instrument="Cam1", detector=d, physical_filter=p,
+                                           universe=registry.dimensions)
+                for d, p in itertools.product({1, 2, 3}, {"Cam1-G", "Cam1-R1", "Cam1-R2"})
+            },
+            graph=expectedGraph,
+            hasFull=False,
+            hasRecords=False,
+        )
+        # - the flat datasets we expect to find from those data IDs, in just
+        #   one collection (so deduplication is irrelevant):
+        expectedFlats = [
+            registry.findDataset(flat, instrument="Cam1", detector=1, physical_filter="Cam1-R1",
+                                 collections="imported_r"),
+            registry.findDataset(flat, instrument="Cam1", detector=2, physical_filter="Cam1-R1",
+                                 collections="imported_r"),
+            registry.findDataset(flat, instrument="Cam1", detector=3, physical_filter="Cam1-R2",
+                                 collections="imported_r"),
+        ]
+        # - the data IDs we expect to extract from that:
+        expectedSubsetDataIds = expectedDataIds.subset(expectedSubsetGraph)
+        # - the bias datasets we expect to find from those data IDs, after we
+        #   subset-out the physical_filter dimension, both with duplicates:
+        expectedAllBiases = [
+            registry.findDataset(bias, instrument="Cam1", detector=1, collections="imported_g"),
+            registry.findDataset(bias, instrument="Cam1", detector=2, collections="imported_g"),
+            registry.findDataset(bias, instrument="Cam1", detector=3, collections="imported_g"),
+            registry.findDataset(bias, instrument="Cam1", detector=2, collections="imported_r"),
+            registry.findDataset(bias, instrument="Cam1", detector=3, collections="imported_r"),
+        ]
+        # - ...and without duplicates:
+        expectedDeduplicatedBiases = [
+            registry.findDataset(bias, instrument="Cam1", detector=1, collections="imported_g"),
+            registry.findDataset(bias, instrument="Cam1", detector=2, collections="imported_r"),
+            registry.findDataset(bias, instrument="Cam1", detector=3, collections="imported_r"),
+        ]
+        # Test against those expected results, using a "lazy" query for the
+        # data IDs (which re-executes that query each time we use it to do
+        # something new).
+        dataIds = registry.queryDataIds(
+            ["detector", "physical_filter"],
+            where="detector.purpose = 'SCIENCE'",  # this rejects detector=4
+        )
+        self.assertEqual(dataIds.graph, expectedGraph)
+        self.assertEqual(dataIds.toSet(), expectedDataIds)
+        self.assertCountEqual(
+            list(
+                dataIds.findDatasets(
+                    flat,
+                    collections=["imported_r"],
+                )
+            ),
+            expectedFlats,
+        )
+        subsetDataIds = dataIds.subset(expectedSubsetGraph, unique=True)
+        self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
+        self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
+        self.assertCountEqual(
+            list(
+                subsetDataIds.findDatasets(
+                    bias,
+                    collections=["imported_r", "imported_g"],
+                    deduplicate=False
+                )
+            ),
+            expectedAllBiases
+        )
+        self.assertCountEqual(
+            list(
+                subsetDataIds.findDatasets(
+                    bias,
+                    collections=["imported_r", "imported_g"],
+                    deduplicate=True
+                )
+            ), expectedDeduplicatedBiases
+        )
+        # Materialize the bias dataset queries (only) by putting the results
+        # into temporary tables, then repeat those tests.
+        with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
+                                        deduplicate=False).materialize() as biases:
+            self.assertCountEqual(list(biases), expectedAllBiases)
+        with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
+                                        deduplicate=True).materialize() as biases:
+            self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+        # Materialize the data ID subset query, but not the dataset queries.
+        with subsetDataIds.materialize() as subsetDataIds:
+            self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
+            self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
+            self.assertCountEqual(
+                list(
+                    subsetDataIds.findDatasets(
+                        bias,
+                        collections=["imported_r", "imported_g"],
+                        deduplicate=False
+                    )
+                ),
+                expectedAllBiases
+            )
+            self.assertCountEqual(
+                list(
+                    subsetDataIds.findDatasets(
+                        bias,
+                        collections=["imported_r", "imported_g"],
+                        deduplicate=True
+                    )
+                ), expectedDeduplicatedBiases
+            )
+            # Materialize the dataset queries, too.
+            with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
+                                            deduplicate=False).materialize() as biases:
+                self.assertCountEqual(list(biases), expectedAllBiases)
+            with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
+                                            deduplicate=True).materialize() as biases:
+                self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+        # Materialize the original query, but none of the follow-up queries.
+        with dataIds.materialize() as dataIds:
+            self.assertEqual(dataIds.graph, expectedGraph)
+            self.assertEqual(dataIds.toSet(), expectedDataIds)
+            self.assertCountEqual(
+                list(
+                    dataIds.findDatasets(
+                        flat,
+                        collections=["imported_r"],
+                    )
+                ),
+                expectedFlats,
+            )
+            subsetDataIds = dataIds.subset(expectedSubsetGraph, unique=True)
+            self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
+            self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
+            self.assertCountEqual(
+                list(
+                    subsetDataIds.findDatasets(
+                        bias,
+                        collections=["imported_r", "imported_g"],
+                        deduplicate=False
+                    )
+                ),
+                expectedAllBiases
+            )
+            self.assertCountEqual(
+                list(
+                    subsetDataIds.findDatasets(
+                        bias,
+                        collections=["imported_r", "imported_g"],
+                        deduplicate=True
+                    )
+                ), expectedDeduplicatedBiases
+            )
+            # Materialize just the bias dataset queries.
+            with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
+                                            deduplicate=False).materialize() as biases:
+                self.assertCountEqual(list(biases), expectedAllBiases)
+            with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
+                                            deduplicate=True).materialize() as biases:
+                self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+            # Materialize the subset data ID query, but not the dataset
+            # queries.
+            with subsetDataIds.materialize() as subsetDataIds:
+                self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
+                self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
+                self.assertCountEqual(
+                    list(
+                        subsetDataIds.findDatasets(
+                            bias,
+                            collections=["imported_r", "imported_g"],
+                            deduplicate=False
+                        )
+                    ),
+                    expectedAllBiases
+                )
+                self.assertCountEqual(
+                    list(
+                        subsetDataIds.findDatasets(
+                            bias,
+                            collections=["imported_r", "imported_g"],
+                            deduplicate=True
+                        )
+                    ), expectedDeduplicatedBiases
+                )
+                # Materialize the bias dataset queries, too, so now we're
+                # materializing every single step.
+                with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
+                                                deduplicate=False).materialize() as biases:
+                    self.assertCountEqual(list(biases), expectedAllBiases)
+                with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
+                                                deduplicate=True).materialize() as biases:
+                    self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+
+    def testEmptyDimensionsQueries(self):
+        """Test Query and QueryResults objects in the case where there are no
+        dimensions.
+        """
+        # Set up test data: one dataset type, two runs, one dataset in each.
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        schema = DatasetType("schema", dimensions=registry.dimensions.empty, storageClass="Catalog")
+        registry.registerDatasetType(schema)
+        dataId = DataCoordinate.makeEmpty(registry.dimensions)
+        run1 = "run1"
+        run2 = "run2"
+        registry.registerRun(run1)
+        registry.registerRun(run2)
+        (dataset1,) = registry.insertDatasets(schema, dataIds=[dataId], run=run1)
+        (dataset2,) = registry.insertDatasets(schema, dataIds=[dataId], run=run2)
+        # Query directly for both of the datasets, and each one, one at a time.
+        self.assertCountEqual(
+            list(registry.queryDatasets(schema, collections=[run1, run2], deduplicate=False)),
+            [dataset1, dataset2]
+        )
+        self.assertEqual(
+            list(registry.queryDatasets(schema, collections=[run1, run2], deduplicate=True)),
+            [dataset1],
+        )
+        self.assertEqual(
+            list(registry.queryDatasets(schema, collections=[run2, run1], deduplicate=True)),
+            [dataset2],
+        )
+        # Query for data IDs with no dimensions.
+        dataIds = registry.queryDataIds([])
+        self.assertEqual(
+            dataIds.toSequence(),
+            DataCoordinateSequence([dataId], registry.dimensions.empty)
+        )
+        # Use queried data IDs to find the datasets.
+        self.assertCountEqual(
+            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+            [dataset1, dataset2],
+        )
+        self.assertEqual(
+            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+            [dataset1],
+        )
+        self.assertEqual(
+            list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+            [dataset2],
+        )
+        # Now materialize the data ID query results and repeat those tests.
+        with dataIds.materialize() as dataIds:
+            self.assertEqual(
+                dataIds.toSequence(),
+                DataCoordinateSequence([dataId], registry.dimensions.empty)
+            )
+            self.assertCountEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                [dataset1, dataset2],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                [dataset1],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                [dataset2],
+            )
+        # Query for non-empty data IDs, then subset that to get the empty one.
+        # Repeat the above tests starting from that.
+        dataIds = registry.queryDataIds(["instrument"]).subset(registry.dimensions.empty, unique=True)
+        self.assertEqual(
+            dataIds.toSequence(),
+            DataCoordinateSequence([dataId], registry.dimensions.empty)
+        )
+        self.assertCountEqual(
+            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+            [dataset1, dataset2],
+        )
+        self.assertEqual(
+            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+            [dataset1],
+        )
+        self.assertEqual(
+            list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+            [dataset2],
+        )
+        with dataIds.materialize() as dataIds:
+            self.assertEqual(
+                dataIds.toSequence(),
+                DataCoordinateSequence([dataId], registry.dimensions.empty)
+            )
+            self.assertCountEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                [dataset1, dataset2],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                [dataset1],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                [dataset2],
+            )
+        # Query for non-empty data IDs, then materialize, then subset to get
+        # the empty one.  Repeat again.
+        with registry.queryDataIds(["instrument"]).materialize() as nonEmptyDataIds:
+            dataIds = nonEmptyDataIds.subset(registry.dimensions.empty, unique=True)
+            self.assertEqual(
+                dataIds.toSequence(),
+                DataCoordinateSequence([dataId], registry.dimensions.empty)
+            )
+            self.assertCountEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                [dataset1, dataset2],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                [dataset1],
+            )
+            self.assertEqual(
+                list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                [dataset2],
+            )
+            with dataIds.materialize() as dataIds:
+                self.assertEqual(
+                    dataIds.toSequence(),
+                    DataCoordinateSequence([dataId], registry.dimensions.empty)
+                )
+                self.assertCountEqual(
+                    list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                    [dataset1, dataset2],
+                )
+                self.assertEqual(
+                    list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                    [dataset1],
+                )
+                self.assertEqual(
+                    list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                    [dataset2],
+                )

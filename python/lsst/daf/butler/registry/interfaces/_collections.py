@@ -28,7 +28,7 @@ __all__ = [
     "RunRecord",
 ]
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import (
     Any,
     Iterator,
@@ -41,6 +41,7 @@ import astropy.time
 from ...core import ddl, Timespan
 from ..wildcards import CollectionSearch
 from .._collectionType import CollectionType
+from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ._database import Database, StaticTablesContext
@@ -241,7 +242,7 @@ class ChainedCollectionRecord(CollectionRecord):
         raise NotImplementedError()
 
 
-class CollectionManager(ABC):
+class CollectionManager(VersionedExtension):
     """An interface for managing the collections (including runs) in a
     `Registry`.
 
@@ -278,7 +279,9 @@ class CollectionManager(ABC):
     @classmethod
     @abstractmethod
     def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
-                                onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
+                                onDelete: Optional[str] = None,
+                                constraint: bool = True,
+                                **kwargs: Any) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the collection
         table.
 
@@ -294,7 +297,11 @@ class CollectionManager(ABC):
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
-        **kwds
+        constraint: `bool`, optional
+            If `False` (`True` is default), add a field that can be joined to
+            the collection primary key, but do not add a foreign key
+            constraint.
+        **kwargs
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are
             otherwise provided).
@@ -309,7 +316,9 @@ class CollectionManager(ABC):
     @classmethod
     @abstractmethod
     def addRunForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "run",
-                         onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
+                         onDelete: Optional[str] = None,
+                         constraint: bool = True,
+                         **kwargs: Any) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the run
         table.
 
@@ -325,6 +334,9 @@ class CollectionManager(ABC):
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
+        constraint: `bool`, optional
+            If `False` (`True` is default), add a field that can be joined to
+            the run primary key, but do not add a foreign key constraint.
         **kwds
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are

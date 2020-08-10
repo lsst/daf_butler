@@ -33,6 +33,7 @@ from lsst.daf.butler.registry.interfaces import (
     OpaqueTableStorageManager,
     OpaqueTableStorage,
     StaticTablesContext,
+    VersionTuple
 )
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 
@@ -90,6 +91,15 @@ class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
         # Docstring inherited from OpaqueTableStorageManager.
         return self._storages.setdefault(name, DummyOpaqueTableStorage(name, spec))
 
+    @classmethod
+    def currentVersion(cls) -> Optional[VersionTuple]:
+        # Docstring inherited from VersionedExtension.
+        return None
+
+    def schemaDigest(self) -> Optional[str]:
+        # Docstring inherited from VersionedExtension.
+        return None
+
 
 class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
 
@@ -120,6 +130,15 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         for name, bridge in self._bridges.items():
             if ref in bridge:
                 yield name
+
+    @classmethod
+    def currentVersion(cls) -> Optional[VersionTuple]:
+        # Docstring inherited from VersionedExtension.
+        return None
+
+    def schemaDigest(self) -> Optional[str]:
+        # Docstring inherited from VersionedExtension.
+        return None
 
 
 class DummyRegistry:

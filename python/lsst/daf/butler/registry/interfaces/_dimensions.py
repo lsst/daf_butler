@@ -28,6 +28,7 @@ from typing import Iterable, Optional, Type, TYPE_CHECKING
 import sqlalchemy
 
 from ...core import SkyPixDimension
+from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import (
@@ -265,8 +266,19 @@ class DimensionRecordStorage(ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+        """Return tables used for schema digest.
 
-class DimensionRecordStorageManager(ABC):
+        Returns
+        -------
+        tables : `Iterable` [ `sqlalchemy.schema.Table` ]
+            Possibly empty set of tables for schema digest calculations.
+        """
+        raise NotImplementedError()
+
+
+class DimensionRecordStorageManager(VersionedExtension):
     """An interface for managing the dimension records in a `Registry`.
 
     `DimensionRecordStorageManager` primarily serves as a container and factory

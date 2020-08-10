@@ -212,7 +212,7 @@ def expandUniqueId(butler, partialId):
 
     query = " AND ".join(f"{dimension} = {value!r}" for dimension, value in partialId.items())
 
-    dataId = [id for id in registry.queryDimensions(dimensions, where=query, expand=False)]
+    dataId = list(registry.queryDataIds(dimensions, where=query))
     if len(dataId) == 1:
         return dataId[0]
     else:

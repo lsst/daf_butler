@@ -25,13 +25,15 @@ __all__ = [
     "ButlerAttributeExistsError",
 ]
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import (
     Iterable,
     Optional,
     Tuple,
     TYPE_CHECKING,
 )
+
+from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ._database import Database, StaticTablesContext
@@ -43,7 +45,7 @@ class ButlerAttributeExistsError(RuntimeError):
     """
 
 
-class ButlerAttributeManager(ABC):
+class ButlerAttributeManager(VersionedExtension):
     """An interface for managing butler attributes in a `Registry`.
 
     Attributes are represented in registry as a set of name-value pairs, both
@@ -156,5 +158,16 @@ class ButlerAttributeManager(ABC):
             Attribute name.
         value : `str`
             Corresponding attribute value.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def empty(self) -> bool:
+        """Check whether attributes set is empty.
+
+        Returns
+        -------
+        empty : `bool`
+            True if there are no any attributes defined.
         """
         raise NotImplementedError()

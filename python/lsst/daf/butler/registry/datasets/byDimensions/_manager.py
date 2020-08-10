@@ -22,7 +22,11 @@ from lsst.daf.butler import (
     DimensionUniverse,
 )
 from lsst.daf.butler.registry import ConflictingDefinitionError
-from lsst.daf.butler.registry.interfaces import DatasetRecordStorage, DatasetRecordStorageManager
+from lsst.daf.butler.registry.interfaces import (
+    DatasetRecordStorage,
+    DatasetRecordStorageManager,
+    VersionTuple
+)
 
 from .tables import makeStaticTableSpecs, addDatasetForeignKey, makeDynamicTableName, makeDynamicTableSpec
 from ._storage import ByDimensionsDatasetRecordStorage
@@ -34,6 +38,10 @@ if TYPE_CHECKING:
         StaticTablesContext,
     )
     from .tables import StaticDatasetTablesTuple
+
+
+# This has to be updated on every schema change
+_VERSION = VersionTuple(0, 1, 0)
 
 
 class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
@@ -182,3 +190,12 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             id=id,
             run=self._collections[row[self._collections.getRunForeignKeyName()]].name
         )
+
+    @classmethod
+    def currentVersion(cls) -> Optional[VersionTuple]:
+        # Docstring inherited from VersionedExtension.
+        return _VERSION
+
+    def schemaDigest(self) -> Optional[str]:
+        # Docstring inherited from VersionedExtension.
+        return self._defaultSchemaDigest(self._static)

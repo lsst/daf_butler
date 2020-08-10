@@ -34,6 +34,7 @@ from typing import (
 
 from ...core.ddl import TableSpec
 from ._database import Database, StaticTablesContext
+from ._versioning import VersionedExtension
 
 
 class OpaqueTableStorage(ABC):
@@ -98,7 +99,7 @@ class OpaqueTableStorage(ABC):
     """
 
 
-class OpaqueTableStorageManager(ABC):
+class OpaqueTableStorageManager(VersionedExtension):
     """An interface that manages the opaque tables in a `Registry`.
 
     `OpaqueTableStorageManager` primarily serves as a container and factory for

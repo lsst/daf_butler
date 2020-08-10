@@ -34,6 +34,7 @@ from typing import (
 
 from ...core.utils import immutable
 from ...core import DatasetRef
+from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import DatasetType, DimensionUniverse
@@ -212,7 +213,7 @@ class DatastoreRegistryBridge(ABC):
     """
 
 
-class DatastoreRegistryBridgeManager(ABC):
+class DatastoreRegistryBridgeManager(VersionedExtension):
     """An abstract base class that defines the interface between `Registry`
     and `Datastore` when a new `Datastore` is constructed.
 

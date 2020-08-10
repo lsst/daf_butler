@@ -139,6 +139,9 @@ class PosixDatastore(FileLikeDatastore):
 
         formatter = getInfo.formatter
         try:
+            log.debug("Reading %s from location %s with formatter %s",
+                      f"component {getInfo.component}" if isComponent else "",
+                      location.uri, type(formatter).__name__)
             result = formatter.read(component=getInfo.component if isComponent else None)
         except Exception as e:
             raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"

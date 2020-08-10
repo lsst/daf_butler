@@ -40,6 +40,7 @@ from ...core import (
     ddl,
     SimpleQuery,
 )
+from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
@@ -215,7 +216,7 @@ class DatasetRecordStorage(ABC):
     """
 
 
-class DatasetRecordStorageManager(ABC):
+class DatasetRecordStorageManager(VersionedExtension):
     """An interface that manages the tables that describe datasets.
 
     `DatasetRecordStorageManager` primarily serves as a container and factory
@@ -291,10 +292,37 @@ class DatasetRecordStorageManager(ABC):
         """
         raise NotImplementedError()
 
+    def __getitem__(self, name: str) -> DatasetRecordStorage:
+        """Return the object that provides access to the records associated
+        with the given `DatasetType` name.
+
+        This is simply a convenience wrapper for `find` that raises `KeyError`
+        when the dataset type is not found.
+
+        Returns
+        -------
+        records : `DatasetRecordStorage`
+            The object representing the records for the given dataset type.
+
+        Raises
+        ------
+        KeyError
+            Raised if there is no dataset type with the given name.
+
+        Notes
+        -----
+        Dataset types registered by another client of the same repository since
+        the last call to `initialize` or `refresh` may not be found.
+        """
+        result = self.find(name)
+        if result is None:
+            raise KeyError(f"Dataset type with name '{name}' not found.")
+        return result
+
     @abstractmethod
     def find(self, name: str) -> Optional[DatasetRecordStorage]:
         """Return an object that provides access to the records associated with
-        the given `DatasetType`, if one exists.
+        the given `DatasetType` name, if one exists.
 
         Parameters
         ----------
