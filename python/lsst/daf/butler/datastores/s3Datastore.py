@@ -247,8 +247,15 @@ class S3Datastore(FileLikeDatastore):
         # an *exact* full key already exists before writing instead. The insert
         # key operation is equivalent to creating the dir and the file.
         if s3CheckFileExists(location, client=self.client,)[0]:
-            raise FileExistsError(f"Cannot write file for ref {ref} as "
-                                  f"output file {location.uri} exists.")
+            # Assume that by this point if registry thinks the file should
+            # not exist then the file should not exist and therefore we can
+            # overwrite it. This can happen if a put was interrupted by
+            # an external interrupt. The only time this could be problematic is
+            # if the file template is incomplete and multiple dataset refs
+            # result in identical filenames.
+            # Eventually we should remove the check completely (it takes
+            # non-zero time for network).
+            log.warning("Object %s exists in datastore for ref %s", location.uri, ref)
 
         # upload the file directly from bytes or by using a temporary file if
         # _toBytes is not implemented
