@@ -93,11 +93,11 @@ class WebdavDatastore(FileLikeDatastore):
     def __init__(self, config: Union[DatastoreConfig, str],
                  bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         super().__init__(config, bridgeManager, butlerRoot)
-        b = ButlerURI(self.root)
+        uri = ButlerURI(self.root, forceDirectory=True)
         self.session = getHttpSession()
-        if not folderExists(self.root, session=self.session):
+        if not uri.exists():
             try:
-                b.mkdir()
+                uri.mkdir()
             except ValueError:
                 raise ValueError(f"Can not create directory {self.root}, check permissions.")
 
@@ -115,9 +115,7 @@ class WebdavDatastore(FileLikeDatastore):
         exists : `bool`
             True if the location can be found, false otherwise.
         """
-        exists, _ = webdavCheckFileExists(location,
-                                          session=self.session)
-        return exists
+        return location.uri.exists()
 
     def _delete_artifact(self, location: Location) -> None:
         """Delete the artifact from the datastore.
@@ -127,9 +125,7 @@ class WebdavDatastore(FileLikeDatastore):
         location : `Location`
             Location of the artifact associated with this datastore.
         """
-        r = self.session.delete(location.uri.geturl())
-        if r.status_code not in [200, 202, 204]:
-            raise FileNotFoundError(f"Unable to delete resource {self}; status code: {r.status_code}")
+        location.uri.remove()
 
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
@@ -182,7 +178,7 @@ class WebdavDatastore(FileLikeDatastore):
     def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
 
-        if webdavCheckFileExists(location, session=self.session,)[0]:
+        if location.uri.exists():
             raise FileExistsError(f"Cannot write file for ref {ref} as "
                                   f"output file {location.uri} exists.")
 
@@ -218,7 +214,7 @@ class WebdavDatastore(FileLikeDatastore):
             if not os.path.exists(srcUri.ospath):
                 raise FileNotFoundError(f"File at '{srcUri}' does not exist.")
         elif srcUri.scheme.startswith("http"):
-            if not webdavCheckFileExists(srcUri, session=self.session)[0]:
+            if not srcUri.exists():
                 raise FileNotFoundError(f"File at '{srcUri}' does not exist.")
         else:
             raise NotImplementedError(f"Scheme type {srcUri.scheme} not supported.")
