@@ -102,7 +102,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
     def testRegistry(self):
         """Check that formatters can be stored in the registry.
         """
-        formatterTypeName = "lsst.daf.butler.formatters.pexConfig.PexConfigFormatter"
+        formatterTypeName = "lsst.daf.butler.tests.deferredFormatter.DeferredFormatter"
         storageClassName = "Image"
         self.factory.registerFormatter(storageClassName, formatterTypeName)
         f = self.factory.getFormatter(storageClassName, self.fileDescriptor)
@@ -115,8 +115,8 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertIsFormatter(fcls)
         # Defer the import so that we ensure that the infrastructure loaded
         # it on demand previously
-        from lsst.daf.butler.formatters.pexConfig import PexConfigFormatter
-        self.assertEqual(type(f), PexConfigFormatter)
+        from lsst.daf.butler.tests.deferredFormatter import DeferredFormatter
+        self.assertEqual(type(f), DeferredFormatter)
 
         with self.assertRaises(TypeError):
             # Requires a constructor parameter
@@ -124,6 +124,12 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
 
         with self.assertRaises(KeyError):
             self.factory.getFormatter("Missing", self.fileDescriptor)
+
+        # Check that a bad formatter path fails
+        storageClassName = "BadImage"
+        self.factory.registerFormatter(storageClassName, "lsst.daf.butler.tests.deferredFormatter.Unknown")
+        with self.assertRaises(ImportError):
+            self.factory.getFormatter(storageClassName, self.fileDescriptor)
 
     def testRegistryWithStorageClass(self):
         """Test that the registry can be given a StorageClass object.
