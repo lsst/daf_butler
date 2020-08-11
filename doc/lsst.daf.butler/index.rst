@@ -116,9 +116,6 @@ Example formatters
 .. automodapi:: lsst.daf.butler.formatters.parquet
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.formatters.pexConfig
-   :no-main-docstr:
-   :headings: ^"
 .. automodapi:: lsst.daf.butler.formatters.pickle
    :no-main-docstr:
    :headings: ^"
