@@ -92,7 +92,9 @@ def config_dump(*args, **kwargs):
               help="DatasetType(s) to ignore for validation.")
 def config_validate(*args, **kwargs):
     """Validate the configuration files for a Gen3 Butler repository."""
-    cli_handle_exception(configValidate, *args, **kwargs)
+    is_good = cli_handle_exception(configValidate, *args, **kwargs)
+    if not is_good:
+        raise click.exceptions.Exit(1)
 
 
 @click.command(short_help="Search for collections.")
