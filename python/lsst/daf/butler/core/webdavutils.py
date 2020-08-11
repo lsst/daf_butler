@@ -45,7 +45,7 @@ def getHttpSession() -> requests.Session:
 
     Returns
     -------
-    s : `requests.Session`
+    session : `requests.Session`
         An http session used to execute requests.
 
     Notes
@@ -63,7 +63,7 @@ def getHttpSession() -> requests.Session:
     NB: requests will read CA certificates in REQUESTS_CA_BUNDLE
     It must be manually exported according to the system CA directory.
     """
-    s = requests.Session()
+    session = requests.Session()
     log.debug("Creating new HTTP session...")
 
     try:
@@ -76,20 +76,21 @@ def getHttpSession() -> requests.Session:
             proxy_cert = os.environ['WEBDAV_PROXY_CERT']
         except KeyError:
             raise KeyError("Environment variable WEBDAV_PROXY_CERT is not set")
-        s.cert = (proxy_cert, proxy_cert)
+        log.debug("... using x509 authentication.")
+        session.cert = (proxy_cert, proxy_cert)
     elif env_auth_method == "TOKEN":
         try:
             bearer_token = os.environ['WEBDAV_BEARER_TOKEN']
         except KeyError:
             raise KeyError("Environment variable WEBDAV_BEARER_TOKEN is not set")
-        s.headers = CaseInsensitiveDict({'Authorization': 'Bearer ' + bearer_token})
+        log.debug("... using bearer-token authentication.")
+        session.headers = CaseInsensitiveDict({'Authorization': 'Bearer ' + bearer_token})
     else:
         raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
 
-    # s.verify = False
     log.debug("Session configured and ready.")
 
-    return s
+    return session
 
 
 def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
