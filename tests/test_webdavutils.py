@@ -25,7 +25,7 @@ import responses
 
 
 from lsst.daf.butler.core.webdavutils import (folderExists, webdavCheckFileExists,
-                                              getFileURL, webdavDeleteFile, isWebdavEndpoint)
+                                              _getFileURL, webdavDeleteFile, isWebdavEndpoint)
 from lsst.daf.butler import Location, ButlerURI
 
 
@@ -107,9 +107,9 @@ class WebdavUtilsTestCase(unittest.TestCase):
         buri = ButlerURI(f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}")
         loc = Location(f"https://{self.serverRoot}/", f"{self.existingfolderName}/{self.existingfileName}")
 
-        self.assertEqual(getFileURL(s), s)
-        self.assertEqual(getFileURL(buri), s)
-        self.assertEqual(getFileURL(loc), s)
+        self.assertEqual(_getFileURL(s), s)
+        self.assertEqual(_getFileURL(buri), s)
+        self.assertEqual(_getFileURL(loc), s)
 
 
 if __name__ == "__main__":
