@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 __all__ = ("getHttpSession", "isWebdavEndpoint", "webdavCheckFileExists",
-           "folderExists", "webdavDeleteFile", "getFileURL")
+           "folderExists", "webdavDeleteFile")
 
 import os
 import requests
@@ -114,7 +114,7 @@ def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
     if session is None:
         session = getHttpSession()
 
-    filepath = getFileURL(path)
+    filepath = _getFileURL(path)
 
     log.debug("Checking if file exists: %s", filepath)
 
@@ -137,7 +137,7 @@ def webdavDeleteFile(path: Union[Location, ButlerURI, str],
     if session is None:
         session = getHttpSession()
 
-    filepath = getFileURL(path)
+    filepath = _getFileURL(path)
 
     log.debug("Removing file: %s", filepath)
     r = session.delete(filepath)
@@ -164,7 +164,7 @@ def folderExists(path: Union[Location, ButlerURI, str],
     if session is None:
         session = getHttpSession()
 
-    filepath = getFileURL(path)
+    filepath = _getFileURL(path)
 
     log.debug("Checking if folder exists: %s", filepath)
     r = session.head(filepath)
@@ -184,12 +184,14 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
     isWebdav : `bool`
         True if the endpoint implements Webdav, False if it doesn't.
     """
+    filepath = _getFileURL(path)
 
     log.debug("Detecting HTTP endpoint type...")
     r = requests.options(filepath)
     return True if 'DAV' in r.headers else False
 
 
+def _getFileURL(path: Union[Location, ButlerURI, str]) -> str:
     """Returns the absolute URL of the resource as a string.
 
     Parameters
@@ -202,8 +204,8 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
     filepath : `str`
         The fully qualified URL of the resource.
     """
-        filepath = path.geturl()
-    elif isinstance(path, Location):
+    if isinstance(path, Location):
         filepath = path.uri.geturl()
-
+    else:
+        filepath = ButlerURI(path).geturl()
     return filepath
