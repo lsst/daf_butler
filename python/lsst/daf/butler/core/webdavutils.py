@@ -94,7 +94,22 @@ def getHttpSession() -> requests.Session:
 
 def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
                           session: Optional[requests.Session] = None) -> Tuple[bool, int]:
-    """Check that a remote HTTP resource exists."""
+    """Check that a remote HTTP resource exists.
+        
+    Parameters
+    ----------
+    path : `Location`, `ButlerURI` or `str`
+        Location or ButlerURI containing the bucket name and filepath.
+    session : `requests.Session`, optional
+        Session object to query.
+
+    Returns
+    -------
+    exists : `bool`
+        True if resource exists, False otherwise.
+    size : `int`
+        Size of the resource, if it exists, in bytes, otherwise -1
+    """
     if session is None:
         session = getHttpSession()
 
@@ -108,7 +123,16 @@ def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
 
 def webdavDeleteFile(path: Union[Location, ButlerURI, str],
                      session: Optional[requests.Session] = None) -> None:
-    """Check that a remote HTTP resource exists."""
+    """Remove a remote HTTP resource.
+    Raises a FileNotFoundError if the resource does not exist or on failure.
+    
+    Parameters
+    ----------
+    path : `Location`, `ButlerURI` or `str`
+        Location or ButlerURI containing the bucket name and filepath.
+    session : `requests.Session`, optional
+        Session object to query.
+    """
     if session is None:
         session = getHttpSession()
 
@@ -126,8 +150,8 @@ def folderExists(path: Union[Location, ButlerURI, str],
 
     Parameters
     ----------
-    folderName : `str`
-        Name of the Webdav folder
+    path : `Location`, `ButlerURI` or `str`
+        Location or ButlerURI containing the bucket name and filepath.
     session : `requests.Session`, optional
         Session object to query.
 
@@ -147,19 +171,36 @@ def folderExists(path: Union[Location, ButlerURI, str],
 
 
 def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
+    """Check whether the remote HTTP endpoint implements Webdav features.
 
-    filepath = getFileURL(path)
+    Parameters
+    ----------
+    path : `Location`, `ButlerURI` or `str`
+        Location or ButlerURI containing the bucket name and filepath.
+
+    Returns
+    -------
+    isWebdav : `bool`
+        True if the endpoint implements Webdav, False if it doesn't.
+    """
 
     log.debug("Detecting HTTP endpoint type...")
     r = requests.options(filepath)
     return True if 'DAV' in r.headers else False
 
 
-def getFileURL(path: Union[Location, ButlerURI, str]) -> str:
+    """Returns the absolute URL of the resource as a string.
 
-    if isinstance(path, str):
-        filepath = path
-    elif isinstance(path, ButlerURI):
+    Parameters
+    ----------
+    path : `Location`, `ButlerURI` or `str`
+        Location or ButlerURI containing the bucket name and filepath.
+
+    Returns
+    -------
+    filepath : `str`
+        The fully qualified URL of the resource.
+    """
         filepath = path.geturl()
     elif isinstance(path, Location):
         filepath = path.uri.geturl()

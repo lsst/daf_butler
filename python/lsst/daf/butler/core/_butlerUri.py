@@ -1191,7 +1191,9 @@ class ButlerHttpURI(ButlerURI):
         return True if r.status_code == 200 else False
 
     def mkdir(self) -> None:
-
+        """For a dir-like URI, create the directory resource if it does not
+        already exist.
+        """
         if not self.exists():
             log.debug("Creating new directory: %s", self.geturl())
             r = self.session.request('MKCOL', self.geturl())
@@ -1225,6 +1227,14 @@ class ButlerHttpURI(ButlerURI):
         return tmpFile.name, True
 
     def read(self, size: int = -1) -> bytes:
+        """Open the resource and return the contents in bytes.
+
+        Parameters
+        ----------
+        size : `int`, optional
+            The number of bytes to read. Negative or omitted indicates
+            that all data should be read.
+        """
         log.debug("Reading from remote resource: %s", self.geturl())
         stream = True if size > 0 else False
         r = self.session.get(self.geturl(), stream=stream)
@@ -1234,6 +1244,17 @@ class ButlerHttpURI(ButlerURI):
             return next(r.iter_content(chunk_size=size))
 
     def write(self, data: bytes, overwrite: bool = True) -> None:
+        """Write the supplied bytes to the new resource.
+
+        Parameters
+        ----------
+        data : `bytes`
+            The bytes to write to the resource. The entire contents of the
+            resource will be replaced.
+        overwrite : `bool`, optional
+            If `True` the resource will be overwritten if it exists. Otherwise
+            the write will fail.
+        """
         log.debug("Writing to remote resource: %s", self.geturl())
         if not overwrite:
             if self.exists():
