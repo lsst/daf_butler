@@ -45,11 +45,12 @@ from .config import Config
 from .configSupport import processLookupConfigs, LookupKey
 from .exceptions import ValidationError
 from .dimensions import SkyPixDimension, DataCoordinate
+from .datasets import DatasetRef
+from .storageClass import StorageClass
 
 if TYPE_CHECKING:
     from .dimensions import DimensionUniverse
-    from .datasets import DatasetType, DatasetRef
-    from .storageClass import StorageClass
+    from .datasets import DatasetType
 
 log = logging.getLogger(__name__)
 
@@ -443,20 +444,11 @@ class FileTemplate:
         if isinstance(ref.dataId, DataCoordinate):
             if ref.dataId.hasRecords():
                 extras = ref.dataId.records.byName()
-            # If there is exactly one SkyPixDimension in the data ID, alias its
-            # value with the key "skypix", so we can use that to match any
-            # skypix dimension.
-            # We restrict this behavior to the (real-world) case where the
-            # data ID is a DataCoordinate, not just a dict.  That should only
-            # not be true in some test code, but that test code is a pain to
-            # update to be more like the real world while still providing our
-            # only tests of important behavior.
-            skypix = [dimension for dimension in ref.datasetType.dimensions
-                      if isinstance(dimension, SkyPixDimension)]
-            if len(skypix) == 1:
-                fields["skypix"] = fields[skypix[0].name]
+            skypix_alias = self._determine_skypix_alias(ref)
+            if skypix_alias is not None:
+                fields["skypix"] = fields[skypix_alias]
                 if extras:
-                    extras["skypix"] = extras[skypix[0].name]
+                    extras["skypix"] = extras[skypix_alias]
 
         datasetType = ref.datasetType
         fields["datasetType"], component = datasetType.nameAndComponent()
@@ -602,6 +594,10 @@ class FileTemplate:
         if not hasattr(entity, "dimensions"):
             return
 
+        # Mypy does not know about hasattr so help it out
+        if entity is None:
+            return
+
         # if this entity represents a component then insist that component
         # is present in the template. If the entity is not a component
         # make sure that component is not mandatory.
@@ -620,20 +616,31 @@ class FileTemplate:
         except AttributeError:
             pass
 
+        # From here on we need at least a DatasetType
+        # Mypy doesn't understand the AttributeError clause below
+        if isinstance(entity, StorageClass):
+            return
+
         # Get the dimension links to get the full set of available field names
         # Fall back to dataId keys if we have them but no links.
         # dataId keys must still be present in the template
-        # Ignore warnings from mypy concerning StorageClass and DatasetType
-        # not supporting the full API.
         try:
-            minimal = set(entity.dimensions.required.names)  # type: ignore
-            maximal = set(entity.dimensions.names)  # type: ignore
+            minimal = set(entity.dimensions.required.names)
+            maximal = set(entity.dimensions.names)
         except AttributeError:
             try:
                 minimal = set(entity.dataId.keys())  # type: ignore
                 maximal = minimal
             except AttributeError:
                 return
+
+        # Replace specific skypix dimensions with generic one
+        skypix_alias = self._determine_skypix_alias(entity)
+        if skypix_alias is not None:
+            minimal.add("skypix")
+            maximal.add("skypix")
+            minimal.remove(skypix_alias)
+            maximal.remove(skypix_alias)
 
         required = self.fields(optionals=False)
 
@@ -647,3 +654,39 @@ class FileTemplate:
                                               f" {allfields} is not a superset of {minimal}.")
 
         return
+
+    def _determine_skypix_alias(self, entity: Union[DatasetRef, DatasetType]) -> Optional[str]:
+        """Given a `DatasetRef` return the dimension name that refers to a sky
+        pixel.
+
+        Parameters
+        ----------
+        ref : `DatasetRef` or `DatasetType`
+            The entity to examine.
+
+        Returns
+        -------
+        alias : `str`
+            If there is a sky pixelization in the supplied dataId, return
+            its name, else returns `None`.  Will return `None` also if there
+            is more than one sky pix dimension in the data ID or if the
+            dataID is not a `DataCoordinate`
+        """
+        alias = None
+
+        if isinstance(entity, DatasetRef):
+            entity = entity.datasetType
+
+        # If there is exactly one SkyPixDimension in the data ID, alias its
+        # value with the key "skypix", so we can use that to match any
+        # skypix dimension.
+        # We restrict this behavior to the (real-world) case where the
+        # data ID is a DataCoordinate, not just a dict.  That should only
+        # not be true in some test code, but that test code is a pain to
+        # update to be more like the real world while still providing our
+        # only tests of important behavior.
+        skypix = [dimension for dimension in entity.dimensions
+                  if isinstance(dimension, SkyPixDimension)]
+        if len(skypix) == 1:
+            alias = skypix[0].name
+        return alias

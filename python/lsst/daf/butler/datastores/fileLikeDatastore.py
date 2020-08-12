@@ -527,6 +527,10 @@ class FileLikeDatastore(GenericBaseDatastore):
         except KeyError as e:
             raise DatasetTypeNotSupportedError(f"Unable to find template for {ref}") from e
 
+        # Validate the template to protect against filenames from different
+        # dataIds returning the same and causing overwrite confusion.
+        template.validateTemplate(ref)
+
         location = self.locationFactory.fromPath(template.format(ref))
 
         # Get the formatter based on the storage class
@@ -1172,7 +1176,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         """
         log.debug("Emptying trash in datastore %s", self.name)
         # Context manager will empty trash iff we finish it without raising.
-        with self._bridge.emptyTrash() as trashed:
+        with self.bridge.emptyTrash() as trashed:
             for ref in trashed:
                 fileLocations = self._get_dataset_locations_info(ref)
 

@@ -873,7 +873,6 @@ class FileLikeDatastoreButlerTests(ButlerTests):
 
         dataId1 = {"instrument": "DummyCamComp", "visit": 423}
         dataId2 = {"instrument": "DummyCamComp", "visit": 423, "physical_filter": "d-r"}
-        dataId3 = {"instrument": "DummyCamComp", "visit": 425}
 
         # Put with exactly the data ID keys needed
         ref = butler.put(metric, "metric1", dataId1)
@@ -899,14 +898,8 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         butler.datastore.templates.validateTemplates([ref])
 
         # Now use a file template that will not result in unique filenames
-        ref = butler.put(metric, "metric3", dataId1)
-
-        # Check the template based on dimensions. This one is a bad template
         with self.assertRaises(FileTemplateValidationError):
-            butler.datastore.templates.validateTemplates([ref])
-
-        with self.assertRaises(FileExistsError):
-            butler.put(metric, "metric3", dataId3)
+            butler.put(metric, "metric3", dataId1)
 
     def testImportExport(self):
         # Run put/get tests just to create and populate a repo.

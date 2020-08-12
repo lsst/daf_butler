@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .. import Butler
+from .. import Butler, ValidationError
 
 
 def configValidate(repo, quiet, dataset_type, ignore):
@@ -36,12 +36,19 @@ def configValidate(repo, quiet, dataset_type, ignore):
     ignore : [`str`]
         "DatasetTypes to ignore for validation."
 
-    Raises
-    ------
-    ValidationError
-        If a configuration fails validation.
+    Returns
+    -------
+    is_good : `bool`
+        `True` if validation was okay. `False` if there was a validation
+        error.
     """
     logFailures = not quiet
     butler = Butler(config=repo)
-    butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=dataset_type, ignore=ignore)
-    print("No problems encountered with configuration.")
+    is_good = True
+    try:
+        butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=dataset_type, ignore=ignore)
+    except ValidationError:
+        is_good = False
+    else:
+        print("No problems encountered with configuration.")
+    return is_good
