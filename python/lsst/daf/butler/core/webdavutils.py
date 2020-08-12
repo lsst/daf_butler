@@ -96,7 +96,7 @@ def getHttpSession() -> requests.Session:
 def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
                           session: Optional[requests.Session] = None) -> Tuple[bool, int]:
     """Check that a remote HTTP resource exists.
-        
+
     Parameters
     ----------
     path : `Location`, `ButlerURI` or `str`
@@ -126,7 +126,7 @@ def webdavDeleteFile(path: Union[Location, ButlerURI, str],
                      session: Optional[requests.Session] = None) -> None:
     """Remove a remote HTTP resource.
     Raises a FileNotFoundError if the resource does not exist or on failure.
-    
+
     Parameters
     ----------
     path : `Location`, `ButlerURI` or `str`

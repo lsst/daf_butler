@@ -50,7 +50,6 @@ from .fileLikeDatastore import FileLikeDatastore
 
 from lsst.daf.butler.core.webdavutils import (
     getHttpSession,
-    folderExists,
     webdavCheckFileExists,
     webdavDeleteFile,
 )
