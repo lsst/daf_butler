@@ -1285,6 +1285,7 @@ class ButlerHttpURI(ButlerURI):
         self.session.put(self.geturl(), data=data)
 
     def transfer_from(self, src: ButlerURI, transfer: str = "copy",
+                      overwrite: bool = False,
                       transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
         """Transfer the current resource to a Webdav repository.
 

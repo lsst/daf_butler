@@ -363,10 +363,14 @@ class WebdavURITestCase(unittest.TestCase):
         existingFileName = "existingFile"
         notExistingFileName = "notExistingFile"
 
-        self.existingFileButlerURI = ButlerURI(f"https://{serverRoot}/{existingFolderName}/{existingFileName}")
-        self.notExistingFileButlerURI = ButlerURI(f"https://{serverRoot}/{existingFolderName}/{notExistingFileName}")
-        self.existingFolderButlerURI = ButlerURI(f"https://{serverRoot}/{existingFolderName}")
-        self.notExistingFolderButlerURI = ButlerURI(f"https://{serverRoot}/{notExistingFileName}")
+        self.existingFileButlerURI = ButlerURI(
+            f"https://{serverRoot}/{existingFolderName}/{existingFileName}")
+        self.notExistingFileButlerURI = ButlerURI(
+            f"https://{serverRoot}/{existingFolderName}/{notExistingFileName}")
+        self.existingFolderButlerURI = ButlerURI(
+            f"https://{serverRoot}/{existingFolderName}")
+        self.notExistingFolderButlerURI = ButlerURI(
+            f"https://{serverRoot}/{notExistingFileName}")
 
         # Used by ButlerHttpURI.exists()
         responses.add(responses.HEAD,
