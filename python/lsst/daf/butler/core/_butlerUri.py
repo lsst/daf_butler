@@ -1261,7 +1261,7 @@ class ButlerHttpURI(ButlerURI):
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
         self.session.put(self.geturl(), data=data)
 
-    def transfer_from(self, src: ButlerURI, transfer: str = "copy",
+    def transfer_from(self, src: ButlerURI, transfer: str,
                       transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
         """Transfer the current resource to a Webdav repository.
 
