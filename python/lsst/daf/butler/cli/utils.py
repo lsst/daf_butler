@@ -134,11 +134,10 @@ def clickResultMsg(result):
     msg : `str`
         The message string.
     """
-    msg = io.StringIO()
+    msg = f"""\noutput: {result.output}\nexception: {result.exception}"""
     if result.exception:
-        traceback.print_tb(result.exception.__traceback__, file=msg)
-        msg.seek(0)
-    return f"\noutput: {result.output}\nexception: {result.exception}\ntraceback: {msg.read()}"
+        msg += f"""\ntraceback: {"".join(traceback.format_tb(result.exception.__traceback__))}"""
+    return msg
 
 
 @contextmanager
