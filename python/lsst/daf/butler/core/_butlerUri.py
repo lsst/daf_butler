@@ -1238,6 +1238,8 @@ class ButlerHttpURI(ButlerURI):
         log.debug("Reading from remote resource: %s", self.geturl())
         stream = True if size > 0 else False
         r = self.session.get(self.geturl(), stream=stream)
+        if r.status_code != 200:
+            raise FileNotFoundError(f"Unable to read resource {self}; status code: {r.status_code}")
         if not stream:
             return r.content
         else:
