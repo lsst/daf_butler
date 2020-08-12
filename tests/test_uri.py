@@ -24,6 +24,7 @@ import shutil
 import tempfile
 import unittest
 import urllib.parse
+import responses
 
 try:
     import boto3
@@ -342,6 +343,47 @@ class S3URITestCase(unittest.TestCase):
         self.assertEqual(child.relativeToPathRoot, subpath)
         self.assertIn("%", child.path)
         self.assertEqual(child.unquoted_path, "/" + subpath)
+
+
+class WebdavURITestCase(unittest.TestCase):
+
+    def setUp(self):
+        serverRoot = "www.lsst.org"
+        existingFolderName = "existingFolder"
+        existingFileName = "existingFile"
+        notExistingFileName = "notExistingFile"
+
+        self.existingFileURL = f"https://{serverRoot}/{existingFolderName}/{existingFileName}"
+        self.notExistingFileURL = f"https://{serverRoot}/{existingFolderName}/{notExistingFileName}"
+
+        # Used by ButlerHttpURI.exists()
+        responses.add(responses.HEAD,
+                      self.existingFileURL,
+                      status=200, headers={'Content-Length': '1024'})
+        responses.add(responses.HEAD,
+                      self.notExistingFileURL,
+                      status=404)
+
+        # Used by ButlerHttpURI.remove()
+        responses.add(responses.DELETE,
+                      self.existingFileURL,
+                      status=200)
+        responses.add(responses.DELETE,
+                      self.notExistingFileURL,
+                      status=404)
+
+    @responses.activate
+    def testExists(self):
+
+        self.assertTrue(ButlerURI(self.existingFileURL).exists())
+        self.assertFalse(ButlerURI(self.notExistingFileURL).exists())
+
+    @responses.activate
+    def testRemove(self):
+
+        self.assertIsNone(ButlerURI(self.existingFileURL).remove())
+        with self.assertRaises(FileNotFoundError):
+            ButlerURI(self.notExistingFileURL).remove()
 
 
 if __name__ == "__main__":
