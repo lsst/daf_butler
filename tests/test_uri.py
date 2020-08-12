@@ -127,6 +127,11 @@ class FileURITestCase(unittest.TestCase):
             if mode in ("symlink", "relsymlink"):
                 self.assertTrue(os.path.islink(dest.ospath), f"Check that {dest} is symlink")
 
+            with self.assertRaises(FileExistsError):
+                dest.transfer_from(src, transfer=mode)
+
+            dest.transfer_from(src, transfer=mode, overwrite=True)
+
             os.remove(dest.ospath)
 
         b = src.read()
@@ -312,6 +317,11 @@ class S3URITestCase(unittest.TestCase):
         subset = dest.read(size=nbytes)
         self.assertEqual(len(subset), nbytes)  # Extra byte comes back
         self.assertEqual(subset.decode(), content[:nbytes])
+
+        with self.assertRaises(FileExistsError):
+            dest.transfer_from(src, transfer="copy")
+
+        dest.transfer_from(src, transfer="copy", overwrite=True)
 
     def testWrite(self):
         s3write = ButlerURI(self.makeS3Uri("created.txt"))

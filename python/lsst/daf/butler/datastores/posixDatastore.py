@@ -166,8 +166,13 @@ class PosixDatastore(FileLikeDatastore):
         predictedFullPath = os.path.join(self.root, formatter.predictPath())
 
         if os.path.exists(predictedFullPath):
-            raise FileExistsError(f"Cannot write file for ref {ref} as "
-                                  f"output file {predictedFullPath} already exists")
+            # Assume that by this point if registry thinks the file should
+            # not exist then the file should not exist and therefore we can
+            # overwrite it. This can happen if a put was interrupted by
+            # an external interrupt. The only time this could be problematic is
+            # if the file template is incomplete and multiple dataset refs
+            # result in identical filenames.
+            log.warning("Object %s exists in datastore for ref %s", location.uri, ref)
 
         def _removeFileExists(path: str) -> None:
             """Remove a file and do not complain if it is not there.

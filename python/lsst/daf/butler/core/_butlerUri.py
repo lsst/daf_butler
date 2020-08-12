@@ -660,6 +660,7 @@ class ButlerURI:
         return parsed, dirLike
 
     def transfer_from(self, src: ButlerURI, transfer: str,
+                      overwrite: bool = False,
                       transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
         """Transfer the current resource to a new location.
 
@@ -671,6 +672,8 @@ class ButlerURI:
             Mode to use for transferring the resource. Generically there are
             many standard options: copy, link, symlink, hardlink, relsymlink.
             Not all URIs support all modes.
+        overwrite : `bool`, optional
+            Allow an existing file to be overwritten. Defaults to `False`.
         transaction : `DatastoreTransaction`, optional
             A transaction object that can (depending on implementation)
             rollback transfers on error.  Not guaranteed to be implemented.
@@ -828,6 +831,7 @@ class ButlerFileURI(ButlerURI):
             raise FileExistsError(f"URI {self} exists but is not a directory!")
 
     def transfer_from(self, src: ButlerURI, transfer: str,
+                      overwrite: bool = False,
                       transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
         """Transfer the current resource to a local file.
 
@@ -838,6 +842,8 @@ class ButlerFileURI(ButlerURI):
         transfer : `str`
             Mode to use for transferring the resource. Supports the following
             options: copy, link, symlink, hardlink, relsymlink.
+        overwrite : `bool`, optional
+            Allow an existing file to be overwritten. Defaults to `False`.
         transaction : `DatastoreTransaction`, optional
             If a transaction is provided, undo actions will be registered.
         """
@@ -874,7 +880,8 @@ class ButlerFileURI(ButlerURI):
             transfer = "move"
 
         # The output location should not exist
-        if self.exists():
+        dest_exists = self.exists()
+        if not overwrite and dest_exists:
             raise FileExistsError(f"Destination path '{self}' already exists. Transfer "
                                   f"from {src} cannot be completed.")
 
@@ -892,6 +899,17 @@ class ButlerFileURI(ButlerURI):
         if transaction is None:
             # Use a no-op transaction to reduce code duplication
             transaction = NoTransaction()
+
+        # For links the OS doesn't let us overwrite so if something does
+        # exist we have to remove it before we do the actual "transfer" below
+        if "link" in transfer and overwrite and dest_exists:
+            try:
+                self.remove()
+            except Exception:
+                # If this fails we ignore it since it's a problem
+                # that will manifest immediately below with a more relevant
+                # error message
+                pass
 
         if transfer == "move":
             with transaction.undoWith(f"move from {local_src}", shutil.move, newFullPath, local_src):
@@ -1098,6 +1116,7 @@ class ButlerS3URI(ButlerURI):
         return tmpFile.name, True
 
     def transfer_from(self, src: ButlerURI, transfer: str = "copy",
+                      overwrite: bool = False,
                       transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
         """Transfer the current resource to an S3 bucket.
 
@@ -1108,6 +1127,8 @@ class ButlerS3URI(ButlerURI):
         transfer : `str`
             Mode to use for transferring the resource. Supports the following
             options: copy.
+        overwrite : `bool`, optional
+            Allow an existing file to be overwritten. Defaults to `False`.
         transaction : `DatastoreTransaction`, optional
             Currently unused.
         """
@@ -1118,7 +1139,7 @@ class ButlerS3URI(ButlerURI):
         log.debug(f"Transferring {src} [exists: {src.exists()}] -> "
                   f"{self} [exists: {self.exists()}] (transfer={transfer})")
 
-        if self.exists():
+        if not overwrite and self.exists():
             raise FileExistsError(f"Destination path '{self}' already exists.")
 
         if transfer == "auto":
