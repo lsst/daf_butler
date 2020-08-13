@@ -1217,7 +1217,7 @@ class ButlerHttpURI(ButlerURI):
         """
         if not self.exists():
             log.debug("Creating new directory: %s", self.geturl())
-            r = self.session.request('MKCOL', self.geturl())
+            r = self.session.request("MKCOL", self.geturl())
             if r.status_code != 201:
                 raise ValueError(f"Can not create directory {self}, status code: {r.status_code}")
 
@@ -1301,22 +1301,22 @@ class ButlerHttpURI(ButlerURI):
         """
         # Fail early to prevent delays if remote resources are requested
         if transfer not in self.transferModes:
-            raise ValueError(f"Transfer mode '{transfer}' not supported by URI scheme {self.scheme}")
+            raise ValueError(f"Transfer mode {transfer} not supported by URI scheme {self.scheme}")
 
         log.debug(f"Transferring {src} [exists: {src.exists()}] -> "
                   f"{self} [exists: {self.exists()}] (transfer={transfer})")
 
         if self.exists():
-            raise FileExistsError(f"Destination path '{self}' already exists.")
+            raise FileExistsError(f"Destination path {self} already exists.")
 
         if transfer == "auto":
             transfer = self.transferDefault
 
         if isinstance(src, type(self)):
             if transfer == "move":
-                self.session.request('MOVE', src.geturl(), headers={'Destination': self.geturl()})
+                self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()})
             else:
-                self.session.request('COPY', src.geturl(), headers={'Destination': self.geturl()})
+                self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()})
         else:
             # Use local file and upload it
             local_src, is_temporary = src.as_local()

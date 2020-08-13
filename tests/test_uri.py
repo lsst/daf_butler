@@ -396,16 +396,16 @@ class WebdavURITestCase(unittest.TestCase):
 
         # Used by ButlerHttpURI.transfer_from()
         responses.add(responses.Response(url=self.existingFileButlerURI.geturl(),
-                                         method='COPY',
-                                         headers={'Destination': self.existingFileButlerURI.geturl()},
+                                         method="COPY",
+                                         headers={"Destination": self.existingFileButlerURI.geturl()},
                                          status=200))
         responses.add(responses.Response(url=self.existingFileButlerURI.geturl(),
-                                         method='COPY',
-                                         headers={'Destination': self.notExistingFileButlerURI.geturl()},
+                                         method="COPY",
+                                         headers={"Destination": self.notExistingFileButlerURI.geturl()},
                                          status=200))
         responses.add(responses.Response(url=self.existingFileButlerURI.geturl(),
-                                         method='MOVE',
-                                         headers={'Destination': self.notExistingFileButlerURI.geturl()},
+                                         method="MOVE",
+                                         headers={"Destination": self.notExistingFileButlerURI.geturl()},
                                          status=200))
 
         # Used by ButlerHttpURI.remove()
@@ -418,10 +418,10 @@ class WebdavURITestCase(unittest.TestCase):
 
         # Used by ButlerHttpURI.mkdir()
         responses.add(responses.Response(url=self.notExistingFolderButlerURI.geturl(),
-                                         method='MKCOL',
+                                         method="MKCOL",
                                          status=201))
         responses.add(responses.Response(url=self.existingFolderButlerURI.geturl(),
-                                         method='MKCOL',
+                                         method="MKCOL",
                                          status=403))
 
     @responses.activate

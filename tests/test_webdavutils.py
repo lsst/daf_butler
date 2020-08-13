@@ -48,7 +48,7 @@ class WebdavUtilsTestCase(unittest.TestCase):
         # Used by webdavCheckFileExists()
         responses.add(responses.HEAD,
                       f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}",
-                      status=200, headers={'Content-Length': '1024'})
+                      status=200, headers={"Content-Length": "1024"})
         responses.add(responses.HEAD,
                       f"https://{self.serverRoot}/{self.existingfolderName}/{self.notExistingfileName}",
                       status=404)
@@ -62,7 +62,7 @@ class WebdavUtilsTestCase(unittest.TestCase):
                       status=404)
 
         # Used by isWebdavEndpoint()
-        responses.add(responses.OPTIONS, f"https://{self.serverRoot}", status=200, headers={'DAV': '1,2,3'})
+        responses.add(responses.OPTIONS, f"https://{self.serverRoot}", status=200, headers={"DAV": "1,2,3"})
         responses.add(responses.OPTIONS, f"https://{self.wrongRoot}", status=200)
 
     @responses.activate
