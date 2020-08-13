@@ -207,6 +207,15 @@ class FieldSpec:
     nullable: bool = True
     """Whether this field is allowed to be NULL."""
 
+    default: Any = None
+    """A server-side default value for this field.
+
+    This is passed directly as the ``server_default`` argument to
+    `sqlalchemy.schema.Column`.  It does _not_ go through SQLAlchemy's usual
+    type conversion or quoting for Python literals, and should hence be used
+    with care.  See the SQLAlchemy documentation for more information.
+    """
+
     doc: Optional[str] = None
     """Documentation for this field."""
 

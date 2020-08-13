@@ -623,7 +623,7 @@ class Database(ABC):
                                             metadata=metadata))
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {table}.{spec.name}."
         return sqlalchemy.schema.Column(*args, nullable=spec.nullable, primary_key=spec.primaryKey,
-                                        comment=spec.doc, **kwds)
+                                        comment=spec.doc, server_default=spec.default, **kwds)
 
     def _convertForeignKeySpec(self, table: str, spec: ddl.ForeignKeySpec, metadata: sqlalchemy.MetaData,
                                **kwds: Any) -> sqlalchemy.schema.ForeignKeyConstraint:
