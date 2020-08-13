@@ -46,6 +46,7 @@ from typing import (
     Mapping,
     Optional,
     Type,
+    TypeVar,
     Union,
 )
 
@@ -237,7 +238,10 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-def transactional(func: Callable) -> Callable:
+F = TypeVar("F", bound=Callable)
+
+
+def transactional(func: F) -> F:
     """Decorator that wraps a method and makes it transactional.
 
     This depends on the class also defining a `transaction` method
@@ -247,7 +251,7 @@ def transactional(func: Callable) -> Callable:
     def inner(self: Any, *args: Any, **kwargs: Any) -> Any:
         with self.transaction():
             return func(self, *args, **kwargs)
-    return inner
+    return inner  # type: ignore
 
 
 def stripIfNotNone(s: Optional[str]) -> Optional[str]:
