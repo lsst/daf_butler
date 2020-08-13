@@ -24,6 +24,7 @@ import shutil
 import tempfile
 import unittest
 import urllib.parse
+import responses
 
 try:
     import boto3
@@ -352,6 +353,126 @@ class S3URITestCase(unittest.TestCase):
         self.assertEqual(child.relativeToPathRoot, subpath)
         self.assertIn("%", child.path)
         self.assertEqual(child.unquoted_path, "/" + subpath)
+
+
+class WebdavURITestCase(unittest.TestCase):
+
+    def setUp(self):
+        serverRoot = "www.lsst.org"
+        existingFolderName = "existingFolder"
+        existingFileName = "existingFile"
+        notExistingFileName = "notExistingFile"
+
+        self.existingFileButlerURI = ButlerURI(
+            f"https://{serverRoot}/{existingFolderName}/{existingFileName}")
+        self.notExistingFileButlerURI = ButlerURI(
+            f"https://{serverRoot}/{existingFolderName}/{notExistingFileName}")
+        self.existingFolderButlerURI = ButlerURI(
+            f"https://{serverRoot}/{existingFolderName}")
+        self.notExistingFolderButlerURI = ButlerURI(
+            f"https://{serverRoot}/{notExistingFileName}")
+
+        # Used by ButlerHttpURI.exists()
+        responses.add(responses.HEAD,
+                      self.existingFileButlerURI.geturl(),
+                      status=200, headers={'Content-Length': '1024'})
+        responses.add(responses.HEAD,
+                      self.notExistingFileButlerURI.geturl(),
+                      status=404)
+
+        # Used by ButlerHttpURI.read()
+        responses.add(responses.GET,
+                      self.existingFileButlerURI.geturl(),
+                      status=200,
+                      body=str.encode("It works!"))
+        responses.add(responses.GET,
+                      self.notExistingFileButlerURI.geturl(),
+                      status=404)
+
+        # Used by ButlerHttpURI.write()
+        responses.add(responses.PUT,
+                      self.existingFileButlerURI.geturl(),
+                      status=200)
+
+        # Used by ButlerHttpURI.transfer_from()
+        responses.add(responses.Response(url=self.existingFileButlerURI.geturl(),
+                                         method="COPY",
+                                         headers={"Destination": self.existingFileButlerURI.geturl()},
+                                         status=200))
+        responses.add(responses.Response(url=self.existingFileButlerURI.geturl(),
+                                         method="COPY",
+                                         headers={"Destination": self.notExistingFileButlerURI.geturl()},
+                                         status=200))
+        responses.add(responses.Response(url=self.existingFileButlerURI.geturl(),
+                                         method="MOVE",
+                                         headers={"Destination": self.notExistingFileButlerURI.geturl()},
+                                         status=200))
+
+        # Used by ButlerHttpURI.remove()
+        responses.add(responses.DELETE,
+                      self.existingFileButlerURI.geturl(),
+                      status=200)
+        responses.add(responses.DELETE,
+                      self.notExistingFileButlerURI.geturl(),
+                      status=404)
+
+        # Used by ButlerHttpURI.mkdir()
+        responses.add(responses.Response(url=self.notExistingFolderButlerURI.geturl(),
+                                         method="MKCOL",
+                                         status=201))
+        responses.add(responses.Response(url=self.existingFolderButlerURI.geturl(),
+                                         method="MKCOL",
+                                         status=403))
+
+    @responses.activate
+    def testExists(self):
+
+        self.assertTrue(self.existingFileButlerURI.exists())
+        self.assertFalse(self.notExistingFileButlerURI.exists())
+
+    @responses.activate
+    def testRemove(self):
+
+        self.assertIsNone(self.existingFileButlerURI.remove())
+        with self.assertRaises(FileNotFoundError):
+            self.notExistingFileButlerURI.remove()
+
+    @responses.activate
+    def testMkdir(self):
+
+        self.assertIsNone(self.notExistingFolderButlerURI.mkdir())
+        with self.assertRaises(ValueError):
+            self.existingFolderButlerURI.mkdir()
+
+    @responses.activate
+    def testRead(self):
+
+        self.assertEqual(self.existingFileButlerURI.read().decode(), "It works!")
+        self.assertNotEqual(self.existingFileButlerURI.read().decode(), "Nope.")
+        with self.assertRaises(FileNotFoundError):
+            self.notExistingFileButlerURI.read()
+
+    @responses.activate
+    def testWrite(self):
+
+        self.assertIsNone(self.existingFileButlerURI.write(data=str.encode("Some content.")))
+        with self.assertRaises(FileExistsError):
+            self.existingFileButlerURI.write(data=str.encode("Some content."), overwrite=False)
+
+    @responses.activate
+    def testTransfer(self):
+
+        self.assertIsNone(self.notExistingFileButlerURI.transfer_from(
+            src=self.existingFileButlerURI))
+        self.assertIsNone(self.notExistingFileButlerURI.transfer_from(
+            src=self.existingFileButlerURI,
+            transfer="move"))
+        with self.assertRaises(FileExistsError):
+            self.existingFileButlerURI.transfer_from(src=self.existingFileButlerURI)
+        with self.assertRaises(ValueError):
+            self.notExistingFileButlerURI.transfer_from(
+                src=self.existingFileButlerURI,
+                transfer="unsupported")
 
 
 if __name__ == "__main__":

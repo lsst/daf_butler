@@ -1193,10 +1193,40 @@ class ButlerPackageResourceURI(ButlerURI):
 class ButlerHttpURI(ButlerURI):
     """General HTTP(S) resource."""
 
+    @property
+    def session(self) -> requests.Session:
+        """Client object to address remote resource."""
+        from .webdavutils import getHttpSession, isWebdavEndpoint
+        if isWebdavEndpoint(self):
+            log.debug("%s looks like a Webdav endpoint.", self.geturl())
+            return getHttpSession()
+
+        log.debug("%s looks like a standard HTTP endpoint.", self.geturl())
+        return requests.Session()
+
     def exists(self) -> bool:
         """Check that a remote HTTP resource exists."""
-        header = requests.head(self.geturl())
-        return True if header.status_code == 200 else False
+        log.debug("Checking if resource exists: %s", self.geturl())
+        r = self.session.head(self.geturl())
+
+        return True if r.status_code == 200 else False
+
+    def mkdir(self) -> None:
+        """For a dir-like URI, create the directory resource if it does not
+        already exist.
+        """
+        if not self.exists():
+            log.debug("Creating new directory: %s", self.geturl())
+            r = self.session.request("MKCOL", self.geturl())
+            if r.status_code != 201:
+                raise ValueError(f"Can not create directory {self}, status code: {r.status_code}")
+
+    def remove(self) -> None:
+        """Remove the resource."""
+        log.debug("Removing resource: %s", self.geturl())
+        r = self.session.delete(self.geturl())
+        if r.status_code not in [200, 202, 204]:
+            raise FileNotFoundError(f"Unable to delete resource {self}; status code: {r.status_code}")
 
     def as_local(self) -> Tuple[str, bool]:
         """Download object over HTTP and place in temporary directory.
@@ -1208,7 +1238,8 @@ class ButlerHttpURI(ButlerURI):
         temporary : `bool`
             Always returns `True`. This is always a temporary file.
         """
-        r = requests.get(self.geturl(), stream=True)
+        log.debug("Downloading remote resource as local file: %s", self.geturl())
+        r = self.session.get(self.geturl(), stream=True)
         if r.status_code != 200:
             raise FileNotFoundError(f"Unable to download resource {self}; status code: {r.status_code}")
         with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
@@ -1217,13 +1248,84 @@ class ButlerHttpURI(ButlerURI):
         return tmpFile.name, True
 
     def read(self, size: int = -1) -> bytes:
-        # Docstring inherits
+        """Open the resource and return the contents in bytes.
+
+        Parameters
+        ----------
+        size : `int`, optional
+            The number of bytes to read. Negative or omitted indicates
+            that all data should be read.
+        """
+        log.debug("Reading from remote resource: %s", self.geturl())
         stream = True if size > 0 else False
-        r = requests.get(self.geturl(), stream=stream)
+        r = self.session.get(self.geturl(), stream=stream)
+        if r.status_code != 200:
+            raise FileNotFoundError(f"Unable to read resource {self}; status code: {r.status_code}")
         if not stream:
             return r.content
         else:
             return next(r.iter_content(chunk_size=size))
+
+    def write(self, data: bytes, overwrite: bool = True) -> None:
+        """Write the supplied bytes to the new resource.
+
+        Parameters
+        ----------
+        data : `bytes`
+            The bytes to write to the resource. The entire contents of the
+            resource will be replaced.
+        overwrite : `bool`, optional
+            If `True` the resource will be overwritten if it exists. Otherwise
+            the write will fail.
+        """
+        log.debug("Writing to remote resource: %s", self.geturl())
+        if not overwrite:
+            if self.exists():
+                raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
+        self.session.put(self.geturl(), data=data)
+
+    def transfer_from(self, src: ButlerURI, transfer: str = "copy",
+                      overwrite: bool = False,
+                      transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
+        """Transfer the current resource to a Webdav repository.
+
+        Parameters
+        ----------
+        src : `ButlerURI`
+            Source URI.
+        transfer : `str`
+            Mode to use for transferring the resource. Supports the following
+            options: copy.
+        transaction : `DatastoreTransaction`, optional
+            Currently unused.
+        """
+        # Fail early to prevent delays if remote resources are requested
+        if transfer not in self.transferModes:
+            raise ValueError(f"Transfer mode {transfer} not supported by URI scheme {self.scheme}")
+
+        log.debug(f"Transferring {src} [exists: {src.exists()}] -> "
+                  f"{self} [exists: {self.exists()}] (transfer={transfer})")
+
+        if self.exists():
+            raise FileExistsError(f"Destination path {self} already exists.")
+
+        if transfer == "auto":
+            transfer = self.transferDefault
+
+        if isinstance(src, type(self)):
+            if transfer == "move":
+                self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()})
+            else:
+                self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()})
+        else:
+            # Use local file and upload it
+            local_src, is_temporary = src.as_local()
+            f = open(local_src, "rb")
+            files = {"file": f}
+            self.session.post(self.geturl(), files=files)
+            f.close()
+            if is_temporary:
+                os.remove(local_src)
 
 
 class ButlerInMemoryURI(ButlerURI):

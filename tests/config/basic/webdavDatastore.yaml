@@ -1,0 +1,6 @@
+datastore:
+  cls: lsst.daf.butler.datastores.webdavDatastore.WebdavDatastore
+  root: https://some.webdav.server/butlerRoot
+  templates: !include templates.yaml
+  formatters: !include formatters.yaml
+  composites: !include composites.yaml
