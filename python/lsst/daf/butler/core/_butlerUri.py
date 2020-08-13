@@ -1320,8 +1320,10 @@ class ButlerHttpURI(ButlerURI):
         else:
             # Use local file and upload it
             local_src, is_temporary = src.as_local()
-            files = {'file': open(local_src, 'rb')}
+            f = open(local_src, "rb")
+            files = {"file": f}
             self.session.post(self.geturl(), files=files)
+            f.close()
             if is_temporary:
                 os.remove(local_src)
 
