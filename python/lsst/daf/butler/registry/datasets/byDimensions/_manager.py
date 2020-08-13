@@ -198,4 +198,4 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
 
     def schemaDigest(self) -> Optional[str]:
         # Docstring inherited from VersionedExtension.
-        return self._defaultSchemaDigest(self._static)
+        return self._defaultSchemaDigest(self._static, self._db.dialect)

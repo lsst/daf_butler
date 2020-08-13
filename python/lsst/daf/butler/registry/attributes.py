@@ -135,4 +135,4 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
 
     def schemaDigest(self) -> Optional[str]:
         # Docstring inherited from VersionedExtension.
-        return self._defaultSchemaDigest([self._table])
+        return self._defaultSchemaDigest([self._table], self._db.dialect)

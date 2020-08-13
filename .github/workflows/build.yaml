@@ -21,6 +21,12 @@ jobs:
       - name: Install sqlite
         run: sudo apt-get install sqlite libyaml-dev
 
+      - name: Install postgresql (server)
+        run: sudo apt install postgresql
+
+      - name: Install postgresql Python packages
+        run: pip install psycopg2 testing.postgresql
+
       # It seems like pip install of requirements for a URL package
       # does not install those dependencies
       - name: Install sphgeom dependencies

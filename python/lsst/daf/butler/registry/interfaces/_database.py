@@ -51,6 +51,8 @@ import sqlalchemy
 from ...core import ddl, time_utils
 from .._exceptions import ConflictingDefinitionError
 
+_IN_SAVEPOINT_TRANSACTION = "IN_SAVEPOINT_TRANSACTION"
+
 
 def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: List[Dict[str, Any]]) -> None:
     """Test that the definition of a table in a `ddl.TableSpec` and from
@@ -335,31 +337,86 @@ class Database(ABC):
         raise NotImplementedError()
 
     @contextmanager
-    def transaction(self, *, interrupting: bool = False) -> Iterator:
+    def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
+                    lock: Iterable[sqlalchemy.schema.Table] = ()) -> Iterator:
         """Return a context manager that represents a transaction.
 
         Parameters
         ----------
-        interrupting : `bool`
-            If `True`, this transaction block needs to be able to interrupt
-            any existing one in order to yield correct behavior.
+        interrupting : `bool`, optional
+            If `True` (`False` is default), this transaction block may not be
+            nested without an outer one, and attempting to do so is a logic
+            (i.e. assertion) error.
+        savepoint : `bool`, optional
+            If `True` (`False` is default), create a `SAVEPOINT`, allowing
+            exceptions raised by the database (e.g. due to constraint
+            violations) during this transaction's context to be caught outside
+            it without also rolling back all operations in an outer transaction
+            block.  If `False`, transactions may still be nested, but a
+            rollback may be generated at any level and affects all levels, and
+            commits are deferred until the outermost block completes.  If any
+            outer transaction block was created with ``savepoint=True``, all
+            inner blocks will be as well (regardless of the actual value
+            passed).  This has no effect if this is the outermost transaction.
+        lock : `Iterable` [ `sqlalchemy.schema.Table` ], optional
+            A list of tables to lock for the duration of this transaction.
+            These locks are guaranteed to prevent concurrent writes, but only
+            prevent concurrent reads if the database engine requires that in
+            order to block concurrent writes.
+
+        Notes
+        -----
+        All transactions on a connection managed by one or more `Database`
+        instances _must_ go through this method, or transaction state will not
+        be correctly managed.
         """
         assert not (interrupting and self._connection.in_transaction()), (
             "Logic error in transaction nesting: an operation that would "
             "interrupt the active transaction context has been requested."
         )
-        if self._connection.in_transaction():
+        # We remember whether we are already in a SAVEPOINT transaction via the
+        # connection object's 'info' dict, which is explicitly for user
+        # information like this.  This is safer than a regular `Database`
+        # instance attribute, because it guards against multiple `Database`
+        # instances sharing the same connection.  The need to use our own flag
+        # here to track whether we're in a nested transaction should go away in
+        # SQLAlchemy 1.4, which seems to have a
+        # `Connection.in_nested_transaction()` method.
+        savepoint = savepoint or self._connection.info.get(_IN_SAVEPOINT_TRANSACTION, False)
+        self._connection.info[_IN_SAVEPOINT_TRANSACTION] = savepoint
+        if self._connection.in_transaction() and savepoint:
             trans = self._connection.begin_nested()
         else:
-            # Use a regular (non-savepoint) transaction only for the outermost
-            # context.
+            # Use a regular (non-savepoint) transaction always for the
+            # outermost context, as well as when a savepoint was not requested.
             trans = self._connection.begin()
+        self._lockTables(lock)
         try:
             yield
             trans.commit()
         except BaseException:
             trans.rollback()
             raise
+        finally:
+            if not self._connection.in_transaction():
+                self._connection.info.pop(_IN_SAVEPOINT_TRANSACTION, None)
+
+    @abstractmethod
+    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+        """Acquire locks on the given tables.
+
+        This is an implementation hook for subclasses, called by `transaction`.
+        It should not be called directly by other code.
+
+        Parameters
+        ----------
+        tables : `Iterable` [ `sqlalchemy.schema.Table` ], optional
+            A list of tables to lock for the duration of this transaction.
+            These locks are guaranteed to prevent concurrent writes, but only
+            prevent concurrent reads if the database engine requires that in
+            order to block concurrent writes.
+        """
+        raise NotImplementedError()
 
     @contextmanager
     def declareStaticTables(self, *, create: bool) -> Iterator[StaticTablesContext]:
@@ -445,6 +502,13 @@ class Database(ABC):
         any namespace or schema that identifies its names within a `Registry`.
         """
         raise NotImplementedError()
+
+    @property
+    def dialect(self) -> sqlalchemy.engine.Dialect:
+        """The SQLAlchemy dialect for this database engine
+        (`sqlalchemy.engine.Dialect`).
+        """
+        return self._connection.dialect
 
     def shrinkDatabaseEntityName(self, original: str) -> str:
         """Return a version of the given name that fits within this database

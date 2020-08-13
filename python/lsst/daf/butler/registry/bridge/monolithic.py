@@ -266,4 +266,4 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
 
     def schemaDigest(self) -> Optional[str]:
         # Docstring inherited from VersionedExtension.
-        return self._defaultSchemaDigest(self._tables)
+        return self._defaultSchemaDigest(self._tables, self._db.dialect)

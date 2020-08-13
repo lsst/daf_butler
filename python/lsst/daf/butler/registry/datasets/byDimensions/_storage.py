@@ -50,7 +50,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._runKeyColumn = collections.getRunForeignKeyName()
 
     def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
-        # Docstring inherited from DatasetRecordStorageManager.
+        # Docstring inherited from DatasetRecordStorage.
         staticRow = {
             "dataset_type_id": self._dataset_type_id,
             self._runKeyColumn: run.key,
@@ -84,7 +84,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             )
 
     def find(self, collection: CollectionRecord, dataId: DataCoordinate) -> Optional[DatasetRef]:
-        # Docstring inherited from DatasetRecordStorageManager.
+        # Docstring inherited from DatasetRecordStorage.
         assert dataId.graph == self.datasetType.dimensions
         sql = self.select(collection=collection, dataId=dataId, id=SimpleQuery.Select,
                           run=SimpleQuery.Select).combine()
@@ -99,7 +99,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         )
 
     def delete(self, datasets: Iterable[DatasetRef]) -> None:
-        # Docstring inherited from DatasetRecordStorageManager.
+        # Docstring inherited from DatasetRecordStorage.
         # Only delete from common dataset table; ON DELETE foreign key clauses
         # will handle the rest.
         self._db.delete(
@@ -109,7 +109,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         )
 
     def associate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
-        # Docstring inherited from DatasetRecordStorageManager.
+        # Docstring inherited from DatasetRecordStorage.
         if collection.type is not CollectionType.TAGGED:
             raise TypeError(f"Cannot associate into collection '{collection}' "
                             f"of type {collection.type.name}; must be TAGGED.")
@@ -126,7 +126,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._db.replace(self._dynamic, *rows)
 
     def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
-        # Docstring inherited from DatasetRecordStorageManager.
+        # Docstring inherited from DatasetRecordStorage.
         if collection.type is not CollectionType.TAGGED:
             raise TypeError(f"Cannot disassociate from collection '{collection}' "
                             f"of type {collection.type.name}; must be TAGGED.")
@@ -145,7 +145,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                ) -> SimpleQuery:
-        # Docstring inherited from DatasetRecordStorageManager.
+        # Docstring inherited from DatasetRecordStorage.
         assert collection.type is not CollectionType.CHAINED
         query = SimpleQuery()
         # We always include the _static.dataset table, and we can always get
@@ -183,7 +183,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         return query
 
     def getDataId(self, id: int) -> DataCoordinate:
-        # Docstring inherited from DatasetRecordStorageManager.
+        # Docstring inherited from DatasetRecordStorage.
         # This query could return multiple rows (one for each tagged collection
         # the dataset is in, plus one for its run collection), and we don't
         # care which of those we get.

@@ -141,13 +141,17 @@ class VersionedExtension(ABC):
         """
         raise NotImplementedError()
 
-    def _defaultSchemaDigest(self, tables: Iterable[sqlalchemy.schema.Table]) -> str:
+    def _defaultSchemaDigest(self, tables: Iterable[sqlalchemy.schema.Table],
+                             dialect: sqlalchemy.engine.Dialect) -> str:
         """Calculate digest for a schema based on list of tables schemas.
 
         Parameters
         ----------
         tables : iterable [`sqlalchemy.schema.Table`]
             Set of tables comprising the schema.
+        dialect : `sqlalchemy.engine.Dialect`, optional
+            Dialect used to stringify types; needed to support dialect-specific
+            types.
 
         Returns
         -------
@@ -173,7 +177,7 @@ class VersionedExtension(ABC):
             tableSchemaRepr = [table.name]
             schemaReps = []
             for column in table.columns:
-                columnRep = f"COL,{column.name},{column.type}"
+                columnRep = f"COL,{column.name},{column.type.compile(dialect=dialect)}"
                 if column.primary_key:
                     columnRep += ",PK"
                 if column.nullable:
