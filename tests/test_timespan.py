@@ -29,6 +29,9 @@ from lsst.daf.butler import Timespan
 
 class TimespanTestCase(unittest.TestCase):
     """Tests for the `Timespan` class.
+
+    Test coverage for the `DatabaseTimespanRepresentation` classes is handled
+    by the tests for `Database` and its subclasses.
     """
 
     def setUp(self):

@@ -26,9 +26,11 @@ from abc import ABC, abstractmethod
 import asyncio
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
+import itertools
 from typing import ContextManager, Iterable, Set, Tuple
 import warnings
 
+import astropy.time
 import sqlalchemy
 
 from lsst.sphgeom import ConvexPolygon, UnitVector3d
@@ -38,7 +40,7 @@ from ..interfaces import (
     DatabaseConflictError,
     SchemaAlreadyDefinedError
 )
-from ...core import ddl
+from ...core import ddl, Timespan
 
 StaticTablesTuple = namedtuple("StaticTablesTuple", ["a", "b", "c"])
 
@@ -688,3 +690,182 @@ class DatabaseTests(ABC):
                 self.assertEqual(names2, {"a1"})
 
         asyncio.run(testSolutionWithLocking())
+
+    def testDatabaseTimespanRepresentation(self):
+        """Tests for `DatabaseTimespanRepresentation` and the `Database`
+        methods that interact with it.
+        """
+        # Make some test timespans to play with, with the full suite of
+        # topological relationships.
+        start = astropy.time.Time('2020-01-01T00:00:00', format="isot", scale="tai")
+        offset = astropy.time.TimeDelta(60, format="sec")
+        timestamps = [start + offset*n for n in range(3)]
+        aTimespans = [Timespan(begin=None, end=None)]
+        aTimespans.extend(Timespan(begin=None, end=t) for t in timestamps)
+        aTimespans.extend(Timespan(begin=t, end=None) for t in timestamps)
+        aTimespans.extend(Timespan(begin=t1, end=t2) for t1, t2 in itertools.combinations(timestamps, 2))
+        # Make another list of timespans that span the full range but don't
+        # overlap.  This is a subset of the previous list.
+        bTimespans = [Timespan(begin=None, end=timestamps[0])]
+        bTimespans.extend(Timespan(begin=t1, end=t2) for t1, t2 in zip(timestamps[:-1], timestamps[1:]))
+        bTimespans.append(Timespan(begin=timestamps[-1], end=None))
+        # Make a database and create a table with that database's timespan
+        # representation.  This one will have no exclusion constraint and
+        # a nullable timespan.
+        db = self.makeEmptyDatabase(origin=1)
+        tsRepr = db.getTimespanRepresentation()
+        aSpec = ddl.TableSpec(
+            fields=[
+                ddl.FieldSpec(name="id", dtype=sqlalchemy.Integer, primaryKey=True),
+            ],
+        )
+        for fieldSpec in tsRepr.makeFieldSpecs(nullable=True):
+            aSpec.fields.add(fieldSpec)
+        with db.declareStaticTables(create=True) as context:
+            aTable = context.addTable("a", aSpec)
+
+        def convertRowForInsert(row: dict) -> dict:
+            """Convert a row containing a Timespan instance into one suitable
+            for insertion into the database.
+            """
+            result = row.copy()
+            ts = result.pop(tsRepr.NAME)
+            return tsRepr.update(ts, result=result)
+
+        def convertRowFromSelect(row: dict) -> dict:
+            """Convert a row from the database into one containing a Timespan.
+            """
+            result = row.copy()
+            timespan = tsRepr.extract(result)
+            for name in tsRepr.getFieldNames():
+                del result[name]
+            result[tsRepr.NAME] = timespan
+            return result
+
+        # Insert rows into table A, in chunks just to make things interesting.
+        # Include one with a NULL timespan.
+        aRows = [{"id": n, tsRepr.NAME: t} for n, t in enumerate(aTimespans)]
+        aRows.append({"id": len(aRows), tsRepr.NAME: None})
+        db.insert(aTable, convertRowForInsert(aRows[0]))
+        db.insert(aTable, *[convertRowForInsert(r) for r in aRows[1:3]])
+        db.insert(aTable, *[convertRowForInsert(r) for r in aRows[3:]])
+        # Add another one with a NULL timespan, but this time by invoking
+        # the server-side default.
+        aRows.append({"id": len(aRows)})
+        db.insert(aTable, aRows[-1])
+        aRows[-1][tsRepr.NAME] = None
+        # Test basic round-trip through database.
+        self.assertEqual(
+            aRows,
+            [convertRowFromSelect(dict(row))
+             for row in db.query(aTable.select().order_by(aTable.columns.id)).fetchall()]
+        )
+        # Create another table B with a not-null timespan and (if the database
+        # supports it), an exclusion constraint.  Use ensureTableExists this
+        # time to check that mode of table creation vs. timespans.
+        bSpec = ddl.TableSpec(
+            fields=[
+                ddl.FieldSpec(name="id", dtype=sqlalchemy.Integer, primaryKey=True),
+                ddl.FieldSpec(name="key", dtype=sqlalchemy.Integer, nullable=False),
+            ],
+        )
+        for fieldSpec in tsRepr.makeFieldSpecs(nullable=False):
+            bSpec.fields.add(fieldSpec)
+        if tsRepr.hasExclusionConstraint():
+            bSpec.exclusion.add(("key", tsRepr))
+        bTable = db.ensureTableExists("b", bSpec)
+        # Insert rows into table B, again in chunks.  Each Timespan appears
+        # twice, but with different values for the 'key' field (which should
+        # still be okay for any exclusion constraint we may have defined).
+        bRows = [{"id": n, "key": 1, tsRepr.NAME: t} for n, t in enumerate(bTimespans)]
+        offset = len(bRows)
+        bRows.extend({"id": n + offset, "key": 2, tsRepr.NAME: t} for n, t in enumerate(bTimespans))
+        db.insert(bTable, *[convertRowForInsert(r) for r in bRows[:2]])
+        db.insert(bTable, convertRowForInsert(bRows[2]))
+        db.insert(bTable, *[convertRowForInsert(r) for r in bRows[3:]])
+        # Insert a row with no timespan into table B.  This should invoke the
+        # server-side default, which is a timespan over (-∞, ∞).  We set
+        # key=3 to avoid upsetting an exclusion constraint that might exist.
+        bRows.append({"id": len(bRows), "key": 3})
+        db.insert(bTable, bRows[-1])
+        bRows[-1][tsRepr.NAME] = Timespan(None, None)
+        # Test basic round-trip through database.
+        self.assertEqual(
+            bRows,
+            [convertRowFromSelect(dict(row))
+             for row in db.query(bTable.select().order_by(bTable.columns.id)).fetchall()]
+        )
+        # Test that we can't insert timespan=None into this table.
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
+            db.insert(bTable, convertRowForInsert({"id": len(bRows), "key": 4, tsRepr.NAME: None}))
+        # IFF this database supports exclusion constraints, test that they
+        # also prevent inserts.
+        if tsRepr.hasExclusionConstraint():
+            with self.assertRaises(sqlalchemy.exc.IntegrityError):
+                db.insert(bTable, convertRowForInsert({"id": len(bRows), "key": 1,
+                                                       tsRepr.NAME: Timespan(None, timestamps[1])}))
+            with self.assertRaises(sqlalchemy.exc.IntegrityError):
+                db.insert(bTable, convertRowForInsert({"id": len(bRows), "key": 1,
+                                                       tsRepr.NAME: Timespan(timestamps[0], timestamps[2])}))
+            with self.assertRaises(sqlalchemy.exc.IntegrityError):
+                db.insert(bTable, convertRowForInsert({"id": len(bRows), "key": 1,
+                                                       tsRepr.NAME: Timespan(timestamps[2], None)}))
+        # Test NULL checks in SELECT queries, on both tables.
+        aRepr = tsRepr.fromSelectable(aTable)
+        self.assertEqual(
+            [row[tsRepr.NAME] is None for row in aRows],
+            [
+                row["f"] for row in db.query(
+                    sqlalchemy.sql.select(
+                        [aRepr.isNull().label("f")]
+                    ).order_by(
+                        aTable.columns.id
+                    )
+                ).fetchall()
+            ]
+        )
+        bRepr = tsRepr.fromSelectable(bTable)
+        self.assertEqual(
+            [False for row in bRows],
+            [
+                row["f"] for row in db.query(
+                    sqlalchemy.sql.select(
+                        [bRepr.isNull().label("f")]
+                    ).order_by(
+                        bTable.columns.id
+                    )
+                ).fetchall()
+            ]
+        )
+        # Test overlap expressions that relate in-database A timespans to
+        # Python-literal B timespans; check that this is consistent with
+        # Python-only overlap tests.
+        for bRow in bRows:
+            with self.subTest(bRow=bRow):
+                expected = {}
+                for aRow in aRows:
+                    if aRow[tsRepr.NAME] is None:
+                        expected[aRow["id"]] = None
+                    else:
+                        expected[aRow["id"]] = aRow[tsRepr.NAME].overlaps(bRow[tsRepr.NAME])
+                sql = sqlalchemy.sql.select(
+                    [aTable.columns.id.label("a"), aRepr.overlaps(bRow[tsRepr.NAME]).label("f")]
+                ).select_from(aTable)
+                queried = {row["a"]: row["f"] for row in db.query(sql).fetchall()}
+                self.assertEqual(expected, queried)
+        # Test overlap expressions that relate in-database A timespans to
+        # in-database B timespans; check that this is consistent with
+        # Python-only overlap tests.
+        expected = {
+            (aRow["id"], bRow["id"]): (aRow[tsRepr.NAME].overlaps(bRow[tsRepr.NAME])
+                                       if aRow[tsRepr.NAME] is not None else None)
+            for aRow, bRow in itertools.product(aRows, bRows)
+        }
+        sql = sqlalchemy.sql.select(
+            [
+                aTable.columns.id.label("a"),
+                bTable.columns.id.label("b"),
+                aRepr.overlaps(bRepr).label("f")
+            ]
+        ).select_from(aTable.join(bTable, onclause=sqlalchemy.sql.literal(True)))
+        queried = {(row["a"], row["b"]): row["f"] for row in db.query(sql).fetchall()}
