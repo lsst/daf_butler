@@ -27,6 +27,7 @@ from contextlib import contextmanager
 import copy
 import enum
 import itertools
+import logging
 from typing import (
     Callable,
     Iterable,
@@ -60,6 +61,9 @@ from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryM
 
 if TYPE_CHECKING:
     from ._builder import QueryBuilder
+
+
+_LOG = logging.getLogger("daf.butler.registry.queries")
 
 
 class Query(ABC):
@@ -271,7 +275,9 @@ class Query(ABC):
             of any real rows to indicate an empty query (see `EmptyQuery`).
         """
         predicate = self.predicate(region)
-        for row in db.query(self.sql):
+        sql = self.sql
+        _LOG.debug("Executing query: '''\n%s\n'''", sql)
+        for row in db.query(sql):
             if predicate(row):
                 yield row
 
