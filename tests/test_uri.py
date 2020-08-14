@@ -358,7 +358,7 @@ class S3URITestCase(unittest.TestCase):
 class WebdavURITestCase(unittest.TestCase):
 
     def setUp(self):
-        serverRoot = "www.lsst.org"
+        serverRoot = "www.not-exists.orgx"
         existingFolderName = "existingFolder"
         existingFileName = "existingFile"
         notExistingFileName = "notExistingFile"
@@ -368,9 +368,23 @@ class WebdavURITestCase(unittest.TestCase):
         self.notExistingFileButlerURI = ButlerURI(
             f"https://{serverRoot}/{existingFolderName}/{notExistingFileName}")
         self.existingFolderButlerURI = ButlerURI(
-            f"https://{serverRoot}/{existingFolderName}")
+            f"https://{serverRoot}/{existingFolderName}", forceDirectory=True)
         self.notExistingFolderButlerURI = ButlerURI(
-            f"https://{serverRoot}/{notExistingFileName}")
+            f"https://{serverRoot}/{notExistingFileName}", forceDirectory=True)
+
+        # Need to declare the options
+        responses.add(responses.OPTIONS,
+                      self.existingFileButlerURI.geturl(),
+                      headers={'not': '1024'}, status=200)
+        responses.add(responses.OPTIONS,
+                      self.notExistingFileButlerURI.geturl(),
+                      headers={'not': '1024'}, status=200)
+        responses.add(responses.OPTIONS,
+                      self.notExistingFolderButlerURI.geturl(),
+                      headers={'not': '1024'}, status=200)
+        responses.add(responses.OPTIONS,
+                      self.existingFolderButlerURI.geturl(),
+                      headers={'not': '1024'}, status=200)
 
         # Used by ButlerHttpURI.exists()
         responses.add(responses.HEAD,
@@ -417,6 +431,12 @@ class WebdavURITestCase(unittest.TestCase):
                       status=404)
 
         # Used by ButlerHttpURI.mkdir()
+        responses.add(responses.HEAD,
+                      self.existingFolderButlerURI.geturl(),
+                      status=200, headers={'Content-Length': '1024'})
+        responses.add(responses.HEAD,
+                      self.notExistingFolderButlerURI.geturl(),
+                      status=404)
         responses.add(responses.Response(url=self.notExistingFolderButlerURI.geturl(),
                                          method="MKCOL",
                                          status=201))
@@ -440,9 +460,14 @@ class WebdavURITestCase(unittest.TestCase):
     @responses.activate
     def testMkdir(self):
 
-        self.assertIsNone(self.notExistingFolderButlerURI.mkdir())
+        # The mock means that we can't check this now exists
+        self.notExistingFolderButlerURI.mkdir()
+
+        # This should do nothing
+        self.existingFolderButlerURI.mkdir()
+
         with self.assertRaises(ValueError):
-            self.existingFolderButlerURI.mkdir()
+            self.notExistingFileButlerURI.mkdir()
 
     @responses.activate
     def testRead(self):

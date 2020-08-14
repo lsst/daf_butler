@@ -1095,7 +1095,7 @@ class ButlerS3URI(ButlerURI):
             raise ValueError(f"Bucket {self.netloc} does not exist for {self}!")
 
         if not self.dirLike:
-            raise ValueError("Can not create a 'directory' for file-like URI {self}")
+            raise ValueError(f"Can not create a 'directory' for file-like URI {self}")
 
         # don't create S3 key when root is at the top-level of an Bucket
         if not self.path == "/":
@@ -1215,6 +1215,9 @@ class ButlerHttpURI(ButlerURI):
         """For a dir-like URI, create the directory resource if it does not
         already exist.
         """
+        if not self.dirLike:
+            raise ValueError(f"Can not create a 'directory' for file-like URI {self}")
+
         if not self.exists():
             log.debug("Creating new directory: %s", self.geturl())
             r = self.session.request("MKCOL", self.geturl())
