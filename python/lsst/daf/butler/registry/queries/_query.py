@@ -106,6 +106,19 @@ class Query(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def isDatasetSearchOrdered(self) -> Optional[bool]:
+        """Whether a dataset search present in this query is based on an
+        ordered search path of collections.
+
+        Returns
+        -------
+        ordered : `bool` or `None`
+            If `True`, the collection search path was ordered.  If `False`,
+            it was not.  If `None`, there is no dataset search in this query.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def getDimensionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         """Return the query column that contains the primary key value for
         the dimension with the given name.
@@ -394,6 +407,14 @@ class Query(ABC):
         if datasetColumns is not None:
             self.managers.datasets.addDatasetForeignKey(spec, primaryKey=unique, constraint=constraints)
             self.managers.collections.addRunForeignKey(spec, nullable=False, constraint=constraints)
+            if datasetColumns.rank is not None:
+                spec.fields.add(
+                    ddl.FieldSpec(
+                        name="rank",
+                        dtype=sqlalchemy.Integer,
+                        nullable=False,
+                    )
+                )
         return spec
 
     def _makeSubsetQueryColumns(self, *, graph: Optional[DimensionGraph] = None,
@@ -443,6 +464,96 @@ class Query(ABC):
             columns.datasets = self.getDatasetColumns()
         return graph, columns
 
+    def _makeDeduplicateQuery(self, original: sqlalchemy.sql.FromClause) -> Query:
+        """Helper method for subclass implementations of `subset`.
+
+        Parameters
+        ----------
+        original : `sqlalchemy.sql.FromClause`
+            A SQLAlchemy representation of ``self`` that can be used in a JOIN
+            clause - so either an _aliased_ subquery, or a table.
+
+        Returns
+        -------
+        deduplicated : `Query`
+            A query that represents a deduplicated version of ``self``.  May
+            be ``self`` if it is already deduplicated.
+        """
+        datasets = self.getDatasetColumns()
+        if datasets is None:
+            raise TypeError("No datasets in this query.")
+        if not datasets.ordered:
+            raise TypeError(
+                "Cannot deduplicate datasets because the original collection expression was not ordered."
+            )
+        if datasets.rank is None:
+            # Already deduplicated.
+            return self
+        # The query currently contains a subquery that is a UNION ALL over
+        # per-collection subsubqueries, each with its own rank value.
+        #
+        # Write a new query that uses that previous query as a subquery, with
+        # a window function to select the lowest-rank dataset for each data ID.
+        # That will look something like this:
+        #
+        # SELECT
+        #     {dst}_window.{all-data-id-cols},
+        #     {dst}_window.id,
+        #     {dst}_window.run_id
+        # FROM (
+        #     SELECT
+        #         {original}.{all-data-id-cols},
+        #         {original}.id,
+        #         {original}.run_id,
+        #         ROW_NUMBER() OVER (
+        #             PARTITION BY original.{dataset-type-data-id-cols}
+        #             ORDER BY rank
+        #         ) AS rownum
+        #         FROM {original}
+        #     ) {dst}_window
+        # WHERE
+        #     {dst}_window.rownum = 1;
+        #
+        windowSelectCols = [
+            original.columns["dataset_id"],
+            original.columns[self.managers.collections.getRunForeignKeyName()],
+        ]
+        windowSelectCols.extend(original.columns[name].label(name) for name in self.graph.dimensions.names)
+        windowSelectCols.append(
+            sqlalchemy.sql.func.row_number().over(
+                partition_by=[original.columns[name].label(name)
+                              for name in datasets.datasetType.dimensions.required.names],
+                order_by=original.columns.rank
+            ).label("rownum")
+        )
+        window = sqlalchemy.sql.select(
+            windowSelectCols
+        ).select_from(original).alias("window")
+        simpleQuery = SimpleQuery()
+        simpleQuery.join(window)
+        simpleQuery.where.append(window.columns["rownum"] == 1)
+        columns = QueryColumns()
+        for dimension in self.graph.dimensions:
+            columns.keys[dimension] = [window.columns[dimension.name]]
+        for element in self.spatial:
+            columns.regions[element] = self.getRegionColumn(element.name)
+        columns.datasets = DatasetQueryColumns(
+            datasetType=datasets.datasetType,
+            id=window.columns["dataset_id"],
+            runKey=window.columns[self.managers.collections.getRunForeignKeyName()],
+            rank=None,
+            ordered=True,
+        )
+        return DirectQuery(
+            simpleQuery=simpleQuery,
+            columns=columns,
+            uniqueness=(DirectQueryUniqueness.NATURALLY_UNIQUE
+                        if self.isUnique() else DirectQueryUniqueness.NOT_UNIQUE),
+            graph=self.graph,
+            whereRegion=None,
+            managers=self.managers,
+        )
+
     @contextmanager
     def materialize(self, db: Database) -> Iterator[Query]:
         """Execute this query and insert its results into a temporary table.
@@ -470,6 +581,7 @@ class Query(ABC):
                                 spatial=self.spatial,
                                 datasetType=self.datasetType,
                                 isUnique=self.isUnique(),
+                                isDatasetSearchOrdered=self.isDatasetSearchOrdered(),
                                 graph=self.graph,
                                 whereRegion=self.whereRegion,
                                 managers=self.managers)
@@ -538,6 +650,25 @@ class Query(ABC):
         switching to a scheme in which pairwise dimension spatial relationships
         are explicitly precomputed (for e.g. combinations of instruments and
         skymaps).
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def deduplicated(self) -> Query:
+        """Return a query that yields datasets only from the first matching
+        collection for each data ID.
+
+        Returns
+        -------
+        deduplicated : `Query`
+            The deduplicated query.  May be ``self`` if it is already
+            deduplicated.
+
+        Raises
+        ------
+        TypeError
+            Raised if this query does not yield datasets at all or if the
+            original collection expression was unordered.
         """
         raise NotImplementedError()
 
@@ -634,6 +765,12 @@ class DirectQuery(Query):
         # Docstring inherited from Query.
         return self._uniqueness is not DirectQueryUniqueness.NOT_UNIQUE
 
+    def isDatasetSearchOrdered(self) -> Optional[bool]:
+        # Docstring inherited from Query.
+        if self._columns.datasets is None:
+            return None
+        return self._columns.datasets.ordered
+
     def getDimensionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from Query.
         return self._columns.getKeyColumn(name).label(name)
@@ -656,6 +793,8 @@ class DirectQuery(Query):
             datasetType=base.datasetType,
             id=base.id.label("dataset_id"),
             runKey=base.runKey.label(self.managers.collections.getRunForeignKeyName()),
+            rank=base.rank.label("rank") if base.rank is not None else None,
+            ordered=base.ordered,
         )
 
     @property
@@ -692,6 +831,10 @@ class DirectQuery(Query):
             whereRegion=self.whereRegion if not unique else None,
             managers=self.managers,
         )
+
+    def deduplicated(self) -> Query:
+        # Docstring inherited from Query.
+        return self._makeDeduplicateQuery(self.sql.alias("original"))
 
     def makeBuilder(self, summary: Optional[QuerySummary] = None) -> QueryBuilder:
         # Docstring inherited from Query.
@@ -730,6 +873,10 @@ class MaterializedQuery(Query):
     isUnique : `bool`
         If `True`, the table's rows are unique, and there is no need to
         add ``SELECT DISTINCT`` to gaurantee this in results.
+    isDatasetSearchOrdered : `bool` or `None`
+        If `True`, this table was constructed from a query with an ordered
+        search path of collections.  If `False`, it was constructed from an
+        unordered set of collections.  If `None`, it has no dataset search.
     graph : `DimensionGraph`
         Dimensions included in the columns of this table.
     whereRegion : `Region` or `None`
@@ -744,6 +891,7 @@ class MaterializedQuery(Query):
                  spatial: Iterable[DimensionElement],
                  datasetType: Optional[DatasetType],
                  isUnique: bool,
+                 isDatasetSearchOrdered: Optional[bool],
                  graph: DimensionGraph,
                  whereRegion: Optional[Region],
                  managers: RegistryManagers):
@@ -752,10 +900,15 @@ class MaterializedQuery(Query):
         self._spatial = tuple(spatial)
         self._datasetType = datasetType
         self._isUnique = isUnique
+        self._isDatasetSearchOrdered = isDatasetSearchOrdered
 
     def isUnique(self) -> bool:
         # Docstring inherited from Query.
         return self._isUnique
+
+    def isDatasetSearchOrdered(self) -> Optional[bool]:
+        # Docstring inherited from Query.
+        return self._isDatasetSearchOrdered
 
     def getDimensionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from Query.
@@ -773,10 +926,13 @@ class MaterializedQuery(Query):
     def getDatasetColumns(self) -> Optional[DatasetQueryColumns]:
         # Docstring inherited from Query.
         if self._datasetType is not None:
+            assert self._isDatasetSearchOrdered is not None
             return DatasetQueryColumns(
                 datasetType=self._datasetType,
                 id=self._table.columns["dataset_id"],
                 runKey=self._table.columns[self.managers.collections.getRunForeignKeyName()],
+                rank=self._table.columns.get("rank"),
+                ordered=self._isDatasetSearchOrdered,
             )
         else:
             return None
@@ -810,6 +966,10 @@ class MaterializedQuery(Query):
             whereRegion=self.whereRegion if not unique else None,
             managers=self.managers,
         )
+
+    def deduplicated(self) -> Query:
+        # Docstring inherited from Query.
+        return self._makeDeduplicateQuery(self._table)
 
     def makeBuilder(self, summary: Optional[QuerySummary] = None) -> QueryBuilder:
         # Docstring inherited from Query.
@@ -845,6 +1005,10 @@ class EmptyQuery(Query):
     def isUnique(self) -> bool:
         # Docstring inherited from Query.
         return True
+
+    def isDatasetSearchOrdered(self) -> Optional[bool]:
+        # Docstring inherited from Query.
+        return None
 
     def getDimensionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from Query.
@@ -883,6 +1047,10 @@ class EmptyQuery(Query):
         # Docstring inherited from Query.
         assert graph is None or graph.issubset(self.graph)
         return self
+
+    def deduplicated(self) -> Query:
+        # Docstring inherited from Query.
+        raise TypeError("No datasets in this query.")
 
     def makeBuilder(self, summary: Optional[QuerySummary] = None) -> QueryBuilder:
         # Docstring inherited from Query.

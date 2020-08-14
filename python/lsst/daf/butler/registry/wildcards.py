@@ -839,6 +839,12 @@ class CollectionQuery:
                                         flattenChains=flattenChains, includeChains=includeChains):
             yield record
 
+    def isOrdered(self) -> bool:
+        """Return `True` if this expression is fully ordered, meeting the
+        requirements of `CollectionSearch` as well as `CollectionQuery`.
+        """
+        return (not self._patterns and self._search is not Ellipsis)
+
     any: ClassVar[CollectionQuery]
     """A special `CollectionQuery` instance that matches any collection.
 

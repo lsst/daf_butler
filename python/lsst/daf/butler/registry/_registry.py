@@ -1343,9 +1343,11 @@ class Registry:
         # need to deduplicate.  Note that if any of the collections are
         # actually wildcard expressions, and we've asked for deduplication,
         # this will raise TypeError for us.
-        if not builder.joinDataset(datasetType, collections, isResult=True, deduplicate=deduplicate):
+        if not builder.joinDataset(datasetType, collections, isResult=True):
             return queries.ChainedDatasetQueryResults(())
         query = builder.finish()
+        if deduplicate:
+            query = query.deduplicated()
         return queries.ParentDatasetQueryResults(self._db, query, components=[None])
 
     def queryDataIds(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
