@@ -251,9 +251,26 @@ class DatasetQueryColumns:
     this dataset.
     """
 
+    rank: Optional[ColumnElement]
+    """Literal integer column holding the rank of the collection in which this
+    dataset was found among all collections given.
+    """
+
+    ordered: bool
+    """Whether this query represents an ordered search.
+
+    If `True`, this is an ordered search that may be (if `rank` is not `None`)
+    or has been (if `rank` is `None`) deduplicated across collections to yield
+    datasets from the first collection in which each dataset type + data ID
+    combination appears.  If `False`, the given collection expression was
+    intrinsically unordered, and `rank` is always `None`.
+    """
+
     def __iter__(self) -> Iterator[ColumnElement]:
         yield self.id
         yield self.runKey
+        if self.rank is not None:
+            yield self.rank
 
 
 @dataclass
