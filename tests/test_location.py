@@ -181,6 +181,24 @@ class LocationTestCase(unittest.TestCase):
         self.assertEqual(uri, uri2)
         self.assertTrue(uri2.dirLike)
 
+    def testUriExtensions(self):
+        """Test extension extraction."""
+
+        files = (("file.fits.gz", ".fits.gz"),
+                 ("file.fits", ".fits"),
+                 ("file.fits.xz", ".fits.xz"),
+                 ("file.fits.tar", ".tar"),
+                 ("file", ""),
+                 ("flat_i_sim_1.4_blah.fits.gz", ".fits.gz"),
+                 ("flat_i_sim_1.4_blah.txt", ".txt"),
+                 ("flat_i_sim_1.4_blah.fits.fz", ".fits.fz"),
+                 ("flat_i_sim_1.4_blah.fits.txt", ".txt"),
+                 )
+
+        for file, expected in files:
+            uri = ButlerURI(f"a/b/{file}")
+            self.assertEqual(uri.getExtension(), expected)
+
     def testFileLocation(self):
         root = os.path.abspath(os.path.curdir)
         factory = LocationFactory(root)

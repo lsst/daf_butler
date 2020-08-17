@@ -434,12 +434,25 @@ class ButlerURI:
         -------
         ext : `str`
             The file extension (including the ``.``). Can be empty string
-            if there is no file extension. Will return all file extensions
-            as a single extension such that ``file.fits.gz`` will return
-            a value of ``.fits.gz``.
+            if there is no file extension. Usually returns only the last
+            file extension unless there is a special extension modifier
+            indicating file compression, in which case the combined
+            extension (e.g. ``.fits.gz``) will be returned.
         """
+        special = {".gz", ".bz2", ".xz", ".fz"}
+
         extensions = self._pathLib(self.path).suffixes
-        return "".join(extensions)
+
+        if not extensions:
+            return ""
+
+        ext = extensions.pop()
+
+        # Multiple extensions, decide whether to include the final two
+        if extensions and ext in special:
+            ext = f"{extensions[-1]}{ext}"
+
+        return ext
 
     def join(self, path: str) -> ButlerURI:
         """Create a new `ButlerURI` with additional path components including
