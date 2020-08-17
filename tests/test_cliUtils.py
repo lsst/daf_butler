@@ -29,8 +29,8 @@ from unittest.mock import call, MagicMock
 
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.utils import (clickResultMsg, ForwardOptions, LogCliRunner, Mocker, mockEnvVar,
-                                       MWArgument, MWCommand, MWCtxObj, MWOption, MWOptionDecorator, MWPath,
-                                       option_section, unwrap)
+                                       MWArgumentDecorator, MWCommand, MWCtxObj, MWOption, MWOptionDecorator,
+                                       MWPath, option_section, unwrap)
 from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 
 
@@ -55,6 +55,7 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
     @repo_argument(help="repo help text")
     @directory_argument(help="directory help text")
     def cli():
+        """The cli help message."""
         pass
 
     def test_help(self):
@@ -64,11 +65,13 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
         addArgumentHelp for more details."""
         runner = LogCliRunner()
         result = runner.invoke(ArgumentHelpGeneratorTestCase.cli, ["--help"])
-        expected = """Usage: cli [OPTIONS] [REPO] [DIRECTORY]
+        expected = """Usage: cli [OPTIONS] REPO DIRECTORY
 
-  directory help text
+  The cli help message.
 
   repo help text
+
+  directory help text
 
 Options:
   --help  Show this message and exit.
@@ -131,6 +134,7 @@ class MWOptionTest(unittest.TestCase):
 
         The default behavior of click is to not add elipsis to options that
         have `multiple=True`."""
+
         @click.command()
         @click.option("--things", cls=MWOption, multiple=True)
         def cmd(things):
@@ -149,6 +153,7 @@ class MWOptionTest(unittest.TestCase):
         equal 1, but it does not put a space before the elipsis and we prefer
         a space between the metavar and the elipsis."""
         for numberOfArgs in (0, 1, 2):  # nargs must be >= 0 for an option
+
             @click.command()
             @click.option("--things", cls=MWOption, nargs=numberOfArgs)
             def cmd(things):
@@ -160,86 +165,109 @@ class MWOptionTest(unittest.TestCase):
             self.assertIn(expectedOutut, result.output)
 
 
-class MWArgumentTest(unittest.TestCase):
+class MWArgumentDecoratorTest(unittest.TestCase):
+    """Tests for the MWArgumentDecorator class."""
+
+    things_argument = MWArgumentDecorator("things")
+    otherHelpText = "Help text for OTHER."
+    other_argument = MWArgumentDecorator("other", help=otherHelpText)
 
     def setUp(self):
         self.runner = LogCliRunner()
 
-    def test_addElipsisToNargs(self):
-        """Verify that MWOption adds " ..." after the option metavar when
-        `nargs` != 1.
+    def test_help(self):
+        """Verify expected help text output.
 
-        The default behavior of click is to add elipsis when nargs does not
-        equal 1, but it does not put a space before the elipsis and we prefer
-        a space between the metavar and the elipsis."""
+        Verify argument help gets inserted after the usage, in the order
+        arguments are declared.
+
+        Verify that MWArgument adds " ..." after the option metavar when
+        `nargs` != 1. The default behavior of click is to add elipsis when
+        nargs does not equal 1, but it does not put a space before the elipsis
+        and we prefer a space between the metavar and the elipsis."""
         # nargs can be -1 for any number of args, or >= 1 for a specified
         # number of arguments.
+
+        helpText = "Things help text."
         for numberOfArgs in (-1, 1, 2):
             for required in (True, False):
+
                 @click.command()
-                @click.argument("things", cls=MWArgument, required=required, nargs=numberOfArgs)
-                def cmd(things):
+                @self.things_argument(required=required, nargs=numberOfArgs, help=helpText)
+                @self.other_argument()
+                def cmd(things, other):
+                    """Cmd help text."""
                     pass
                 result = self.runner.invoke(cmd, ["--help"])
                 self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-                expectedOutut = (f"Usage: cmd [OPTIONS] {'THINGS' if required else '[THINGS]'}"
-                                 f"{' ...' if numberOfArgs != 1 else ''}")
+                expectedOutut = (f"""Usage: cmd [OPTIONS] {'THINGS' if required else '[THINGS]'} {'... ' if numberOfArgs != 1 else ''}OTHER
+
+  Cmd help text.
+
+  {helpText}
+
+  {self.otherHelpText}
+""")
                 self.assertIn(expectedOutut, result.output)
+
+    def testUse(self):
+        """Test using the MWArgumentDecorator with a command."""
+        mock = MagicMock()
+
+        @click.command()
+        @self.things_argument()
+        def cli(things):
+            mock(things)
+        self.runner = click.testing.CliRunner()
+        result = self.runner.invoke(cli, ("foo"))
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        mock.assert_called_with("foo")
 
 
 class MWOptionDecoratorTest(unittest.TestCase):
+    """Tests for the MWOptionDecorator class."""
 
-    def makeTestOption(self, flags, expectedFlag, expectedKey):
+    test_option = MWOptionDecorator("-t", "--test", multiple=True)
 
-        class test_option(MWOptionDecorator):  # noqa: N801
+    def testGetName(self):
+        """Test getting the option name from the MWOptionDecorator."""
+        self.assertEqual(self.test_option.name(), "test")
 
-            @staticmethod
-            def defaultHelp():
-                return "default help"
+    def testGetOpts(self):
+        """Test getting the option flags from the MWOptionDecorator."""
+        self.assertEqual(self.test_option.opts(), ["-t", "--test"])
 
-            @staticmethod
-            def optionFlags():
-                return flags
+    def testUse(self):
+        """Test using the MWOptionDecorator with a command."""
+        mock = MagicMock()
 
-        class Expected:
+        @click.command()
+        @self.test_option()
+        def cli(test):
+            mock(test)
+        self.runner = click.testing.CliRunner()
+        result = self.runner.invoke(cli, ("-t", "foo"))
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        mock.assert_called_with(("foo",))
 
-            def __init__(self):
-                self.flag = expectedFlag
-                self.flags = flags
-                self.key = expectedKey
+    def testOverride(self):
+        """Test using the MWOptionDecorator with a command and overriding one
+        of the default values."""
+        mock = MagicMock()
 
-        return test_option, Expected()
-
-    def test(self):
-        """Verify the helper funcs in MWOptionDecorator return the correct
-        value. Also verifies values can be extracted from click.Option as
-        expected."""
-        tests = (self.makeTestOption(("-t",), "-t", "t"),  # <- one flag, short:
-                 # one flag, long:
-                 self.makeTestOption(("--test-val",), "--test-val", "test_val"),
-                 # one short, one long:
-                 self.makeTestOption(("-t", "--test-val"), "--test-val", "test_val"),
-                 # same, opposite order:
-                 self.makeTestOption(("--test-val", "-t"), "--test-val", "test_val"),
-                 # two longer option flags, reverse alphabetical order (first
-                 # flag is still picked):
-                 self.makeTestOption(("--test-val", "--alternate-opt"), "--test-val", "test_val"),
-                 # multiple short and long flags:
-                 self.makeTestOption(("-t", "--test-val", "-a", "--alternate-opt"), "--test-val", "test_val"),
-                 # declare alternate kwarg name:
-                 self.makeTestOption(("--test-val", "alternate_name"), "--test-val", "alternate_name"))
-
-        for test_option, expected in tests:
-            self.assertEqual(test_option.defaultHelp(), "default help")
-            # key is extracted from click.Option
-            self.assertEqual(test_option.optionKey(), expected.key)
-            # flag is generated from the flags extracted from click.Option
-            self.assertEqual(test_option.flag(), expected.flag)
-            # optionFlags is set in the MWOptionDecorator class.
-            self.assertEqual(test_option.optionFlags(), expected.flags)
+        @click.command()
+        @self.test_option(multiple=False)
+        def cli(test):
+            mock(test)
+        self.runner = click.testing.CliRunner()
+        result = self.runner.invoke(cli, ("-t", "foo"))
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        mock.assert_called_with("foo")
 
 
 class SectionOptionTest(unittest.TestCase):
+    """Tests for the option_section decorator that inserts section break
+    headings between options in the --help output of a command."""
 
     @staticmethod
     @click.command()
@@ -283,6 +311,7 @@ Section break between metasyntactic variables.
 class MWPathTest(unittest.TestCase):
 
     def getCmd(self, exists):
+
         @click.command()
         @click.option("--name", type=MWPath(exists=exists))
         def cmd(name):
@@ -330,20 +359,7 @@ class ForwardObjectsTest(unittest.TestCase):
 
     mock = MagicMock()
 
-    class test_option(MWOptionDecorator):  # noqa: N801
-        """Decorator that adds a a test option to a command."""
-
-        @staticmethod
-        def defaultHelp():
-            return "default help"
-
-        @staticmethod
-        def optionFlags():
-            return ("-t", "--test", "--atest")
-
-        def __call__(self, f):
-            return click.option(*self.optionFlags(), cls=MWOption, forward=self.forward,
-                                help=self.defaultHelp())(f)
+    test_option = MWOptionDecorator("-t", "--test", "--atest")
 
     @click.group(chain=True)
     def cli():

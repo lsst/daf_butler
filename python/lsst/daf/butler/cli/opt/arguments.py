@@ -19,32 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import click
-
-from ..utils import MWOption, MWOptionDecorator
+from ..utils import MWArgumentDecorator, split_commas
 
 
-class long_log_option(MWOptionDecorator):  # noqa: N801
-    """A decorator to add a long_log option to a click.Command.
+directory_argument = MWArgumentDecorator("directory",
+                                         help="DIRECTORY is the folder containing dataset files.")
 
-    Parameters
-    ----------
-    help : `str`, optional
-        The help text to use for the option.
-    """
+glob_argument = MWArgumentDecorator("glob",
+                                    callback=split_commas,
+                                    help="GLOB is one or more strings to apply to the search.",
+                                    nargs=-1)
 
-    @staticmethod
-    def defaultHelp():
-        return "Make log messages appear in long format."
-
-    @staticmethod
-    def optionFlags():
-        return ("--long-log",)
-
-    def __init__(self, help=None):
-        self.help = help or self.defaultHelp()
-
-    def __call__(self, f):
-        return click.option(*self.optionFlags(), cls=MWOption,
-                            help=self.help,
-                            is_flag=True)(f)
+repo_argument = MWArgumentDecorator("repo")

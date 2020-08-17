@@ -19,12 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import abc
 import click
 import click.testing
 from contextlib import contextmanager
 import copy
-import enum
+from functools import partial
 import io
 import os
 import textwrap
@@ -73,13 +72,6 @@ def textTypeStr(multiple):
 # For parameters that support key-value inputs, this defines the separator
 # for those inputs.
 split_kv_separator = "="
-
-
-# The ParameterType enum is used to indicate a click Argument or Option (both
-# of which are subclasses of click.Parameter).
-class ParameterType(enum.Enum):
-    ARGUMENT = 0
-    OPTION = 1
 
 
 class Mocker:
@@ -518,10 +510,10 @@ class MWPath(click.Path):
 class MWOption(click.Option):
     """Overrides click.Option with desired behaviors."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, forward=False, **kwargs):
         # `forward` indicates weather a subcommand should forward the value of
         # this option to the next subcommand or not.
-        self.forward = kwargs.pop("forward", False)
+        self.forward = forward
         super().__init__(*args, **kwargs)
 
     def make_metavar(self):
@@ -611,67 +603,49 @@ class OptionSection(MWOption):
         return (self.sectionText, "")
 
 
-class MWOptionDecorator(abc.ABC):
+class MWOptionDecorator:
+    """Wraps the click.option decorator to enable shared options to be declared
+    and allows inspection of the shared option.
+    """
 
-    _name = None
-    _opts = None
+    def __init__(self, *param_decls, **kwargs):
+        forward = kwargs.pop("forward", False)
+        self.partialOpt = partial(click.option, *param_decls, cls=partial(MWOption, forward=forward),
+                                  **kwargs)
+        opt = click.Option(param_decls, **kwargs)
+        self._name = opt.name
+        self._opts = opt.opts
 
-    def __init__(self, forward=False):
-        self.forward = forward
+    def name(self):
+        """Get the name that will be passed to the command function for this
+        option."""
+        return self._name
 
-    @staticmethod
-    @abc.abstractmethod
-    def defaultHelp():
-        """The help default help text to use for the Option.
+    def opts(self):
+        """Get the flags that will be used for this option on the command
+        line."""
+        return self._opts
 
-        Returns
-        -------
-        defaultHelp : `str`
-            The default help text.
-        """
-        raise NotImplementedError()
+    def __call__(self, *args, **kwargs):
+        return self.partialOpt(*args, **kwargs)
 
-    @staticmethod
-    @abc.abstractmethod
-    def optionFlags():
-        """The flags that become the param_decls of a click.Parameter.
 
-        Returns
-        -------
-        flags : `tuple` [`str`]
-            The flags to use.
-        """
-        raise NotImplementedError()
+class MWArgumentDecorator:
+    """Wraps the click.argument decorator to enable shared arguments to be
+    declared. """
 
-    @classmethod
-    def _update(cls):
-        """Use the click.Option to generate the kwarg name and the list of
-        flags.
-        """
-        if cls._name is None:
-            p = click.Option(cls.optionFlags())
-            cls._name = p.name
-            cls._opts = p.opts
+    def __init__(self, *param_decls, **kwargs):
+        self._helpText = kwargs.pop("help", None)
+        self.partialArg = partial(click.argument, *param_decls, cls=MWArgument, **kwargs)
 
-    @classmethod
-    def optionKey(cls):
-        """Get the keyword argument name for an option flag."""
-        cls._update()
-        return cls._name
-
-    @classmethod
-    def flag(cls):
-        """Get the option flag. Prefers the first flag that begins with two
-        dashes if one is declared, otherwise uses the first flag that begins
-        with a single dash."""
-        cls._update()
-        ret = None
-        for opt in cls._opts:
-            if opt.startswith("--"):
-                return opt
-            if ret is None and opt.startswith("-"):
-                ret = opt
-        return ret
+    def __call__(self, *args, help=None, **kwargs):
+        def decorator(f):
+            if help is not None:
+                self._helpText = help
+            if self._helpText:
+                f.__doc__ = addArgumentHelp(f.__doc__, self._helpText)
+            return self.partialArg(*args, **kwargs)(f)
+        return decorator
 
 
 class MWCommand(click.Command):
