@@ -310,7 +310,6 @@ class Formatter(metaclass=ABCMeta):
         writing files.  If ``extension`` is `None` only the set of supported
         extensions will be examined.
         """
-        ext = location.getExtension()
         supported = set(cls.supportedExtensions)
 
         try:
@@ -323,9 +322,17 @@ class Formatter(metaclass=ABCMeta):
         if default is not None:
             supported.add(default)
 
-        if ext in supported:
-            return
-        raise ValueError(f"Extension '{ext}' on '{location}' is not supported by Formatter '{cls.__name__}'")
+        # Get the file name from the uri
+        file = location.uri.basename()
+
+        # Check that this file name ends with one of the supported extensions.
+        # This is less prone to confusion than asking the location for
+        # its extension and then doing a set comparison
+        for ext in supported:
+            if file.endswith(ext):
+                return
+        raise ValueError(f"Extension '{location.getExtension()}' on '{location}' "
+                         f"is not supported by Formatter '{cls.__name__}' (supports: {supported})")
 
     def predictPath(self) -> str:
         """Return the path that would be returned by write, without actually
