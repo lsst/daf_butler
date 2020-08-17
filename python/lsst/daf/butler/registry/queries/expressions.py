@@ -84,8 +84,9 @@ def categorizeIdentifier(universe: DimensionUniverse, name: str) -> Tuple[Dimens
             # what they were trying to do.
             # Encourage them to clean that up and try again.
             raise RuntimeError(
-                f"Invalid reference to '{table}.{column}' in expression; please use "
-                f"'{column}' or '{column}.{universe.dimensions[column].primaryKey.name}' instead."
+                f"Invalid reference to '{table}.{column}' "  # type: ignore
+                f"in expression; please use '{column}' or "
+                f"'{column}.{universe[column].primaryKey.name}' instead."
             )
         else:
             if column not in element.RecordClass.fields.standard.names:
@@ -93,7 +94,7 @@ def categorizeIdentifier(universe: DimensionUniverse, name: str) -> Tuple[Dimens
             return element, column
     else:
         try:
-            dimension = universe.dimensions[table]
+            dimension = universe[table]
         except KeyError as err:
             raise LookupError(f"No dimension with name '{table}.") from err
         return dimension, None

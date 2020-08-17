@@ -54,9 +54,9 @@ E = TypeVar("E", bound=DimensionElement)
 
 
 @immutable
-class DimensionUniverse(DimensionGraph):
-    """A special `DimensionGraph` that constructs and manages a complete set of
-    compatible dimensions.
+class DimensionUniverse:
+    """A parent class that represents a complete, self-consistent set of
+    dimensions and their relationships.
 
     `DimensionUniverse` is not a class-level singleton, but all instances are
     tracked in a singleton map keyed by the version number in the configuration
@@ -89,15 +89,11 @@ class DimensionUniverse(DimensionGraph):
             return self
 
         # Create the universe instance and add core attributes.
-        # We don't want any of what DimensionGraph.__new__ does, so we just go
-        # straight to object.__new__.  The C++ side of my brain is offended by
-        # this, but I think it's the right approach in Python, where we don't
-        # have the option of having multiple constructors with different roles.
         self = object.__new__(cls)
-        self.universe = self
+        assert self is not None
         self._cache = {}
-        self.dimensions = NamedValueSet()
-        self.elements = NamedValueSet()
+        self._dimensions = NamedValueSet()
+        self._elements = NamedValueSet()
 
         # Read the skypix dimensions from config.
         skyPixDimensions, self.commonSkyPix = processSkyPixConfig(config["skypix"])
@@ -128,7 +124,6 @@ class DimensionUniverse(DimensionGraph):
 
         # Add attributes for special subsets of the graph.
         self.empty = DimensionGraph(self, (), conform=False)
-        self._finish()
 
         # Set up factories for dataId packers as defined by config.
         # MyPy is totally confused by us setting attributes on self in __new__.
@@ -144,10 +139,113 @@ class DimensionUniverse(DimensionGraph):
         # version has already been constructed in the receiving process.
         self._version = version
         cls._instances[self._version] = self
+
+        # Build mappings from element to index.  These are used for
+        # topological-sort comparison operators in DimensionElement itself.
+        self._elementIndices = {
+            name: i for i, name in enumerate(self._elements.names)
+        }
+        # Same for dimension to index, sorted topologically across required
+        # and implied.  This is used for encode/decode.
+        self._dimensionIndices = {
+            name: i for i, name in enumerate(self._dimensions.names)
+        }
+
+        # Freeze internal sets so we can return them in methods without
+        # worrying about modifications.
+        self._elements.freeze()
+        self._dimensions.freeze()
         return self
 
     def __repr__(self) -> str:
         return f"DimensionUniverse({self})"
+
+    def __getitem__(self, name: str) -> DimensionElement:
+        return self._elements[name]
+
+    def get(self, name: str, default: Optional[DimensionElement] = None) -> Optional[DimensionElement]:
+        """Return the `DimensionElement` with the given name or a default.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the element.
+        default : `DimensionElement`, optional
+            Element to return if the named one does not exist.  Defaults to
+            `None`.
+
+        Returns
+        -------
+        element : `DimensionElement`
+            The named element.
+        """
+        return self._elements.get(name, default)
+
+    def getStaticElements(self) -> NamedValueSet[DimensionElement]:
+        """Return a set of all static elements in this universe.
+
+        Non-static elements that are created as needed may also exist, but
+        these are guaranteed to have no direct relationships to other elements
+        (though they may have spatial or temporal relationships).
+
+        Returns
+        -------
+        elements : `NamedValueSet` [ `DimensionElement` ]
+            A frozen set of `DimensionElement` instances.
+        """
+        return self._elements
+
+    def getStaticDimensions(self) -> NamedValueSet[Dimension]:
+        """Return a set of all static dimensions in this universe.
+
+        Non-static dimensions that are created as needed may also exist, but
+        these are guaranteed to have no direct relationships to other elements
+        (though they may have spatial or temporal relationships).
+
+        Returns
+        -------
+        dimensions : `NamedValueSet` [ `Dimension` ]
+            A frozen set of `Dimension` instances.
+        """
+        return self._dimensions
+
+    def getElementIndex(self, name: str) -> int:
+        """Return the position of the named dimension element in this
+        universe's sorting of all elements.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the element.
+
+        Returns
+        -------
+        index : `int`
+            Sorting index for this element.
+        """
+        return self._elementIndices[name]
+
+    def getDimensionIndex(self, name: str) -> int:
+        """Return the position of the named dimension in this universe's
+        sorting of all dimensions.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the dimension.
+
+        Returns
+        -------
+        index : `int`
+            Sorting index for this dimension.
+
+        Notes
+        -----
+        The dimension sort order for a universe is consistent with the element
+        order (all dimensions are elements), and either can be used to sort
+        dimensions if used consistently.
+        """
+        return self._dimensionIndices[name]
 
     def extract(self, iterable: Iterable[Union[Dimension, str]]) -> DimensionGraph:
         """Construct a `DimensionGraph` from a possibly-heterogenous iterable
@@ -180,8 +278,8 @@ class DimensionUniverse(DimensionGraph):
         """Return a sorted version of the given iterable of dimension elements.
 
         The universe's sort order is topological (an element's dependencies
-        precede it), starting with skypix dimensions (which never have
-        dependencies) and then sorting lexicographically to break ties.
+        precede it), with an unspecified (but deterministic) approach to
+        breaking ties.
 
         Parameters
         ----------
@@ -196,7 +294,7 @@ class DimensionUniverse(DimensionGraph):
             A sorted list containing the same elements that were given.
         """
         s = set(elements)
-        result = [element for element in self.elements if element in s or element.name in s]
+        result = [element for element in self._elements if element in s or element.name in s]
         if reverse:
             result.reverse()
         # mypy thinks this can return DimensionElements even if all the user
@@ -227,7 +325,7 @@ class DimensionUniverse(DimensionGraph):
         See `DimensionGraph.encode` and `DimensionGraph.decode` for more
         information.
         """
-        return math.ceil(len(self.dimensions)/8)
+        return math.ceil(len(self._dimensions)/8)
 
     @classmethod
     def _unpickle(cls, version: int) -> DimensionUniverse:
@@ -262,6 +360,14 @@ class DimensionUniverse(DimensionGraph):
     """
 
     _cache: Dict[FrozenSet[str], DimensionGraph]
+
+    _dimensions: NamedValueSet[Dimension]
+
+    _elements: NamedValueSet[DimensionElement]
+
+    _dimensionIndices: Dict[str, int]
+
+    _elementIndices: Dict[str, int]
 
     _packers: Dict[str, DimensionPackerFactory]
 
