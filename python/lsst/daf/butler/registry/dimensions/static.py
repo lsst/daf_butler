@@ -69,7 +69,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                    universe: DimensionUniverse) -> DimensionRecordStorageManager:
         # Docstring inherited from DimensionRecordStorageManager.
         records: NamedKeyDict[DimensionElement, DimensionRecordStorage] = NamedKeyDict()
-        for element in universe.elements:
+        for element in universe.getStaticElements():
             ImplementationClass = DimensionRecordStorage.getDefaultImplementation(element)
             records[element] = ImplementationClass.initialize(db, element, context=context)
         return cls(db=db, records=records, universe=universe)

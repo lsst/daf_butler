@@ -122,10 +122,10 @@ class DimensionGraph:
         self.universe = universe
         # Reorder dimensions by iterating over the universe (which is
         # ordered already) and extracting the ones in the set.
-        self.dimensions = NamedValueSet(d for d in universe.dimensions if d.name in conformedNames)
+        self.dimensions = NamedValueSet(universe.sorted(conformedNames))
         # Make a set that includes both the dimensions and any
         # DimensionElements whose dependencies are in self.dimensions.
-        self.elements = NamedValueSet(e for e in universe.elements
+        self.elements = NamedValueSet(e for e in universe.getStaticElements()
                                       if e._shouldBeInGraph(self.dimensions.names))
         self._finish()
         return self
@@ -187,16 +187,6 @@ class DimensionGraph:
         # dimensions.
         self._dataCoordinateIndices: Dict[str, int] = {
             name: i for i, name in enumerate(itertools.chain(self.required.names, self.implied.names))
-        }
-        # Same for element to index.  These are used for topological-sort
-        # comparison operators in DimensionElement itself.
-        self._elementIndices: Dict[str, int] = {
-            name: i for i, name in enumerate(self.elements.names)
-        }
-        # Same for dimension to index, sorted topologically across required
-        # and implied.  This is used for encode/decode.
-        self._dimensionIndices: Dict[str, int] = {
-            name: i for i, name in enumerate(self.dimensions.names)
         }
 
     def __getnewargs__(self) -> tuple:
@@ -270,8 +260,8 @@ class DimensionGraph:
         """
         dimensions = []
         mask = int.from_bytes(encoded, "big")
-        for dimension in universe.dimensions:
-            index = universe._dimensionIndices[dimension.name]
+        for dimension in universe.getStaticDimensions():
+            index = universe.getDimensionIndex(dimension.name)
             if mask & (1 << index):
                 dimensions.append(dimension)
         return cls(universe, dimensions=dimensions, conform=False)
@@ -287,7 +277,7 @@ class DimensionGraph:
         """
         mask = 0
         for dimension in self.dimensions:
-            index = self.universe._dimensionIndices[dimension.name]
+            index = self.universe.getDimensionIndex(dimension.name)
             mask |= (1 << index)
         return mask.to_bytes(self.universe.getEncodeLength(), byteorder="big")
 

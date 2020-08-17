@@ -93,11 +93,11 @@ class RelatedDimensions:
             Object containing all other dimension elements.
         """
         for req in tuple(self.required):
-            other = universe.elements[req]._related
+            other = universe[req]._related
             self.required.update(other.required)
             self.dependencies.update(other.dependencies)
         for dep in self.implied:
-            other = universe.elements[dep]._related
+            other = universe[dep]._related
             self.dependencies.update(other.dependencies)
 
     required: Set[str]
@@ -232,7 +232,7 @@ class DimensionElement:
             elif targetName == self.name:
                 target = self
             else:
-                target = universe.elements.get(targetName)
+                target = universe.get(targetName)
                 if target is None:
                     try:
                         target = elementsToDo[targetName]
@@ -255,7 +255,7 @@ class DimensionElement:
         Called only by `_finish`, but may be overridden by subclasses.
         """
         self.universe = universe
-        self.universe.elements.add(self)
+        self.universe._elements.add(self)
 
     def _attachGraph(self) -> None:
         """Initialize the `graph` attribute for this element.
@@ -290,25 +290,25 @@ class DimensionElement:
 
     def __lt__(self, other: DimensionElement) -> bool:
         try:
-            return self.universe._elementIndices[self.name] < self.universe._elementIndices[other.name]
+            return self.universe.getElementIndex(self.name) < self.universe.getElementIndex(other.name)
         except KeyError:
             return NotImplemented
 
     def __le__(self, other: DimensionElement) -> bool:
         try:
-            return self.universe._elementIndices[self.name] <= self.universe._elementIndices[other.name]
+            return self.universe.getElementIndex(self.name) <= self.universe.getElementIndex(other.name)
         except KeyError:
             return NotImplemented
 
     def __gt__(self, other: DimensionElement) -> bool:
         try:
-            return self.universe._elementIndices[self.name] > self.universe._elementIndices[other.name]
+            return self.universe.getElementIndex(self.name) > self.universe.getElementIndex(other.name)
         except KeyError:
             return NotImplemented
 
     def __ge__(self, other: DimensionElement) -> bool:
         try:
-            return self.universe._elementIndices[self.name] >= self.universe._elementIndices[other.name]
+            return self.universe.getElementIndex(self.name) >= self.universe.getElementIndex(other.name)
         except KeyError:
             return NotImplemented
 
@@ -327,7 +327,7 @@ class DimensionElement:
 
         For internal use only.
         """
-        return universe.elements[name]
+        return universe[name]
 
     def __reduce__(self) -> tuple:
         return (self._unpickle, (self.universe, self.name))
@@ -468,7 +468,7 @@ class Dimension(DimensionElement):
     def _attachToUniverse(self, universe: DimensionUniverse) -> None:
         # Docstring inherited from DimensionElement._attachToUniverse.
         super()._attachToUniverse(universe)
-        universe.dimensions.add(self)
+        universe._dimensions.add(self)
 
     def _attachGraph(self) -> None:
         # Docstring inherited from DimensionElement._attachGraph.
