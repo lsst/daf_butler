@@ -319,7 +319,10 @@ class Formatter(metaclass=ABCMeta):
         except AttributeError:
             raise NotImplementedError("No file extension registered with this formatter") from None
 
-        if default is not None:
+        # If extension is implemented as an instance property it won't return
+        # a string when called as a class propertt. Assume that
+        # the supported extensions class property is complete.
+        if default is not None and isinstance(default, str):
             supported.add(default)
 
         # Get the file name from the uri
@@ -331,6 +334,7 @@ class Formatter(metaclass=ABCMeta):
         for ext in supported:
             if file.endswith(ext):
                 return
+
         raise ValueError(f"Extension '{location.getExtension()}' on '{location}' "
                          f"is not supported by Formatter '{cls.__name__}' (supports: {supported})")
 
