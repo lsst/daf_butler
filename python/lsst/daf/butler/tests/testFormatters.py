@@ -21,7 +21,8 @@
 
 from __future__ import annotations
 
-__all__ = ("FormatterTest", "DoNothingFormatter", "LenientYamlFormatter", "MetricsExampleFormatter")
+__all__ = ("FormatterTest", "DoNothingFormatter", "LenientYamlFormatter", "MetricsExampleFormatter",
+           "MultipleExtensionsFormatter", "SingleExtensionFormatter")
 
 from typing import (
     TYPE_CHECKING,
@@ -69,6 +70,16 @@ class FormatterTest(Formatter):
             if "mode" not in recipes[recipeName]:
                 raise RuntimeError("'mode' is a required write recipe parameter")
         return recipes
+
+
+class SingleExtensionFormatter(DoNothingFormatter):
+    """A do nothing formatter that has a single extension registered."""
+    extension = ".fits"
+
+
+class MultipleExtensionsFormatter(SingleExtensionFormatter):
+    """A formatter that has multiple extensions registered."""
+    supportedExtensions = frozenset({".fits.gz", ".fits.fz", ".fit"})
 
 
 class LenientYamlFormatter(YamlFormatter):
