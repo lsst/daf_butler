@@ -159,10 +159,10 @@ class ButlerURI:
     uri : `str` or `urllib.parse.ParseResult`
         URI in string form.  Can be scheme-less if referring to a local
         filesystem path.
-    root : `str`, optional
+    root : `str` or `ButlerURI`, optional
         When fixing up a relative path in a ``file`` scheme or if scheme-less,
         use this as the root. Must be absolute.  If `None` the current
-        working directory will be used.
+        working directory will be used. Can be a file URI.
     forceAbsolute : `bool`, optional
         If `True`, scheme-less relative URI will be converted to an absolute
         path using a ``file`` scheme. If `False` scheme-less URI will remain
@@ -207,7 +207,7 @@ class ButlerURI:
     _uri: urllib.parse.ParseResult
 
     def __new__(cls, uri: Union[str, urllib.parse.ParseResult, ButlerURI],
-                root: Optional[str] = None, forceAbsolute: bool = True,
+                root: Optional[Union[str, ButlerURI]] = None, forceAbsolute: bool = True,
                 forceDirectory: bool = False) -> ButlerURI:
         parsed: urllib.parse.ParseResult
         dirLike: bool
@@ -618,7 +618,7 @@ class ButlerURI:
         return (str(self),)
 
     @staticmethod
-    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
+    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
                       forceAbsolute: bool = False,
                       forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
         """Correct any issues with the supplied URI.
@@ -627,7 +627,7 @@ class ButlerURI:
         ----------
         parsed : `~urllib.parse.ParseResult`
             The result from parsing a URI using `urllib.parse`.
-        root : `str`, ignored
+        root : `str` or `ButlerURI`, ignored
             Not used by the this implementation since all URIs are
             absolute except for those representing the local file system.
         forceAbsolute : `bool`, ignored.
@@ -968,7 +968,7 @@ class ButlerFileURI(ButlerURI):
             os.remove(local_src)
 
     @staticmethod
-    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
+    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
                       forceAbsolute: bool = False,
                       forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
         """Fix up relative paths in URI instances.
@@ -977,10 +977,10 @@ class ButlerFileURI(ButlerURI):
         ----------
         parsed : `~urllib.parse.ParseResult`
             The result from parsing a URI using `urllib.parse`.
-        root : `str`, optional
+        root : `str` or `ButlerURI`, optional
             Path to use as root when converting relative to absolute.
             If `None`, it will be the current working directory. This
-            is a local file system path, not a URI.  It is only used if
+            is a local file system path, or a file URI.  It is only used if
             a file-scheme is used incorrectly with a relative path.
         forceAbsolute : `bool`, ignored
             Has no effect for this subclass. ``file`` URIs are always
@@ -1037,6 +1037,10 @@ class ButlerFileURI(ButlerURI):
 
         if root is None:
             root = os.path.abspath(os.path.curdir)
+        elif isinstance(root, ButlerURI):
+            if root.scheme and root.scheme != "file":
+                raise RuntimeError(f"The override root must be a file URI not {root.scheme}")
+            root = os.path.abspath(root.ospath)
 
         replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
 
@@ -1407,7 +1411,7 @@ class ButlerSchemelessURI(ButlerFileURI):
         return ButlerURI(uri, forceDirectory=self.dirLike)  # type: ignore
 
     @staticmethod
-    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
+    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
                       forceAbsolute: bool = False,
                       forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
         """Fix up relative paths for local file system.
@@ -1416,10 +1420,10 @@ class ButlerSchemelessURI(ButlerFileURI):
         ----------
         parsed : `~urllib.parse.ParseResult`
             The result from parsing a URI using `urllib.parse`.
-        root : `str`, optional
+        root : `str` or `ButlerURI`, optional
             Path to use as root when converting relative to absolute.
             If `None`, it will be the current working directory. This
-            is a local file system path, not a URI.
+            is a local file system path, or a file URI.
         forceAbsolute : `bool`, optional
             If `True`, scheme-less relative URI will be converted to an
             absolute path using a ``file`` scheme. If `False` scheme-less URI
@@ -1454,6 +1458,10 @@ class ButlerSchemelessURI(ButlerFileURI):
 
         if root is None:
             root = os.path.abspath(os.path.curdir)
+        elif isinstance(root, ButlerURI):
+            if root.scheme and root.scheme != "file":
+                raise RuntimeError(f"The override root must be a file URI not {root.scheme}")
+            root = os.path.abspath(root.ospath)
 
         # this is a local OS file path which can support tilde expansion.
         # we quoted it in the constructor so unquote here
