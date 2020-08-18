@@ -29,7 +29,8 @@ import unittest
 from lsst.daf.butler.tests import DatasetTestHelper
 from lsst.daf.butler import (Formatter, FormatterFactory, StorageClass, DatasetType, Config,
                              FileDescriptor, Location, DimensionUniverse, DimensionGraph)
-from lsst.daf.butler.tests.testFormatters import DoNothingFormatter
+from lsst.daf.butler.tests.testFormatters import (DoNothingFormatter, MultipleExtensionsFormatter,
+                                                  SingleExtensionFormatter)
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -76,6 +77,27 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
 
         with self.assertRaises(NotImplementedError):
             f.write("str")
+
+    def testExtensionValidation(self):
+        """Test extension validation"""
+
+        for file, single_ok, multi_ok in (("e.fits", True, True),
+                                          ("e.fit", False, True),
+                                          ("e.fits.fz", False, True),
+                                          ("e.txt", False, False),
+                                          ("e.1.4.fits", True, True),
+                                          ("e.3.fit", False, True),
+                                          ("e.1.4.fits.gz", False, True),
+                                          ):
+            loc = Location("/a/b/c", file)
+
+            for formatter, passes in ((SingleExtensionFormatter, single_ok),
+                                      (MultipleExtensionsFormatter, multi_ok)):
+                if passes:
+                    formatter.validateExtension(loc)
+                else:
+                    with self.assertRaises(ValueError):
+                        formatter.validateExtension(loc)
 
     def testRegistry(self):
         """Check that formatters can be stored in the registry.
