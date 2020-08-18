@@ -194,7 +194,7 @@ class LocationFactory:
         be treated as a posixpath but then converted to an absolute path.
     """
 
-    def __init__(self, datastoreRoot: str):
+    def __init__(self, datastoreRoot: Union[ButlerURI, str]):
         self._datastoreRootUri = ButlerURI(datastoreRoot, forceAbsolute=True,
                                            forceDirectory=True)
 

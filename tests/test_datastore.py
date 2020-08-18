@@ -488,8 +488,8 @@ class DatastoreTests(DatastoreTestsBase):
                     """Ingest a file already in the datastore root."""
                     # first move it into the root, and adjust the path
                     # accordingly
-                    path = shutil.copy(path, datastore.root)
-                    path = os.path.relpath(path, start=datastore.root)
+                    path = shutil.copy(path, datastore.root.ospath)
+                    path = os.path.relpath(path, start=datastore.root.ospath)
                     datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 

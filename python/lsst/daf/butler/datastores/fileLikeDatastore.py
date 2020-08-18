@@ -154,8 +154,8 @@ class FileLikeDatastore(GenericBaseDatastore):
     or relative to a search path. Can be None if no defaults specified.
     """
 
-    root: str
-    """Root directory or URI of this `Datastore`."""
+    root: ButlerURI
+    """Root directory URI of this `Datastore`."""
 
     locationFactory: LocationFactory
     """Factory for creating locations relative to the datastore root."""
@@ -239,7 +239,8 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         # Support repository relocation in config
         # Existence of self.root is checked in subclass
-        self.root = replaceRoot(self.config["root"], butlerRoot)
+        self.root = ButlerURI(replaceRoot(self.config["root"], butlerRoot),
+                              forceDirectory=True, forceAbsolute=True)
 
         self.locationFactory = LocationFactory(self.root)
         self.formatterFactory = FormatterFactory()
@@ -275,7 +276,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         self.useChecksum = self.config.get("checksum", True)
 
     def __str__(self) -> str:
-        return self.root
+        return str(self.root)
 
     @property
     def bridge(self) -> DatastoreRegistryBridge:

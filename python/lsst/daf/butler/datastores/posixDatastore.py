@@ -84,15 +84,13 @@ class PosixDatastore(FileLikeDatastore):
         super().__init__(config, bridgeManager, butlerRoot)
 
         # Check that root is a valid URI for this datastore
-        root = ButlerURI(self.root, forceDirectory=True)
-        if root.scheme and root.scheme != "file":
+        if self.root.scheme and self.root.scheme != "file":
             raise ValueError(f"Root location must only be a file URI not {self.root}")
 
-        self.root = root.ospath
-        if not os.path.isdir(self.root):
+        if not self.root.exists():
             if "create" not in self.config or not self.config["create"]:
-                raise ValueError(f"No valid root at: {self.root}")
-            safeMakeDir(self.root)
+                raise ValueError(f"No valid root and not allowed to create one at: {self.root}")
+            self.root.mkdir()
 
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
@@ -163,7 +161,7 @@ class PosixDatastore(FileLikeDatastore):
             safeMakeDir(storageDir)
 
         # Write the file
-        predictedFullPath = os.path.join(self.root, formatter.predictPath())
+        predictedFullPath = os.path.join(self.root.ospath, formatter.predictPath())
 
         if os.path.exists(predictedFullPath):
             # Assume that by this point if registry thinks the file should
@@ -200,7 +198,7 @@ class PosixDatastore(FileLikeDatastore):
         if formatter_exception:
             raise formatter_exception
 
-        assert predictedFullPath == os.path.join(self.root, path)
+        assert predictedFullPath == os.path.join(self.root.ospath, path)
 
         return self._extractIngestInfo(path, ref, formatter=formatter)
 
@@ -238,12 +236,11 @@ class PosixDatastore(FileLikeDatastore):
             outside the root.
         """
         pathUri = ButlerURI(path, forceAbsolute=False)
-        rootUri = ButlerURI(self.root, forceDirectory=True, forceAbsolute=True)
-        return pathUri.relative_to(rootUri)
+        return pathUri.relative_to(self.root)
 
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
         # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
-        fullPath = os.path.normpath(os.path.join(self.root, path))
+        fullPath = os.path.normpath(os.path.join(self.root.ospath, path))
         if not os.path.exists(fullPath):
             raise FileNotFoundError(f"File at '{fullPath}' does not exist; note that paths to ingest "
                                     f"are assumed to be relative to self.root unless they are absolute.")
@@ -266,7 +263,7 @@ class PosixDatastore(FileLikeDatastore):
         srcUri = ButlerURI(path, root=self.root, forceAbsolute=True)
         if transfer is None:
             # File should exist already
-            rootUri = ButlerURI(self.root, forceDirectory=True)
+            rootUri = self.root
             pathInStore = srcUri.relative_to(rootUri)
             if pathInStore is None:
                 raise RuntimeError(f"Unexpectedly learned that {srcUri} is not within datastore {rootUri}")

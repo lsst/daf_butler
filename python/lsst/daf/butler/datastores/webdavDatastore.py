@@ -79,24 +79,20 @@ class WebdavDatastore(FileLikeDatastore):
     ValueError
         If root location does not exist and ``create`` is `False` in the
         configuration.
-
-    Notes
-    -----
     """
 
     defaultConfigFile = "datastores/webdavDatastore.yaml"
-    """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
-    absolute path. Can be None if no defaults specified.
+    """Path to configuration defaults. Accessed within the ``config`` resource
+    or relative to a search path. Can be None if no defaults specified.
     """
 
     def __init__(self, config: Union[DatastoreConfig, str],
                  bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         super().__init__(config, bridgeManager, butlerRoot)
-        uri = ButlerURI(self.root, forceDirectory=True)
         self.session = getHttpSession()
-        if not uri.exists():
+        if not self.root.exists():
             try:
-                uri.mkdir()
+                self.root.mkdir()
             except ValueError:
                 raise ValueError(f"Can not create directory {self.root}, check permissions.")
 
@@ -219,14 +215,13 @@ class WebdavDatastore(FileLikeDatastore):
             raise NotImplementedError(f"Scheme type {srcUri.scheme} not supported.")
 
         if transfer is None:
-            rootUri = ButlerURI(self.root)
             if srcUri.scheme == "file":
-                raise RuntimeError(f"'{srcUri}' is not inside repository root '{rootUri}'. "
+                raise RuntimeError(f"'{srcUri}' is not inside repository root '{self.root}'. "
                                    "Ingesting local data to WebdavDatastore without upload "
                                    "to Webdav is not allowed.")
             elif srcUri.scheme.startswith("http"):
-                if not srcUri.path.startswith(rootUri.path):
-                    raise RuntimeError(f"'{srcUri}' is not inside repository root '{rootUri}'.")
+                if not srcUri.path.startswith(self.root.path):
+                    raise RuntimeError(f"'{srcUri}' is not inside repository root '{self.root}'.")
         return path
 
     def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
@@ -235,9 +230,8 @@ class WebdavDatastore(FileLikeDatastore):
         srcUri = ButlerURI(path)
 
         if transfer is None:
-            rootUri = ButlerURI(self.root)
             p = pathlib.PurePosixPath(srcUri.relativeToPathRoot)
-            pathInStore = str(p.relative_to(rootUri.relativeToPathRoot))
+            pathInStore = str(p.relative_to(self.root.relativeToPathRoot))
             tgtLocation = self.locationFactory.fromPath(pathInStore)
         else:
             assert transfer == "move" or transfer == "copy", "Should be guaranteed by _standardizeIngestPath"

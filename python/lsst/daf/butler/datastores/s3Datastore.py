@@ -305,10 +305,9 @@ class S3Datastore(FileLikeDatastore):
             raise FileNotFoundError(f"Resource at {srcUri} does not exist")
 
         if transfer is None:
-            rootUri = ButlerURI(self.root)
-            if not srcUri.relative_to(rootUri):
+            if not srcUri.relative_to(self.root):
                 raise RuntimeError(f"Transfer is none but source file ({srcUri}) is not "
-                                   f"within datastore ({rootUri})")
+                                   f"within datastore ({self.root})")
         return path
 
     def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
@@ -321,10 +320,9 @@ class S3Datastore(FileLikeDatastore):
             # to work out the path relative to the root of the datastore.
             # Because unlike for file to file ingest we can get absolute
             # URIs here
-            rootUri = ButlerURI(self.root, forceDirectory=True)
-            pathInStore = srcUri.relative_to(rootUri)
+            pathInStore = srcUri.relative_to(self.root)
             if pathInStore is None:
-                raise RuntimeError(f"Unexpectedly learned that {srcUri} is not within datastore {rootUri}")
+                raise RuntimeError(f"Unexpectedly learned that {srcUri} is not within datastore {self.root}")
             tgtLocation = self.locationFactory.fromPath(pathInStore)
         else:
             # Work out the name we want this ingested file to have
