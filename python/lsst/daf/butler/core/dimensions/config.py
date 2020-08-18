@@ -76,21 +76,19 @@ def processSkyPixConfig(config: Config) -> Tuple[Dict[str, SkyPixDimension], Sky
         the universe.  This instance is also guaranteed to be a value in
         the returned ``dimensions``.
     """
-    skyPixNames = set(config.keys())
+    skyPixSysNames = set(config.keys())
     try:
-        skyPixNames.remove("common")
+        skyPixSysNames.remove("common")
     except KeyError as err:
         raise ValueError("No common skypix dimension defined in configuration.") from err
     dimensions = {}
-    for name in skyPixNames:
-        subconfig = config[name]
+    for sysName in sorted(skyPixSysNames):
+        subconfig = config[sysName]
         pixelizationClass = doImport(subconfig["class"])
-        level = subconfig.get("level", None)
-        if level is not None:
-            pixelization = pixelizationClass(level)
-        else:
-            pixelization = pixelizationClass()
-        dimensions[name] = SkyPixDimension(name, pixelization)
+        max_level = subconfig.get("max_level", 24)
+        for level in range(max_level + 1):
+            name = f"{sysName}{level}"
+            dimensions[name] = SkyPixDimension(name, pixelizationClass(level))
     try:
         common = dimensions[config["common"]]
     except KeyError as err:

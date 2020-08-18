@@ -2,12 +2,9 @@ dimensions:
   version: 0
   skypix:
     common: htm7
-    htm7:
+    htm:
       class: lsst.sphgeom.HtmPixelization
-      level: 7
-    htm9:
-      class: lsst.sphgeom.HtmPixelization
-      level: 9
+      max_level: 24
 
   elements:
     instrument:
