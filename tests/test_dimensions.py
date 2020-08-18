@@ -124,7 +124,7 @@ class DimensionTestCase(unittest.TestCase):
         self.assertEqual(self.universe.getStaticDimensions().names,
                          {"instrument", "visit", "visit_system", "exposure", "detector",
                           "physical_filter", "abstract_filter", "subfilter", "calibration_label",
-                          "skymap", "tract", "patch", "htm7", "htm9"})
+                          "skymap", "tract", "patch"} | {f"htm{level}" for level in range(25)})
 
     def testGraphs(self):
         self.checkGraphInvariants(self.universe.empty)
