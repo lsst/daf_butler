@@ -27,13 +27,17 @@ from lsst.daf.butler.cli.cmd import create
 
 class CreateTest(CliCmdTestBase, unittest.TestCase):
 
-    defaultExpected = dict(repo=None,
-                           seed_config=None,
-                           standalone=False,
-                           override=False,
-                           outfile=None)
+    @staticmethod
+    def defaultExpected():
+        return dict(repo=None,
+                    seed_config=None,
+                    standalone=False,
+                    override=False,
+                    outfile=None)
 
-    command = create
+    @staticmethod
+    def command():
+        return create
 
     def test_minimal(self):
         """Test only required parameters.

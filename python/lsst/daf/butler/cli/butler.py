@@ -24,6 +24,7 @@ import click
 from collections import defaultdict
 import logging
 import os
+import traceback
 import yaml
 
 from .cliLog import CliLog
@@ -122,8 +123,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
 
         Subcommands may further configure the log settings."""
         CliLog.initLog(longlog=LONG_LOG_FLAG in ctx.params)
-        if log_level_option.optionKey in ctx.params:
-            CliLog.setLogLevels(ctx.params[log_level_option.optionKey])
+        if log_level_option.name() in ctx.params:
+            CliLog.setLogLevels(ctx.params[log_level_option.name()])
 
     @staticmethod
     def getPluginList():
@@ -173,7 +174,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             return doImport(pluginName)
         except Exception as err:
             log.warning("Could not import plugin from %s, skipping.", pluginName)
-            log.debug("Plugin import exception: %s", err)
+            log.debug("Plugin import exception: %s\nTraceback:\n%s", err,
+                      "".join(traceback.format_tb(err.__traceback__)))
             return None
 
     @staticmethod

@@ -22,6 +22,7 @@
 import abc
 import copy
 import os
+from unittest.mock import call
 
 from ..cli.utils import clickResultMsg, mockEnvVar, LogCliRunner, Mocker
 from ..cli import butler
@@ -32,16 +33,14 @@ class CliCmdTestBase(abc.ABC):
     and call their respective script fucntions correctly.
     """
 
-    @classmethod
-    @property
+    @staticmethod
     @abc.abstractmethod
-    def defaultExpected(cls):
+    def defaultExpected():
         pass
 
-    @classmethod
-    @property
+    @staticmethod
     @abc.abstractmethod
-    def command(cls):
+    def command():
         """Get the click.Command being tested."""
         pass
 
@@ -54,8 +53,9 @@ class CliCmdTestBase(abc.ABC):
     def setUp(self):
         self.runner = LogCliRunner(env=mockEnvVar)
 
-    def makeExpected(self, **kwargs):
-        expected = copy.copy(self.defaultExpected)
+    @classmethod
+    def makeExpected(cls, **kwargs):
+        expected = copy.copy(cls.defaultExpected())
         expected.update(kwargs)
         return expected
 
@@ -106,12 +106,19 @@ class CliCmdTestBase(abc.ABC):
         """
         with self.runner.isolated_filesystem():
             if withTempFile is not None:
-                os.makedirs(os.path.dirname(withTempFile), exist_ok=True)
+                directory, filename = os.path.split(withTempFile)
+                if directory:
+                    os.makedirs(os.path.dirname(withTempFile), exist_ok=True)
                 with open(withTempFile, "w") as _:
+                    # just need to make the file, don't need to keep it open.
                     pass
             result = self.run_command(inputs)
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            Mocker.mock.assert_called_with(**expectedKwargs)
+            if isinstance(expectedKwargs, (list, tuple)):
+                calls = (call(**e) for e in expectedKwargs)
+            else:
+                calls = (call(**expectedKwargs),)
+            Mocker.mock.assert_has_calls(list(calls))
         return result
 
     def run_missing(self, inputs, expectedMsg):
@@ -133,7 +140,7 @@ class CliCmdTestBase(abc.ABC):
         self.assertRegex(result.stdout, expectedMsg)
 
     def test_help(self):
-        self.assertFalse(self.command.get_short_help_str().endswith("..."),
+        self.assertFalse(self.command().get_short_help_str().endswith("..."),
                          msg="The command help message is being truncated to "
-                         f"\"{self.command.get_short_help_str()}\". It should be shortened, or define "
+                         f"\"{self.command().get_short_help_str()}\". It should be shortened, or define "
                          "@command(short_help=\"something short and helpful\")")

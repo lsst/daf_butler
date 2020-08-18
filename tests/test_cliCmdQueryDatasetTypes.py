@@ -34,12 +34,16 @@ from lsst.daf.butler.tests import CliCmdTestBase
 
 class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
 
-    defaultExpected = dict(repo=None,
-                           verbose=False,
-                           glob=(),
-                           components=None)
+    @staticmethod
+    def defaultExpected():
+        return dict(repo=None,
+                    verbose=False,
+                    glob=(),
+                    components=None)
 
-    command = query_dataset_types
+    @staticmethod
+    def command():
+        return query_dataset_types
 
     def test_minimal(self):
         """Test only required parameters.

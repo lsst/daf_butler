@@ -34,12 +34,16 @@ from lsst.daf.butler.tests import CliCmdTestBase
 
 class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
 
-    defaultExpected = dict(repo=None,
-                           collection_type=None,
-                           flatten_chains=False,
-                           include_chains=None)
+    @staticmethod
+    def defaultExpected():
+        return dict(repo=None,
+                    collection_type=None,
+                    flatten_chains=False,
+                    include_chains=None)
 
-    command = query_collections
+    @staticmethod
+    def command():
+        return query_collections
 
     def test_minimal(self):
         """Test only the required parameters, and omit the optional parameters.

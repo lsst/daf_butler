@@ -22,11 +22,14 @@
 import click
 import yaml
 
-from ..opt import (collection_type_option, dataset_type_option, directory_argument, glob_parameter,
+from ..opt import (collection_type_option, dataset_type_option, directory_argument, glob_argument,
                    repo_argument, run_option, transfer_option, verbose_option)
-from ..utils import split_commas, cli_handle_exception, ParameterType, typeStrAcceptsMultiple
+from ..utils import split_commas, cli_handle_exception, typeStrAcceptsMultiple
 from ...script import (butlerImport, createRepo, configDump, configValidate, queryCollections,
                        queryDatasetTypes)
+
+willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
+existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."
 
 
 # The conversion from the import command name to the butler_import function
@@ -35,7 +38,7 @@ from ...script import (butlerImport, createRepo, configDump, configValidate, que
 # must be reflected in that location. If this becomes a common pattern a better
 # mechanism should be implemented.
 @click.command("import")
-@repo_argument(required=True, help=repo_argument.will_create_repo)
+@repo_argument(required=True, help=willCreateRepoHelp)
 @directory_argument(required=True)
 @transfer_option()
 @run_option(required=True)
@@ -54,7 +57,7 @@ def butler_import(*args, **kwargs):
 
 
 @click.command()
-@repo_argument(required=True, help=repo_argument.will_create_repo)
+@repo_argument(required=True, help=willCreateRepoHelp)
 @click.option("--seed-config", help="Path to an existing YAML config file to apply (on top of defaults).")
 @click.option("--standalone", is_flag=True, help="Include all defaults in the config file in the repo, "
               "insulating the repo from changes in package defaults.")
@@ -68,7 +71,7 @@ def create(*args, **kwargs):
 
 
 @click.command(short_help="Dump butler config to stdout.")
-@repo_argument(required=True)
+@repo_argument(required=True, help=existingRepoHelp)
 @click.option("--subset", "-s", type=str,
               help="Subset of a configuration to report. This can be any key in the hierarchy such as "
               "'.datastore.root' where the leading '.' specified the delimiter for the hierarchy.")
@@ -84,7 +87,7 @@ def config_dump(*args, **kwargs):
 
 
 @click.command(short_help="Validate the configuration files.")
-@repo_argument(required=True)
+@repo_argument(required=True, help=existingRepoHelp)
 @click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
 @dataset_type_option(help="Specific DatasetType(s) to validate.", multiple=True)
 @click.option("--ignore", "-i", type=str, multiple=True, callback=split_commas,
@@ -116,7 +119,7 @@ def query_collections(*args, **kwargs):
 
 @click.command()
 @repo_argument(required=True)
-@glob_parameter(parameterType=ParameterType.ARGUMENT, multiple=True)
+@glob_argument()
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
 @click.option("--components/--no-components",
               default=None,
