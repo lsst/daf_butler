@@ -284,7 +284,6 @@ class FileLikeDatastore(GenericBaseDatastore):
     def bridge(self) -> DatastoreRegistryBridge:
         return self._bridge
 
-    @abstractmethod
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
         location.
@@ -299,9 +298,9 @@ class FileLikeDatastore(GenericBaseDatastore):
         exists : `bool`
             True if the location can be found, false otherwise.
         """
-        raise NotImplementedError()
+        log.debug("Checking if resource exists: %s", location.uri)
+        return location.uri.exists()
 
-    @abstractmethod
     def _delete_artifact(self, location: Location) -> None:
         """Delete the artifact from the datastore.
 
@@ -310,7 +309,9 @@ class FileLikeDatastore(GenericBaseDatastore):
         location : `Location`
             Location of the artifact associated with this datastore.
         """
-        raise NotImplementedError()
+        log.debug("Deleting file: %s", location.uri)
+        location.uri.remove()
+        log.debug("Successfully deleted file: %s", location.uri)
 
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore

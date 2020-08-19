@@ -82,35 +82,6 @@ class RemoteFileDatastore(FileLikeDatastore):
             except ValueError as e:
                 raise ValueError(f"Can not create datastore root '{self.root}', check permissions.") from e
 
-    def _artifact_exists(self, location: Location) -> bool:
-        """Check that an artifact exists in this datastore at the specified
-        location.
-
-        Parameters
-        ----------
-        location : `Location`
-            Expected location of the artifact associated with this datastore.
-
-        Returns
-        -------
-        exists : `bool`
-            True if the location can be found, false otherwise.
-        """
-        log.debug("Checking if resource exists: %s", location.uri)
-        return location.uri.exists()
-
-    def _delete_artifact(self, location: Location) -> None:
-        """Delete the artifact from the datastore.
-
-        Parameters
-        ----------
-        location : `Location`
-            Location of the artifact associated with this datastore.
-        """
-        log.debug("Deleting file: %s", location.uri)
-        location.uri.remove()
-        log.debug("Successfully deleted file: %s", location.uri)
-
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
         location = getInfo.location

@@ -90,32 +90,6 @@ class PosixDatastore(FileLikeDatastore):
                 raise ValueError(f"No valid root and not allowed to create one at: {self.root}")
             self.root.mkdir()
 
-    def _artifact_exists(self, location: Location) -> bool:
-        """Check that an artifact exists in this datastore at the specified
-        location.
-
-        Parameters
-        ----------
-        location : `Location`
-            Expected location of the artifact associated with this datastore.
-
-        Returns
-        -------
-        exists : `bool`
-            True if the location can be found, false otherwise.
-        """
-        return os.path.exists(location.path)
-
-    def _delete_artifact(self, location: Location) -> None:
-        """Delete the artifact from the datastore.
-
-        Parameters
-        ----------
-        location : `Location`
-            Location of the artifact associated with this datastore.
-        """
-        os.remove(location.path)
-
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
         location = getInfo.location
