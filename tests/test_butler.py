@@ -1249,6 +1249,8 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         time.sleep(3)
 
     def setUp(self):
+        os.environ["WEBDAV_AUTH_METHOD"] = "TOKEN"
+        os.environ["WEBDAV_BEARER_TOKEN"] = "XXXXXX"
 
         config = Config(self.configFile)
         uri = ButlerURI(config[".datastore.datastore.root"])

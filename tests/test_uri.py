@@ -358,6 +358,9 @@ class S3URITestCase(unittest.TestCase):
 class WebdavURITestCase(unittest.TestCase):
 
     def setUp(self):
+        os.environ["WEBDAV_AUTH_METHOD"] = "TOKEN"
+        os.environ["WEBDAV_BEARER_TOKEN"] = "XXXXXX"
+
         serverRoot = "www.not-exists.orgx"
         existingFolderName = "existingFolder"
         existingFileName = "existingFile"
