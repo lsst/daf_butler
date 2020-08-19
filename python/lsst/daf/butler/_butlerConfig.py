@@ -84,22 +84,22 @@ class ButlerConfig(Config):
             return
 
         if isinstance(other, str):
+            # This will only allow supported schemes
             uri = ButlerURI(other)
             if uri.scheme == "file" or not uri.scheme:
+                # Check explicitly that we have a directory
                 if os.path.isdir(uri.ospath):
-                    other = os.path.join(uri.ospath, "butler.yaml")
-            elif uri.scheme == "s3":
-                if not uri.dirLike and "." not in uri.basename():
-                    uri = ButlerURI(other, forceDirectory=True)
-                uri.updateFile("butler.yaml")
-                other = uri.geturl()
-            elif uri.scheme == "https":
-                if not uri.dirLike and "." not in uri.basename():
-                    uri = ButlerURI(other, forceDirectory=True)
-                uri.updateFile("butler.yaml")
-                other = uri.geturl()
+                    other = uri.join("butler.yaml")
             else:
-                raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")
+                # For generic URI assume that we have a directory
+                # if the basename does not have a file extension
+                # This heuristic is needed since we can not rely on
+                # external users to include the trailing / and we
+                # can't always check that the remote resource is a directory.
+                if not uri.dirLike and not uri.getExtension():
+                    # Force to a directory and add the default config name
+                    uri = ButlerURI(other, forceDirectory=True).join("butler.yaml")
+                other = uri
 
         # Create an empty config for us to populate
         super().__init__()
