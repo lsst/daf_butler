@@ -29,7 +29,6 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Optional,
-    Type,
     Union,
 )
 
@@ -38,7 +37,6 @@ from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler import (
     ButlerURI,
     DatasetRef,
-    Formatter,
     Location,
     StoredFileInfo,
 )
@@ -206,34 +204,3 @@ class RemoteFileDatastore(FileLikeDatastore):
                 raise RuntimeError(f"Transfer is none but source file ({srcUri}) is not "
                                    f"within datastore ({self.root})")
         return path
-
-    def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
-                           formatter: Union[Formatter, Type[Formatter]],
-                           transfer: Optional[str] = None) -> StoredFileInfo:
-        # Docstring inherited from FileLikeDatastore._extractIngestInfo.
-        srcUri = ButlerURI(path)
-        if transfer is None:
-            # The source file is already in the datastore but we have
-            # to work out the path relative to the root of the datastore.
-            # Because unlike for file to file ingest we can get absolute
-            # URIs here
-            pathInStore = srcUri.relative_to(self.root)
-            if pathInStore is None:
-                raise RuntimeError(f"Unexpectedly learned that {srcUri} is not within datastore {self.root}")
-            tgtLocation = self.locationFactory.fromPath(pathInStore)
-        else:
-            # Work out the name we want this ingested file to have
-            # inside the datastore
-            tgtLocation = self._calculate_ingested_datastore_name(srcUri, ref, formatter)
-
-            # Convert that to a ButlerURI and transfer the resource to S3
-            targetUri = ButlerURI(tgtLocation.uri)
-            targetUri.transfer_from(srcUri, transfer=transfer)
-
-        # the file should exist on the bucket by now
-        size = tgtLocation.uri.size()
-
-        return StoredFileInfo(formatter=formatter, path=tgtLocation.pathInStore,
-                              storageClass=ref.datasetType.storageClass,
-                              component=ref.datasetType.component(),
-                              file_size=size, checksum=None)

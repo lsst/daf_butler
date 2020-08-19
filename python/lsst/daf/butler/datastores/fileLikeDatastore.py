@@ -24,7 +24,9 @@ from __future__ import annotations
 
 __all__ = ("FileLikeDatastore", )
 
+import hashlib
 import logging
+import os
 from abc import abstractmethod
 
 from sqlalchemy import BigInteger, String
@@ -592,7 +594,6 @@ class FileLikeDatastore(GenericBaseDatastore):
         """
         raise NotImplementedError("Must be implemented by subclasses.")
 
-    @abstractmethod
     def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
                            formatter: Union[Formatter, Type[Formatter]],
                            transfer: Optional[str] = None) -> StoredFileInfo:
@@ -627,7 +628,53 @@ class FileLikeDatastore(GenericBaseDatastore):
             Raised if transfer is not `None` but the (internal) location the
             file would be moved to is already occupied.
         """
-        raise NotImplementedError("Must be implemented by subclasses.")
+        if self._transaction is None:
+            raise RuntimeError("Ingest called without transaction enabled")
+
+        # Create URI of the source path, do not need to force a relative
+        # path to absolute.
+        srcUri = ButlerURI(path, forceAbsolute=False)
+
+        # Track whether we have read the size of the source yet
+        have_sized = False
+
+        if transfer is None:
+            # A relative path is assumed to be relative to the datastore
+            # in this context
+            if not srcUri.isabs():
+                tgtLocation = self.locationFactory.fromPath(srcUri.ospath)
+            else:
+                # Work out the path in the datastore from an absolute URI
+                # This is required to be within the datastore.
+                pathInStore = srcUri.relative_to(self.root)
+                if pathInStore is None:
+                    raise RuntimeError(f"Unexpectedly learned that {srcUri} is "
+                                       f"not within datastore {self.root}")
+                tgtLocation = self.locationFactory.fromPath(pathInStore)
+        else:
+            # Work out the name we want this ingested file to have
+            # inside the datastore
+            tgtLocation = self._calculate_ingested_datastore_name(srcUri, ref, formatter)
+
+            # if we are transferring from a local file to a remote location
+            # it may be more efficient to get the size and checksum of the
+            # local file rather than the transferred one
+            if not srcUri.scheme or srcUri.scheme == "file":
+                size = srcUri.size()
+                checksum = self.computeChecksum(srcUri) if self.useChecksum else None
+
+            # transfer the resource to the destination
+            tgtLocation.uri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction)
+
+        # the file should exist in the datastore now
+        if not have_sized:
+            size = tgtLocation.uri.size()
+            checksum = self.computeChecksum(tgtLocation.uri) if self.useChecksum else None
+
+        return StoredFileInfo(formatter=formatter, path=tgtLocation.pathInStore,
+                              storageClass=ref.datasetType.storageClass,
+                              component=ref.datasetType.component(),
+                              file_size=size, checksum=checksum)
 
     def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
         # Docstring inherited from Datastore._prepIngest.
@@ -1337,3 +1384,45 @@ class FileLikeDatastore(GenericBaseDatastore):
                 exportUri.transfer_from(storeUri, transfer=transfer)
 
             yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)
+
+    @staticmethod
+    def computeChecksum(uri: ButlerURI, algorithm: str = "blake2b", block_size: int = 8192) -> Optional[str]:
+        """Compute the checksum of the supplied file.
+
+        Parameters
+        ----------
+        uri : `ButlerURI`
+            Name of resource to calculate checksum from.
+        algorithm : `str`, optional
+            Name of algorithm to use. Must be one of the algorithms supported
+            by :py:class`hashlib`.
+        block_size : `int`
+            Number of bytes to read from file at one time.
+
+        Returns
+        -------
+        hexdigest : `str`
+            Hex digest of the file.
+
+        Notes
+        -----
+        Currently returns None if the URI is for a remote resource.
+        """
+        if algorithm not in hashlib.algorithms_guaranteed:
+            raise NameError("The specified algorithm '{}' is not supported by hashlib".format(algorithm))
+
+        if uri.scheme and uri.scheme != "file":
+            return None
+
+        hasher = hashlib.new(algorithm)
+
+        filename, is_temp = uri.as_local()
+
+        with open(filename, "rb") as f:
+            for chunk in iter(lambda: f.read(block_size), b""):
+                hasher.update(chunk)
+
+        if is_temp:
+            os.remove(filename)
+
+        return hasher.hexdigest()

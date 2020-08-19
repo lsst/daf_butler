@@ -25,7 +25,6 @@ from __future__ import annotations
 
 __all__ = ("PosixDatastore", )
 
-import hashlib
 import logging
 import os
 from typing import (
@@ -33,17 +32,16 @@ from typing import (
     Any,
     ClassVar,
     Optional,
-    Type,
     Union
 )
 
 from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.utils import safeMakeDir
-from lsst.daf.butler import ButlerURI, FileDataset, StoredFileInfo, Formatter, DatasetRef
+from lsst.daf.butler import ButlerURI, FileDataset, StoredFileInfo, DatasetRef
 
 if TYPE_CHECKING:
     from .fileLikeDatastore import DatastoreFileGetInformation
-    from lsst.daf.butler import DatastoreConfig, Location
+    from lsst.daf.butler import DatastoreConfig
     from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
@@ -251,69 +249,3 @@ class PosixDatastore(FileLikeDatastore):
                 raise RuntimeError(f"'{path}' is not inside repository root '{self.root}'.")
             path = pathx
         return path
-
-    def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
-                           formatter: Union[Formatter, Type[Formatter]],
-                           transfer: Optional[str] = None) -> StoredFileInfo:
-        # Docstring inherited from FileLikeDatastore._extractIngestInfo.
-        if self._transaction is None:
-            raise RuntimeError("Ingest called without transaction enabled")
-
-        # Calculate the full path to the source
-        srcUri = ButlerURI(path, root=self.root, forceAbsolute=True)
-        if transfer is None:
-            # File should exist already
-            rootUri = self.root
-            pathInStore = srcUri.relative_to(rootUri)
-            if pathInStore is None:
-                raise RuntimeError(f"Unexpectedly learned that {srcUri} is not within datastore {rootUri}")
-            if not rootUri.exists():
-                raise RuntimeError(f"Unexpectedly discovered that {srcUri} does not exist inside datastore"
-                                   f" {rootUri}")
-            path = pathInStore
-            fullPath = srcUri.ospath
-        elif transfer is not None:
-            # Work out the name we want this ingested file to have
-            # inside the datastore
-            location = self._calculate_ingested_datastore_name(srcUri, ref, formatter)
-            path = location.pathInStore
-            fullPath = location.path
-            targetUri = ButlerURI(location.uri)
-            targetUri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction)
-
-        checksum = self.computeChecksum(fullPath) if self.useChecksum else None
-        stat = os.stat(fullPath)
-        size = stat.st_size
-        return StoredFileInfo(formatter=formatter, path=path, storageClass=ref.datasetType.storageClass,
-                              component=ref.datasetType.component(),
-                              file_size=size, checksum=checksum)
-
-    @staticmethod
-    def computeChecksum(filename: str, algorithm: str = "blake2b", block_size: int = 8192) -> str:
-        """Compute the checksum of the supplied file.
-
-        Parameters
-        ----------
-        filename : `str`
-            Name of file to calculate checksum from.
-        algorithm : `str`, optional
-            Name of algorithm to use. Must be one of the algorithms supported
-            by :py:class`hashlib`.
-        block_size : `int`
-            Number of bytes to read from file at one time.
-
-        Returns
-        -------
-        hexdigest : `str`
-            Hex digest of the file.
-        """
-        if algorithm not in hashlib.algorithms_guaranteed:
-            raise NameError("The specified algorithm '{}' is not supported by hashlib".format(algorithm))
-
-        hasher = hashlib.new(algorithm)
-
-        with open(filename, "rb") as f:
-            for chunk in iter(lambda: f.read(block_size), b""):
-                hasher.update(chunk)
-
-        return hasher.hexdigest()
