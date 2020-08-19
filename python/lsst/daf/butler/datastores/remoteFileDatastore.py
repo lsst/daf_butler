@@ -75,6 +75,8 @@ class RemoteFileDatastore(FileLikeDatastore):
                  bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         super().__init__(config, bridgeManager, butlerRoot)
         if not self.root.exists():
+            if "create" not in self.config or not self.config["create"]:
+                raise ValueError(f"No valid root and not allowed to create one at: {self.root}")
             try:
                 self.root.mkdir()
             except ValueError as e:
