@@ -77,6 +77,12 @@ class Location:
         # Internal cache of the full location as a ButlerURI
         self._uri: Optional[ButlerURI] = None
 
+        # Check that the resulting URI is inside the datastore
+        # This can go wrong if we were given ../dir as path
+        pathInStore = self.uri.relative_to(self._datastoreRootUri)
+        if pathInStore is None:
+            raise ValueError(f"Unexpectedly {path} jumps out of {self._datastoreRootUri}")
+
     def __str__(self) -> str:
         return str(self.uri)
 
