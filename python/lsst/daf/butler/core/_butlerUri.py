@@ -1275,9 +1275,9 @@ class ButlerHttpURI(ButlerURI):
         if not self.exists():
             if self.geturl().endswith('/'):
                 diruri = ButlerURI(self.geturl()[:-1])
-                parentdir = diruri.split()[0]
+                parentdir = diruri.dirname()
             else:
-                parentdir = self.split()[0]
+                parentdir = self.dirname()
             if not parentdir.exists():
                 parentdir.mkdir()
             log.debug("Creating new directory: %s", self.geturl())
