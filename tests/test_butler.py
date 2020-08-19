@@ -44,8 +44,15 @@ except ImportError:
         """
         return cls
 
+try:
+    from cheroot import wsgi
+    from wsgidav.wsgidav_app import WsgiDAVApp
+except ImportError:
+    WsgiDAVApp = None
+
 import astropy.time
 from threading import Thread
+from tempfile import gettempdir
 from lsst.utils import doImport
 from lsst.daf.butler.core.utils import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
@@ -1195,6 +1202,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
             unsetAwsEnvCredentials()
 
 
+@unittest.skipIf(not WsgiDAVApp, "Warning: wsgi/cheroot not found!")
 class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
     """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
     a local in-memory SqlRegistry.
@@ -1274,10 +1282,6 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         uri.remove()
 
     def _serveWebdav():
-        from tempfile import gettempdir
-        from cheroot import wsgi
-        from wsgidav.wsgidav_app import WsgiDAVApp
-
         root_path = gettempdir()
 
         config = {
