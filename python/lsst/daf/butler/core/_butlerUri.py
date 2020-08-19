@@ -1082,7 +1082,7 @@ class ButlerS3URI(ButlerURI):
         # way of knowing if the file was actually deleted except
         # for checking all the keys again, reponse is  HTTP 204 OK
         # response all the time
-        self.client.delete(Bucket=self.netloc, Key=self.relativeToPathRoot)
+        self.client.delete_object(Bucket=self.netloc, Key=self.relativeToPathRoot)
 
     def read(self, size: int = -1) -> bytes:
         args = {}
