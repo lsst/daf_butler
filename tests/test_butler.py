@@ -1194,6 +1194,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         if self.usingDummyCredentials:
             unsetAwsEnvCredentials()
 
+
 class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
     """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
     a local in-memory SqlRegistry.
@@ -1243,7 +1244,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
         # Run a local webdav server on which tests will be run
-        t = Thread(target = cls._serveWebdav, daemon = True) 
+        t = Thread(target=cls._serveWebdav, daemon=True)
         t.start()
         # Wait for it to start
         time.sleep(3)
@@ -1271,7 +1272,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         rooturi = f"http://{self.serverName}/{self.root}"
         uri = ButlerURI(rooturi)
         uri.remove()
-    
+
     def _serveWebdav():
         from tempfile import gettempdir
         from cheroot import wsgi
@@ -1284,7 +1285,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
             "port": 8080,
             "provider_mapping": {"/": root_path},
             "http_authenticator": {
-            "domain_controller": None
+                "domain_controller": None
             },
             "simple_dc": {"user_mapping": {"*": True}},
             "verbose": 0,
@@ -1294,7 +1295,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         server_args = {
             "bind_addr": (config["host"], config["port"]),
             "wsgi_app": app,
-            }
+        }
         server = wsgi.Server(**server_args)
         try:
             server.start()

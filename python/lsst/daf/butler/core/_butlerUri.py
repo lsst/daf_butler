@@ -1244,7 +1244,7 @@ class ButlerHttpURI(ButlerURI):
         baseURL = self.scheme + "://" + self.netloc
         if isWebdavEndpoint(baseURL):
             log.debug("%s looks like a Webdav endpoint.", baseURL)
-            return getHttpSession() 
+            return getHttpSession()
 
         log.debug("%s looks like a standard HTTP endpoint.", baseURL)
         return requests.Session()
