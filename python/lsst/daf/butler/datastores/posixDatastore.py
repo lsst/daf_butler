@@ -37,7 +37,7 @@ from typing import (
 
 from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.utils import safeMakeDir
-from lsst.daf.butler import ButlerURI, FileDataset, StoredFileInfo, DatasetRef
+from lsst.daf.butler import StoredFileInfo, DatasetRef
 
 if TYPE_CHECKING:
     from .fileLikeDatastore import DatastoreFileGetInformation
@@ -173,42 +173,6 @@ class PosixDatastore(FileLikeDatastore):
         assert predictedFullPath == os.path.join(self.root.ospath, path)
 
         return self._extractIngestInfo(path, ref, formatter=formatter)
-
-    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> Optional[str]:
-        # Docstring inherited from base class
-        if transfer != "auto":
-            return transfer
-
-        # See if the paths are within the datastore or not
-        inside = [self._pathInStore(d.path) is not None for d in datasets]
-
-        if all(inside):
-            transfer = None
-        elif not any(inside):
-            transfer = "link"
-        else:
-            raise ValueError("Some datasets are inside the datastore and some are outside."
-                             " Please use an explicit transfer mode and not 'auto'.")
-
-        return transfer
-
-    def _pathInStore(self, path: str) -> Optional[str]:
-        """Return path relative to datastore root
-
-        Parameters
-        ----------
-        path : `str`
-            Path to dataset. Can be absolute path. Returns path in datastore
-            or raises an exception if the path it outside.
-
-        Returns
-        -------
-        inStore : `str`
-            Path relative to datastore root. Returns `None` if the file is
-            outside the root.
-        """
-        pathUri = ButlerURI(path, forceAbsolute=False)
-        return pathUri.relative_to(self.root)
 
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
         # Docstring inherited from FileLikeDatastore._standardizeIngestPath.

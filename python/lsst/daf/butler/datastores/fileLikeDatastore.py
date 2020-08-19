@@ -553,11 +553,44 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location, formatter
 
-    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> Optional[str]:
+    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> Optional[str]:
+        # Docstring inherited from base class
         if transfer != "auto":
             return transfer
-        # Copy is always a good default
-        return "copy"
+
+        # See if the paths are within the datastore or not
+        inside = [self._pathInStore(d.path) is not None for d in datasets]
+
+        if all(inside):
+            transfer = None
+        elif not any(inside):
+            # Allow ButlerURI to use its own knowledge
+            transfer = "auto"
+        else:
+            raise ValueError("Some datasets are inside the datastore and some are outside."
+                             " Please use an explicit transfer mode and not 'auto'.")
+
+        return transfer
+
+    def _pathInStore(self, path: str) -> Optional[str]:
+        """Return path relative to datastore root
+
+        Parameters
+        ----------
+        path : `str`
+            Path to dataset. Can be absolute. If relative assumed to
+            be relative to the datastore. Returns path in datastore
+            or raises an exception if the path it outside.
+
+        Returns
+        -------
+        inStore : `str`
+            Path relative to datastore root. Returns `None` if the file is
+            outside the root.
+        """
+        # Relative path will always be relative to datastore
+        pathUri = ButlerURI(path, forceAbsolute=False)
+        return pathUri.relative_to(self.root)
 
     @abstractmethod
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
