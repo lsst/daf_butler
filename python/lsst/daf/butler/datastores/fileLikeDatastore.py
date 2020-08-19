@@ -550,6 +550,12 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location, formatter
 
+    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> Optional[str]:
+        if transfer != "auto":
+            return transfer
+        # Copy is always a good default
+        return "copy"
+
     @abstractmethod
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
         """Standardize the path of a to-be-ingested file.
