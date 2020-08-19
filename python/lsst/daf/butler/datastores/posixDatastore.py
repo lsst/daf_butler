@@ -99,8 +99,7 @@ class PosixDatastore(FileLikeDatastore):
         if not os.path.exists(location.path):
             raise FileNotFoundError("Dataset with Id {} does not seem to exist at"
                                     " expected location of {}".format(ref.id, location.path))
-        stat = os.stat(location.path)
-        size = stat.st_size
+        size = location.uri.size()
         storedFileInfo = getInfo.info
         if size != storedFileInfo.file_size:
             raise RuntimeError("Integrity failure in Datastore. Size of file {} ({}) does not"
