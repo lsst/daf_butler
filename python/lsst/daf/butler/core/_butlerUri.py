@@ -595,6 +595,17 @@ class ButlerURI:
         """
         raise NotImplementedError()
 
+    def size(self) -> int:
+        """For non-dir-like URI, return the size of the resource.
+
+        Returns
+        -------
+        sz : `int`
+            The size in bytes of the resource associated with this URI.
+            Returns 0 if dir-like.
+        """
+        raise NotImplementedError()
+
     def __str__(self) -> str:
         return self.geturl()
 
@@ -729,6 +740,14 @@ class ButlerFileURI(ButlerURI):
         # Uses os.path.exists so if there is a soft link that points
         # to a file that no longer exists this will return False
         return os.path.exists(self.ospath)
+
+    def size(self) -> int:
+        if not os.path.isdir(self.ospath):
+            stat = os.stat(self.ospath)
+            sz = stat.st_size
+        else:
+            sz = 0
+        return sz
 
     def remove(self) -> None:
         """Remove the resource."""
@@ -1075,6 +1094,14 @@ class ButlerS3URI(ButlerURI):
         exists, _ = s3CheckFileExists(self, client=self.client)
         return exists
 
+    def size(self) -> int:
+        # s3utils itself imports ButlerURI so defer this import
+        from .s3utils import s3CheckFileExists
+        if self.dirLike:
+            return 0
+        _, sz = s3CheckFileExists(self, client=self.client)
+        return sz
+
     def remove(self) -> None:
         """Remove the resource."""
 
@@ -1227,6 +1254,15 @@ class ButlerHttpURI(ButlerURI):
         r = self.session.head(self.geturl())
 
         return True if r.status_code == 200 else False
+
+    def size(self) -> int:
+        if self.dirLike:
+            return 0
+        r = self.session.head(self.geturl())
+        if r.status_code == 200:
+            return int(r.headers['Content-Length'])
+        else:
+            raise FileNotFoundError(f"Resource {self} does not exist")
 
     def mkdir(self) -> None:
         """For a dir-like URI, create the directory resource if it does not
