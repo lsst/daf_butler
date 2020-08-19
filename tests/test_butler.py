@@ -30,6 +30,7 @@ import shutil
 import pickle
 import string
 import random
+import time
 
 try:
     import boto3
@@ -44,6 +45,7 @@ except ImportError:
         return cls
 
 import astropy.time
+from threading import Thread
 from lsst.utils import doImport
 from lsst.daf.butler.core.utils import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
@@ -1191,6 +1193,113 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         # unset any potentially set dummy credentials
         if self.usingDummyCredentials:
             unsetAwsEnvCredentials()
+
+class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
+    """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
+    a local in-memory SqlRegistry.
+    """
+    configFile = os.path.join(TESTDIR, "config/basic/butler-webdavstore.yaml")
+    fullConfigKey = None
+    validationCanFail = True
+
+    serverName = "localhost:8080"
+    """Name of the server that will be used in the tests. The name is read from
+    the config file used with the tests during set-up.
+    """
+
+    root = "butlerRoot/"
+    """Root repository directory expected to be used in case useTempRoot=False.
+    Otherwise the root is set to a 20 characters long randomly generated string
+    during set-up.
+    """
+
+    datastoreStr = [f"datastore={root}"]
+    """Contains all expected root locations in a format expected to be
+    returned by Butler stringification.
+    """
+
+    datastoreName = ["WebdavDatastore@https://{serverName}/{root}"]
+    """The expected format of the WebdavDatastore string."""
+
+    registryStr = ":memory:"
+    """Expected format of the Registry string."""
+
+    def genRoot(self):
+        """Returns a random string of len 20 to serve as a root
+        name for the temporary bucket repo.
+
+        This is equivalent to tempfile.mkdtemp as this is what self.root
+        becomes when useTempRoot is True.
+        """
+        rndstr = "".join(
+            random.choice(string.ascii_uppercase + string.digits) for _ in range(20)
+        )
+        return rndstr + "/"
+
+    @classmethod
+    def setUpClass(cls):
+        # Do the same as inherited class
+        cls.storageClassFactory = StorageClassFactory()
+        cls.storageClassFactory.addFromConfig(cls.configFile)
+
+        # Run a local webdav server on which tests will be run
+        t = Thread(target = cls._serveWebdav, daemon = True) 
+        t.start()
+        # Wait for it to start
+        time.sleep(3)
+
+    def setUp(self):
+
+        config = Config(self.configFile)
+        uri = ButlerURI(config[".datastore.datastore.root"])
+        self.serverName = uri.netloc
+
+        if self.useTempRoot:
+            self.root = self.genRoot()
+        rooturi = f"http://{self.serverName}/{self.root}"
+        config.update({"datastore": {"datastore": {"root": rooturi}}})
+
+        self.datastoreStr = f"datastore={self.root}"
+        self.datastoreName = [f"WebdavDatastore@{rooturi}"]
+
+        Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
+        self.tmpConfigFile = posixpath.join(rooturi, "butler.yaml")
+
+    def tearDown(self):
+        rooturi = f"http://{self.serverName}/{self.root}"
+        uri = ButlerURI(rooturi)
+        uri.remove()
+    
+    def _serveWebdav():
+        from tempfile import gettempdir
+        from cheroot import wsgi
+        from wsgidav.wsgidav_app import WsgiDAVApp
+
+        root_path = gettempdir()
+
+        config = {
+            "host": "0.0.0.0",
+            "port": 8080,
+            "provider_mapping": {"/": root_path},
+            "http_authenticator": {
+            "domain_controller": None
+            },
+            "simple_dc": {"user_mapping": {"*": True}},
+            "verbose": 0,
+        }
+        app = WsgiDAVApp(config)
+
+        server_args = {
+            "bind_addr": (config["host"], config["port"]),
+            "wsgi_app": app,
+            }
+        server = wsgi.Server(**server_args)
+        try:
+            server.start()
+        except KeyboardInterrupt:
+            print("Caught Ctrl-C, shutting down...")
+        finally:
+            server.stop()
 
 
 if __name__ == "__main__":
