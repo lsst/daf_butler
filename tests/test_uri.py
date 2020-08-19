@@ -363,6 +363,8 @@ class WebdavURITestCase(unittest.TestCase):
         existingFileName = "existingFile"
         notExistingFileName = "notExistingFile"
 
+        self.baseURL = ButlerURI(
+            f"https://{serverRoot}")
         self.existingFileButlerURI = ButlerURI(
             f"https://{serverRoot}/{existingFolderName}/{existingFileName}")
         self.notExistingFileButlerURI = ButlerURI(
@@ -374,17 +376,8 @@ class WebdavURITestCase(unittest.TestCase):
 
         # Need to declare the options
         responses.add(responses.OPTIONS,
-                      self.existingFileButlerURI.geturl(),
-                      headers={'not': '1024'}, status=200)
-        responses.add(responses.OPTIONS,
-                      self.notExistingFileButlerURI.geturl(),
-                      headers={'not': '1024'}, status=200)
-        responses.add(responses.OPTIONS,
-                      self.notExistingFolderButlerURI.geturl(),
-                      headers={'not': '1024'}, status=200)
-        responses.add(responses.OPTIONS,
-                      self.existingFolderButlerURI.geturl(),
-                      headers={'not': '1024'}, status=200)
+                      self.baseURL.geturl(),
+                      status=200, headers={"DAV": "1,2,3"})
 
         # Used by ButlerHttpURI.exists()
         responses.add(responses.HEAD,
@@ -433,6 +426,9 @@ class WebdavURITestCase(unittest.TestCase):
         # Used by ButlerHttpURI.mkdir()
         responses.add(responses.HEAD,
                       self.existingFolderButlerURI.geturl(),
+                      status=200, headers={'Content-Length': '1024'})
+        responses.add(responses.HEAD,
+                      self.baseURL.geturl(),
                       status=200, headers={'Content-Length': '1024'})
         responses.add(responses.HEAD,
                       self.notExistingFolderButlerURI.geturl(),
