@@ -28,14 +28,12 @@ import tempfile
 from typing import (
     TYPE_CHECKING,
     Any,
-    Optional,
     Union,
 )
 
 from .fileLikeDatastore import FileLikeDatastore
 
 from lsst.daf.butler import (
-    ButlerURI,
     DatasetRef,
     Location,
     StoredFileInfo,
@@ -160,18 +158,3 @@ class RemoteFileDatastore(FileLikeDatastore):
 
         # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(location.uri, ref, formatter=formatter)
-
-    def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
-        # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
-        if transfer not in (None, "move", "copy"):
-            raise NotImplementedError(f"Transfer mode {transfer} not supported.")
-
-        srcUri = ButlerURI(path)
-        if not srcUri.exists():
-            raise FileNotFoundError(f"Resource at {srcUri} does not exist")
-
-        if transfer is None:
-            if not srcUri.relative_to(self.root):
-                raise RuntimeError(f"Transfer is none but source file ({srcUri}) is not "
-                                   f"within datastore ({self.root})")
-        return path

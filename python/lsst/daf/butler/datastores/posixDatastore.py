@@ -172,17 +172,3 @@ class PosixDatastore(FileLikeDatastore):
         assert predictedFullPath == os.path.join(self.root.ospath, path)
 
         return self._extractIngestInfo(path, ref, formatter=formatter)
-
-    def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
-        # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
-        fullPath = os.path.normpath(os.path.join(self.root.ospath, path))
-        if not os.path.exists(fullPath):
-            raise FileNotFoundError(f"File at '{fullPath}' does not exist; note that paths to ingest "
-                                    f"are assumed to be relative to self.root unless they are absolute.")
-        if transfer is None:
-            # Can not reuse path var because of typing
-            pathx = self._pathInStore(path)
-            if pathx is None:
-                raise RuntimeError(f"'{path}' is not inside repository root '{self.root}'.")
-            path = pathx
-        return path

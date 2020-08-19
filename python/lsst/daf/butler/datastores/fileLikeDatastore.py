@@ -592,7 +592,6 @@ class FileLikeDatastore(GenericBaseDatastore):
         pathUri = ButlerURI(path, forceAbsolute=False)
         return pathUri.relative_to(self.root)
 
-    @abstractmethod
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
         """Standardize the path of a to-be-ingested file.
 
@@ -614,7 +613,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         Notes
         -----
-        Subclasses of `FileLikeDatastore` should implement this method instead
+        Subclasses of `FileLikeDatastore` can implement this method instead
         of `_prepIngest`.  It should not modify the data repository or given
         file in any way.
 
@@ -626,7 +625,29 @@ class FileLikeDatastore(GenericBaseDatastore):
         FileNotFoundError
             Raised if one of the given files does not exist.
         """
-        raise NotImplementedError("Must be implemented by subclasses.")
+        if transfer not in (None,) + self.root.transferModes:
+            raise NotImplementedError(f"Transfer mode {transfer} not supported.")
+
+        # A relative URI indicates relative to datastore root
+        srcUri = ButlerURI(path, forceAbsolute=False)
+        if not srcUri.isabs():
+            srcUri = self.root.join(path)
+
+        if not srcUri.exists():
+            raise FileNotFoundError(f"Resource at {srcUri} does not exist; note that paths to ingest "
+                                    f"are assumed to be relative to {self.root} unless they are absolute.")
+
+        if transfer is None:
+            relpath = srcUri.relative_to(self.root)
+            if not relpath:
+                raise RuntimeError(f"Transfer is none but source file ({srcUri}) is not "
+                                   f"within datastore ({self.root})")
+
+            # Return the relative path within the datastore for internal
+            # transfer
+            path = relpath
+
+        return path
 
     def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
                            formatter: Union[Formatter, Type[Formatter]],
