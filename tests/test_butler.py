@@ -1282,6 +1282,11 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         uri.remove()
 
     def _serveWebdav():
+        """Starts a local webdav-compatible HTTP server,
+        Listening on http://localhost:8080
+        This server only runs when this test class is instantiated,
+        and then shuts down. Must be started is a separate thread.
+        """
         root_path = gettempdir()
 
         config = {
