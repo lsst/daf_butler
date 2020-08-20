@@ -367,7 +367,7 @@ class WebdavURITestCase(unittest.TestCase):
         notExistingFileName = "notExistingFile"
 
         self.baseURL = ButlerURI(
-            f"https://{serverRoot}")
+            f"https://{serverRoot}", forceDirectory=True)
         self.existingFileButlerURI = ButlerURI(
             f"https://{serverRoot}/{existingFolderName}/{existingFileName}")
         self.notExistingFileButlerURI = ButlerURI(
@@ -497,6 +497,15 @@ class WebdavURITestCase(unittest.TestCase):
             self.notExistingFileButlerURI.transfer_from(
                 src=self.existingFileButlerURI,
                 transfer="unsupported")
+
+    def testParent(self):
+
+        self.assertEqual(self.existingFolderButlerURI.geturl(),
+                         self.notExistingFileButlerURI.parent().geturl())
+        self.assertEqual(self.baseURL.geturl(),
+                         self.baseURL.parent().geturl())
+        self.assertEqual(self.existingFileButlerURI.parent().geturl(),
+                         self.existingFileButlerURI.dirname().geturl())
 
 
 if __name__ == "__main__":

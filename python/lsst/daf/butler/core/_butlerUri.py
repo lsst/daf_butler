@@ -393,6 +393,27 @@ class ButlerURI:
         """
         return self.split()[0]
 
+    def parent(self) -> ButlerURI:
+        """Returns a ButlerURI containing all the directories of the path
+        attribute, minus the last one.
+
+        Returns
+        -------
+        head : `ButlerURI`
+            Everything except the tail of path attribute, expanded and
+            normalized as per ButlerURI rules.
+        """
+        # When self is file-like, return self.dirname()
+        if not self.dirLike:
+            return self.dirname()
+        # When self is dir-like, return its parent directory,
+        # regardless of the presence of a trailing separator
+        originalPath = self._pathLib(self.path)
+        parentPath = originalPath.parent
+        parentURI = self._uri._replace(path=str(parentPath))
+
+        return ButlerURI(parentURI, forceDirectory=True)
+
     def replace(self, **kwargs: Any) -> ButlerURI:
         """Replace components in a URI with new values and return a new
         instance.
@@ -1273,13 +1294,8 @@ class ButlerHttpURI(ButlerURI):
             raise ValueError(f"Can not create a 'directory' for file-like URI {self}")
 
         if not self.exists():
-            if self.geturl().endswith('/'):
-                diruri = ButlerURI(self.geturl()[:-1])
-                parentdir = diruri.dirname()
-            else:
-                parentdir = self.dirname()
-            if not parentdir.exists():
-                parentdir.mkdir()
+            if not self.parent().exists():
+                self.parent().mkdir()
             log.debug("Creating new directory: %s", self.geturl())
             r = self.session.request("MKCOL", self.geturl())
             if r.status_code != 201:

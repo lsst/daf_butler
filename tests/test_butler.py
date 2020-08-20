@@ -1202,7 +1202,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
             unsetAwsEnvCredentials()
 
 
-@unittest.skipIf(not WsgiDAVApp, "Warning: wsgi/cheroot not found!")
+@unittest.skipIf(WsgiDAVApp is None, "Warning: wsgi/cheroot not found!")
 class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
     """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
     a local in-memory SqlRegistry.
