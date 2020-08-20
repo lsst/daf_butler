@@ -24,7 +24,9 @@ from __future__ import annotations
 
 __all__ = ("FileLikeDatastore", )
 
+import hashlib
 import logging
+import os
 from abc import abstractmethod
 
 from sqlalchemy import BigInteger, String
@@ -154,8 +156,8 @@ class FileLikeDatastore(GenericBaseDatastore):
     or relative to a search path. Can be None if no defaults specified.
     """
 
-    root: str
-    """Root directory or URI of this `Datastore`."""
+    root: ButlerURI
+    """Root directory URI of this `Datastore`."""
 
     locationFactory: LocationFactory
     """Factory for creating locations relative to the datastore root."""
@@ -239,7 +241,8 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         # Support repository relocation in config
         # Existence of self.root is checked in subclass
-        self.root = replaceRoot(self.config["root"], butlerRoot)
+        self.root = ButlerURI(replaceRoot(self.config["root"], butlerRoot),
+                              forceDirectory=True, forceAbsolute=True)
 
         self.locationFactory = LocationFactory(self.root)
         self.formatterFactory = FormatterFactory()
@@ -275,13 +278,12 @@ class FileLikeDatastore(GenericBaseDatastore):
         self.useChecksum = self.config.get("checksum", True)
 
     def __str__(self) -> str:
-        return self.root
+        return str(self.root)
 
     @property
     def bridge(self) -> DatastoreRegistryBridge:
         return self._bridge
 
-    @abstractmethod
     def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
         location.
@@ -296,9 +298,9 @@ class FileLikeDatastore(GenericBaseDatastore):
         exists : `bool`
             True if the location can be found, false otherwise.
         """
-        raise NotImplementedError()
+        log.debug("Checking if resource exists: %s", location.uri)
+        return location.uri.exists()
 
-    @abstractmethod
     def _delete_artifact(self, location: Location) -> None:
         """Delete the artifact from the datastore.
 
@@ -307,7 +309,9 @@ class FileLikeDatastore(GenericBaseDatastore):
         location : `Location`
             Location of the artifact associated with this datastore.
         """
-        raise NotImplementedError()
+        log.debug("Deleting file: %s", location.uri)
+        location.uri.remove()
+        log.debug("Successfully deleted file: %s", location.uri)
 
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore
@@ -549,7 +553,45 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location, formatter
 
-    @abstractmethod
+    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> Optional[str]:
+        # Docstring inherited from base class
+        if transfer != "auto":
+            return transfer
+
+        # See if the paths are within the datastore or not
+        inside = [self._pathInStore(d.path) is not None for d in datasets]
+
+        if all(inside):
+            transfer = None
+        elif not any(inside):
+            # Allow ButlerURI to use its own knowledge
+            transfer = "auto"
+        else:
+            raise ValueError("Some datasets are inside the datastore and some are outside."
+                             " Please use an explicit transfer mode and not 'auto'.")
+
+        return transfer
+
+    def _pathInStore(self, path: str) -> Optional[str]:
+        """Return path relative to datastore root
+
+        Parameters
+        ----------
+        path : `str`
+            Path to dataset. Can be absolute. If relative assumed to
+            be relative to the datastore. Returns path in datastore
+            or raises an exception if the path it outside.
+
+        Returns
+        -------
+        inStore : `str`
+            Path relative to datastore root. Returns `None` if the file is
+            outside the root.
+        """
+        # Relative path will always be relative to datastore
+        pathUri = ButlerURI(path, forceAbsolute=False)
+        return pathUri.relative_to(self.root)
+
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
         """Standardize the path of a to-be-ingested file.
 
@@ -571,7 +613,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         Notes
         -----
-        Subclasses of `FileLikeDatastore` should implement this method instead
+        Subclasses of `FileLikeDatastore` can implement this method instead
         of `_prepIngest`.  It should not modify the data repository or given
         file in any way.
 
@@ -583,9 +625,30 @@ class FileLikeDatastore(GenericBaseDatastore):
         FileNotFoundError
             Raised if one of the given files does not exist.
         """
-        raise NotImplementedError("Must be implemented by subclasses.")
+        if transfer not in (None,) + self.root.transferModes:
+            raise NotImplementedError(f"Transfer mode {transfer} not supported.")
 
-    @abstractmethod
+        # A relative URI indicates relative to datastore root
+        srcUri = ButlerURI(path, forceAbsolute=False)
+        if not srcUri.isabs():
+            srcUri = self.root.join(path)
+
+        if not srcUri.exists():
+            raise FileNotFoundError(f"Resource at {srcUri} does not exist; note that paths to ingest "
+                                    f"are assumed to be relative to {self.root} unless they are absolute.")
+
+        if transfer is None:
+            relpath = srcUri.relative_to(self.root)
+            if not relpath:
+                raise RuntimeError(f"Transfer is none but source file ({srcUri}) is not "
+                                   f"within datastore ({self.root})")
+
+            # Return the relative path within the datastore for internal
+            # transfer
+            path = relpath
+
+        return path
+
     def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
                            formatter: Union[Formatter, Type[Formatter]],
                            transfer: Optional[str] = None) -> StoredFileInfo:
@@ -620,7 +683,53 @@ class FileLikeDatastore(GenericBaseDatastore):
             Raised if transfer is not `None` but the (internal) location the
             file would be moved to is already occupied.
         """
-        raise NotImplementedError("Must be implemented by subclasses.")
+        if self._transaction is None:
+            raise RuntimeError("Ingest called without transaction enabled")
+
+        # Create URI of the source path, do not need to force a relative
+        # path to absolute.
+        srcUri = ButlerURI(path, forceAbsolute=False)
+
+        # Track whether we have read the size of the source yet
+        have_sized = False
+
+        if transfer is None:
+            # A relative path is assumed to be relative to the datastore
+            # in this context
+            if not srcUri.isabs():
+                tgtLocation = self.locationFactory.fromPath(srcUri.ospath)
+            else:
+                # Work out the path in the datastore from an absolute URI
+                # This is required to be within the datastore.
+                pathInStore = srcUri.relative_to(self.root)
+                if pathInStore is None:
+                    raise RuntimeError(f"Unexpectedly learned that {srcUri} is "
+                                       f"not within datastore {self.root}")
+                tgtLocation = self.locationFactory.fromPath(pathInStore)
+        else:
+            # Work out the name we want this ingested file to have
+            # inside the datastore
+            tgtLocation = self._calculate_ingested_datastore_name(srcUri, ref, formatter)
+
+            # if we are transferring from a local file to a remote location
+            # it may be more efficient to get the size and checksum of the
+            # local file rather than the transferred one
+            if not srcUri.scheme or srcUri.scheme == "file":
+                size = srcUri.size()
+                checksum = self.computeChecksum(srcUri) if self.useChecksum else None
+
+            # transfer the resource to the destination
+            tgtLocation.uri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction)
+
+        # the file should exist in the datastore now
+        if not have_sized:
+            size = tgtLocation.uri.size()
+            checksum = self.computeChecksum(tgtLocation.uri) if self.useChecksum else None
+
+        return StoredFileInfo(formatter=formatter, path=tgtLocation.pathInStore,
+                              storageClass=ref.datasetType.storageClass,
+                              component=ref.datasetType.component(),
+                              file_size=size, checksum=checksum)
 
     def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
         # Docstring inherited from Datastore._prepIngest.
@@ -1330,3 +1439,45 @@ class FileLikeDatastore(GenericBaseDatastore):
                 exportUri.transfer_from(storeUri, transfer=transfer)
 
             yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)
+
+    @staticmethod
+    def computeChecksum(uri: ButlerURI, algorithm: str = "blake2b", block_size: int = 8192) -> Optional[str]:
+        """Compute the checksum of the supplied file.
+
+        Parameters
+        ----------
+        uri : `ButlerURI`
+            Name of resource to calculate checksum from.
+        algorithm : `str`, optional
+            Name of algorithm to use. Must be one of the algorithms supported
+            by :py:class`hashlib`.
+        block_size : `int`
+            Number of bytes to read from file at one time.
+
+        Returns
+        -------
+        hexdigest : `str`
+            Hex digest of the file.
+
+        Notes
+        -----
+        Currently returns None if the URI is for a remote resource.
+        """
+        if algorithm not in hashlib.algorithms_guaranteed:
+            raise NameError("The specified algorithm '{}' is not supported by hashlib".format(algorithm))
+
+        if uri.scheme and uri.scheme != "file":
+            return None
+
+        hasher = hashlib.new(algorithm)
+
+        filename, is_temp = uri.as_local()
+
+        with open(filename, "rb") as f:
+            for chunk in iter(lambda: f.read(block_size), b""):
+                hasher.update(chunk)
+
+        if is_temp:
+            os.remove(filename)
+
+        return hasher.hexdigest()

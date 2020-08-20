@@ -240,6 +240,9 @@ class LocationTestCase(unittest.TestCase):
         self.assertEqual(loc1.pathInStore, pathInStore)
         self.assertEqual(loc1.uri.scheme, "file")
 
+        with self.assertRaises(ValueError):
+            factory.fromPath("../something")
+
     def testQuotedRoot(self):
         """Test we can handle quoted characters."""
         root = "/a/b/c+1/d"

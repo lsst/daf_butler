@@ -172,11 +172,11 @@ class Config(collections.abc.MutableMapping):
 
     Parameters
     ----------
-    other : `str` or `Config` or `dict`
+    other : `str` or `Config` or `dict` or `ButlerURI`
         Other source of configuration, can be:
 
-        - (`str`) Treated as a path to a config file on disk. Must end with
-          ".yaml".
+        - (`str` or `ButlerURI`) Treated as a URI to a config file. Must end
+          with ".yaml".
         - (`Config`) Copies the other Config's values into this one.
         - (`dict`) Copies the values from the dict into this Config.
 

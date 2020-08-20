@@ -159,10 +159,10 @@ class ButlerURI:
     uri : `str` or `urllib.parse.ParseResult`
         URI in string form.  Can be scheme-less if referring to a local
         filesystem path.
-    root : `str`, optional
+    root : `str` or `ButlerURI`, optional
         When fixing up a relative path in a ``file`` scheme or if scheme-less,
         use this as the root. Must be absolute.  If `None` the current
-        working directory will be used.
+        working directory will be used. Can be a file URI.
     forceAbsolute : `bool`, optional
         If `True`, scheme-less relative URI will be converted to an absolute
         path using a ``file`` scheme. If `False` scheme-less URI will remain
@@ -207,7 +207,7 @@ class ButlerURI:
     _uri: urllib.parse.ParseResult
 
     def __new__(cls, uri: Union[str, urllib.parse.ParseResult, ButlerURI],
-                root: Optional[str] = None, forceAbsolute: bool = True,
+                root: Optional[Union[str, ButlerURI]] = None, forceAbsolute: bool = True,
                 forceDirectory: bool = False) -> ButlerURI:
         parsed: urllib.parse.ParseResult
         dirLike: bool
@@ -595,6 +595,17 @@ class ButlerURI:
         """
         raise NotImplementedError()
 
+    def size(self) -> int:
+        """For non-dir-like URI, return the size of the resource.
+
+        Returns
+        -------
+        sz : `int`
+            The size in bytes of the resource associated with this URI.
+            Returns 0 if dir-like.
+        """
+        raise NotImplementedError()
+
     def __str__(self) -> str:
         return self.geturl()
 
@@ -618,7 +629,7 @@ class ButlerURI:
         return (str(self),)
 
     @staticmethod
-    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
+    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
                       forceAbsolute: bool = False,
                       forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
         """Correct any issues with the supplied URI.
@@ -627,7 +638,7 @@ class ButlerURI:
         ----------
         parsed : `~urllib.parse.ParseResult`
             The result from parsing a URI using `urllib.parse`.
-        root : `str`, ignored
+        root : `str` or `ButlerURI`, ignored
             Not used by the this implementation since all URIs are
             absolute except for those representing the local file system.
         forceAbsolute : `bool`, ignored.
@@ -729,6 +740,14 @@ class ButlerFileURI(ButlerURI):
         # Uses os.path.exists so if there is a soft link that points
         # to a file that no longer exists this will return False
         return os.path.exists(self.ospath)
+
+    def size(self) -> int:
+        if not os.path.isdir(self.ospath):
+            stat = os.stat(self.ospath)
+            sz = stat.st_size
+        else:
+            sz = 0
+        return sz
 
     def remove(self) -> None:
         """Remove the resource."""
@@ -968,7 +987,7 @@ class ButlerFileURI(ButlerURI):
             os.remove(local_src)
 
     @staticmethod
-    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
+    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
                       forceAbsolute: bool = False,
                       forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
         """Fix up relative paths in URI instances.
@@ -977,10 +996,10 @@ class ButlerFileURI(ButlerURI):
         ----------
         parsed : `~urllib.parse.ParseResult`
             The result from parsing a URI using `urllib.parse`.
-        root : `str`, optional
+        root : `str` or `ButlerURI`, optional
             Path to use as root when converting relative to absolute.
             If `None`, it will be the current working directory. This
-            is a local file system path, not a URI.  It is only used if
+            is a local file system path, or a file URI.  It is only used if
             a file-scheme is used incorrectly with a relative path.
         forceAbsolute : `bool`, ignored
             Has no effect for this subclass. ``file`` URIs are always
@@ -1037,6 +1056,10 @@ class ButlerFileURI(ButlerURI):
 
         if root is None:
             root = os.path.abspath(os.path.curdir)
+        elif isinstance(root, ButlerURI):
+            if root.scheme and root.scheme != "file":
+                raise RuntimeError(f"The override root must be a file URI not {root.scheme}")
+            root = os.path.abspath(root.ospath)
 
         replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
 
@@ -1071,6 +1094,14 @@ class ButlerS3URI(ButlerURI):
         exists, _ = s3CheckFileExists(self, client=self.client)
         return exists
 
+    def size(self) -> int:
+        # s3utils itself imports ButlerURI so defer this import
+        from .s3utils import s3CheckFileExists
+        if self.dirLike:
+            return 0
+        _, sz = s3CheckFileExists(self, client=self.client)
+        return sz
+
     def remove(self) -> None:
         """Remove the resource."""
 
@@ -1078,7 +1109,7 @@ class ButlerS3URI(ButlerURI):
         # way of knowing if the file was actually deleted except
         # for checking all the keys again, reponse is  HTTP 204 OK
         # response all the time
-        self.client.delete(Bucket=self.netloc, Key=self.relativeToPathRoot)
+        self.client.delete_object(Bucket=self.netloc, Key=self.relativeToPathRoot)
 
     def read(self, size: int = -1) -> bytes:
         args = {}
@@ -1223,6 +1254,15 @@ class ButlerHttpURI(ButlerURI):
         r = self.session.head(self.geturl())
 
         return True if r.status_code == 200 else False
+
+    def size(self) -> int:
+        if self.dirLike:
+            return 0
+        r = self.session.head(self.geturl())
+        if r.status_code == 200:
+            return int(r.headers['Content-Length'])
+        else:
+            raise FileNotFoundError(f"Resource {self} does not exist")
 
     def mkdir(self) -> None:
         """For a dir-like URI, create the directory resource if it does not
@@ -1407,7 +1447,7 @@ class ButlerSchemelessURI(ButlerFileURI):
         return ButlerURI(uri, forceDirectory=self.dirLike)  # type: ignore
 
     @staticmethod
-    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
+    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
                       forceAbsolute: bool = False,
                       forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
         """Fix up relative paths for local file system.
@@ -1416,10 +1456,10 @@ class ButlerSchemelessURI(ButlerFileURI):
         ----------
         parsed : `~urllib.parse.ParseResult`
             The result from parsing a URI using `urllib.parse`.
-        root : `str`, optional
+        root : `str` or `ButlerURI`, optional
             Path to use as root when converting relative to absolute.
             If `None`, it will be the current working directory. This
-            is a local file system path, not a URI.
+            is a local file system path, or a file URI.
         forceAbsolute : `bool`, optional
             If `True`, scheme-less relative URI will be converted to an
             absolute path using a ``file`` scheme. If `False` scheme-less URI
@@ -1454,6 +1494,10 @@ class ButlerSchemelessURI(ButlerFileURI):
 
         if root is None:
             root = os.path.abspath(os.path.curdir)
+        elif isinstance(root, ButlerURI):
+            if root.scheme and root.scheme != "file":
+                raise RuntimeError(f"The override root must be a file URI not {root.scheme}")
+            root = os.path.abspath(root.ospath)
 
         # this is a local OS file path which can support tilde expansion.
         # we quoted it in the constructor so unquote here

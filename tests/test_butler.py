@@ -965,7 +965,7 @@ class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCa
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)
         uris = [exportButler.getURI(d) for d in datasets]
-        datastoreRoot = ButlerURI(exportButler.datastore.root, forceDirectory=True)
+        datastoreRoot = exportButler.datastore.root
 
         pathsInStore = [uri.relative_to(datastoreRoot) for uri in uris]
 
