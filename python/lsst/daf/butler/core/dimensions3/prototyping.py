@@ -42,7 +42,8 @@ import sqlalchemy
 from lsst.sphgeom import Pixelization
 
 from .. import ddl
-from ..named import NamedKeyMapping, NamedValueSet, NamedValueAbstractSet
+from ..named import NamedKeyDict, NamedKeyMapping, NamedValueSet, NamedValueAbstractSet
+from ..simpleQuery import SimpleQuery
 
 
 class DimensionUniverse:
@@ -82,6 +83,10 @@ class QueryVertex(ABC):
     def universe(self) -> DimensionUniverse:
         pass
 
+    @abstractmethod
+    def is_selectable(self) -> bool:
+        raise NotImplementedError()
+
     @property
     def spatial_family(self) -> Optional[SpatialFamily]:
         return None
@@ -91,7 +96,7 @@ class QueryVertex(ABC):
         return None
 
     @property
-    def identifier_group(self) -> DimensionGroup:
+    def dimensions(self) -> DimensionGroup:
         raise NotImplementedError("TODO")
 
     @property
@@ -188,6 +193,9 @@ class SkyPixDimension(Dimension):
     def universe(self) -> DimensionUniverse:
         return self._family.universe
 
+    def is_selectable(self) -> bool:
+        return False
+
     @property
     def spatial_family(self) -> SkyPixSpatialFamily:
         return self._family
@@ -228,6 +236,9 @@ class LabelDimension(Dimension):
     @property
     def universe(self) -> DimensionUniverse:
         return self._universe
+
+    def is_selectable(self) -> bool:
+        return False
 
     def __lt__(self, other: Dimension) -> bool:
         if isinstance(other, LabelDimension):
@@ -279,6 +290,9 @@ class StandardDimension(Dimension):
     @property
     def universe(self) -> DimensionUniverse:
         return self._universe
+
+    def is_selectable(self) -> bool:
+        return True
 
     @property
     def spatial_family(self) -> Optional[SpatialFamily]:
@@ -341,6 +355,9 @@ class DimensionCombination(QueryVertex):
     def universe(self) -> DimensionUniverse:
         return self._universe
 
+    def is_selectable(self) -> bool:
+        return True
+
     @property
     def spatial_family(self) -> Optional[SpatialFamily]:
         return self._spatial_family
@@ -387,9 +404,12 @@ class MaterializedOverlap(QueryVertex, Generic[F]):
     def universe(self) -> DimensionUniverse:
         return self._universe
 
+    def is_selectable(self) -> bool:
+        return True
+
     @property
     def requires(self) -> NamedValueAbstractSet[Dimension]:
-        return (self.relates[0][1].identifier_group | self.relates[1][1].identifier_group).required
+        return (self.relates[0][1].dimensions | self.relates[1][1].dimensions).required
 
     relates: Tuple[Tuple[F, QueryVertex], Tuple[F, QueryVertex]]
 
@@ -469,6 +489,13 @@ class QueryWhereExpression:
     """
 
 
+@dataclasses.dataclass
+class JoinEntry:
+
+    vertex: QueryVertex
+    dimensions: Iterator[Tuple[Dimension, Iterator[QueryVertex]]]
+
+
 class QueryGraph:
 
     requested_dimensions: DimensionGroup
@@ -486,11 +513,20 @@ class QueryGraph:
         names = set(self.requested_dimensions.names)
         names.update(self.where_expression.dimensions.names)
         for vertex in self.extra_vertices:
-            names.update(vertex.identifier_group.names)
+            names.update(vertex.dimensions.names)
         return DimensionGroup(self.universe, names=names)
 
-    def compute_all_vertices(self) -> Iterator[QueryVertex]:
+    def expand_necessary_vertices(self) -> Iterator[QueryVertex]:
         yield from self.extra_vertices
         yield from self.temporal.visit(self.full_dimensions)
         yield from self.spatial.visit(self.full_dimensions)
-        yield from self.full_dimensions
+
+    def build(self):
+        # {dimension.name: {(vertex.name, column)}} for all dimensions and
+        # the vertices that reference them.
+        dimension_keys_selected: Dict[str, Set[Tuple[str, str]]] = {
+            name: set() for name in self.full_dimensions.names
+        }
+        # {(implied_dimension.name, implying_vertex.name)}
+        implied_dimension_relationships_seen: Set[Tuple[str, str]]
+        for vertex in self.expand_necessary_vertices():
