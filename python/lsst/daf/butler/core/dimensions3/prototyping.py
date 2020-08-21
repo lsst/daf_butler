@@ -24,12 +24,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import dataclasses
-import itertools
 from typing import (
     AbstractSet,
     Any,
     ClassVar,
     Generic,
+    Iterable,
     Iterator,
     Optional,
     Set,
@@ -42,16 +42,7 @@ import sqlalchemy
 from lsst.sphgeom import Pixelization
 
 from .. import ddl
-from ..named import NamedKeyMapping
-
-
-K_co = TypeVar("K_co", covariant=True)
-
-
-# Will be replaced with a better NamedValueSet later; current one is mutable
-# and doesn't do type covariance the way we want.
-class AbstractNamedValueSet(AbstractSet[K_co]):
-    pass
+from ..named import NamedKeyMapping, NamedValueSet, NamedValueAbstractSet
 
 
 class DimensionUniverse:
@@ -92,10 +83,6 @@ class QueryVertex(ABC):
         pass
 
     @property
-    def dimension_group(self) -> DimensionGroup:
-        raise NotImplementedError("TODO")
-
-    @property
     def spatial_family(self) -> Optional[SpatialFamily]:
         return None
 
@@ -103,16 +90,27 @@ class QueryVertex(ABC):
     def temporal_family(self) -> Optional[TemporalFamily]:
         return None
 
-    @abstractmethod
-    def get_dimension_columns(self) -> Iterator[Tuple[Dimension, str]]:
-        pass
+    @property
+    def identifier_group(self) -> DimensionGroup:
+        raise NotImplementedError("TODO")
 
-    @abstractmethod
+    @property
+    def requires(self) -> NamedValueAbstractSet[Dimension]:
+        return NamedValueSet().freeze()
+
+    @property
+    def implies(self) -> NamedValueAbstractSet[Dimension]:
+        return NamedValueSet().freeze()
+
     def get_standard_field_specs(self) -> Iterator[ddl.FieldSpec]:
-        pass
+        for dimension in self.requires:
+            yield dataclasses.replace(dimension.key_field_spec, name=dimension.name)
+        for dimension in self.implies:
+            yield dataclasses.replace(dimension.key_field_spec, name=dimension.name,
+                                      primary_key=False, nullable=True)
 
     def get_unique_constraints(self) -> Iterator[Tuple[str, ...]]:
-        return iter(())
+        yield from ()
 
 
 class Dimension(QueryVertex):
@@ -129,7 +127,7 @@ class Dimension(QueryVertex):
 
     @property
     @abstractmethod
-    def primary_key(self) -> ddl.FieldSpec:
+    def key_field_spec(self) -> ddl.FieldSpec:
         raise NotImplementedError()
 
     def __eq__(self, other: Any) -> bool:
@@ -153,11 +151,20 @@ class Dimension(QueryVertex):
     def __ge__(self, other: Dimension) -> bool:
         return self == other or not self < other
 
-    def get_dimension_columns(self) -> Iterator[Tuple[Dimension, str]]:
-        yield (self, self.primary_key.name)
-
     def get_standard_field_specs(self) -> Iterator[ddl.FieldSpec]:
-        yield self.primary_key
+        for dimension in self.requires:
+            yield dataclasses.replace(
+                dimension.key_field_spec,
+                name=dimension.name,
+            )
+        yield self.key_field_spec
+        for dimension in self.implies:
+            yield dataclasses.replace(
+                dimension.key_field_spec,
+                name=dimension.name,
+                primaryKey=False,
+                nullable=True,
+            )
 
 
 class SkyPixSpatialFamily(SpatialFamily):
@@ -194,7 +201,7 @@ class SkyPixDimension(Dimension):
         return super().__lt__(other)
 
     @property
-    def primary_key(self) -> ddl.FieldSpec:
+    def key_field_spec(self) -> ddl.FieldSpec:
         return ddl.FieldSpec(
             name=f"{self._family.name}_id",
             dtype=sqlalchemy.BigInteger,
@@ -228,7 +235,7 @@ class LabelDimension(Dimension):
         return super().__lt__(other)
 
     @property
-    def primary_key(self) -> ddl.FieldSpec:
+    def key_field_spec(self) -> ddl.FieldSpec:
         return ddl.FieldSpec(
             name=self._name,
             dtype=sqlalchemy.String,
@@ -244,22 +251,22 @@ class StandardDimension(Dimension):
         self,
         name: str,
         universe: DimensionUniverse, *,
-        requires: AbstractNamedValueSet[StandardDimension],
-        implies: AbstractNamedValueSet[StandardDimension],
+        requires: NamedValueAbstractSet[Dimension],
+        implies: NamedValueAbstractSet[Dimension],
         spatial_family: Optional[SpatialFamily],
         temporal_family: Optional[TemporalFamily],
-        primary_key: ddl.FieldSpec,
+        key_field_spec: ddl.FieldSpec,
         unique_constraints: AbstractSet[Tuple[str, ...]],
-        metadata: AbstractNamedValueSet[ddl.FieldSpec],
+        metadata: NamedValueAbstractSet[ddl.FieldSpec],
         index: int,
     ):
         self._name = name
         self._universe = universe
-        self.requires = requires
-        self.implies = implies
+        self._requires = requires
+        self._implies = implies
         self._spatial_family = spatial_family
         self._temporal_family = temporal_family
-        self._primary_key = primary_key
+        self._key_field_spec = key_field_spec
         self._unique_constraints = unique_constraints
         self._metadata = metadata
         self._index = index
@@ -281,46 +288,29 @@ class StandardDimension(Dimension):
     def temporal_family(self) -> Optional[TemporalFamily]:
         return self._temporal_family
 
+    @property
+    def requires(self) -> NamedValueAbstractSet[Dimension]:
+        return self._requires
+
+    @property
+    def implies(self) -> NamedValueAbstractSet[Dimension]:
+        return self._implies
+
     def __lt__(self, other: Dimension) -> bool:
         if isinstance(other, StandardDimension):
             return self._index < other._index
         return NotImplemented
 
     @property
-    def primary_key(self) -> ddl.FieldSpec:
-        return self._primary_key
-
-    def get_dimension_columns(self) -> Iterator[Tuple[Dimension, str]]:
-        for dimension in self.requires:
-            yield (dimension, dimension.name)
-        yield (self, self.primary_key.name)
-        for dimension in self.implies:
-            yield (dimension, dimension.name)
+    def key_field_spec(self) -> ddl.FieldSpec:
+        return self._key_field_spec
 
     def get_standard_field_specs(self) -> Iterator[ddl.FieldSpec]:
-        for dimension in self.requires:
-            yield dataclasses.replace(
-                dimension.primary_key,
-                name=dimension.name,
-                primaryKey=False,
-                nullable=False,
-            )
-        yield self.primary_key
-        for dimension in self.implies:
-            yield dataclasses.replace(
-                dimension.primary_key,
-                name=dimension.name,
-                primaryKey=False,
-                nullable=True,
-            )
+        yield from super().get_standard_field_specs()
         yield from self._metadata
 
     def get_unique_constraints(self) -> Iterator[Tuple[str, ...]]:
         return iter(self._unique_constraints)
-
-    requires: AbstractNamedValueSet[StandardDimension]
-
-    implies: AbstractNamedValueSet[StandardDimension]
 
 
 class DimensionCombination(QueryVertex):
@@ -330,13 +320,15 @@ class DimensionCombination(QueryVertex):
         name: str,
         universe: DimensionUniverse, *,
         combines: DimensionGroup,
+        implies: NamedValueAbstractSet[Dimension],
         spatial_family: Optional[SpatialFamily],
         temporal_family: Optional[TemporalFamily],
-        metadata: AbstractNamedValueSet[ddl.FieldSpec],
+        metadata: NamedValueAbstractSet[ddl.FieldSpec],
     ):
         self._name = name
         self._universe = universe
         self.combines = combines
+        self._implies = implies
         self._spatial_family = spatial_family
         self._temporal_family = temporal_family
         self._metadata = metadata
@@ -357,98 +349,19 @@ class DimensionCombination(QueryVertex):
     def temporal_family(self) -> Optional[TemporalFamily]:
         return self._temporal_family
 
-    def get_dimension_columns(self) -> Iterator[Tuple[Dimension, str]]:
-        for dimension in self.combines.required:
-            yield (dimension, dimension.name)
+    @property
+    def requires(self) -> NamedValueAbstractSet[Dimension]:
+        return self.combines.required
+
+    @property
+    def implies(self) -> NamedValueAbstractSet[Dimension]:
+        return self._implies
 
     def get_standard_field_specs(self) -> Iterator[ddl.FieldSpec]:
-        for dimension, name in self.get_dimension_columns():
-            yield dataclasses.replace(dimension.primary_key, name=name)
+        yield from super().get_standard_field_specs()
         yield from self._metadata
 
     combines: DimensionGroup
-
-
-class DimensionAggregateDefinition(QueryVertex):
-
-    def __init__(
-        self,
-        name: str,
-        universe: DimensionUniverse, *,
-        parent: StandardDimension,
-        child: Dimension,
-        mediator: StandardDimension,
-        spatial_family: Optional[SpatialFamily],
-        temporal_family: Optional[TemporalFamily],
-        metadata: AbstractNamedValueSet[ddl.FieldSpec],
-    ):
-        self._name = name
-        self._universe = universe
-        self.parent = parent
-        self.child = child
-        self.mediator = mediator
-        self._spatial_family = spatial_family
-        self._temporal_family = temporal_family
-        self._metadata = metadata
-        # TODO: make asserts into better exceptions
-        assert mediator in parent.requires or mediator in parent.implies
-        assert (parent.spatial_family is None or child.spatial_family is None
-                or parent.spatial_family == child.spatial_family)
-        assert (parent.temporal_family is None or child.temporal_family is None
-                or parent.temporal_family == child.temporal_family)
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def universe(self) -> DimensionUniverse:
-        return self._universe
-
-    def get_dimension_columns(self) -> Iterator[Tuple[Dimension, str]]:
-        seen: Set[str] = set()
-        for dimension, _ in itertools.chain(self.mediator.get_dimension_columns(),
-                                            self.child.get_dimension_columns(),
-                                            self.parent.get_dimension_columns()):
-            if dimension.name not in seen:
-                yield (dimension, dimension.name)
-                seen.add(dimension.name)
-
-    def get_standard_field_specs(self) -> Iterator[ddl.FieldSpec]:
-        seen: Set[str] = set()
-        for dimension, _ in self.mediator.get_dimension_columns():
-            if dimension.name not in seen:
-                yield dataclasses.replace(
-                    dimension.primary_key,
-                    name=dimension.name,
-                )
-                seen.add(dimension.name)
-        for dimension, _ in self.child.get_dimension_columns():
-            if dimension.name not in seen:
-                yield dataclasses.replace(
-                    dimension.primary_key,
-                    name=dimension.name,
-                )
-                seen.add(dimension.name)
-        for dimension, _ in self.parent.get_dimension_columns():
-            if dimension.name not in seen:
-                yield dataclasses.replace(
-                    dimension.primary_key,
-                    name=dimension.name,
-                    primaryKey=False,
-                    nullable=False,
-                )
-                seen.add(dimension.name)
-        yield from self._metadata
-
-    # TODO: in some contexts, we _could_ define unique constraints here.
-    #  - How do they depend on whether mediator is required by or implied by
-    #    parent?
-    #  - Do we need to, or are they already enforced indirectly?
-
-    parent: StandardDimension
-    child: Dimension
-    mediator: StandardDimension
 
 
 F = TypeVar("F", bound=RelationshipFamily)
@@ -460,7 +373,7 @@ class MaterializedOverlap(QueryVertex, Generic[F]):
         self,
         name: str,
         universe: DimensionUniverse, *,
-        relates: Tuple[NamedKeyMapping[F, QueryVertex], NamedKeyMapping[F, QueryVertex]]
+        relates: Tuple[Tuple[F, QueryVertex], Tuple[F, QueryVertex]]
     ):
         self._name = name
         self._universe = universe
@@ -474,41 +387,43 @@ class MaterializedOverlap(QueryVertex, Generic[F]):
     def universe(self) -> DimensionUniverse:
         return self._universe
 
-    def get_dimension_columns(self) -> Iterator[Tuple[Dimension, str]]:
-        seen: Set[str] = set()
-        for side in self.relates:
-            for vertex in side.values():
-                for dimension, _ in vertex.get_dimension_columns():
-                    if dimension.name not in seen:
-                        yield (dimension, dimension.name)
-                        seen.add(dimension.name)
+    @property
+    def requires(self) -> NamedValueAbstractSet[Dimension]:
+        return (self.relates[0][1].identifier_group | self.relates[1][1].identifier_group).required
 
-    def get_standard_field_specs(self) -> Iterator[ddl.FieldSpec]:
-        for dimension, name in self.get_dimension_columns():
-            yield dataclasses.replace(dimension.primary_key, name=name)
-
-    relates: Tuple[NamedKeyMapping[F, QueryVertex], NamedKeyMapping[F, QueryVertex]]
+    relates: Tuple[Tuple[F, QueryVertex], Tuple[F, QueryVertex]]
 
 
 class DimensionGroup:
 
+    def __init__(
+        self,
+        universe: DimensionUniverse, *,
+        dimensions: Optional[Iterable[Dimension]] = None,
+        names: Optional[Iterable[str]] = None,
+        conform: bool = True
+    ):
+        raise NotImplementedError("TODO")
+
     @property
     def names(self) -> AbstractSet[str]:
-        pass
+        raise NotImplementedError("TODO")
 
     def __iter__(self) -> Iterator[Dimension]:
-        pass
+        raise NotImplementedError("TODO")
 
     # TODO: more container interface
 
-    def asSet(self) -> AbstractNamedValueSet[Dimension]:
-        pass
+    def asSet(self) -> NamedValueAbstractSet[Dimension]:
+        raise NotImplementedError("TODO")
+
+    def __or__(self, other: DimensionGroup) -> DimensionGroup:
+        raise NotImplementedError("TODO")
 
     universe: DimensionUniverse
-    required: AbstractNamedValueSet[Dimension]
-    implied: AbstractNamedValueSet[Dimension]
-    aggregations: AbstractNamedValueSet[DimensionAggregateDefinition]
-    combinations: AbstractNamedValueSet[DimensionCombinationSupplement]
+    required: NamedValueAbstractSet[Dimension]
+    implied: NamedValueAbstractSet[Dimension]
+    combinations: NamedValueAbstractSet[DimensionCombination]
 
 
 class QueryRelationship(Generic[F]):
@@ -517,36 +432,65 @@ class QueryRelationship(Generic[F]):
     ManualEdges: ClassVar[Type[ManualEdges]]
 
     @abstractmethod
-    def visit(self, dimensions: DimensionGroup) -> AbstractNamedValueSet[QueryVertex]:
+    def visit(self, dimensions: DimensionGroup) -> Iterator[QueryVertex]:
         pass
 
 
 class FamilyCombinations(QueryRelationship[F]):
     overrides: NamedKeyMapping[F, QueryVertex]
 
-    def visit(self, dimensions: DimensionGroup) -> AbstractNamedValueSet[QueryVertex]:
-        pass
+    def visit(self, dimensions: DimensionGroup) -> Iterator[QueryVertex]:
+        raise NotImplementedError("TODO")
 
 
 class ManualEdges(QueryRelationship[F]):
     edges: Set[Tuple[QueryVertex, QueryVertex]]
 
-    def visit(self, dimensions: DimensionGroup) -> AbstractNamedValueSet[QueryVertex]:
-        pass
+    def visit(self, dimensions: DimensionGroup) -> Iterator[QueryVertex]:
+        raise NotImplementedError("TODO")
 
 
 QueryRelationship.FamilyCombinations = FamilyCombinations
 QueryRelationship.ManualEdges = ManualEdges
 
 
+class QueryWhereExpression:
+
+    dimensions: NamedValueAbstractSet[Dimension]
+    """All dimensions referenced by the expression, including dimensions
+    recursively referenced by the keys of `metadata` (`NamedValueAbstractSet`
+    of `Dimension`).
+    """
+
+    metadata: NamedKeyMapping[QueryVertex, Set[str]]
+    """All fields referenced by the expression, other than the primary keys of
+    dimensions (`NamedKeyMapping` mapping `QueryVertex` to a `set` of field
+    names).
+    """
+
+
 class QueryGraph:
 
-    requested: DimensionGroup
-
+    requested_dimensions: DimensionGroup
     spatial: QueryRelationship[SpatialFamily]
     temporal: QueryRelationship[TemporalFamily]
+    where_expression: QueryWhereExpression
+    extra_vertices: NamedValueAbstractSet[QueryVertex]
 
-    extra: AbstractNamedValueSet[QueryVertex]
+    @property
+    def universe(self) -> DimensionUniverse:
+        return self.requested_dimensions.universe
 
-    def get_vertices(self) -> Iterator[QueryVertex]:
-        raise NotImplementedError("TODO")
+    @property
+    def full_dimensions(self) -> DimensionGroup:
+        names = set(self.requested_dimensions.names)
+        names.update(self.where_expression.dimensions.names)
+        for vertex in self.extra_vertices:
+            names.update(vertex.identifier_group.names)
+        return DimensionGroup(self.universe, names=names)
+
+    def compute_all_vertices(self) -> Iterator[QueryVertex]:
+        yield from self.extra_vertices
+        yield from self.temporal.visit(self.full_dimensions)
+        yield from self.spatial.visit(self.full_dimensions)
+        yield from self.full_dimensions
