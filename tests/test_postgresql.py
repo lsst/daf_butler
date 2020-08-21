@@ -21,10 +21,12 @@
 
 import os
 from contextlib import contextmanager
+import itertools
 import secrets
 import unittest
 import gc
 
+import astropy.time
 try:
     # It's possible but silly to have testing.postgresql installed without
     # having the postgresql server installed (because then nothing in
@@ -36,10 +38,20 @@ except ImportError:
 
 import sqlalchemy
 
-from lsst.daf.butler import ddl
-from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase
+from lsst.daf.butler import ddl, Timespan
 from lsst.daf.butler.registry import Registry
+from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase, _RangeTimespanType
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
+
+
+def _startServer():
+    """Start a PostgreSQL server and create a database within it, returning
+    an object encapsulating both.
+    """
+    server = testing.postgresql.Postgresql()
+    engine = sqlalchemy.engine.create_engine(server.url())
+    engine.execute("CREATE EXTENSION btree_gist;")
+    return server
 
 
 @unittest.skipUnless(testing is not None, "testing.postgresql module not found")
@@ -47,7 +59,7 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
     @classmethod
     def setUpClass(cls):
-        cls.server = testing.postgresql.Postgresql()
+        cls.server = _startServer()
 
     @classmethod
     def tearDownClass(cls):
@@ -125,6 +137,60 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
             )
         )
 
+    def test_RangeTimespanType(self):
+        start = astropy.time.Time('2020-01-01T00:00:00', format="isot", scale="tai")
+        offset = astropy.time.TimeDelta(60, format="sec")
+        timestamps = [start + offset*n for n in range(3)]
+        timespans = [Timespan(begin=None, end=None)]
+        timespans.extend(Timespan(begin=None, end=t) for t in timestamps)
+        timespans.extend(Timespan(begin=t, end=None) for t in timestamps)
+        timespans.extend(Timespan(begin=a, end=b) for a, b in itertools.combinations(timestamps, 2))
+        db = self.makeEmptyDatabase(origin=1)
+        with db.declareStaticTables(create=True) as context:
+            tbl = context.addTable(
+                "tbl",
+                ddl.TableSpec(
+                    fields=[
+                        ddl.FieldSpec(name="id", dtype=sqlalchemy.Integer, primaryKey=True),
+                        ddl.FieldSpec(name="timespan", dtype=_RangeTimespanType),
+                    ],
+                )
+            )
+        rows = [{"id": n, "timespan": t} for n, t in enumerate(timespans)]
+        db.insert(tbl, *rows)
+
+        # Test basic round-trip through database.
+        self.assertEqual(
+            rows,
+            [dict(row) for row in db.query(tbl.select().order_by(tbl.columns.id)).fetchall()]
+        )
+
+        # Test that Timespan's Python methods are consistent with our usage of
+        # half-open ranges and PostgreSQL operators on ranges.
+        def subquery(alias: str) -> sqlalchemy.sql.FromClause:
+            return sqlalchemy.sql.select(
+                [tbl.columns.id.label("id"), tbl.columns.timespan.label("timespan")]
+            ).select_from(
+                tbl
+            ).alias(alias)
+        sq1 = subquery("sq1")
+        sq2 = subquery("sq2")
+        query = sqlalchemy.sql.select([
+            sq1.columns.id.label("n1"),
+            sq2.columns.id.label("n2"),
+            sq1.columns.timespan.overlaps(sq2.columns.timespan).label("overlaps"),
+        ])
+
+        dbResults = {
+            (row[query.columns.n1], row[query.columns.n2]): row[query.columns.overlaps]
+            for row in db.query(query)
+        }
+        pyResults = {
+            (n1, n2): t1.overlaps(t2)
+            for (n1, t1), (n2, t2) in itertools.product(enumerate(timespans), enumerate(timespans))
+        }
+        self.assertEqual(pyResults, dbResults)
+
 
 @unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class PostgresqlRegistryTests(RegistryTests):
@@ -139,7 +205,7 @@ class PostgresqlRegistryTests(RegistryTests):
 
     @classmethod
     def setUpClass(cls):
-        cls.server = testing.postgresql.Postgresql()
+        cls.server = _startServer()
 
     @classmethod
     def tearDownClass(cls):

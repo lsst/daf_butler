@@ -23,12 +23,14 @@ from __future__ import annotations
 __all__ = ["PostgresqlDatabase"]
 
 from contextlib import contextmanager, closing
-from typing import Iterable, Iterator, Optional
+from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Type, Union
 
-import sqlalchemy
+import psycopg2
+import sqlalchemy.dialects.postgresql
 
 from ..interfaces import Database, ReadOnlyDatabaseError
 from ..nameShrinker import NameShrinker
+from ...core import DatabaseTimespanRepresentation, ddl, Timespan, time_utils
 
 
 class PostgresqlDatabase(Database):
@@ -55,6 +57,10 @@ class PostgresqlDatabase(Database):
     SQLAlchemy.  Running the tests for this class requires the
     ``testing.postgresql`` be installed, which we assume indicates that a
     PostgreSQL server is installed and can be run locally in userspace.
+
+    Some functionality provided by this class (and used by `Registry`) requires
+    the ``btree_gist`` PostgreSQL server extension to be installed an enabled
+    on the database being connected to; this is checked at connection time.
     """
 
     def __init__(self, *, connection: sqlalchemy.engine.Connection, origin: int,
@@ -67,6 +73,12 @@ class PostgresqlDatabase(Database):
             raise RuntimeError("Only the psycopg2 driver for PostgreSQL is supported.") from err
         if namespace is None:
             namespace = connection.execute("SELECT current_schema();").scalar()
+        if not connection.execute("SELECT COUNT(*) FROM pg_extension WHERE extname='btree_gist';").scalar():
+            raise RuntimeError(
+                "The Butler PostgreSQL backend requires the btree_gist extension. "
+                "As extensions are enabled per-database, this may require an administrator to run "
+                "`CREATE EXTENSION btree_gist;` in a database before a butler client for it is initialized."
+            )
         self.namespace = namespace
         self.dbname = dsn.get("dbname")
         self._writeable = writeable
@@ -107,6 +119,30 @@ class PostgresqlDatabase(Database):
     def expandDatabaseEntityName(self, shrunk: str) -> str:
         return self._shrinker.expand(shrunk)
 
+    def _convertExclusionConstraintSpec(self, table: str,
+                                        spec: Tuple[Union[str, Type[DatabaseTimespanRepresentation]], ...],
+                                        metadata: sqlalchemy.MetaData) -> sqlalchemy.schema.Constraint:
+        # Docstring inherited.
+        args = []
+        names = ["excl"]
+        for item in spec:
+            if isinstance(item, str):
+                args.append((sqlalchemy.schema.Column(item), "="))
+                names.append(item)
+            elif issubclass(item, DatabaseTimespanRepresentation):
+                assert item is self.getTimespanRepresentation()
+                args.append((sqlalchemy.schema.Column(DatabaseTimespanRepresentation.NAME), "&&"))
+                names.append(DatabaseTimespanRepresentation.NAME)
+        return sqlalchemy.dialects.postgresql.ExcludeConstraint(
+            *args,
+            name=self.shrinkDatabaseEntityName("_".join(names)),
+        )
+
+    @classmethod
+    def getTimespanRepresentation(cls) -> Type[DatabaseTimespanRepresentation]:
+        # Docstring inherited.
+        return _RangeTimespanRepresentation
+
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
         if not (self.isWriteable() or table.key in self._tempTables):
             raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
@@ -124,3 +160,141 @@ class PostgresqlDatabase(Database):
                 if column.name not in table.primary_key}
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
         self._connection.execute(query, *rows)
+
+
+class _RangeTimespanType(sqlalchemy.TypeDecorator):
+    """A single-column `Timespan` representation usable only with
+    PostgreSQL.
+
+    This type should be able to take advantage of PostgreSQL's built-in
+    range operators, and the indexing and EXCLUSION table constraints built
+    off of them.
+    """
+
+    impl = sqlalchemy.dialects.postgresql.INT8RANGE
+
+    def process_bind_param(self, value: Optional[Timespan],
+                           dialect: sqlalchemy.engine.Dialect
+                           ) -> Optional[psycopg2.extras.NumericRange]:
+        if value is None:
+            return None
+        if not isinstance(value, Timespan):
+            raise TypeError(f"Unsupported type: {type(value)}, expected Timespan.")
+        lower = None if value.begin is None else time_utils.astropy_to_nsec(value.begin)
+        upper = None if value.end is None else time_utils.astropy_to_nsec(value.end)
+        return psycopg2.extras.NumericRange(lower=lower, upper=upper)
+
+    def process_result_value(self, value: Optional[psycopg2.extras.NumericRange],
+                             dialect: sqlalchemy.engine.Dialect
+                             ) -> Optional[Timespan]:
+        if value is None or value.isempty:
+            return None
+        begin = None if value.lower is None else time_utils.nsec_to_astropy(value.lower)
+        end = None if value.upper is None else time_utils.nsec_to_astropy(value.upper)
+        return Timespan(begin=begin, end=end)
+
+    class comparator_factory(sqlalchemy.types.Concatenable.Comparator):  # noqa: N801
+        """Comparison operators for TimespanColumnRanges.
+
+        Notes
+        -----
+        The existence of this nested class is a workaround for a bug
+        submitted upstream as
+        https://github.com/sqlalchemy/sqlalchemy/issues/5476.  The code is
+        a limited copy of the operators in
+        ``sqlalchemy.dialects.postgresql.ranges.RangeOperators``, but with
+        ``is_comparison=True`` added to all calls.
+        """
+
+        def __ne__(self, other: Any) -> Any:
+            "Boolean expression. Returns true if two ranges are not equal"
+            if other is None:
+                return super().__ne__(other)
+            else:
+                return self.expr.op("<>", is_comparison=True)(other)
+
+        def contains(self, other: Any, **kw: Any) -> Any:
+            """Boolean expression. Returns true if the right hand operand,
+            which can be an element or a range, is contained within the
+            column.
+            """
+            return self.expr.op("@>", is_comparison=True)(other)
+
+        def contained_by(self, other: Any) -> Any:
+            """Boolean expression. Returns true if the column is contained
+            within the right hand operand.
+            """
+            return self.expr.op("<@", is_comparison=True)(other)
+
+        def overlaps(self, other: Any) -> Any:
+            """Boolean expression. Returns true if the column overlaps
+            (has points in common with) the right hand operand.
+            """
+            return self.expr.op("&&", is_comparison=True)(other)
+
+
+class _RangeTimespanRepresentation(DatabaseTimespanRepresentation):
+    """An implementation of `DatabaseTimespanRepresentation` that uses
+    `_RangeTimespanType` to store a timespan in a single
+    PostgreSQL-specific field.
+
+    Parameters
+    ----------
+    column : `sqlalchemy.sql.ColumnElement`
+        SQLAlchemy object representing the column.
+    """
+    def __init__(self, column: sqlalchemy.sql.ColumnElement):
+        self.column = column
+
+    __slots__ = ("column",)
+
+    @classmethod
+    def makeFieldSpecs(cls, nullable: bool, **kwargs: Any) -> Tuple[ddl.FieldSpec, ...]:
+        # Docstring inherited.
+        return (
+            ddl.FieldSpec(
+                cls.NAME, dtype=_RangeTimespanType, nullable=nullable,
+                default=(None if nullable else sqlalchemy.sql.text("'(,)'::int8range")),
+                **kwargs
+            ),
+        )
+
+    @classmethod
+    def getFieldNames(cls) -> Tuple[str, ...]:
+        # Docstring inherited.
+        return (cls.NAME,)
+
+    @classmethod
+    def update(cls, timespan: Optional[Timespan], *,
+               result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        # Docstring inherited.
+        if result is None:
+            result = {}
+        result[cls.NAME] = timespan
+        return result
+
+    @classmethod
+    def extract(cls, mapping: Mapping[str, Any]) -> Optional[Timespan]:
+        # Docstring inherited.
+        return mapping[cls.NAME]
+
+    @classmethod
+    def hasExclusionConstraint(cls) -> bool:
+        # Docstring inherited.
+        return True
+
+    @classmethod
+    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause) -> _RangeTimespanRepresentation:
+        # Docstring inherited.
+        return cls(selectable.columns[cls.NAME])
+
+    def isNull(self) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited.
+        return self.column.is_(None)
+
+    def overlaps(self, other: Union[Timespan, _RangeTimespanRepresentation]) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited.
+        if isinstance(other, Timespan):
+            return self.column.overlaps(other)
+        else:
+            return self.column.overlaps(other.column)

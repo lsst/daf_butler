@@ -217,6 +217,12 @@ class DimensionElement:
         self.required.freeze()
         self.implied = NamedValueSet(universe.sorted(self._related.implied))
         self.implied.freeze()
+        self.dimensions = NamedValueSet(self.required)
+        for d in self.implied:
+            self.dimensions.add(d)
+        self.dimensions.freeze()
+        assert all(a == b for a, b in zip(self.required, self.dimensions)), \
+            "NamedValueSet.add is expected to preserve order."
         # Set self.spatial and self.temporal to DimensionElement instances from
         # the private _related versions of those.
         for s in ("spatial", "temporal"):
@@ -372,6 +378,21 @@ class DimensionElement:
     (wholly) also part of the primary key.
 
     Unlike ``self.graph.implied``, this set is not expanded recursively.
+    """
+
+    dimensions: NamedValueSet[Dimension]
+    """The union of `required` and `implied`, with all elements in `required`
+    before any elements in `implied`.
+
+    This differs from ``self.graph.dimension`` both in order and in content:
+
+     - as in ``self.implied``, implied dimensions are not expanded recursively
+       here;
+     - implied dimensions appear after required dimensions here, instead of
+       being topologically ordered.
+
+    As a result, this set is ordered consistently with
+    ``self.RecordClass.fields``.
     """
 
     spatial: Optional[DimensionElement]

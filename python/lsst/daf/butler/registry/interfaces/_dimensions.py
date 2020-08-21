@@ -32,12 +32,12 @@ from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import (
+        DatabaseTimespanRepresentation,
         DataCoordinateIterable,
         DimensionElement,
         DimensionRecord,
         DimensionUniverse,
         NamedKeyDict,
-        Timespan,
     )
     from ..queries import QueryBuilder
     from ._database import Database, StaticTablesContext
@@ -148,7 +148,7 @@ class DimensionRecordStorage(ABC):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
     ) -> sqlalchemy.sql.FromClause:
         """Add the dimension element's logical table to a query under
         construction.

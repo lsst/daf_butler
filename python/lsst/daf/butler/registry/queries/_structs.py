@@ -29,6 +29,7 @@ from sqlalchemy.sql import ColumnElement
 
 from lsst.sphgeom import Region
 from ...core import (
+    DatabaseTimespanRepresentation,
     DataCoordinate,
     DatasetType,
     Dimension,
@@ -38,7 +39,6 @@ from ...core import (
     NamedKeyDict,
     NamedValueSet,
     SkyPixDimension,
-    Timespan,
 )
 from ..interfaces import (
     CollectionManager,
@@ -282,10 +282,10 @@ class QueryColumns:
     dimensions in `QuerySummary.requested` and `QuerySummary.dataId.graph`.
     """
 
-    timespans: NamedKeyDict[DimensionElement, Timespan[ColumnElement]]
+    timespans: NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]
     """Columns that correspond to timespans for elements that participate in a
     temporal join or filter in the query (`NamedKeyDict` mapping
-    `DimensionElement` to `Timespan` of `ColumnElement`).
+    `DimensionElement` to `DatabaseTimespanRepresentation`).
 
     In a `Query`, the keys of this dictionary must be exactly the elements
     in `QuerySummary.temporal`.

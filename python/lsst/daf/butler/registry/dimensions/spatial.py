@@ -28,14 +28,13 @@ import sqlalchemy
 
 from ...core import (
     addDimensionForeignKey,
+    DatabaseTimespanRepresentation,
     ddl,
     DimensionElement,
     DimensionRecord,
-    makeDimensionElementTableSpec,
     NamedKeyDict,
     NamedValueSet,
     REGION_FIELD_SPEC,
-    Timespan,
 )
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
@@ -107,7 +106,10 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         return cls(
             db,
             element,
-            table=method(element.name, makeDimensionElementTableSpec(element)),
+            table=method(
+                element.name,
+                element.RecordClass.fields.makeTableSpec(tsRepr=db.getTimespanRepresentation())
+            ),
             commonSkyPixOverlapTable=method(
                 _OVERLAP_TABLE_NAME_PATTERN.format(element.name, element.universe.commonSkyPix.name),
                 _makeOverlapTableSpec(element, element.universe.commonSkyPix)
@@ -118,7 +120,7 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         if regions is not None:

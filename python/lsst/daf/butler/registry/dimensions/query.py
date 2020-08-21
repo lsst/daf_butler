@@ -27,13 +27,12 @@ from typing import Iterable, Optional
 import sqlalchemy
 
 from ...core import (
+    DatabaseTimespanRepresentation,
     DataCoordinateIterable,
     Dimension,
     DimensionElement,
     DimensionRecord,
-    makeDimensionElementTableSpec,
     NamedKeyDict,
-    Timespan,
 )
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
@@ -60,7 +59,9 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         self._db = db
         self._element = element
         self._target = element.universe[element.viewOf]
-        self._targetSpec = makeDimensionElementTableSpec(self._target)
+        self._targetSpec = self._target.RecordClass.fields.makeTableSpec(
+            tsRepr=self._db.getTimespanRepresentation(),
+        )
         self._query = None  # Constructed on first use.
         if element not in self._target.graph.dimensions:
             raise NotImplementedError("Query-backed dimension must be a dependency of its target.")
@@ -120,7 +121,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         assert regions is None, "Should be guaranteed by constructor checks."
@@ -132,8 +133,8 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             # results.
             return
         self._ensureQuery()
-        joinOn = builder.startJoin(self._query, list(self.element.required),
-                                   self.element.RecordClass.__slots__)
+        joinOn = builder.startJoin(self._query, self.element.required,
+                                   self.element.RecordClass.fields.required.names)
         builder.finishJoin(self._query, joinOn)
         return self._query
 
@@ -151,7 +152,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         for dataId in dataIds:
             # Given the restrictions imposed at construction, we know there's
             # nothing to actually fetch: everything we need is in the data ID.
-            yield RecordClass.fromDict(dataId.byName())
+            yield RecordClass(**dataId.byName())
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.

@@ -167,7 +167,7 @@ def _makeRecords(dataIds, universe):
                     relation = expandedIds[other.name][0]
                     value[other.name] = relation[other.primaryKey.name]
 
-    return {dimension: [universe[dimension].RecordClass.fromDict(value) for value in values]
+    return {dimension: [universe[dimension].RecordClass(**value) for value in values]
             for dimension, values in expandedIds.items()}
 
 

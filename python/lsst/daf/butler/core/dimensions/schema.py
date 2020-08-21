@@ -22,17 +22,16 @@ from __future__ import annotations
 
 __all__ = (
     "addDimensionForeignKey",
-    "makeDimensionElementTableSpec",
     "REGION_FIELD_SPEC",
 )
 
 import copy
 
-from typing import TYPE_CHECKING
+from typing import Tuple, Type, TYPE_CHECKING
 
 from .. import ddl
 from ..named import NamedValueSet
-from ..timespan import TIMESPAN_FIELD_SPECS
+from ..timespan import DatabaseTimespanRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .elements import DimensionElement, Dimension
@@ -117,61 +116,141 @@ def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
     return fieldSpec
 
 
-def makeDimensionElementTableSpec(element: DimensionElement) -> ddl.TableSpec:
-    """Create a complete table specification for a `DimensionElement`.
-
-    This combines the foreign key fields from dependencies, unique keys
-    for true `Dimension` instances, metadata fields, and region/timestamp
-    fields for spatial/temporal elements.
-
-    Most callers should use `DimensionElement.makeTableSpec` or
-    `DimensionUniverse.makeSchemaSpec` instead, which account for elements
-    that have no table or reference another table.
+class DimensionElementFields:
+    """An object that constructs the table schema for a `DimensionElement` and
+    provides a categorized view of its fields.
 
     Parameters
     ----------
     element : `DimensionElement`
         Element for which to make a table specification.
 
-    Returns
-    -------
-    spec : `ddl.TableSpec`
-        Database-agnostic specification for a table.
+    Notes
+    -----
+    This combines the foreign key fields from dependencies, unique keys
+    for true `Dimension` instances, metadata fields, and region/timestamp
+    fields for spatial/temporal elements.
+
+    Callers should use `DimensionUniverse.makeSchemaSpec` if they want to
+    account for elements that have no table or reference another table; this
+    class simply creates a specification for the table an element _would_ have
+    without checking whether it does have one.  That can be useful in contexts
+    (e.g. `DimensionRecord`) where we want to simulate the existence of such a
+    table.
     """
-    tableSpec = ddl.TableSpec(
-        fields=NamedValueSet(),
-        unique=set(),
-        foreignKeys=[]
-    )
-    # Add the primary key fields of required dimensions.  These continue to be
-    # primary keys in the table for this dimension.
-    dependencies = []
-    for dimension in element.required:
-        if dimension != element:
-            addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
-            dependencies.append(dimension.name)
+    def __init__(self, element: DimensionElement):
+        self.element = element
+        self._tableSpec = ddl.TableSpec(fields=())
+        # Add the primary key fields of required dimensions.  These continue to
+        # be primary keys in the table for this dimension.
+        self.required = NamedValueSet()
+        self.dimensions = NamedValueSet()
+        self.standard = NamedValueSet()
+        dependencies = []
+        for dimension in element.required:
+            if dimension != element:
+                fieldSpec = addDimensionForeignKey(self._tableSpec, dimension, primaryKey=True)
+                dependencies.append(fieldSpec.name)
+            else:
+                fieldSpec = element.primaryKey  # type: ignore
+                # A Dimension instance is in its own required dependency graph
+                # (always at the end, because of topological ordering).  In
+                # this case we don't want to rename the field.
+                self._tableSpec.fields.add(fieldSpec)
+            self.required.add(fieldSpec)
+            self.dimensions.add(fieldSpec)
+            self.standard.add(fieldSpec)
+        # Add fields and foreign keys for implied dimensions.  These are
+        # primary keys in their own table, but should not be here.  As with
+        # required dependencies, we rename the fields with the dimension name.
+        # We use element.implied instead of element.graph.implied because we
+        # don't want *recursive* implied dependencies.
+        self.implied = NamedValueSet()
+        for dimension in element.implied:
+            fieldSpec = addDimensionForeignKey(self._tableSpec, dimension, primaryKey=False, nullable=True)
+            self.implied.add(fieldSpec)
+            self.dimensions.add(fieldSpec)
+            self.standard.add(fieldSpec)
+        # Add non-primary unique keys and unique constraints for them.
+        for fieldSpec in getattr(element, "alternateKeys", ()):
+            self._tableSpec.fields.add(fieldSpec)
+            self._tableSpec.unique.add(tuple(dependencies) + (fieldSpec.name,))
+            self.standard.add(fieldSpec)
+        # Add other metadata fields.
+        for fieldSpec in element.metadata:
+            self._tableSpec.fields.add(fieldSpec)
+            self.standard.add(fieldSpec)
+        names = list(self.standard.names)
+        # Add fields for regions and/or timespans.
+        if element.spatial is not None:
+            self._tableSpec.fields.add(REGION_FIELD_SPEC)
+            names.append(REGION_FIELD_SPEC.name)
+        if element.temporal is not None:
+            names.append(DatabaseTimespanRepresentation.NAME)
+        self.names = tuple(names)
+
+    def makeTableSpec(self, tsRepr: Type[DatabaseTimespanRepresentation]) -> ddl.TableSpec:
+        """Construct a complete specification for a table that could hold the
+        records of this element.
+
+        Parameters
+        ----------
+        tsRepr : `type` (`DatabaseTimespanRepresentation` subclass)
+            Class object that specifies how timespans are represented in the
+            database.
+
+        Returns
+        -------
+        spec : `ddl.TableSpec`
+            Specification for a table.
+        """
+        if self.element.temporal is not None:
+            spec = ddl.TableSpec(
+                fields=NamedValueSet(self._tableSpec.fields),
+                unique=self._tableSpec.unique,
+                indexes=self._tableSpec.indexes,
+                foreignKeys=self._tableSpec.foreignKeys,
+            )
+            for fieldSpec in tsRepr.makeFieldSpecs(nullable=True):
+                spec.fields.add(fieldSpec)
         else:
-            # A Dimension instance is in its own required dependency graph
-            # (always at the end, because of topological ordering).  In this
-            # case we don't want to rename the field.
-            tableSpec.fields.add(element.primaryKey)   # type: ignore
-    # Add fields and foreign keys for implied dimensions.  These are primary
-    # keys in their own table, but should not be here.  As with required
-    # dependencies, we rename the fields with the dimension name.
-    # We use element.implied instead of element.graph.implied because we don't
-    # want *recursive* implied dependencies.
-    for dimension in element.implied:
-        addDimensionForeignKey(tableSpec, dimension, primaryKey=False, nullable=True)
-    # Add non-primary unique keys and unique constraints for them.
-    for fieldSpec in getattr(element, "alternateKeys", ()):
-        tableSpec.fields.add(fieldSpec)
-        tableSpec.unique.add(tuple(dependencies) + (fieldSpec.name,))
-    # Add metadata fields, temporal timespans, and spatial regions.
-    for fieldSpec in element.metadata:
-        tableSpec.fields.add(fieldSpec)
-    if element.spatial is not None:
-        tableSpec.fields.add(REGION_FIELD_SPEC)
-    if element.temporal is not None:
-        for fieldSpec in TIMESPAN_FIELD_SPECS:
-            tableSpec.fields.add(fieldSpec)
-    return tableSpec
+            spec = self._tableSpec
+        return spec
+
+    element: DimensionElement
+    """The dimension element these fields correspond to (`DimensionElement`).
+    """
+
+    required: NamedValueSet[ddl.FieldSpec]
+    """The fields of this table that correspond to the element's required
+    dimensions, in that order, i.e. `DimensionElement.required`
+    (`NamedValueSet` [ `ddl.FieldSpec` ]).
+    """
+
+    implied: NamedValueSet[ddl.FieldSpec]
+    """The fields of this table that correspond to the element's implied
+    dimensions, in that order, i.e. `DimensionElement.implied`
+    (`NamedValueSet` [ `ddl.FieldSpec` ]).
+    """
+
+    dimensions: NamedValueSet[ddl.FieldSpec]
+    """The fields of this table that correspond to the element's direct
+    required and implied dimensions, in that order, i.e.
+    `DimensionElement.dimensions` (`NamedValueSet` [ `ddl.FieldSpec` ]).
+    """
+
+    standard: NamedValueSet[ddl.FieldSpec]
+    """All standard fields that are expected to have the same form in all
+    databases; this is all fields other than those that represent a region
+    and/or timespan (`NamedValueSet` [ `ddl.FieldSpec` ]).
+    """
+
+    names: Tuple[str, ...]
+    """The names of all fields in the specification (`tuple` [ `str` ]).
+
+    This includes "region" and/or "timespan" if `element` is spatial and/or
+    temporal (respectively).  The actual database representation of these
+    quantities may involve multiple fields (or even fields only on a different
+    table), but the Python representation of those rows (i.e. `DimensionRecord`
+    instances) will always contain exactly these fields.
+    """

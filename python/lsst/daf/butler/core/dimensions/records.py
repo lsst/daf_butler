@@ -27,39 +27,25 @@ from typing import (
     Any,
     ClassVar,
     Dict,
-    Mapping,
-    Tuple,
     TYPE_CHECKING,
     Type,
 )
 
-from ..timespan import Timespan
 from .elements import Dimension
+from ..timespan import Timespan, DatabaseTimespanRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    import astropy.time
     from .elements import DimensionElement
     from .coordinate import DataCoordinate
+    from .schema import DimensionElementFields
 
 
-def _reconstructDimensionRecord(definition: DimensionElement, *args: Any) -> DimensionRecord:
+def _reconstructDimensionRecord(definition: DimensionElement, mapping: Dict[str, Any]) -> DimensionRecord:
     """Unpickle implementation for `DimensionRecord` subclasses.
 
     For internal use by `DimensionRecord`.
     """
-    return definition.RecordClass(*args)
-
-
-def _makeTimespanFromRecord(record: DimensionRecord) -> Timespan[astropy.time.Time]:
-    """Extract a `Timespan` object from the appropriate endpoint attributes.
-
-    For internal use by `DimensionRecord`.
-    """
-    from ..timespan import TIMESPAN_FIELD_SPECS
-    return Timespan(
-        begin=getattr(record, TIMESPAN_FIELD_SPECS.begin.name),
-        end=getattr(record, TIMESPAN_FIELD_SPECS.end.name),
-    )
+    return definition.RecordClass(**mapping)
 
 
 def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionRecord]:
@@ -68,15 +54,18 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
 
     For internal use by `DimensionRecord`.
     """
-    from .schema import makeDimensionElementTableSpec
-    fields = tuple(makeDimensionElementTableSpec(definition).fields.names)
+    from .schema import DimensionElementFields, REGION_FIELD_SPEC
+    fields = DimensionElementFields(definition)
+    slots = list(fields.standard.names)
+    if definition.spatial:
+        slots.append(REGION_FIELD_SPEC.name)
+    if definition.temporal:
+        slots.append(DatabaseTimespanRepresentation.NAME)
     d = {
         "definition": definition,
-        "__slots__": fields,
-        "fields": fields,
+        "__slots__": tuple(slots),
+        "fields": fields
     }
-    if definition.temporal:
-        d["timespan"] = property(_makeTimespanFromRecord)
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
 
 
@@ -86,8 +75,14 @@ class DimensionRecord:
 
     Parameters
     ----------
-    args
-        Field values for this record, ordered to match ``__slots__``.
+    **kwargs
+        Field values for this record.  Unrecognized keys are ignored.  If this
+        is the record for a `Dimension`, its primary key value may be provided
+        with the actual name of the field (e.g. "id" or "name"), the name of
+        the `Dimension`, or both.  If this record class has a "timespan"
+        attribute, "datetime_begin" and "datetime_end" keyword arguments may
+        be provided instead of a single "timespan" keyword argument (but are
+        ignored if a "timespan" argument is provided).
 
     Notes
     -----
@@ -97,22 +92,13 @@ class DimensionRecord:
     itself is pure abstract, but does not use the `abc` module to indicate this
     because it does not have overridable methods.
 
-    Record classes have attributes that correspond exactly to the fields in the
-    related database table, a few additional methods inherited from the
-    `DimensionRecord` base class, and two additional injected attributes:
+    Record classes have attributes that correspond exactly to the
+    `~DimensionElementFields.standard` fields in the related database table,
+    plus "region" and "timespan" attributes for spatial and/or temporal
+    elements (respectively).
 
-     - ``definition`` is a class attribute that holds the `DimensionElement`;
-
-     - ``timespan`` is a property that returns a `Timespan`, present only
-       on record classes that correspond to temporal elements.
-
-    The field attributes are defined via the ``__slots__`` mechanism, and the
-    ``__slots__`` tuple itself is considered the public interface for obtaining
-    the list of fields.
-
-    Instances are usually obtained from a `Registry`, but in the rare cases
-    where they are constructed directly in Python (usually for insertion into
-    a `Registry`), the `fromDict` method should generally be used.
+    Instances are usually obtained from a `Registry`, but can be constructed
+    directly from Python as well.
 
     `DimensionRecord` instances are immutable.
     """
@@ -122,55 +108,43 @@ class DimensionRecord:
     # when they access self.__slots__.
     __slots__ = ("dataId",)
 
-    def __init__(self, *args: Any):
-        for attrName, value in zip(self.__slots__, args):
-            object.__setattr__(self, attrName, value)
+    def __init__(self, **kwargs: Any):
+        # Accept either the dimension name or the actual name of its primary
+        # key field; ensure both are present in the dict for convenience below.
+        if isinstance(self.definition, Dimension):
+            v = kwargs.get(self.definition.primaryKey.name)
+            if v is None:
+                v = kwargs.get(self.definition.name)
+                if v is None:
+                    raise ValueError(
+                        f"No value provided for {self.definition.name}.{self.definition.primaryKey.name}."
+                    )
+                kwargs[self.definition.primaryKey.name] = v
+            else:
+                v2 = kwargs.setdefault(self.definition.name, v)
+                if v != v2:
+                    raise ValueError(
+                        f"Multiple inconsistent values for "
+                        f"{self.definition.name}.{self.definition.primaryKey.name}: {v!r} != {v2!r}."
+                    )
+        for name in self.__slots__:
+            object.__setattr__(self, name, kwargs.get(name))
+        if self.definition.temporal is not None:
+            if self.timespan is None:  # type: ignore
+                self.timespan = Timespan(
+                    kwargs.get("datetime_begin"),
+                    kwargs.get("datetime_end"),
+                )
+
         from .coordinate import DataCoordinate
-        if self.definition.required.names == self.definition.graph.required.names:
-            dataId = DataCoordinate.fromRequiredValues(
+        object.__setattr__(
+            self,
+            "dataId",
+            DataCoordinate.fromRequiredValues(
                 self.definition.graph,
-                args[:len(self.definition.required.names)]
+                tuple(kwargs[dimension] for dimension in self.definition.required.names)
             )
-        else:
-            assert not isinstance(self.definition, Dimension)
-            dataId = DataCoordinate.fromRequiredValues(
-                self.definition.graph,
-                tuple(getattr(self, name) for name in self.definition.required.names)
-            )
-        object.__setattr__(self, "dataId", dataId)
-
-    @classmethod
-    def fromDict(cls, mapping: Mapping[str, Any]) -> DimensionRecord:
-        """Construct a `DimensionRecord` subclass instance from a mapping
-        of field values.
-
-        Parameters
-        ----------
-        mapping : `~collections.abc.Mapping`
-            Field values, keyed by name.  The keys must match those in
-            ``__slots__``, with the exception that a dimension name
-            may be used in place of the primary key name - for example,
-            "tract" may be used instead of "id" for the "id" primary key
-            field of the "tract" dimension.
-
-        Returns
-        -------
-        record : `DimensionRecord`
-            An instance of this subclass of `DimensionRecord`.
-        """
-        # If the name of the dimension is present in the given dict, use it
-        # as the primary key value instead of expecting the field name.
-        # For example, allow {"instrument": "HSC", ...} instead of
-        # {"name": "HSC", ...} when building a record for instrument dimension.
-        primaryKey = mapping.get(cls.definition.name)
-        d: Mapping[str, Any]
-        if primaryKey is not None and isinstance(cls.definition, Dimension):
-            d = dict(mapping)
-            d[cls.definition.primaryKey.name] = primaryKey
-        else:
-            d = mapping
-        values = tuple(d.get(k) for k in cls.__slots__)
-        return cls(*values)
+        )
 
     def __eq__(self, other: Any) -> bool:
         if type(other) != type(self):
@@ -182,23 +156,36 @@ class DimensionRecord:
 
     def __str__(self) -> str:
         lines = [f"{self.definition.name}:"]
-        lines.extend(f"  {field}: {getattr(self, field)!r}" for field in self.fields)
+        lines.extend(f"  {name}: {getattr(self, name)!r}" for name in self.__slots__)
         return "\n".join(lines)
 
     def __repr__(self) -> str:
         return "{}.RecordClass({})".format(
             self.definition.name,
-            ", ".join(repr(getattr(self, field)) for field in self.fields)
+            ", ".join(repr(getattr(self, name)) for name in self.__slots__)
         )
 
     def __reduce__(self) -> tuple:
-        args = tuple(getattr(self, name) for name in self.__slots__)
-        return (_reconstructDimensionRecord, (self.definition,) + args)
+        mapping = {name: getattr(self, name) for name in self.__slots__}
+        return (_reconstructDimensionRecord, (self.definition, mapping))
 
-    def toDict(self) -> Dict[str, Any]:
+    def toDict(self, splitTimespan: bool = False) -> Dict[str, Any]:
         """Return a vanilla `dict` representation of this record.
+
+        Parameters
+        ----------
+        splitTimespan : `bool`, optional
+            If `True` (`False` is default) transform any "timespan" key value
+            from a `Timespan` instance into a pair of regular
+            ("datetime_begin", "datetime_end") fields.
         """
-        return {name: getattr(self, name) for name in self.__slots__}
+        results = {name: getattr(self, name) for name in self.__slots__}
+        if splitTimespan:
+            timespan = results.pop("timespan", None)
+            if timespan is not None:
+                results["datetime_begin"] = timespan.begin
+                results["datetime_end"] = timespan.end
+        return results
 
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
@@ -213,6 +200,7 @@ class DimensionRecord:
     (`DimensionElement`).
     """
 
-    fields: ClassVar[Tuple[str, ...]]
-    """The names of all fields in this class (`tuple` [ `str` ]).
+    fields: ClassVar[DimensionElementFields]
+    """A categorized view of the fields in this class
+    (`DimensionElementFields`).
     """

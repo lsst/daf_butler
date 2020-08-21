@@ -88,7 +88,7 @@ def categorizeIdentifier(universe: DimensionUniverse, name: str) -> Tuple[Dimens
                 f"'{column}' or '{column}.{universe.dimensions[column].primaryKey.name}' instead."
             )
         else:
-            if column not in element.RecordClass.__slots__:
+            if column not in element.RecordClass.fields.standard.names:
                 raise LookupError(f"Column '{column} not found in table for {element}.")
             return element, column
     else:

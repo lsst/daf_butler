@@ -41,6 +41,8 @@ from typing import (
     Sequence,
     Set,
     Tuple,
+    Type,
+    Union,
 )
 import uuid
 import warnings
@@ -48,7 +50,7 @@ import warnings
 import astropy.time
 import sqlalchemy
 
-from ...core import ddl, time_utils
+from ...core import DatabaseTimespanRepresentation, ddl, time_utils
 from .._exceptions import ConflictingDefinitionError
 
 _IN_SAVEPOINT_TRANSACTION = "IN_SAVEPOINT_TRANSACTION"
@@ -623,7 +625,7 @@ class Database(ABC):
                                             metadata=metadata))
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {table}.{spec.name}."
         return sqlalchemy.schema.Column(*args, nullable=spec.nullable, primary_key=spec.primaryKey,
-                                        comment=spec.doc, **kwds)
+                                        comment=spec.doc, server_default=spec.default, **kwds)
 
     def _convertForeignKeySpec(self, table: str, spec: ddl.ForeignKeySpec, metadata: sqlalchemy.MetaData,
                                **kwds: Any) -> sqlalchemy.schema.ForeignKeyConstraint:
@@ -660,6 +662,37 @@ class Database(ABC):
             name=name,
             ondelete=spec.onDelete
         )
+
+    def _convertExclusionConstraintSpec(self, table: str,
+                                        spec: Tuple[Union[str, Type[DatabaseTimespanRepresentation]], ...],
+                                        metadata: sqlalchemy.MetaData) -> sqlalchemy.schema.Constraint:
+        """Convert a `tuple` from `ddl.TableSpec.exclusion` into a SQLAlchemy
+        constraint representation.
+
+        Parameters
+        ----------
+        table : `str`
+            Name of the table this constraint is being added to.
+        spec : `tuple` [ `str` or `type` ]
+            A tuple of `str` column names and the `type` object returned by
+            `getTimespanRepresentation` (which must appear exactly once),
+            indicating the order of the columns in the index used to back the
+            constraint.
+        metadata : `sqlalchemy.MetaData`
+            SQLAlchemy representation of the DDL schema this constraint is
+            being added to.
+
+        Returns
+        -------
+        constraint : `sqlalchemy.schema.Constraint`
+            SQLAlchemy representation of the constraint.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if this database does not support exclusion constraints.
+        """
+        raise NotImplementedError(f"Database {self} does not support exclusion constraints.")
 
     def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
                           **kwds: Any) -> sqlalchemy.schema.Table:
@@ -724,6 +757,9 @@ class Database(ABC):
             )
             for fk in spec.foreignKeys if fk.addIndex and fk.source not in allIndexes
         )
+
+        args.extend(self._convertExclusionConstraintSpec(name, excl, metadata) for excl in spec.exclusion)
+
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {name}."
         return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwds)
 
@@ -889,6 +925,42 @@ class Database(ABC):
             self._tempTables.remove(table.key)
         else:
             raise TypeError(f"Table {table.key} was not created by makeTemporaryTable.")
+
+    @classmethod
+    def getTimespanRepresentation(cls) -> Type[DatabaseTimespanRepresentation]:
+        """Return a `type` that encapsulates the way `Timespan` objects are
+        recommended to be stored in this database.
+
+        `Database` does not automatically use the return type of this method
+        anywhere else; calling code is responsible for making sure that DDL
+        and queries are consistent with it.
+
+        Returns
+        -------
+        tsRepr : `type` (`DatabaseTimespanRepresention` subclass)
+            A type that encapsultes the way `Timespan` objects should be
+            stored in this database.
+
+        Notes
+        -----
+        There are two big reasons we've decided to keep timespan-mangling logic
+        outside the `Database` implementations, even though the choice of
+        representation is ultimately up to a `Database` implementation:
+
+         - Timespans appear in relatively few tables and queries in our
+           typical usage, and the code that operates on them is already aware
+           that it is working with timespans.  In contrast, a
+           timespan-representation-aware implementation of, say, `insert`,
+           would need to have extra logic to identify when timespan-mangling
+           needed to occur, which would usually be useless overhead.
+
+         - SQLAlchemy's rich SELECT query expression system has no way to wrap
+           multiple columns in a single expression object (the ORM does, but
+           we are not using the ORM).  So we would have to wrap _much_ more of
+           that code in our own interfaces to encapsulate timespan
+           representations there.
+        """
+        return DatabaseTimespanRepresentation.Compound
 
     def sync(self, table: sqlalchemy.schema.Table, *,
              keys: Dict[str, Any],
