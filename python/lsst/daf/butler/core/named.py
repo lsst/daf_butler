@@ -61,10 +61,12 @@ except ImportError:
 
 
 K = TypeVar("K", bound=Named)
+K_co = TypeVar("K_co", bound=Named, covariant=True)
 V = TypeVar("V")
+V_co = TypeVar("V_co", covariant=True)
 
 
-class NamedKeyMapping(Mapping[K, V]):
+class NamedKeyMapping(Mapping[K_co, V_co]):
     """An abstract base class for custom mappings whose keys are objects with
     a `str` ``name`` attribute, for which lookups on the name as well as the
     object are permitted.
@@ -77,6 +79,8 @@ class NamedKeyMapping(Mapping[K, V]):
     type checking; the actual Python runtime doesn't care about types at all.
     """
 
+    __slots__ = ()
+
     @property
     @abstractmethod
     def names(self) -> AbstractSet[str]:
@@ -85,7 +89,7 @@ class NamedKeyMapping(Mapping[K, V]):
         """
         raise NotImplementedError()
 
-    def byName(self) -> Dict[str, V]:
+    def byName(self) -> Dict[str, V_co]:
         """Return a `Mapping` with names as keys and the same values as
         ``self``.
 
@@ -99,25 +103,27 @@ class NamedKeyMapping(Mapping[K, V]):
         return dict(zip(self.names, self.values()))
 
     @abstractmethod
-    def __getitem__(self, key: Union[str, K]) -> V:
+    def __getitem__(self, key: Union[str, K_co]) -> V_co:
         raise NotImplementedError()
 
-    def get(self, key: Union[str, K], default: Any = None) -> Any:
+    def get(self, key: Union[str, K_co], default: Any = None) -> Any:
         # Delegating to super is not allowed by typing, because it doesn't
         # accept str, but we know it just delegates to __getitem__, which does.
         return super().get(key, default)  # type: ignore
 
 
-NameLookupMapping = Union[NamedKeyMapping[K, V], Mapping[str, V]]
+NameLookupMapping = Union[NamedKeyMapping[K_co, V_co], Mapping[str, V_co]]
 """A type annotation alias for signatures that want to use ``mapping[s]``
 (or ``mapping.get(s)``) where ``s`` is a `str`, and don't care whether
-``mapping.keys()`` returns a named objects or direct `str` instances.
+``mapping.keys()`` returns named objects or direct `str` instances.
 """
 
 
 class NamedKeyMutableMapping(NamedKeyMapping[K, V], MutableMapping[K, V]):
     """An abstract base class that adds mutation to `NamedKeyMapping`.
     """
+
+    __slots__ = ()
 
     @abstractmethod
     def __setitem__(self, key: Union[str, K], value: V) -> None:
@@ -223,30 +229,150 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
         return self._dict.items()
 
     def copy(self) -> NamedKeyDict[K, V]:
+        """Return a new `NamedKeyDict` with the same elements.
+        """
         result = NamedKeyDict.__new__(NamedKeyDict)
         result._dict = dict(self._dict)
         result._names = dict(self._names)
         return result
 
-    def freeze(self) -> None:
+    def freeze(self) -> NamedKeyMapping[K, V]:
         """Disable all mutators, effectively transforming ``self`` into
         an immutable mapping.
+
+        Returns
+        -------
+        self : `NamedKeyMapping`
+            While ``self`` is modified in-place, it is also returned with a
+            type anotation that reflects its new, frozen state; assigning it
+            to a new variable (and considering any previous references
+            invalidated) should allow for more accurate static type checking.
         """
         if not isinstance(self._dict, MappingProxyType):
             self._dict = MappingProxyType(self._dict)  # type: ignore
+        return self
 
 
-class NamedValueSet(MutableSet[K]):
+class NamedValueAbstractSet(AbstractSet[K_co]):
+    """An abstract base class for custom sets whose elements are objects with
+    a `str` ``name`` attribute, allowing some dict-like operations and
+    views to be supported.
+    """
+
+    __slots__ = ()
+
+    @property
+    @abstractmethod
+    def names(self) -> AbstractSet[str]:
+        """The set of names associated with the keys, in the same order
+        (`AbstractSet` [ `str` ]).
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def asMapping(self) -> Mapping[str, K_co]:
+        """Return a mapping view with names as keys.
+
+        Returns
+        -------
+        dict : `Mapping`
+            A dictionary-like view with ``values() == self``.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def __getitem__(self, name: str) -> K_co:
+        raise NotImplementedError()
+
+    def get(self, name: str, default: Any = None) -> Any:
+        """Return the element with the given name, or ``default`` if
+        no such element is present.
+        """
+        try:
+            return self[name]
+        except KeyError:
+            return default
+
+
+class NamedValueMutableSet(NamedValueAbstractSet[K], MutableSet[K]):
+    """An abstract base class that adds mutation interfaces to
+    `NamedValueAbstractSet`.
+
+    Methods that can add new elements to the set are unchanged from their
+    `MutableSet` definitions, while those that only remove them can generally
+    accept names or element instances.  `pop` can be used in either its
+    `MutableSet` form (no arguments; an arbitrary element is returned) or its
+    `MutableMapping` form (one or two arguments for the name and optional
+    default value, respectively).  A `MutableMapping`-like `__delitem__`
+    interface is also included, which takes only names (like
+    `NamedValueAbstractSet.__getitem__`).
+    """
+
+    __slots__ = ()
+
+    @abstractmethod
+    def __delitem__(self, name: str) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def remove(self, element: Union[str, K]) -> Any:
+        """Remove an element from the set.
+
+        Parameters
+        ----------
+        element : `object` or `str`
+            Element to remove or the string name thereof.  Assumed to be an
+            element if it has a ``.name`` attribute.
+
+        Raises
+        ------
+        KeyError
+            Raised if an element with the given name does not exist.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def discard(self, element: Union[str, K]) -> Any:
+        """Remove an element from the set if it exists.
+
+        Does nothing if no matching element is present.
+
+        Parameters
+        ----------
+        element : `object` or `str`
+            Element to remove or the string name thereof.  Assumed to be an
+            element if it has a ``.name`` attribute.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def pop(self, *args: str) -> K:
+        """Remove and return an element from the set.
+
+        Parameters
+        ----------
+        name : `str`, optional
+            Name of the element to remove and return.  Must be passed
+            positionally.  If not provided, an arbitrary element is
+            removed and returned.
+
+        Raises
+        ------
+        KeyError
+            Raised if ``name`` is provided but ``default`` is not, and no
+            matching element exists.
+        """
+        raise NotImplementedError()
+
+
+class NamedValueSet(NamedValueMutableSet[K]):
     """A custom mutable set class that requires elements to have a ``.name``
     attribute, which can then be used as keys in `dict`-like lookup.
 
     Names and elements can both be used with the ``in`` and ``del``
     operators, `remove`, and `discard`.  Names (but not elements)
     can be used with ``[]``-based element retrieval (not assignment)
-    and the `get` method.  `pop` can be used in either its `MutableSet`
-    form (no arguments; an arbitrary element is returned) or its
-    `MutableMapping` form (one or two arguments for the name and
-    optional default value, respectively).
+    and the `get` method.
 
     Parameters
     ----------
@@ -273,19 +399,11 @@ class NamedValueSet(MutableSet[K]):
 
     @property
     def names(self) -> KeysView[str]:
-        """The set of element names, in the same order
-        (`~collections.abc.KeysView`).
-        """
+        # Docstring inherited.
         return self._dict.keys()
 
-    def asDict(self) -> Mapping[str, K]:
-        """Return a mapping view with names as keys.
-
-        Returns
-        -------
-        dict : `Mapping`
-            A dictionary-like view with ``values() == self``.
-        """
+    def asMapping(self) -> Mapping[str, K]:
+        # Docstring inherited.
         return self._dict
 
     def __contains__(self, key: Any) -> bool:
@@ -337,9 +455,7 @@ class NamedValueSet(MutableSet[K]):
         return self._dict[name]
 
     def get(self, name: str, default: Any = None) -> Any:
-        """Return the element with the given name, or ``default`` if
-        no such element is present.
-        """
+        # Docstring inherited
         return self._dict.get(name, default)
 
     def __delitem__(self, name: str) -> None:
@@ -356,66 +472,42 @@ class NamedValueSet(MutableSet[K]):
         self._dict[element.name] = element
 
     def remove(self, element: Union[str, K]) -> Any:
-        """Remove an element from the set.
-
-        Parameters
-        ----------
-        element : `object` or `str`
-            Element to remove or the string name thereof.  Assumed to be an
-            element if it has a ``.name`` attribute.
-
-        Raises
-        ------
-        KeyError
-            Raised if an element with the given name does not exist.
-        """
+        # Docstring inherited.
         del self._dict[getattr(element, "name", element)]
 
     def discard(self, element: Union[str, K]) -> Any:
-        """Remove an element from the set if it exists.
-
-        Does nothing if no matching element is present.
-
-        Parameters
-        ----------
-        element : `object` or `str`
-            Element to remove or the string name thereof.  Assumed to be an
-            element if it has a ``.name`` attribute.
-        """
+        # Docstring inherited.
         try:
             self.remove(element)
         except KeyError:
             pass
 
     def pop(self, *args: str) -> K:
-        """Remove and return an element from the set.
-
-        Parameters
-        ----------
-        name : `str`, optional
-            Name of the element to remove and return.  Must be passed
-            positionally.  If not provided, an arbitrary element is
-            removed and returned.
-
-        Raises
-        ------
-        KeyError
-            Raised if ``name`` is provided but ``default`` is not, and no
-            matching element exists.
-        """
+        # Docstring inherited.
         if not args:
             return super().pop()
         else:
             return self._dict.pop(*args)
 
     def copy(self) -> NamedValueSet[K]:
+        """Return a new `NamedValueSet` with the same elements.
+        """
         result = NamedValueSet.__new__(NamedValueSet)
         result._dict = dict(self._dict)
         return result
 
-    def freeze(self) -> None:
+    def freeze(self) -> NamedValueAbstractSet[K]:
         """Disable all mutators, effectively transforming ``self`` into
         an immutable set.
+
+        Returns
+        -------
+        self : `NamedValueAbstractSet`
+            While ``self`` is modified in-place, it is also returned with a
+            type anotation that reflects its new, frozen state; assigning it
+            to a new variable (and considering any previous references
+            invalidated) should allow for more accurate static type checking.
         """
         if not isinstance(self._dict, MappingProxyType):
             self._dict = MappingProxyType(self._dict)  # type: ignore
+        return self
