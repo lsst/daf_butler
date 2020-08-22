@@ -60,6 +60,7 @@ from ..core import (
     NamedKeyMapping,
     NameLookupMapping,
     StorageClassFactory,
+    Timespan,
 )
 from . import queries
 from ..core.utils import doImport, iterable, transactional
