@@ -951,7 +951,7 @@ class RegistryTests(ABC):
         """
 
         def _dt(iso_string):
-            return astropy.time.Time(iso_string, format="iso", scale="utc")
+            return astropy.time.Time(iso_string, format="iso", scale="tai")
 
         registry = self.makeRegistry()
 

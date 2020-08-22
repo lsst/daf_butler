@@ -467,7 +467,7 @@ class _CompoundDatabaseTimespanRepresentation(DatabaseTimespanRepresentation):
             end = MAX_TIME if other.end is None else other.end
         elif isinstance(other, _CompoundDatabaseTimespanRepresentation):
             begin = other.begin
-            end = other.begin
+            end = other.end
         else:
             raise TypeError(f"Unexpected argument to overlaps: {other!r}.")
         return sqlalchemy.sql.and_(self.end > begin, end > self.begin)

@@ -869,3 +869,4 @@ class DatabaseTests(ABC):
             ]
         ).select_from(aTable.join(bTable, onclause=sqlalchemy.sql.literal(True)))
         queried = {(row["a"], row["b"]): row["f"] for row in db.query(sql).fetchall()}
+        self.assertEqual(expected, queried)
