@@ -42,8 +42,7 @@ import sqlalchemy
 from lsst.sphgeom import Pixelization
 
 from .. import ddl
-from ..named import NamedKeyDict, NamedKeyMapping, NamedValueSet, NamedValueAbstractSet
-from ..simpleQuery import SimpleQuery
+from ..named import NamedKeyMapping, NamedValueSet, NamedValueAbstractSet
 
 
 class DimensionUniverse:
@@ -520,33 +519,3 @@ class QueryGraph:
         yield from self.extra_vertices
         yield from self.temporal.visit(self.full_dimensions)
         yield from self.spatial.visit(self.full_dimensions)
-
-    def build(self):
-        # {dimension.name}
-        dimension_keys_seen: Set[str] = set()
-        # {(implied_dimension.name, implying_vertex.name)}
-        implied_dimension_relationships_seen: Set[Tuple[str, str]]
-        # {vertex.name}
-        vertices_seen: Set[str] = set()
-        for vertex in self.expand_necessary_vertices():
-            if vertex.name in vertices_seen:
-                continue
-            vertices_seen.add(vertex.name)
-            join_on = {
-                name: dimension_keys_selected[name]
-                for dim in vertex.required.names
-            }
-            if vertex.implies:
-                implied_dimension_relationships_seen.update(
-                    (name, vertex.name)
-                    for name in vertex.implies.names
-                )
-                join_on.update(
-                    (name, dimension_keys_selected[name])
-                    for name in vertex.implies.names
-                )
-            if isinstance(vertex, Dimension):
-                join_on[vertex.name] = dimension_keys_selected[name]
-            for dimension_name, previously_joined in join_on.items():
-                
-                
