@@ -82,6 +82,28 @@ class Timespan(NamedTuple):
         end = tmpl.format(t=self.end) if self.end is not None else None
         return f"Timespan(begin={begin}, end={end})"
 
+    def __eq__(self, other: Any) -> bool:
+        # Include some fuzziness in equality because round tripping
+        # can introduce some drift at the picosecond level
+        # Butler is okay wih nanosecond precision
+        if not isinstance(other, type(self)):
+            return False
+
+        def compare_time(t1: Optional[astropy.time.Time], t2: Optional[astropy.time.Time]) -> bool:
+            if t1 is None and t2 is None:
+                return True
+            if t1 is None or t2 is None:
+                return False
+
+            return times_equal(t1, t2)
+
+        result = compare_time(self.begin, other.begin) and compare_time(self.end, other.end)
+        return result
+
+    def __ne__(self, other: Any) -> bool:
+        # Need to override the explicit parent class implementation
+        return not self.__eq__(other)
+
     def overlaps(self, other: Timespan) -> Any:
         """Test whether this timespan overlaps another.
 

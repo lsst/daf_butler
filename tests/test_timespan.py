@@ -92,6 +92,31 @@ class TimespanTestCase(unittest.TestCase):
                     self.assertEqual(diffs1, (a,))
                     self.assertEqual(diffs2, (b,))
 
+    def testPrecision(self):
+        """Test that we only use nanosecond precision for equality."""
+        ts1 = self.timespans[-1]
+        ts2 = Timespan(begin=ts1.begin + astropy.time.TimeDelta(1e-10, format="sec"), end=ts1.end)
+        self.assertEqual(ts1, ts2)
+
+        self.assertEqual(Timespan(begin=None, end=None), Timespan(begin=None, end=None))
+        self.assertEqual(Timespan(begin=None, end=ts1.end), Timespan(begin=None, end=ts1.end))
+
+        ts2 = Timespan(begin=ts1.begin + astropy.time.TimeDelta(1e-8, format="sec"), end=ts1.end)
+        self.assertNotEqual(ts1, ts2)
+
+        ts2 = Timespan(begin=None, end=ts1.end)
+        self.assertNotEqual(ts1, ts2)
+
+        t1 = Timespan(begin=astropy.time.Time(2456461.0, val2=0.06580758101851847, format="jd", scale="tai"),
+                      end=astropy.time.Time(2456461.0, val2=0.06617994212962963, format="jd", scale="tai"))
+        t2 = Timespan(begin=astropy.time.Time(2456461.0, val2=0.06580758101851858, format="jd", scale="tai"),
+                      end=astropy.time.Time(2456461.0, val2=0.06617994212962963, format="jd", scale="tai"))
+        self.assertEqual(t1, t2)
+
+        # Ensure that == and != work properly
+        self.assertTrue(t1 == t2, f"Equality of {t1} and {t2}")
+        self.assertFalse(t1 != t2, f"Check != is false for {t1} and {t2}")
+
     def testTimescales(self):
         """Test time scale conversion occurs on comparison."""
         ts1 = Timespan(begin=astropy.time.Time('2013-06-17 13:34:45.775000', scale='tai', format='iso'),
