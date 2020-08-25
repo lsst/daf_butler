@@ -1273,6 +1273,9 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         self.datastoreStr = f"datastore={self.root}"
         self.datastoreName = [f"WebdavDatastore@{self.rooturi}"]
 
+        from lsst.daf.butler.core.webdavutils import isWebdavEndpoint
+        if not isWebdavEndpoint(self.rooturi):
+            raise OSError("Webdav server not running properly: cannot run tests.")
 
         Butler.makeRepo(self.rooturi, config=config, forceConfigRoot=False)
         self.tmpConfigFile = posixpath.join(self.rooturi, "butler.yaml")
