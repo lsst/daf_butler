@@ -1267,19 +1267,18 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
 
         if self.useTempRoot:
             self.root = self.genRoot()
-        rooturi = f"http://{self.serverName}/{self.root}"
-        config.update({"datastore": {"datastore": {"root": rooturi}}})
+        self.rooturi = f"http://{self.serverName}/{self.root}"
+        config.update({"datastore": {"datastore": {"root": self.rooturi}}})
 
         self.datastoreStr = f"datastore={self.root}"
-        self.datastoreName = [f"WebdavDatastore@{rooturi}"]
+        self.datastoreName = [f"WebdavDatastore@{self.rooturi}"]
 
-        Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
-        self.tmpConfigFile = posixpath.join(rooturi, "butler.yaml")
+
+        Butler.makeRepo(self.rooturi, config=config, forceConfigRoot=False)
+        self.tmpConfigFile = posixpath.join(self.rooturi, "butler.yaml")
 
     def tearDown(self):
-        rooturi = f"http://{self.serverName}/{self.root}"
-        uri = ButlerURI(rooturi)
-        uri.remove()
+        ButlerURI(self.rooturi).remove()
 
     def _serveWebdav():
         """Starts a local webdav-compatible HTTP server,
