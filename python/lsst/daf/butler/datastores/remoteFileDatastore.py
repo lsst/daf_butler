@@ -134,7 +134,7 @@ class RemoteFileDatastore(FileLikeDatastore):
             # Eventually we should remove the check completely (it takes
             # non-zero time for network).
             log.warning("Object %s exists in datastore for ref %s", location.uri, ref)
-            
+
         if not location.uri.dirname().exists():
             log.debug("Folder %s does not exist yet.", location.uri.dirname().geturl())
             location.uri.dirname().mkdir()

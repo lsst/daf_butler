@@ -1399,17 +1399,19 @@ class ButlerHttpURI(ButlerURI):
         if isinstance(src, type(self)):
             if transfer == "move":
                 self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()})
+                log.debug(f"Direct move via MOVE operation executed.")
             else:
                 self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()})
+                log.debug(f"Direct copy via COPY operation executed.")
         else:
             # Use local file and upload it
             local_src, is_temporary = src.as_local()
             f = open(local_src, "rb")
-            files = {"file": f}
-            self.session.post(self.geturl(), files=files)
+            self.session.put(self.geturl(), data=f)
             f.close()
             if is_temporary:
                 os.remove(local_src)
+            log.debug(f"Indirect copy via temporary file executed.")
 
 
 class ButlerInMemoryURI(ButlerURI):
