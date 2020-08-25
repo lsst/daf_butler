@@ -67,6 +67,7 @@ from lsst.daf.butler.registry import MissingCollectionError
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core.s3utils import (setAwsEnvCredentials,
                                           unsetAwsEnvCredentials)
+from lsst.daf.butler.core.webdavutils import isWebdavEndpoint
 
 from lsst.daf.butler.tests import MultiDetectorFormatter, MetricsExample
 
@@ -1202,7 +1203,10 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
             unsetAwsEnvCredentials()
 
 
-@unittest.skipIf(WsgiDAVApp is None, "Warning: wsgi/cheroot not found!")
+@unittest.skipIf(WsgiDAVApp is None, "Warning: wsgidav/cheroot not found!")
+# Mock required environment variables during tests
+@unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
+                                       "WEBDAV_BEARER_TOKEN": "XXXXXX"})
 class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
     """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
     a local in-memory SqlRegistry.
@@ -1257,10 +1261,10 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         # Wait for it to start
         time.sleep(3)
 
+    # Mock required environment variables during tests
+    @unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
+                                           "WEBDAV_BEARER_TOKEN": "XXXXXX"})
     def setUp(self):
-        os.environ["WEBDAV_AUTH_METHOD"] = "TOKEN"
-        os.environ["WEBDAV_BEARER_TOKEN"] = "XXXXXX"
-
         config = Config(self.configFile)
         uri = ButlerURI(config[".datastore.datastore.root"])
         self.serverName = uri.netloc
@@ -1273,13 +1277,15 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         self.datastoreStr = f"datastore={self.root}"
         self.datastoreName = [f"WebdavDatastore@{self.rooturi}"]
 
-        from lsst.daf.butler.core.webdavutils import isWebdavEndpoint
         if not isWebdavEndpoint(self.rooturi):
             raise OSError("Webdav server not running properly: cannot run tests.")
 
         Butler.makeRepo(self.rooturi, config=config, forceConfigRoot=False)
         self.tmpConfigFile = posixpath.join(self.rooturi, "butler.yaml")
 
+    # Mock required environment variables during tests
+    @unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
+                                           "WEBDAV_BEARER_TOKEN": "XXXXXX"})
     def tearDown(self):
         ButlerURI(self.rooturi).remove()
 

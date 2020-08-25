@@ -355,12 +355,12 @@ class S3URITestCase(unittest.TestCase):
         self.assertEqual(child.unquoted_path, "/" + subpath)
 
 
+# Mock required environment variables during tests
+@unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
+                                       "WEBDAV_BEARER_TOKEN": "XXXXXX"})
 class WebdavURITestCase(unittest.TestCase):
 
     def setUp(self):
-        os.environ["WEBDAV_AUTH_METHOD"] = "TOKEN"
-        os.environ["WEBDAV_BEARER_TOKEN"] = "XXXXXX"
-
         serverRoot = "www.not-exists.orgx"
         existingFolderName = "existingFolder"
         existingFileName = "existingFile"
