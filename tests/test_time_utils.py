@@ -26,6 +26,7 @@ import unittest
 
 from astropy.time import Time, TimeDelta
 from lsst.daf.butler import time_utils
+from lsst.daf.butler.core.time_utils import astropy_to_nsec
 
 
 class TimeTestCase(unittest.TestCase):
@@ -119,6 +120,12 @@ class TimeTestCase(unittest.TestCase):
         self.assertTrue(time_utils.times_equal(time2, time1, 501))
         self.assertFalse(time_utils.times_equal(time1, time2, 499))
         self.assertFalse(time_utils.times_equal(time2, time1, 499))
+
+        # UTC vs TAI
+        time1 = Time('2013-06-17 13:34:45.775000', scale='tai', format='iso')
+        time2 = Time('2013-06-17T13:34:10.775', scale='utc', format='isot')
+        self.assertTrue(time_utils.times_equal(time1, time2))
+        self.assertEqual(astropy_to_nsec(time1), astropy_to_nsec(time2))
 
 
 if __name__ == "__main__":

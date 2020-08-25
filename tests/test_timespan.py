@@ -92,6 +92,14 @@ class TimespanTestCase(unittest.TestCase):
                     self.assertEqual(diffs1, (a,))
                     self.assertEqual(diffs2, (b,))
 
+    def testTimescales(self):
+        """Test time scale conversion occurs on comparison."""
+        ts1 = Timespan(begin=astropy.time.Time('2013-06-17 13:34:45.775000', scale='tai', format='iso'),
+                       end=astropy.time.Time('2013-06-17 13:35:17.947000', scale='tai', format='iso'))
+        ts2 = Timespan(begin=astropy.time.Time('2013-06-17T13:34:10.775', scale='utc', format='isot'),
+                       end=astropy.time.Time('2013-06-17T13:34:42.947', scale='utc', format='isot'))
+        self.assertEqual(ts1, ts2, f"Compare {ts1} with {ts2}")
+
 
 if __name__ == "__main__":
     unittest.main()
