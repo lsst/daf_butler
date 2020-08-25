@@ -67,11 +67,11 @@ class Timespan(NamedTuple):
         if self.begin is None:
             head = "(-∞, "
         else:
-            head = f"[{self.begin}, "
+            head = f"[{self.begin.tai.isot}, "
         if self.end is None:
             tail = "∞)"
         else:
-            tail = f"{self.end})"
+            tail = f"{self.end.tai.isot})"
         return head + tail
 
     def __repr__(self) -> str:
