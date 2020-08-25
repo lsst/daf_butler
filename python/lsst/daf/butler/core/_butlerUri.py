@@ -1294,7 +1294,11 @@ class ButlerHttpURI(ButlerURI):
             raise ValueError(f"Can not create a 'directory' for file-like URI {self}")
 
         if not self.exists():
-            if not self.parent().exists():
+            # We need to test the absence of the parent directory,
+            # but also if parent URL is different from self URL,
+            # otherwise we could be stuck in a recursive loop
+            # where self == parent
+            if not self.parent().exists() and self.parent().geturl() != self.geturl():
                 self.parent().mkdir()
             log.debug("Creating new directory: %s", self.geturl())
             r = self.session.request("MKCOL", self.geturl())
