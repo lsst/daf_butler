@@ -31,6 +31,7 @@ import pickle
 import string
 import random
 import time
+import socket
 
 try:
     import boto3
@@ -1215,9 +1216,13 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     fullConfigKey = None
     validationCanFail = True
 
-    serverName = "localhost:8080"
-    """Name of the server that will be used in the tests. The name is read from
-    the config file used with the tests during set-up.
+    serverName = "localhost"
+    """Name of the server that will be used in the tests.
+    """
+
+    portNumber = 8080
+    """Port on which the webdav server listens. Automatically chosen
+    at setup via the _getfreeport() method
     """
 
     root = "butlerRoot/"
@@ -1255,8 +1260,9 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         cls.storageClassFactory = StorageClassFactory()
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
+        cls.portNumber = cls._getfreeport()
         # Run a local webdav server on which tests will be run
-        t = Thread(target=cls._serveWebdav, daemon=True)
+        t = Thread(target=cls._serveWebdav, args=(cls.portNumber, ), daemon=True)
         t.start()
         # Wait for it to start
         time.sleep(3)
@@ -1266,12 +1272,10 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
                                            "WEBDAV_BEARER_TOKEN": "XXXXXX"})
     def setUp(self):
         config = Config(self.configFile)
-        uri = ButlerURI(config[".datastore.datastore.root"])
-        self.serverName = uri.netloc
 
         if self.useTempRoot:
             self.root = self.genRoot()
-        self.rooturi = f"http://{self.serverName}/{self.root}"
+        self.rooturi = f"http://{self.serverName}:{self.portNumber}/{self.root}"
         config.update({"datastore": {"datastore": {"root": self.rooturi}}})
 
         self.datastoreStr = f"datastore={self.root}"
@@ -1289,17 +1293,22 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     def tearDown(self):
         ButlerURI(self.rooturi).remove()
 
-    def _serveWebdav():
+    def _serveWebdav(port: int):
         """Starts a local webdav-compatible HTTP server,
         Listening on http://localhost:8080
         This server only runs when this test class is instantiated,
         and then shuts down. Must be started is a separate thread.
+
+        Parameters
+        ----------
+        port : `int`
+           The port number on which the server should listen
         """
         root_path = gettempdir()
 
         config = {
             "host": "0.0.0.0",
-            "port": 8080,
+            "port": port,
             "provider_mapping": {"/": root_path},
             "http_authenticator": {
                 "domain_controller": None
@@ -1314,12 +1323,24 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
             "wsgi_app": app,
         }
         server = wsgi.Server(**server_args)
+
         try:
             server.start()
         except KeyboardInterrupt:
             print("Caught Ctrl-C, shutting down...")
         finally:
             server.stop()
+
+    def _getfreeport():
+        """
+        Determines a free port using sockets.
+        """
+        free_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        free_socket.bind(('0.0.0.0', 0))
+        free_socket.listen()
+        port = free_socket.getsockname()[1]
+        free_socket.close()
+        return port
 
 
 if __name__ == "__main__":

@@ -1,8 +1,6 @@
 datastore:
   cls: lsst.daf.butler.datastores.webdavDatastore.WebdavDatastore
-  # http://localhost:8080 is where the local webdav server listens
-  # during Butler unit tests, so this value is required for successful testing
-  root: http://localhost:8080/butlerRoot
+  root: http://anywebdavserver/butlerRoot
   templates: !include templates.yaml
   formatters: !include formatters.yaml
   composites: !include composites.yaml
