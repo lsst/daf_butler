@@ -1351,12 +1351,13 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
             # shut down the server when True
             while True:
                 if stopWebdavServer():
-                    server.stop()
-                    t.join()
                     break
                 time.sleep(1)
         except KeyboardInterrupt:
             print("Caught Ctrl-C, shutting down...")
+        finally:
+            server.stop()
+            t.join()
 
     def _getfreeport():
         """
