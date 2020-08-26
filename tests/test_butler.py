@@ -1242,6 +1242,9 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     registryStr = ":memory:"
     """Expected format of the Registry string."""
 
+    serverThread = None
+    stopWebdavServer = False
+
     def genRoot(self):
         """Returns a random string of len 20 to serve as a root
         name for the temporary bucket repo.
@@ -1262,10 +1265,17 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
 
         cls.portNumber = cls._getfreeport()
         # Run a local webdav server on which tests will be run
-        t = Thread(target=cls._serveWebdav, args=(cls.portNumber, ), daemon=True)
-        t.start()
+        cls.serverThread = Thread(target=cls._serveWebdav,
+                                  args=(cls, cls.portNumber, lambda: cls.stopWebdavServer),
+                                  daemon=True)
+        cls.serverThread.start()
         # Wait for it to start
         time.sleep(3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.stopWebdavServer = True
+        cls.serverThread.join()
 
     # Mock required environment variables during tests
     @unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
@@ -1293,7 +1303,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     def tearDown(self):
         ButlerURI(self.rooturi).remove()
 
-    def _serveWebdav(port: int):
+    def _serveWebdav(self, port: int, stopWebdavServer):
         """Starts a local webdav-compatible HTTP server,
         Listening on http://localhost:8080
         This server only runs when this test class is instantiated,
@@ -1323,13 +1333,19 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
             "wsgi_app": app,
         }
         server = wsgi.Server(**server_args)
+        server.prepare()
 
         try:
-            server.start()
+            t = Thread(target=server.serve, daemon=True)
+            t.start()
+            while True:
+                if stopWebdavServer():
+                    server.stop()
+                    t.join()
+                    break
+                time.sleep(1)
         except KeyboardInterrupt:
             print("Caught Ctrl-C, shutting down...")
-        finally:
-            server.stop()
 
     def _getfreeport():
         """
