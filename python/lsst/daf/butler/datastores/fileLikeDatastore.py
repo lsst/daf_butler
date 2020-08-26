@@ -711,7 +711,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             # inside the datastore
             tgtLocation = self._calculate_ingested_datastore_name(srcUri, ref, formatter)
             if not tgtLocation.uri.dirname().exists():
-                log.debug("Folder %s does not exist yet.", tgtLocation.uri.dirname().geturl())
+                log.debug("Folder %s does not exist yet.", tgtLocation.uri.dirname())
                 tgtLocation.uri.dirname().mkdir()
 
             # if we are transferring from a local file to a remote location
