@@ -1222,7 +1222,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
 
     portNumber = 8080
     """Port on which the webdav server listens. Automatically chosen
-    at setup via the _getfreeport() method
+    at setUpClass via the _getfreeport() method
     """
 
     root = "butlerRoot/"
@@ -1243,7 +1243,12 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     """Expected format of the Registry string."""
 
     serverThread = None
+    """Thread in which the local webdav server will run"""
+
     stopWebdavServer = False
+    """This flag will cause the webdav server to
+    gracefully shut down when True
+    """
 
     def genRoot(self):
         """Returns a random string of len 20 to serve as a root
@@ -1274,7 +1279,9 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
 
     @classmethod
     def tearDownClass(cls):
+        # Ask for graceful shut down of the webdav server
         cls.stopWebdavServer = True
+        # Wait for the thread to exit
         cls.serverThread.join()
 
     # Mock required environment variables during tests
@@ -1301,6 +1308,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     @unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
                                            "WEBDAV_BEARER_TOKEN": "XXXXXX"})
     def tearDown(self):
+        # Clear temporary directory
         ButlerURI(self.rooturi).remove()
 
     def _serveWebdav(self, port: int, stopWebdavServer):
@@ -1336,8 +1344,11 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         server.prepare()
 
         try:
+            # Start the actual server in a separate thread
             t = Thread(target=server.serve, daemon=True)
             t.start()
+            # watch stopWebdavServer, and gracefully
+            # shut down the server when True
             while True:
                 if stopWebdavServer():
                     server.stop()
