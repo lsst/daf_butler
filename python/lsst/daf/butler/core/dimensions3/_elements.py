@@ -27,13 +27,17 @@ import dataclasses
 from typing import (
     AbstractSet,
     Any,
+    Dict,
+    FrozenSet,
     Iterable,
     Iterator,
     Mapping,
     Optional,
+    Set,
     Tuple,
     Type,
     TypeVar,
+    Union,
 )
 
 import sqlalchemy
@@ -45,19 +49,16 @@ from ..named import NamedValueSet, NamedValueAbstractSet
 
 class RelationshipFamily(ABC):
 
-    def __new__(
-        cls,
+    def __init__(
+        self,
+        universe: DimensionUniverse,
         name: str,
-        universe: DimensionUniverse
-    ) -> RelationshipFamily:
-        self = super().__new__(cls)
-        self.name = name
+    ):
         self.universe = universe
-        # TODO: register with universe
-        return self
+        self.name = name
 
-    name: str
     universe: DimensionUniverse
+    name: str
 
 
 class SpatialFamily(RelationshipFamily):
@@ -76,22 +77,15 @@ class TemporalFamily(RelationshipFamily):
         return False
 
 
-T = TypeVar("T", bound="DimensionElement")
-
-
 class DimensionElement(ABC):
 
-    def __new__(
-        cls: Type[T],
-        name: str,
+    def __init__(
+        self,
         universe: DimensionUniverse,
-        **kwargs: Any,
-    ) -> T:
-        self = super().__new__(cls)
-        self.name = name
+        name: str,
+    ):
         self.universe = universe
-        # TODO: register with universe
-        return self
+        self.name = name
 
     @property
     def spatial_family(self) -> Optional[SpatialFamily]:
@@ -113,6 +107,10 @@ class DimensionElement(ABC):
     def implies(self) -> NamedValueAbstractSet[Dimension]:
         return NamedValueSet().freeze()
 
+    @property
+    def dependencies(self) -> NamedValueAbstractSet[Dimension]:
+        raise NotImplementedError("TODO")
+
     def get_standard_field_specs(self) -> Iterator[ddl.FieldSpec]:
         for dimension in self.requires:
             yield dataclasses.replace(dimension.key_field_spec, name=dimension.name)
@@ -123,8 +121,8 @@ class DimensionElement(ABC):
     def get_unique_constraints(self) -> Iterator[Tuple[str, ...]]:
         yield from ()
 
-    name: str
     universe: DimensionUniverse
+    name: str
 
 
 S = TypeVar("S", bound="AliasDimensionElement")
@@ -132,17 +130,15 @@ S = TypeVar("S", bound="AliasDimensionElement")
 
 class AliasDimensionElement(DimensionElement):
 
-    def __new__(
-        cls,
-        name: str, target: DimensionElement,
-        **kwargs: Any,
-    ) -> AliasDimensionElement:
-        return super().__new__(cls, name, target.universe)
-
-    def __init__(self, name: str, target: DimensionElement, *,
-                 requires: NamedValueAbstractSet[Dimension],
-                 implies: NamedValueAbstractSet[Dimension],
-                 unique_constraints: AbstractSet[Tuple[str, ...]]):
+    def __init__(
+        self,
+        target: DimensionElement,
+        name: str, *,
+        requires: NamedValueAbstractSet[Dimension],
+        implies: NamedValueAbstractSet[Dimension],
+        unique_constraints: AbstractSet[Tuple[str, ...]],
+    ):
+        super().__init__(target.universe, name)
         self.target = target
         self._requires = implies
         self._implies = requires
@@ -150,21 +146,21 @@ class AliasDimensionElement(DimensionElement):
         # TODO: handle relationship families?
 
     @classmethod
-    def from_overrides(cls: Type[S], name: str, target: DimensionElement, *,
+    def from_overrides(cls: Type[S], target: DimensionElement, name: str, *,
                        overrides: Mapping[str, str]) -> S:
         requires = NamedValueSet({
-            target.universe[overrides.get(name, name)]  # type: ignore
+            target.universe.dimensions[overrides.get(name, name)]
             for name in target.requires.names
         })
         implies = NamedValueSet({
-            target.universe[overrides.get(name, name)]  # type: ignore
+            target.universe.dimensions[overrides.get(name, name)]
             for name in target.implies.names
         })
         unique_constraints = frozenset(
             tuple(overrides.get(name, name) for name in constraint)
             for constraint in target.get_unique_constraints()
         )
-        return cls(name, target,
+        return cls(target, name,
                    requires=requires.freeze(),  # type: ignore
                    implies=implies.freeze(),  # type: ignore
                    unique_constraints=unique_constraints)
@@ -216,8 +212,8 @@ class Dimension(DimensionElement):
     def __ge__(self, other: Dimension) -> bool:
         return self == other or not self < other
 
-    def alias(self, name: str, **kwargs: str) -> AliasDimension:
-        return AliasDimension.from_overrides(name, self, overrides=kwargs)
+    def register_alias(self, name: str, **kwargs: str) -> AliasDimension:
+        return AliasDimension.from_overrides(self, name, overrides=kwargs)
 
     def get_standard_field_specs(self) -> Iterator[ddl.FieldSpec]:
         for dimension in self.requires:
@@ -237,8 +233,8 @@ class Dimension(DimensionElement):
 
 class DimensionCombination(DimensionElement):
 
-    def alias(self, name: str, **kwargs: str) -> AliasDimensionCombination:
-        return AliasDimensionCombination.from_overrides(name, self, overrides=kwargs)
+    def register_alias(self, name: str, **kwargs: str) -> AliasDimensionCombination:
+        return AliasDimensionCombination.from_overrides(self, name, overrides=kwargs)
 
 
 class AliasDimension(Dimension, AliasDimensionElement):
@@ -256,6 +252,21 @@ class AliasDimensionCombination(DimensionCombination, AliasDimensionElement):
 
 
 class SkyPixFamily(SpatialFamily):
+
+    def __init__(
+        self,
+        universe: DimensionUniverse,
+        name: str, *,
+        max_level: int,
+        pixelization_cls: Type[Pixelization],
+    ):
+        super().__init__(universe, name)
+        self.max_level = max_level
+        self.pixelization_cls = pixelization_cls
+
+    def register_level(self, level: int) -> SkyPixDimension:
+        return SkyPixDimension(self, level)
+
     max_level: int
     pixelization_cls: Type[Pixelization]
 
@@ -263,7 +274,7 @@ class SkyPixFamily(SpatialFamily):
 class SkyPixDimension(Dimension):
 
     def __init__(self, family: SkyPixFamily, level: int):
-        self._name = f"{family.name}{level}"
+        super().__init__(family.universe, f"{family.name}{level}")
         self._family = family
         self.level = level
         self.pixelization = self._family.pixelization_cls(level)
@@ -285,12 +296,40 @@ class SkyPixDimension(Dimension):
     pixelization: Pixelization
 
 
+class StandardSpatialFamily(SpatialFamily):
+
+    def __init__(
+        self,
+        universe: DimensionUniverse,
+        name: str,
+        mediator: Optional[Dimension] = None,
+    ):
+        super().__init__(universe, name)
+        self.mediator = mediator
+
+    mediator: Optional[Dimension]
+
+
+class StandardTemporalFamily(TemporalFamily):
+
+    def __init__(
+        self,
+        universe: DimensionUniverse,
+        name: str,
+        mediator: Optional[Dimension] = None,
+    ):
+        super().__init__(universe, name)
+        self.mediator = mediator
+
+    mediator: Optional[Dimension]
+
+
 class StandardDimension(Dimension):
 
     def __init__(
         self,
-        name: str,
-        universe: DimensionUniverse, *,
+        universe: DimensionUniverse,
+        name: str, *,
         requires: NamedValueAbstractSet[Dimension],
         implies: NamedValueAbstractSet[Dimension],
         spatial_family: Optional[SpatialFamily],
@@ -298,8 +337,8 @@ class StandardDimension(Dimension):
         key_field_spec: ddl.FieldSpec,
         unique_constraints: AbstractSet[Tuple[str, ...]],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
-        index: int,
     ):
+        super().__init__(universe, name)
         self._requires = requires
         self._implies = implies
         self._spatial_family = spatial_family
@@ -307,7 +346,6 @@ class StandardDimension(Dimension):
         self._key_field_spec = key_field_spec
         self._unique_constraints = unique_constraints
         self._metadata = metadata
-        self._index = index
         # TODO: check that unique constraints are all valid field names.
 
     @property
@@ -342,14 +380,15 @@ class StandardDimensionCombination(DimensionCombination):
 
     def __init__(
         self,
-        name: str,
-        universe: DimensionUniverse, *,
+        universe: DimensionUniverse,
+        name: str, *,
         requires: NamedValueAbstractSet[Dimension],
         implies: NamedValueAbstractSet[Dimension],
         spatial_family: Optional[SpatialFamily],
         temporal_family: Optional[TemporalFamily],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
     ):
+        super().__init__(universe, name)
         self._requires = requires
         self._implies = implies
         self._spatial_family = spatial_family
@@ -381,12 +420,26 @@ class DimensionGroup:
 
     def __init__(
         self,
-        universe: DimensionUniverse, *,
-        dimensions: Optional[Iterable[Dimension]] = None,
-        names: Optional[Iterable[str]] = None,
-        conform: bool = True
+        universe: DimensionUniverse,
+        dimensions: NamedValueAbstractSet[Dimension],
+        combinations: NamedValueAbstractSet[DimensionCombination],
     ):
-        raise NotImplementedError("TODO")
+        self.universe = universe
+        self._as_set = dimensions
+        self.combinations = combinations
+        implied_names: Set[str] = set()
+        for dimension in dimensions:
+            implied_names.update(dimension.implies.names)
+        if implied_names:
+            self.required = NamedValueSet(d for d in dimensions if d.name not in implied_names).freeze()
+            self.implied = NamedValueSet(d for d in dimensions if d.name in implied_names).freeze()
+        else:
+            self.required = dimensions
+            self.implied = NamedValueSet().freeze()
+        elements: NamedValueSet[DimensionElement] = NamedValueSet()
+        elements.update(dimensions)
+        elements.update(combinations)
+        self.elements = elements.freeze()
 
     @property
     def names(self) -> AbstractSet[str]:
@@ -412,8 +465,79 @@ class DimensionGroup:
 
 class DimensionUniverse:
 
+    def __init__(self) -> None:
+        self.dimensions = NamedValueSet()
+        self._group_cache: Dict[FrozenSet[str], DimensionGroup] = {}
+
     def __getitem__(self, name: str) -> DimensionElement:
         raise NotImplementedError("TODO")
 
-    def register_skypix(self, name: str, max_level: int, cls: Type[Pixelization]) -> SkyPixFamily:
+    def group(
+        self,
+        dimensions: Iterable[Union[str, Dimension]], *,
+        conform: bool = True
+    ) -> DimensionGroup:
+        names: Set[str]
+        try:
+            names = set(dimensions.names)  # type: ignore
+        except AttributeError:
+            names = {
+                item if isinstance(item, str) else item.name
+                for item in dimensions
+            }
+        if conform:
+            for name in frozenset(names):
+                names.update(self.dimensions[name].dependencies.names)
+        cache_key = frozenset(names)
+        result = self._group_cache.get(cache_key)
+        if result is not None:
+            return result
+        raise NotImplementedError()
+
+    def register_skypix_family(self, name: str, max_level: int, cls: Type[Pixelization]) -> SkyPixFamily:
         raise NotImplementedError("TODO")
+
+    def register_spatial_family(
+        self,
+        name: str,
+        mediator: Optional[Dimension] = None,
+    ) -> StandardSpatialFamily:
+        # TODO: friendlier argument types.
+        raise NotImplementedError("TODO")
+
+    def register_temporal_family(
+        self,
+        name: str,
+        mediator: Optional[Dimension] = None,
+    ) -> StandardTemporalFamily:
+        # TODO: friendlier argument types.
+        raise NotImplementedError("TODO")
+
+    def register_dimension(
+        self,
+        name: str,
+        key_field_spec: ddl.FieldSpec, *,
+        requires: NamedValueAbstractSet[Dimension],
+        implies: NamedValueAbstractSet[Dimension],
+        spatial_family: Optional[SpatialFamily],
+        temporal_family: Optional[TemporalFamily],
+        unique_constraints: AbstractSet[Tuple[str, ...]],
+        metadata: NamedValueAbstractSet[ddl.FieldSpec],
+    ) -> StandardDimension:
+        # TODO: friendlier argument types.
+        raise NotImplementedError("TODO")
+
+    def register_combination(
+        self,
+        name: str,
+        requires: NamedValueAbstractSet[Dimension],
+        implies: NamedValueAbstractSet[Dimension],
+        spatial_family: Optional[SpatialFamily],
+        temporal_family: Optional[TemporalFamily],
+        unique_constraints: AbstractSet[Tuple[str, ...]],
+        metadata: NamedValueAbstractSet[ddl.FieldSpec],
+    ) -> StandardDimensionCombination:
+        # TODO: friendlier argument types.
+        raise NotImplementedError("TODO")
+
+    dimensions: NamedValueAbstractSet[Dimension]
