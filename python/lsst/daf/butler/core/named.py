@@ -489,6 +489,17 @@ class NamedValueSet(NamedValueMutableSet[K]):
         else:
             return self._dict.pop(*args)
 
+    def update(self, elements: Iterable[K]) -> None:
+        """Add multple new elements to the set.
+
+        Parameters
+        ----------
+        elements : `Iterable`
+            Elements to add.
+        """
+        for element in elements:
+            self.add(element)
+
     def copy(self) -> NamedValueSet[K]:
         """Return a new `NamedValueSet` with the same elements.
         """
