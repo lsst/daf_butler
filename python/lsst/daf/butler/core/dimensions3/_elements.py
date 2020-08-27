@@ -96,7 +96,7 @@ class DimensionElement(ABC):
         return None
 
     @property
-    def span(self) -> DimensionGroup:
+    def spanning_group(self) -> DimensionGroup:
         raise NotImplementedError("TODO")
 
     @property
