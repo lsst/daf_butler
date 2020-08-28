@@ -37,12 +37,14 @@ import errno
 import os
 import builtins
 import functools
+import re
 from typing import (
     Any,
     Callable,
     Dict,
     Iterable,
     Iterator,
+    List,
     Mapping,
     Optional,
     Type,
@@ -307,3 +309,38 @@ def immutable(cls: Type) -> Type:
         assert not state
     cls.__setstate__ = __setstate__
     return cls
+
+
+def findFileResources(values: Iterable[str], regex: Optional[str] = None) -> List[str]:
+    """Get the files from a list of values. If a value is a file it is added to
+    the list of returned files. If a value is a directory, all the files in
+    the directory (recursively) that match the regex will be returned.
+
+    Parameters
+    ----------
+    values : iterable [`str`]
+        The files to return and directories in which to look for files to
+        return.
+    regex : `str`
+        The regex to use when searching for files within directories. Optional,
+        by default returns all the found files.
+
+    Returns
+    -------
+    resources: `list` [`str`]
+        The passed-in files and files found in passed-in directories.
+    """
+    fileRegex = None if regex is None else re.compile(regex)
+    resources = []
+
+    # Find all the files of interest
+    for location in values:
+        if os.path.isdir(location):
+            for root, dirs, files in os.walk(location):
+                for name in files:
+                    path = os.path.join(root, name)
+                    if os.path.isfile(path) and (fileRegex is None or fileRegex.search(name)):
+                        resources.append(path)
+        else:
+            resources.append(location)
+    return resources
