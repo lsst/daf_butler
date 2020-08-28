@@ -440,6 +440,7 @@ class DimensionGroup:
         elements.update(dimensions)
         elements.update(combinations)
         self.elements = elements.freeze()
+        # TODO: relationship families.
 
     @property
     def names(self) -> AbstractSet[str]:
@@ -461,6 +462,8 @@ class DimensionGroup:
     implied: NamedValueAbstractSet[Dimension]
     combinations: NamedValueAbstractSet[DimensionCombination]
     elements: NamedValueAbstractSet[DimensionElement]
+    spatial_families: NamedValueAbstractSet[SpatialFamily]
+    temporal_families: NamedValueAbstractSet[TemporalFamily]
 
 
 class DimensionUniverse:
