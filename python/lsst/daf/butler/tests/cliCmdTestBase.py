@@ -51,6 +51,7 @@ class CliCmdTestBase(abc.ABC):
         return butler.cli
 
     def setUp(self):
+        Mocker.reset()
         self.runner = LogCliRunner(env=mockEnvVar)
 
     @classmethod
