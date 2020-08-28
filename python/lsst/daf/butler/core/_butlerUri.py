@@ -393,6 +393,27 @@ class ButlerURI:
         """
         return self.split()[0]
 
+    def parent(self) -> ButlerURI:
+        """Returns a ButlerURI containing all the directories of the path
+        attribute, minus the last one.
+
+        Returns
+        -------
+        head : `ButlerURI`
+            Everything except the tail of path attribute, expanded and
+            normalized as per ButlerURI rules.
+        """
+        # When self is file-like, return self.dirname()
+        if not self.dirLike:
+            return self.dirname()
+        # When self is dir-like, return its parent directory,
+        # regardless of the presence of a trailing separator
+        originalPath = self._pathLib(self.path)
+        parentPath = originalPath.parent
+        parentURI = self._uri._replace(path=str(parentPath))
+
+        return ButlerURI(parentURI, forceDirectory=True)
+
     def replace(self, **kwargs: Any) -> ButlerURI:
         """Replace components in a URI with new values and return a new
         instance.
@@ -1241,11 +1262,12 @@ class ButlerHttpURI(ButlerURI):
     def session(self) -> requests.Session:
         """Client object to address remote resource."""
         from .webdavutils import getHttpSession, isWebdavEndpoint
-        if isWebdavEndpoint(self):
-            log.debug("%s looks like a Webdav endpoint.", self.geturl())
+        baseURL = self.scheme + "://" + self.netloc
+        if isWebdavEndpoint(baseURL):
+            log.debug("%s looks like a Webdav endpoint.", baseURL)
             return getHttpSession()
 
-        log.debug("%s looks like a standard HTTP endpoint.", self.geturl())
+        log.debug("%s looks like a standard HTTP endpoint.", baseURL)
         return requests.Session()
 
     def exists(self) -> bool:
@@ -1272,6 +1294,12 @@ class ButlerHttpURI(ButlerURI):
             raise ValueError(f"Can not create a 'directory' for file-like URI {self}")
 
         if not self.exists():
+            # We need to test the absence of the parent directory,
+            # but also if parent URL is different from self URL,
+            # otherwise we could be stuck in a recursive loop
+            # where self == parent
+            if not self.parent().exists() and self.parent().geturl() != self.geturl():
+                self.parent().mkdir()
             log.debug("Creating new directory: %s", self.geturl())
             r = self.session.request("MKCOL", self.geturl())
             if r.status_code != 201:
@@ -1371,17 +1399,19 @@ class ButlerHttpURI(ButlerURI):
         if isinstance(src, type(self)):
             if transfer == "move":
                 self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()})
+                log.debug("Direct move via MOVE operation executed.")
             else:
                 self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()})
+                log.debug("Direct copy via COPY operation executed.")
         else:
             # Use local file and upload it
             local_src, is_temporary = src.as_local()
             f = open(local_src, "rb")
-            files = {"file": f}
-            self.session.post(self.geturl(), files=files)
+            self.session.put(self.geturl(), data=f)
             f.close()
             if is_temporary:
                 os.remove(local_src)
+            log.debug("Indirect copy via temporary file executed.")
 
 
 class ButlerInMemoryURI(ButlerURI):

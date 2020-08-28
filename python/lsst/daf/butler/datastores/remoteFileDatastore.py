@@ -135,6 +135,10 @@ class RemoteFileDatastore(FileLikeDatastore):
             # non-zero time for network).
             log.warning("Object %s exists in datastore for ref %s", location.uri, ref)
 
+        if not location.uri.dirname().exists():
+            log.debug("Folder %s does not exist yet.", location.uri.dirname())
+            location.uri.dirname().mkdir()
+
         if self._transaction is None:
             raise RuntimeError("Attempting to write artifact without transaction enabled")
 

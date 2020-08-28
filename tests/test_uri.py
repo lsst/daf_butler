@@ -355,6 +355,9 @@ class S3URITestCase(unittest.TestCase):
         self.assertEqual(child.unquoted_path, "/" + subpath)
 
 
+# Mock required environment variables during tests
+@unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
+                                       "WEBDAV_BEARER_TOKEN": "XXXXXX"})
 class WebdavURITestCase(unittest.TestCase):
 
     def setUp(self):
@@ -363,6 +366,8 @@ class WebdavURITestCase(unittest.TestCase):
         existingFileName = "existingFile"
         notExistingFileName = "notExistingFile"
 
+        self.baseURL = ButlerURI(
+            f"https://{serverRoot}", forceDirectory=True)
         self.existingFileButlerURI = ButlerURI(
             f"https://{serverRoot}/{existingFolderName}/{existingFileName}")
         self.notExistingFileButlerURI = ButlerURI(
@@ -374,17 +379,8 @@ class WebdavURITestCase(unittest.TestCase):
 
         # Need to declare the options
         responses.add(responses.OPTIONS,
-                      self.existingFileButlerURI.geturl(),
-                      headers={'not': '1024'}, status=200)
-        responses.add(responses.OPTIONS,
-                      self.notExistingFileButlerURI.geturl(),
-                      headers={'not': '1024'}, status=200)
-        responses.add(responses.OPTIONS,
-                      self.notExistingFolderButlerURI.geturl(),
-                      headers={'not': '1024'}, status=200)
-        responses.add(responses.OPTIONS,
-                      self.existingFolderButlerURI.geturl(),
-                      headers={'not': '1024'}, status=200)
+                      self.baseURL.geturl(),
+                      status=200, headers={"DAV": "1,2,3"})
 
         # Used by ButlerHttpURI.exists()
         responses.add(responses.HEAD,
@@ -433,6 +429,9 @@ class WebdavURITestCase(unittest.TestCase):
         # Used by ButlerHttpURI.mkdir()
         responses.add(responses.HEAD,
                       self.existingFolderButlerURI.geturl(),
+                      status=200, headers={'Content-Length': '1024'})
+        responses.add(responses.HEAD,
+                      self.baseURL.geturl(),
                       status=200, headers={'Content-Length': '1024'})
         responses.add(responses.HEAD,
                       self.notExistingFolderButlerURI.geturl(),
@@ -498,6 +497,15 @@ class WebdavURITestCase(unittest.TestCase):
             self.notExistingFileButlerURI.transfer_from(
                 src=self.existingFileButlerURI,
                 transfer="unsupported")
+
+    def testParent(self):
+
+        self.assertEqual(self.existingFolderButlerURI.geturl(),
+                         self.notExistingFileButlerURI.parent().geturl())
+        self.assertEqual(self.baseURL.geturl(),
+                         self.baseURL.parent().geturl())
+        self.assertEqual(self.existingFileButlerURI.parent().geturl(),
+                         self.existingFileButlerURI.dirname().geturl())
 
 
 if __name__ == "__main__":

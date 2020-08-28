@@ -33,7 +33,7 @@ class WebdavUtilsTestCase(unittest.TestCase):
     """Test for the Webdav related utilities.
     """
     session = requests.Session()
-    serverRoot = "www.lsstnowebdav.orgx"
+    serverRoot = "www.lsstwithwebdav.orgx"
     wrongRoot = "www.lsstwithoutwebdav.org"
     existingfolderName = "testFolder"
     notExistingfolderName = "testFolder_not_exist"
