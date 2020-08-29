@@ -57,6 +57,10 @@ class RelationshipFamily(ABC):
         self.universe = universe
         self.name = name
 
+    @abstractmethod
+    def choose(self, names: Iterable[str]) -> str:
+        raise NotImplementedError()
+
     universe: DimensionUniverse
     name: str
 

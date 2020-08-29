@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import itertools
 from typing import (
     AbstractSet,
     ClassVar,
@@ -31,6 +32,7 @@ from typing import (
     Generic,
     Iterable,
     Iterator,
+    List,
     Mapping,
     Optional,
     Set,
@@ -41,7 +43,7 @@ from typing import (
 
 import sqlalchemy
 
-from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet
+from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
 from ..timespan import DatabaseTimespanRepresentation
 from ._elements import (
     Dimension,
@@ -129,21 +131,40 @@ class QueryJoinGenerator(Generic[F]):
     Manual: ClassVar[Type[ManualEdges]]
 
     @abstractmethod
-    def visit(self, graph: QueryGraph, embedded: AbstractSet[QueryEdge]) -> Iterator[QueryEdge]:
+    def visit(
+        self,
+        vertices: NamedKeyMapping[F, NamedValueAbstractSet[QueryVertex]],
+        embedded: AbstractSet[QueryEdge]
+    ) -> Iterator[QueryEdge]:
         pass
 
 
 class AutoIntersect(QueryJoinGenerator[F]):
     overrides: NamedKeyMapping[F, QueryVertex]
 
-    def visit(self, graph: QueryGraph, embedded: AbstractSet[QueryEdge]) -> Iterator[QueryEdge]:
-        family_names = {}
+    def visit(
+        self,
+        vertices: NamedKeyMapping[F, NamedValueAbstractSet[QueryVertex]],
+        embedded: AbstractSet[QueryEdge]
+    ) -> Iterator[QueryEdge]:
+        chosen: List[QueryVertex] = []
+        for family, members in vertices.items():
+            vertex = self.overrides.get(family)
+            if vertex is None:
+                vertex = members[family.choose(members.names)]
+            chosen.append(vertex)
+        for v1, v2 in itertools.combinations(chosen, 2):
+            yield QueryEdge(v1, v2)
 
 
 class ManualEdges(QueryJoinGenerator[F]):
     edges: Set[QueryEdge]
 
-    def visit(self, graph: QueryGraph, embedded: AbstractSet[QueryEdge]) -> Iterator[QueryEdge]:
+    def visit(
+        self,
+        vertices: NamedKeyMapping[F, NamedValueAbstractSet[QueryVertex]],
+        embedded: AbstractSet[QueryEdge]
+    ) -> Iterator[QueryEdge]:
         yield from self.edges
 
 
@@ -225,9 +246,56 @@ class QueryGraph:
                 names.update(dimension_set.names)
         return self.universe.group(names)
 
+    def gather_spatial(
+        self,
+        manager: DimensionManager,
+    ) -> NamedKeyMapping[SpatialFamily, NamedValueAbstractSet[QueryVertex]]:
+        result: NamedKeyDict[SpatialFamily, NamedValueSet[QueryVertex]] = NamedKeyDict()
+        for element in self.full_dimensions.elements:
+            if element.spatial_family is not None:
+                members = result.get(element.spatial_family)
+                if members is None:
+                    members = NamedValueSet()
+                    result[element.spatial_family] = members
+                vertex = manager.make_query_vertex(element)
+                assert vertex is not None
+                members.add(vertex)
+        for vertex in self.extra_vertices:
+            if vertex.spatial_family is not None:
+                members = result.get(vertex.spatial_family)
+                if members is None:
+                    members = NamedValueSet()
+                    result[vertex.spatial_family] = members
+                members.add(vertex)
+        return result.freeze()
+
+    def gather_temporal(
+        self,
+        manager: DimensionManager,
+    ) -> NamedKeyMapping[TemporalFamily, NamedValueAbstractSet[QueryVertex]]:
+        # TODO: remove duplication with the spatial version
+        result: NamedKeyDict[TemporalFamily, NamedValueSet[QueryVertex]] = NamedKeyDict()
+        for element in self.full_dimensions.elements:
+            if element.temporal_family is not None:
+                members = result.get(element.temporal_family)
+                if members is None:
+                    members = NamedValueSet()
+                    result[element.temporal_family] = members
+                vertex = manager.make_query_vertex(element)
+                assert vertex is not None
+                members.add(vertex)
+        for vertex in self.extra_vertices:
+            if vertex.temporal_family is not None:
+                members = result.get(vertex.temporal_family)
+                if members is None:
+                    members = NamedValueSet()
+                    result[vertex.temporal_family] = members
+                members.add(vertex)
+        return result.freeze()
+
     def compute_select_specs(
         self,
-        manager: DimensionManager
+        manager: DimensionManager,
     ) -> NamedKeyMapping[QueryVertex, QueryVertexSelectSpec]:
         result: NamedKeyDict[QueryVertex, QueryVertexSelectSpec] = NamedKeyDict()
         dimension_sets_seen: SupersetAccumulator[str] = SupersetAccumulator()
@@ -249,10 +317,10 @@ class QueryGraph:
             add_vertex(vertex)
         for vertex in self.where_expression.extra.keys():
             add_vertex(vertex)
-        for edge in self.spatial_join_generator.visit(self, spatial_edges_seen):
+        for edge in self.spatial_join_generator.visit(self.gather_spatial(manager), spatial_edges_seen):
             for join_vertex in manager.get_vertices_for_spatial_edge(edge):
                 add_vertex(vertex).spatial = True
-        for edge in self.temporal_join_generator.visit(self, temporal_edges_seen):
+        for edge in self.temporal_join_generator.visit(self.gather_temporal(manager), temporal_edges_seen):
             for join_vertex in manager.get_vertices_for_temporal_edge(edge):
                 add_vertex(vertex).temporal = True
         for element in reversed(list(self.full_dimensions.elements)):
