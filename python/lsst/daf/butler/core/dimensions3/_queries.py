@@ -23,13 +23,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections import defaultdict
 from dataclasses import dataclass
 import itertools
 from typing import (
     AbstractSet,
-    ClassVar,
-    Dict,
+    Callable,
     FrozenSet,
     Generic,
     Iterable,
@@ -38,22 +36,24 @@ from typing import (
     Mapping,
     Optional,
     Set,
-    Tuple,
-    Type,
     TypeVar,
 )
 
 import sqlalchemy
 
-from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
+from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet
 from ..timespan import DatabaseTimespanRepresentation
+from ._relationships import (
+    RelationshipCategory,
+    RelationshipEndpoint,
+    RelationshipFamily,
+    RelationshipLink,
+)
 from ._elements import (
     Dimension,
     DimensionElement,
     DimensionGroup,
     DimensionUniverse,
-    RelationshipCategory,
-    RelationshipFamily,
 )
 
 
@@ -72,21 +72,15 @@ class QueryVertexSelectSpec:
     relationships: Set[RelationshipCategory]
 
 
-class QueryVertex(ABC):
-
-    name: str
+class QueryVertex(RelationshipEndpoint):
 
     @property
     @abstractmethod
-    def dimension_sets(self) -> Iterator[NamedValueAbstractSet[Dimension]]:
+    def dimensions(self) -> NamedValueAbstractSet[Dimension]:
         raise NotImplementedError()
 
     @property
     def families(self) -> Mapping[RelationshipCategory, RelationshipFamily]:
-        return {}
-
-    @property
-    def embedded_relationship_edges(self) -> Mapping[RelationshipCategory, AbstractSet[QueryEdge]]:
         return {}
 
     @abstractmethod
@@ -94,95 +88,60 @@ class QueryVertex(ABC):
         raise NotImplementedError()
 
 
-class QueryEdge(Tuple[QueryVertex, QueryVertex]):
-
-    def __new__(cls, first: QueryVertex, second: QueryVertex) -> QueryEdge:
-        # mypy claims __new__ needs an iterable below, but complains about
-        # passing it a tuple.  Seems like a bug, so these ignores can
-        # hopefully go away someday.
-        if first.name < second.name:
-            return super().__new__(cls, (first, second))  # type: ignore
-        elif first.name > second.name:
-            return super().__new__(cls, (second, first))  # type: ignore
-        else:
-            raise ValueError(
-                f"Identical or baf vertices for edge: {first.name}, {second.name}."
-            )
-
-    @property
-    def names(self) -> Tuple[str, str]:
-        return (self[0].name, self[1].name)
-
-
-class QueryEdgeGenerator(ABC):
-
-    Auto: ClassVar[Type[AutoIntersect]]
-    Manual: ClassVar[Type[ManualEdges]]
+class RelationshipLinkGenerator(ABC):
 
     @abstractmethod
     def visit(
         self,
-        graph: QueryGraph,
+        endpoints: Iterable[RelationshipEndpoint],
         category: RelationshipCategory,
-        manager: DimensionManager,
-    ) -> Iterator[QueryEdge]:
+        is_needed: Callable[[RelationshipLink], bool],
+    ) -> Iterator[RelationshipLink]:
         raise NotImplementedError()
 
 
-class AutoIntersect(QueryEdgeGenerator):
+class IntersectAsNeeded(RelationshipLinkGenerator):
     overrides: NamedKeyMapping[RelationshipFamily, QueryVertex]
 
     def visit(
         self,
-        graph: QueryGraph,
+        endpoints: Iterable[RelationshipEndpoint],
         category: RelationshipCategory,
-        manager: DimensionManager,
-    ) -> Iterator[QueryEdge]:
-        best_vertices_by_family: NamedKeyDict[RelationshipFamily, QueryVertex] = NamedKeyDict()
-        for vertex in graph.extra_vertices:
-            family = vertex.families.get(category)
+        is_needed: Callable[[RelationshipLink], bool],
+    ) -> Iterator[RelationshipLink]:
+        # Group endpoints by family.
+        endpoints_by_family: NamedKeyDict[RelationshipFamily, List[RelationshipEndpoint]] = NamedKeyDict()
+        for endpoint in endpoints:
+            family = endpoint.families.get(category)
             if family is not None and family not in self.overrides:
-                if family in best_vertices_by_family:
-                    raise RuntimeError(
-                        f"Cannot compute automatic intersection because both {vertex.name} "
-                        f"and {best_vertices_by_family[family.name]} are associated with the same "
-                        f"relationship ({category.name}) family, and no automatic preference exists."
-                    )
-                best_vertices_by_family[family.name] = vertex
-        dimension_elements_by_family: NamedKeyDict[RelationshipFamily, List[DimensionElement]] \
-            = NamedKeyDict()
-        for element in graph.full_dimensions.elements:
-            family = element.families.get(category)
-            if family is not None and family not in self.overrides:
-                if family not in best_vertices_by_family:
-                    # A QueryVertex in extra_vertices always supersedes
-                    # a DimensionElement, but there isn't one for this family.
-                    dimension_elements_by_family[family].append(element)
-        for family, elements in dimension_elements_by_family.items():
-            best_element = family.choose(elements)
-            element_vertex = manager.make_query_vertex(best_element)
-            # FIXME: element_vertex might be None
-            best_vertices_by_family[family.name] = element_vertex
-        best_vertices_by_family.update(self.overrides)
-        # TODO: avoid embedded edges
-        for v1, v2 in itertools.combinations(best_vertices_by_family.values(), 2):
-            yield QueryEdge(v1, v2)
+                endpoints_by_family.setdefault(family, []).append(endpoint)
+        # Select the best endpoint from each family.
+        best_endpoints: List[RelationshipEndpoint] = []
+        for family, endpoints in endpoints_by_family.items():
+            override = self.overrides.get(family)
+            if override is not None:
+                best_endpoints.append(override)
+            elif len(endpoints) == 1:
+                best_endpoints.append(endpoints[0])
+            else:
+                best_endpoints.append(family.choose(endpoints))
+        # Yield combinatorial links that are needed according to the callback.
+        for endpoint1, endpoint2 in itertools.combinations(best_endpoints, 2):
+            link = RelationshipLink(endpoint1, endpoint2)
+            if is_needed(link):
+                yield link
 
 
-class ManualEdges(QueryEdgeGenerator):
-    edges: Set[QueryEdge]
+class ManualLinks(RelationshipLinkGenerator):
+    links: Set[RelationshipLink]
 
     def visit(
         self,
-        graph: QueryGraph,
+        endpoints: Iterable[RelationshipEndpoint],
         category: RelationshipCategory,
-        manager: DimensionManager,
-    ) -> Iterator[QueryEdge]:
-        yield from self.edges
-
-
-QueryEdgeGenerator.Auto = AutoIntersect
-QueryEdgeGenerator.Manual = ManualEdges
+        is_needed: Callable[[RelationshipLink], bool],
+    ) -> Iterator[RelationshipLink]:
+        yield from self.links
 
 
 class QueryWhereExpression:
@@ -207,9 +166,9 @@ class DimensionManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_vertices_for_relationship_edge(
+    def get_vertices_for_link(
         self,
-        edge: QueryEdge,
+        edge: RelationshipLink,
         category: RelationshipCategory,
     ) -> Iterator[QueryVertex]:
         raise NotImplementedError()
@@ -243,6 +202,9 @@ class SupersetAccumulator(Generic[K]):
         self._data -= to_drop
         self._data.add(frozenset(s))
 
+    def __iter__(self) -> Iterator[AbstractSet[K]]:
+        yield from self._data
+
 
 class QueryGraph:
 
@@ -254,36 +216,9 @@ class QueryGraph:
     def full_dimensions(self) -> DimensionGroup:
         names = set(self.requested_dimensions.names)
         names.update(self.where_expression.dimensions.names)
-        for vertex in self.extra_vertices:
-            for dimension_set in vertex.dimension_sets:
-                names.update(dimension_set.names)
+        for vertex in self.fixed_vertices:
+            names.update(vertex.dimensions.names)
         return self.universe.group(names)
-
-    def gather_relationship_vertices(
-        self,
-        manager: DimensionManager,
-        category: RelationshipCategory,
-    ) -> NamedKeyMapping[RelationshipFamily, NamedValueAbstractSet[QueryVertex]]:
-        result: NamedKeyDict[RelationshipFamily, NamedValueSet[QueryVertex]] = NamedKeyDict()
-        for element in self.full_dimensions.elements:
-            family = element.families.get(category)
-            if family is not None:
-                members = result.get(family)
-                if members is None:
-                    members = NamedValueSet()
-                    result[family] = members
-                vertex = manager.make_query_vertex(element)
-                assert vertex is not None
-                members.add(vertex)
-        for vertex in self.extra_vertices:
-            family = element.families.get(category)
-            if family is not None:
-                members = result.get(family)
-                if members is None:
-                    members = NamedValueSet()
-                    result[family] = members
-                members.add(vertex)
-        return result.freeze()
 
     def compute_select_specs(
         self,
@@ -291,7 +226,6 @@ class QueryGraph:
     ) -> NamedKeyMapping[QueryVertex, QueryVertexSelectSpec]:
         result: NamedKeyDict[QueryVertex, QueryVertexSelectSpec] = NamedKeyDict()
         dimension_sets_seen: SupersetAccumulator[str] = SupersetAccumulator()
-        embedded_relationship_edges: Dict[RelationshipCategory, Set[QueryEdge]] = defaultdict(set)
 
         def add_vertex(v: QueryVertex) -> QueryVertexSelectSpec:
             spec = result.get(v)
@@ -301,30 +235,39 @@ class QueryGraph:
                     relationships=set(),
                 )
                 result[v] = spec
-                for dimension_set in v.dimension_sets:
-                    dimension_sets_seen.add(dimension_set.names)
-                for category, edges in v.embedded_relationship_edges.items():
-                    embedded_relationship_edges[category].update(edges)
+                dimension_sets_seen.add(v.dimensions.names)
             return spec
 
-        for vertex in self.extra_vertices:
+        for vertex in self.fixed_vertices:
             add_vertex(vertex)
         for vertex in self.where_expression.extra.keys():
             add_vertex(vertex)
         del vertex
+
+        def is_link_needed(ln: RelationshipLink) -> bool:
+            if isinstance(ln[0], DimensionElement) and isinstance(ln[1], DimensionElement):
+                link_dimension_set = ln[0].requires.names | ln[1].requires.names
+                return link_dimension_set not in dimension_sets_seen
+            else:
+                return True
+
         for category in RelationshipCategory.__members__.values():
-            edge_iter = self.edge_generators[category].visit(self, category, manager)
-            for edge in edge_iter:
-                for join_vertex in manager.get_vertices_for_relationship_edge(edge, category):
-                    add_vertex(join_vertex).relationships.add(category)
+            link_iter = self.link_generators[category].visit(
+                itertools.chain(self.fixed_vertices, self.full_dimensions.elements),
+                category,
+                is_link_needed
+            )
+            for link in link_iter:
+                for link_vertex in manager.get_vertices_for_link(link, category):
+                    add_vertex(link_vertex).relationships.add(category)
+
         for element in reversed(list(self.full_dimensions.elements)):
             element_vertex = manager.make_query_vertex(element)
-            if (element_vertex is not None
-                    and any(ds.names not in dimension_sets_seen for ds in element_vertex.dimension_sets)):
+            if element_vertex is not None and element_vertex.dimensions.names not in dimension_sets_seen:
                 add_vertex(element_vertex)
         return result.freeze()
 
     requested_dimensions: DimensionGroup
-    edge_generators: Mapping[RelationshipCategory, QueryEdgeGenerator]
+    link_generators: Mapping[RelationshipCategory, RelationshipLinkGenerator]
     where_expression: QueryWhereExpression
-    extra_vertices: NamedValueAbstractSet[QueryVertex]
+    fixed_vertices: NamedValueAbstractSet[QueryVertex]

@@ -22,9 +22,8 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import dataclasses
-import enum
 from typing import (
     AbstractSet,
     Any,
@@ -46,53 +45,18 @@ from lsst.sphgeom import Pixelization
 
 from .. import ddl
 from ..named import NamedValueSet, NamedValueAbstractSet
+from ._relationships import RelationshipCategory, RelationshipEndpoint, RelationshipFamily
 
 
-@enum.unique
-class RelationshipCategory(enum.Enum):
-    SPATIAL = enum.auto()
-    TEMPORAL = enum.auto()
-
-
-class RelationshipFamily(ABC):
-
-    def __init__(
-        self,
-        universe: DimensionUniverse,
-        name: str,
-        category: RelationshipCategory,
-    ):
-        self.universe = universe
-        self.name = name
-        self.category = category
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, RelationshipFamily):
-            return self.category == other.category and self.name == other.name
-        return False
-
-    @abstractmethod
-    def choose(self, names: Iterable[DimensionElement]) -> DimensionElement:
-        raise NotImplementedError()
-
-    universe: DimensionUniverse
-    name: str
-    category: RelationshipCategory
-
-
-class DimensionElement(ABC):
+class DimensionElement(RelationshipEndpoint):
 
     def __init__(
         self,
         universe: DimensionUniverse,
         name: str,
     ):
+        super().__init__(name)
         self.universe = universe
-        self.name = name
-
-    @property
-    def families(self) -> Mapping[RelationshipCategory, RelationshipFamily]:
-        return {}
 
     @property
     def spanning_group(self) -> DimensionGroup:
@@ -255,12 +219,13 @@ class SkyPixFamily(RelationshipFamily):
         max_level: int,
         pixelization_cls: Type[Pixelization],
     ):
-        super().__init__(universe, name, RelationshipCategory.SPATIAL)
+        super().__init__(name, RelationshipCategory.SPATIAL)
         self.max_level = max_level
         self.pixelization_cls = pixelization_cls
+        self._universe = universe
 
     def register_level(self, level: int) -> SkyPixDimension:
-        return SkyPixDimension(self, level)
+        return SkyPixDimension(self._universe, self, level)
 
     max_level: int
     pixelization_cls: Type[Pixelization]
@@ -268,8 +233,8 @@ class SkyPixFamily(RelationshipFamily):
 
 class SkyPixDimension(Dimension):
 
-    def __init__(self, family: SkyPixFamily, level: int):
-        super().__init__(family.universe, f"{family.name}{level}")
+    def __init__(self, universe: DimensionUniverse, family: SkyPixFamily, level: int):
+        super().__init__(universe, f"{family.name}{level}")
         self._family = family
         self.level = level
         self.pixelization = self._family.pixelization_cls(level)
@@ -295,12 +260,11 @@ class StandardRelationshipFamily(RelationshipFamily):
 
     def __init__(
         self,
-        universe: DimensionUniverse,
         name: str,
         category: RelationshipCategory,
         mediator: Optional[Dimension] = None,
     ):
-        super().__init__(universe, name, category)
+        super().__init__(name, category)
         self.mediator = mediator
 
     mediator: Optional[Dimension]
