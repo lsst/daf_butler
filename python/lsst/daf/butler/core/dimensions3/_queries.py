@@ -58,7 +58,7 @@ from ._elements import (
 
 
 @dataclass
-class QueryVertexSelectResult:
+class QueryJoinTermSelectResult:
     selectable: sqlalchemy.sql.FromClause
     dimensions: NamedKeyMapping[Dimension, sqlalchemy.sql.ColumnElement]
     region: Optional[sqlalchemy.sql.ColumnElement]
@@ -67,12 +67,12 @@ class QueryVertexSelectResult:
 
 
 @dataclass
-class QueryVertexSelectSpec:
+class QueryJoinTermSelectSpec:
     extra: Set[str]
     relationships: Set[RelationshipCategory]
 
 
-class QueryVertex(RelationshipEndpoint):
+class QueryJoinTerm(RelationshipEndpoint):
 
     @property
     @abstractmethod
@@ -84,7 +84,7 @@ class QueryVertex(RelationshipEndpoint):
         return {}
 
     @abstractmethod
-    def select(self, spec: QueryVertexSelectSpec) -> QueryVertexSelectResult:
+    def select(self, spec: QueryJoinTermSelectSpec) -> QueryJoinTermSelectResult:
         raise NotImplementedError()
 
 
@@ -101,7 +101,7 @@ class RelationshipLinkGenerator(ABC):
 
 
 class IntersectAsNeeded(RelationshipLinkGenerator):
-    overrides: NamedKeyMapping[RelationshipFamily, QueryVertex]
+    overrides: NamedKeyMapping[RelationshipFamily, QueryJoinTerm]
 
     def visit(
         self,
@@ -152,9 +152,9 @@ class QueryWhereExpression:
     of `Dimension`).
     """
 
-    extra: NamedKeyMapping[QueryVertex, Set[str]]
+    extra: NamedKeyMapping[QueryJoinTerm, Set[str]]
     """All fields referenced by the expression, other than the primary keys of
-    dimensions (`NamedKeyMapping` mapping `QueryVertex` to a `set` of field
+    dimensions (`NamedKeyMapping` mapping `QueryJoinTerm` to a `set` of field
     names).
     """
 
@@ -162,15 +162,15 @@ class QueryWhereExpression:
 class DimensionManager(ABC):
 
     @abstractmethod
-    def make_query_vertex(self, element: DimensionElement) -> Optional[QueryVertex]:
+    def make_query_join_term_for_element(self, element: DimensionElement) -> Optional[QueryJoinTerm]:
         raise NotImplementedError()
 
     @abstractmethod
-    def get_vertices_for_link(
+    def make_query_join_terms_for_link(
         self,
         edge: RelationshipLink,
         category: RelationshipCategory,
-    ) -> Iterator[QueryVertex]:
+    ) -> Iterator[QueryJoinTerm]:
         raise NotImplementedError()
 
 
@@ -206,7 +206,7 @@ class SupersetAccumulator(Generic[K]):
         yield from self._data
 
 
-class QueryGraph:
+class QuerySpec:
 
     @property
     def universe(self) -> DimensionUniverse:
@@ -216,21 +216,21 @@ class QueryGraph:
     def full_dimensions(self) -> DimensionGroup:
         names = set(self.requested_dimensions.names)
         names.update(self.where_expression.dimensions.names)
-        for vertex in self.fixed_vertices:
-            names.update(vertex.dimensions.names)
+        for join_term in self.fixed_join_terms:
+            names.update(join_term.dimensions.names)
         return self.universe.group(names)
 
     def compute_select_specs(
         self,
         manager: DimensionManager,
-    ) -> NamedKeyMapping[QueryVertex, QueryVertexSelectSpec]:
-        result: NamedKeyDict[QueryVertex, QueryVertexSelectSpec] = NamedKeyDict()
+    ) -> NamedKeyMapping[QueryJoinTerm, QueryJoinTermSelectSpec]:
+        result: NamedKeyDict[QueryJoinTerm, QueryJoinTermSelectSpec] = NamedKeyDict()
         dimension_sets_seen: SupersetAccumulator[str] = SupersetAccumulator()
 
-        def add_vertex(v: QueryVertex) -> QueryVertexSelectSpec:
+        def add_join_term(v: QueryJoinTerm) -> QueryJoinTermSelectSpec:
             spec = result.get(v)
             if spec is None:
-                spec = QueryVertexSelectSpec(
+                spec = QueryJoinTermSelectSpec(
                     extra=self.where_expression.extra.get(v, ()),
                     relationships=set(),
                 )
@@ -238,11 +238,15 @@ class QueryGraph:
                 dimension_sets_seen.add(v.dimensions.names)
             return spec
 
-        for vertex in self.fixed_vertices:
-            add_vertex(vertex)
-        for vertex in self.where_expression.extra.keys():
-            add_vertex(vertex)
-        del vertex
+        join_term: Optional[QueryJoinTerm]
+
+        for join_term in self.fixed_join_terms:
+            add_join_term(join_term)
+        del join_term
+
+        for join_term in self.where_expression.extra.keys():
+            add_join_term(join_term)
+        del join_term
 
         def is_link_needed(ln: RelationshipLink) -> bool:
             if isinstance(ln[0], DimensionElement) and isinstance(ln[1], DimensionElement):
@@ -253,21 +257,24 @@ class QueryGraph:
 
         for category in RelationshipCategory.__members__.values():
             link_iter = self.link_generators[category].visit(
-                itertools.chain(self.fixed_vertices, self.full_dimensions.elements),
+                itertools.chain(self.fixed_join_terms, self.full_dimensions.elements),
                 category,
                 is_link_needed
             )
             for link in link_iter:
-                for link_vertex in manager.get_vertices_for_link(link, category):
-                    add_vertex(link_vertex).relationships.add(category)
+                for join_term in manager.make_query_join_terms_for_link(link, category):
+                    add_join_term(join_term).relationships.add(category)
+        del join_term
 
         for element in reversed(list(self.full_dimensions.elements)):
-            element_vertex = manager.make_query_vertex(element)
-            if element_vertex is not None and element_vertex.dimensions.names not in dimension_sets_seen:
-                add_vertex(element_vertex)
+            join_term = manager.make_query_join_term_for_element(element)
+            if join_term is not None and join_term.dimensions.names not in dimension_sets_seen:
+                add_join_term(join_term)
+        del join_term
+
         return result.freeze()
 
     requested_dimensions: DimensionGroup
     link_generators: Mapping[RelationshipCategory, RelationshipLinkGenerator]
     where_expression: QueryWhereExpression
-    fixed_vertices: NamedValueAbstractSet[QueryVertex]
+    fixed_join_terms: NamedValueAbstractSet[QueryJoinTerm]
