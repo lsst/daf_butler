@@ -124,8 +124,8 @@ class AliasDimensionElement(DimensionElement):
             for constraint in target.get_unique_constraints()
         )
         return cls(target, name,
-                   requires=requires.freeze(),  # type: ignore
-                   implies=implies.freeze(),  # type: ignore
+                   requires=requires.freeze(),
+                   implies=implies.freeze(),
                    unique_constraints=unique_constraints)
 
     @property
