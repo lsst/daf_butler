@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import dataclasses
+import enum
 from typing import (
     AbstractSet,
     Any,
@@ -47,38 +48,36 @@ from .. import ddl
 from ..named import NamedValueSet, NamedValueAbstractSet
 
 
+@enum.unique
+class RelationshipCategory(enum.Enum):
+    SPATIAL = enum.auto()
+    TEMPORAL = enum.auto()
+
+
 class RelationshipFamily(ABC):
 
     def __init__(
         self,
         universe: DimensionUniverse,
         name: str,
+        category: RelationshipCategory,
     ):
         self.universe = universe
         self.name = name
+        self.category = category
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, RelationshipFamily):
+            return self.category == other.category and self.name == other.name
+        return False
 
     @abstractmethod
-    def choose(self, names: Iterable[str]) -> str:
+    def choose(self, names: Iterable[DimensionElement]) -> DimensionElement:
         raise NotImplementedError()
 
     universe: DimensionUniverse
     name: str
-
-
-class SpatialFamily(RelationshipFamily):
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, SpatialFamily):
-            return self.name == other.name
-        return False
-
-
-class TemporalFamily(RelationshipFamily):
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, TemporalFamily):
-            return self.name == other.name
-        return False
+    category: RelationshipCategory
 
 
 class DimensionElement(ABC):
@@ -92,12 +91,8 @@ class DimensionElement(ABC):
         self.name = name
 
     @property
-    def spatial_family(self) -> Optional[SpatialFamily]:
-        return None
-
-    @property
-    def temporal_family(self) -> Optional[TemporalFamily]:
-        return None
+    def families(self) -> Mapping[RelationshipCategory, RelationshipFamily]:
+        return {}
 
     @property
     def spanning_group(self) -> DimensionGroup:
@@ -170,12 +165,8 @@ class AliasDimensionElement(DimensionElement):
                    unique_constraints=unique_constraints)
 
     @property
-    def spatial_family(self) -> Optional[SpatialFamily]:
-        return self.target.spatial_family
-
-    @property
-    def temporal_family(self) -> Optional[TemporalFamily]:
-        return self.target.temporal_family
+    def families(self) -> Mapping[RelationshipCategory, RelationshipFamily]:
+        return self.target.families
 
     @property
     def requires(self) -> NamedValueAbstractSet[Dimension]:
@@ -255,7 +246,7 @@ class AliasDimensionCombination(DimensionCombination, AliasDimensionElement):
     target: DimensionCombination
 
 
-class SkyPixFamily(SpatialFamily):
+class SkyPixFamily(RelationshipFamily):
 
     def __init__(
         self,
@@ -264,7 +255,7 @@ class SkyPixFamily(SpatialFamily):
         max_level: int,
         pixelization_cls: Type[Pixelization],
     ):
-        super().__init__(universe, name)
+        super().__init__(universe, name, RelationshipCategory.SPATIAL)
         self.max_level = max_level
         self.pixelization_cls = pixelization_cls
 
@@ -300,29 +291,16 @@ class SkyPixDimension(Dimension):
     pixelization: Pixelization
 
 
-class StandardSpatialFamily(SpatialFamily):
+class StandardRelationshipFamily(RelationshipFamily):
 
     def __init__(
         self,
         universe: DimensionUniverse,
         name: str,
+        category: RelationshipCategory,
         mediator: Optional[Dimension] = None,
     ):
-        super().__init__(universe, name)
-        self.mediator = mediator
-
-    mediator: Optional[Dimension]
-
-
-class StandardTemporalFamily(TemporalFamily):
-
-    def __init__(
-        self,
-        universe: DimensionUniverse,
-        name: str,
-        mediator: Optional[Dimension] = None,
-    ):
-        super().__init__(universe, name)
+        super().__init__(universe, name, category)
         self.mediator = mediator
 
     mediator: Optional[Dimension]
@@ -336,8 +314,7 @@ class StandardDimension(Dimension):
         name: str, *,
         requires: NamedValueAbstractSet[Dimension],
         implies: NamedValueAbstractSet[Dimension],
-        spatial_family: Optional[SpatialFamily],
-        temporal_family: Optional[TemporalFamily],
+        families: Mapping[RelationshipCategory, RelationshipFamily],
         key_field_spec: ddl.FieldSpec,
         unique_constraints: AbstractSet[Tuple[str, ...]],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
@@ -345,20 +322,15 @@ class StandardDimension(Dimension):
         super().__init__(universe, name)
         self._requires = requires
         self._implies = implies
-        self._spatial_family = spatial_family
-        self._temporal_family = temporal_family
+        self._families = families
         self._key_field_spec = key_field_spec
         self._unique_constraints = unique_constraints
         self._metadata = metadata
         # TODO: check that unique constraints are all valid field names.
 
     @property
-    def spatial_family(self) -> Optional[SpatialFamily]:
-        return self._spatial_family
-
-    @property
-    def temporal_family(self) -> Optional[TemporalFamily]:
-        return self._temporal_family
+    def families(self) -> Mapping[RelationshipCategory, RelationshipFamily]:
+        return self._families
 
     @property
     def requires(self) -> NamedValueAbstractSet[Dimension]:
@@ -388,24 +360,18 @@ class StandardDimensionCombination(DimensionCombination):
         name: str, *,
         requires: NamedValueAbstractSet[Dimension],
         implies: NamedValueAbstractSet[Dimension],
-        spatial_family: Optional[SpatialFamily],
-        temporal_family: Optional[TemporalFamily],
+        families: Mapping[RelationshipCategory, RelationshipFamily],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
     ):
         super().__init__(universe, name)
         self._requires = requires
         self._implies = implies
-        self._spatial_family = spatial_family
-        self._temporal_family = temporal_family
+        self._families = families
         self._metadata = metadata
 
     @property
-    def spatial_family(self) -> Optional[SpatialFamily]:
-        return self._spatial_family
-
-    @property
-    def temporal_family(self) -> Optional[TemporalFamily]:
-        return self._temporal_family
+    def families(self) -> Mapping[RelationshipCategory, RelationshipFamily]:
+        return self._families
 
     @property
     def requires(self) -> NamedValueAbstractSet[Dimension]:
@@ -466,8 +432,6 @@ class DimensionGroup:
     implied: NamedValueAbstractSet[Dimension]
     combinations: NamedValueAbstractSet[DimensionCombination]
     elements: NamedValueAbstractSet[DimensionElement]
-    spatial_families: NamedValueAbstractSet[SpatialFamily]
-    temporal_families: NamedValueAbstractSet[TemporalFamily]
 
 
 class DimensionUniverse:
@@ -504,19 +468,12 @@ class DimensionUniverse:
     def register_skypix_family(self, name: str, max_level: int, cls: Type[Pixelization]) -> SkyPixFamily:
         raise NotImplementedError("TODO")
 
-    def register_spatial_family(
+    def register_relationship_family(
         self,
         name: str,
+        category: RelationshipCategory,
         mediator: Optional[Dimension] = None,
-    ) -> StandardSpatialFamily:
-        # TODO: friendlier argument types.
-        raise NotImplementedError("TODO")
-
-    def register_temporal_family(
-        self,
-        name: str,
-        mediator: Optional[Dimension] = None,
-    ) -> StandardTemporalFamily:
+    ) -> StandardRelationshipFamily:
         # TODO: friendlier argument types.
         raise NotImplementedError("TODO")
 
@@ -526,8 +483,7 @@ class DimensionUniverse:
         key_field_spec: ddl.FieldSpec, *,
         requires: NamedValueAbstractSet[Dimension],
         implies: NamedValueAbstractSet[Dimension],
-        spatial_family: Optional[SpatialFamily],
-        temporal_family: Optional[TemporalFamily],
+        families: Mapping[RelationshipCategory, RelationshipFamily],
         unique_constraints: AbstractSet[Tuple[str, ...]],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
     ) -> StandardDimension:
@@ -539,8 +495,7 @@ class DimensionUniverse:
         name: str,
         requires: NamedValueAbstractSet[Dimension],
         implies: NamedValueAbstractSet[Dimension],
-        spatial_family: Optional[SpatialFamily],
-        temporal_family: Optional[TemporalFamily],
+        families: Mapping[RelationshipCategory, RelationshipFamily],
         unique_constraints: AbstractSet[Tuple[str, ...]],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
     ) -> StandardDimensionCombination:
