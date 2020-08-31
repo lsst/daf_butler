@@ -77,6 +77,10 @@ class DatasetTemporalFamily(RelationshipFamily):
     def __init__(self, dataset_type: DatasetType):
         super().__init__(dataset_type.name, RelationshipCategory.TEMPORAL)
 
+    @property
+    def minimal_dimensions(self) -> None:
+        return None
+
     def choose(self, endpoints: Iterable[RelationshipEndpoint]) -> RelationshipEndpoint:
         try:
             (endpoint,) = endpoints

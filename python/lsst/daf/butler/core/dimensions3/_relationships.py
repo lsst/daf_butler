@@ -28,10 +28,17 @@ from typing import (
     Any,
     Iterable,
     Mapping,
+    Optional,
     Tuple,
+    TYPE_CHECKING,
 )
 
 import sqlalchemy
+
+from ..named import NamedValueAbstractSet
+
+if TYPE_CHECKING:
+    from ._elements import Dimension
 
 
 @enum.unique
@@ -54,6 +61,11 @@ class RelationshipFamily(ABC):
         if isinstance(other, RelationshipFamily):
             return self.category == other.category and self.name == other.name
         return False
+
+    @property
+    @abstractmethod
+    def minimal_dimensions(self) -> Optional[NamedValueAbstractSet[Dimension]]:
+        raise NotImplementedError()
 
     @abstractmethod
     def choose(self, endpoints: Iterable[RelationshipEndpoint]) -> RelationshipEndpoint:

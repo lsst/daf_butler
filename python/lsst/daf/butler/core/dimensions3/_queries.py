@@ -45,7 +45,7 @@ from typing import (
 
 import sqlalchemy
 
-from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet
+from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
 from ._relationships import (
     RelationshipCategory,
     RelationshipEndpoint,
@@ -95,7 +95,7 @@ class RelationshipLinkGenerator(ABC):
         self,
         endpoints: Iterable[RelationshipEndpoint],
         category: RelationshipCategory,
-        is_needed: Callable[[RelationshipLink], bool],
+        is_needed: Callable[[NamedValueAbstractSet[Dimension]], bool],
     ) -> Iterator[RelationshipLink]:
         raise NotImplementedError()
 
@@ -107,7 +107,7 @@ class IntersectAsNeeded(RelationshipLinkGenerator):
         self,
         endpoints: Iterable[RelationshipEndpoint],
         category: RelationshipCategory,
-        is_needed: Callable[[RelationshipLink], bool],
+        is_needed: Callable[[NamedValueAbstractSet[Dimension]], bool],
     ) -> Iterator[RelationshipLink]:
         # Group endpoints by family.
         endpoints_by_family: NamedKeyDict[RelationshipFamily, List[RelationshipEndpoint]] = NamedKeyDict()
@@ -116,20 +116,23 @@ class IntersectAsNeeded(RelationshipLinkGenerator):
             if family is not None and family not in self.overrides:
                 endpoints_by_family.setdefault(family, []).append(endpoint)
         # Select the best endpoint from each family.
-        best_endpoints: List[RelationshipEndpoint] = []
+        best_endpoints_by_family: NamedKeyDict[RelationshipFamily, RelationshipEndpoint] = NamedKeyDict()
         for family, endpoints in endpoints_by_family.items():
             override = self.overrides.get(family)
             if override is not None:
-                best_endpoints.append(override)
+                best_endpoints_by_family[family] = override
             elif len(endpoints) == 1:
-                best_endpoints.append(endpoints[0])
+                best_endpoints_by_family[family] = endpoints[0]
             else:
-                best_endpoints.append(family.choose(endpoints))
+                best_endpoints_by_family[family] = family.choose(endpoints)
         # Yield combinatorial links that are needed according to the callback.
-        for endpoint1, endpoint2 in itertools.combinations(best_endpoints, 2):
-            link = RelationshipLink(endpoint1, endpoint2)
-            if is_needed(link):
-                yield link
+        for (f1, e1), (f2, e2) in itertools.combinations(best_endpoints_by_family.items(), 2):
+            if f1.minimal_dimensions is not None and f2.minimal_dimensions is not None:
+                link_minimal_dimensions = NamedValueSet(f1.minimal_dimensions | f2.minimal_dimensions)
+                if is_needed(link_minimal_dimensions):
+                    yield RelationshipLink(e1, e2)
+            else:
+                yield RelationshipLink(e1, e2)
 
 
 class ManualLinks(RelationshipLinkGenerator):
@@ -139,7 +142,7 @@ class ManualLinks(RelationshipLinkGenerator):
         self,
         endpoints: Iterable[RelationshipEndpoint],
         category: RelationshipCategory,
-        is_needed: Callable[[RelationshipLink], bool],
+        is_needed: Callable[[NamedValueAbstractSet[Dimension]], bool],
     ) -> Iterator[RelationshipLink]:
         yield from self.links
 
@@ -288,14 +291,8 @@ class _QueryBuilderStage1:
             self._dimension_sets.add(table.dimensions.names)
         return parameters
 
-    def _is_link_needed(self, link: RelationshipLink) -> bool:
-        if isinstance(link[0], DimensionElement) and isinstance(link[1], DimensionElement):
-            # TODO: does this work when expanding tract+visit to include
-            # detector?  I don't think so...
-            link_dimension_set = link[0].requires.names | link[1].requires.names
-            return link_dimension_set not in self._dimension_sets
-        else:
-            return True
+    def is_dimension_set_needed(self, dimensions: NamedValueAbstractSet[Dimension]) -> bool:
+        return dimensions.names in self._dimension_sets
 
     def add_relationships(
         self,
@@ -305,7 +302,7 @@ class _QueryBuilderStage1:
         link_iter = link_generator.visit(
             itertools.chain(self._parameters_by_table.keys(), self._dimensions.elements),
             category,
-            self._is_link_needed
+            self.is_dimension_set_needed,
         )
         for link in link_iter:
             for table, parameters in self._manager.make_logical_tables_for_link(link, category):
