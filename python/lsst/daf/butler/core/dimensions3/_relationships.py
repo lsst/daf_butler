@@ -31,6 +31,8 @@ from typing import (
     Tuple,
 )
 
+import sqlalchemy
+
 
 @enum.unique
 class RelationshipCategory(enum.Enum):
@@ -71,6 +73,19 @@ class RelationshipEndpoint(ABC):
         return {}
 
     name: str
+
+
+class RelationshipEndpointDatabaseRepresentation(ABC):
+
+    @classmethod
+    @abstractmethod
+    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause
+                       ) -> RelationshipEndpointDatabaseRepresentation:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def relate(self, other: RelationshipEndpointDatabaseRepresentation) -> sqlalchemy.sql.ColumnElement:
+        raise NotImplementedError()
 
 
 class RelationshipLink(Tuple[RelationshipEndpoint, RelationshipEndpoint]):

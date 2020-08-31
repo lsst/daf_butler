@@ -385,7 +385,7 @@ class DimensionGroup:
 
     # TODO: more container interface
 
-    def asSet(self) -> NamedValueAbstractSet[Dimension]:
+    def as_set(self) -> NamedValueAbstractSet[Dimension]:
         raise NotImplementedError("TODO")
 
     def __or__(self, other: DimensionGroup) -> DimensionGroup:

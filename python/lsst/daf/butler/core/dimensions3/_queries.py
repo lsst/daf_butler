@@ -23,11 +23,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from dataclasses import dataclass
 import itertools
 from typing import (
     AbstractSet,
     Callable,
+    Dict,
     FrozenSet,
     Generic,
     Iterable,
@@ -36,16 +38,18 @@ from typing import (
     Mapping,
     Optional,
     Set,
+    Tuple,
+    Type,
     TypeVar,
 )
 
 import sqlalchemy
 
 from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet
-from ..timespan import DatabaseTimespanRepresentation
 from ._relationships import (
     RelationshipCategory,
     RelationshipEndpoint,
+    RelationshipEndpointDatabaseRepresentation,
     RelationshipFamily,
     RelationshipLink,
 )
@@ -58,33 +62,29 @@ from ._elements import (
 
 
 @dataclass
-class QueryJoinTermSelectResult:
-    selectable: sqlalchemy.sql.FromClause
-    dimensions: NamedKeyMapping[Dimension, sqlalchemy.sql.ColumnElement]
-    region: Optional[sqlalchemy.sql.ColumnElement]
-    timespan: Optional[DatabaseTimespanRepresentation]
-    extra: Mapping[str, sqlalchemy.sql.ColumnElement]
-
-
-@dataclass
-class QueryJoinTermSelectSpec:
+class LogicalTableSelectParameters:
     extra: Set[str]
-    relationships: Set[RelationshipCategory]
+    relationships: Dict[RelationshipCategory, Type[RelationshipEndpointDatabaseRepresentation]]
+
+    def update(self, other: LogicalTableSelectParameters) -> None:
+        self.extra.update(other.extra)
+        self.relationships.update(other.relationships)
 
 
-class QueryJoinTerm(RelationshipEndpoint):
+class LogicalTable(RelationshipEndpoint):
 
     @property
     @abstractmethod
-    def dimensions(self) -> NamedValueAbstractSet[Dimension]:
+    def dimensions(self) -> NamedKeyDict[Dimension, str]:
         raise NotImplementedError()
 
     @property
+    @abstractmethod
     def families(self) -> Mapping[RelationshipCategory, RelationshipFamily]:
         return {}
 
     @abstractmethod
-    def select(self, spec: QueryJoinTermSelectSpec) -> QueryJoinTermSelectResult:
+    def to_sql(self, parameters: LogicalTableSelectParameters) -> sqlalchemy.sql.FromClause:
         raise NotImplementedError()
 
 
@@ -101,7 +101,7 @@ class RelationshipLinkGenerator(ABC):
 
 
 class IntersectAsNeeded(RelationshipLinkGenerator):
-    overrides: NamedKeyMapping[RelationshipFamily, QueryJoinTerm]
+    overrides: NamedKeyMapping[RelationshipFamily, LogicalTable]
 
     def visit(
         self,
@@ -144,6 +144,7 @@ class ManualLinks(RelationshipLinkGenerator):
         yield from self.links
 
 
+@dataclass
 class QueryWhereExpression:
 
     dimensions: NamedValueAbstractSet[Dimension]
@@ -152,25 +153,25 @@ class QueryWhereExpression:
     of `Dimension`).
     """
 
-    extra: NamedKeyMapping[QueryJoinTerm, Set[str]]
+    extra: Mapping[str, Set[str]]
     """All fields referenced by the expression, other than the primary keys of
-    dimensions (`NamedKeyMapping` mapping `QueryJoinTerm` to a `set` of field
-    names).
+    dimensions (`Mapping` mapping the name of a `LogicalTable` or
+    `DimensionElement` to a `set` of field names).
     """
 
 
 class DimensionManager(ABC):
 
     @abstractmethod
-    def make_query_join_term_for_element(self, element: DimensionElement) -> Optional[QueryJoinTerm]:
+    def make_logical_table_for_element(self, element: DimensionElement) -> Optional[LogicalTable]:
         raise NotImplementedError()
 
     @abstractmethod
-    def make_query_join_terms_for_link(
+    def make_logical_tables_for_link(
         self,
         edge: RelationshipLink,
         category: RelationshipCategory,
-    ) -> Iterator[QueryJoinTerm]:
+    ) -> Iterator[Tuple[LogicalTable, LogicalTableSelectParameters]]:
         raise NotImplementedError()
 
 
@@ -216,65 +217,177 @@ class QuerySpec:
     def full_dimensions(self) -> DimensionGroup:
         names = set(self.requested_dimensions.names)
         names.update(self.where_expression.dimensions.names)
-        for join_term in self.fixed_join_terms:
-            names.update(join_term.dimensions.names)
+        for table in self.fixed_tables:
+            names.update(table.dimensions.names)
         return self.universe.group(names)
 
-    def compute_select_specs(
-        self,
-        manager: DimensionManager,
-    ) -> NamedKeyMapping[QueryJoinTerm, QueryJoinTermSelectSpec]:
-        result: NamedKeyDict[QueryJoinTerm, QueryJoinTermSelectSpec] = NamedKeyDict()
-        dimension_sets_seen: SupersetAccumulator[str] = SupersetAccumulator()
-
-        def add_join_term(v: QueryJoinTerm) -> QueryJoinTermSelectSpec:
-            spec = result.get(v)
-            if spec is None:
-                spec = QueryJoinTermSelectSpec(
-                    extra=self.where_expression.extra.get(v, ()),
-                    relationships=set(),
-                )
-                result[v] = spec
-                dimension_sets_seen.add(v.dimensions.names)
-            return spec
-
-        join_term: Optional[QueryJoinTerm]
-
-        for join_term in self.fixed_join_terms:
-            add_join_term(join_term)
-        del join_term
-
-        for join_term in self.where_expression.extra.keys():
-            add_join_term(join_term)
-        del join_term
-
-        def is_link_needed(ln: RelationshipLink) -> bool:
-            if isinstance(ln[0], DimensionElement) and isinstance(ln[1], DimensionElement):
-                link_dimension_set = ln[0].requires.names | ln[1].requires.names
-                return link_dimension_set not in dimension_sets_seen
-            else:
-                return True
-
+    def build_sql(self, manager: DimensionManager) -> sqlalchemy.sql.Select:
+        # Stage 1: Compute the full set of logical tables that will go into the
+        # query, and the columns we need from them.
+        stage1 = _QueryBuilderStage1(self.full_dimensions, manager)
+        # Fixed tables are always included.
+        for table in self.fixed_tables:
+            stage1.add_logical_table(table)
+        del table
+        # Relationships can bring in tables.  Depending on the relationship
+        # categories and their representation the database, these can be
+        # explicit join tables that represented precomputed relationships, or
+        # tables with endpoints (e.g. regions, timespans) to relate on-the-fly.
         for category in RelationshipCategory.__members__.values():
-            link_iter = self.link_generators[category].visit(
-                itertools.chain(self.fixed_join_terms, self.full_dimensions.elements),
-                category,
-                is_link_needed
-            )
-            for link in link_iter:
-                for join_term in manager.make_query_join_terms_for_link(link, category):
-                    add_join_term(join_term).relationships.add(category)
-        del join_term
+            stage1.add_relationships(category, self.link_generators[category])
+        # Ensure any tables with extra (i.e. non-dimension, non-relationship)
+        # columns referenced by the WHERE clause are included.  That could be
+        # a fixed table already added, or a dimension element table that we'll
+        # add here.
+        for table_name, extra_columns in self.where_expression.extra.items():
+            stage1.ensure_extra_columns(table_name, extra_columns)
+        # Similarly ensure any tables with extra columns referenced by the
+        # SELECT clause are included.  First group those by table name...
+        select_extra_by_table: Dict[str, Set[str]] = defaultdict(set)
+        for table_name, extra_column in self.select_extra.values():
+            select_extra_by_table[table_name].add(extra_column)
+        # ...then ensure those tables are added with those extra columns.
+        for table_name, extra_columns in self.where_expression.extra.items():
+            stage1.ensure_extra_columns(table_name, extra_columns)
+        # Finally add any dimension elements whose keys or relationships
+        # are not already covered by other tables we've included.
+        parameters_by_table = stage1.finish()
 
-        for element in reversed(list(self.full_dimensions.elements)):
-            join_term = manager.make_query_join_term_for_element(element)
-            if join_term is not None and join_term.dimensions.names not in dimension_sets_seen:
-                add_join_term(join_term)
-        del join_term
-
-        return result.freeze()
+        # TODO: stage 2
+        stage2 = _QueryBuilderStage2()
+        for table, parameters in parameters_by_table.items():
+            stage2.join(table, parameters)
+        return stage2.finish(self.requested_dimensions, self.select_extra, self.where_expression)
 
     requested_dimensions: DimensionGroup
-    link_generators: Mapping[RelationshipCategory, RelationshipLinkGenerator]
+    link_generators: Dict[RelationshipCategory, RelationshipLinkGenerator]
+    select_extra: Mapping[str, Tuple[str, str]]
     where_expression: QueryWhereExpression
-    fixed_join_terms: NamedValueAbstractSet[QueryJoinTerm]
+    fixed_tables: List[LogicalTable]
+
+
+class _QueryBuilderStage1:
+
+    def __init__(self, dimensions: DimensionGroup, manager: DimensionManager) -> None:
+        self._dimensions = dimensions
+        self._manager = manager
+        self._parameters_by_table: NamedKeyDict[LogicalTable, LogicalTableSelectParameters] = NamedKeyDict()
+        self._dimension_sets: SupersetAccumulator[str] = SupersetAccumulator()
+
+    def add_logical_table(self, table: LogicalTable) -> LogicalTableSelectParameters:
+        parameters = self._parameters_by_table.get(table)
+        if parameters is None:
+            parameters = LogicalTableSelectParameters(
+                extra=set(),
+                relationships={},
+            )
+            self._parameters_by_table[table] = parameters
+            self._dimension_sets.add(table.dimensions.names)
+        return parameters
+
+    def _is_link_needed(self, link: RelationshipLink) -> bool:
+        if isinstance(link[0], DimensionElement) and isinstance(link[1], DimensionElement):
+            # TODO: does this work when expanding tract+visit to include
+            # detector?  I don't think so...
+            link_dimension_set = link[0].requires.names | link[1].requires.names
+            return link_dimension_set not in self._dimension_sets
+        else:
+            return True
+
+    def add_relationships(
+        self,
+        category: RelationshipCategory,
+        link_generator: RelationshipLinkGenerator
+    ) -> None:
+        link_iter = link_generator.visit(
+            itertools.chain(self._parameters_by_table.keys(), self._dimensions.elements),
+            category,
+            self._is_link_needed
+        )
+        for link in link_iter:
+            for table, parameters in self._manager.make_logical_tables_for_link(link, category):
+                self.add_logical_table(table).update(parameters)
+
+    def ensure_extra_columns(self, table_name: str, extra: AbstractSet[str]) -> None:
+        if table_name in self._parameters_by_table.names:
+            self._parameters_by_table[table_name].extra.update(extra)
+        elif table_name in self._dimensions.elements.names:
+            element = self._dimensions.elements[table_name]
+            element_table = self._manager.make_logical_table_for_element(element)
+            if element_table is None:
+                raise RuntimeError(f"WHERE clause references {table_name} value(s) {extra}, but there "
+                                   "is no table for this element.")
+            self.add_logical_table(element_table)
+
+    def finish(self) -> NamedKeyMapping[LogicalTable, LogicalTableSelectParameters]:
+        for element in reversed(list(self._dimensions.elements)):
+            element_table = self._manager.make_logical_table_for_element(element)
+            if element_table is not None and element_table.dimensions.names in self._dimension_sets:
+                self.add_logical_table(element_table)
+        return self._parameters_by_table.freeze()
+
+
+class _QueryBuilderStage2:
+
+    def __init__(self) -> None:
+        self._dimension_columns: Dict[str, List[sqlalchemy.sql.ColumnElement]] = defaultdict(list)
+        self._endpoint_reprs: Dict[RelationshipCategory, List[RelationshipEndpointDatabaseRepresentation]] \
+            = defaultdict(list)
+        self._table_sql: Dict[str, sqlalchemy.sql.FromClause] = {}
+        self._from_clause: Optional[sqlalchemy.sql.FromClause] = None
+
+    def join(self, table: LogicalTable, parameters: LogicalTableSelectParameters) -> None:
+        sql = table.to_sql(parameters)
+        join_on: List[sqlalchemy.sql.ColumnElement] = []
+        for dimension, column_name in table.dimensions.items():
+            joined_columns = self._dimension_columns[dimension.name]
+            join_on.extend((sql.columns[column_name] == c for c in joined_columns))
+            joined_columns.append(sql.columns[column_name])
+        for category, endpoint_repr_type in parameters.relationships.items():
+            joined_reprs = self._endpoint_reprs[category]
+            endpoint_repr = endpoint_repr_type.fromSelectable(sql)
+            join_on.extend((endpoint_repr.relate(r) for r in joined_reprs))
+            joined_reprs.append(endpoint_repr)
+        if self._from_clause is None:
+            assert not join_on
+            self._from_clause = sql
+        else:
+            join_on_expr = sqlalchemy.sql.and_(*join_on) if join_on else sqlalchemy.sql.literal(True)
+            self._from_clause = self._from_clause.join(
+                sql,
+                joinon=join_on_expr
+            )
+        self._table_sql[table.name] = sql
+
+    def finish(
+        self,
+        dimensions: DimensionGroup,
+        select_extra: Mapping[str, Tuple[str, str]],
+        where: QueryWhereExpression
+    ) -> sqlalchemy.sql.Select:
+        select_columns = [
+            self._dimension_columns[d.name][-1].label(d.name)
+            for d in dimensions
+        ]
+        select_columns.extend(
+            self._table_sql[table_name].columns[column_name].label(label)
+            for label, (table_name, column_name) in select_extra.items()
+        )
+        return sqlalchemy.sql.select(select_columns).select_from(self._from_clause)  # TODO: where clause
+
+
+class DataCoordinateQuery:
+
+    def __init__(
+        self,
+        dimensions: DimensionGroup, *,
+        links: Optional[Mapping[RelationshipCategory, RelationshipLinkGenerator]] = None,
+        where: Optional[QueryWhereExpression] = None,
+        others: Iterable[DataCoordinateQuery] = (),
+        # TODO: managers
+    ):
+        # TODO
+        pass
+
+    def as_table(self) -> LogicalTable:
+        raise NotImplementedError("TODO")
