@@ -75,7 +75,7 @@ class LogicalTable(RelationshipEndpoint):
 
     @property
     @abstractmethod
-    def dimensions(self) -> NamedKeyDict[Dimension, str]:
+    def dimensions(self) -> NamedKeyMapping[Dimension, str]:
         raise NotImplementedError()
 
     @property
@@ -253,7 +253,10 @@ class QuerySpec:
         # are not already covered by other tables we've included.
         parameters_by_table = stage1.finish()
 
-        # TODO: stage 2
+        # Stage 2: Actually build the query with SQLAlchemy objects.
+        # Now that we know the tables we'll join in, this is fairly simple;
+        # it's just translating the data structures in the QuerySpec and
+        # stage 1 builder into SQL code.
         stage2 = _QueryBuilderStage2()
         for table, parameters in parameters_by_table.items():
             stage2.join(table, parameters)
