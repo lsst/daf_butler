@@ -281,15 +281,15 @@ class NamedValueAbstractSet(AbstractSet[K_co]):
         raise NotImplementedError()
 
     @abstractmethod
-    def __getitem__(self, name: str) -> K_co:
+    def __getitem__(self, key: Union[str, K_co]) -> K_co:
         raise NotImplementedError()
 
-    def get(self, name: str, default: Any = None) -> Any:
+    def get(self, key: Union[str, K_co], default: Any = None) -> Any:
         """Return the element with the given name, or ``default`` if
         no such element is present.
         """
         try:
-            return self[name]
+            return self[key]
         except KeyError:
             return default
 
@@ -451,12 +451,18 @@ class NamedValueSet(NamedValueMutableSet[K]):
     def issuperset(self, other: AbstractSet[K]) -> bool:
         return self >= other
 
-    def __getitem__(self, name: str) -> K:
-        return self._dict[name]
+    def __getitem__(self, key: Union[str, K]) -> K:
+        if isinstance(key, str):
+            return self._dict[key]
+        else:
+            return self._dict[key.name]
 
-    def get(self, name: str, default: Any = None) -> Any:
+    def get(self, key: Union[str, K], default: Any = None) -> Any:
         # Docstring inherited
-        return self._dict.get(name, default)
+        if isinstance(key, str):
+            return self._dict.get(key, default)
+        else:
+            return self._dict.get(key.name, default)
 
     def __delitem__(self, name: str) -> None:
         del self._dict[name]
