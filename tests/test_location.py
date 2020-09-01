@@ -24,6 +24,7 @@ import unittest
 import os.path
 import posixpath
 import pickle
+import pathlib
 
 from lsst.daf.butler import LocationFactory, ButlerURI
 from lsst.daf.butler.core._butlerUri import os2posix, posix2os
@@ -147,6 +148,25 @@ class LocationTestCase(unittest.TestCase):
         self.assertEqual(uri4, uri3)
         uri4 = copy.deepcopy(uri3)
         self.assertEqual(uri4, uri3)
+
+    def testUriRoot(self):
+        os_path_root = pathlib.Path(__file__).absolute().root
+        rootUris = (os_path_root, "s3://bucket", "file://localhost/", "https://a.b.com")
+        for uri_str in rootUris:
+            uri = ButlerURI(uri_str, forceDirectory=True)
+            self.assertEqual(uri.relativeToPathRoot, "./", f"Testing uri: {uri}")
+
+        example_local_file = os.path.join(os_path_root, "a", "b", "c")
+        uriStrings = (
+            ("file://localhost/file.ext", "file.ext"),
+            (example_local_file, os.path.join("a", "b", "c")),
+            ("s3://bucket/path/file.ext", "path/file.ext"),
+            ("https://host.com/a/b/c.d", "a/b/c.d"),
+        )
+
+        for uri_str, result in uriStrings:
+            uri = ButlerURI(uri_str)
+            self.assertEqual(uri.relativeToPathRoot, result)
 
     def testUriJoin(self):
         uri = ButlerURI("a/b/c/d", forceDirectory=True, forceAbsolute=False)
