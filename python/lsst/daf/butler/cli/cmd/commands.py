@@ -119,7 +119,8 @@ def query_collections(*args, **kwargs):
 
 @click.command()
 @repo_argument(required=True)
-@glob_argument()
+@glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
+                    "dataset types to return.")
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
 @click.option("--components/--no-components",
               default=None,
