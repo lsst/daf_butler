@@ -54,7 +54,7 @@ def queryDatasetTypes(repo, verbose, glob, components):
     verbose : `bool`
         If false only return the name of the dataset types. If false return
         name, dimensions, and storage class of each dataset type.
-    glob : [`str`]
+    glob : iterable [`str`]
         A list of glob-style search string that fully or partially identify
         the dataset type names to search for.
     components : `bool` or `None`
@@ -71,11 +71,10 @@ def queryDatasetTypes(repo, verbose, glob, components):
         collection names.
     """
     butler = Butler(repo)
-    kwargs = dict()
+    kwargs = {}
     if glob:
         kwargs['expression'] = [_translateExpr(g) for g in glob]
-    kwargs['components'] = components
-    datasetTypes = butler.registry.queryDatasetTypes(**kwargs)
+    datasetTypes = butler.registry.queryDatasetTypes(components=components, **kwargs)
     if verbose:
         info = [dict(name=datasetType.name,
                      dimensions=list(datasetType.dimensions.names),
