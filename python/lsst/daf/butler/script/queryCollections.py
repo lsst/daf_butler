@@ -20,9 +20,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .. import Butler
+from ..core.utils import globToRegex
 
 
-def queryCollections(repo, collection_type, flatten_chains, include_chains):
+def queryCollections(repo, glob, collection_type, flatten_chains, include_chains):
     """Get the collections whose names match an expression.
 
     Parameters
@@ -30,6 +31,9 @@ def queryCollections(repo, collection_type, flatten_chains, include_chains):
     repo : `str`
         URI to the location of the repo or URI to a config file describing the
         repo and its location.
+    glob : iterable [`str`]
+        A list of glob-style search string that fully or partially identify
+        the dataset type names to search for.
     collection_type : `CollectionType` or `None`
         If provided, only return collections of this type.
     flatten_chains : `bool`
@@ -43,11 +47,18 @@ def queryCollections(repo, collection_type, flatten_chains, include_chains):
     Returns
     -------
     collections : `dict` [`str`, [`str`]]
-        A dict whose key is 'collections' and whose value is a list of
+        A dict whose key is "collections" and whose value is a list of
         collection names.
     """
     butler = Butler(repo)
+    expression = globToRegex(glob)
+    # Only pass expression to queryCollections if there is an expression to
+    # apply; otherwise let queryCollections use its default value.
+    kwargs = {}
+    if expression:
+        kwargs["expression"] = expression
     collections = butler.registry.queryCollections(collectionType=collection_type,
                                                    flattenChains=flatten_chains,
-                                                   includeChains=include_chains)
-    return {'collections': list(collections)}
+                                                   includeChains=include_chains,
+                                                   **kwargs)
+    return {"collections": list(collections)}

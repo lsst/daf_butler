@@ -102,6 +102,8 @@ def config_validate(*args, **kwargs):
 
 @click.command(short_help="Search for collections.")
 @repo_argument(required=True)
+@glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
+                    "collections to return.")
 @collection_type_option()
 @click.option("--flatten-chains/--no-flatten-chains",
               help="Recursively get the child collections of matching CHAINED collections. Default is "

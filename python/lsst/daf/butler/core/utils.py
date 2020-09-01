@@ -36,7 +36,9 @@ __all__ = (
 import errno
 import os
 import builtins
+import fnmatch
 import functools
+import logging
 import re
 from typing import (
     Any,
@@ -47,12 +49,16 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Pattern,
     Type,
     TypeVar,
     Union,
 )
 
 from lsst.utils import doImport
+
+
+_LOG = logging.getLogger(__name__.partition(".")[2])
 
 
 def safeMakeDir(directory: str) -> None:
@@ -344,3 +350,25 @@ def findFileResources(values: Iterable[str], regex: Optional[str] = None) -> Lis
         else:
             resources.append(location)
     return resources
+
+
+def globToRegex(expressions: List[str]) -> List[Pattern[str]]:
+    """Translate glob-style search terms to regex.
+
+    If a stand-alone '*' is found in ``expressions`` then an empty list will be
+    returned, meaning there are no pattern constraints.
+
+    Parameters
+    ----------
+    expressions : `list` [`str`]
+        A list of glob-style pattern strings to convert.
+
+    Returns
+    -------
+    expressions : `list` [`str`]
+        A list of regex Patterns.
+    """
+    if "*" in expressions:
+        _LOG.warning("Found a '*' in the glob terms, returning zero search restrictions.")
+        return list()
+    return [re.compile(fnmatch.translate(e)) for e in expressions]
