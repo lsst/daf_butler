@@ -31,3 +31,7 @@ glob_argument = MWArgumentDecorator("glob",
                                     nargs=-1)
 
 repo_argument = MWArgumentDecorator("repo")
+
+locations_argument = MWArgumentDecorator("locations",
+                                         callback=split_commas,
+                                         nargs=-1)

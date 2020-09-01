@@ -19,12 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from collections import Counter, namedtuple
+from glob import glob
+import os
 import unittest
-from collections import namedtuple
 
-from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton
+from lsst.daf.butler.core.utils import findFileResources, iterable, getFullTypeName, Singleton
 from lsst.daf.butler import Formatter, Registry
 from lsst.daf.butler import NamedKeyDict, StorageClass
+
+
+TESTDIR = os.path.dirname(__file__)
 
 
 class IterableTestCase(unittest.TestCase):
@@ -162,6 +167,39 @@ class TestButlerUtils(unittest.TestCase):
 
         for item, typeName in tests:
             self.assertEqual(getFullTypeName(item), typeName)
+
+
+class FindFileResourcesTestCase(unittest.TestCase):
+
+    def test_getSingleFile(self):
+        """Test getting a file by its file name."""
+        filename = os.path.join(TESTDIR, "config/basic/butler.yaml")
+        self.assertEqual([filename], findFileResources([filename]))
+
+    def test_getAllFiles(self):
+        """Test getting all the files by not passing a regex."""
+        expected = Counter([p for p in glob(os.path.join(TESTDIR, "config", "**"), recursive=True)
+                            if os.path.isfile(p)])
+        self.assertNotEqual(len(expected), 0)  # verify some files were found
+        files = Counter(findFileResources([os.path.join(TESTDIR, "config")]))
+        self.assertEqual(expected, files)
+
+    def test_getAllFilesRegex(self):
+        """Test getting all the files with a regex-specified file ending."""
+        expected = Counter(glob(os.path.join(TESTDIR, "config", "**", "*.yaml"), recursive=True))
+        self.assertNotEqual(len(expected), 0)  # verify some files were found
+        files = Counter(findFileResources([os.path.join(TESTDIR, "config")], r"\.yaml\b"))
+        self.assertEqual(expected, files)
+
+    def test_multipleInputs(self):
+        """Test specifying more than one location to find a files."""
+        expected = Counter(glob(os.path.join(TESTDIR, "config", "basic", "**", "*.yaml"), recursive=True))
+        expected.update(glob(os.path.join(TESTDIR, "config", "templates", "**", "*.yaml"), recursive=True))
+        self.assertNotEqual(len(expected), 0)  # verify some files were found
+        files = Counter(findFileResources([os.path.join(TESTDIR, "config", "basic"),
+                                           os.path.join(TESTDIR, "config", "templates")],
+                                          r"\.yaml\b"))
+        self.assertEqual(expected, files)
 
 
 if __name__ == "__main__":

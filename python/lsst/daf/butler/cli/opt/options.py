@@ -85,6 +85,9 @@ long_log_option = MWOptionDecorator("--long-log",
                                     is_flag=True)
 
 
+regex_option = MWOptionDecorator("--regex")
+
+
 run_option = MWOptionDecorator("--output-run",
                                help="The name of the run datasets should be output to.")
 
