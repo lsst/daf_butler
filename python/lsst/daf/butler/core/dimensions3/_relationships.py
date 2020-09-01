@@ -31,6 +31,7 @@ from typing import (
     Optional,
     Tuple,
     TYPE_CHECKING,
+    Union,
 )
 
 import sqlalchemy
@@ -87,6 +88,9 @@ class RelationshipEndpoint(ABC):
     name: str
 
 
+RelationshipEndpointKey = Union[str, RelationshipEndpoint]
+
+
 class RelationshipEndpointDatabaseRepresentation(ABC):
 
     @classmethod
@@ -112,7 +116,7 @@ class RelationshipLink(Tuple[RelationshipEndpoint, RelationshipEndpoint]):
             return super().__new__(cls, (second, first))  # type: ignore
         else:
             raise ValueError(
-                f"Identical or baf vertices for edge: {first.name}, {second.name}."
+                f"Identical or bad endpoints for link: {first.name}, {second.name}."
             )
 
     @property

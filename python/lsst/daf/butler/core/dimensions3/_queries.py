@@ -24,13 +24,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from dataclasses import dataclass
+from contextlib import contextmanager
+import dataclasses
 import itertools
 from typing import (
     AbstractSet,
     Callable,
+    ContextManager,
     Dict,
     FrozenSet,
+    Generator,
     Generic,
     Iterable,
     Iterator,
@@ -42,14 +45,18 @@ from typing import (
     Type,
     TypeVar,
 )
+import uuid
 
 import sqlalchemy
 
+from .. import ddl
 from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
+from ...registry.interfaces import Database
 from ._relationships import (
     RelationshipCategory,
     RelationshipEndpoint,
     RelationshipEndpointDatabaseRepresentation,
+    RelationshipEndpointKey,
     RelationshipFamily,
     RelationshipLink,
 )
@@ -61,7 +68,7 @@ from ._elements import (
 )
 
 
-@dataclass
+@dataclasses.dataclass
 class LogicalTableSelectParameters:
     extra: Set[str]
     relationships: Dict[RelationshipCategory, Type[RelationshipEndpointDatabaseRepresentation]]
@@ -99,9 +106,15 @@ class RelationshipLinkGenerator(ABC):
     ) -> Iterator[RelationshipLink]:
         raise NotImplementedError()
 
+    @abstractmethod
+    def copy(self) -> RelationshipLinkGenerator:
+        raise NotImplementedError()
+
 
 class IntersectAsNeeded(RelationshipLinkGenerator):
-    overrides: NamedKeyMapping[RelationshipFamily, LogicalTable]
+
+    def __init__(self) -> None:
+        self.overrides = {}
 
     def visit(
         self,
@@ -110,19 +123,20 @@ class IntersectAsNeeded(RelationshipLinkGenerator):
         is_needed: Callable[[NamedValueAbstractSet[Dimension]], bool],
     ) -> Iterator[RelationshipLink]:
         # Group endpoints by family.
-        endpoints_by_family: NamedKeyDict[RelationshipFamily, List[RelationshipEndpoint]] = NamedKeyDict()
+        endpoints_by_family: NamedKeyDict[RelationshipFamily, NamedValueSet[RelationshipEndpoint]] \
+            = NamedKeyDict()
         for endpoint in endpoints:
             family = endpoint.families.get(category)
-            if family is not None and family not in self.overrides:
-                endpoints_by_family.setdefault(family, []).append(endpoint)
+            if family is not None and family.name not in self.overrides:
+                endpoints_by_family.setdefault(family, NamedValueSet()).add(endpoint)
         # Select the best endpoint from each family.
         best_endpoints_by_family: NamedKeyDict[RelationshipFamily, RelationshipEndpoint] = NamedKeyDict()
         for family, endpoints in endpoints_by_family.items():
-            override = self.overrides.get(family)
+            override = self.overrides.get(family.name)
             if override is not None:
-                best_endpoints_by_family[family] = override
+                best_endpoints_by_family[family] = endpoints[override]
             elif len(endpoints) == 1:
-                best_endpoints_by_family[family] = endpoints[0]
+                (best_endpoints_by_family[family],) = endpoints
             else:
                 best_endpoints_by_family[family] = family.choose(endpoints)
         # Yield combinatorial links that are needed according to the callback.
@@ -134,9 +148,19 @@ class IntersectAsNeeded(RelationshipLinkGenerator):
             else:
                 yield RelationshipLink(e1, e2)
 
+    def copy(self) -> RelationshipLinkGenerator:
+        result = IntersectAsNeeded()
+        result.overrides.update(self.overrides)
+        return result
+
+    overrides: Dict[str, RelationshipEndpointKey]
+
 
 class ManualLinks(RelationshipLinkGenerator):
-    links: Set[RelationshipLink]
+    links: Set[Tuple[RelationshipEndpointKey, RelationshipEndpointKey]]
+
+    def __init__(self) -> None:
+        self.links = set()
 
     def visit(
         self,
@@ -144,23 +168,44 @@ class ManualLinks(RelationshipLinkGenerator):
         category: RelationshipCategory,
         is_needed: Callable[[NamedValueAbstractSet[Dimension]], bool],
     ) -> Iterator[RelationshipLink]:
-        yield from self.links
+        # Convert input string/endpoint tuples to RelationshipLinks, and use a
+        # set to deduplicate them.
+        endpoints = NamedValueSet(endpoints)
+        standardized_links = {
+            RelationshipLink(endpoints[key1], endpoints[key2]) for key1, key2 in self.links
+        }
+        yield from standardized_links
+
+    def copy(self) -> RelationshipLinkGenerator:
+        result = ManualLinks()
+        result.links.update(self.links)
+        return result
 
 
-@dataclass
-class QueryWhereExpression:
+class QueryWhereExpression(ABC):
 
-    dimensions: NamedValueAbstractSet[Dimension]
-    """All dimensions referenced by the expression, including dimensions
-    recursively referenced by the keys of `metadata` (`NamedValueAbstractSet`
-    of `Dimension`).
-    """
+    @staticmethod
+    def from_str(expression: str) -> QueryWhereExpression:
+        raise NotImplementedError("TODO")
 
-    extra: Mapping[str, Set[str]]
-    """All fields referenced by the expression, other than the primary keys of
-    dimensions (`Mapping` mapping the name of a `LogicalTable` or
-    `DimensionElement` to a `set` of field names).
-    """
+    @abstractmethod
+    def get_referenced_dimensions(self, universe: DimensionUniverse) -> NamedValueAbstractSet[Dimension]:
+        """All dimensions referenced by the expression (including those whose
+        names appear as keys in the dict returned by
+        `get_reference_extra_columns`).
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_referenced_extra_columns(self) -> Mapping[str, Set[str]]:
+        """All fields referenced by the expression, other than the primary keys
+        of dimensions (`Mapping` mapping the name of a `LogicalTable` or
+        `DimensionElement` to a `set` of field names).
+        """
+        raise NotImplementedError()
+
+    def __and__(self, other: QueryWhereExpression) -> QueryWhereExpression:
+        raise NotImplementedError("TODO")
 
 
 class DimensionManager(ABC):
@@ -210,6 +255,7 @@ class SupersetAccumulator(Generic[K]):
         yield from self._data
 
 
+@dataclasses.dataclass
 class QuerySpec:
 
     @property
@@ -219,7 +265,7 @@ class QuerySpec:
     @property
     def full_dimensions(self) -> DimensionGroup:
         names = set(self.requested_dimensions.names)
-        names.update(self.where_expression.dimensions.names)
+        names.update(self.where_expression.get_referenced_dimensions(self.universe).names)
         for table in self.fixed_tables:
             names.update(table.dimensions.names)
         return self.universe.group(names)
@@ -242,7 +288,8 @@ class QuerySpec:
         # columns referenced by the WHERE clause are included.  That could be
         # a fixed table already added, or a dimension element table that we'll
         # add here.
-        for table_name, extra_columns in self.where_expression.extra.items():
+        where_extra_columns = self.where_expression.get_referenced_extra_columns()
+        for table_name, extra_columns in where_extra_columns.items():
             stage1.ensure_extra_columns(table_name, extra_columns)
         # Similarly ensure any tables with extra columns referenced by the
         # SELECT clause are included.  First group those by table name...
@@ -250,7 +297,7 @@ class QuerySpec:
         for table_name, extra_column in self.select_extra.values():
             select_extra_by_table[table_name].add(extra_column)
         # ...then ensure those tables are added with those extra columns.
-        for table_name, extra_columns in self.where_expression.extra.items():
+        for table_name, extra_columns in where_extra_columns.items():
             stage1.ensure_extra_columns(table_name, extra_columns)
         # Finally add any dimension elements whose keys or relationships
         # are not already covered by other tables we've included.
@@ -266,10 +313,12 @@ class QuerySpec:
         return stage2.finish(self.requested_dimensions, self.select_extra, self.where_expression)
 
     requested_dimensions: DimensionGroup
-    link_generators: Dict[RelationshipCategory, RelationshipLinkGenerator]
-    select_extra: Mapping[str, Tuple[str, str]]
-    where_expression: QueryWhereExpression
-    fixed_tables: List[LogicalTable]
+    link_generators: Dict[RelationshipCategory, RelationshipLinkGenerator] = dataclasses.field(
+        default_factory=lambda: defaultdict(IntersectAsNeeded)
+    )
+    select_extra: Dict[str, Tuple[str, str]] = dataclasses.field(default_factory=dict)
+    where_expression: QueryWhereExpression = dataclasses.field(default_factory=QueryWhereExpression)
+    fixed_tables: List[LogicalTable] = dataclasses.field(default_factory=list)
 
 
 class _QueryBuilderStage1:
@@ -376,18 +425,97 @@ class _QueryBuilderStage2:
         return sqlalchemy.sql.select(select_columns).select_from(self._from_clause)  # TODO: where clause
 
 
-class DataCoordinateQuery:
+class SelectableSqlWrapper(ABC):
 
-    def __init__(
+    __slots__ = ("_is_unique",)
+
+    def __init__(self, is_unique: bool):
+        self._is_unique = is_unique
+
+    @staticmethod
+    def from_query(sql: sqlalchemy.sql.Select, *, name: Optional[str] = None) -> SelectableSqlWrapper:
+        return _SelectQuerySqlWrapper(sql, name=name)
+
+    @staticmethod
+    def from_table(sql: sqlalchemy.schema.Table) -> SelectableSqlWrapper:
+        return _TableSqlWrapper(sql)
+
+    @abstractmethod
+    def as_from_clause(self) -> sqlalchemy.sql.FromClause:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def as_select_query(self) -> sqlalchemy.sql.Select:
+        raise NotImplementedError()
+
+    def is_unique(self) -> bool:
+        return self._is_unique
+
+    def unique(self) -> SelectableSqlWrapper:
+        if self._is_unique:
+            return self
+        else:
+            return self.from_query(self.as_select_query().distinct())
+
+    @abstractmethod
+    def materialize(
         self,
-        dimensions: DimensionGroup, *,
-        links: Optional[Mapping[RelationshipCategory, RelationshipLinkGenerator]] = None,
-        where: Optional[QueryWhereExpression] = None,
-        others: Iterable[DataCoordinateQuery] = (),
-        # TODO: managers
-    ):
-        # TODO
-        pass
+        table_spec: ddl.TableSpec,
+        db: Database
+    ) -> ContextManager[SelectableSqlWrapper]:
+        raise NotImplementedError()
 
-    def as_table(self) -> LogicalTable:
-        raise NotImplementedError("TODO")
+
+class _SelectQuerySqlWrapper(SelectableSqlWrapper):
+
+    __slots__ = ("_sql", "_name",)
+
+    def __init__(self, sql: sqlalchemy.sql.Select, *, name: Optional[str] = None,
+                 is_unique: bool = False):
+        super().__init__(is_unique)
+        self._sql = sql
+        self._name = name
+
+    def as_from_clause(self) -> sqlalchemy.sql.FromClause:
+        if self._name is None:
+            name = f"qry_{uuid.uuid4().hex}"
+        else:
+            name = self._name
+        return self._sql.alias(name)
+
+    def as_select_query(self) -> sqlalchemy.sql.Select:
+        return self._sql
+
+    @contextmanager
+    def materialize(
+        self,
+        table_spec: ddl.TableSpec,
+        db: Database
+    ) -> Generator[SelectableSqlWrapper, None, None]:
+        table = db.makeTemporaryTable(table_spec, name=self._name)
+        db.insert(table, select=self.as_select_query(), names=table_spec.fields.names)
+        yield _TableSqlWrapper(table, is_unique=self.is_unique())
+        db.dropTemporaryTable(table)
+
+
+class _TableSqlWrapper(SelectableSqlWrapper):
+
+    __slots__ = ("_sql",)
+
+    def __init__(self, sql: sqlalchemy.schema.Table, is_unique: bool = False):
+        super().__init__(is_unique)
+        self._sql = sql
+
+    def as_from_clause(self) -> sqlalchemy.sql.FromClause:
+        return self._sql
+
+    def as_select_query(self) -> sqlalchemy.sql.Select:
+        return self._sql.select()
+
+    @contextmanager
+    def materialize(
+        self,
+        table_spec: ddl.TableSpec,
+        db: Database
+    ) -> Generator[SelectableSqlWrapper, None, None]:
+        yield self
