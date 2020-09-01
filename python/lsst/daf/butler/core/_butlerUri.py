@@ -314,6 +314,17 @@ class ButlerURI:
         return urllib.parse.unquote(relToRoot)
 
     @property
+    def is_root(self) -> bool:
+        """`True` if this URI points to the root of the network location.
+
+        This means that the path components refers to the top level.
+        """
+        relpath = self.relativeToPathRoot
+        if relpath == "./":
+            return True
+        return False
+
+    @property
     def fragment(self) -> str:
         """The fragment component of the URI."""
         return self._uri.fragment

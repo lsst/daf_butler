@@ -155,6 +155,7 @@ class LocationTestCase(unittest.TestCase):
         for uri_str in rootUris:
             uri = ButlerURI(uri_str, forceDirectory=True)
             self.assertEqual(uri.relativeToPathRoot, "./", f"Testing uri: {uri}")
+            self.assertTrue(uri.is_root, f"Testing URI {uri} is a root URI")
 
         example_local_file = os.path.join(os_path_root, "a", "b", "c")
         uriStrings = (
