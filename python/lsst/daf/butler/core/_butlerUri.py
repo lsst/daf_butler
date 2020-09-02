@@ -314,6 +314,17 @@ class ButlerURI:
         return urllib.parse.unquote(relToRoot)
 
     @property
+    def is_root(self) -> bool:
+        """`True` if this URI points to the root of the network location.
+
+        This means that the path components refers to the top level.
+        """
+        relpath = self.relativeToPathRoot
+        if relpath == "./":
+            return True
+        return False
+
+    @property
     def fragment(self) -> str:
         """The fragment component of the URI."""
         return self._uri.fragment
@@ -1111,7 +1122,10 @@ class ButlerS3URI(ButlerURI):
 
     def exists(self) -> bool:
         # s3utils itself imports ButlerURI so defer this import
-        from .s3utils import s3CheckFileExists
+        from .s3utils import s3CheckFileExists, bucketExists
+        if self.is_root:
+            # Only check for the bucket since the path is irrelevant
+            return bucketExists(self.netloc)
         exists, _ = s3CheckFileExists(self, client=self.client)
         return exists
 
