@@ -75,7 +75,7 @@ def iterable(a: Any) -> Iterable[Any]:
       (e.g. ``[i for i in a]``)
     - a `str` -> return single element iterable (e.g. ``[a]``)
     - a Mapping -> return single element iterable
-    - not iterable -> return single elment iterable (e.g. ``[a]``).
+    - not iterable -> return single element iterable (e.g. ``[a]``).
 
     Parameters
     ----------
