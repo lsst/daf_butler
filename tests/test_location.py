@@ -150,17 +150,17 @@ class LocationTestCase(unittest.TestCase):
         self.assertEqual(uri4, uri3)
 
     def testUriRoot(self):
-        os_path_root = pathlib.Path(__file__).absolute().root
-        rootUris = (os_path_root, "s3://bucket", "file://localhost/", "https://a.b.com")
+        osPathRoot = pathlib.Path(__file__).absolute().root
+        rootUris = (osPathRoot, "s3://bucket", "file://localhost/", "https://a.b.com")
         for uri_str in rootUris:
             uri = ButlerURI(uri_str, forceDirectory=True)
             self.assertEqual(uri.relativeToPathRoot, "./", f"Testing uri: {uri}")
             self.assertTrue(uri.is_root, f"Testing URI {uri} is a root URI")
 
-        example_local_file = os.path.join(os_path_root, "a", "b", "c")
+        exampleLocalFile = os.path.join(osPathRoot, "a", "b", "c")
         uriStrings = (
             ("file://localhost/file.ext", "file.ext"),
-            (example_local_file, os.path.join("a", "b", "c")),
+            (exampleLocalFile, os.path.join("a", "b", "c")),
             ("s3://bucket/path/file.ext", "path/file.ext"),
             ("https://host.com/a/b/c.d", "a/b/c.d"),
         )
