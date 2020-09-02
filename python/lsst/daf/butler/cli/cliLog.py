@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
+import os
 
 try:
     import lsst.log as lsstLog
@@ -42,7 +43,7 @@ class CliLog:
     initialization so that lsst.log is a handler for python logging.
 
     Handles log uninitialization, which allows command line interface code that
-    initializes logging to be run unit tests that run in batches, without
+    initializes logging to run unit tests that execute in batches, without
     affecting other unit tests. """
 
     defaultLsstLogLevel = lsstLog.FATAL if lsstLog is not None else None
@@ -78,8 +79,11 @@ class CliLog:
         cls._initialized = True
 
         if lsstLog is not None:
-            # global logging config
-            lsstLog.configure_prop(_LOG_PROP.format(cls.longLogFmt if longlog else cls.normalLogFmt))
+            # Initialize global logging config. Skip if the env var
+            # LSST_LOG_CONFIG exists. The file it points to would already
+            # configure lsst.log.
+            if not os.path.isfile(os.environ.get("LSST_LOG_CONFIG", "")):
+                lsstLog.configure_prop(_LOG_PROP.format(cls.longLogFmt if longlog else cls.normalLogFmt))
             cls._recordComponentSetting(None)
             pythonLogger = logging.getLogger()
             pythonLogger.setLevel(logging.INFO)
