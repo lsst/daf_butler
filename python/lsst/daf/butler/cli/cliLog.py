@@ -63,9 +63,9 @@ class CliLog:
         """
         if cls._initialized:
             # Unit tests that execute more than one command do end up
-            # calling this fucntion multiple times in one program execution,
+            # calling this function multiple times in one program execution,
             # so do log a debug but don't log an error or fail, just make the
-            # re-initalization a no-op.
+            # re-initialization a no-op.
             log = logging.getLogger(__name__.partition(".")[2])
             log.debug("Log is already initialized, returning without re-initializing.")
             return
@@ -109,9 +109,9 @@ class CliLog:
         If the lsst.log handler was added to the python root logger's handlers
         in `initLog`, it will be removed here.
 
-        For each loger level that was set by this class, sets that logger's
+        For each logger level that was set by this class, sets that logger's
         level to the value it was before this class set it. For lsst.log, if a
-        component level was uninitialzed, it will be set to
+        component level was uninitialized, it will be set to
         `Log.defaultLsstLogLevel` because there is no log4cxx api to set a
         component back to an uninitialized state.
         """

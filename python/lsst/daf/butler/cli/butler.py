@@ -50,7 +50,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         """localCmdPkg identifies the location of the commands that are in this
         package. `getLocalCommands` assumes that the commands can be found in
         `localCmdPkg.__all__`, if this is not the case then getLocalCommands
-        should be overrideen.
+        should be overridden.
 
         Returns
         -------
@@ -62,7 +62,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
     def getLocalCommands(self):
         """Get the commands offered by the local package. This assumes that the
         commands can be found in `localCmdPkg.__all__`, if this is not the case
-        then this function should be overrideen.
+        then this function should be overridden.
 
         Returns
         -------
