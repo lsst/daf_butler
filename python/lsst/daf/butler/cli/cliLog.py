@@ -38,6 +38,12 @@ log4j.appender.A1.layout.ConversionPattern={}
 
 
 class CliLog:
+    """Interface for managing python logging and lsst.log. Handles
+    initialization so that lsst.log is a handler for python logging.
+
+    Handles log uninitialization, which allows command line interface code that
+    initializes logging to be run unit tests that run in batches, without
+    affecting other unit tests. """
 
     defaultLsstLogLevel = lsstLog.FATAL if lsstLog is not None else None
 
