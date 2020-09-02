@@ -51,6 +51,10 @@ mockEnvVar = {mockEnvVarKey: "1"}
 typeStrAcceptsMultiple = "TEXT ..."
 typeStrAcceptsSingle = "TEXT"
 
+# For parameters that support key-value inputs, this defines the separator
+# for those inputs.
+split_kv_separator = "="
+
 
 def textTypeStr(multiple):
     """Get the text type string for CLI help documentation.
@@ -67,11 +71,6 @@ def textTypeStr(multiple):
         The type string to use.
     """
     return typeStrAcceptsMultiple if multiple else typeStrAcceptsSingle
-
-
-# For parameters that support key-value inputs, this defines the separator
-# for those inputs.
-split_kv_separator = "="
 
 
 class Mocker:

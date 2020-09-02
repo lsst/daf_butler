@@ -19,28 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import fnmatch
-import re
-
 from .. import Butler
-
-
-def _translateExpr(expr):
-    """Translate glob-style search terms to regex.
-
-    Parameters
-    ----------
-    expr : `str` or `...`
-        A glob-style pattern string to convert, or an Ellipsis.
-
-    Returns
-    -------
-    expressions : [`str` or `...`]
-        A list of expressions that are either regex or Ellipsis.
-    """
-    if expr == ...:
-        return expr
-    return re.compile(fnmatch.translate(expr))
+from ..core.utils import globToRegex
 
 
 def queryDatasetTypes(repo, verbose, glob, components):
@@ -54,7 +34,7 @@ def queryDatasetTypes(repo, verbose, glob, components):
     verbose : `bool`
         If false only return the name of the dataset types. If false return
         name, dimensions, and storage class of each dataset type.
-    glob : [`str`]
+    glob : iterable [`str`]
         A list of glob-style search string that fully or partially identify
         the dataset type names to search for.
     components : `bool` or `None`
@@ -67,15 +47,17 @@ def queryDatasetTypes(repo, verbose, glob, components):
     Returns
     -------
     collections : `dict` [`str`, [`str`]]
-        A dict whose key is 'datasetTypes' and whose value is a list of
+        A dict whose key is "datasetTypes" and whose value is a list of
         collection names.
     """
     butler = Butler(repo)
-    kwargs = dict()
-    if glob:
-        kwargs['expression'] = [_translateExpr(g) for g in glob]
-    kwargs['components'] = components
-    datasetTypes = butler.registry.queryDatasetTypes(**kwargs)
+    expression = globToRegex(glob)
+    # Only pass expression to queryDatasetTypes if there is an expression to
+    # apply; otherwise let queryDatasetTypes use its default value.
+    kwargs = {}
+    if expression:
+        kwargs["expression"] = expression
+    datasetTypes = butler.registry.queryDatasetTypes(components=components, **kwargs)
     if verbose:
         info = [dict(name=datasetType.name,
                      dimensions=list(datasetType.dimensions.names),
@@ -83,4 +65,4 @@ def queryDatasetTypes(repo, verbose, glob, components):
                 for datasetType in datasetTypes]
     else:
         info = [datasetType.name for datasetType in datasetTypes]
-    return {'datasetTypes': info}
+    return {"datasetTypes": info}

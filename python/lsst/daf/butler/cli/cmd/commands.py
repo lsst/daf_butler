@@ -102,6 +102,8 @@ def config_validate(*args, **kwargs):
 
 @click.command(short_help="Search for collections.")
 @repo_argument(required=True)
+@glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
+                    "collections to return.")
 @collection_type_option()
 @click.option("--flatten-chains/--no-flatten-chains",
               help="Recursively get the child collections of matching CHAINED collections. Default is "
@@ -119,7 +121,8 @@ def query_collections(*args, **kwargs):
 
 @click.command()
 @repo_argument(required=True)
-@glob_argument()
+@glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
+                    "dataset types to return.")
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
 @click.option("--components/--no-components",
               default=None,

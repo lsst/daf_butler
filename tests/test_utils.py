@@ -22,9 +22,10 @@
 from collections import Counter, namedtuple
 from glob import glob
 import os
+import re
 import unittest
 
-from lsst.daf.butler.core.utils import findFileResources, iterable, getFullTypeName, Singleton
+from lsst.daf.butler.core.utils import findFileResources, getFullTypeName, globToRegex, iterable, Singleton
 from lsst.daf.butler import Formatter, Registry
 from lsst.daf.butler import NamedKeyDict, StorageClass
 
@@ -200,6 +201,37 @@ class FindFileResourcesTestCase(unittest.TestCase):
                                            os.path.join(TESTDIR, "config", "templates")],
                                           r"\.yaml\b"))
         self.assertEqual(expected, files)
+
+
+class GlobToRegexTestCase(unittest.TestCase):
+
+    def testStarInList(self):
+        """Test that if a one of the items in the expression list is a star
+        (stand-alone) then no search terms are returned (which implies no
+        restrictions) """
+        self.assertEqual(globToRegex(["foo", "*", "bar"]), [])
+
+    def testGlobList(self):
+        """Test that a list of glob strings converts as expected to a regex and
+        returns in the expected list.
+        """
+        # test an absolute string
+        patterns = globToRegex(["bar"])
+        self.assertEquals(len(patterns), 1)
+        self.assertTrue(bool(re.fullmatch(patterns[0], "bar")))
+        self.assertIsNone(re.fullmatch(patterns[0], "boz"))
+
+        # test leading & trailing wildcard in multiple patterns
+        patterns = globToRegex(["ba*", "*.fits"])
+        self.assertEquals(len(patterns), 2)
+        # check the "ba*" pattern:
+        self.assertTrue(bool(re.fullmatch(patterns[0], "bar")))
+        self.assertTrue(bool(re.fullmatch(patterns[0], "baz")))
+        self.assertIsNone(re.fullmatch(patterns[0], "boz.fits"))
+        # check the "*.fits" pattern:
+        self.assertTrue(bool(re.fullmatch(patterns[1], "bar.fits")))
+        self.assertTrue(re.fullmatch(patterns[1], "boz.fits"))
+        self.assertIsNone(re.fullmatch(patterns[1], "boz.hdf5"))
 
 
 if __name__ == "__main__":

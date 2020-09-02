@@ -39,6 +39,7 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
         return dict(repo=None,
                     collection_type=None,
                     flatten_chains=False,
+                    glob=(),
                     include_chains=None)
 
     @staticmethod
@@ -53,10 +54,11 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
 
     def test_all(self):
         """Test all parameters"""
-        self.run_test(["query-collections", "here",
+        self.run_test(["query-collections", "here", "foo*",
                        "--flatten-chains",
                        "--include-chains"],
                       self.makeExpected(repo="here",
+                                        glob=("foo*",),
                                         flatten_chains=True,
                                         include_chains=True))
 
@@ -65,15 +67,22 @@ class QueryCollectionsScriptTest(unittest.TestCase):
 
     def testGetCollections(self):
         run = "ingest/run"
-        tag = "ingest"
-        expected = {"collections": [run, tag]}
+        tag = "tag"
         runner = LogCliRunner()
         with runner.isolated_filesystem():
             butlerCfg = Butler.makeRepo("here")
             # the purpose of this call is to create some collections
             _ = Butler(butlerCfg, run=run, tags=[tag], collections=[tag])
+
+            # Verify collections that were created are found by
+            # query-collections.
             result = runner.invoke(cli, ["query-collections", "here"])
-            self.assertEqual(expected, yaml.safe_load(result.output))
+            self.assertEqual({"collections": [run, tag]}, yaml.safe_load(result.output))
+
+            # Verify that with a glob argument, that only collections whose
+            # name matches with the specified pattern are returned.
+            result = runner.invoke(cli, ["query-collections", "here", "t*"])
+            self.assertEqual({"collections": [tag]}, yaml.safe_load(result.output))
 
 
 if __name__ == "__main__":
