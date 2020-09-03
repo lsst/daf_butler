@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
+import os
 
 try:
     import lsst.log as lsstLog
@@ -38,6 +39,12 @@ log4j.appender.A1.layout.ConversionPattern={}
 
 
 class CliLog:
+    """Interface for managing python logging and lsst.log. Handles
+    initialization so that lsst.log is a handler for python logging.
+
+    Handles log uninitialization, which allows command line interface code that
+    initializes logging to run unit tests that execute in batches, without
+    affecting other unit tests. """
 
     defaultLsstLogLevel = lsstLog.FATAL if lsstLog is not None else None
 
@@ -63,17 +70,20 @@ class CliLog:
         """
         if cls._initialized:
             # Unit tests that execute more than one command do end up
-            # calling this fucntion multiple times in one program execution,
+            # calling this function multiple times in one program execution,
             # so do log a debug but don't log an error or fail, just make the
-            # re-initalization a no-op.
+            # re-initialization a no-op.
             log = logging.getLogger(__name__.partition(".")[2])
             log.debug("Log is already initialized, returning without re-initializing.")
             return
         cls._initialized = True
 
         if lsstLog is not None:
-            # global logging config
-            lsstLog.configure_prop(_LOG_PROP.format(cls.longLogFmt if longlog else cls.normalLogFmt))
+            # Initialize global logging config. Skip if the env var
+            # LSST_LOG_CONFIG exists. The file it points to would already
+            # configure lsst.log.
+            if not os.path.isfile(os.environ.get("LSST_LOG_CONFIG", "")):
+                lsstLog.configure_prop(_LOG_PROP.format(cls.longLogFmt if longlog else cls.normalLogFmt))
             cls._recordComponentSetting(None)
             pythonLogger = logging.getLogger()
             pythonLogger.setLevel(logging.INFO)
@@ -109,9 +119,9 @@ class CliLog:
         If the lsst.log handler was added to the python root logger's handlers
         in `initLog`, it will be removed here.
 
-        For each loger level that was set by this class, sets that logger's
+        For each logger level that was set by this class, sets that logger's
         level to the value it was before this class set it. For lsst.log, if a
-        component level was uninitialzed, it will be set to
+        component level was uninitialized, it will be set to
         `Log.defaultLsstLogLevel` because there is no log4cxx api to set a
         component back to an uninitialized state.
         """
