@@ -23,9 +23,10 @@ from __future__ import annotations
 __all__ = ("astropy_to_nsec", "nsec_to_astropy", "times_equal")
 
 import logging
+import warnings
 
 import astropy.time
-
+import astropy.utils.exceptions
 
 # These constants can be used by client code.
 # EPOCH is used to construct times as read from database, its precision is
@@ -73,8 +74,11 @@ def astropy_to_nsec(astropy_time: astropy.time.Time) -> int:
     after the max. time then it returns number corresponding to max. time.
     """
     # sometimes comparison produces warnings if input value is in UTC
-    # scale, transform it to TAI before doing anyhting
-    value = astropy_time.tai
+    # scale, transform it to TAI before doing anything but also trap
+    # warnings in case we are dealing with simulated data from the future
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+        value = astropy_time.tai
     # anything before epoch or after MAX_TIME is truncated
     if value < EPOCH:
         _LOG.warning("'%s' is earlier than epoch time '%s', epoch time will be used instead",
@@ -135,8 +139,12 @@ def times_equal(time1: astropy.time.Time,
     """
     # To compare we need them in common scale, for simplicity just
     # bring them both to TAI scale
-    time1 = time1.tai
-    time2 = time2.tai
+    # Hide any warnings from this conversion since they are not relevant
+    # to the equality
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+        time1 = time1.tai
+        time2 = time2.tai
     delta = (time2.jd1 - time1.jd1) + (time2.jd2 - time1.jd2)
     delta *= _NSEC_PER_DAY
     return abs(delta) < precision_nsec

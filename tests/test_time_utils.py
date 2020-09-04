@@ -23,6 +23,7 @@
 """
 
 import unittest
+import warnings
 
 from astropy.time import Time, TimeDelta
 from lsst.daf.butler import time_utils
@@ -52,6 +53,17 @@ class TimeTestCase(unittest.TestCase):
 
         value_max = time_utils.astropy_to_nsec(time_utils.MAX_TIME)
         self.assertEqual(value, value_max)
+
+        # Check that we do not warn inside our code for UTC in the future
+        with self.assertWarns(Warning):
+            time = Time("2101-01-01T00:00:00", format="isot", scale="utc")
+
+        # unittest can't test for no warnings so we run the test and
+        # trigger our own warning and count all the warnings
+        with self.assertWarns(Warning) as cm:
+            time_utils.astropy_to_nsec(time)
+            warnings.warn("deliberate")
+        self.assertEqual(str(cm.warning), "deliberate")
 
     def test_round_trip(self):
         """Test precision of round-trip conversion.

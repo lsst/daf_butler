@@ -21,6 +21,7 @@
 
 import unittest
 import itertools
+import warnings
 
 import astropy.time
 
@@ -124,6 +125,24 @@ class TimespanTestCase(unittest.TestCase):
         ts2 = Timespan(begin=astropy.time.Time('2013-06-17T13:34:10.775', scale='utc', format='isot'),
                        end=astropy.time.Time('2013-06-17T13:34:42.947', scale='utc', format='isot'))
         self.assertEqual(ts1, ts2, f"Compare {ts1} with {ts2}")
+
+    def testFuture(self):
+        """Check that we do not get warnings from future dates."""
+
+        # Astropy will give "dubious year" for UTC five years in the future
+        # so hide these expected warnings from the test output
+        with self.assertWarns(Warning):
+            ts1 = Timespan(begin=astropy.time.Time('2213-06-17 13:34:45.775000', scale='utc', format='iso'),
+                           end=astropy.time.Time('2213-06-17 13:35:17.947000', scale='utc', format='iso'))
+            ts2 = Timespan(begin=astropy.time.Time('2213-06-17 13:34:45.775000', scale='utc', format='iso'),
+                           end=astropy.time.Time('2213-06-17 13:35:17.947000', scale='utc', format='iso'))
+
+        # unittest can't test for no warnings so we run the test and
+        # trigger our own warning and count all the warnings
+        with self.assertWarns(Warning) as cm:
+            self.assertEqual(ts1, ts2)
+            warnings.warn("deliberate")
+        self.assertEqual(str(cm.warning), "deliberate")
 
 
 if __name__ == "__main__":
