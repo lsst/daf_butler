@@ -239,7 +239,9 @@ dimensions:
           name: science_program
           type: string
           length: 64
-          doc: Observing program (survey or proposal) identifier.
+          doc: >
+            Observing program (survey, proposal, engineering project)
+            identifier.
         -
           name: tracking_ra
           type: float
