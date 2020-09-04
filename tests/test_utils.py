@@ -217,13 +217,13 @@ class GlobToRegexTestCase(unittest.TestCase):
         """
         # test an absolute string
         patterns = globToRegex(["bar"])
-        self.assertEquals(len(patterns), 1)
+        self.assertEqual(len(patterns), 1)
         self.assertTrue(bool(re.fullmatch(patterns[0], "bar")))
         self.assertIsNone(re.fullmatch(patterns[0], "boz"))
 
         # test leading & trailing wildcard in multiple patterns
         patterns = globToRegex(["ba*", "*.fits"])
-        self.assertEquals(len(patterns), 2)
+        self.assertEqual(len(patterns), 2)
         # check the "ba*" pattern:
         self.assertTrue(bool(re.fullmatch(patterns[0], "bar")))
         self.assertTrue(bool(re.fullmatch(patterns[0], "baz")))
