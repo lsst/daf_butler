@@ -29,7 +29,9 @@ from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Dict, Iterator, Mapping, NamedTuple, Optional, Tuple, Type, TypeVar, Union
 
 import astropy.time
+import astropy.utils.exceptions
 import sqlalchemy
+import warnings
 
 from . import ddl
 from .time_utils import astropy_to_nsec, EPOCH, MAX_TIME, times_equal
@@ -64,14 +66,18 @@ class Timespan(NamedTuple):
     """
 
     def __str__(self) -> str:
-        if self.begin is None:
-            head = "(-∞, "
-        else:
-            head = f"[{self.begin.tai.isot}, "
-        if self.end is None:
-            tail = "∞)"
-        else:
-            tail = f"{self.end.tai.isot})"
+        # Trap dubious year warnings in case we have timespans from
+        # simulated data in the future
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+            if self.begin is None:
+                head = "(-∞, "
+            else:
+                head = f"[{self.begin.tai.isot}, "
+            if self.end is None:
+                tail = "∞)"
+            else:
+                tail = f"{self.end.tai.isot})"
         return head + tail
 
     def __repr__(self) -> str:
@@ -430,14 +436,22 @@ class _CompoundDatabaseTimespanRepresentation(DatabaseTimespanRepresentation):
             begin = None
             end = None
         else:
-            if timespan.begin is None or timespan.begin < EPOCH:
-                begin = EPOCH
-            else:
-                begin = timespan.begin
-            if timespan.end is None or timespan.end > MAX_TIME:
-                end = MAX_TIME
-            else:
-                end = timespan.end
+            # These comparisons can trigger UTC -> TAI conversions that
+            # can result in warnings for simulated data from the future
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+                if timespan.begin is None or timespan.begin < EPOCH:
+                    begin = EPOCH
+                else:
+                    begin = timespan.begin
+                # MAX_TIME is first in comparison to force a conversion
+                # from the supplied time scale to TAI rather than
+                # forcing MAX_TIME to be continually converted to
+                # the target time scale (which triggers warnings to UTC)
+                if timespan.end is None or MAX_TIME <= timespan.end:
+                    end = MAX_TIME
+                else:
+                    end = timespan.end
         result[f"{cls.NAME}_begin"] = begin
         result[f"{cls.NAME}_end"] = end
         return result
