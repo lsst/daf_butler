@@ -24,6 +24,7 @@ import itertools
 import warnings
 
 import astropy.time
+import astropy.utils.exceptions
 
 from lsst.daf.butler import Timespan
 
@@ -131,7 +132,8 @@ class TimespanTestCase(unittest.TestCase):
 
         # Astropy will give "dubious year" for UTC five years in the future
         # so hide these expected warnings from the test output
-        with self.assertWarns(Warning):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
             ts1 = Timespan(begin=astropy.time.Time('2213-06-17 13:34:45.775000', scale='utc', format='iso'),
                            end=astropy.time.Time('2213-06-17 13:35:17.947000', scale='utc', format='iso'))
             ts2 = Timespan(begin=astropy.time.Time('2213-06-17 13:34:45.775000', scale='utc', format='iso'),

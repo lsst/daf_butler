@@ -25,6 +25,7 @@
 import unittest
 import warnings
 
+import astropy.utils.exceptions
 from astropy.time import Time, TimeDelta
 from lsst.daf.butler import time_utils
 from lsst.daf.butler.core.time_utils import astropy_to_nsec
@@ -54,8 +55,10 @@ class TimeTestCase(unittest.TestCase):
         value_max = time_utils.astropy_to_nsec(time_utils.MAX_TIME)
         self.assertEqual(value, value_max)
 
-        # Check that we do not warn inside our code for UTC in the future
-        with self.assertWarns(Warning):
+        # Astropy will give "dubious year" for UTC five years in the future
+        # so hide these expected warnings from the test output
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
             time = Time("2101-01-01T00:00:00", format="isot", scale="utc")
 
         # unittest can't test for no warnings so we run the test and
