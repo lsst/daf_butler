@@ -302,7 +302,7 @@ class SqliteDatabase(Database):
         # other databases.
 
         constraints = []
-        if spec.dtype == sqlalchemy.String:
+        if spec.isStringType():
             name = self.shrinkDatabaseEntityName("_".join([table, "len", spec.name]))
             constraints.append(sqlalchemy.CheckConstraint(f"length({spec.name})<={spec.length}"
                                                           # Oracle converts
