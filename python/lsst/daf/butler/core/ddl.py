@@ -91,13 +91,13 @@ class SchemaValidationError(ValidationError):
 
 class Base64Bytes(sqlalchemy.TypeDecorator):
     """A SQLAlchemy custom type that maps Python `bytes` to a base64-encoded
-    `sqlalchemy.String`.
+    `sqlalchemy.Text` field.
     """
 
-    impl = sqlalchemy.String
+    impl = sqlalchemy.Text
 
     def __init__(self, nbytes: int, *args: Any, **kwargs: Any):
-        length = 4*ceil(nbytes/3)
+        length = 4*ceil(nbytes/3) if self.impl == sqlalchemy.String else None
         super().__init__(*args, length=length, **kwargs)
         self.nbytes = nbytes
 
