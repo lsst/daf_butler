@@ -1,13 +1,14 @@
 dimensions:
   version: 0
   skypix:
+    # 'common' is the skypix system and level used to relate all other spatial
+    # dimensions.  Its value is a string formed by concatenating one of the
+    # other keys under the 'skypix' headerin (i.e. the name of a skypix system)
+    # with an integer level (with no zero-padding).
     common: htm7
-    htm7:
+    htm:
       class: lsst.sphgeom.HtmPixelization
-      level: 7
-    htm9:
-      class: lsst.sphgeom.HtmPixelization
-      level: 9
+      max_level: 24
 
   elements:
     instrument:

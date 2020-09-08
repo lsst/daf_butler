@@ -121,15 +121,14 @@ class DimensionTestCase(unittest.TestCase):
         self.assertEqual(DimensionGraph.decode(encoded, universe=self.universe), graph)
 
     def testConfigRead(self):
-        self.assertEqual(self.universe.dimensions.names,
+        self.assertEqual(self.universe.getStaticDimensions().names,
                          {"instrument", "visit", "visit_system", "exposure", "detector",
                           "physical_filter", "abstract_filter", "subfilter", "calibration_label",
-                          "skymap", "tract", "patch", "htm7", "htm9"})
+                          "skymap", "tract", "patch"} | {f"htm{level}" for level in range(25)})
 
     def testGraphs(self):
         self.checkGraphInvariants(self.universe.empty)
-        self.checkGraphInvariants(self.universe)
-        for element in self.universe.elements:
+        for element in self.universe.getStaticElements():
             self.checkGraphInvariants(element.graph)
 
     def testInstrumentDimensions(self):
@@ -185,7 +184,7 @@ class DimensionTestCase(unittest.TestCase):
 
     def testSchemaGeneration(self):
         tableSpecs = NamedKeyDict({})
-        for element in self.universe.elements:
+        for element in self.universe.getStaticElements():
             if element.hasTable and element.viewOf is None:
                 tableSpecs[element] = element.RecordClass.fields.makeTableSpec(
                     tsRepr=DatabaseTimespanRepresentation.Compound
@@ -239,7 +238,7 @@ class DimensionTestCase(unittest.TestCase):
         self.assertIs(universe1, universe2)
         self.assertIs(universe1, universe3)
         self.assertIs(universe1, universe4)
-        for element1 in universe1.elements:
+        for element1 in universe1.getStaticElements():
             element2 = pickle.loads(pickle.dumps(element1))
             self.assertIs(element1, element2)
             graph1 = element1.graph

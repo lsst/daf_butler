@@ -27,6 +27,9 @@ jobs:
       - name: Install postgresql Python packages
         run: pip install psycopg2 testing.postgresql
 
+      - name: Install cryptography package for moto
+        run: pip install cryptography
+
       # It seems like pip install of requirements for a URL package
       # does not install those dependencies
       - name: Install sphgeom dependencies

@@ -150,7 +150,7 @@ class RepoExport:
             records for all dimensions will be exported.
         """
         if elements is None:
-            elements = frozenset(element for element in self._registry.dimensions.elements
+            elements = frozenset(element for element in self._registry.dimensions.getStaticElements()
                                  if element.hasTable() and element.viewOf is None)
         else:
             elements = frozenset(elements)
