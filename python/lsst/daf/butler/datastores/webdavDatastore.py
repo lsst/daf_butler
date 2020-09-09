@@ -48,6 +48,6 @@ class WebdavDatastore(RemoteFileDatastore):
     """
 
     defaultConfigFile = "datastores/webdavDatastore.yaml"
-    """Path to configuration defaults. Accessed within the ``config`` resource
+    """Path to configuration defaults. Accessed within the ``configs`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
