@@ -25,11 +25,13 @@ Deciding which formatter or delegate to use is controlled by the storage class a
 
      butler config-dump --subset .datastore.formatters ./repo-dir
 
+.. _daf_butler_storage_classes:
+
 Storage Classes
 ===============
 
 A Storage Class is fundamental to informing Butler how to deal with specific Python types.
-Each `DatasetType` is associated with a `StorageClass`.
+Each `DatasetType` is associated with a `StorageClass` when it is defined (usually as part of a pipeline configuration).
 This storage class declares the Python type, any components it may have (derived or read-write), and a delegate that can be used to process read parameters and do assembly.
 
 Composites
@@ -38,7 +40,7 @@ Composites
 A composite storage class declares that the Python type consists of discrete components that can be accessed individually.
 Each of these components must declare its storage class as well.
 
-For example, if a ``pvi`` dataset type has been associated with an ``ExposureF`` storage class, the user can `Butler.get()` the full ``pvi`` and access the components as they would normally for an `~lsst.afw.image.ExposureF`, or if the user solely want the metadata header from the exposure they can ask for ``pvi.metadata`` and just get that.
+For example, if a ``pvi`` dataset type has been associated with an ``ExposureF`` composite storage class, the user can `Butler.get()` the full ``pvi`` and access the components as they would normally for an `~lsst.afw.image.ExposureF`, or if the user solely want the metadata header from the exposure they can ask for ``pvi.metadata`` and just get that.
 The implementation details of how that metadata is retrieved depend on the details of how the dataset was serialized within the datastore.
 
 Composites must declare **all** the components for the Python type and Butler requires that if a composite is dissassembled into its components and then reassembled to form the composite again, this operation must be lossless.

@@ -28,7 +28,7 @@ The supported datastores are:
 File-Based Datastores
 =====================
 
-The file-based datastores (for example `~datastores.posixDatastore.PosixDatastore` and `~datastores.s3Datastore.S3Datastore`) share configuration since they use formatters to serialize datasets to file artifacts using file name template schemes and also support composite disassembly.
+The file-based datastores (for example `~datastores.posixDatastore.PosixDatastore` and `~datastores.s3Datastore.S3Datastore`) share configuration since they use formatters to serialize datasets to file artifacts using file name template schemes and also support disassembly of :ref:`composite storage classes <daf_butler_storage_classes>`.
 
 The supported configurations are:
 
@@ -46,6 +46,7 @@ The supported configurations are:
     The template uses data dimensions to do this.
     Generally the default setting will be usable although it can be tuned per `DatasetType`, `StorageClass` or data ID.
     Changes to this template only apply to new datasets since datastore remembers the names associated with previous datasets.
+    Templates are formatted as `FileTemplate` instances.
 **formatters**
     Mapping of `DatasetType`, `StorageClass` or data ID to a specific formatter class that understands the associated Python type and will serialize it to a file artifact.
     The formatters section also supports the definitions of write recipes (bulk configurations that can be selected for specific formatters) and write parameters (parameters that control how the dataset is serialized; note it is required that all serialized artifacts be readable by a formatter without knowing which write parameters were used).
