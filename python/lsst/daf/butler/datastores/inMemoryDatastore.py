@@ -311,7 +311,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         # will affect the data globally, before the read-only component
         # is selected.
         if isReadOnlyComponent:
-            inMemoryDataset = writeStorageClass.assembler().handleParameters(inMemoryDataset, parameters)
+            inMemoryDataset = writeStorageClass.delegate().handleParameters(inMemoryDataset, parameters)
             # Then disable parameters for later
             parameters = {}
 
@@ -324,7 +324,7 @@ class InMemoryDatastore(GenericBaseDatastore):
                                                                writeStorageClass.name))
 
             # Concrete composite written as a single object (we hope)
-            inMemoryDataset = writeStorageClass.assembler().getComponent(inMemoryDataset, component)
+            inMemoryDataset = writeStorageClass.delegate().getComponent(inMemoryDataset, component)
 
         # Since there is no formatter to process parameters, they all must be
         # passed to the assembler.

@@ -1076,7 +1076,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                 # component.
                 components[component] = self._read_artifact_into_memory(getInfo, ref, isComponent=False)
 
-            inMemoryDataset = ref.datasetType.storageClass.assembler().assemble(components)
+            inMemoryDataset = ref.datasetType.storageClass.delegate().assemble(components)
 
             # Any unused parameters will have to be passed to the assembler
             if parameters:
@@ -1085,8 +1085,8 @@ class FileLikeDatastore(GenericBaseDatastore):
                 unusedParams = {}
 
             # Process parameters
-            return ref.datasetType.storageClass.assembler().handleParameters(inMemoryDataset,
-                                                                             parameters=unusedParams)
+            return ref.datasetType.storageClass.delegate().handleParameters(inMemoryDataset,
+                                                                            parameters=unusedParams)
 
         elif isDisassembledReadOnlyComponent:
 
@@ -1103,11 +1103,11 @@ class FileLikeDatastore(GenericBaseDatastore):
             # forwarding the request to a single read/write component.
             # Rather than guessing which rw component is the right one by
             # scanning each for a read-only component of the same name,
-            # we ask the composite assembler directly which one is best to
+            # we ask the storage class delegate directly which one is best to
             # use.
-            compositeAssembler = compositeStorageClass.assembler()
-            forwardedComponent = compositeAssembler.selectResponsibleComponent(refComponent,
-                                                                               set(allComponents))
+            compositeDelegate = compositeStorageClass.delegate()
+            forwardedComponent = compositeDelegate.selectResponsibleComponent(refComponent,
+                                                                              set(allComponents))
 
             # Select the relevant component
             rwInfo = allComponents[forwardedComponent]
@@ -1206,7 +1206,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         artifacts = []
         if doDisassembly:
-            components = ref.datasetType.storageClass.assembler().disassemble(inMemoryDataset)
+            components = ref.datasetType.storageClass.delegate().disassemble(inMemoryDataset)
             for component, componentInfo in components.items():
                 # Don't recurse because we want to take advantage of
                 # bulk insert -- need a new DatasetRef that refers to the

@@ -299,7 +299,7 @@ class DatastoreTests(DatastoreTestsBase):
             ref = self.makeDatasetRef("metric", dimensions, sc, dataId,
                                       conform=False)
 
-            components = sc.assembler().disassemble(metrics)
+            components = sc.delegate().disassemble(metrics)
             self.assertTrue(components)
 
             compsRead = {}
@@ -321,7 +321,7 @@ class DatastoreTests(DatastoreTestsBase):
                 datastore.remove(compRef)
 
             # combine all the components we read back into a new composite
-            metricsOut = sc.assembler().assemble(compsRead)
+            metricsOut = sc.delegate().assemble(compsRead)
             self.assertEqual(metrics, metricsOut)
 
     def testRemove(self):

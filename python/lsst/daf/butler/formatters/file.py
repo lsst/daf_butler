@@ -120,7 +120,7 @@ class FileFormatter(Formatter):
 
             # Concrete composite written as a single file (we hope)
             try:
-                data = fileDescriptor.storageClass.assembler().getComponent(data, component)
+                data = fileDescriptor.storageClass.delegate().getComponent(data, component)
             except AttributeError:
                 # Defer the complaint
                 data = None

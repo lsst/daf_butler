@@ -171,7 +171,7 @@ class GenericBaseDatastore(Datastore):
         """
         # Process any left over parameters
         if assemblerParams:
-            inMemoryDataset = readStorageClass.assembler().handleParameters(inMemoryDataset, assemblerParams)
+            inMemoryDataset = readStorageClass.delegate().handleParameters(inMemoryDataset, assemblerParams)
 
         # Validate the returned data type matches the expected data type
         pytype = readStorageClass.pytype

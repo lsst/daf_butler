@@ -5,7 +5,6 @@ Core code for butler.
 # Do not export the utility routines from utils and queries.
 
 from ._butlerUri import *
-from .assembler import *
 from .config import *
 from .configSupport import LookupKey
 from .composites import *
@@ -23,6 +22,7 @@ from .named import *
 from .quantum import *
 from .simpleQuery import *
 from .storageClass import *
+from .storageClassDelegate import *
 from .storedFileInfo import *
 from .dimensions import *
 from .repoTransfers import *
