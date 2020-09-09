@@ -63,7 +63,7 @@ storageClasses:
   StructuredDataDataTest:
     pytype: list
     delegate: lsst.daf.butler.tests.ListDelegate
-    readComponents:
+    derivedComponents:
       counter: Integer
     parameters:
       - slice
@@ -75,7 +75,7 @@ storageClasses:
       summary: StructuredDataDictYaml
       output: StructuredDataDictYaml
       data: StructuredDataDataTest
-    readComponents:
+    derivedComponents:
       counter: Integer
   StructuredCompositeReadCompNoDisassembly:
     inheritsFrom: StructuredCompositeReadComp

@@ -68,8 +68,8 @@ class StorageClass:
         Python type (or name of type) to associate with the `StorageClass`
     components : `dict`, optional
         `dict` mapping name of a component to another `StorageClass`.
-    readComponents : `dict`, optional
-        `dict` mapping name of a read-only component to another `StorageClass`.
+    derivedComponents : `dict`, optional
+        `dict` mapping name of a derived component to another `StorageClass`.
     parameters : `~collections.abc.Sequence` or `~collections.abc.Set`
         Parameters understood by this `StorageClass` that can control
         reading of data from datastores.
@@ -79,7 +79,7 @@ class StorageClass:
     """
     _cls_name: str = "BaseStorageClass"
     _cls_components: Optional[Dict[str, StorageClass]] = None
-    _cls_readComponents: Optional[Dict[str, StorageClass]] = None
+    _cls_derivedComponents: Optional[Dict[str, StorageClass]] = None
     _cls_parameters: Optional[Union[Set[str], Sequence[str]]] = None
     _cls_delegate: Optional[str] = None
     _cls_pytype: Optional[Union[Type, str]] = None
@@ -89,7 +89,7 @@ class StorageClass:
     def __init__(self, name: Optional[str] = None,
                  pytype: Optional[Union[Type, str]] = None,
                  components: Optional[Dict[str, StorageClass]] = None,
-                 readComponents: Optional[Dict[str, StorageClass]] = None,
+                 derivedComponents: Optional[Dict[str, StorageClass]] = None,
                  parameters: Optional[Union[Sequence, Set]] = None,
                  delegate: Optional[str] = None):
         if name is None:
@@ -98,8 +98,8 @@ class StorageClass:
             pytype = self._cls_pytype
         if components is None:
             components = self._cls_components
-        if readComponents is None:
-            readComponents = self._cls_readComponents
+        if derivedComponents is None:
+            derivedComponents = self._cls_derivedComponents
         if parameters is None:
             parameters = self._cls_parameters
         if delegate is None:
@@ -120,7 +120,7 @@ class StorageClass:
             self._pytype = None
 
         self._components = components if components is not None else {}
-        self._readComponents = readComponents if readComponents is not None else {}
+        self._derivedComponents = derivedComponents if derivedComponents is not None else {}
         self._parameters = frozenset(parameters) if parameters is not None else frozenset()
         # if the delegate is not None also set it and clear the default
         # delegate
@@ -146,10 +146,10 @@ class StorageClass:
         return self._components
 
     @property
-    def readComponents(self) -> Dict[str, StorageClass]:
-        """Read-only component names mapped to associated `StorageClass`
+    def derivedComponents(self) -> Dict[str, StorageClass]:
+        """Derived component names mapped to associated `StorageClass`
         """
-        return self._readComponents
+        return self._derivedComponents
 
     @property
     def parameters(self) -> Set[str]:
@@ -181,7 +181,7 @@ class StorageClass:
         return self._delegate
 
     def allComponents(self) -> Mapping[str, StorageClass]:
-        """Return a mapping of all the read and read/write components
+        """Return a mapping of all the derived and read/write components
         to the corresponding storage class.
 
         Returns
@@ -190,7 +190,7 @@ class StorageClass:
             The component name to storage class mapping.
         """
         components = copy.copy(self.components)
-        components.update(self.readComponents)
+        components.update(self.derivedComponents)
         return components
 
     def delegate(self) -> StorageClassDelegate:
@@ -507,7 +507,7 @@ StorageClasses
             # StorageClass Constructor
             storageClassKwargs = {k: info[k] for k in ("pytype", "delegate", "parameters") if k in info}
 
-            for compName in ("components", "readComponents"):
+            for compName in ("components", "derivedComponents"):
                 if compName not in info:
                     continue
                 components = {}
@@ -568,7 +568,7 @@ StorageClasses
         # so that a child can inherit but override one bit.
         # lists (which you get from configs) are treated as sets for this to
         # work consistently.
-        for k in ("components", "parameters", "readComponents"):
+        for k in ("components", "parameters", "derivedComponents"):
             classKey = f"_cls_{k}"
             if classKey in clsargs:
                 baseValue = getattr(baseClass, classKey, None)

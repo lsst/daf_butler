@@ -1027,9 +1027,9 @@ class FileLikeDatastore(GenericBaseDatastore):
         isDisassembled = len(allGetInfo) > 1
 
         # Look for the special case where we are disassembled but the
-        # component is a read-only component that was not written during
+        # component is a derived component that was not written during
         # disassembly. For this scenario we need to check that the
-        # component requested is listed as a read-only component for the
+        # component requested is listed as a derived component for the
         # composite storage class
         isDisassembledReadOnlyComponent = False
         if isDisassembled and refComponent:
@@ -1043,7 +1043,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             # branch below that reads a persisted component will fail
             # so there is no need to complain here.
             if compositeStorageClass is not None:
-                isDisassembledReadOnlyComponent = refComponent in compositeStorageClass.readComponents
+                isDisassembledReadOnlyComponent = refComponent in compositeStorageClass.derivedComponents
 
         if isDisassembled and not refComponent:
             # This was a disassembled dataset spread over multiple files
@@ -1092,17 +1092,17 @@ class FileLikeDatastore(GenericBaseDatastore):
 
             compositeStorageClass = ref.datasetType.parentStorageClass
             if compositeStorageClass is None:
-                raise RuntimeError(f"Unable to retrieve read-only component '{refComponent}' since"
+                raise RuntimeError(f"Unable to retrieve derived component '{refComponent}' since"
                                    "no composite storage class is available.")
 
             if refComponent is None:
                 # Mainly for mypy
                 raise RuntimeError(f"Internal error in datastore {self.name}: component can not be None here")
 
-            # Assume that every read-only component can be calculated by
+            # Assume that every derived component can be calculated by
             # forwarding the request to a single read/write component.
             # Rather than guessing which rw component is the right one by
-            # scanning each for a read-only component of the same name,
+            # scanning each for a derived component of the same name,
             # we ask the storage class delegate directly which one is best to
             # use.
             compositeDelegate = compositeStorageClass.delegate()
@@ -1131,13 +1131,13 @@ class FileLikeDatastore(GenericBaseDatastore):
                                                    ref.dataId)
 
             # The assembler can not receive any parameter requests for a
-            # read-only component at this time since the assembler will
-            # see the storage class of the read-only component and those
+            # derived component at this time since the assembler will
+            # see the storage class of the derived component and those
             # parameters will have to be handled by the formatter on the
             # forwarded storage class.
             assemblerParams: Dict[str, Any] = {}
 
-            # Need to created a new info that specifies the read-only
+            # Need to created a new info that specifies the derived
             # component and associated storage class
             readInfo = DatastoreFileGetInformation(rwInfo.location, readFormatter,
                                                    rwInfo.info, assemblerParams, {},
@@ -1166,7 +1166,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             if isDisassembled:
                 refStorageClass.validateParameters(parameters)
             else:
-                # For an assembled composite this could be a read-only
+                # For an assembled composite this could be a derived
                 # component derived from a real component. The validity
                 # of the parameters is not clear. For now validate against
                 # the composite storage class

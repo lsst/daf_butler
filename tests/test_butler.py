@@ -289,7 +289,7 @@ class ButlerPutGetTests:
             data = butler.get(compNameD, dataId)
             self.assertEqual(data, metric.data)
 
-            if "counter" in storageClass.readComponents:
+            if "counter" in storageClass.derivedComponents:
                 count = butler.get(ref.datasetType.componentTypeName("counter"), dataId)
                 self.assertEqual(count, len(data))
 

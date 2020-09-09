@@ -124,7 +124,7 @@ storageClasses:
       filter: Filter
       detector: Detector
       validPolygon: Polygon
-    readComponents:
+    derivedComponents:
       bbox: Box2I
       dimensions: Extent2I
       xy0: Point2I

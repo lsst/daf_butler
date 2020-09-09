@@ -179,7 +179,7 @@ class MetricsExampleDataFormatter(Formatter):
     """A specialist test formatter for the data component of a MetricsExample.
 
     This is needed if the MetricsExample is dissassembled and we want to
-    support the read-only component.
+    support the derived component.
     """
 
     unsupportedParameters = None
