@@ -19,7 +19,7 @@ All other keys depend on the specific datastore class that is selected.
 
 The supported datastores are:
 
-* :ref:`daf_butler-datastores-file` (POSIX and S3)
+* :ref:`daf_butler-datastores-file` (local POSIX along with remote datastores such as S3)
 * :ref:`daf_butler-datastores-memory`
 * :ref:`daf_butler-datastores-chain`
 
@@ -40,14 +40,16 @@ The supported configurations are:
     This sections defines the name of the registry table that should be used to hold details about datasets stored in the datastore (such as the path within the datastore and the associated formatter).
     This only needs to be set if multiple datastores are to be used simultaneously within one Butler repository since the table names should not clash.
 **create**
-    A Boolean to define whether an attempt should be made to initialize the datastore by creating the directory.  Defaults to `True`.
+    A Boolean to define whether an attempt should be made to initialize the datastore by creating the directory.  Defaults to `True`, and that default should normally not be changed.
 **templates**
     The template to use to construct "files" within the datastore.
     The template uses data dimensions to do this.
     Generally the default setting will be usable although it can be tuned per `DatasetType`, `StorageClass` or data ID.
+    Changes to this template only apply to new datasets since datastore remembers the names associated with previous datasets.
 **formatters**
     Mapping of `DatasetType`, `StorageClass` or data ID to a specific formatter class that understands the associated Python type and will serialize it to a file artifact.
     The formatters section also supports the definitions of write recipes (bulk configurations that can be selected for specific formatters) and write parameters (parameters that control how the dataset is serialized; note it is required that all serialized artifacts be readable by a formatter without knowing which write parameters were used).
+    Once a formatter is associated with a particular dataset it is permanently associated with that dataset even if the configuration is later modified to specify a different formatter.
 **constraints**
     Specify `DatasetType`, `StorageClass` or data ID that will be accepted or rejected by this datastore.
 **composites**
@@ -91,6 +93,8 @@ The `~datastores.chainedDatastore.ChainedDatastore` datastore enables multiple o
 The datastore will be sent to every datastore in the chain and success is reported if any of the datastores accepts the dataset.
 When a dataset is retrieved each datastore is asked for the dataset in turn and the first match is sufficient.
 This allows an in-memory datastore to be combined with a file-based datastore to enable simple in-memory retrieval for a dataset that has been persisted to disk.
+A file-based datastore can be turned into a a chained datastore after the fact, for example by adding an in-memory caching datastore.
+The only constraint is that all the datasets in registry are associated with at least one of the datastores in the chain.
 
 `~datastores.chainedDatastore.ChainedDatastore` has a ``datastores`` key that contains a list of datastore configurations that can match the ``datastore`` contents from other datastores.
 Additionally, a `~datastores.chainedDatastore.ChainedDatastore` can also support ``constraints`` definitions.

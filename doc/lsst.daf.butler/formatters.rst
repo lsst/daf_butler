@@ -19,13 +19,18 @@ Deciding which formatter or assembler to use is controlled by the storage class 
 .. note::
 
   When discussing configuration below, the default configuration values can be inspected at ``$DAF_BUTLER_DIR/python/lsst/daf/butler/configs`` (they can be accessed directly as Python package resources) and current values can be obtained by calling ``butler config-dump`` on a Butler repository.
+  For example, this will list the formatter section of a butler configuration (assuming a single file-based datastore is in use):
+
+  .. prompt:: bash
+
+     butler config-dump --subset .datastore.formatters ./repo-dir
 
 Storage Classes
 ===============
 
 A Storage Class is fundamental to informing Butler how to deal with specific Python types.
 Each `DatasetType` is associated with a `StorageClass`.
-This storage class declares the Python type, any components it may have (read-only or read-write), and an assembler that can be used to process read parameters.
+This storage class declares the Python type, any components it may have (derived or read-write), and an assembler that can be used to process read parameters.
 
 Composites
 ^^^^^^^^^^
@@ -42,15 +47,15 @@ Only composites have the potential to be disassembled into discrete file artifac
 Disassembly itself is controlled by the datastore configuration.
 In cases where the datastore uses a remote storage and only some components are required, then disassembly can significantly improve data access performance.
 
-Read-only Components
-^^^^^^^^^^^^^^^^^^^^
+Derived Components
+^^^^^^^^^^^^^^^^^^
 
 There are some situations where a Python type has some property that can usefully be retrieved that looks like a component of a composite but is not a component since it is not an integral part of the composite Python type.
 This is particularly true for metadata such as bounding boxes or pixel counts which can efficiently be obtained from a large dataset without requiring that large dataset to be read into memory solely to be discarded once this information is extracted.
 
-Read-only components can be defined for all storage classes without that storage class being declared to be a composite.
-As for standard components, a read-only component declares the storage class (and therefore Python type) of that component.
-If your Python type has useful components that can be accessed but which do not support full disassembly (because round-tripping disassembly is lossy), read-only components should be defined rather than full-fledged components.
+Derived components are read-only components that can be defined for all storage classes without that storage class being declared to be a composite.
+As for standard components, a derived component declares the storage class (and therefore Python type) of that component.
+If your Python type has useful components that can be accessed but which do not support full disassembly (because round-tripping disassembly is lossy), derived components should be defined rather than full-fledged components.
 
 Read Parameters
 ^^^^^^^^^^^^^^^
@@ -59,7 +64,7 @@ A storage class definition includes read parameters that can control how a parti
 These read parameters can be thought of as being understood by the Python type being returned and modifying it in a way that still returns that identical Python type.
 The canonical example of this is subsetting where the caller passes in a bounding box that reduces the size of the image being returned.
 
-If a parameter would change the Python type its functionality should be encapsulated in a read-only component.
+If a parameter would change the Python type its functionality should be encapsulated in a derived component.
 
 .. note::
 
@@ -68,18 +73,18 @@ If a parameter would change the Python type its functionality should be encapsul
   For example, the caller has no real idea whether a particular compression option is supported or not because they have no visibility into whether the file written is in HDF5 or FITS or plain text.
   For this reason write parameters are part of formatter configuration.
 
-Read Parameters and Read-Only Components
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Read Parameters and Derived Components
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Read parameters are usually applied during the retrieval of the associated Python type from the persisted artifact.
 This requires that the parameters are understood by that Python type.
 When read-only components involve read parameters there are now multiple ways in which the parameters can be applied.
 
-Consider the case of a pixel counting read-only component for an image dataset.
+Consider the case of a pixel counting derived component for an image dataset.
 A read parameter for subsetting the dataset should be applied to the image before the pixel counting is performed.
 It does not make sense for subsetting to be applied to the integer pixel count.
 
-For this reason read parameters for read-only components are processed prior to calculating the read-only component.
+For this reason read parameters for derived components are processed prior to calculating the derived component.
 
 Defining a Storage Class
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -110,7 +115,7 @@ A composite storage class refers to a Python type that can be disassembled into 
     readComponents:
       npixels: NumPixels
 
-In this simplified definition for a masked image, there are two components declared along with a read-only component that returns the number of pixels in the image.
+In this simplified definition for a masked image, there are two components declared along with a derived component that returns the number of pixels in the image.
 The assembler should be able to disassemble the associated Python type into the ``image`` and ``mask`` components if the datastore requests disassembly.
 The assembler would also be used to process the ``subset`` read parameter if the formatter used by the datastore has declared it does not support the parameter.
 
@@ -119,12 +124,16 @@ You can do this using YAML anchors and references but the preferred approach is 
 
 .. code-block:: yaml
 
-   MaskedImageI:
-     inheritsFrom: MaskedImage
-     pytype: lsst.afw.image.MaskedImageI
+   GenericStorageClass:
+      pytype: lsst.generic.GenericX
+      components:
+        image: ImageX
+        metadata: Metadata
+   GenericStorageClassI:
+     inheritsFrom: GenericStorageClass
+     pytype: lsst.generic.GenericI
      components:
        image: ImageI
-       mask: MaskX
 
 If this approach is used the `StorageClass` Python class created by `StorageClassFactory` will inherit from the specific parent class and not the generic `StorageClass`.
 
@@ -136,7 +145,7 @@ Assemblers
   The base class is called CompositeAssembler because it was first developed for composites.
   Now might be a good time to rebrand it since non-composites need one if they use read parameters.
 
-Every `StorageClass` that defines read parameters or components (read/write or read) must also specify an `CompositeAssembler` class.
+Every `StorageClass` that defines read parameters or components (read/write or derived) must also specify a `CompositeAssembler` class.
 This class should inherit from the `CompositeAssembler` base class.
 
 Composite Disassembly
@@ -154,18 +163,18 @@ Additionally datastores can choose to only disassemble specific storage classes 
 .. warning::
 
   Composite disassembly implicitly assumes that an identical Python object can be created from the disassembled components.
-  If this is not true, the components should be declared read-only and disassembly will never be attempted.
+  If this is not true, the components should be declared derived and disassembly will never be attempted.
 
-Read-only Components
-^^^^^^^^^^^^^^^^^^^^
+Derived Components
+^^^^^^^^^^^^^^^^^^
 
-Just as for components of a composite, if a storage class defines read-only components, it must also specify an assembler to support the calculation of that derived component.
+Just as for components of a composite, if a storage class defines derived components, it must also specify an assembler to support the calculation of that derived component.
 This should be implemented in the `CompositeAssembler.getComponent()` method.
 
 Additionally, if the storage class refers to a composite, the datastore can be configured to disassemble the dataset into discrete artifacts.
-Since read-only components are derived and are not persisted themselves the datastore needs to be told which component should be used to calculate this derived quantity.
+Since derived components are derived and are not persisted themselves the datastore needs to be told which component should be used to calculate this derived quantity.
 To enable this the assembler must implement `CompositeAssembler.selectResponsibleComponent()`.
-This method is given the name of the read-only component and a list of all available persisted components and must return one and only one relevant component.
+This method is given the name of the derived component and a list of all available persisted components and must return one and only one relevant component.
 The datastore will then make a component request to the formatter associated with that component.
 
 .. note::
@@ -181,10 +190,10 @@ For example this means that a read parameter that subsets an image is valid beca
 
 If read parameters are defined then a `CompositeAssembler.handleParameters()` method must be defined that understands how to apply these parameters to the Python object and should return a modified copy.
 This method must be written even if a `Formatter` is to be used.
-There are two reasons for this, firstly, there is no guarantee that a particular formatter implementation will understand the parameter (and no requirement for that to be the case), and secondly there is no guarantee that a formatter will be involved in retrieval of the dataset.
+There are two reasons for this; firstly, there is no guarantee that a particular formatter implementation will understand the parameter (and no requirement for that to be the case), and secondly there is no guarantee that a formatter will be involved in retrieval of the dataset.
 In-memory datastores never involve a file artifact so whilst composite disassembly is never an issue, an assembler must at least provide the parameter handler to allow the user to configure such a datastore.
 
-For read-only components parameters are handled by the composite component prior to deriving the read-only component.
+For derived components parameters are handled by the composite component prior to deriving the derived component.
 The assembler `CompositeAssembler.handleParameters()` method will only be called in this situation if no formatter is used (such as with an in-memory datastore).
 
 Formatters
@@ -199,6 +208,7 @@ Details of where the artifact may be located within the datastore are passed to 
 
   The formatter system has only been used to write datasets to files or to bytes that would be written to a file.
   The interface may evolve as other types of datastore become available and make use of the formatter system.
+  The interface is being reassessed on :jira:`DM-26658`.
 
 When ingesting files from external sources formatters are associated with each incoming file but these formatters are only required to support a `Formatter.read()` method.
 They must though declare all the file extensions that they can support.
@@ -216,7 +226,7 @@ Each formatter that reads or writes a file must declare the file extensions that
 For a formatter that supports a single extension this is most easily achieved by setting the class property `Formatter.extension` to that extension.
 In some scenarios a formatter might support multiple formats that are controlled by write parameters.
 In this case the formatter should assign a frozen set to the `Formatter.supportedExtensions` class property.
-It is then required that the class implement an instance property for ``extension`` that returns the extension that will be used by this formatter for writing the current dataset.
+It is then required that the class implements an instance property for ``extension`` that returns the extension that will be used by this formatter for writing the current dataset.
 
 File vs Bytes
 ^^^^^^^^^^^^^
@@ -240,10 +250,8 @@ For many file-based formatter implementations a subclass of `Formatter` can be u
 Composites are not handled by `~formatters.file.FileFormatter`.
 
 .. note::
-  I'm not sure I understand why _writeFile() doesn't also take the path rather than requiring FileDescriptor to be used.
-  It's inconsistent with _readFile that does take the local path.
-  It's not much of a simplification as things stand.
-  Need to revisit that.
+
+   The design of this class hierarchy will be reassessed in :jira:`DM-26658`.
 
 Write Parameters
 ^^^^^^^^^^^^^^^^
