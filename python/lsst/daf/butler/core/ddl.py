@@ -91,13 +91,13 @@ class SchemaValidationError(ValidationError):
 
 class Base64Bytes(sqlalchemy.TypeDecorator):
     """A SQLAlchemy custom type that maps Python `bytes` to a base64-encoded
-    `sqlalchemy.String`.
+    `sqlalchemy.Text` field.
     """
 
-    impl = sqlalchemy.String
+    impl = sqlalchemy.Text
 
     def __init__(self, nbytes: int, *args: Any, **kwargs: Any):
-        length = 4*ceil(nbytes/3)
+        length = 4*ceil(nbytes/3) if self.impl == sqlalchemy.String else None
         super().__init__(*args, length=length, **kwargs)
         self.nbytes = nbytes
 
@@ -271,6 +271,23 @@ class FieldSpec:
         self.doc = stripIfNotNone(config.get("doc", None))
         return self
 
+    def isStringType(self) -> bool:
+        """Indicate that this is a sqlalchemy.String field spec.
+
+        Returns
+        -------
+        isString : `bool`
+            The field refers to a `sqlalchemy.String` and not any other type.
+            This can return `False` even if the object was created with a
+            string type if it has been decided that it should be implemented
+            as a `sqlalchemy.Text` type.
+        """
+        if self.dtype == sqlalchemy.String:
+            # For short strings retain them as strings
+            if self.dtype == sqlalchemy.String and self.length and self.length <= 32:
+                return True
+        return False
+
     def getSizedColumnType(self) -> sqlalchemy.types.TypeEngine:
         """Return a sized version of the column type, utilizing either (or
         neither) of ``self.length`` and ``self.nbytes``.
@@ -281,6 +298,9 @@ class FieldSpec:
             A SQLAlchemy column type object.
         """
         if self.length is not None:
+            # Last chance check that we are only looking at possible String
+            if self.dtype == sqlalchemy.String and not self.isStringType():
+                return sqlalchemy.Text
             return self.dtype(length=self.length)
         if self.nbytes is not None:
             return self.dtype(nbytes=self.nbytes)
