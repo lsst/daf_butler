@@ -47,7 +47,7 @@ from .interfaces import (
 # This manager is supposed to have super-stable schema that never changes
 # but there may be cases when we need data migration on this table so we
 # keep version for it as well.
-_VERSION = VersionTuple(0, 1, 0)
+_VERSION = VersionTuple(1, 0, 0)
 
 
 class DefaultButlerAttributeManager(ButlerAttributeManager):
