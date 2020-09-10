@@ -23,7 +23,7 @@
 
 from __future__ import annotations
 
-__all__ = ("DatasetComponent", "CompositeAssembler")
+__all__ = ("DatasetComponent", "StorageClassDelegate")
 
 import collections
 from dataclasses import dataclass
@@ -64,8 +64,13 @@ class DatasetComponent:
     """
 
 
-class CompositeAssembler:
-    """Class for providing assembler and disassembler support for composites.
+class StorageClassDelegate:
+    """Class to delegate the handling of components and parameters for the
+    python type associated with a particular `StorageClass`.
+
+    A delegate is required for any storage class that defines components
+    (derived or otherwise) or support read parameters. It is used for
+    composite disassembly and assembly.
 
     Attributes
     ----------
@@ -74,7 +79,7 @@ class CompositeAssembler:
     Parameters
     ----------
     storageClass : `StorageClass`
-        `StorageClass` to be used with this assembler.
+        `StorageClass` to be used with this delegate.
     """
 
     def __init__(self, storageClass: StorageClass):
@@ -122,7 +127,8 @@ class CompositeAssembler:
             Collection of components from which to assemble a new composite
             object. Keys correspond to composite names in the `StorageClass`.
         pytype : `type`, optional
-            Override the type from the :attr:`CompositeAssembler.storageClass`
+            Override the type from the
+            :attr:`StorageClassDelegate.storageClass`
             to use when assembling the final object.
 
         Returns
@@ -192,7 +198,7 @@ class CompositeAssembler:
         comps : `dict`
             Non-None components extracted from the composite, indexed by the
             component name as derived from the
-            `CompositeAssembler.storageClass`.
+            `StorageClassDelegate.storageClass`.
         """
         components = {}
         if self.storageClass.isComposite():
@@ -263,7 +269,7 @@ class CompositeAssembler:
         subset : iterable, optional
             Iterable containing subset of components to extract from composite.
             Must be a subset of those defined in
-            `CompositeAssembler.storageClass`.
+            `StorageClassDelegate.storageClass`.
         override : `object`, optional
             Object to use for disassembly instead of parent. This can be useful
             when called from subclasses that have composites in a hierarchy.
@@ -272,10 +278,10 @@ class CompositeAssembler:
         -------
         components : `dict`
             `dict` with keys matching the components defined in
-            `CompositeAssembler.storageClass`
+            `StorageClassDelegate.storageClass`
             and values being `DatasetComponent` instances describing the
             component. Returns None if this is not a composite
-            `CompositeAssembler.storageClass`.
+            `StorageClassDelegate.storageClass`.
 
         Raises
         ------
@@ -284,7 +290,7 @@ class CompositeAssembler:
             lookups.
         TypeError
             The parent object does not match the supplied
-            `CompositeAssembler.storageClass`.
+            `StorageClassDelegate.storageClass`.
         """
         if not self.storageClass.isComposite():
             raise TypeError("Can not disassemble something that is not a composite"
@@ -364,18 +370,18 @@ class CompositeAssembler:
         return inMemoryDataset
 
     @classmethod
-    def selectResponsibleComponent(cls, readComponent: str, fromComponents: Set[Optional[str]]) -> str:
+    def selectResponsibleComponent(cls, derivedComponent: str, fromComponents: Set[Optional[str]]) -> str:
         """Given a possible set of components to choose from, return the
-        component that should be used to calculate the requested read
+        component that should be used to calculate the requested derived
         component.
 
         Parameters
         ----------
-        readComponent : `str`
-            The component that is being requested.
+        derivedComponent : `str`
+            The derived component that is being requested.
         fromComponents : `set` of `str`
-            The available set of component options from which that read
-            component can be derived. `None` can be included but should
+            The available set of component options from which that derived
+            component can be computed. `None` can be included but should
             be ignored.
 
         Returns
@@ -386,9 +392,9 @@ class CompositeAssembler:
         Raises
         ------
         NotImplementedError
-            Raised if this assembler refuses to answer the question.
+            Raised if this delegate refuses to answer the question.
         ValueError
-            Raised if this assembler can not determine a relevant component
+            Raised if this delegate can not determine a relevant component
             from the supplied options.
         """
-        raise NotImplementedError("This assembler does not support read-only components")
+        raise NotImplementedError("This delegate does not support derived components")

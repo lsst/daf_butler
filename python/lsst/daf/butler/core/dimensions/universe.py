@@ -68,8 +68,8 @@ class DimensionUniverse:
     ----------
     config : `Config`, optional
         Configuration describing the dimensions and their relationships.  If
-        not provided, default configuration (from
-        ``daf_butler/config/dimensions.yaml``) wil be loaded.
+        not provided, default configuration (from ``dimensions.yaml`` in
+        this package's ``configs`` resource directory) will be loaded.
     """
 
     _instances: ClassVar[Dict[int, DimensionUniverse]] = {}

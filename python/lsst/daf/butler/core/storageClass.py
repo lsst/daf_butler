@@ -45,7 +45,7 @@ from typing import (
 
 from lsst.utils import doImport
 from .utils import Singleton, getFullTypeName
-from .assembler import CompositeAssembler
+from .storageClassDelegate import StorageClassDelegate
 from .config import ConfigSubset, Config
 from .configSupport import LookupKey
 
@@ -68,42 +68,42 @@ class StorageClass:
         Python type (or name of type) to associate with the `StorageClass`
     components : `dict`, optional
         `dict` mapping name of a component to another `StorageClass`.
-    readComponents : `dict`, optional
-        `dict` mapping name of a read-only component to another `StorageClass`.
+    derivedComponents : `dict`, optional
+        `dict` mapping name of a derived component to another `StorageClass`.
     parameters : `~collections.abc.Sequence` or `~collections.abc.Set`
         Parameters understood by this `StorageClass` that can control
         reading of data from datastores.
-    assembler : `str`, optional
+    delegate : `str`, optional
         Fully qualified name of class supporting assembly and disassembly
         of a `pytype` instance.
     """
     _cls_name: str = "BaseStorageClass"
     _cls_components: Optional[Dict[str, StorageClass]] = None
-    _cls_readComponents: Optional[Dict[str, StorageClass]] = None
+    _cls_derivedComponents: Optional[Dict[str, StorageClass]] = None
     _cls_parameters: Optional[Union[Set[str], Sequence[str]]] = None
-    _cls_assembler: Optional[str] = None
+    _cls_delegate: Optional[str] = None
     _cls_pytype: Optional[Union[Type, str]] = None
-    defaultAssembler: Type = CompositeAssembler
-    defaultAssemblerName: str = getFullTypeName(defaultAssembler)
+    defaultDelegate: Type = StorageClassDelegate
+    defaultDelegateName: str = getFullTypeName(defaultDelegate)
 
     def __init__(self, name: Optional[str] = None,
                  pytype: Optional[Union[Type, str]] = None,
                  components: Optional[Dict[str, StorageClass]] = None,
-                 readComponents: Optional[Dict[str, StorageClass]] = None,
+                 derivedComponents: Optional[Dict[str, StorageClass]] = None,
                  parameters: Optional[Union[Sequence, Set]] = None,
-                 assembler: Optional[str] = None):
+                 delegate: Optional[str] = None):
         if name is None:
             name = self._cls_name
         if pytype is None:
             pytype = self._cls_pytype
         if components is None:
             components = self._cls_components
-        if readComponents is None:
-            readComponents = self._cls_readComponents
+        if derivedComponents is None:
+            derivedComponents = self._cls_derivedComponents
         if parameters is None:
             parameters = self._cls_parameters
-        if assembler is None:
-            assembler = self._cls_assembler
+        if delegate is None:
+            delegate = self._cls_delegate
         self.name = name
 
         if pytype is None:
@@ -120,24 +120,24 @@ class StorageClass:
             self._pytype = None
 
         self._components = components if components is not None else {}
-        self._readComponents = readComponents if readComponents is not None else {}
+        self._derivedComponents = derivedComponents if derivedComponents is not None else {}
         self._parameters = frozenset(parameters) if parameters is not None else frozenset()
-        # if the assembler is not None also set it and clear the default
-        # assembler
-        self._assembler: Optional[Type]
-        self._assemblerClassName: Optional[str]
-        if assembler is not None:
-            self._assemblerClassName = assembler
-            self._assembler = None
+        # if the delegate is not None also set it and clear the default
+        # delegate
+        self._delegate: Optional[Type]
+        self._delegateClassName: Optional[str]
+        if delegate is not None:
+            self._delegateClassName = delegate
+            self._delegate = None
         elif components is not None:
-            # We set a default assembler for composites so that a class is
+            # We set a default delegate for composites so that a class is
             # guaranteed to support something if it is a composite.
-            log.debug("Setting default assembler for %s", self.name)
-            self._assembler = self.defaultAssembler
-            self._assemblerClassName = self.defaultAssemblerName
+            log.debug("Setting default delegate for %s", self.name)
+            self._delegate = self.defaultDelegate
+            self._delegateClassName = self.defaultDelegateName
         else:
-            self._assembler = None
-            self._assemblerClassName = None
+            self._delegate = None
+            self._delegateClassName = None
 
     @property
     def components(self) -> Dict[str, StorageClass]:
@@ -146,10 +146,10 @@ class StorageClass:
         return self._components
 
     @property
-    def readComponents(self) -> Dict[str, StorageClass]:
-        """Read-only component names mapped to associated `StorageClass`
+    def derivedComponents(self) -> Dict[str, StorageClass]:
+        """Derived component names mapped to associated `StorageClass`
         """
-        return self._readComponents
+        return self._derivedComponents
 
     @property
     def parameters(self) -> Set[str]:
@@ -171,17 +171,17 @@ class StorageClass:
         return self._pytype
 
     @property
-    def assemblerClass(self) -> Optional[Type]:
-        """Class to use to (dis)assemble an object from components."""
-        if self._assembler is not None:
-            return self._assembler
-        if self._assemblerClassName is None:
+    def delegateClass(self) -> Optional[Type]:
+        """Class to use to delegate type-specific actions."""
+        if self._delegate is not None:
+            return self._delegate
+        if self._delegateClassName is None:
             return None
-        self._assembler = doImport(self._assemblerClassName)
-        return self._assembler
+        self._delegate = doImport(self._delegateClassName)
+        return self._delegate
 
     def allComponents(self) -> Mapping[str, StorageClass]:
-        """Return a mapping of all the read and read/write components
+        """Return a mapping of all the derived and read/write components
         to the corresponding storage class.
 
         Returns
@@ -190,26 +190,26 @@ class StorageClass:
             The component name to storage class mapping.
         """
         components = copy.copy(self.components)
-        components.update(self.readComponents)
+        components.update(self.derivedComponents)
         return components
 
-    def assembler(self) -> CompositeAssembler:
-        """Return an instance of an assembler.
+    def delegate(self) -> StorageClassDelegate:
+        """Return an instance of a storage class delegate.
 
         Returns
         -------
-        assembler : `CompositeAssembler`
-            Instance of the assembler associated with this `StorageClass`.
-            Assembler is constructed with this `StorageClass`.
+        delegate : `StorageClassDelegate`
+            Instance of the delegate associated with this `StorageClass`.
+            The delegate is constructed with this `StorageClass`.
 
         Raises
         ------
         TypeError
-            This StorageClass has no associated assembler.
+            This StorageClass has no associated delegate.
         """
-        cls = self.assemblerClass
+        cls = self.delegateClass
         if cls is None:
-            raise TypeError(f"No assembler class is associated with StorageClass {self.name}")
+            raise TypeError(f"No delegate class is associated with StorageClass {self.name}")
         return cls(storageClass=self)
 
     def isComposite(self) -> bool:
@@ -346,7 +346,7 @@ class StorageClass:
         return isinstance(instance, self.pytype)
 
     def __eq__(self, other: Any) -> bool:
-        """Equality checks name, pytype name, assembler name, and components"""
+        """Equality checks name, pytype name, delegate name, and components"""
 
         if not isinstance(other, StorageClass):
             return False
@@ -354,9 +354,9 @@ class StorageClass:
         if self.name != other.name:
             return False
 
-        # We must compare pytype and assembler by name since we do not want
+        # We must compare pytype and delegate by name since we do not want
         # to trigger an import of external module code here
-        if self._assemblerClassName != other._assemblerClassName:
+        if self._delegateClassName != other._delegateClassName:
             return False
         if self._pytypeName != other._pytypeName:
             return False
@@ -384,8 +384,8 @@ class StorageClass:
         optionals: Dict[str, Any] = {}
         if self._pytypeName != "object":
             optionals["pytype"] = self._pytypeName
-        if self._assemblerClassName is not None:
-            optionals["assembler"] = self._assemblerClassName
+        if self._delegateClassName is not None:
+            optionals["delegate"] = self._delegateClassName
         if self._parameters:
             optionals["parameters"] = self._parameters
         if self.components:
@@ -505,9 +505,9 @@ StorageClasses
 
             # Extract scalar items from dict that are needed for
             # StorageClass Constructor
-            storageClassKwargs = {k: info[k] for k in ("pytype", "assembler", "parameters") if k in info}
+            storageClassKwargs = {k: info[k] for k in ("pytype", "delegate", "parameters") if k in info}
 
-            for compName in ("components", "readComponents"):
+            for compName in ("components", "derivedComponents"):
                 if compName not in info:
                     continue
                 components = {}
@@ -568,7 +568,7 @@ StorageClasses
         # so that a child can inherit but override one bit.
         # lists (which you get from configs) are treated as sets for this to
         # work consistently.
-        for k in ("components", "parameters", "readComponents"):
+        for k in ("components", "parameters", "derivedComponents"):
             classKey = f"_cls_{k}"
             if classKey in clsargs:
                 baseValue = getattr(baseClass, classKey, None)

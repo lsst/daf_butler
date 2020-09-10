@@ -113,7 +113,7 @@ class S3Datastore(RemoteFileDatastore):
     """
 
     defaultConfigFile = "datastores/s3Datastore.yaml"
-    """Path to configuration defaults. Accessed within the ``config`` resource
+    """Path to configuration defaults. Accessed within the ``configs`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
 

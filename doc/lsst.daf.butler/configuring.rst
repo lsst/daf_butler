@@ -8,7 +8,7 @@ The main sections of the YAML file are handled separately by each sub configurat
 Each config specialization, registry, schema, storage class, composites, and dimensions knows the name of the key for its own section of the configuration and knows the names of files providing overrides and defaults for the configuration.
 Additionally, if the sub configuration contains a ``cls`` key, that class is imported and an additional configuration file name can be provided by asking the class for its defaultConfigFile  property.
 All the keys within a sub configuration are processed by the class constructed from ``cls``.
-The primary source of default values comes from the ``config`` resource (accessed using `pkg_resources` and package ``lsst.daf.butler``) –- this directory contains YAML files matching the names specified in the sub config classes and also can include names specified by the corresponding component class (for example `~lsst.daf.butler.datastores.posixDatastore.PosixDatastore`  specifies that configuration should be found in ``datastores/posixDatastore.yaml``.
+The primary source of default values comes from the ``configs`` resource (accessed using `pkg_resources` and package ``lsst.daf.butler``) –- this directory contains YAML files matching the names specified in the sub config classes and also can include names specified by the corresponding component class (for example `~lsst.daf.butler.datastores.posixDatastore.PosixDatastore`  specifies that configuration should be found in ``datastores/posixDatastore.yaml``.
 There are additional search paths that can be included when a config object is constructed:
 
 1. Explicit list of directory paths to search passed into the constructor.
@@ -41,7 +41,7 @@ There is a command available to allow you to see how all these overrides and inc
 
 .. prompt:: bash
 
-   dumpButlerConfig.py --subset .registry.db ./repo/butler.yaml
+   butler config-dump --subset .registry.db ./repo/butler.yaml
 
 Note the leading "``.``" to indicate that you are using a "``.``" delimiter to specify the hierarchy within the configuration.
 

@@ -94,7 +94,7 @@ class LenientYamlFormatter(YamlFormatter):
 
 class MetricsExampleFormatter(Formatter):
     """A specialist test formatter for metrics that supports components
-    directly without assembler."""
+    directly without assembler delegate."""
 
     extension = ".yaml"
     """Always write YAML"""
@@ -179,11 +179,11 @@ class MetricsExampleDataFormatter(Formatter):
     """A specialist test formatter for the data component of a MetricsExample.
 
     This is needed if the MetricsExample is dissassembled and we want to
-    support the read-only component.
+    support the derived component.
     """
 
     unsupportedParameters = None
-    """Let the assembler handle slice"""
+    """Let the assembler delegate handle slice"""
 
     extension = ".yaml"
     """Always write YAML"""

@@ -25,11 +25,11 @@ large external dependencies on python classes such as afw or serialization
 formats such as FITS or HDF5.
 """
 
-__all__ = ("ListAssembler", "MetricsAssembler", "MetricsExample", "registerMetricsExample")
+__all__ = ("ListDelegate", "MetricsDelegate", "MetricsExample", "registerMetricsExample")
 
 
 import copy
-from lsst.daf.butler import CompositeAssembler, StorageClass
+from lsst.daf.butler import StorageClassDelegate, StorageClass
 
 
 def registerMetricsExample(butler):
@@ -67,7 +67,7 @@ def registerMetricsExample(butler):
         "lsst.daf.butler.formatters.yaml.YamlFormatter",
         pytype=list,
         parameters={"slice"},
-        assembler="lsst.daf.butler.tests.ListAssembler"
+        delegate="lsst.daf.butler.tests.ListDelegate"
     )
 
     _addFullStorageClass(
@@ -76,7 +76,7 @@ def registerMetricsExample(butler):
         "lsst.daf.butler.formatters.pickle.PickleFormatter",
         pytype=MetricsExample,
         parameters={"slice"},
-        assembler="lsst.daf.butler.tests.MetricsAssembler"
+        delegate="lsst.daf.butler.tests.MetricsDelegate"
     )
 
     _addFullStorageClass(
@@ -88,7 +88,7 @@ def registerMetricsExample(butler):
                     "output": yamlDict,
                     "data": yamlList,
                     },
-        assembler="lsst.daf.butler.tests.MetricsAssembler"
+        delegate="lsst.daf.butler.tests.MetricsDelegate"
     )
 
 
@@ -234,7 +234,7 @@ class MetricsExample:
         return cls(exportDict["summary"], exportDict["output"], data)
 
 
-class ListAssembler(CompositeAssembler):
+class ListDelegate(StorageClassDelegate):
     """Parameter handler for list parameters"""
 
     def handleParameters(self, inMemoryDataset, parameters=None):
@@ -264,7 +264,7 @@ class ListAssembler(CompositeAssembler):
         return inMemoryDataset
 
 
-class MetricsAssembler(CompositeAssembler):
+class MetricsDelegate(StorageClassDelegate):
     """Parameter handler for parameters using Metrics"""
 
     def handleParameters(self, inMemoryDataset, parameters=None):

@@ -162,7 +162,7 @@ class YamlFormatter(FileFormatter):
         """
         if pytype is not None and not hasattr(builtins, pytype.__name__):
             if storageClass.isComposite():
-                inMemoryDataset = storageClass.assembler().assemble(inMemoryDataset, pytype=pytype)
+                inMemoryDataset = storageClass.delegate().assemble(inMemoryDataset, pytype=pytype)
             elif not isinstance(inMemoryDataset, pytype):
                 # Hope that we can pass the arguments in directly
                 inMemoryDataset = pytype(inMemoryDataset)

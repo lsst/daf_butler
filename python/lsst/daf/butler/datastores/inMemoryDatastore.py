@@ -96,7 +96,7 @@ class InMemoryDatastore(GenericBaseDatastore):
     """
 
     defaultConfigFile = "datastores/inMemoryDatastore.yaml"
-    """Path to configuration defaults. Accessed within the ``config`` resource
+    """Path to configuration defaults. Accessed within the ``configs`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
 
@@ -296,11 +296,11 @@ class InMemoryDatastore(GenericBaseDatastore):
         component = ref.datasetType.component()
 
         # Check that the supplied parameters are suitable for the type read
-        # If this is a read-only component we validate against the composite
-        isReadOnlyComponent = False
-        if component in writeStorageClass.readComponents:
+        # If this is a derived component we validate against the composite
+        isDerivedComponent = False
+        if component in writeStorageClass.derivedComponents:
             writeStorageClass.validateParameters(parameters)
-            isReadOnlyComponent = True
+            isDerivedComponent = True
         else:
             readStorageClass.validateParameters(parameters)
 
@@ -308,10 +308,10 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         # if this is a read only component we need to apply parameters
         # before we retrieve the component. We assume that the parameters
-        # will affect the data globally, before the read-only component
+        # will affect the data globally, before the derived component
         # is selected.
-        if isReadOnlyComponent:
-            inMemoryDataset = writeStorageClass.assembler().handleParameters(inMemoryDataset, parameters)
+        if isDerivedComponent:
+            inMemoryDataset = writeStorageClass.delegate().handleParameters(inMemoryDataset, parameters)
             # Then disable parameters for later
             parameters = {}
 
@@ -324,7 +324,7 @@ class InMemoryDatastore(GenericBaseDatastore):
                                                                writeStorageClass.name))
 
             # Concrete composite written as a single object (we hope)
-            inMemoryDataset = writeStorageClass.assembler().getComponent(inMemoryDataset, component)
+            inMemoryDataset = writeStorageClass.delegate().getComponent(inMemoryDataset, component)
 
         # Since there is no formatter to process parameters, they all must be
         # passed to the assembler.

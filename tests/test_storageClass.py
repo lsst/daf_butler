@@ -23,7 +23,7 @@ import os
 import pickle
 import unittest
 
-from lsst.daf.butler import StorageClass, StorageClassFactory, StorageClassConfig, CompositeAssembler
+from lsst.daf.butler import StorageClass, StorageClassFactory, StorageClassConfig, StorageClassDelegate
 
 """Tests related to the StorageClass infrastructure.
 """
@@ -59,9 +59,9 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertNotIn("parameters", r)
         self.assertIn("pytype='dict'", r)
 
-        # Ensure we do not have an assembler
+        # Ensure we do not have a delegate
         with self.assertRaises(TypeError):
-            sc.assembler()
+            sc.delegate()
 
         # Allow no definition of python type
         scn = StorageClass(className)
@@ -72,10 +72,10 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertIn("comp1", scc.components)
         r = repr(scc)
         self.assertIn("comp1", r)
-        self.assertIn("lsst.daf.butler.core.assembler.CompositeAssembler", r)
+        self.assertIn("lsst.daf.butler.core.storageClassDelegate.StorageClassDelegate", r)
 
-        # Ensure that we have an assembler
-        self.assertIsInstance(scc.assembler(), CompositeAssembler)
+        # Ensure that we have a delegate
+        self.assertIsInstance(scc.delegate(), StorageClassDelegate)
 
         # Check we can create a storageClass using the name of an importable
         # type.
@@ -134,7 +134,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
                            components={"comp2": sc3})
         self.assertNotEqual(sc5, sc8)
         sc9 = StorageClass("Composite", pytype=PythonType,
-                           components={"comp2": sc3}, assembler="lsst.daf.butler.Butler")
+                           components={"comp2": sc3}, delegate="lsst.daf.butler.Butler")
         self.assertNotEqual(sc5, sc9)
 
     def testRegistry(self):
