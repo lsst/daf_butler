@@ -157,11 +157,6 @@ class ButlerPutGetTests:
 
         datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
 
-        # Try to create one that will have a name that is too long
-        with self.assertRaises(Exception) as cm:
-            self.addDatasetType("DatasetTypeNameTooLong" * 50, dimensions, storageClass, butler.registry)
-        self.assertIn("check constraint", str(cm.exception).lower())
-
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
         butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
