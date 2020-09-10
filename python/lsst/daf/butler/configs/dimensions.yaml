@@ -165,6 +165,13 @@ dimensions:
           length: 64
           doc: Object of interest for this visit or survey field name.
         -
+          name: observation_reason
+          type: string
+          length: 32
+          doc: >
+            The reason this visit was taken. (e.g. science,
+            filter scan, unknown, various).
+        -
           name: science_program
           type: string
           length: 64
@@ -218,6 +225,13 @@ dimensions:
           length: 16
           doc: The observation type of this exposure (e.g. dark, bias, science).
         -
+          name: observation_reason
+          type: string
+          length: 32
+          doc: >
+            The reason this observation was taken. (e.g. science,
+            filter scan, unknown).
+        -
           name: group_name
           type: string
           length: 64
@@ -239,7 +253,9 @@ dimensions:
           name: science_program
           type: string
           length: 64
-          doc: Observing program (survey or proposal) identifier.
+          doc: >
+            Observing program (survey, proposal, engineering project)
+            identifier.
         -
           name: tracking_ra
           type: float
