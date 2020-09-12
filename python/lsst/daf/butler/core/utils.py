@@ -281,7 +281,10 @@ def stripIfNotNone(s: Optional[str]) -> Optional[str]:
     return s
 
 
-def immutable(cls: Type) -> Type:
+T = TypeVar("T", bound="Type")
+
+
+def immutable(cls: T) -> T:
     """A class decorator that simulates a simple form of immutability for
     the decorated class.
 
