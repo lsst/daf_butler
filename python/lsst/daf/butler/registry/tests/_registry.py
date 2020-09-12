@@ -41,6 +41,7 @@ from ...core import (
     DataCoordinate,
     DataCoordinateSequence,
     DataCoordinateSet,
+    DatasetAssociation,
     DatasetRef,
     DatasetType,
     DimensionGraph,
@@ -1555,6 +1556,36 @@ class RegistryTests(ABC):
         registry.certify(collection, [bias3a], Timespan(begin=t1, end=t3))
         # Now we'll certify 2b and 3b together over [t4, ∞).
         registry.certify(collection, [bias2b, bias3b], Timespan(begin=t4, end=None))
+
+        # Fetch all associations and check that they are what we expect.
+        self.assertCountEqual(
+            list(
+                registry.queryDatasetAssociations(
+                    "bias",
+                    collections=[collection, "imported_g", "imported_r"],
+                )
+            ),
+            [
+                DatasetAssociation(
+                    ref=registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
+                    collection="imported_g",
+                    timespan=None,
+                ),
+                DatasetAssociation(
+                    ref=registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
+                    collection="imported_r",
+                    timespan=None,
+                ),
+                DatasetAssociation(ref=bias2a, collection="imported_g", timespan=None),
+                DatasetAssociation(ref=bias3a, collection="imported_g", timespan=None),
+                DatasetAssociation(ref=bias2b, collection="imported_r", timespan=None),
+                DatasetAssociation(ref=bias3b, collection="imported_r", timespan=None),
+                DatasetAssociation(ref=bias2a, collection=collection, timespan=Timespan(begin=t2, end=t4)),
+                DatasetAssociation(ref=bias3a, collection=collection, timespan=Timespan(begin=t1, end=t3)),
+                DatasetAssociation(ref=bias2b, collection=collection, timespan=Timespan(begin=t4, end=None)),
+                DatasetAssociation(ref=bias3b, collection=collection, timespan=Timespan(begin=t4, end=None)),
+            ]
+        )
 
         class Ambiguous:
             """Tag class to denote lookups that are expected to be ambiguous.

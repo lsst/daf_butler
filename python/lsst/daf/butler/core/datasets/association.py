@@ -19,6 +19,32 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .type import *
-from .ref import *
-from .association import DatasetAssociation
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Optional
+
+from .ref import DatasetRef
+from ..timespan import Timespan
+
+
+@dataclass
+class DatasetAssociation:
+    """A struct that represents the membership of a single dataset in a
+    single collection.
+    """
+
+    __slots__ = ("ref", "collection", "timespan")
+
+    ref: DatasetRef
+    """Resolved reference to a dataset (`DatasetRef`).
+    """
+
+    collection: str
+    """Name of a collection (`str`).
+    """
+
+    timespan: Optional[Timespan]
+    """Validity range of the dataset if this is a `~CollectionType.CALIBRATION`
+    collection (`Timespan` or `None`).
+    """
