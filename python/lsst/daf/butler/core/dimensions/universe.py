@@ -158,7 +158,7 @@ class DimensionUniverse:
         return self
 
     def __repr__(self) -> str:
-        return f"DimensionUniverse({self})"
+        return f"DimensionUniverse({self._version})"
 
     def __getitem__(self, name: str) -> DimensionElement:
         return self._elements[name]
