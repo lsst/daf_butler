@@ -24,7 +24,6 @@ import click
 from functools import partial
 
 from ..utils import MWOptionDecorator, split_commas, split_kv, unwrap
-from lsst.daf.butler.core.utils import iterable
 from lsst.daf.butler.registry import CollectionType
 
 
@@ -74,7 +73,6 @@ log_level_option = MWOptionDecorator("--log-level",
                                                                           case_sensitive=False),
                                                       normalize=True,
                                                       unseparated_okay=True),
-                                     default=iterable("WARNING"),
                                      help="The logging level. "
                                           f"Supported levels are [{'|'.join(logLevelChoices)}]",
                                      is_eager=True,
