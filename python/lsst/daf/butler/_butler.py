@@ -974,9 +974,9 @@ class Butler:
         refs : `~collections.abc.Iterable` of `DatasetRef`
             Datasets to prune.  These must be "resolved" references (not just
             a `DatasetType` and data ID).
-        disassociate : bool`, optional
+        disassociate : `bool`, optional
             Disassociate pruned datasets from ``self.tags`` (or the collections
-            given via the ``tags`` argument).  Ignored if ``refs`` is ``...``.
+            given via the ``tags`` argument).
         unstore : `bool`, optional
             If `True` (`False` is default) remove these datasets from all
             datastores known to this butler.  Note that this will make it
