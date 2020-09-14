@@ -67,16 +67,18 @@ dataset_type_option = MWOptionDecorator("-d", "--dataset-type",
                                         multiple=True)
 
 
+logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
 log_level_option = MWOptionDecorator("--log-level",
                                      callback=partial(split_kv,
-                                                      choice=click.Choice(["CRITICAL", "ERROR", "WARNING",
-                                                                          "INFO", "DEBUG"],
+                                                      choice=click.Choice(logLevelChoices,
                                                                           case_sensitive=False),
                                                       normalize=True,
                                                       unseparated_okay=True),
                                      default=iterable("WARNING"),
-                                     help="The Python log level to use.",
+                                     help="The logging level. "
+                                          f"Supported levels are [{'|'.join(logLevelChoices)}]",
                                      is_eager=True,
+                                     metavar="LEVEL|COMPONENT=LEVEL",
                                      multiple=True)
 
 
