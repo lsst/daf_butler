@@ -28,10 +28,7 @@ from typing import (
     Dict,
     Iterable,
     List,
-    Mapping,
-    MutableMapping,
     Optional,
-    Set,
     Tuple,
 )
 from collections import defaultdict
@@ -57,7 +54,7 @@ class RepoExportContext:
 
         with butler.export(filename="export.yaml") as export:
             export.saveDataIds(...)
-            export.saveDatasts(...)
+            export.saveDatasets(...)
 
     Parameters
     ----------
@@ -80,7 +77,9 @@ class RepoExportContext:
         self._backend = backend
         self._directory = directory
         self._transfer = transfer
-        self._dataset_ids: Set[int] = set()
+        self._records: Dict[DimensionElement, Dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
+        self._dataset_ids = set()
+        self._datasets: Dict[Tuple[DatasetType, str], List[FileDataset]] = defaultdict(list)
 
     def saveDataIds(self, dataIds: Iterable[DataCoordinate], *,
                     elements: Optional[Iterable[DimensionElement]] = None) -> None:
@@ -99,13 +98,10 @@ class RepoExportContext:
                                  if element.hasTable() and element.viewOf is None)
         else:
             elements = frozenset(elements)
-        records: MutableMapping[DimensionElement, Dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
         for dataId in dataIds:
             for record in dataId.records.values():
                 if record is not None and record.definition in elements:
-                    records[record.definition].setdefault(record.dataId, record)
-        for element in self._registry.dimensions.sorted(records.keys()):
-            self._backend.saveDimensionData(element, *records[element].values())
+                    self._records[record.definition].setdefault(record.dataId, record)
 
     def saveDatasets(self, refs: Iterable[DatasetRef], *,
                      elements: Optional[Iterable[DimensionElement]] = None,
@@ -139,7 +135,6 @@ class RepoExportContext:
         future (once `Registry` provides a way to look up that information).
         """
         dataIds = set()
-        datasets: Mapping[Tuple[DatasetType, str], List[FileDataset]] = defaultdict(list)
         for ref in refs:
             # The query interfaces that are often used to generate the refs
             # passed here often don't remove duplicates, so do that here for
@@ -155,14 +150,16 @@ class RepoExportContext:
                 exports = [rewrite(export) for export in exports]
             self._dataset_ids.add(ref.getCheckedId())
             assert ref.run is not None
-            datasets[ref.datasetType, ref.run].extend(exports)
+            self._datasets[ref.datasetType, ref.run].extend(exports)
         self.saveDataIds(dataIds, elements=elements)
-        for (datasetType, run), records in datasets.items():
-            self._backend.saveDatasets(datasetType, run, *records)
 
     def _finish(self) -> None:
         """Delegate to the backend to finish the export process.
 
         For use by `Butler.export` only.
         """
+        for element in self._registry.dimensions.sorted(self._records.keys()):
+            self._backend.saveDimensionData(element, *self._records[element].values())
+        for (datasetType, run), records in self._datasets.items():
+            self._backend.saveDatasets(datasetType, run, *records)
         self._backend.finish()

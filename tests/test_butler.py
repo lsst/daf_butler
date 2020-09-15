@@ -940,6 +940,9 @@ class FileLikeDatastoreButlerTests(ButlerTests):
             exportFile = os.path.join(exportDir, "exports.yaml")
             with exportButler.export(filename=exportFile, directory=exportDir, transfer="auto") as export:
                 export.saveDatasets(datasets)
+                # Save one of the data IDs again; this should be harmless
+                # because of internal deduplication.
+                export.saveDataIds([datasets[0].dataId])
             self.assertTrue(os.path.exists(exportFile))
             with tempfile.TemporaryDirectory() as importDir:
                 # We always want this to be a local posix butler
