@@ -62,7 +62,6 @@ from .core import (
     DatasetType,
     Datastore,
     FileDataset,
-    RepoExport,
     StorageClassFactory,
     ValidationError,
 )
@@ -72,6 +71,7 @@ from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
 from .registry import Registry, RegistryConfig, CollectionType
 from .registry.wildcards import CollectionSearch
+from .transfers import RepoExportContext
 
 log = logging.getLogger(__name__)
 
@@ -1205,12 +1205,12 @@ class Butler:
     def export(self, *, directory: Optional[str] = None,
                filename: Optional[str] = None,
                format: Optional[str] = None,
-               transfer: Optional[str] = None) -> ContextManager[RepoExport]:
+               transfer: Optional[str] = None) -> ContextManager[RepoExportContext]:
         """Export datasets from the repository represented by this `Butler`.
 
         This method is a context manager that returns a helper object
-        (`RepoExport`) that is used to indicate what information from the
-        repository should be exported.
+        (`RepoExportContext`) that is used to indicate what information from
+        the repository should be exported.
 
         Parameters
         ----------
@@ -1266,8 +1266,8 @@ class Butler:
         with open(filename, 'w') as stream:
             backend = BackendClass(stream)
             try:
-                helper = RepoExport(self.registry, self.datastore, backend=backend,
-                                    directory=directory, transfer=transfer)
+                helper = RepoExportContext(self.registry, self.datastore, backend=backend,
+                                           directory=directory, transfer=transfer)
                 yield helper
             except BaseException:
                 raise
