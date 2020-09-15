@@ -114,7 +114,11 @@ class RepoExportContext:
         Parameters
         ----------
         dataIds : iterable of `DataCoordinate`.
-            Fully-expanded data IDs to export.
+            Data IDs to export.  For large numbers of data IDs obtained by
+            calls to `Registry.queryDataIds`, it will be much more efficient if
+            these are expanded to include records (i.e.
+            `DataCoordinate.hasRecords` returns `True`) prior to the call to
+            `saveDataIds` via e.g. ``Registry.queryDataIds(...).expanded()``.
         elements : iterable of `DimensionElement`, optional
             Dimension elements whose records should be exported.  If `None`,
             records for all dimensions will be exported.
@@ -125,6 +129,12 @@ class RepoExportContext:
         else:
             elements = frozenset(elements)
         for dataId in dataIds:
+            # This is potentially quite slow, because it's approximately
+            # len(dataId.graph.elements) queries per data ID.  But it's a no-op
+            # if the data ID is already expanded, and DM-26692 will add (or at
+            # least start to add / unblock) query functionality that should
+            # let us speed this up internally as well.
+            dataId = self._registry.expandDataId(dataId)
             for record in dataId.records.values():
                 if record is not None and record.definition in elements:
                     self._records[record.definition].setdefault(record.dataId, record)
@@ -167,7 +177,7 @@ class RepoExportContext:
             # convenience.
             if ref.id in self._dataset_ids:
                 continue
-            dataIds.add(self._registry.expandDataId(ref.dataId))
+            dataIds.add(ref.dataId)
             # `exports` is a single-element list here, because we anticipate
             # a future where more than just Datastore.export has a vectorized
             # API and we can pull this out of the loop.
