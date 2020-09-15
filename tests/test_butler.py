@@ -943,6 +943,11 @@ class FileLikeDatastoreButlerTests(ButlerTests):
             exportFile = os.path.join(exportDir, "exports.yaml")
             with exportButler.export(filename=exportFile, directory=exportDir, transfer="auto") as export:
                 export.saveDatasets(datasets)
+                # Export the same datasets again. This should quietly do
+                # nothing because of internal deduplication, and it shouldn't
+                # complain about being asked to export the "htm7" elements even
+                # though there aren't any in these datasets or in the database.
+                export.saveDatasets(datasets, elements=["htm7"])
                 # Save one of the data IDs again; this should be harmless
                 # because of internal deduplication.
                 export.saveDataIds([datasets[0].dataId])

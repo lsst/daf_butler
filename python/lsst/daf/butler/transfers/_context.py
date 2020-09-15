@@ -30,6 +30,7 @@ from typing import (
     List,
     Optional,
     Tuple,
+    Union,
 )
 from collections import defaultdict
 
@@ -108,7 +109,7 @@ class RepoExportContext:
             self._records[element].setdefault(record.dataId, record)
 
     def saveDataIds(self, dataIds: Iterable[DataCoordinate], *,
-                    elements: Optional[Iterable[DimensionElement]] = None) -> None:
+                    elements: Optional[Iterable[Union[str, DimensionElement]]] = None) -> None:
         """Export the dimension records associated with one or more data IDs.
 
         Parameters
@@ -119,7 +120,7 @@ class RepoExportContext:
             these are expanded to include records (i.e.
             `DataCoordinate.hasRecords` returns `True`) prior to the call to
             `saveDataIds` via e.g. ``Registry.queryDataIds(...).expanded()``.
-        elements : iterable of `DimensionElement`, optional
+        elements : iterable of `DimensionElement` or `str`, optional
             Dimension elements whose records should be exported.  If `None`,
             records for all dimensions will be exported.
         """
@@ -127,7 +128,10 @@ class RepoExportContext:
             elements = frozenset(element for element in self._registry.dimensions.getStaticElements()
                                  if element.hasTable() and element.viewOf is None)
         else:
-            elements = frozenset(elements)
+            elements = frozenset(
+                self._registry.dimensions[element] if not isinstance(element, DimensionElement) else element
+                for element in elements
+            )
         for dataId in dataIds:
             # This is potentially quite slow, because it's approximately
             # len(dataId.graph.elements) queries per data ID.  But it's a no-op
@@ -140,7 +144,7 @@ class RepoExportContext:
                     self._records[record.definition].setdefault(record.dataId, record)
 
     def saveDatasets(self, refs: Iterable[DatasetRef], *,
-                     elements: Optional[Iterable[DimensionElement]] = None,
+                     elements: Optional[Union[str, DimensionElement]] = None,
                      rewrite: Optional[Callable[[FileDataset], FileDataset]] = None) -> None:
         """Export one or more datasets.
 
@@ -154,7 +158,7 @@ class RepoExportContext:
             attributes must not be `None`.  Duplicates are automatically
             ignored.  Nested data IDs must have `DataCoordinate.hasRecords`
             return `True`.
-        elements : iterable of `DimensionElement`, optional
+        elements : iterable of `DimensionElement` or `str`, optional
             Dimension elements whose records should be exported; this is
             forwarded to `saveDataIds` when exporting the data IDs of the
             given datasets.
