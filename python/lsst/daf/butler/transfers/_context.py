@@ -112,8 +112,8 @@ class RepoExportContext:
                      rewrite: Optional[Callable[[FileDataset], FileDataset]] = None) -> None:
         """Export one or more datasets.
 
-        This automatically exports any `DatasetType`, `Run`, and dimension
-        records associated with the datasets.
+        This automatically exports any `DatasetType`, `~CollectionType.RUN`
+        collections, and dimension records associated with the datasets.
 
         Parameters
         ----------
@@ -134,10 +134,9 @@ class RepoExportContext:
 
         Notes
         -----
-        At present, this only associates datasets with the collection that
-        matches their run name.  Other collections will be included in the
-        export in the future (once `Registry` provides a way to look up that
-        information).
+        At present, this only associates datasets with `~CollectionType.RUN`
+        collections.  Other collections will be included in the export in the
+        future (once `Registry` provides a way to look up that information).
         """
         dataIds = set()
         datasets: Mapping[Tuple[DatasetType, str], List[FileDataset]] = defaultdict(list)
