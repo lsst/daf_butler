@@ -81,6 +81,32 @@ class RepoExportContext:
         self._dataset_ids = set()
         self._datasets: Dict[Tuple[DatasetType, str], List[FileDataset]] = defaultdict(list)
 
+    def saveDimensionData(self, element: Union[str, DimensionElement],
+                          records: Iterable[Union[dict, DimensionRecord]]) -> None:
+        """Export the given dimension records associated with one or more data
+        IDs.
+
+        Parameters
+        ----------
+        element : `str` or `DimensionElement`
+            `DimensionElement` or `str` indicating the logical table these
+            records are from.
+        records : `Iterable` [ `DimensionRecord` or `dict` ]
+            Records to export, as an iterable containing `DimensionRecord` or
+            `dict` instances.
+        """
+        if not isinstance(element, DimensionElement):
+            element = self._registry.dimensions[element]
+        for record in records:
+            if not isinstance(record, DimensionRecord):
+                record = element.RecordClass(**record)
+            elif record.definition != element:
+                raise ValueError(
+                    f"Mismatch between element={element.name} and "
+                    f"dimension record with definition={record.definition.name}."
+                )
+            self._records[element].setdefault(record.dataId, record)
+
     def saveDataIds(self, dataIds: Iterable[DataCoordinate], *,
                     elements: Optional[Iterable[DimensionElement]] = None) -> None:
         """Export the dimension records associated with one or more data IDs.
