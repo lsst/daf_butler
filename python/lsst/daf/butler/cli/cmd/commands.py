@@ -24,9 +24,9 @@ import yaml
 
 from ..opt import (collection_type_option, dataset_type_option, directory_argument, glob_argument,
                    repo_argument, run_option, transfer_option, verbose_option)
-from ..utils import split_commas, cli_handle_exception, typeStrAcceptsMultiple
-from ...script import (butlerImport, createRepo, configDump, configValidate, queryCollections,
-                       queryDatasetTypes)
+from ..utils import cli_handle_exception, split_commas, typeStrAcceptsMultiple, unwrap
+from ...script import (butlerImport, createRepo, configDump, configValidate, pruneCollection,
+                       queryCollections, queryDatasetTypes)
 
 willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
 existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."
@@ -98,6 +98,26 @@ def config_validate(*args, **kwargs):
     is_good = cli_handle_exception(configValidate, *args, **kwargs)
     if not is_good:
         raise click.exceptions.Exit(1)
+
+
+@click.command()
+@repo_argument(required=True)
+@click.option("--collection",
+              help=unwrap("""Name of the collection to remove. If this is a TAGGED or CHAINED collection,
+                          datasets within the collection are not modified unless --unstore is passed. If this
+                          is a RUN collection, --purge and --unstore must be passed, and all datasets in it
+                          are fully removed from the data repository. """))
+@click.option("--purge",
+              help=unwrap("""Permit RUN collections to be removed, fully removing datasets within them.
+                          Requires --unstore as an added precaution against accidental deletion. Must not be
+                          passed if the collection is not a RUN."""),
+              is_flag=True)
+@click.option("--unstore",
+              help=("""Remove all datasets in the collection from all datastores in which they appear."""),
+              is_flag=True)
+def prune_collection(**kwargs):
+    """Remove a collection and possibly prune datasets within it."""
+    cli_handle_exception(pruneCollection, **kwargs)
 
 
 @click.command(short_help="Search for collections.")
