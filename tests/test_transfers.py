@@ -36,16 +36,20 @@ from typing import (
 import unittest
 import unittest.mock
 
+import astropy.time
+
 from lsst.daf.butler import (
+    CollectionType,
     DatasetRef,
     Datastore,
     FileDataset,
     Registry,
+    Timespan,
     YamlRepoExportBackend,
     YamlRepoImportBackend,
 )
 from lsst.daf.butler.transfers import RepoExportContext
-from lsst.daf.butler.registry import RegistryConfig
+from lsst.daf.butler.registry import CollectionSearch, RegistryConfig
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -251,6 +255,74 @@ class TransfersTestCase(unittest.TestCase):
         self.assertCountEqual(
             [ref.unresolved() for ref in registry1.queryDatasets(..., collections=...)],
             [ref.unresolved() for ref in registry2.queryDatasets(..., collections=...)],
+        )
+
+    def testCollectionTransfers(self):
+        """Test exporting and then importing collections of various types.
+        """
+        # Populate a registry with some datasets.
+        registry1, _ = self.runImport(os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        self.runImport(os.path.join(TESTDIR, "data", "registry", "datasets.yaml"), registry=registry1)
+        # Add some more collections.
+        registry1.registerRun("run1")
+        registry1.registerCollection("tag1", CollectionType.TAGGED)
+        registry1.registerCollection("calibration1", CollectionType.CALIBRATION)
+        registry1.registerCollection("chain1", CollectionType.CHAINED)
+        registry1.registerCollection("chain2", CollectionType.CHAINED)
+        registry1.setCollectionChain("chain1", ["tag1", "run1", "chain2"])
+        registry1.setCollectionChain("chain2", [("calibration1", ["bias"]), "run1"])
+        # Associate some datasets into the TAGGED and CALIBRATION collections.
+        flats1 = list(registry1.queryDatasets("flat", collections=...))
+        registry1.associate("tag1", flats1)
+        t1 = astropy.time.Time('2020-01-01T01:00:00', format="isot", scale="tai")
+        t2 = astropy.time.Time('2020-01-01T02:00:00', format="isot", scale="tai")
+        t3 = astropy.time.Time('2020-01-01T03:00:00', format="isot", scale="tai")
+        bias2a = registry1.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g")
+        bias3a = registry1.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g")
+        bias2b = registry1.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r")
+        bias3b = registry1.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r")
+        registry1.certify("calibration1", [bias2a, bias3a], Timespan(t1, t2))
+        registry1.certify("calibration1", [bias2b], Timespan(t2, None))
+        registry1.certify("calibration1", [bias3b], Timespan(t2, t3))
+        # Export all collections.
+        exportStream = StringIO()
+        with self.runExport(stream=exportStream, registry=registry1) as exporter:
+            # Sort results to put chain1 before chain2, which is intentionally
+            # not topological order.
+            for collection in sorted(registry1.queryCollections()):
+                exporter.saveCollection(collection)
+            exporter.saveDatasets(flats1)
+            exporter.saveDatasets([bias2a, bias2b, bias3a, bias3b])
+        # Import them into a new registry.
+        importStream = StringIO(exportStream.getvalue())
+        registry2, _ = self.runImport(importStream)
+        # Check that it all round-tripped, starting with the collections
+        # themselves.
+        self.assertIs(registry2.getCollectionType("run1"), CollectionType.RUN)
+        self.assertIs(registry2.getCollectionType("tag1"), CollectionType.TAGGED)
+        self.assertIs(registry2.getCollectionType("calibration1"), CollectionType.CALIBRATION)
+        self.assertIs(registry2.getCollectionType("chain1"), CollectionType.CHAINED)
+        self.assertIs(registry2.getCollectionType("chain2"), CollectionType.CHAINED)
+        self.assertEqual(
+            registry2.getCollectionChain("chain1"),
+            CollectionSearch.fromExpression(["tag1", "run1", "chain2"]),
+        )
+        self.assertEqual(
+            registry2.getCollectionChain("chain2"),
+            CollectionSearch.fromExpression([("calibration1", ["bias"]), "run1"]),
+        )
+        # Check that tag collection contents are the same.
+        self.maxDiff = None
+        self.assertCountEqual(
+            [ref.unresolved() for ref in registry1.queryDatasets(..., collections="tag1")],
+            [ref.unresolved() for ref in registry2.queryDatasets(..., collections="tag1")],
+        )
+        # Check that calibration collection contents are the same.
+        self.assertCountEqual(
+            [(assoc.ref.unresolved(), assoc.timespan)
+             for assoc in registry1.queryDatasetAssociations("bias", collections="calibration1")],
+            [(assoc.ref.unresolved(), assoc.timespan)
+             for assoc in registry2.queryDatasetAssociations("bias", collections="calibration1")],
         )
 
 
