@@ -934,12 +934,8 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         # Add a DimensionRecord that's unused by those datasets.
         skymapRecord = {"name": "example_skymap", "hash": (50).to_bytes(8, byteorder="little")}
         exportButler.registry.insertDimensionData("skymap", skymapRecord)
-        # Export those datasets.  We used TemporaryDirectory because there
-        # doesn't seem to be a way to get the filename (as opposed to the file
-        # object) from any of tempfile's temporary-file context managers.
+        # Export and then import datasets.
         with tempfile.TemporaryDirectory() as exportDir:
-            # TODO: When PosixDatastore supports transfer-on-exist, add tests
-            # for that.
             exportFile = os.path.join(exportDir, "exports.yaml")
             with exportButler.export(filename=exportFile, directory=exportDir, transfer="auto") as export:
                 export.saveDatasets(datasets)
