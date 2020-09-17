@@ -207,11 +207,13 @@ class RepoExportContext:
             #     r = self._records[element]
             # (continued below).
             self._backend.saveDimensionData(element, *self._records[element].values())
-        for datasetType, run in sorted(self._datasets.keys()):
-            # After, that we need to sort the FileDataset objects in the third
-            # argument below (maybe by filename?) and the lists of DatasetRef
-            # within those (I'd use the aforementioned new DataCoordinate sort
-            # method, because I'm not sure dataset_id values are going to be
-            # reliably deterministic themselves).
+        # Then we need to either make DatasetType sortable directly or sort
+        # the iteration below by its name (as well as run).
+        for datasetType, run in self._datasets.keys():
+            # And after that, that we need to sort the FileDataset objects in
+            # the third argument below (maybe by filename?) and the lists of
+            # DatasetRef within those (I'd use the aforementioned new
+            # DataCoordinate sort method, because I'm not sure dataset_id
+            # values are going to be reliably deterministic themselves).
             self._backend.saveDatasets(datasetType, run, *self._datasets[datasetType, run])
         self._backend.finish()
