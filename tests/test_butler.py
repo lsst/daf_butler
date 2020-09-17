@@ -931,15 +931,24 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         # Test that the repo actually has at least one dataset.
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))
         self.assertGreater(len(datasets), 0)
-        # Export those datasets.  We used TemporaryDirectory because there
-        # doesn't seem to be a way to get the filename (as opposed to the file
-        # object) from any of tempfile's temporary-file context managers.
+        # Add a DimensionRecord that's unused by those datasets.
+        skymapRecord = {"name": "example_skymap", "hash": (50).to_bytes(8, byteorder="little")}
+        exportButler.registry.insertDimensionData("skymap", skymapRecord)
+        # Export and then import datasets.
         with tempfile.TemporaryDirectory() as exportDir:
-            # TODO: When PosixDatastore supports transfer-on-exist, add tests
-            # for that.
             exportFile = os.path.join(exportDir, "exports.yaml")
             with exportButler.export(filename=exportFile, directory=exportDir, transfer="auto") as export:
                 export.saveDatasets(datasets)
+                # Export the same datasets again. This should quietly do
+                # nothing because of internal deduplication, and it shouldn't
+                # complain about being asked to export the "htm7" elements even
+                # though there aren't any in these datasets or in the database.
+                export.saveDatasets(datasets, elements=["htm7"])
+                # Save one of the data IDs again; this should be harmless
+                # because of internal deduplication.
+                export.saveDataIds([datasets[0].dataId])
+                # Save some dimension records directly.
+                export.saveDimensionData("skymap", [skymapRecord])
             self.assertTrue(os.path.exists(exportFile))
             with tempfile.TemporaryDirectory() as importDir:
                 # We always want this to be a local posix butler
@@ -957,6 +966,8 @@ class FileLikeDatastoreButlerTests(ButlerTests):
                         # Test for existence by passing in the DatasetType and
                         # data ID separately, to avoid lookup by dataset_id.
                         self.assertTrue(importButler.datasetExists(ref.datasetType, ref.dataId))
+                self.assertEqual(list(importButler.registry.queryDimensionRecords("skymap")),
+                                 [importButler.registry.dimensions["skymap"].RecordClass(**skymapRecord)])
 
 
 class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):

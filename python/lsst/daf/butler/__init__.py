@@ -11,4 +11,5 @@ from .registry import Registry, CollectionType, CollectionSearch, DatasetTypeRes
 from ._butlerConfig import *
 from ._deferredDatasetHandle import *
 from ._butler import *
+from .transfers import YamlRepoExportBackend, YamlRepoImportBackend
 from .version import *

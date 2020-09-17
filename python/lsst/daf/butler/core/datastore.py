@@ -55,12 +55,12 @@ from .config import ConfigSubset, Config
 from .exceptions import ValidationError, DatasetTypeNotSupportedError
 from .constraints import Constraints
 from .storageClass import StorageClassFactory
+from .fileDataset import FileDataset
 
 if TYPE_CHECKING:
     from ..registry.interfaces import DatastoreRegistryBridgeManager
     from .datasets import DatasetRef, DatasetType
     from .configSupport import LookupKey
-    from .repoTransfers import FileDataset
     from .storageClass import StorageClass
     from ._butlerUri import ButlerURI
 

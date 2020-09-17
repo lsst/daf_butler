@@ -47,7 +47,6 @@ from ...core import (
     NamedValueSet,
     StorageClass,
     ddl,
-    YamlRepoImportBackend
 )
 from .._registry import (
     CollectionType,
@@ -102,6 +101,7 @@ class RegistryTests(ABC):
         """Load registry test data from ``getDataDir/<filename>``,
         which should be a YAML import/export file.
         """
+        from ...transfers import YamlRepoImportBackend
         with open(os.path.join(self.getDataDir(), filename), 'r') as stream:
             backend = YamlRepoImportBackend(stream, registry)
         backend.register()

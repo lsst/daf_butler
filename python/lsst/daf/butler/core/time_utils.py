@@ -23,10 +23,13 @@ from __future__ import annotations
 __all__ = ("astropy_to_nsec", "nsec_to_astropy", "times_equal")
 
 import logging
+from typing import Any
 import warnings
 
 import astropy.time
 import astropy.utils.exceptions
+import yaml
+
 
 # These constants can be used by client code.
 # EPOCH is used to construct times as read from database, its precision is
@@ -148,3 +151,70 @@ def times_equal(time1: astropy.time.Time,
     delta = (time2.jd1 - time1.jd1) + (time2.jd2 - time1.jd2)
     delta *= _NSEC_PER_DAY
     return abs(delta) < precision_nsec
+
+
+class _AstropyTimeToYAML:
+    """Handle conversion of astropy Time to/from YAML representation.
+
+    This class defines methods that convert astropy Time instances to or from
+    YAML representation. On output it converts time to string ISO format in
+    TAI scale with maximum precision defining special YAML tag for it. On
+    input it does inverse transformation. The methods need to be registered
+    with YAML dumper and loader classes.
+
+    Notes
+    -----
+    Python ``yaml`` module defines special helper base class ``YAMLObject``
+    that provides similar functionality but its use is complicated by the need
+    to convert ``Time`` instances to instances of ``YAMLObject`` sub-class
+    before saving them to YAML. This class avoids this intermediate step but
+    it requires separate regisration step.
+    """
+
+    yaml_tag = "!butler_time/tai/iso"  # YAML tag name for Time class
+
+    @classmethod
+    def to_yaml(cls, dumper: yaml.Dumper, data: astropy.time.Time) -> Any:
+        """Convert astropy Time object into YAML format.
+
+        Parameters
+        ----------
+        dumper : `yaml.Dumper`
+            YAML dumper instance.
+        data : `astropy.time.Time`
+            Data to be converted.
+        """
+        if data is not None:
+            # we store time in ISO format but we need full nanosecond
+            # precision so we have to construct intermediate instance to make
+            # sure its precision is set correctly.
+            data = astropy.time.Time(data.tai, precision=9)
+            data = data.to_value("iso")
+        return dumper.represent_scalar(cls.yaml_tag, data)
+
+    @classmethod
+    def from_yaml(cls, loader: yaml.SafeLoader, node: yaml.ScalarNode) -> astropy.time.Time:
+        """Convert YAML node into astropy time
+
+        Parameters
+        ----------
+        loader : `yaml.SafeLoader`
+            Instance of YAML loader class.
+        node : `yaml.ScalarNode`
+            YAML node.
+
+        Returns
+        -------
+        time : `astropy.time.Time`
+            Time instance, can be ``None``.
+        """
+        if node.value is not None:
+            return astropy.time.Time(node.value, format="iso", scale="tai")
+
+
+# Register Time -> YAML conversion method with Dumper class
+yaml.Dumper.add_representer(astropy.time.Time, _AstropyTimeToYAML.to_yaml)
+
+# Register YAML -> Time conversion method with Loader, for our use case we
+# only need SafeLoader.
+yaml.SafeLoader.add_constructor(_AstropyTimeToYAML.yaml_tag, _AstropyTimeToYAML.from_yaml)

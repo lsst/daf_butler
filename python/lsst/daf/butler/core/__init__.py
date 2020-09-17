@@ -25,6 +25,6 @@ from .storageClass import *
 from .storageClassDelegate import *
 from .storedFileInfo import *
 from .dimensions import *
-from .repoTransfers import *
+from .fileDataset import *
 from . import time_utils
 from .timespan import *
