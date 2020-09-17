@@ -8,6 +8,7 @@ from typing import (
     Iterable,
     Iterator,
     Optional,
+    Set,
     TYPE_CHECKING,
 )
 
@@ -16,10 +17,13 @@ import sqlalchemy
 from lsst.daf.butler import (
     CollectionType,
     DataCoordinate,
+    DataCoordinateSet,
     DatasetRef,
     DatasetType,
     SimpleQuery,
+    Timespan,
 )
+from lsst.daf.butler.registry import ConflictingDefinitionError
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
 
 if TYPE_CHECKING:
@@ -40,13 +44,15 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                  dataset_type_id: int,
                  collections: CollectionManager,
                  static: StaticDatasetTablesTuple,
-                 dynamic: sqlalchemy.sql.Table):
+                 tags: sqlalchemy.schema.Table,
+                 calibs: Optional[sqlalchemy.schema.Table]):
         super().__init__(datasetType=datasetType)
         self._dataset_type_id = dataset_type_id
         self._db = db
         self._collections = collections
         self._static = static
-        self._dynamic = dynamic
+        self._tags = tags
+        self._calibs = calibs
         self._runKeyColumn = collections.getRunForeignKeyName()
 
     def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
@@ -63,18 +69,18 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                                          returnIds=True)
             assert datasetIds is not None
             # Combine the generated dataset_id values and data ID fields to
-            # form rows to be inserted into the dynamic table.
-            protoDynamicRow = {
+            # form rows to be inserted into the tags table.
+            protoTagsRow = {
                 "dataset_type_id": self._dataset_type_id,
                 self._collections.getCollectionForeignKeyName(): run.key,
             }
-            dynamicRows = [
-                dict(protoDynamicRow, dataset_id=dataset_id, **dataId.byName())
+            tagsRows = [
+                dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
                 for dataId, dataset_id in zip(dataIds, datasetIds)
             ]
-            # Insert those rows into the dynamic table.  This is where we'll
+            # Insert those rows into the tags table.  This is where we'll
             # get any unique constraint violations.
-            self._db.insert(self._dynamic, *dynamicRows)
+            self._db.insert(self._tags, *tagsRows)
         for dataId, datasetId in zip(dataIds, datasetIds):
             yield DatasetRef(
                 datasetType=self.datasetType,
@@ -83,14 +89,35 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 run=run.name,
             )
 
-    def find(self, collection: CollectionRecord, dataId: DataCoordinate) -> Optional[DatasetRef]:
+    def find(self, collection: CollectionRecord, dataId: DataCoordinate,
+             timespan: Optional[Timespan] = None) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
         assert dataId.graph == self.datasetType.dimensions
+        if collection.type is CollectionType.CALIBRATION and timespan is None:
+            raise TypeError(f"Cannot search for dataset in CALIBRATION collection {collection.name} "
+                            f"without an input timespan.")
         sql = self.select(collection=collection, dataId=dataId, id=SimpleQuery.Select,
-                          run=SimpleQuery.Select).combine()
-        row = self._db.query(sql).fetchone()
+                          run=SimpleQuery.Select, timespan=timespan).combine()
+        results = self._db.query(sql)
+        row = results.fetchone()
         if row is None:
             return None
+        if collection.type is CollectionType.CALIBRATION:
+            # For temporal calibration lookups (only!) our invariants do not
+            # guarantee that the number of result rows is <= 1.
+            # They would if `select` constrained the given timespan to be
+            # _contained_ by the validity range in the self._calibs table,
+            # instead of simply _overlapping_ it, because we do guarantee that
+            # the validity ranges are disjoint for a particular dataset type,
+            # collection, and data ID.  But using an overlap test and a check
+            # for multiple result rows here allows us to provide a more useful
+            # diagnostic, as well as allowing `select` to support more general
+            # queries where multiple results are not an error.
+            if results.fetchone() is not None:
+                raise RuntimeError(
+                    f"Multiple matches found for calibration lookup in {collection.name} for "
+                    f"{self.datasetType.name} with {dataId} overlapping {timespan}. "
+                )
         return DatasetRef(
             datasetType=self.datasetType,
             dataId=dataId,
@@ -123,7 +150,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
             rows.append(row)
-        self._db.replace(self._dynamic, *rows)
+        self._db.replace(self._tags, *rows)
 
     def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorage.
@@ -137,13 +164,148 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             }
             for dataset in datasets
         ]
-        self._db.delete(self._dynamic, ["dataset_id", self._collections.getCollectionForeignKeyName()],
+        self._db.delete(self._tags, ["dataset_id", self._collections.getCollectionForeignKeyName()],
                         *rows)
+
+    def _buildCalibOverlapQuery(self, collection: CollectionRecord,
+                                dataIds: Optional[DataCoordinateSet],
+                                timespan: Timespan) -> SimpleQuery:
+        assert self._calibs is not None
+        # Start by building a SELECT query for any rows that would overlap
+        # this one.
+        query = SimpleQuery()
+        query.join(self._calibs)
+        # Add a WHERE clause matching the dataset type and collection.
+        query.where.append(self._calibs.columns.dataset_type_id == self._dataset_type_id)
+        query.where.append(
+            self._calibs.columns[self._collections.getCollectionForeignKeyName()] == collection.key
+        )
+        # Add a WHERE clause matching any of the given data IDs.
+        if dataIds is not None:
+            dataIds.constrain(
+                query,
+                lambda name: self._calibs.columns[name],  # type: ignore
+            )
+        # Add WHERE clause for timespan overlaps.
+        tsRepr = self._db.getTimespanRepresentation()
+        query.where.append(tsRepr.fromSelectable(self._calibs).overlaps(timespan))
+        return query
+
+    def certify(self, collection: CollectionRecord, datasets: Iterable[DatasetRef],
+                timespan: Timespan) -> None:
+        # Docstring inherited from DatasetRecordStorage.
+        if self._calibs is None:
+            raise TypeError(f"Cannot certify datasets of type {self.datasetType.name}, for which "
+                            f"DatasetType.isCalibration() is False.")
+        if collection.type is not CollectionType.CALIBRATION:
+            raise TypeError(f"Cannot certify into collection '{collection}' "
+                            f"of type {collection.type.name}; must be CALIBRATION.")
+        tsRepr = self._db.getTimespanRepresentation()
+        protoRow = {
+            self._collections.getCollectionForeignKeyName(): collection.key,
+            "dataset_type_id": self._dataset_type_id,
+        }
+        rows = []
+        dataIds: Optional[Set[DataCoordinate]] = set() if not tsRepr.hasExclusionConstraint() else None
+        for dataset in datasets:
+            row = dict(protoRow, dataset_id=dataset.getCheckedId())
+            for dimension, value in dataset.dataId.items():
+                row[dimension.name] = value
+            tsRepr.update(timespan, result=row)
+            rows.append(row)
+            if dataIds is not None:
+                dataIds.add(dataset.dataId)
+        if tsRepr.hasExclusionConstraint():
+            # Rely on database constraint to enforce invariants; we just
+            # reraise the exception for consistency across DB engines.
+            try:
+                self._db.insert(self._calibs, *rows)
+            except sqlalchemy.exc.IntegrityError as err:
+                raise ConflictingDefinitionError(
+                    f"Validity range conflict certifying datasets of type {self.datasetType.name} "
+                    f"into {collection.name} for range [{timespan.begin}, {timespan.end})."
+                ) from err
+        else:
+            # Have to implement exclusion constraint ourselves.
+            # Start by building a SELECT query for any rows that would overlap
+            # this one.
+            query = self._buildCalibOverlapQuery(
+                collection,
+                DataCoordinateSet(dataIds, graph=self.datasetType.dimensions),  # type: ignore
+                timespan
+            )
+            query.columns.append(sqlalchemy.sql.func.count())
+            sql = query.combine()
+            # Acquire a table lock to ensure there are no concurrent writes
+            # could invalidate our checking before we finish the inserts.  We
+            # use a SAVEPOINT in case there is an outer transaction that a
+            # failure here should not roll back.
+            with self._db.transaction(lock=[self._calibs], savepoint=True):
+                # Run the check SELECT query.
+                conflicting = self._db.query(sql).scalar()
+                if conflicting > 0:
+                    raise ConflictingDefinitionError(
+                        f"{conflicting} validity range conflicts certifying datasets of type "
+                        f"{self.datasetType.name} into {collection.name} for range "
+                        f"[{timespan.begin}, {timespan.end})."
+                    )
+                # Proceed with the insert.
+                self._db.insert(self._calibs, *rows)
+
+    def decertify(self, collection: CollectionRecord, timespan: Timespan, *,
+                  dataIds: Optional[Iterable[DataCoordinate]] = None) -> None:
+        # Docstring inherited from DatasetRecordStorage.
+        if self._calibs is None:
+            raise TypeError(f"Cannot decertify datasets of type {self.datasetType.name}, for which "
+                            f"DatasetType.isCalibration() is False.")
+        if collection.type is not CollectionType.CALIBRATION:
+            raise TypeError(f"Cannot decertify from collection '{collection}' "
+                            f"of type {collection.type.name}; must be CALIBRATION.")
+        tsRepr = self._db.getTimespanRepresentation()
+        # Construct a SELECT query to find all rows that overlap our inputs.
+        dataIdSet: Optional[DataCoordinateSet]
+        if dataIds is not None:
+            dataIdSet = DataCoordinateSet(set(dataIds), graph=self.datasetType.dimensions)
+        else:
+            dataIdSet = None
+        query = self._buildCalibOverlapQuery(collection, dataIdSet, timespan)
+        query.columns.extend(self._calibs.columns)
+        sql = query.combine()
+        # Set up collections to populate with the rows we'll want to modify.
+        # The insert rows will have the same values for collection and
+        # dataset type.
+        protoInsertRow = {
+            self._collections.getCollectionForeignKeyName(): collection.key,
+            "dataset_type_id": self._dataset_type_id,
+        }
+        rowsToDelete = []
+        rowsToInsert = []
+        # Acquire a table lock to ensure there are no concurrent writes
+        # between the SELECT and the DELETE and INSERT queries based on it.
+        with self._db.transaction(lock=[self._calibs], savepoint=True):
+            for row in self._db.query(sql):
+                rowsToDelete.append({"id": row["id"]})
+                # Construct the insert row(s) by copying the prototype row,
+                # then adding the dimension column values, then adding what's
+                # left of the timespan from that row after we subtract the
+                # given timespan.
+                newInsertRow = protoInsertRow.copy()
+                newInsertRow["dataset_id"] = row["dataset_id"]
+                for name in self.datasetType.dimensions.required.names:
+                    newInsertRow[name] = row[name]
+                rowTimespan = tsRepr.extract(row)
+                assert rowTimespan is not None, "Field should have a NOT NULL constraint."
+                for diffTimespan in rowTimespan.difference(timespan):
+                    rowsToInsert.append(tsRepr.update(diffTimespan, result=newInsertRow.copy()))
+            # Run the DELETE and INSERT queries.
+            self._db.delete(self._calibs, ["id"], *rowsToDelete)
+            self._db.insert(self._calibs, *rowsToInsert)
 
     def select(self, collection: CollectionRecord,
                dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
                id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
+               timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
                ) -> SimpleQuery:
         # Docstring inherited from DatasetRecordStorage.
         assert collection.type is not CollectionType.CHAINED
@@ -159,27 +321,43 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             **{self._runKeyColumn: run}
         )
         # If and only if the collection is a RUN, we constrain it in the static
-        # table (and also the dynamic table below)
+        # table (and also the tags or calibs table below)
         if collection.type is CollectionType.RUN:
             query.where.append(self._static.dataset.columns[self._runKeyColumn]
                                == collection.key)
-        # We get or constrain the data ID from the dynamic table, but that's
-        # multiple columns, not one, so we need to transform the one Select.Or
-        # argument into a dictionary of them.
+        # We get or constrain the data ID from the tags/calibs table, but
+        # that's multiple columns, not one, so we need to transform the one
+        # Select.Or argument into a dictionary of them.
         kwargs: Dict[str, Any]
         if dataId is SimpleQuery.Select:
             kwargs = {dim.name: SimpleQuery.Select for dim in self.datasetType.dimensions.required}
         else:
             kwargs = dict(dataId.byName())
-        # We always constrain (never retrieve) the collection from the dynamic
+        # We always constrain (never retrieve) the collection from the tags
         # table.
         kwargs[self._collections.getCollectionForeignKeyName()] = collection.key
-        # And now we finally join in the dynamic table.
-        query.join(
-            self._dynamic,
-            onclause=(self._static.dataset.columns.id == self._dynamic.columns.dataset_id),
-            **kwargs
-        )
+        # And now we finally join in the tags or calibs table.
+        if collection.type is CollectionType.CALIBRATION:
+            assert self._calibs is not None, \
+                "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
+            tsRepr = self._db.getTimespanRepresentation()
+            # Add the timespan column(s) to the result columns, or constrain
+            # the timespan via an overlap condition.
+            if timespan is SimpleQuery.Select:
+                kwargs.update({k: SimpleQuery.Select for k in tsRepr.getFieldNames()})
+            elif timespan is not None:
+                query.where.append(tsRepr.fromSelectable(self._calibs).overlaps(timespan))
+            query.join(
+                self._calibs,
+                onclause=(self._static.dataset.columns.id == self._calibs.columns.dataset_id),
+                **kwargs
+            )
+        else:
+            query.join(
+                self._tags,
+                onclause=(self._static.dataset.columns.id == self._tags.columns.dataset_id),
+                **kwargs
+            )
         return query
 
     def getDataId(self, id: int) -> DataCoordinate:
@@ -187,10 +365,10 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # This query could return multiple rows (one for each tagged collection
         # the dataset is in, plus one for its run collection), and we don't
         # care which of those we get.
-        sql = self._dynamic.select().where(
+        sql = self._tags.select().where(
             sqlalchemy.sql.and_(
-                self._dynamic.columns.dataset_id == id,
-                self._dynamic.columns.dataset_type_id == self._dataset_type_id
+                self._tags.columns.dataset_id == id,
+                self._tags.columns.dataset_type_id == self._dataset_type_id
             )
         ).limit(1)
         row = self._db.query(sql).fetchone()

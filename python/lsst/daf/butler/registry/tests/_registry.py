@@ -30,7 +30,7 @@ import unittest
 
 import astropy.time
 import sqlalchemy
-from typing import Optional
+from typing import Optional, Type, Union
 
 try:
     import numpy as np
@@ -47,6 +47,7 @@ from ...core import (
     NamedValueSet,
     StorageClass,
     ddl,
+    Timespan,
 )
 from .._registry import (
     CollectionType,
@@ -312,7 +313,7 @@ class RegistryTests(ABC):
         self.loadData(registry, "base.yaml")
         run = "test"
         registry.registerRun(run)
-        datasetType = registry.getDatasetType("permabias")
+        datasetType = registry.getDatasetType("bias")
         dataId = {"instrument": "Cam1", "detector": 2}
         ref, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
         outRef = registry.getDataset(ref.id)
@@ -329,7 +330,7 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         run = "test"
-        datasetType = registry.getDatasetType("permabias")
+        datasetType = registry.getDatasetType("bias")
         dataId = {"instrument": "Cam1", "detector": 4}
         registry.registerRun(run)
         inputRef, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
@@ -362,44 +363,44 @@ class RegistryTests(ABC):
         # First query for all dataset types; components should only be included
         # when components=True.
         self.assertEqual(
-            {"permabias", "permaflat"},
+            {"bias", "flat"},
             NamedValueSet(registry.queryDatasetTypes()).names
         )
         self.assertEqual(
-            {"permabias", "permaflat"},
+            {"bias", "flat"},
             NamedValueSet(registry.queryDatasetTypes(components=False)).names
         )
         self.assertLess(
-            {"permabias", "permaflat", "permabias.wcs", "permaflat.photoCalib"},
+            {"bias", "flat", "bias.wcs", "flat.photoCalib"},
             NamedValueSet(registry.queryDatasetTypes(components=True)).names
         )
         # Use a pattern that can match either parent or components.  Again,
         # components are only returned if components=True.
         self.assertEqual(
-            {"permabias"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"))).names
+            {"bias"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"))).names
         )
         self.assertEqual(
-            {"permabias"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"), components=False)).names
+            {"bias"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=False)).names
         )
         self.assertLess(
-            {"permabias", "permabias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"), components=True)).names
+            {"bias", "bias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=True)).names
         )
         # This pattern matches only a component.  In this case we also return
         # that component dataset type if components=None.
         self.assertEqual(
-            {"permabias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"))).names
+            {"bias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"))).names
         )
         self.assertEqual(
             set(),
-            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"), components=False)).names
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=False)).names
         )
         self.assertEqual(
-            {"permabias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"), components=True)).names
+            {"bias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=True)).names
         )
 
     def testComponentLookups(self):
@@ -412,21 +413,21 @@ class RegistryTests(ABC):
         # Registry), and check for consistency with
         # DatasetRef.makeComponentRef.
         collection = "imported_g"
-        parentType = registry.getDatasetType("permabias")
-        childType = registry.getDatasetType("permabias.wcs")
+        parentType = registry.getDatasetType("bias")
+        childType = registry.getDatasetType("bias.wcs")
         parentRefResolved = registry.findDataset(parentType, collections=collection,
                                                  instrument="Cam1", detector=1)
         self.assertIsInstance(parentRefResolved, DatasetRef)
         self.assertEqual(childType, parentRefResolved.makeComponentRef("wcs").datasetType)
         # Search for a single dataset with findDataset.
-        childRef1 = registry.findDataset("permabias.wcs", collections=collection,
+        childRef1 = registry.findDataset("bias.wcs", collections=collection,
                                          dataId=parentRefResolved.dataId)
         self.assertEqual(childRef1, parentRefResolved.makeComponentRef("wcs"))
         # Search for detector data IDs constrained by component dataset
         # existence with queryDataIds.
         dataIds = registry.queryDataIds(
             ["detector"],
-            datasets=["permabias.wcs"],
+            datasets=["bias.wcs"],
             collections=collection,
         ).toSet()
         self.assertEqual(
@@ -441,7 +442,7 @@ class RegistryTests(ABC):
         )
         # Search for multiple datasets of a single type with queryDatasets.
         childRefs2 = set(registry.queryDatasets(
-            "permabias.wcs",
+            "bias.wcs",
             collections=collection,
         ))
         self.assertEqual(
@@ -457,7 +458,7 @@ class RegistryTests(ABC):
         self.loadData(registry, "datasets.yaml")
         run1 = "imported_g"
         run2 = "imported_r"
-        datasetType = "permabias"
+        datasetType = "bias"
         # Find some datasets via their run's collection.
         dataId1 = {"instrument": "Cam1", "detector": 1}
         ref1 = registry.findDataset(datasetType, dataId1, collections=run1)
@@ -506,7 +507,7 @@ class RegistryTests(ABC):
         self.assertIsNone(registry.findDataset(datasetType, dataId3, collections=tag1))
         # Register a chained collection that searches:
         # 1. 'tag1'
-        # 2. 'run1', but only for the permaflat dataset
+        # 2. 'run1', but only for the flat dataset
         # 3. 'run2'
         chain1 = "chain1"
         registry.registerCollection(chain1, type=CollectionType.CHAINED)
@@ -522,35 +523,35 @@ class RegistryTests(ABC):
         with self.assertRaises(ValueError):
             registry.setCollectionChain(chain1, [tag1, chain1])
         # Add the child collections.
-        registry.setCollectionChain(chain1, [tag1, (run1, "permaflat"), run2])
+        registry.setCollectionChain(chain1, [tag1, (run1, "flat"), run2])
         self.assertEqual(
             list(registry.getCollectionChain(chain1)),
             [(tag1, DatasetTypeRestriction.any),
-             (run1, DatasetTypeRestriction.fromExpression("permaflat")),
+             (run1, DatasetTypeRestriction.fromExpression("flat")),
              (run2, DatasetTypeRestriction.any)]
         )
         # Searching for dataId1 or dataId2 in the chain should return ref1 and
         # ref2, because both are in tag1.
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain1), ref1)
         self.assertEqual(registry.findDataset(datasetType, dataId2, collections=chain1), ref2)
-        # Now disassociate ref2 from tag1.  The search (for permabias) with
+        # Now disassociate ref2 from tag1.  The search (for bias) with
         # dataId2 in chain1 should then:
         # 1. not find it in tag1
-        # 2. not look in tag2, because it's restricted to permaflat here
+        # 2. not look in tag2, because it's restricted to flat here
         # 3. find a different dataset in run2
         registry.disassociate(tag1, [ref2])
         ref2b = registry.findDataset(datasetType, dataId2, collections=chain1)
         self.assertNotEqual(ref2b, ref2)
         self.assertEqual(ref2b, registry.findDataset(datasetType, dataId2, collections=run2))
-        # Look in the chain for a permaflat that is in run1; should get the
+        # Look in the chain for a flat that is in run1; should get the
         # same ref as if we'd searched run1 directly.
         dataId3 = {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}
-        self.assertEqual(registry.findDataset("permaflat", dataId3, collections=chain1),
-                         registry.findDataset("permaflat", dataId3, collections=run1),)
+        self.assertEqual(registry.findDataset("flat", dataId3, collections=chain1),
+                         registry.findDataset("flat", dataId3, collections=run1),)
         # Define a new chain so we can test recursive chains.
         chain2 = "chain2"
         registry.registerCollection(chain2, type=CollectionType.CHAINED)
-        registry.setCollectionChain(chain2, [(run2, "permabias"), chain1])
+        registry.setCollectionChain(chain2, [(run2, "bias"), chain1])
         # Query for collections matching a regex.
         self.assertCountEqual(
             list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),
@@ -561,19 +562,19 @@ class RegistryTests(ABC):
             list(registry.queryCollections([re.compile("imported_."), "chain1"], flattenChains=False)),
             ["imported_r", "imported_g", "chain1"]
         )
-        # Search for permabias with dataId1 should find it via tag1 in chain2,
+        # Search for bias with dataId1 should find it via tag1 in chain2,
         # recursing, because is not in run1.
         self.assertIsNone(registry.findDataset(datasetType, dataId1, collections=run2))
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain2), ref1)
-        # Search for permabias with dataId2 should find it in run2 (ref2b).
+        # Search for bias with dataId2 should find it in run2 (ref2b).
         self.assertEqual(registry.findDataset(datasetType, dataId2, collections=chain2), ref2b)
-        # Search for a permaflat that is in run2.  That should not be found
-        # at the front of chain2, because of the restriction to permabias
+        # Search for a flat that is in run2.  That should not be found
+        # at the front of chain2, because of the restriction to bias
         # on run2 there, but it should be found in at the end of chain1.
         dataId4 = {"instrument": "Cam1", "detector": 3, "physical_filter": "Cam1-R2"}
-        ref4 = registry.findDataset("permaflat", dataId4, collections=run2)
+        ref4 = registry.findDataset("flat", dataId4, collections=run2)
         self.assertIsNotNone(ref4)
-        self.assertEqual(ref4, registry.findDataset("permaflat", dataId4, collections=chain2))
+        self.assertEqual(ref4, registry.findDataset("flat", dataId4, collections=chain2))
         # Deleting a collection that's part of a CHAINED collection is not
         # allowed, and is exception-safe.
         with self.assertRaises(Exception):
@@ -1121,34 +1122,34 @@ class RegistryTests(ABC):
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
         self.assertCountEqual(
-            list(registry.queryDatasets("permabias", collections=["imported_g", "imported_r"])),
+            list(registry.queryDatasets("bias", collections=["imported_g", "imported_r"])),
             [
-                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_r"),
-                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_r"),
-                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
             ]
         )
         self.assertCountEqual(
-            list(registry.queryDatasets("permabias", collections=["imported_g", "imported_r"],
+            list(registry.queryDatasets("bias", collections=["imported_g", "imported_r"],
                                         deduplicate=True)),
             [
-                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
             ]
         )
         self.assertCountEqual(
-            list(registry.queryDatasets("permabias", collections=["imported_r", "imported_g"],
+            list(registry.queryDatasets("bias", collections=["imported_r", "imported_g"],
                                         deduplicate=True)),
             [
-                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
-                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_r"),
-                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_r"),
-                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r"),
+                registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
             ]
         )
 
@@ -1159,8 +1160,8 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
-        bias = registry.getDatasetType("permabias")
-        flat = registry.getDatasetType("permaflat")
+        bias = registry.getDatasetType("bias")
+        flat = registry.getDatasetType("flat")
         # Obtain expected results from methods other than those we're testing
         # here.  That includes:
         # - the dimensions of the data IDs we want to query:
@@ -1497,3 +1498,207 @@ class RegistryTests(ABC):
                     list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
                     [dataset2],
                 )
+
+    def testCalibrationCollections(self):
+        """Test operations on `~CollectionType.CALIBRATION` collections,
+        including `Registry.certify`, `Registry.decertify`, and
+        `Registry.findDataset`.
+        """
+        # Setup - make a Registry, fill it with some datasets in
+        # non-calibration collections.
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        # Set up some timestamps.
+        t1 = astropy.time.Time('2020-01-01T01:00:00', format="isot", scale="tai")
+        t2 = astropy.time.Time('2020-01-01T02:00:00', format="isot", scale="tai")
+        t3 = astropy.time.Time('2020-01-01T03:00:00', format="isot", scale="tai")
+        t4 = astropy.time.Time('2020-01-01T04:00:00', format="isot", scale="tai")
+        t5 = astropy.time.Time('2020-01-01T05:00:00', format="isot", scale="tai")
+        allTimespans = [
+            Timespan(a, b) for a, b in itertools.combinations([None, t1, t2, t3, t4, t5, None], r=2)
+        ]
+        # Get references to some datasets.
+        bias2a = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g")
+        bias3a = registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g")
+        bias2b = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r")
+        bias3b = registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r")
+        # Register the main calibration collection we'll be working with.
+        collection = "Cam1/calibs/default"
+        registry.registerCollection(collection, type=CollectionType.CALIBRATION)
+        # Cannot associate into a calibration collection (no timespan).
+        with self.assertRaises(TypeError):
+            registry.associate(collection, [bias2a])
+        # Certify 2a dataset with [t2, t4) validity.
+        registry.certify(collection, [bias2a], Timespan(begin=t2, end=t4))
+        # We should not be able to certify 2b with anything overlapping that
+        # window.
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=None, end=t3))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=None, end=t5))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t1, end=t3))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t1, end=t5))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t1, end=None))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t2, end=t3))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t2, end=t5))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t2, end=None))
+        # We should be able to certify 3a with a range overlapping that window,
+        # because it's for a different detector.
+        # We'll certify 3a over [t1, t3).
+        registry.certify(collection, [bias3a], Timespan(begin=t1, end=t3))
+        # Now we'll certify 2b and 3b together over [t4, ∞).
+        registry.certify(collection, [bias2b, bias3b], Timespan(begin=t4, end=None))
+
+        class Ambiguous:
+            """Tag class to denote lookups that are expected to be ambiguous.
+            """
+            pass
+
+        def assertLookup(detector: int, timespan: Timespan,
+                         expected: Optional[Union[DatasetRef, Type[Ambiguous]]]) -> None:
+            """Local function that asserts that a bias lookup returns the given
+            expected result.
+            """
+            if expected is Ambiguous:
+                with self.assertRaises(RuntimeError):
+                    registry.findDataset("bias", collections=collection, instrument="Cam1",
+                                         detector=detector, timespan=timespan)
+            else:
+                self.assertEqual(
+                    expected,
+                    registry.findDataset("bias", collections=collection, instrument="Cam1",
+                                         detector=detector, timespan=timespan)
+                )
+
+        # Systematically test lookups against expected results.
+        assertLookup(detector=2, timespan=Timespan(None, t1), expected=None)
+        assertLookup(detector=2, timespan=Timespan(None, t2), expected=None)
+        assertLookup(detector=2, timespan=Timespan(None, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(None, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(None, t5), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(None, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t1, t2), expected=None)
+        assertLookup(detector=2, timespan=Timespan(t1, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t1, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t1, t5), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t1, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t2, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t2, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t2, t5), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t2, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t3, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t3, t5), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t3, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t4, t5), expected=bias2b)
+        assertLookup(detector=2, timespan=Timespan(t4, None), expected=bias2b)
+        assertLookup(detector=2, timespan=Timespan(t5, None), expected=bias2b)
+        assertLookup(detector=3, timespan=Timespan(None, t1), expected=None)
+        assertLookup(detector=3, timespan=Timespan(None, t2), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t5), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(None, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t1, t2), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t5), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t1, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t2, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t2, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t2, t5), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t2, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t3, t4), expected=None)
+        assertLookup(detector=3, timespan=Timespan(t3, t5), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t3, None), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t4, t5), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t4, None), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t5, None), expected=bias3b)
+
+        # Decertify [t3, t5) for all data IDs, and do test lookups again.
+        # This should truncate bias2a to [t2, t3), leave bias3a unchanged at
+        # [t1, t3), and truncate bias2b and bias3b to [t5, ∞).
+        registry.decertify(collection=collection, datasetType="bias", timespan=Timespan(t3, t5))
+        assertLookup(detector=2, timespan=Timespan(None, t1), expected=None)
+        assertLookup(detector=2, timespan=Timespan(None, t2), expected=None)
+        assertLookup(detector=2, timespan=Timespan(None, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(None, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(None, t5), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(None, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t1, t2), expected=None)
+        assertLookup(detector=2, timespan=Timespan(t1, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t1, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t1, t5), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t1, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t2, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t2, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t2, t5), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t2, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t3, t4), expected=None)
+        assertLookup(detector=2, timespan=Timespan(t3, t5), expected=None)
+        assertLookup(detector=2, timespan=Timespan(t3, None), expected=bias2b)
+        assertLookup(detector=2, timespan=Timespan(t4, t5), expected=None)
+        assertLookup(detector=2, timespan=Timespan(t4, None), expected=bias2b)
+        assertLookup(detector=2, timespan=Timespan(t5, None), expected=bias2b)
+        assertLookup(detector=3, timespan=Timespan(None, t1), expected=None)
+        assertLookup(detector=3, timespan=Timespan(None, t2), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t5), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t1, t2), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t5), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t2, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t2, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t2, t5), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t2, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t3, t4), expected=None)
+        assertLookup(detector=3, timespan=Timespan(t3, t5), expected=None)
+        assertLookup(detector=3, timespan=Timespan(t3, None), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t4, t5), expected=None)
+        assertLookup(detector=3, timespan=Timespan(t4, None), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t5, None), expected=bias3b)
+
+        # Decertify everything, this time with explicit data IDs, then check
+        # that no lookups succeed.
+        registry.decertify(
+            collection, "bias", Timespan(None, None),
+            dataIds=[
+                dict(instrument="Cam1", detector=2),
+                dict(instrument="Cam1", detector=3),
+            ]
+        )
+        for detector in (2, 3):
+            for timespan in allTimespans:
+                assertLookup(detector=detector, timespan=timespan, expected=None)
+        # Certify bias2a and bias3a over (-∞, ∞), check that all lookups return
+        # those.
+        registry.certify(collection, [bias2a, bias3a], Timespan(None, None),)
+        for timespan in allTimespans:
+            assertLookup(detector=2, timespan=timespan, expected=bias2a)
+            assertLookup(detector=3, timespan=timespan, expected=bias3a)
+        # Decertify just bias2 over [t2, t4).
+        # This should split a single certification row into two (and leave the
+        # other existing row, for bias3a, alone).
+        registry.decertify(collection, "bias", Timespan(t2, t4),
+                           dataIds=[dict(instrument="Cam1", detector=2)])
+        for timespan in allTimespans:
+            assertLookup(detector=3, timespan=timespan, expected=bias3a)
+            overlapsBefore = timespan.overlaps(Timespan(None, t2))
+            overlapsAfter = timespan.overlaps(Timespan(t4, None))
+            if overlapsBefore and overlapsAfter:
+                expected = Ambiguous
+            elif overlapsBefore or overlapsAfter:
+                expected = bias2a
+            else:
+                expected = None
+            assertLookup(detector=2, timespan=timespan, expected=expected)

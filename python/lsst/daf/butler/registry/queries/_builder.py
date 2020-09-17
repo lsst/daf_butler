@@ -36,6 +36,7 @@ from ...core import (
     SimpleQuery,
 )
 
+from .._collectionType import CollectionType
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns, RegistryManagers
 from .expressions import ClauseVisitor
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, Query
@@ -154,6 +155,11 @@ class QueryBuilder:
         baseColumnNames.update(datasetType.dimensions.required.names)
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
                                                                  datasetType=datasetType)):
+            if datasetType.isCalibration() and collectionRecord.type is CollectionType.CALIBRATION:
+                raise NotImplementedError(
+                    f"Query for dataset type '{datasetType.name}' in CALIBRATION-type collection "
+                    f"'{collectionRecord.name}' is not yet supported."
+                )
             ssq = datasetRecordStorage.select(collection=collectionRecord,
                                               dataId=SimpleQuery.Select,
                                               id=SimpleQuery.Select if isResult else None,
