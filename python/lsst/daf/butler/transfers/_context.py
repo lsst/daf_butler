@@ -199,7 +199,19 @@ class RepoExportContext:
         For use by `Butler.export` only.
         """
         for element in self._registry.dimensions.sorted(self._records.keys()):
+            # To make export deterministic (DM-26324), the next step is to
+            # implement a way to sort DataCoordinates, then transform the
+            # second argument to:
+            #     *[r[dataId] for dataId in sorted(r.keys())]
+            # where
+            #     r = self._records[element]
+            # (continued below).
             self._backend.saveDimensionData(element, *self._records[element].values())
-        for (datasetType, run), records in self._datasets.items():
-            self._backend.saveDatasets(datasetType, run, *records)
+        for datasetType, run in sorted(self._datasets.keys()):
+            # After, that we need to sort the FileDataset objects in the third
+            # argument below (maybe by filename?) and the lists of DatasetRef
+            # within those (I'd use the aforementioned new DataCoordinate sort
+            # method, because I'm not sure dataset_id values are going to be
+            # reliably deterministic themselves).
+            self._backend.saveDatasets(datasetType, run, *self._datasets[datasetType, run])
         self._backend.finish()
