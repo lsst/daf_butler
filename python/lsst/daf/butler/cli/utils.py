@@ -31,10 +31,13 @@ import traceback
 from unittest.mock import MagicMock, patch
 import uuid
 import yaml
+import logging
 
 from .cliLog import CliLog
 from ..core.utils import iterable
+from ..core.config import Config
 
+log = logging.getLogger(__name__)
 
 # CLI_MOCK_ENV is set by some tests as an environment variable, it
 # indicates to the cli_handle_exception function that instead of executing the
@@ -667,3 +670,50 @@ class MWCtxObj():
             return ctx.obj
         ctx.obj = MWCtxObj()
         return ctx.obj
+
+
+def yaml_presets(ctx, param, value):
+    """Click callback that reads additional values from the supplied
+    YAML file.
+
+    Parameters
+    ----------
+    ctx : `click.context`
+        The context for the click operation. Used to extract the subcommand
+        name.
+    param : `str`
+        The parameter name.
+    value : `object`
+        The value of the parameter.
+    """
+    ctx.default_map = ctx.default_map or {}
+    cmd_name = ctx.info_name
+    if value:
+        try:
+            overrides = _read_yaml_presets(value, cmd_name)
+        except Exception as e:
+            raise click.BadOptionUsage(param.name, f"Error reading overrides file: {e}", ctx)
+        # Override the defaults for this subcommand
+        ctx.default_map.update(overrides)
+    return
+
+
+def _read_yaml_presets(file_uri, cmd_name):
+    """Read file command line overrides from YAML config file.
+
+    Parameters
+    ----------
+    file_uri : `str`
+        URI of override YAML file containing the command line overrides.
+        They should be grouped by command name.
+    cmd_name : `str`
+        The subcommand name that is being modified.
+
+    Returns
+    -------
+    overrides : `dict` of [`str`, Any]
+        The relevant command line options read from the override file.
+    """
+    log.debug("Reading command line overrides for subcommand %s from URI %s", cmd_name, file_uri)
+    config = Config(file_uri)
+    return config[cmd_name]

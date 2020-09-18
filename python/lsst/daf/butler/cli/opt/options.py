@@ -23,7 +23,7 @@
 import click
 from functools import partial
 
-from ..utils import MWOptionDecorator, split_commas, split_kv, unwrap
+from ..utils import MWOptionDecorator, split_commas, split_kv, unwrap, yaml_presets
 from lsst.daf.butler.registry import CollectionType
 
 
@@ -103,3 +103,12 @@ transfer_option = MWOptionDecorator("-t", "--transfer",
 verbose_option = MWOptionDecorator("-v", "--verbose",
                                    help="Increase verbosity.",
                                    is_flag=True)
+
+
+options_file_option = MWOptionDecorator("--options-file", "-@",
+                                        expose_value=False,  # This option should not be forwarded
+                                        help=unwrap("""URI to YAML file containing overrides
+                                                    of command line options. The YAML should be organized
+                                                    as a hierarchy with subcommand names at the top
+                                                    level options for that subcommand below."""),
+                                        callback=yaml_presets)
