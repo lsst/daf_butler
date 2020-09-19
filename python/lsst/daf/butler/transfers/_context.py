@@ -29,6 +29,7 @@ from typing import (
     Iterable,
     List,
     Optional,
+    Set,
     Tuple,
     Union,
 )
@@ -79,7 +80,7 @@ class RepoExportContext:
         self._directory = directory
         self._transfer = transfer
         self._records: Dict[DimensionElement, Dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
-        self._dataset_ids = set()
+        self._dataset_ids: Set[int] = set()
         self._datasets: Dict[Tuple[DatasetType, str], List[FileDataset]] = defaultdict(list)
 
     def saveDimensionData(self, element: Union[str, DimensionElement],
@@ -144,7 +145,7 @@ class RepoExportContext:
                     self._records[record.definition].setdefault(record.dataId, record)
 
     def saveDatasets(self, refs: Iterable[DatasetRef], *,
-                     elements: Optional[Union[str, DimensionElement]] = None,
+                     elements: Optional[Iterable[Union[str, DimensionElement]]] = None,
                      rewrite: Optional[Callable[[FileDataset], FileDataset]] = None) -> None:
         """Export one or more datasets.
 
