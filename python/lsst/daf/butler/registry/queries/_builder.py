@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import Any, Iterable, List, Optional
+from typing import AbstractSet, Any, Iterable, List, Optional
 
 import sqlalchemy.sql
 
@@ -143,6 +143,13 @@ class QueryBuilder:
             collections = CollectionSearch.fromExpression(collections)
         else:
             collections = CollectionQuery.fromExpression(collections)
+        # If we are searching all collections with no constraints, loop over
+        # RUN collections only, because that will include all datasets.
+        collectionTypes: AbstractSet[CollectionType]
+        if collections == CollectionQuery.any:
+            collectionTypes = {CollectionType.RUN}
+        else:
+            collectionTypes = CollectionType.all()
         datasetRecordStorage = self._managers.datasets.find(datasetType.name)
         if datasetRecordStorage is None:
             # Unrecognized dataset type means no results.  It might be better
@@ -154,7 +161,8 @@ class QueryBuilder:
         baseColumnNames = {"id", runKeyName} if isResult else set()
         baseColumnNames.update(datasetType.dimensions.required.names)
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
-                                                                 datasetType=datasetType)):
+                                                                 datasetType=datasetType,
+                                                                 collectionTypes=collectionTypes)):
             if datasetType.isCalibration() and collectionRecord.type is CollectionType.CALIBRATION:
                 raise NotImplementedError(
                     f"Query for dataset type '{datasetType.name}' in CALIBRATION-type collection "
