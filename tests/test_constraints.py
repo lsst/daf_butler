@@ -40,7 +40,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
                                            {"instrument": "A", "physical_filter": "u"},
                                            conform=False)
 
-        dimensions = self.universe.extract(("visit", "calibration_label", "instrument"))
+        dimensions = self.universe.extract(("visit", "detector", "instrument"))
         self.pviA = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "A", "visit": 1},
                                         conform=False)
         self.pviB = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "B", "visit": 2},
@@ -60,7 +60,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertFalse(constraints.isAcceptable(self.pviA))
 
-        config = ConstraintsConfig({"accept": ["visit+calibration_label+instrument", "ExposureF"]})
+        config = ConstraintsConfig({"accept": ["visit+detector+instrument", "ExposureF"]})
         constraints = Constraints(config, universe=self.universe)
 
         self.assertFalse(constraints.isAcceptable(self.calexpA))
