@@ -37,7 +37,6 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
     def defaultExpected():
         return dict(repo=None,
                     transfer="auto",
-                    output_run=None,
                     directory=None,
                     skip_dimensions=(),
                     export_file=None)
@@ -49,26 +48,22 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
     def test_minimal(self):
         """Test only the required parameters, and omit the optional parameters.
         """
-        self.run_test(["import", "here", "foo",
-                       "--output-run", "out"],
-                      self.makeExpected(repo="here", directory="foo",
-                                        output_run="out"))
+        self.run_test(["import", "here", "foo"],
+                      self.makeExpected(repo="here", directory="foo"))
 
     def test_almostAll(self):
         """Test all the parameters, except export_file which gets its own test
         case below.
         """
         self.run_test(["import", "here", "foo",
-                       "--output-run", "out",
                        "--transfer", "symlink"],
                       self.makeExpected(repo="here", directory="foo",
-                                        output_run="out",
                                         transfer="symlink"))
 
     def test_missingArgument(self):
         """Verify the command fails if either of the positional arguments,
         REPO or DIRECTORY, is missing."""
-        self.run_missing(["import", "foo", "--output-run", "out"],
+        self.run_missing(["import", "foo"],
                          r"Error: Missing argument ['\"]DIRECTORY['\"].")
 
 
@@ -80,7 +75,6 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
     def defaultExpected():
         return dict(repo=None,
                     transfer="auto",
-                    output_run=None,
                     directory=None,
                     export_file=None)
 
@@ -122,11 +116,10 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
             with open("output.yaml", "w") as f:
                 f.write("foobarbaz")
             self.run_test(["import", "here", "foo",
-                           "--output-run", "out",
                            "--skip-dimensions", "instrument", "-s", "detector",
                            "--export-file", os.path.abspath("output.yaml")],
                           self.makeExpected(repo="here", directory="foo",
-                                            output_run="out", skip_dimensions=("instrument", "detector"),
+                                            skip_dimensions=("instrument", "detector"),
                                             export_file=unittest.mock.ANY))
             self.assertEqual("foobarbaz", ExportFileCase.didRead)
 
