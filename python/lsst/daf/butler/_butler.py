@@ -1241,10 +1241,10 @@ class Butler:
         to be exported::
 
             with butler.export("exports.yaml") as export:
-                # Export all flats, and the calibration_label dimensions
-                # associated with them.
+                # Export all flats, but none of the dimension element rows
+                # (i.e. data ID information) associated with them.
                 export.saveDatasets(butler.registry.queryDatasets("flat"),
-                                    elements=[butler.registry.dimensions["calibration_label"]])
+                                    elements=())
                 # Export all datasets that start with "deepCoadd_" and all of
                 # their associated data ID information.
                 export.saveDatasets(butler.registry.queryDatasets("deepCoadd_*"))
