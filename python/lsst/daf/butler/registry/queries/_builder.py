@@ -163,11 +163,16 @@ class QueryBuilder:
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
                                                                  datasetType=datasetType,
                                                                  collectionTypes=collectionTypes)):
-            if datasetType.isCalibration() and collectionRecord.type is CollectionType.CALIBRATION:
-                raise NotImplementedError(
-                    f"Query for dataset type '{datasetType.name}' in CALIBRATION-type collection "
-                    f"'{collectionRecord.name}' is not yet supported."
-                )
+            if collectionRecord.type is CollectionType.CALIBRATION:
+                if datasetType.isCalibration():
+                    raise NotImplementedError(
+                        f"Query for dataset type '{datasetType.name}' in CALIBRATION-type collection "
+                        f"'{collectionRecord.name}' is not yet supported."
+                    )
+                else:
+                    # We can never find a non-calibration dataset in a
+                    # CALIBRATION collection.
+                    continue
             ssq = datasetRecordStorage.select(collection=collectionRecord,
                                               dataId=SimpleQuery.Select,
                                               id=SimpleQuery.Select if isResult else None,
