@@ -23,7 +23,7 @@ import click
 import yaml
 
 from ..opt import (collection_type_option, dataset_type_option, directory_argument, options_file_option,
-                   glob_argument, repo_argument, run_option, transfer_option, verbose_option)
+                   glob_argument, repo_argument, transfer_option, verbose_option)
 from ..utils import cli_handle_exception, split_commas, typeStrAcceptsMultiple, unwrap
 from ...script import (butlerImport, createRepo, configDump, configValidate, pruneCollection,
                        queryCollections, queryDatasetTypes)
@@ -41,7 +41,6 @@ existingRepoHelp = "REPO is the URI or path to an existing data repository root 
 @repo_argument(required=True, help=willCreateRepoHelp)
 @directory_argument(required=True)
 @transfer_option()
-@run_option(required=True)
 @click.option("--export-file",
               help="Name for the file that contains database information associated with the exported "
                    "datasets.  If this is not an absolute path, does not exist in the current working "
