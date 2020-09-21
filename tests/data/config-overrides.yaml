@@ -1,0 +1,3 @@
+# Each subcommand has its own section here
+config-dump:
+  subset: .datastore

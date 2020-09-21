@@ -23,6 +23,7 @@
 """Unit tests for daf_butler CLI config-dump command.
 """
 
+import os.path
 import unittest
 import yaml
 
@@ -30,6 +31,8 @@ from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.cmd import config_dump
 from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
 from lsst.daf.butler.tests import CliCmdTestBase
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class ConfigDumpTest(CliCmdTestBase, unittest.TestCase):
@@ -104,6 +107,41 @@ class ConfigDumpUseTest(unittest.TestCase):
             result = self.runner.invoke(butler.cli, ["config-dump", "here", "--subset", "foo"])
             self.assertEqual(result.exit_code, 1)
             self.assertIn("Error: 'foo not found in config at here'", result.output)
+
+    def test_presets(self):
+        """Test that file overrides can set command line options in bulk.
+        """
+        with self.runner.isolated_filesystem():
+            result = self.runner.invoke(butler.cli, ["create", "here"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            overrides_path = os.path.join(TESTDIR, "data", "config-overrides.yaml")
+
+            # Run with a presets file
+            result = self.runner.invoke(butler.cli, ["config-dump", "here", "--options-file", overrides_path])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            cfg = yaml.safe_load(result.stdout)
+            # Look for datastore information
+            self.assertIn("formatters", cfg)
+            self.assertIn("root", cfg)
+
+            # Now run with an explicit subset and presets
+            result = self.runner.invoke(butler.cli, ["config-dump", "here", f"-@{overrides_path}",
+                                                     "--subset", ".registry"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            cfg = yaml.safe_load(result.stdout)
+            # Look for datastore information
+            self.assertNotIn("formatters", cfg)
+            self.assertIn("managers", cfg)
+
+            # Now with subset before presets -- explicit always trumps
+            # presets.
+            result = self.runner.invoke(butler.cli, ["config-dump", "here", "--subset", ".registry",
+                                                     "--options-file", overrides_path])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            cfg = yaml.safe_load(result.stdout)
+            # Look for datastore information
+            self.assertNotIn("formatters", cfg)
+            self.assertIn("managers", cfg)
 
 
 if __name__ == "__main__":

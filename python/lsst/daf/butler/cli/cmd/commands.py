@@ -22,8 +22,8 @@
 import click
 import yaml
 
-from ..opt import (collection_type_option, dataset_type_option, directory_argument, glob_argument,
-                   repo_argument, run_option, transfer_option, verbose_option)
+from ..opt import (collection_type_option, dataset_type_option, directory_argument, options_file_option,
+                   glob_argument, repo_argument, run_option, transfer_option, verbose_option)
 from ..utils import cli_handle_exception, split_commas, typeStrAcceptsMultiple, unwrap
 from ...script import (butlerImport, createRepo, configDump, configValidate, pruneCollection,
                        queryCollections, queryDatasetTypes)
@@ -51,6 +51,7 @@ existingRepoHelp = "REPO is the URI or path to an existing data repository root 
 @click.option("--skip-dimensions", "-s", type=str, multiple=True, callback=split_commas,
               metavar=typeStrAcceptsMultiple,
               help="Dimensions that should be skipped during import")
+@options_file_option()
 def butler_import(*args, **kwargs):
     """Import data into a butler repository."""
     cli_handle_exception(butlerImport, *args, **kwargs)
@@ -65,6 +66,7 @@ def butler_import(*args, **kwargs):
               "repo settings.")
 @click.option("--outfile", "-f", default=None, type=str, help="Name of output file to receive repository "
               "configuration. Default is to write butler.yaml into the specified repo.")
+@options_file_option()
 def create(*args, **kwargs):
     """Create an empty Gen3 Butler repository."""
     cli_handle_exception(createRepo, *args, **kwargs)
@@ -81,6 +83,7 @@ def create(*args, **kwargs):
 @click.option("--file", "outfile", type=click.File("w"), default="-",
               help="Print the (possibly-expanded) configuration for a repository to a file, or to stdout "
               "by default.")
+@options_file_option()
 def config_dump(*args, **kwargs):
     """Dump either a subset or full Butler configuration to standard output."""
     cli_handle_exception(configDump, *args, **kwargs)
@@ -93,6 +96,7 @@ def config_dump(*args, **kwargs):
 @click.option("--ignore", "-i", type=str, multiple=True, callback=split_commas,
               metavar=typeStrAcceptsMultiple,
               help="DatasetType(s) to ignore for validation.")
+@options_file_option()
 def config_validate(*args, **kwargs):
     """Validate the configuration files for a Gen3 Butler repository."""
     is_good = cli_handle_exception(configValidate, *args, **kwargs)
@@ -115,6 +119,7 @@ def config_validate(*args, **kwargs):
 @click.option("--unstore",
               help=("""Remove all datasets in the collection from all datastores in which they appear."""),
               is_flag=True)
+@options_file_option()
 def prune_collection(**kwargs):
     """Remove a collection and possibly prune datasets within it."""
     cli_handle_exception(pruneCollection, **kwargs)
@@ -134,6 +139,7 @@ def prune_collection(**kwargs):
                    "--no-include-chains do not return records for CHAINED collections. Default is the "
                    "opposite of --flatten-chains: include either CHAINED collections or their children, but "
                    "not both.")
+@options_file_option()
 def query_collections(*args, **kwargs):
     """Get the collections whose names match an expression."""
     print(yaml.dump(cli_handle_exception(queryCollections, *args, **kwargs)))
@@ -151,6 +157,7 @@ def query_collections(*args, **kwargs):
                    "specified) is to apply patterns to components only if their parent datasets were not "
                    "matched by the expression. Fully-specified component datasets (`str` or `DatasetType` "
                    "instances) are always included.")
+@options_file_option()
 def query_dataset_types(*args, **kwargs):
     """Get the dataset types in a repository."""
     print(yaml.dump(cli_handle_exception(queryDatasetTypes, *args, **kwargs), sort_keys=False))
