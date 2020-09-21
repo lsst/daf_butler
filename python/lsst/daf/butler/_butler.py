@@ -53,6 +53,7 @@ except ImportError:
 
 from lsst.utils import doImport
 from .core import (
+    AmbiguousDatasetError,
     ButlerURI,
     Config,
     ConfigSubset,
@@ -652,7 +653,7 @@ class Butler:
         Parameters
         ----------
         ref : `DatasetRef`
-            Reference to an already stored dataset.
+            Resolved reference to an already stored dataset.
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
@@ -664,12 +665,42 @@ class Butler:
         """
         return self.datastore.get(ref, parameters=parameters)
 
+    def getDirectDeferred(self, ref: DatasetRef, *,
+                          parameters: Union[dict, None] = None) -> DeferredDatasetHandle:
+        """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
+        from a resolved `DatasetRef`.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Resolved reference to an already stored dataset.
+        parameters : `dict`
+            Additional StorageClass-defined options to control reading,
+            typically used to efficiently read only a subset of the dataset.
+
+        Returns
+        -------
+        obj : `DeferredDatasetHandle`
+            A handle which can be used to retrieve a dataset at a later time.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``ref.id is None``, i.e. the reference is unresolved.
+        """
+        if ref.id is None:
+            raise AmbiguousDatasetError(
+                f"Dataset of type {ref.datasetType.name} with data ID {ref.dataId} is not resolved."
+            )
+        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters)
+
     def getDeferred(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                     dataId: Optional[DataId] = None, *,
                     parameters: Union[dict, None] = None,
                     collections: Any = None,
                     **kwds: Any) -> DeferredDatasetHandle:
-        """Create a `DeferredDatasetHandle` which can later retrieve a dataset
+        """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
+        after an immediate registry lookup.
 
         Parameters
         ----------
