@@ -70,6 +70,12 @@ class PosixDatastore(FileLikeDatastore):
     PosixDatastore supports all transfer modes for file-based ingest:
     `"move"`, `"copy"`, `"symlink"`, `"hardlink"`, `"relsymlink"`
     and `None` (no transfer).
+
+    For PosixDatastore, the `"auto"` transfer mode will operate in-place (like
+    ``transfer=None``) if the file is already within the datastore root, and
+    fall back to `"link"` otherwise.
+
+    See `Datastore.ingest` for more information on transfer modes.
     """
 
     defaultConfigFile: ClassVar[Optional[str]] = "datastores/posixDatastore.yaml"
