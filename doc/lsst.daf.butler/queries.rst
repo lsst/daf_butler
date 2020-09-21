@@ -300,7 +300,7 @@ Few examples of valid expressions using some of the constructs:
 
     visit IN (100..200) AND tract = 500
 
-    visit IN (100..200) AND visit NOT IN (159, 191) AND abstract_filter = 'i'
+    visit IN (100..200) AND visit NOT IN (159, 191) AND band = 'i'
 
     (visit = 100 OR visit = 101) AND exposure % 2 = 1
 

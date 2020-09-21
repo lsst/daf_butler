@@ -213,12 +213,12 @@ class RegistryTests(ABC):
         # expandDataId should raise if there is no record with the given ID.
         with self.assertRaises(LookupError):
             registry.expandDataId({"instrument": "Unknown"}, graph=dimension.graph)
-        # abstract_filter doesn't have a table; insert should fail.
+        # band doesn't have a table; insert should fail.
         with self.assertRaises(TypeError):
-            registry.insertDimensionData("abstract_filter", {"abstract_filter": "i"})
+            registry.insertDimensionData("band", {"band": "i"})
         dimensionName2 = "physical_filter"
         dimension2 = registry.dimensions[dimensionName2]
-        dimensionValue2 = {"name": "DummyCam_i", "abstract_filter": "i"}
+        dimensionValue2 = {"name": "DummyCam_i", "band": "i"}
         # Missing required dependency ("instrument") should fail
         with self.assertRaises(KeyError):
             registry.insertDimensionData(dimensionName2, dimensionValue2)
@@ -256,7 +256,7 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         dimensionEntries = [
             ("instrument", {"instrument": "DummyCam"}),
-            ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "abstract_filter": "R"}),
+            ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "R"}),
             # Using an np.int64 here fails unless Records.fromDict is also
             # patched to look for numbers.Integral
             ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo", "physical_filter": "d-r"}),
@@ -661,8 +661,8 @@ class RegistryTests(ABC):
         )
         registry.insertDimensionData(
             "physical_filter",
-            dict(instrument="DummyCam", name="dummy_r", abstract_filter="r"),
-            dict(instrument="DummyCam", name="dummy_i", abstract_filter="i"),
+            dict(instrument="DummyCam", name="dummy_r", band="r"),
+            dict(instrument="DummyCam", name="dummy_i", band="i"),
         )
         registry.insertDimensionData(
             "detector",
@@ -815,7 +815,7 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
 
         # need a bunch of dimensions and datasets for test, we want
-        # "abstract_filter" in the test so also have to add physical_filter
+        # "band" in the test so also have to add physical_filter
         # dimensions
         registry.insertDimensionData(
             "instrument",
@@ -823,8 +823,8 @@ class RegistryTests(ABC):
         )
         registry.insertDimensionData(
             "physical_filter",
-            dict(instrument="DummyCam", name="dummy_r", abstract_filter="r"),
-            dict(instrument="DummyCam", name="dummy_i", abstract_filter="i"),
+            dict(instrument="DummyCam", name="dummy_r", band="r"),
+            dict(instrument="DummyCam", name="dummy_i", band="i"),
         )
         registry.insertDimensionData(
             "skymap",
@@ -845,7 +845,7 @@ class RegistryTests(ABC):
         registry.storageClasses.registerStorageClass(storageClass)
         calexpType = DatasetType(name="deepCoadd_calexp",
                                  dimensions=registry.dimensions.extract(("skymap", "tract", "patch",
-                                                                         "abstract_filter")),
+                                                                         "band")),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
         mergeType = DatasetType(name="deepCoadd_mergeDet",
@@ -854,7 +854,7 @@ class RegistryTests(ABC):
         registry.registerDatasetType(mergeType)
         measType = DatasetType(name="deepCoadd_meas",
                                dimensions=registry.dimensions.extract(("skymap", "tract", "patch",
-                                                                       "abstract_filter")),
+                                                                       "band")),
                                storageClass=storageClass)
         registry.registerDatasetType(measType)
 
@@ -870,7 +870,7 @@ class RegistryTests(ABC):
                 dataId = dict(skymap="DummyMap", tract=tract, patch=patch)
                 registry.insertDatasets(mergeType, dataIds=[dataId], run=run)
                 for aFilter in ("i", "r"):
-                    dataId = dict(skymap="DummyMap", tract=tract, patch=patch, abstract_filter=aFilter)
+                    dataId = dict(skymap="DummyMap", tract=tract, patch=patch, band=aFilter)
                     registry.insertDatasets(calexpType, dataIds=[dataId], run=run)
 
         # with empty expression
@@ -878,10 +878,10 @@ class RegistryTests(ABC):
                                      datasets=[calexpType, mergeType], collections=run).toSet()
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("skymap", "tract", "patch", "abstract_filter"))
+            self.assertCountEqual(dataId.keys(), ("skymap", "tract", "patch", "band"))
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 4, 6, 7))
-        self.assertCountEqual(set(dataId["abstract_filter"] for dataId in rows), ("i", "r"))
+        self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
         rows = registry.queryDataIds(dimensions,
@@ -890,16 +890,16 @@ class RegistryTests(ABC):
         self.assertEqual(len(rows), 2*2*2)   # 2 tracts x 2 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 7))
-        self.assertCountEqual(set(dataId["abstract_filter"] for dataId in rows), ("i", "r"))
+        self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i", "r"))
 
         # limit to single filter
         rows = registry.queryDataIds(dimensions,
                                      datasets=[calexpType, mergeType], collections=run,
-                                     where="abstract_filter = 'i'").toSet()
+                                     where="band = 'i'").toSet()
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 4, 6, 7))
-        self.assertCountEqual(set(dataId["abstract_filter"] for dataId in rows), ("i",))
+        self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i",))
 
         # expression excludes everything, specifying non-existing skymap is
         # not a fatal error, it's operator error
@@ -932,7 +932,7 @@ class RegistryTests(ABC):
 
         coaddType = DatasetType(name="deepCoadd_calexp",
                                 dimensions=registry.dimensions.extract(("skymap", "tract", "patch",
-                                                                        "abstract_filter")),
+                                                                        "band")),
                                 storageClass=storageClass)
         registry.registerDatasetType(coaddType)
 
@@ -966,7 +966,7 @@ class RegistryTests(ABC):
         registry.insertDimensionData("instrument", dict(name="DummyCam"))
         registry.insertDimensionData(
             "physical_filter",
-            dict(instrument="DummyCam", name="dummy_i", abstract_filter="i"),
+            dict(instrument="DummyCam", name="dummy_i", band="i"),
         )
         registry.insertDimensionData(
             "detector",
@@ -1041,22 +1041,22 @@ class RegistryTests(ABC):
 
     def testAbstractFilterQuery(self):
         """Test that we can run a query that just lists the known
-        abstract_filters.  This is tricky because abstract_filter is
+        bands.  This is tricky because band is
         backed by a query against physical_filter.
         """
         registry = self.makeRegistry()
         registry.insertDimensionData("instrument", dict(name="DummyCam"))
         registry.insertDimensionData(
             "physical_filter",
-            dict(instrument="DummyCam", name="dummy_i", abstract_filter="i"),
-            dict(instrument="DummyCam", name="dummy_i2", abstract_filter="i"),
-            dict(instrument="DummyCam", name="dummy_r", abstract_filter="r"),
+            dict(instrument="DummyCam", name="dummy_i", band="i"),
+            dict(instrument="DummyCam", name="dummy_i2", band="i"),
+            dict(instrument="DummyCam", name="dummy_r", band="r"),
         )
-        rows = registry.queryDataIds(["abstract_filter"]).toSet()
+        rows = registry.queryDataIds(["band"]).toSet()
         self.assertCountEqual(
             rows,
-            [DataCoordinate.standardize(abstract_filter="i", universe=registry.dimensions),
-             DataCoordinate.standardize(abstract_filter="r", universe=registry.dimensions)]
+            [DataCoordinate.standardize(band="i", universe=registry.dimensions),
+             DataCoordinate.standardize(band="r", universe=registry.dimensions)]
         )
 
     def testAttributeManager(self):

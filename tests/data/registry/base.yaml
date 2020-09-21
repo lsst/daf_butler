@@ -23,15 +23,15 @@ data:
       -
         instrument: Cam1
         name: Cam1-G
-        abstract_filter: g
+        band: g
       -
         instrument: Cam1
         name: Cam1-R1
-        abstract_filter: r
+        band: r
       -
         instrument: Cam1
         name: Cam1-R2
-        abstract_filter: r
+        band: r
   -
     type: dimension
     element: detector
@@ -67,7 +67,7 @@ data:
   -
     type: dataset_type
     name: permaflat
-    dimensions: [instrument, detector, physical_filter, abstract_filter]
+    dimensions: [instrument, detector, physical_filter, band]
     storage_class: Exposure
   -
     type: dataset_type

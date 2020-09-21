@@ -44,7 +44,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
     At present, the only query this class supports is a SELECT DISTNCT over the
     table for some other dimension that has this dimension as an implied
     dependency.  For example, we can use this class to provide access to the
-    set of ``abstract_filter`` names referenced by any ``physical_filter``.
+    set of ``band`` names referenced by any ``physical_filter``.
 
     Parameters
     ----------

@@ -300,7 +300,7 @@ class ParserLexTestCase(unittest.TestCase):
 
         expression = ("((instrument='HSC' AND detector != 9) OR instrument='CFHT') "
                       "AND tract=8766 AND patch.cell_x > 5 AND "
-                      "patch.cell_y < 4 AND abstract_filter='i'")
+                      "patch.cell_y < 4 AND band='i'")
 
         tree = parser.parse(expression)
         self.assertIsInstance(tree, exprTree.BinaryOp)
@@ -311,7 +311,7 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertIsInstance(tree.rhs, exprTree.BinaryOp)
         self.assertEqual(tree.rhs.op, '=')
         self.assertIsInstance(tree.rhs.lhs, exprTree.Identifier)
-        self.assertEqual(tree.rhs.lhs.name, 'abstract_filter')
+        self.assertEqual(tree.rhs.lhs.name, 'band')
         self.assertIsInstance(tree.rhs.rhs, exprTree.StringLiteral)
         self.assertEqual(tree.rhs.rhs.value, 'i')
 
