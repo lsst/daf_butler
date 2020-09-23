@@ -25,8 +25,7 @@ import yaml
 from ..opt import (collection_type_option, dataset_type_option, directory_argument, options_file_option,
                    glob_argument, repo_argument, transfer_option, verbose_option)
 from ..utils import cli_handle_exception, split_commas, typeStrAcceptsMultiple, unwrap
-from ...script import (butlerImport, createRepo, configDump, configValidate, pruneCollection,
-                       queryCollections, queryDatasetTypes, removeDatasetType)
+from ... import script
 
 willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
 existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."
@@ -53,7 +52,7 @@ existingRepoHelp = "REPO is the URI or path to an existing data repository root 
 @options_file_option()
 def butler_import(*args, **kwargs):
     """Import data into a butler repository."""
-    cli_handle_exception(butlerImport, *args, **kwargs)
+    cli_handle_exception(script.butlerImport, *args, **kwargs)
 
 
 @click.command()
@@ -68,7 +67,7 @@ def butler_import(*args, **kwargs):
 @options_file_option()
 def create(*args, **kwargs):
     """Create an empty Gen3 Butler repository."""
-    cli_handle_exception(createRepo, *args, **kwargs)
+    cli_handle_exception(script.createRepo, *args, **kwargs)
 
 
 @click.command(short_help="Dump butler config to stdout.")
@@ -85,7 +84,7 @@ def create(*args, **kwargs):
 @options_file_option()
 def config_dump(*args, **kwargs):
     """Dump either a subset or full Butler configuration to standard output."""
-    cli_handle_exception(configDump, *args, **kwargs)
+    cli_handle_exception(script.configDump, *args, **kwargs)
 
 
 @click.command(short_help="Validate the configuration files.")
@@ -98,7 +97,7 @@ def config_dump(*args, **kwargs):
 @options_file_option()
 def config_validate(*args, **kwargs):
     """Validate the configuration files for a Gen3 Butler repository."""
-    is_good = cli_handle_exception(configValidate, *args, **kwargs)
+    is_good = cli_handle_exception(script.configValidate, *args, **kwargs)
     if not is_good:
         raise click.exceptions.Exit(1)
 
@@ -121,7 +120,7 @@ def config_validate(*args, **kwargs):
 @options_file_option()
 def prune_collection(**kwargs):
     """Remove a collection and possibly prune datasets within it."""
-    cli_handle_exception(pruneCollection, **kwargs)
+    cli_handle_exception(script.pruneCollection, **kwargs)
 
 
 @click.command(short_help="Search for collections.")
@@ -141,7 +140,7 @@ def prune_collection(**kwargs):
 @options_file_option()
 def query_collections(*args, **kwargs):
     """Get the collections whose names match an expression."""
-    print(yaml.dump(cli_handle_exception(queryCollections, *args, **kwargs)))
+    print(yaml.dump(cli_handle_exception(script.queryCollections, *args, **kwargs)))
 
 
 @click.command()
@@ -159,12 +158,12 @@ def query_collections(*args, **kwargs):
 @options_file_option()
 def query_dataset_types(*args, **kwargs):
     """Get the dataset types in a repository."""
-    print(yaml.dump(cli_handle_exception(queryDatasetTypes, *args, **kwargs), sort_keys=False))
+    print(yaml.dump(cli_handle_exception(script.queryDatasetTypes, *args, **kwargs), sort_keys=False))
 
 
 @click.command()
 @repo_argument(required=True)
 @click.argument('dataset-type-name', nargs=1)
 def remove_dataset_type(*args, **kwargs):
-    """Remove a dataset type definition from a reopsitory."""
-    cli_handle_exception(removeDatasetType, *args, **kwargs)
+    """Remove a dataset type definition from a repository."""
+    cli_handle_exception(script.removeDatasetType, *args, **kwargs)
