@@ -497,6 +497,34 @@ class Registry:
         _, inserted = self._datasets.register(datasetType)
         return inserted
 
+    def removeDatasetType(self, name: str) -> None:
+        """Remove the named `DatasetType` from the registry.
+
+        .. warning::
+
+            Registry caches the dataset type definitions. This means that
+            deleting the dataset type definition may result in unexpected
+            behavior from other butler processes that are active that have
+            not seen the deletion.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the type to be removed.
+
+        Raises
+        ------
+        lsst.daf.butler.registry.OrphanedRecordError
+            Raised if an attempt is made to remove the dataset type definition
+            when there are already datasets associated with it.
+
+        Notes
+        -----
+        If the dataset type is not registered the method will return without
+        action.
+        """
+        self._datasets.remove(name, universe=self._dimensions.universe)
+
     def getDatasetType(self, name: str) -> DatasetType:
         """Get the `DatasetType`.
 

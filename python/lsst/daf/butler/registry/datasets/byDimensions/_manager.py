@@ -21,7 +21,7 @@ from lsst.daf.butler import (
     DimensionGraph,
     DimensionUniverse,
 )
-from lsst.daf.butler.registry import ConflictingDefinitionError
+from lsst.daf.butler.registry import ConflictingDefinitionError, OrphanedRecordError
 from lsst.daf.butler.registry.interfaces import (
     DatasetRecordStorage,
     DatasetRecordStorageManager,
@@ -114,6 +114,23 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             byId[storage._dataset_type_id] = storage
         self._byName = byName
         self._byId = byId
+
+    def remove(self, name: str, *, universe: DimensionUniverse) -> None:
+        # Docstring inherited from DatasetRecordStorageManager.
+        compositeName, componentName = DatasetType.splitDatasetTypeName(name)
+        if componentName is not None:
+            raise ValueError(f"Cannot delete a dataset type of a component of a composite (given {name})")
+
+        # Delete the row
+        try:
+            self._db.delete(self._static.dataset_type, ["name"], {"name": name})
+        except sqlalchemy.exc.IntegrityError as e:
+            raise OrphanedRecordError(f"Dataset type {name} can not be removed."
+                                      " It is associated with datasets that must be removed first.") from e
+
+        # Now refresh everything -- removal is rare enough that this does
+        # not need to be fast.
+        self.refresh(universe=universe)
 
     def find(self, name: str) -> Optional[DatasetRecordStorage]:
         # Docstring inherited from DatasetRecordStorageManager.
