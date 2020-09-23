@@ -26,7 +26,9 @@ __all__ = ("butler_import",
            "prune_collection",
            "query_collections",
            "query_dataset_types",
-           "remove_dataset_type")
+           "query_datasets",
+           "remove_dataset_type",
+           )
 
 
 from .commands import (butler_import,
@@ -36,5 +38,6 @@ from .commands import (butler_import,
                        prune_collection,
                        query_collections,
                        query_dataset_types,
+                       query_datasets,
                        remove_dataset_type,
                        )
