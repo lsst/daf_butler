@@ -368,6 +368,19 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
+    def remove(self, name: str, *, universe: DimensionUniverse) -> None:
+        """Remove the dataset type.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the dataset type.
+        universe : `DimensionUniverse`
+            Universe to use to trigger a refresh following removal.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def __iter__(self) -> Iterator[DatasetType]:
         """Return an iterator over the the dataset types present in this layer.
 
