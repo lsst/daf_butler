@@ -65,12 +65,13 @@ Concrete Storage Classes
 
 .. _lsst.daf.butler-scripts:
 
-Script reference
-================
+Butler Command Reference
+========================
 
 .. toctree::
    :maxdepth: 1
 
+   scripts/options-file.rst
    scripts/butler.py
 
 .. _lsst.daf.butler-pyapi:
