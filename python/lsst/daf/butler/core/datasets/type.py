@@ -184,10 +184,12 @@ class DatasetType:
         self._isCalibration = isCalibration
 
     def __repr__(self) -> str:
-        parent = ""
+        extra = ""
         if self._parentStorageClassName:
-            parent = f", parentStorageClass={self._parentStorageClassName}"
-        return f"DatasetType({self.name}, {self.dimensions}, {self._storageClassName}{parent})"
+            extra = f", parentStorageClass={self._parentStorageClassName}"
+        if self._isCalibration:
+            extra += ", isCalibration=True"
+        return f"DatasetType({self.name!r}, {self.dimensions}, {self._storageClassName}{extra})"
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, type(self)):
@@ -202,6 +204,8 @@ class DatasetType:
         else:
             if self._storageClassName != other._storageClassName:
                 return False
+        if self._isCalibration != other._isCalibration:
+            return False
         if self._parentStorageClass is not None and other._parentStorageClass is not None:
             return self._parentStorageClass == other._parentStorageClass
         else:
