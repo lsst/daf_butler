@@ -64,6 +64,7 @@ from .core import (
     Datastore,
     FileDataset,
     StorageClassFactory,
+    Timespan,
     ValidationError,
 )
 from .core.repoRelocation import BUTLER_ROOT_TAG
@@ -539,9 +540,22 @@ class Butler:
             idNumber = datasetRefOrType.id
         else:
             idNumber = None
-        # Standardize the data ID first instead of letting registry.findDataset
-        # do it, so we get the result even if no dataset is found.
-        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions, **kwds)
+        timespan: Optional[Timespan] = None
+        if datasetType.isCalibration():
+            # Because this is a calibration dataset, first try to make a
+            # standardize the data ID without restricting the dimensions to
+            # those of the dataset type requested, because there may be extra
+            # dimensions that provide temporal information for a validity-range
+            # lookup.
+            dataId = DataCoordinate.standardize(dataId, universe=self.registry.dimensions, **kwds)
+            if dataId.graph.temporal:
+                dataId = self.registry.expandDataId(dataId)
+                timespan = dataId.timespan
+        else:
+            # Standardize the data ID to just the dimensions of the dataset
+            # type instead of letting registry.findDataset do it, so we get the
+            # result even if no dataset is found.
+            dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions, **kwds)
         if collections is None:
             collections = self.collections
             if not collections:
@@ -550,7 +564,7 @@ class Butler:
             collections = CollectionSearch.fromExpression(collections)
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
-        ref = self.registry.findDataset(datasetType, dataId, collections=collections)
+        ref = self.registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)
         if ref is None:
             if allowUnresolved:
                 return DatasetRef(datasetType, dataId)
