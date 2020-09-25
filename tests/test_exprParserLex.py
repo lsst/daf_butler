@@ -204,7 +204,7 @@ class ParserLexTestCase(unittest.TestCase):
 
         expr = ("((instrument='HSC' AND detector != 9) OR instrument='CFHT') "
                 "AND tract=8766 AND patch.cell_x > 5 AND "
-                "patch.cell_y < 4 AND abstract_filter='i' "
+                "patch.cell_y < 4 AND band='i' "
                 "or visit IN (1..50:2)")
         tokens = (("LPAREN", "("),
                   ("LPAREN", "("),
@@ -234,7 +234,7 @@ class ParserLexTestCase(unittest.TestCase):
                   ("LT", "<"),
                   ("NUMERIC_LITERAL", "4"),
                   ("AND", "AND"),
-                  ("IDENTIFIER", "abstract_filter"),
+                  ("IDENTIFIER", "band"),
                   ("EQ", "="),
                   ("STRING_LITERAL", "i"),
                   ("OR", "or"),

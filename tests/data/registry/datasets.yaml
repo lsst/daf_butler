@@ -52,21 +52,21 @@ data:
           instrument: Cam1
           detector: 2
           physical_filter: Cam1-G
-          abstract_filter: g
+          band: g
       -
         dataset_id: 1020
         data_id:
           instrument: Cam1
           detector: 3
           physical_filter: Cam1-G
-          abstract_filter: g
+          band: g
       -
         dataset_id: 1030
         data_id:
           instrument: Cam1
           detector: 4
           physical_filter: Cam1-G
-          abstract_filter: g
+          band: g
   -
     type: run
     name: imported_r
@@ -101,25 +101,25 @@ data:
           instrument: Cam1
           detector: 1
           physical_filter: Cam1-R1
-          abstract_filter: r
+          band: r
       -
         dataset_id: 2020
         data_id:
           instrument: Cam1
           detector: 2
           physical_filter: Cam1-R1
-          abstract_filter: r
+          band: r
       -
         dataset_id: 2030
         data_id:
           instrument: Cam1
           detector: 3
           physical_filter: Cam1-R2
-          abstract_filter: r
+          band: r
       -
         dataset_id: 2040
         data_id:
           instrument: Cam1
           detector: 4
           physical_filter: Cam1-R2
-          abstract_filter: r
+          band: r

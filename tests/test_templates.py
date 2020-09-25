@@ -308,7 +308,7 @@ class TestFileTemplates(unittest.TestCase):
 
         # Rerun but with a failure
         entities["pvi"] = self.makeDatasetRef("pvi", storageClassName="StorageClassX",
-                                              dataId={"abstract_filter": "i"})
+                                              dataId={"band": "i"})
         with self.assertRaises(FileTemplateValidationError):
             with self.assertLogs(level="FATAL"):
                 templates.validateTemplates(entities.values(), logFailures=True)

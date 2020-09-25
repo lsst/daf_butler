@@ -166,7 +166,7 @@ class ButlerPutGetTests:
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
         butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
                                                                 "name": "d-r",
-                                                                "abstract_filter": "R"})
+                                                                "band": "R"})
         butler.registry.insertDimensionData("visit_system", {"instrument": "DummyCamComp",
                                                              "id": 1,
                                                              "name": "default"})
@@ -346,7 +346,7 @@ class ButlerPutGetTests:
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
         butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
                                                                 "name": "d-r",
-                                                                "abstract_filter": "R"})
+                                                                "band": "R"})
         butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
                                                       "name": "fourtwentythree", "physical_filter": "d-r"})
         dataId = {"instrument": "DummyCamComp", "visit": 423}
@@ -491,7 +491,7 @@ class ButlerTests(ButlerPutGetTests):
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
         butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
                                                                 "name": "d-r",
-                                                                "abstract_filter": "R"})
+                                                                "band": "R"})
         for detector in (1, 2):
             butler.registry.insertDimensionData("detector", {"instrument": "DummyCamComp", "id": detector,
                                                              "full_name": f"detector{detector}"})
@@ -699,7 +699,7 @@ class ButlerTests(ButlerPutGetTests):
         dimensionEntries = [
             ("instrument", {"instrument": "DummyCam"}, {"instrument": "DummyHSC"},
              {"instrument": "DummyCamComp"}),
-            ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "abstract_filter": "R"}),
+            ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "R"}),
             ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo", "physical_filter": "d-r"})
         ]
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
@@ -744,7 +744,7 @@ class ButlerTests(ButlerPutGetTests):
         dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
         dimensionEntries = (("instrument", {"instrument": "DummyCam"}),
                             ("physical_filter", {"instrument": "DummyCam", "name": "d-r",
-                                                 "abstract_filter": "R"}),
+                                                 "band": "R"}),
                             ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo",
                                        "physical_filter": "d-r"}))
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
@@ -866,7 +866,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
         butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
                                                                 "name": "d-r",
-                                                                "abstract_filter": "R"})
+                                                                "band": "R"})
         butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423, "name": "v423",
                                                       "physical_filter": "d-r"})
         butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425, "name": "v425",

@@ -49,7 +49,7 @@ dimensions:
             instrument.
       cached: true
 
-    abstract_filter:
+    band:
       doc: >
         A filter that is not associated with a particular instrument.  An
         abstract filter can be used to relate similar physical filters, and
@@ -74,12 +74,12 @@ dimensions:
       requires:
         - instrument
       implies:
-        - abstract_filter
+        - band
       cached: true
 
     subfilter:
       doc: >
-        A mathematical division of an abstract_filter. Subfilters are used to
+        A mathematical division of an band. Subfilters are used to
         model wavelength-dependent effects such as differential chromatic
         refraction.
       keys:
@@ -87,7 +87,7 @@ dimensions:
           name: id
           type: int
       requires:
-        - abstract_filter
+        - band
       cached: true
 
     detector:
@@ -383,7 +383,7 @@ dimensions:
       fixed: [skymap]
       dimensions: [skymap, tract, patch]
       cls: lsst.skymap.packers.SkyMapDimensionPacker
-    tract_patch_abstract_filter:
+    tract_patch_band:
       fixed: [skymap]
-      dimensions: [skymap, tract, patch, abstract_filter]
+      dimensions: [skymap, tract, patch, band]
       cls: lsst.skymap.packers.SkyMapDimensionPacker

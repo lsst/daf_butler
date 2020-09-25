@@ -270,8 +270,8 @@ class SqliteMemoryRegistryTests(RegistryTests):
         # Add some dimension entries
         registry.insertDimensionData("instrument", {"name": "DummyCam"})
         registry.insertDimensionData("physical_filter",
-                                     {"instrument": "DummyCam", "name": "dummy_r", "abstract_filter": "r"},
-                                     {"instrument": "DummyCam", "name": "dummy_i", "abstract_filter": "i"})
+                                     {"instrument": "DummyCam", "name": "dummy_r", "band": "r"},
+                                     {"instrument": "DummyCam", "name": "dummy_i", "band": "i"})
         for detector in (1, 2, 3, 4, 5):
             registry.insertDimensionData("detector", {"instrument": "DummyCam", "id": detector,
                                                       "full_name": str(detector)})

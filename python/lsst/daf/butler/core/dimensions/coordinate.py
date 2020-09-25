@@ -344,8 +344,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             ``self.hasFull()`` is `False` and
             ``graph.required.issubset(self.graph.required)`` is `False`.  As
             an example of the latter case, consider trying to go from a data ID
-            with dimensions {instrument, physical_filter, abstract_filter} to
-            just {instrument, abstract_filter}; abstract_filter is implied by
+            with dimensions {instrument, physical_filter, band} to
+            just {instrument, band}; band is implied by
             physical_filter and hence would have no value in the original data
             ID if ``self.hasFull()`` is `False`.
 

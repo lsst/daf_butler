@@ -715,19 +715,19 @@ data:
     records:
       - instrument: HSC
         name: HSC-Z
-        abstract_filter: z
+        band: z
       - instrument: HSC
         name: HSC-I
-        abstract_filter: i
+        band: i
       - instrument: HSC
         name: HSC-G
-        abstract_filter: g
+        band: g
       - instrument: HSC
         name: HSC-Y
-        abstract_filter: y
+        band: y
       - instrument: HSC
         name: HSC-R
-        abstract_filter: r
+        band: r
   - type: dimension
     element: tract
     records:
