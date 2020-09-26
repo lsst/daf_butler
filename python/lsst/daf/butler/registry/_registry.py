@@ -49,6 +49,7 @@ from ..core import (
     DataCoordinate,
     DataCoordinateIterable,
     DataId,
+    DatasetAssociation,
     DatasetRef,
     DatasetType,
     ddl,
@@ -60,6 +61,7 @@ from ..core import (
     NamedKeyMapping,
     NameLookupMapping,
     StorageClassFactory,
+    Timespan,
 )
 from . import queries
 from ..core.utils import doImport, iterable, transactional
@@ -546,7 +548,8 @@ class Registry:
         return self._datasets[name].datasetType
 
     def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
-                    collections: Any, **kwargs: Any) -> Optional[DatasetRef]:
+                    collections: Any, timespan: Optional[Timespan] = None,
+                    **kwargs: Any) -> Optional[DatasetRef]:
         """Find a dataset given its `DatasetType` and data ID.
 
         This can be used to obtain a `DatasetRef` that permits the dataset to
@@ -566,6 +569,10 @@ class Registry:
             to search for the dataset, such as a `str`, `DatasetType`, or
             iterable  thereof.  See :ref:`daf_butler_collection_expressions`
             for more information.
+        timespan : `Timespan`, optional
+            A timespan that the validity range of the dataset must overlap.
+            If not provided, any `~CollectionType.CALIBRATION` collections
+            matched by the ``collections`` argument will not be searched.
         **kwargs
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true
@@ -585,6 +592,18 @@ class Registry:
             Raised if the dataset type does not exist.
         MissingCollectionError
             Raised if any of ``collections`` does not exist in the registry.
+
+        Notes
+        -----
+        This method simply returns `None` and does not raise an exception even
+        when the set of collections searched is intrinsically incompatible with
+        the dataset type, e.g. if ``datasetType.isCalibration() is False``, but
+        only `~CollectionType.CALIBRATION` collections are being searched.
+        This may make it harder to debug some lookup failures, but the behavior
+        is intentional; we consider it more important that failed searches are
+        reported consistently, regardless of the reason, and that adding
+        additional collections that do not contain a match to the search path
+        never changes the behavior.
         """
         if isinstance(datasetType, DatasetType):
             storage = self._datasets[datasetType.name]
@@ -594,7 +613,10 @@ class Registry:
                                             universe=self.dimensions, **kwargs)
         collections = CollectionSearch.fromExpression(collections)
         for collectionRecord in collections.iter(self._collections, datasetType=storage.datasetType):
-            result = storage.find(collectionRecord, dataId)
+            if (collectionRecord.type is CollectionType.CALIBRATION
+                    and (not storage.datasetType.isCalibration() or timespan is None)):
+                continue
+            result = storage.find(collectionRecord, dataId, timespan=timespan)
             if result is not None:
                 return result
 
@@ -786,6 +808,79 @@ class Registry:
             storage = self._datasets.find(datasetType.name)
             assert storage is not None
             storage.disassociate(collectionRecord, refsForType)
+
+    @transactional
+    def certify(self, collection: str, refs: Iterable[DatasetRef], timespan: Timespan) -> None:
+        """Associate one or more datasets with a calibration collection and a
+        validity range within it.
+
+        Parameters
+        ----------
+        collection : `str`
+            The name of an already-registered `~CollectionType.CALIBRATION`
+            collection.
+        refs : `Iterable` [ `DatasetRef` ]
+            Datasets to be associated.
+        timespan : `Timespan`
+            The validity range for these datasets within the collection.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if any of the given `DatasetRef` instances is unresolved.
+        ConflictingDefinitionError
+            Raised if the collection already contains a different dataset with
+            the same `DatasetType` and data ID and an overlapping validity
+            range.
+        TypeError
+            Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
+            collection or if one or more datasets are of a dataset type for
+            which `DatasetType.isCalibration` returns `False`.
+        """
+        collectionRecord = self._collections.find(collection)
+        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
+            storage = self._datasets[datasetType.name]
+            storage.certify(collectionRecord, refsForType, timespan)
+
+    @transactional
+    def decertify(self, collection: str, datasetType: Union[str, DatasetType], timespan: Timespan, *,
+                  dataIds: Optional[Iterable[DataId]] = None) -> None:
+        """Remove or adjust datasets to clear a validity range within a
+        calibration collection.
+
+        Parameters
+        ----------
+        collection : `str`
+            The name of an already-registered `~CollectionType.CALIBRATION`
+            collection.
+        datasetType : `str` or `DatasetType`
+            Name or `DatasetType` instance for the datasets to be decertified.
+        timespan : `Timespan`, optional
+            The validity range to remove datasets from within the collection.
+            Datasets that overlap this range but are not contained by it will
+            have their validity ranges adjusted to not overlap it, which may
+            split a single dataset validity range into two.
+        dataIds : `Iterable` [ `DataId` ], optional
+            Data IDs that should be decertified within the given validity range
+            If `None`, all data IDs for ``self.datasetType`` will be
+            decertified.
+
+        Raises
+        ------
+        TypeError
+            Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
+            collection or if ``datasetType.isCalibration() is False``.
+        """
+        collectionRecord = self._collections.find(collection)
+        if isinstance(datasetType, str):
+            storage = self._datasets[datasetType]
+        else:
+            storage = self._datasets[datasetType.name]
+        standardizedDataIds = None
+        if dataIds is not None:
+            standardizedDataIds = [DataCoordinate.standardize(d, graph=storage.datasetType.dimensions)
+                                   for d in dataIds]
+        storage.decertify(collectionRecord, timespan, dataIds=standardizedDataIds)
 
     def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
         """Return an object that allows a new `Datastore` instance to
@@ -1049,7 +1144,7 @@ class Registry:
 
     def queryCollections(self, expression: Any = ...,
                          datasetType: Optional[DatasetType] = None,
-                         collectionType: Optional[CollectionType] = None,
+                         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
                          flattenChains: bool = False,
                          includeChains: Optional[bool] = None) -> Iterator[str]:
         """Iterate over the collections whose names match an expression.
@@ -1067,8 +1162,8 @@ class Registry:
             this dataset type according to ``expression``.  If this is
             not provided, any dataset type restrictions in ``expression`` are
             ignored.
-        collectionType : `CollectionType`, optional
-            If provided, only yield collections of this type.
+        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
+            If provided, only yield collections of these types.
         flattenChains : `bool`, optional
             If `True` (`False` is default), recursively yield the child
             collections of matching `~CollectionType.CHAINED` collections.
@@ -1083,7 +1178,8 @@ class Registry:
             The name of a collection that matches ``expression``.
         """
         query = CollectionQuery.fromExpression(expression)
-        for record in query.iter(self._collections, datasetType=datasetType, collectionType=collectionType,
+        for record in query.iter(self._collections, datasetType=datasetType,
+                                 collectionTypes=frozenset(collectionTypes),
                                  flattenChains=flattenChains, includeChains=includeChains):
             yield record.name
 
@@ -1138,7 +1234,9 @@ class Registry:
         collections
             An expression that fully or partially identifies the collections
             to search for datasets, such as a `str`, `re.Pattern`, or iterable
-            thereof.  `...` can be used to return all collections.  See
+            thereof.  `...` can be used to datasets from all
+            `~CollectionType.RUN` collections (no other collections are
+            necessary, because all datasets are in a ``RUN`` collection).  See
             :ref:`daf_butler_collection_expressions` for more information.
         dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
             Dimensions to include in the query (in addition to those used
@@ -1429,6 +1527,70 @@ class Registry:
         dataIds = self.queryDataIds(element.graph, dataId=dataId, datasets=datasets, collections=collections,
                                     where=where, components=components, **kwargs)
         return iter(self._dimensions[element].fetch(dataIds))
+
+    def queryDatasetAssociations(
+        self,
+        datasetType: Union[str, DatasetType],
+        collections: Any = ...,
+        *,
+        collectionTypes: Iterable[CollectionType] = CollectionType.all(),
+        flattenChains: bool = False,
+    ) -> Iterator[DatasetAssociation]:
+        """Iterate over dataset-collection combinations where the dataset is in
+        the collection.
+
+        This method is a temporary placeholder for better support for
+        assocation results in `queryDatasets`.  It will probably be
+        removed in the future, and should be avoided in production code
+        whenever possible.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType` or `str`
+            A dataset type object or the name of one.
+        collections: `Any`, optional
+            An expression that fully or partially identifies the collections
+            to search for datasets.  See `queryCollections` and
+            :ref:`daf_butler_collection_expressions` for more information.
+        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
+            If provided, only yield associations from collections of these
+            types.
+        flattenChains : `bool`, optional
+            If `True` (default) search in the children of
+            `~CollectionType.CHAINED` collections.  If `False`, ``CHAINED``
+            collections are ignored.
+
+        Yields
+        ------
+        association : `DatasetAssociation`
+            Object representing the relationship beween a single dataset and
+            a single collection.
+        """
+        collections = CollectionQuery.fromExpression(collections)
+        tsRepr = self._db.getTimespanRepresentation()
+        if isinstance(datasetType, str):
+            storage = self._datasets[datasetType]
+        else:
+            storage = self._datasets[datasetType.name]
+        for collectionRecord in collections.iter(self._collections, datasetType=datasetType,
+                                                 collectionTypes=frozenset(collectionTypes),
+                                                 flattenChains=flattenChains):
+            query = storage.select(collectionRecord)
+            if query is None:
+                continue
+            for row in self._db.query(query.combine()):
+                dataId = DataCoordinate.fromRequiredValues(
+                    storage.datasetType.dimensions,
+                    tuple(row[name] for name in storage.datasetType.dimensions.required.names)
+                )
+                runRecord = self._collections[row[self._collections.getRunForeignKeyName()]]
+                ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name,
+                                 conform=False)
+                if collectionRecord.type is CollectionType.CALIBRATION:
+                    timespan = tsRepr.extract(row)
+                else:
+                    timespan = None
+                yield DatasetAssociation(ref=ref, collection=collectionRecord.name, timespan=timespan)
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).

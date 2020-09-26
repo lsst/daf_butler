@@ -5,12 +5,12 @@
 # different runs, they cannot actually contain any common datasets).
 # In detail:
 # run=imported_g:
-#   permabias for detectors 1-3
-#   permaflat for detectors 2-4, physical_filter=Cam1-G
+#   bias for detectors 1-3
+#   flat for detectors 2-4, physical_filter=Cam1-G
 # run=imported_r:
-#   permabias for detectors 2-4
-#   permaflat for detectors 1-2, physical_filter=Cam1-R1
-#   permaflat for detectors 3-4, physical_filter=Cam1-R2
+#   bias for detectors 2-4
+#   flat for detectors 1-2, physical_filter=Cam1-R1
+#   flat for detectors 3-4, physical_filter=Cam1-R2
 #
 # At present, the path and formatter entries here are missing.  If we ever
 # want to use this data for a tests that involves a datastore, that would need
@@ -23,7 +23,7 @@ data:
     name: imported_g
   -
     type: dataset
-    dataset_type: permabias
+    dataset_type: bias
     run: imported_g
     records:
       -
@@ -43,7 +43,7 @@ data:
           detector: 3
   -
     type: dataset
-    dataset_type: permaflat
+    dataset_type: flat
     run: imported_g
     records:
       -
@@ -72,7 +72,7 @@ data:
     name: imported_r
   -
     type: dataset
-    dataset_type: permabias
+    dataset_type: bias
     run: imported_r
     records:
       -
@@ -92,7 +92,7 @@ data:
           detector: 4
   -
     type: dataset
-    dataset_type: permaflat
+    dataset_type: flat
     run: imported_r
     records:
       -

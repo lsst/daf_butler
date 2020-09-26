@@ -51,7 +51,7 @@ _KEY_FIELD_SPEC = ddl.FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, pr
 
 
 # This has to be updated on every schema change
-_VERSION = VersionTuple(0, 1, 0)
+_VERSION = VersionTuple(0, 3, 0)
 
 
 def _makeTableSpecs(tsRepr: Type[DatabaseTimespanRepresentation]) -> CollectionTablesTuple:

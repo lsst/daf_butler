@@ -157,11 +157,6 @@ class ButlerPutGetTests:
 
         datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
 
-        # Try to create one that will have a name that is too long
-        with self.assertRaises(Exception) as cm:
-            self.addDatasetType("DatasetTypeNameTooLong" * 50, dimensions, storageClass, butler.registry)
-        self.assertIn("check constraint", str(cm.exception).lower())
-
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
         butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
@@ -983,7 +978,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
                 # in the script folder are generally considered protected and
                 # should not be used as public api.
                 with open(exportFile, "r") as f:
-                    script.butlerImport(importDir, output_run="ingest/run", export_file=f,
+                    script.butlerImport(importDir, export_file=f,
                                         directory=exportDir, transfer="auto", skip_dimensions=None)
                 importButler = Butler(importDir, run="ingest/run")
                 for ref in datasets:

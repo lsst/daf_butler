@@ -53,6 +53,7 @@ except ImportError:
 
 from lsst.utils import doImport
 from .core import (
+    AmbiguousDatasetError,
     ButlerURI,
     Config,
     ConfigSubset,
@@ -63,6 +64,7 @@ from .core import (
     Datastore,
     FileDataset,
     StorageClassFactory,
+    Timespan,
     ValidationError,
 )
 from .core.repoRelocation import BUTLER_ROOT_TAG
@@ -538,9 +540,22 @@ class Butler:
             idNumber = datasetRefOrType.id
         else:
             idNumber = None
-        # Standardize the data ID first instead of letting registry.findDataset
-        # do it, so we get the result even if no dataset is found.
-        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions, **kwds)
+        timespan: Optional[Timespan] = None
+        if datasetType.isCalibration():
+            # Because this is a calibration dataset, first try to make a
+            # standardize the data ID without restricting the dimensions to
+            # those of the dataset type requested, because there may be extra
+            # dimensions that provide temporal information for a validity-range
+            # lookup.
+            dataId = DataCoordinate.standardize(dataId, universe=self.registry.dimensions, **kwds)
+            if dataId.graph.temporal:
+                dataId = self.registry.expandDataId(dataId)
+                timespan = dataId.timespan
+        else:
+            # Standardize the data ID to just the dimensions of the dataset
+            # type instead of letting registry.findDataset do it, so we get the
+            # result even if no dataset is found.
+            dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions, **kwds)
         if collections is None:
             collections = self.collections
             if not collections:
@@ -549,7 +564,7 @@ class Butler:
             collections = CollectionSearch.fromExpression(collections)
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
-        ref = self.registry.findDataset(datasetType, dataId, collections=collections)
+        ref = self.registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)
         if ref is None:
             if allowUnresolved:
                 return DatasetRef(datasetType, dataId)
@@ -652,7 +667,7 @@ class Butler:
         Parameters
         ----------
         ref : `DatasetRef`
-            Reference to an already stored dataset.
+            Resolved reference to an already stored dataset.
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
@@ -664,12 +679,42 @@ class Butler:
         """
         return self.datastore.get(ref, parameters=parameters)
 
+    def getDirectDeferred(self, ref: DatasetRef, *,
+                          parameters: Union[dict, None] = None) -> DeferredDatasetHandle:
+        """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
+        from a resolved `DatasetRef`.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Resolved reference to an already stored dataset.
+        parameters : `dict`
+            Additional StorageClass-defined options to control reading,
+            typically used to efficiently read only a subset of the dataset.
+
+        Returns
+        -------
+        obj : `DeferredDatasetHandle`
+            A handle which can be used to retrieve a dataset at a later time.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``ref.id is None``, i.e. the reference is unresolved.
+        """
+        if ref.id is None:
+            raise AmbiguousDatasetError(
+                f"Dataset of type {ref.datasetType.name} with data ID {ref.dataId} is not resolved."
+            )
+        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters)
+
     def getDeferred(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                     dataId: Optional[DataId] = None, *,
                     parameters: Union[dict, None] = None,
                     collections: Any = None,
                     **kwds: Any) -> DeferredDatasetHandle:
-        """Create a `DeferredDatasetHandle` which can later retrieve a dataset
+        """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
+        after an immediate registry lookup.
 
         Parameters
         ----------
@@ -1241,10 +1286,10 @@ class Butler:
         to be exported::
 
             with butler.export("exports.yaml") as export:
-                # Export all flats, and the calibration_label dimensions
-                # associated with them.
+                # Export all flats, but none of the dimension element rows
+                # (i.e. data ID information) associated with them.
                 export.saveDatasets(butler.registry.queryDatasets("flat"),
-                                    elements=[butler.registry.dimensions["calibration_label"]])
+                                    elements=())
                 # Export all datasets that start with "deepCoadd_" and all of
                 # their associated data ID information.
                 export.saveDatasets(butler.registry.queryDatasets("deepCoadd_*"))
