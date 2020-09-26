@@ -651,8 +651,7 @@ class CollectionSearch:
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, CollectionSearch):
             return self._items == other._items
-        else:
-            return False
+        return False
 
     def __str__(self) -> str:
         return "[{}]".format(", ".join(f"{k}: {v}" for k, v in self._items))
@@ -838,6 +837,12 @@ class CollectionQuery:
         for record, _ in self.iterPairs(manager, datasetType=datasetType, collectionTypes=collectionTypes,
                                         flattenChains=flattenChains, includeChains=includeChains):
             yield record
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, CollectionQuery):
+            return self._search == other._search and self._patterns == other._patterns
+        else:
+            return False
 
     any: ClassVar[CollectionQuery]
     """A special `CollectionQuery` instance that matches any collection.

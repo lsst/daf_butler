@@ -41,6 +41,7 @@ from ...core import (
     DataCoordinate,
     DataCoordinateSequence,
     DataCoordinateSet,
+    DatasetAssociation,
     DatasetRef,
     DatasetType,
     DimensionGraph,
@@ -946,101 +947,7 @@ class RegistryTests(ABC):
         rows = registry.queryDataIds(dimensions, datasets=calexpType, collections=collection).toSet()
         self.assertEqual(len(rows), 0)
 
-    def testCalibrationLabelIndirection(self):
-        """Test that we can look up datasets with calibration_label dimensions
-        from a data ID with exposure dimensions.
-        """
-
-        def _dt(iso_string):
-            return astropy.time.Time(iso_string, format="iso", scale="tai")
-
-        registry = self.makeRegistry()
-
-        flat = DatasetType(
-            "flat",
-            registry.dimensions.extract(
-                ["instrument", "detector", "physical_filter", "calibration_label"]
-            ),
-            "ImageU"
-        )
-        registry.registerDatasetType(flat)
-        registry.insertDimensionData("instrument", dict(name="DummyCam"))
-        registry.insertDimensionData(
-            "physical_filter",
-            dict(instrument="DummyCam", name="dummy_i", band="i"),
-        )
-        registry.insertDimensionData(
-            "detector",
-            *[dict(instrument="DummyCam", id=i, full_name=str(i)) for i in (1, 2, 3, 4, 5)]
-        )
-        registry.insertDimensionData(
-            "exposure",
-            dict(instrument="DummyCam", id=100, name="100", physical_filter="dummy_i",
-                 datetime_begin=_dt("2005-12-15 02:00:00"), datetime_end=_dt("2005-12-15 03:00:00")),
-            dict(instrument="DummyCam", id=101, name="101", physical_filter="dummy_i",
-                 datetime_begin=_dt("2005-12-16 02:00:00"), datetime_end=_dt("2005-12-16 03:00:00")),
-        )
-        registry.insertDimensionData(
-            "calibration_label",
-            dict(instrument="DummyCam", name="first_night",
-                 datetime_begin=_dt("2005-12-15 01:00:00"), datetime_end=_dt("2005-12-15 04:00:00")),
-            dict(instrument="DummyCam", name="second_night",
-                 datetime_begin=_dt("2005-12-16 01:00:00"), datetime_end=_dt("2005-12-16 04:00:00")),
-            dict(instrument="DummyCam", name="both_nights",
-                 datetime_begin=_dt("2005-12-15 01:00:00"), datetime_end=_dt("2005-12-16 04:00:00")),
-        )
-        # Different flats for different nights for detectors 1-3 in first
-        # collection.
-        run1 = "calibs1"
-        registry.registerRun(run1)
-        for detector in (1, 2, 3):
-            registry.insertDatasets(flat, [dict(instrument="DummyCam", calibration_label="first_night",
-                                                physical_filter="dummy_i", detector=detector)],
-                                    run=run1)
-            registry.insertDatasets(flat, [dict(instrument="DummyCam", calibration_label="second_night",
-                                                physical_filter="dummy_i", detector=detector)],
-                                    run=run1)
-        # The same flat for both nights for detectors 3-5 (so detector 3 has
-        # multiple valid flats) in second collection.
-        run2 = "calib2"
-        registry.registerRun(run2)
-        for detector in (3, 4, 5):
-            registry.insertDatasets(flat, [dict(instrument="DummyCam", calibration_label="both_nights",
-                                                physical_filter="dummy_i", detector=detector)],
-                                    run=run2)
-        # Perform queries for individual exposure+detector combinations, which
-        # should always return exactly one flat.
-        for exposure in (100, 101):
-            for detector in (1, 2, 3):
-                with self.subTest(exposure=exposure, detector=detector):
-                    rows = list(registry.queryDatasets("flat", collections=[run1],
-                                                       instrument="DummyCam",
-                                                       exposure=exposure,
-                                                       detector=detector))
-                    self.assertEqual(len(rows), 1)
-            for detector in (3, 4, 5):
-                with self.subTest(exposure=exposure, detector=detector):
-                    rows = registry.queryDatasets("flat", collections=[run2],
-                                                  instrument="DummyCam",
-                                                  exposure=exposure,
-                                                  detector=detector)
-                    self.assertEqual(len(list(rows)), 1)
-            for detector in (1, 2, 4, 5):
-                with self.subTest(exposure=exposure, detector=detector):
-                    rows = registry.queryDatasets("flat", collections=[run1, run2],
-                                                  instrument="DummyCam",
-                                                  exposure=exposure,
-                                                  detector=detector)
-                    self.assertEqual(len(list(rows)), 1)
-            for detector in (3,):
-                with self.subTest(exposure=exposure, detector=detector):
-                    rows = registry.queryDatasets("flat", collections=[run1, run2],
-                                                  instrument="DummyCam",
-                                                  exposure=exposure,
-                                                  detector=detector)
-                    self.assertEqual(len(list(rows)), 2)
-
-    def testAbstractFilterQuery(self):
+    def testAbstractQuery(self):
         """Test that we can run a query that just lists the known
         bands.  This is tricky because band is
         backed by a query against physical_filter.
@@ -1555,6 +1462,36 @@ class RegistryTests(ABC):
         registry.certify(collection, [bias3a], Timespan(begin=t1, end=t3))
         # Now we'll certify 2b and 3b together over [t4, ∞).
         registry.certify(collection, [bias2b, bias3b], Timespan(begin=t4, end=None))
+
+        # Fetch all associations and check that they are what we expect.
+        self.assertCountEqual(
+            list(
+                registry.queryDatasetAssociations(
+                    "bias",
+                    collections=[collection, "imported_g", "imported_r"],
+                )
+            ),
+            [
+                DatasetAssociation(
+                    ref=registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
+                    collection="imported_g",
+                    timespan=None,
+                ),
+                DatasetAssociation(
+                    ref=registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
+                    collection="imported_r",
+                    timespan=None,
+                ),
+                DatasetAssociation(ref=bias2a, collection="imported_g", timespan=None),
+                DatasetAssociation(ref=bias3a, collection="imported_g", timespan=None),
+                DatasetAssociation(ref=bias2b, collection="imported_r", timespan=None),
+                DatasetAssociation(ref=bias3b, collection="imported_r", timespan=None),
+                DatasetAssociation(ref=bias2a, collection=collection, timespan=Timespan(begin=t2, end=t4)),
+                DatasetAssociation(ref=bias3a, collection=collection, timespan=Timespan(begin=t1, end=t3)),
+                DatasetAssociation(ref=bias2b, collection=collection, timespan=Timespan(begin=t4, end=None)),
+                DatasetAssociation(ref=bias3b, collection=collection, timespan=Timespan(begin=t4, end=None)),
+            ]
+        )
 
         class Ambiguous:
             """Tag class to denote lookups that are expected to be ambiguous.

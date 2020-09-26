@@ -345,18 +345,6 @@ dimensions:
           doc: >
             Which row this patch occupies in the tract's grid of patches.
 
-    calibration_label:
-      doc: >
-        A string label that maps to a date validity range for master
-        calibration products.
-      keys:
-        -
-          name: name
-          type: string
-          length: 128
-      requires: [instrument]
-      temporal: calibration_label
-
     visit_detector_region:
       doc: >
         A many-to-many join table that provides region information for

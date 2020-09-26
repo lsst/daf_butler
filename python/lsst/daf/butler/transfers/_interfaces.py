@@ -25,18 +25,23 @@ __all__ = ["RepoExportBackend", "RepoImportBackend", "RepoTransferFormatConfig"]
 
 from abc import ABC, abstractmethod
 from typing import (
+    Iterable,
     Optional,
     Set,
 )
 
 from ..core import (
     ConfigSubset,
+    DatasetAssociation,
     DatasetType,
     Datastore,
     DimensionElement,
     DimensionRecord,
     FileDataset,
 )
+
+from ..registry import CollectionType
+from ..registry.interfaces import CollectionRecord
 
 
 class RepoTransferFormatConfig(ConfigSubset):
@@ -49,6 +54,9 @@ class RepoTransferFormatConfig(ConfigSubset):
 
 class RepoExportBackend(ABC):
     """An abstract interface for data repository export implementations.
+
+    Methods are guaranteed to be called in ways that reflect foreign key
+    dependencies.
     """
 
     @abstractmethod
@@ -61,6 +69,20 @@ class RepoExportBackend(ABC):
             The `DimensionElement` whose elements are being exported.
         data : `DimensionRecord` (variadic)
             One or more records to export.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def saveCollection(self, record: CollectionRecord) -> None:
+        """Export a collection.
+
+        This only exports the collection's own state, not its associations with
+        datasets.
+
+        Parameters
+        ----------
+        record: `CollectionRecord`
+            Object representing the collection to export.
         """
         raise NotImplementedError()
 
@@ -79,6 +101,25 @@ class RepoExportBackend(ABC):
         datasets : `FileDataset`, variadic
             Per-dataset information to be exported.  `FileDataset.formatter`
             attributes should be strings, not `Formatter` instances or classes.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def saveDatasetAssociations(self, collection: str, collectionType: CollectionType,
+                                associations: Iterable[DatasetAssociation]) -> None:
+        """Export the dataset-collection associations for a single collection.
+
+        Parameters
+        ----------
+        collection : `str`
+            The name of the collection.
+        collectionType : `CollectionType`
+            The type of the collection; either `CollectionType.TAGGED` or
+            `CollectionType.CALIBRATION` (as other collection types are
+            exported in other ways).
+        associations : `Iterable` [ `DatasetAssociation` ]
+            Structs representing an association between this collection and
+            this dataset.
         """
         raise NotImplementedError()
 

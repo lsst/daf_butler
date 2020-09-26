@@ -49,6 +49,7 @@ from ..core import (
     DataCoordinate,
     DataCoordinateIterable,
     DataId,
+    DatasetAssociation,
     DatasetRef,
     DatasetType,
     ddl,
@@ -1233,7 +1234,9 @@ class Registry:
         collections
             An expression that fully or partially identifies the collections
             to search for datasets, such as a `str`, `re.Pattern`, or iterable
-            thereof.  `...` can be used to return all collections.  See
+            thereof.  `...` can be used to datasets from all
+            `~CollectionType.RUN` collections (no other collections are
+            necessary, because all datasets are in a ``RUN`` collection).  See
             :ref:`daf_butler_collection_expressions` for more information.
         dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
             Dimensions to include in the query (in addition to those used
@@ -1524,6 +1527,70 @@ class Registry:
         dataIds = self.queryDataIds(element.graph, dataId=dataId, datasets=datasets, collections=collections,
                                     where=where, components=components, **kwargs)
         return iter(self._dimensions[element].fetch(dataIds))
+
+    def queryDatasetAssociations(
+        self,
+        datasetType: Union[str, DatasetType],
+        collections: Any = ...,
+        *,
+        collectionTypes: Iterable[CollectionType] = CollectionType.all(),
+        flattenChains: bool = False,
+    ) -> Iterator[DatasetAssociation]:
+        """Iterate over dataset-collection combinations where the dataset is in
+        the collection.
+
+        This method is a temporary placeholder for better support for
+        assocation results in `queryDatasets`.  It will probably be
+        removed in the future, and should be avoided in production code
+        whenever possible.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType` or `str`
+            A dataset type object or the name of one.
+        collections: `Any`, optional
+            An expression that fully or partially identifies the collections
+            to search for datasets.  See `queryCollections` and
+            :ref:`daf_butler_collection_expressions` for more information.
+        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
+            If provided, only yield associations from collections of these
+            types.
+        flattenChains : `bool`, optional
+            If `True` (default) search in the children of
+            `~CollectionType.CHAINED` collections.  If `False`, ``CHAINED``
+            collections are ignored.
+
+        Yields
+        ------
+        association : `DatasetAssociation`
+            Object representing the relationship beween a single dataset and
+            a single collection.
+        """
+        collections = CollectionQuery.fromExpression(collections)
+        tsRepr = self._db.getTimespanRepresentation()
+        if isinstance(datasetType, str):
+            storage = self._datasets[datasetType]
+        else:
+            storage = self._datasets[datasetType.name]
+        for collectionRecord in collections.iter(self._collections, datasetType=datasetType,
+                                                 collectionTypes=frozenset(collectionTypes),
+                                                 flattenChains=flattenChains):
+            query = storage.select(collectionRecord)
+            if query is None:
+                continue
+            for row in self._db.query(query.combine()):
+                dataId = DataCoordinate.fromRequiredValues(
+                    storage.datasetType.dimensions,
+                    tuple(row[name] for name in storage.datasetType.dimensions.required.names)
+                )
+                runRecord = self._collections[row[self._collections.getRunForeignKeyName()]]
+                ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name,
+                                 conform=False)
+                if collectionRecord.type is CollectionType.CALIBRATION:
+                    timespan = tsRepr.extract(row)
+                else:
+                    timespan = None
+                yield DatasetAssociation(ref=ref, collection=collectionRecord.name, timespan=timespan)
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).
