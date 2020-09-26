@@ -21,17 +21,12 @@
 
 from __future__ import annotations
 
-import contextlib
-from io import StringIO
 import os
+import tempfile
 from typing import (
-    Generator,
+    Any,
     Iterable,
     Optional,
-    Set,
-    TextIO,
-    Tuple,
-    Union,
 )
 import unittest
 import unittest.mock
@@ -39,16 +34,15 @@ import unittest.mock
 import astropy.time
 
 from lsst.daf.butler import (
+    Butler,
+    ButlerConfig,
     CollectionType,
     DatasetRef,
     Datastore,
     FileDataset,
     Registry,
     Timespan,
-    YamlRepoExportBackend,
-    YamlRepoImportBackend,
 )
-from lsst.daf.butler.transfers import RepoExportContext
 from lsst.daf.butler.registry import CollectionSearch, RegistryConfig
 
 
@@ -74,8 +68,10 @@ def _mock_export(refs: Iterable[DatasetRef], *,
                           formatter="lsst.daf.butler.formatters.json.JsonFormatter")
 
 
-class TransfersTestCase(unittest.TestCase):
-    """Tests for repository import/export functionality.
+class SimpleButlerTestCase(unittest.TestCase):
+    """Tests for butler (including import/export functionality) that should not
+    depend on the Registry Database backend or Datastore implementation, and
+    can instead utilize an in-memory SQLite Registry and a mocked Datastore.
     """
 
     def makeRegistry(self) -> Registry:
@@ -84,108 +80,16 @@ class TransfersTestCase(unittest.TestCase):
         The default implementation returns a SQLite in-memory database.
         """
         config = RegistryConfig()
-        config["db"] = "sqlite://"
+        config["db"] = "sqlite:///:memory:"
         return Registry.fromConfig(config, create=True)
 
-    def runImport(self, file: Union[str, TextIO],
-                  *,
-                  registry: Optional[Registry] = None,
-                  datastore: Optional[Datastore] = None,
-                  directory: Optional[str] = None,
-                  transfer: Optional[str] = None,
-                  skip_dimensions: Optional[Set[str]] = None) -> Tuple[Registry, Datastore]:
-        """Import repository data from an export file.
-
-        Parameters
-        ----------
-        file: `str` or `TextIO`
-            Name of the (YAML) file that describes the data to import, or an
-            open file-like object pointing to it.
-        stream: `
-        registry: `Registry`, optional
-            Registry instance to load datsets into.  If not provided,
-            `makeRegistry` is called.
-        datastore: `Datastore`, optional
-            Datastore instance to load datasets into (may be a mock).  If not
-            provided, a mock is created.
-        directory: `str`, optional
-            Directory containing files to import.  Ignored if ``datastore`` is
-            a mock.
-        transfer: `str`, optional
-            Transfer mode.  See `Datastore.ingest`.
-        skip_dimensions: `Set` [ `str` ], optional
-            Set of dimension element names for which records should not be
-            imported.
-
-        Returns
-        -------
-        registry: `Registry`
-            The `Registry` that datasets were loaded into.
-        datastore: `Datastore`
-            The `Datastore` instance or mock that datasets were loaded into.
-        """
-        if registry is None:
-            registry = self.makeRegistry()
-        if datastore is None:
-            datastore = unittest.mock.Mock(spec=Datastore)
-        if isinstance(file, str):
-            with open(file, 'r') as stream:
-                backend = YamlRepoImportBackend(stream, registry)
-                backend.register()
-                backend.load(datastore, directory=directory, transfer=transfer,
-                             skip_dimensions=skip_dimensions)
-        else:
-            backend = YamlRepoImportBackend(file, registry)
-            backend.register()
-            backend.load(datastore, directory=directory, transfer=transfer, skip_dimensions=skip_dimensions)
-        return (registry, datastore)
-
-    @contextlib.contextmanager
-    def runExport(self, *,
-                  registry: Optional[Registry] = None,
-                  datastore: Optional[Datastore] = None,
-                  stream: Optional[TextIO] = None,
-                  directory: Optional[str] = None,
-                  transfer: Optional[str] = None) -> Generator[RepoExportContext, None, None]:
-        """Export repository data to an export file.
-
-        Parameters
-        ----------
-        registry: `Registry`, optional
-            Registry instance to load datasets from.  If not provided,
-            `makeRegistry` is called.
-        datastore: `Datastore`, optional
-            Datastore instance to load datasets from (may be a mock).  If not
-            provided, a mock is created.
-        directory: `str`, optional
-            Directory to contain exported file.  Ignored if ``datastore`` is
-            a mock.
-        stream : `TextIO`, optional
-            Writeable file-like object pointing at the export file to write.
-        transfer: `str`, optional
-            Transfer mode.  See `Datastore.ingest`.
-
-        Yields
-        ------
-        context : `RepoExportContext`
-            A helper object that can be used to export repo data.  This is
-            wrapped in a context manager via the `contextlib.contextmanager`
-            decorator.
-        """
-        if registry is None:
-            registry = self.makeRegistry()
-        if datastore is None:
-            datastore = unittest.mock.Mock(spec=Datastore)
-            datastore.export = _mock_export
-        backend = YamlRepoExportBackend(stream)
-        try:
-            helper = RepoExportContext(registry, datastore, backend=backend,
-                                       directory=directory, transfer=transfer)
-            yield helper
-        except BaseException:
-            raise
-        else:
-            helper._finish()
+    def makeButler(self, **kwargs: Any) -> Butler:
+        config = ButlerConfig()
+        config["registry", "db"] = "sqlite:///:memory:"
+        with unittest.mock.patch.object(Datastore, "fromConfig", spec=Datastore.fromConfig):
+            butler = Butler(config, **kwargs)
+            butler.datastore.export = _mock_export
+        return butler
 
     def testReadBackwardsCompatibility(self):
         """Test that we can read an export file written by a previous version
@@ -198,17 +102,18 @@ class TransfersTestCase(unittest.TestCase):
         this at some point, but I think it's best to wait for the changes to
         the export format required for CALIBRATION collections to land.
         """
-        registry, _ = self.runImport(os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
         # Spot-check a few things, but the most important test is just that
         # the above does not raise.
         self.assertGreaterEqual(
-            set(record.id for record in registry.queryDimensionRecords("detector", instrument="HSC")),
+            set(record.id for record in butler.registry.queryDimensionRecords("detector", instrument="HSC")),
             set(range(104)),  # should have all science CCDs; may have some focus ones.
         )
         self.assertGreaterEqual(
             {
                 (record.id, record.physical_filter)
-                for record in registry.queryDimensionRecords("visit", instrument="HSC")
+                for record in butler.registry.queryDimensionRecords("visit", instrument="HSC")
             },
             {
                 (27136, 'HSC-Z'),
@@ -234,35 +139,39 @@ class TransfersTestCase(unittest.TestCase):
             }
         )
 
-    def testAllDatasetsRoundTrip(self):
+    def testDatasetTransfers(self):
         """Test exporting all datasets from a repo and then importing them all
         back in again.
         """
         # Import data to play with.
-        registry1, _ = self.runImport(os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        self.runImport(os.path.join(TESTDIR, "data", "registry", "datasets.yaml"), registry=registry1)
-        # Export all datasets.
-        exportStream = StringIO()
-        with self.runExport(stream=exportStream, registry=registry1) as exporter:
-            exporter.saveDatasets(
-                registry1.queryDatasets(..., collections=...)
-            )
-        # Import it all again.
-        importStream = StringIO(exportStream.getvalue())
-        registry2, _ = self.runImport(importStream)
-        # Check that it all round-tripped.  Use unresolved() to make comparison
-        # not care about dataset_id values, which may be rewritten.
+        butler1 = self.makeButler(writeable=True)
+        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        with tempfile.NamedTemporaryFile(mode='w', suffix=".yaml") as file:
+            # Export all datasets.
+            with butler1.export(filename=file.name) as exporter:
+                exporter.saveDatasets(
+                    butler1.registry.queryDatasets(..., collections=...)
+                )
+            # Import it all again.
+            butler2 = self.makeButler(writeable=True)
+            butler2.import_(filename=file.name)
+        # Check that it all round-tripped.  Use unresolved() to make
+        # comparison not care about dataset_id values, which may be
+        # rewritten.
         self.assertCountEqual(
-            [ref.unresolved() for ref in registry1.queryDatasets(..., collections=...)],
-            [ref.unresolved() for ref in registry2.queryDatasets(..., collections=...)],
+            [ref.unresolved() for ref in butler1.registry.queryDatasets(..., collections=...)],
+            [ref.unresolved() for ref in butler2.registry.queryDatasets(..., collections=...)],
         )
 
     def testCollectionTransfers(self):
         """Test exporting and then importing collections of various types.
         """
         # Populate a registry with some datasets.
-        registry1, _ = self.runImport(os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        self.runImport(os.path.join(TESTDIR, "data", "registry", "datasets.yaml"), registry=registry1)
+        butler1 = self.makeButler(writeable=True)
+        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        registry1 = butler1.registry
         # Add some more collections.
         registry1.registerRun("run1")
         registry1.registerCollection("tag1", CollectionType.TAGGED)
@@ -284,18 +193,20 @@ class TransfersTestCase(unittest.TestCase):
         registry1.certify("calibration1", [bias2a, bias3a], Timespan(t1, t2))
         registry1.certify("calibration1", [bias2b], Timespan(t2, None))
         registry1.certify("calibration1", [bias3b], Timespan(t2, t3))
-        # Export all collections.
-        exportStream = StringIO()
-        with self.runExport(stream=exportStream, registry=registry1) as exporter:
-            # Sort results to put chain1 before chain2, which is intentionally
-            # not topological order.
-            for collection in sorted(registry1.queryCollections()):
-                exporter.saveCollection(collection)
-            exporter.saveDatasets(flats1)
-            exporter.saveDatasets([bias2a, bias2b, bias3a, bias3b])
-        # Import them into a new registry.
-        importStream = StringIO(exportStream.getvalue())
-        registry2, _ = self.runImport(importStream)
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix=".yaml") as file:
+            # Export all collections, and some datasets.
+            with butler1.export(filename=file.name) as exporter:
+                # Sort results to put chain1 before chain2, which is
+                # intentionally not topological order.
+                for collection in sorted(registry1.queryCollections()):
+                    exporter.saveCollection(collection)
+                exporter.saveDatasets(flats1)
+                exporter.saveDatasets([bias2a, bias2b, bias3a, bias3b])
+            # Import them into a new registry.
+            butler2 = self.makeButler(writeable=True)
+            butler2.import_(filename=file.name)
+        registry2 = butler2.registry
         # Check that it all round-tripped, starting with the collections
         # themselves.
         self.assertIs(registry2.getCollectionType("run1"), CollectionType.RUN)
