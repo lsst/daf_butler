@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
 
 # This has to be updated on every schema change
-_VERSION = VersionTuple(0, 2, 0)
+_VERSION = VersionTuple(0, 3, 0)
 
 
 class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
