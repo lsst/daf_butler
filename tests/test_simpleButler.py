@@ -26,7 +26,9 @@ import tempfile
 from typing import (
     Any,
     Iterable,
+    Mapping,
     Optional,
+    Tuple,
 )
 import unittest
 import unittest.mock
@@ -68,6 +70,14 @@ def _mock_export(refs: Iterable[DatasetRef], *,
                           formatter="lsst.daf.butler.formatters.json.JsonFormatter")
 
 
+def _mock_get(ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None
+              ) -> Tuple[int, Optional[Mapping[str, Any]]]:
+    """A mock of `Datastore.get` that just returns the integer dataset ID value
+    and parameters it was given.
+    """
+    return (ref.id, parameters)
+
+
 class SimpleButlerTestCase(unittest.TestCase):
     """Tests for butler (including import/export functionality) that should not
     depend on the Registry Database backend or Datastore implementation, and
@@ -89,6 +99,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         with unittest.mock.patch.object(Datastore, "fromConfig", spec=Datastore.fromConfig):
             butler = Butler(config, **kwargs)
             butler.datastore.export = _mock_export
+            butler.datastore.get = _mock_get
         return butler
 
     def testReadBackwardsCompatibility(self):
@@ -235,6 +246,54 @@ class SimpleButlerTestCase(unittest.TestCase):
             [(assoc.ref.unresolved(), assoc.timespan)
              for assoc in registry2.queryDatasetAssociations("bias", collections="calibration1")],
         )
+
+    def testGetCalibration(self):
+        """Test that `Butler.get` can be used to fetch from
+        `~CollectionType.CALIBRATION` collections if the data ID includes
+        extra dimensions with temporal information.
+        """
+        # Import data to play with.
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        # Certify some biases into a CALIBRATION collection.
+        registry = butler.registry
+        registry.registerCollection("calibs", CollectionType.CALIBRATION)
+        t1 = astropy.time.Time('2020-01-01T01:00:00', format="isot", scale="tai")
+        t2 = astropy.time.Time('2020-01-01T02:00:00', format="isot", scale="tai")
+        t3 = astropy.time.Time('2020-01-01T03:00:00', format="isot", scale="tai")
+        bias2a = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g")
+        bias3a = registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g")
+        bias2b = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r")
+        bias3b = registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r")
+        registry.certify("calibs", [bias2a, bias3a], Timespan(t1, t2))
+        registry.certify("calibs", [bias2b], Timespan(t2, None))
+        registry.certify("calibs", [bias3b], Timespan(t2, t3))
+        # Insert some exposure dimension data.
+        registry.insertDimensionData(
+            "exposure",
+            {
+                "instrument": "Cam1",
+                "id": 3,
+                "name": "three",
+                "timespan": Timespan(t1, t2),
+                "physical_filter": "Cam1-G",
+            },
+            {
+                "instrument": "Cam1",
+                "id": 4,
+                "name": "four",
+                "timespan": Timespan(t2, t3),
+                "physical_filter": "Cam1-G",
+            },
+        )
+        # Get some biases from raw-like data IDs.
+        bias2a_id, _ = butler.get("bias", {"instrument": "Cam1", "exposure": 3, "detector": 2},
+                                  collections="calibs")
+        self.assertEqual(bias2a_id, bias2a.id)
+        bias3b_id, _ = butler.get("bias", {"instrument": "Cam1", "exposure": 4, "detector": 3},
+                                  collections="calibs")
+        self.assertEqual(bias3b_id, bias3b.id)
 
 
 if __name__ == "__main__":
