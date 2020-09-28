@@ -95,6 +95,12 @@ long_log_option = MWOptionDecorator("--long-log",
                                     is_flag=True)
 
 
+processes_option = MWOptionDecorator("-j", "--processes",
+                                     default=1,
+                                     help="Number of processes to use.",
+                                     type=click.IntRange(min=1))
+
+
 regex_option = MWOptionDecorator("--regex")
 
 
