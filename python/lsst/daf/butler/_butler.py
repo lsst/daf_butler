@@ -195,7 +195,8 @@ class Butler:
                  tags: Iterable[str] = (),
                  chains: Optional[Mapping[str, Any]] = None,
                  searchPaths: Optional[List[str]] = None,
-                 writeable: Optional[bool] = None):
+                 writeable: Optional[bool] = None,
+                 ):
         # Transform any single-pass iterator into an actual sequence so we
         # can see if its empty
         self.tags = tuple(tags)
@@ -797,6 +798,16 @@ class Butler:
             Raised if no matching dataset exists in the `Registry`.
         TypeError
             Raised if no collections were provided.
+
+        Notes
+        -----
+        When looking up datasets in a `~CollectionType.CALIBRATION` collection,
+        this method requires that the given data ID include temporal dimensions
+        beyond the dimensions of the dataset type itself, in order to find the
+        dataset with the appropriate validity range.  For example, a "bias"
+        dataset with native dimensions ``{instrument, detector}`` could be
+        fetched with a ``{instrument, detector, exposure}`` data ID, because
+        ``exposure`` is a temporal dimension.
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
