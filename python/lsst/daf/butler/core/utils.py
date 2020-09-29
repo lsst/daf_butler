@@ -281,25 +281,37 @@ def stripIfNotNone(s: Optional[str]) -> Optional[str]:
     return s
 
 
-T = TypeVar("T", bound="Type")
+_T = TypeVar("_T", bound="Type")
 
 
-def immutable(cls: T) -> T:
-    """A class decorator that simulates a simple form of immutability for
-    the decorated class.
+def immutable(cls: _T) -> _T:
+    """A class decorator that simulates a simple form of immutability for the
+    decorated class.
 
-    A class decorated as `immutable` may only set each of its attributes once
-    (by convention, in ``__new__``); any attempts to set an already-set
-    attribute will raise `AttributeError`.
+    A class decorated as `immutable` may only set each of its attributes once;
+    any attempts to set an already-set attribute will raise `AttributeError`.
 
-    Because this behavior interferes with the default implementation for
-    the ``pickle`` and ``copy`` modules, `immutable` provides implementations
-    of ``__getstate__`` and ``__setstate__`` that override this behavior.
-    Immutable classes can them implement pickle/copy via ``__getnewargs__``
-    only (other approaches such as ``__reduce__`` and ``__deepcopy__`` may
-    also be used).
+    Notes
+    -----
+    Subclasses of classes marked with ``@immutable`` are also immutable.
+
+    Because this behavior interferes with the default implementation for the
+    ``pickle`` modules, `immutable` provides implementations of
+    ``__getstate__`` and ``__setstate__`` that override this behavior.
+    Immutable classes can then implement pickle via ``__reduce__`` or
+    ``__getnewargs__``.
+
+    Following the example of Python's built-in immutable types, such as `str`
+    and `tuple`, the `immutable` decorator provides a ``__copy__``
+    implementation that just returns ``self``, because there is no reason to
+    actually copy an object if none of its shared owners can modify it.
+
+    Similarly, objects that are recursively (i.e. are themselves immutable and
+    have only recursively immutable attributes) should also reimplement
+    ``__deepcopy__`` to return ``self``.  This is not done by the decorator, as
+    it has no way of checking for recursive immutability.
     """
-    def __setattr__(self: Any, name: str, value: Any) -> None:  # noqa: N807
+    def __setattr__(self: _T, name: str, value: Any) -> None:  # noqa: N807
         if hasattr(self, name):
             raise AttributeError(f"{cls.__name__} instances are immutable.")
         object.__setattr__(self, name, value)
@@ -307,16 +319,20 @@ def immutable(cls: T) -> T:
     # I think it's just confused by descriptor stuff.
     cls.__setattr__ = __setattr__  # type: ignore
 
-    def __getstate__(self: Any) -> dict:  # noqa: N807
+    def __getstate__(self: _T) -> dict:  # noqa: N807
         # Disable default state-setting when unpickled.
         return {}
     cls.__getstate__ = __getstate__
 
-    def __setstate__(self: Any, state: Any) -> None:  # noqa: N807
+    def __setstate__(self: _T, state: Any) -> None:  # noqa: N807
         # Disable default state-setting when copied.
         # Sadly what works for pickle doesn't work for copy.
         assert not state
     cls.__setstate__ = __setstate__
+
+    def __copy__(self: _T) -> _T:  # noqa: N807
+        return self
+    cls.__copy__ = __copy__
     return cls
 
 
