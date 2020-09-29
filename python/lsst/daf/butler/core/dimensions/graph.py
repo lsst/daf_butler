@@ -192,6 +192,11 @@ class DimensionGraph:
     def __getnewargs__(self) -> tuple:
         return (self.universe, None, tuple(self.dimensions.names), False)
 
+    def __deepcopy__(self, memo: dict) -> DimensionGraph:
+        # DimensionGraph is recursively immutable; see note in @immutable
+        # decorator.
+        return self
+
     @property
     def names(self) -> KeysView[str]:
         """A set of the names of all dimensions in the graph (`KeysView`).

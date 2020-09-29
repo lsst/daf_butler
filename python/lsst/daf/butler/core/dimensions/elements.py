@@ -332,6 +332,11 @@ class DimensionElement:
     def __reduce__(self) -> tuple:
         return (self._unpickle, (self.universe, self.name))
 
+    def __deepcopy__(self, memo: dict) -> DimensionElement:
+        # DimensionElement is recursively immutable; see note in @immutable
+        # decorator.
+        return self
+
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
 
@@ -432,7 +437,6 @@ class DimensionElement:
     """
 
 
-@immutable
 class Dimension(DimensionElement):
     """A named data-organization concept that can be used as a key in a data
     ID.
@@ -504,7 +508,6 @@ class Dimension(DimensionElement):
     """
 
 
-@immutable
 class SkyPixDimension(Dimension):
     """A special `Dimension` subclass for hierarchical pixelizations of the
     sky.
