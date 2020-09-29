@@ -349,6 +349,11 @@ class DimensionUniverse:
     def __reduce__(self) -> tuple:
         return (self._unpickle, (self._version,))
 
+    def __deepcopy__(self, memo: dict) -> DimensionUniverse:
+        # DimensionUniverse is recursively immutable; see note in @immutable
+        # decorator.
+        return self
+
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
 
