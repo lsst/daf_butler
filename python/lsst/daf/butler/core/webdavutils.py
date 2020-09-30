@@ -63,7 +63,15 @@ def getHttpSession() -> requests.Session:
     NB: requests will read CA certificates in REQUESTS_CA_BUNDLE
     It must be manually exported according to the system CA directory.
     """
+    from requests.adapters import HTTPAdapter
+    from requests.packages.urllib3.util.retry import Retry
+
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+
     session = requests.Session()
+    session.mount("http://", HTTPAdapter(max_retries=retries))
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+
     log.debug("Creating new HTTP session...")
 
     try:

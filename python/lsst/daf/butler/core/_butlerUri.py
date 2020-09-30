@@ -1271,18 +1271,26 @@ class ButlerPackageResourceURI(ButlerURI):
 
 class ButlerHttpURI(ButlerURI):
     """General HTTP(S) resource."""
+    _session = None
 
     @property
     def session(self) -> requests.Session:
         """Client object to address remote resource."""
+        if ButlerHttpURI._session is not None:
+            return ButlerHttpURI._session
+
         from .webdavutils import getHttpSession, isWebdavEndpoint
         baseURL = self.scheme + "://" + self.netloc
+
         if isWebdavEndpoint(baseURL):
             log.debug("%s looks like a Webdav endpoint.", baseURL)
-            return getHttpSession()
+            s = getHttpSession()
+        else:
+            log.debug("%s looks like a standard HTTP endpoint.", baseURL)
+            s = requests.Session()
 
-        log.debug("%s looks like a standard HTTP endpoint.", baseURL)
-        return requests.Session()
+        ButlerHttpURI._session = s
+        return s
 
     def exists(self) -> bool:
         """Check that a remote HTTP resource exists."""
