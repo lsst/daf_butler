@@ -1426,12 +1426,10 @@ class ButlerHttpURI(ButlerURI):
         if isinstance(src, type(self)):
             if transfer == "move":
                 r = self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()})
-                self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()})
-                log.debug("Direct move via MOVE operation executed.")
+                log.debug("Running move via MOVE HTTP request.")
             else:
                 r = self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()})
-                self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()})
-                log.debug("Direct copy via COPY operation executed.")
+                log.debug("Running copy via COPY HTTP request.")
         else:
             # Use local file and upload it
             local_src, is_temporary = src.as_local()
@@ -1440,6 +1438,7 @@ class ButlerHttpURI(ButlerURI):
             f.close()
             if is_temporary:
                 os.remove(local_src)
+            log.debug("Running transfer from a local copy of the file.")
 
         if r.status_code not in [201, 202, 204]:
             raise ValueError(f"Can not transfer file {self}, status code: {r.status_code}")
