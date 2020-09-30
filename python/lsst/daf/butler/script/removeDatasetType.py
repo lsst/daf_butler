@@ -1,8 +1,8 @@
-# This file is part of obs_base.
+# This file is part of daf_butler.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
-# (https://www.lsst.org).
+# (http://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -19,22 +19,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("butler_import",
-           "create",
-           "config_dump",
-           "config_validate",
-           "prune_collection",
-           "query_collections",
-           "query_dataset_types",
-           "remove_dataset_type")
+__all__ = ("removeDatasetType",)
+
+from .. import Butler
 
 
-from .commands import (butler_import,
-                       create,
-                       config_dump,
-                       config_validate,
-                       prune_collection,
-                       query_collections,
-                       query_dataset_types,
-                       remove_dataset_type,
-                       )
+def removeDatasetType(repo, dataset_type_name):
+    """Remove the named dataset type definition.
+
+    Parameters
+    ----------
+    repo : `str`
+        URI to the location of the repo or URI to a config file describing the
+        repo and its location.
+    datasetTypeName : `str`
+        The name of the dataset type to be removed.
+    """
+    butler = Butler(repo, writeable=True)
+    butler.registry.removeDatasetType(dataset_type_name)

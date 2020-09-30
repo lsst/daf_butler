@@ -26,7 +26,7 @@ from ..opt import (collection_type_option, dataset_type_option, directory_argume
                    glob_argument, repo_argument, transfer_option, verbose_option)
 from ..utils import cli_handle_exception, split_commas, typeStrAcceptsMultiple, unwrap
 from ...script import (butlerImport, createRepo, configDump, configValidate, pruneCollection,
-                       queryCollections, queryDatasetTypes)
+                       queryCollections, queryDatasetTypes, removeDatasetType)
 
 willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
 existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."
@@ -160,3 +160,11 @@ def query_collections(*args, **kwargs):
 def query_dataset_types(*args, **kwargs):
     """Get the dataset types in a repository."""
     print(yaml.dump(cli_handle_exception(queryDatasetTypes, *args, **kwargs), sort_keys=False))
+
+
+@click.command()
+@repo_argument(required=True)
+@click.argument('dataset-type-name', nargs=1)
+def remove_dataset_type(*args, **kwargs):
+    """Remove a dataset type definition from a reopsitory."""
+    cli_handle_exception(removeDatasetType, *args, **kwargs)
