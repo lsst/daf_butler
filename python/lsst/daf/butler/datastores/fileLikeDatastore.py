@@ -274,8 +274,8 @@ class FileLikeDatastore(GenericBaseDatastore):
             # configuration.
             pass
 
-        # Determine whether checksums should be used
-        self.useChecksum = self.config.get("checksum", True)
+        # Determine whether checksums should be used - default to False
+        self.useChecksum = self.config.get("checksum", False)
 
     def __str__(self) -> str:
         return str(self.root)
