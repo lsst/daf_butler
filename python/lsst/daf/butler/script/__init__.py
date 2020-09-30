@@ -26,3 +26,4 @@ from .configValidate import configValidate
 from .pruneCollection import pruneCollection
 from .queryCollections import queryCollections
 from .queryDatasetTypes import queryDatasetTypes
+from .removeDatasetType import removeDatasetType

@@ -101,6 +101,20 @@ class QueryDatasetTypesScriptTest(unittest.TestCase):
             self.assertIn(instrumentDimension, response["datasetTypes"][0]["dimensions"])
             self.assertIn(visitDimension, response["datasetTypes"][0]["dimensions"])
 
+            # Now remove and check that it was removed
+            # First a non-existent one
+            result = runner.invoke(cli, ["remove-dataset-type", "here", "unreal"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+            # Now one we now has been registered
+            result = runner.invoke(cli, ["remove-dataset-type", "here", datasetName])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+            # and check that it has gone
+            result = runner.invoke(cli, ["query-dataset-types", "here"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertEqual({"datasetTypes": []}, yaml.safe_load(result.output))
+
 
 if __name__ == "__main__":
     unittest.main()
