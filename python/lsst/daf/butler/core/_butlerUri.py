@@ -1317,7 +1317,10 @@ class ButlerHttpURI(ButlerURI):
             log.debug("Creating new directory: %s", self.geturl())
             r = self.session.request("MKCOL", self.geturl())
             if r.status_code != 201:
-                raise ValueError(f"Can not create directory {self}, status code: {r.status_code}")
+                if r.status_code == 405:
+                    log.debug("Can not create directory: %s may already exist: skipping.", self.geturl())
+                else:
+                    raise ValueError(f"Can not create directory {self}, status code: {r.status_code}")
 
     def remove(self) -> None:
         """Remove the resource."""
