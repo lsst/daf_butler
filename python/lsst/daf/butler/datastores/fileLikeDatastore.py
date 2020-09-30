@@ -720,6 +720,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             if not srcUri.scheme or srcUri.scheme == "file":
                 size = srcUri.size()
                 checksum = self.computeChecksum(srcUri) if self.useChecksum else None
+                have_sized = True
 
             # transfer the resource to the destination
             tgtLocation.uri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction)
