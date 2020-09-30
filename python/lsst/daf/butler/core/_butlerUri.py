@@ -1383,7 +1383,9 @@ class ButlerHttpURI(ButlerURI):
         if not overwrite:
             if self.exists():
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
-        self.session.put(self.geturl(), data=data)
+        r = self.session.put(self.geturl(), data=data)
+        if r.status_code not in [201, 202, 204]:
+            raise ValueError(f"Can not write file {self}, status code: {r.status_code}")
 
     def transfer_from(self, src: ButlerURI, transfer: str = "copy",
                       overwrite: bool = False,
@@ -1415,20 +1417,24 @@ class ButlerHttpURI(ButlerURI):
 
         if isinstance(src, type(self)):
             if transfer == "move":
+                r = self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()})
                 self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()})
                 log.debug("Direct move via MOVE operation executed.")
             else:
+                r = self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()})
                 self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()})
                 log.debug("Direct copy via COPY operation executed.")
         else:
             # Use local file and upload it
             local_src, is_temporary = src.as_local()
             f = open(local_src, "rb")
-            self.session.put(self.geturl(), data=f)
+            r = self.session.put(self.geturl(), data=f)
             f.close()
             if is_temporary:
                 os.remove(local_src)
-            log.debug("Indirect copy via temporary file executed.")
+
+        if r.status_code not in [201, 202, 204]:
+            raise ValueError(f"Can not transfer file {self}, status code: {r.status_code}")
 
 
 class ButlerInMemoryURI(ButlerURI):
