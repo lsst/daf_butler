@@ -1277,12 +1277,14 @@ class ButlerHttpURI(ButlerURI):
     @property
     def session(self) -> requests.Session:
         """Client object to address remote resource."""
+        from .webdavutils import refreshToken
         if ButlerHttpURI._sessionInitialized:
+            refreshToken(ButlerHttpURI._session)
             return ButlerHttpURI._session
 
-        from .webdavutils import getHttpSession, isWebdavEndpoint
         baseURL = self.scheme + "://" + self.netloc
 
+        from .webdavutils import getHttpSession, isWebdavEndpoint
         if isWebdavEndpoint(baseURL):
             log.debug("%s looks like a Webdav endpoint.", baseURL)
             s = getHttpSession()

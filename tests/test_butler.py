@@ -1238,7 +1238,8 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
 @unittest.skipIf(WsgiDAVApp is None, "Warning: wsgidav/cheroot not found!")
 # Mock required environment variables during tests
 @unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
-                                       "WEBDAV_BEARER_TOKEN": "XXXXXX"})
+                                       "WEBDAV_TOKEN_FILE": os.path.join(
+                                           TESTDIR, "config/testConfigs/webdav/token")})
 class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
     """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
     a local in-memory SqlRegistry.
@@ -1317,7 +1318,8 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
 
     # Mock required environment variables during tests
     @unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
-                                           "WEBDAV_BEARER_TOKEN": "XXXXXX"})
+                                           "WEBDAV_TOKEN_FILE": os.path.join(
+                                               TESTDIR, "config/testConfigs/webdav/token")})
     def setUp(self):
         config = Config(self.configFile)
 
@@ -1337,7 +1339,8 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
 
     # Mock required environment variables during tests
     @unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
-                                           "WEBDAV_BEARER_TOKEN": "XXXXXX"})
+                                           "WEBDAV_TOKEN_FILE": os.path.join(
+                                               TESTDIR, "config/testConfigs/webdav/token")})
     def tearDown(self):
         # Clear temporary directory
         ButlerURI(self.rooturi).remove()

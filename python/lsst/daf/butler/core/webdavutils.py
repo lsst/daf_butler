@@ -27,7 +27,8 @@ __all__ = ("getHttpSession", "isWebdavEndpoint", "webdavCheckFileExists",
 import os
 import requests
 import logging
-from requests.structures import CaseInsensitiveDict
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 from typing import (
     Optional,
@@ -57,14 +58,13 @@ def getHttpSession() -> requests.Session:
     X509: must set WEBDAV_PROXY_CERT
     (path to proxy certificate used to authenticate requests)
 
-    TOKEN: must set WEBDAV_BEARER_TOKEN
-    (bearer token used to authenticate requests, as a single string)
+    TOKEN: must set WEBDAV_TOKEN_FILE
+    (file which contains the bearer token used to
+    authenticate requests, as a simple string)
 
     NB: requests will read CA certificates in REQUESTS_CA_BUNDLE
     It must be manually exported according to the system CA directory.
     """
-    from requests.adapters import HTTPAdapter
-    from requests.packages.urllib3.util.retry import Retry
 
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
 
@@ -87,18 +87,38 @@ def getHttpSession() -> requests.Session:
         log.debug("... using x509 authentication.")
         session.cert = (proxy_cert, proxy_cert)
     elif env_auth_method == "TOKEN":
-        try:
-            bearer_token = os.environ['WEBDAV_BEARER_TOKEN']
-        except KeyError:
-            raise KeyError("Environment variable WEBDAV_BEARER_TOKEN is not set")
+        refreshToken(session)
         log.debug("... using bearer-token authentication.")
-        session.headers = CaseInsensitiveDict({'Authorization': 'Bearer ' + bearer_token})
+
     else:
         raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
 
     log.debug("Session configured and ready.")
 
     return session
+
+
+def refreshToken(session: requests.Session) -> None:
+    """Set or update the 'Authorization' header of the session,
+    configure bearer token authentication, with the value of the token
+    fetched from WEBDAV_TOKEN_FILE
+
+    Parameters
+    ----------
+    session : `requests.Session`
+        Session on which bearer token authentication must be configured
+    """
+    try:
+        token_path = os.environ['WEBDAV_TOKEN_FILE']
+        if not os.path.isfile(token_path):
+            raise FileNotFoundError(f"No token file: {token_path}")
+
+        bearer_token = open(os.environ['WEBDAV_TOKEN_FILE'], 'r').read().replace('\n', '')
+        log.debug("Using token %s", bearer_token)
+    except KeyError:
+        raise KeyError("Environment variable WEBDAV_TOKEN_FILE is not set")
+
+    session.headers.update({'Authorization': 'Bearer ' + bearer_token})
 
 
 def webdavCheckFileExists(path: Union[Location, ButlerURI, str],

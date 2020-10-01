@@ -357,7 +357,8 @@ class S3URITestCase(unittest.TestCase):
 
 # Mock required environment variables during tests
 @unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
-                                       "WEBDAV_BEARER_TOKEN": "XXXXXX"})
+                                       "WEBDAV_TOKEN_FILE": os.path.join(
+                                           TESTDIR, "config/testConfigs/webdav/token")})
 class WebdavURITestCase(unittest.TestCase):
 
     def setUp(self):
