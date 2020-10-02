@@ -43,9 +43,9 @@ from typing import (
 )
 
 from lsst.sphgeom import Region
-from ..named import NamedKeyMapping, NameLookupMapping, NamedValueSet
+from ..named import NamedKeyMapping, NameLookupMapping, NamedValueAbstractSet
 from ..timespan import Timespan
-from .elements import Dimension, DimensionElement
+from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph
 from ._records import DimensionRecord
 
@@ -322,7 +322,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     def __len__(self) -> int:
         return len(self.keys())
 
-    def keys(self) -> NamedValueSet[Dimension]:
+    def keys(self) -> NamedValueAbstractSet[Dimension]:
         return self.graph.required
 
     @property
@@ -505,7 +505,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         """
         assert self.hasRecords(), "region may only be accessed if hasRecords() returns True."
         regions = []
-        for element in self.graph.spatial:
+        for family in self.graph.spatial:
+            element = family.choose(self.graph.elements)
             record = self._record(element.name)
             # DimensionRecord subclasses for spatial elements always have a
             # .region, but they're dynamic so this can't be type-checked.
@@ -528,7 +529,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         """
         assert self.hasRecords(), "timespan may only be accessed if hasRecords() returns True."
         timespans = []
-        for element in self.graph.temporal:
+        for family in self.graph.temporal:
+            element = family.choose(self.graph.elements)
             record = self._record(element.name)
             # DimensionRecord subclasses for temporal elements always have
             # .timespan, but they're dynamic so this can't be type-checked.
@@ -598,7 +600,7 @@ class _DataCoordinateFullView(NamedKeyMapping[Dimension, DataIdValue]):
     def __len__(self) -> int:
         return len(self.keys())
 
-    def keys(self) -> NamedValueSet[Dimension]:
+    def keys(self) -> NamedValueAbstractSet[Dimension]:
         return self._target.graph.dimensions
 
     @property
@@ -632,7 +634,7 @@ class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, Optional[Dime
     def __len__(self) -> int:
         return len(self.keys())
 
-    def keys(self) -> NamedValueSet[DimensionElement]:
+    def keys(self) -> NamedValueAbstractSet[DimensionElement]:
         return self._target.graph.elements
 
     @property
@@ -685,7 +687,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         # Docstring inherited from DataCoordinate.
         if self._graph == graph:
             return self
-        elif self.hasFull() or self._graph.required.issuperset(graph.dimensions):
+        elif self.hasFull() or self._graph.required >= graph.dimensions:
             return _BasicTupleDataCoordinate(
                 graph,
                 tuple(self[k] for k in graph._dataCoordinateIndices.keys()),

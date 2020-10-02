@@ -31,23 +31,27 @@ from typing import (
     FrozenSet,
     Iterable,
     List,
+    Mapping,
     Optional,
+    Set,
     TYPE_CHECKING,
     TypeVar,
     Union,
 )
 
 from ..config import Config
-from ..named import NamedValueSet
+from ..named import NamedValueAbstractSet
 from ..utils import immutable
-from .elements import Dimension, DimensionElement, SkyPixDimension
+from ._config import DimensionConfig
+from ._elements import Dimension, DimensionElement
+from ._topology import TopologicalSpace, TopologicalFamily
 from ._graph import DimensionGraph
-from ._config import processElementsConfig, processSkyPixConfig, DimensionConfig
-from ._packer import DimensionPackerFactory
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._coordinate import DataCoordinate
-    from ._packer import DimensionPacker
+    from ._packer import DimensionPacker, DimensionPackerFactory
+    from ._skypix import SkyPixDimension
+    from .construction import DimensionConstructionBuilder
 
 
 E = TypeVar("E", bound=DimensionElement)
@@ -67,9 +71,17 @@ class DimensionUniverse:
     Parameters
     ----------
     config : `Config`, optional
-        Configuration describing the dimensions and their relationships.  If
-        not provided, default configuration (from ``dimensions.yaml`` in
-        this package's ``configs`` resource directory) will be loaded.
+        Configuration object from which dimension definitions can be extracted.
+        Ignored if ``builder`` is provided, or if ``version`` is provided and
+        an instance with that version already exists.
+    version : `int`, optional
+        Integer version for this `DimensionUniverse`.  If not provided, a
+        version will be obtained from ``builder`` or ``config``.
+    builder : `DimensionConstructionBuilder`, optional
+        Builder object used to initialize a new instance.  Ignored if
+        ``version`` is provided and an instance with that version already
+        exists.  Should not have had `~DimensionConstructionBuilder.finish`
+        called; this will be called if needed by `DimensionUniverse`.
     """
 
     _instances: ClassVar[Dict[int, DimensionUniverse]] = {}
@@ -78,59 +90,51 @@ class DimensionUniverse:
     For internal use only.
     """
 
-    def __new__(cls, config: Optional[Config] = None) -> DimensionUniverse:
-        # Normalize the config and apply defaults.
-        config = DimensionConfig(config)
+    def __new__(
+        cls,
+        config: Optional[Config] = None, *,
+        version: Optional[int] = None,
+        builder: Optional[DimensionConstructionBuilder] = None,
+    ) -> DimensionUniverse:
+        # Try to get a version first, to look for existing instances; try to
+        # do as little work as possible at this stage.
+        if version is None:
+            if builder is None:
+                config = DimensionConfig(config)
+                version = config["version"]
+            else:
+                version = builder.version
 
-        # First see if an equivalent instance already exists.
-        version = config["version"]
+        # See if an equivalent instance already exists.
         self: Optional[DimensionUniverse] = cls._instances.get(version)
         if self is not None:
             return self
 
-        # Create the universe instance and add core attributes.
+        # Ensure we have a builder, building one from config if necessary.
+        if builder is None:
+            config = DimensionConfig(config)
+            builder = config.makeBuilder()
+
+        # Delegate to the builder for most of the construction work.
+        builder.finish()
+
+        # Create the universe instance and create core attributes, mostly
+        # copying from builder.
         self = object.__new__(cls)
         assert self is not None
         self._cache = {}
-        self._dimensions = NamedValueSet()
-        self._elements = NamedValueSet()
+        self._dimensions = builder.dimensions
+        self._elements = builder.elements
+        self._topology = builder.topology
+        self._packers = builder.packers
+        self.commonSkyPix = self._dimensions[builder.commonSkyPixName]
 
-        # Read the skypix dimensions from config.
-        skyPixDimensions, self.commonSkyPix = processSkyPixConfig(config["skypix"])
-        # Add the skypix dimensions to the universe after sorting
-        # lexicographically (no topological sort because skypix dimensions
-        # never have any dependencies).
-        for name in sorted(skyPixDimensions):
-            skyPixDimensions[name]._finish(self, {})
+        # Attach self to all elements.
+        for element in self._elements:
+            element.universe = self
 
-        # Read the other dimension elements from config.
-        elementsToDo = processElementsConfig(config["elements"])
-        # Add elements to the universe in topological order by identifying at
-        # each outer iteration which elements have already had all of their
-        # dependencies added.
-        while elementsToDo:
-            unblocked = [name for name, element in elementsToDo.items()
-                         if element._related.dependencies.isdisjoint(elementsToDo.keys())]
-            unblocked.sort()  # Break ties lexicographically.
-            if not unblocked:
-                raise RuntimeError(f"Cycle detected in dimension elements: {elementsToDo.keys()}.")
-            for name in unblocked:
-                # Finish initialization of the element with steps that
-                # depend on those steps already having been run for all
-                # dependencies.
-                # This includes adding the element to self.elements and
-                # (if appropriate) self.dimensions.
-                elementsToDo.pop(name)._finish(self, elementsToDo)
-
-        # Add attributes for special subsets of the graph.
+        # Add attribute for special subsets of the graph.
         self.empty = DimensionGraph(self, (), conform=False)
-
-        # Set up factories for dataId packers as defined by config.
-        # MyPy is totally confused by us setting attributes on self in __new__.
-        self._packers = {}
-        for name, subconfig in config.get("packers", {}).items():
-            self._packers[name] = DimensionPackerFactory.fromConfig(universe=self,  # type: ignore
-                                                                    config=subconfig)
 
         # Use the version number from the config as a key in the singleton
         # dict containing all instances; that will let us transfer dimension
@@ -151,10 +155,6 @@ class DimensionUniverse:
             name: i for i, name in enumerate(self._dimensions.names)
         }
 
-        # Freeze internal sets so we can return them in methods without
-        # worrying about modifications.
-        self._elements.freeze()
-        self._dimensions.freeze()
         return self
 
     def __repr__(self) -> str:
@@ -181,7 +181,7 @@ class DimensionUniverse:
         """
         return self._elements.get(name, default)
 
-    def getStaticElements(self) -> NamedValueSet[DimensionElement]:
+    def getStaticElements(self) -> NamedValueAbstractSet[DimensionElement]:
         """Return a set of all static elements in this universe.
 
         Non-static elements that are created as needed may also exist, but
@@ -190,12 +190,12 @@ class DimensionUniverse:
 
         Returns
         -------
-        elements : `NamedValueSet` [ `DimensionElement` ]
+        elements : `NamedValueAbstractSet` [ `DimensionElement` ]
             A frozen set of `DimensionElement` instances.
         """
         return self._elements
 
-    def getStaticDimensions(self) -> NamedValueSet[Dimension]:
+    def getStaticDimensions(self) -> NamedValueAbstractSet[Dimension]:
         """Return a set of all static dimensions in this universe.
 
         Non-static dimensions that are created as needed may also exist, but
@@ -204,7 +204,7 @@ class DimensionUniverse:
 
         Returns
         -------
-        dimensions : `NamedValueSet` [ `Dimension` ]
+        dimensions : `NamedValueAbstractSet` [ `Dimension` ]
             A frozen set of `Dimension` instances.
         """
         return self._dimensions
@@ -248,6 +248,34 @@ class DimensionUniverse:
         desirable.
         """
         return self._dimensionIndices[name]
+
+    def expandDimensionNameSet(self, names: Set[str]) -> None:
+        """Expand a set of dimension names in-place to include recursive
+        dependencies.
+
+        This is an advanced interface for cases where constructing a
+        `DimensionGraph` (which also expands required dependencies) is
+        impossible or undesirable.
+
+        Parameters
+        ----------
+        names : `set` [ `str` ]
+            A true `set` of dimension names, to be expanded in-place.
+        """
+        # Keep iterating until the set of names stops growing.  This is not as
+        # efficient as it could be, but we work pretty hard cache
+        # DimensionGraph instances to keep actual construction rare, so that
+        # shouldn't matter.
+        oldSize = len(names)
+        while True:
+            # iterate over a temporary copy so we can modify the original
+            for name in tuple(names):
+                names.update(self._dimensions[name].required.names)
+                names.update(self._dimensions[name].implied.names)
+            if oldSize == len(names):
+                break
+            else:
+                oldSize = len(names)
 
     def extract(self, iterable: Iterable[Union[Dimension, str]]) -> DimensionGraph:
         """Construct a `DimensionGraph` from a possibly-heterogenous iterable
@@ -318,7 +346,7 @@ class DimensionUniverse:
             setting the space over which packed integer IDs are unique).
             ``dataId.hasRecords()`` must return `True`.
         """
-        return self._packers[name](dataId)
+        return self._packers[name](self, dataId)
 
     def getEncodeLength(self) -> int:
         """Return the size (in bytes) of the encoded size of `DimensionGraph`
@@ -368,9 +396,11 @@ class DimensionUniverse:
 
     _cache: Dict[FrozenSet[str], DimensionGraph]
 
-    _dimensions: NamedValueSet[Dimension]
+    _dimensions: NamedValueAbstractSet[Dimension]
 
-    _elements: NamedValueSet[DimensionElement]
+    _elements: NamedValueAbstractSet[DimensionElement]
+
+    _topology: Mapping[TopologicalSpace, NamedValueAbstractSet[TopologicalFamily]]
 
     _dimensionIndices: Dict[str, int]
 

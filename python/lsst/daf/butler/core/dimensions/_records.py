@@ -31,11 +31,10 @@ from typing import (
     Type,
 )
 
-from .elements import Dimension
 from ..timespan import Timespan, DatabaseTimespanRepresentation
+from ._elements import Dimension, DimensionElement
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .elements import DimensionElement
     from ._coordinate import DataCoordinate
     from ._schema import DimensionElementFields
 

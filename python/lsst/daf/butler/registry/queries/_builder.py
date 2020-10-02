@@ -31,10 +31,10 @@ from ...core import (
     SkyPixDimension,
     Dimension,
     DatasetType,
-    NamedKeyDict,
-    NamedValueSet,
     SimpleQuery,
 )
+
+from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 
 from .._collectionType import CollectionType
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns, RegistryManagers
@@ -260,7 +260,7 @@ class QueryBuilder:
         self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
         return True
 
-    def joinTable(self, table: sqlalchemy.sql.FromClause, dimensions: NamedValueSet[Dimension], *,
+    def joinTable(self, table: sqlalchemy.sql.FromClause, dimensions: NamedValueAbstractSet[Dimension], *,
                   datasets: Optional[DatasetQueryColumns] = None) -> None:
         """Join an arbitrary table to the query via dimension relationships.
 
