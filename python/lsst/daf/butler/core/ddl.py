@@ -51,7 +51,7 @@ from .utils import iterable, stripIfNotNone
 from .named import NamedValueSet
 
 if TYPE_CHECKING:
-    from .timespan import DatabaseTimespanRepresentation
+    from .timespan import TimespanDatabaseRepresentation
 
 
 _LOG = logging.getLogger(__name__)
@@ -380,7 +380,7 @@ class TableSpec:
         Special constraints that prohibit overlaps between timespans over rows
         where other columns are equal.  These take the same form as unique
         constraints, but each tuple may contain a single
-        `DatabaseTimespanRepresentation` subclass representing a timespan
+        `TimespanDatabaseRepresentation` subclass representing a timespan
         column.
     recycleIds : bool, optional
         If `True`, allow databases that might normally recycle autoincrement
@@ -394,7 +394,7 @@ class TableSpec:
         unique: Iterable[Tuple[str, ...]] = (),
         indexes: Iterable[Tuple[str, ...]] = (),
         foreignKeys: Iterable[ForeignKeySpec] = (),
-        exclusion: Iterable[Tuple[Union[str, Type[DatabaseTimespanRepresentation]], ...]] = (),
+        exclusion: Iterable[Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...]] = (),
         recycleIds: bool = True,
         doc: Optional[str] = None,
     ):
@@ -418,7 +418,7 @@ class TableSpec:
     foreignKeys: List[ForeignKeySpec]
     """Foreign key constraints for the table."""
 
-    exclusion: Set[Tuple[Union[str, Type[DatabaseTimespanRepresentation]], ...]]
+    exclusion: Set[Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...]]
     """Exclusion constraints for the table.
 
     Exclusion constraints behave mostly like unique constraints, but may
