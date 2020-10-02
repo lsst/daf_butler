@@ -34,6 +34,7 @@ from typing import (
     Any,
     Mapping,
     Optional,
+    Type,
     TypeVar,
 )
 
@@ -182,8 +183,7 @@ class TopologicalExtentDatabaseRepresentation(ABC):
 
     @classmethod
     @abstractmethod
-    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause
-                       ) -> TopologicalExtentDatabaseRepresentation:
+    def fromSelectable(cls: Type[_S], selectable: sqlalchemy.sql.FromClause) -> _S:
         """Construct an instance that represents a logical column (which may
         actually be backed by multiple columns) in the given table or subquery.
 
