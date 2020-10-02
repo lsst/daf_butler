@@ -19,12 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .graph import *
-from .coordinate import *
-from .records import *
+from ._graph import *
+from ._coordinate import *
+from ._records import *
 from .elements import *
-from .config import *
-from .universe import *
-from .packer import *
-from .schema import *
+from ._config import *
+from ._universe import *
+from ._packer import *
+from ._schema import *
 from ._dataCoordinateIterable import *
