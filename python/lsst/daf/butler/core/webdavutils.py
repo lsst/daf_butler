@@ -98,6 +98,18 @@ def getHttpSession() -> requests.Session:
     return session
 
 
+def isTokenAuth() -> bool:
+    try:
+        env_auth_method = os.environ['LSST_BUTLER_WEBDAV_AUTH']
+    except KeyError:
+        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, \
+                      please use values X509 or TOKEN")
+
+    if env_auth_method == "TOKEN":
+        return True
+    return False
+
+
 def refreshToken(session: requests.Session) -> None:
     """Set or update the 'Authorization' header of the session,
     configure bearer token authentication, with the value fetched

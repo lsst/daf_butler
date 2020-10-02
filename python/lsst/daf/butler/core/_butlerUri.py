@@ -1277,9 +1277,10 @@ class ButlerHttpURI(ButlerURI):
     @property
     def session(self) -> requests.Session:
         """Client object to address remote resource."""
-        from .webdavutils import refreshToken
+        from .webdavutils import refreshToken, isTokenAuth
         if ButlerHttpURI._sessionInitialized:
-            refreshToken(ButlerHttpURI._session)
+            if isTokenAuth():
+                refreshToken(ButlerHttpURI._session)
             return ButlerHttpURI._session
 
         baseURL = self.scheme + "://" + self.netloc
