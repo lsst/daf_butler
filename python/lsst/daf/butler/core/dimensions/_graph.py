@@ -41,7 +41,7 @@ from ..named import NamedValueSet
 from ..utils import immutable
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .universe import DimensionUniverse
+    from ._universe import DimensionUniverse
     from .elements import DimensionElement, Dimension
 
 
