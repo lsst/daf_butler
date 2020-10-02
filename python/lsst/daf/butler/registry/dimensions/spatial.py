@@ -28,7 +28,7 @@ import sqlalchemy
 
 from ...core import (
     addDimensionForeignKey,
-    DatabaseTimespanRepresentation,
+    TimespanDatabaseRepresentation,
     ddl,
     DimensionElement,
     DimensionRecord,
@@ -120,7 +120,7 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         if regions is not None:
