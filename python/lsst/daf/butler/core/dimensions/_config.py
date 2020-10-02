@@ -28,10 +28,10 @@ from typing import Iterator, Iterable, Optional, Union
 from ..config import Config, ConfigSubset
 from .. import ddl
 from .._butlerUri import ButlerURI
+from .._topology import TopologicalSpace
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 from ._packer import DimensionPackerConstructionVisitor
 from ._skypix import SkyPixConstructionVisitor
-from ._topology import TopologicalSpace
 from .standard import (
     StandardDimensionElementConstructionVisitor,
     StandardTopologicalFamilyConstructionVisitor,

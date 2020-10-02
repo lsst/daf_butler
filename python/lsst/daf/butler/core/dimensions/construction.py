@@ -30,7 +30,7 @@ from typing import (
 )
 
 from ..named import NamedValueSet
-from ._topology import TopologicalFamily, TopologicalSpace
+from .._topology import TopologicalFamily, TopologicalSpace
 
 if TYPE_CHECKING:
     from ._elements import Dimension, DimensionElement

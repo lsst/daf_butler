@@ -41,10 +41,10 @@ from typing import (
 
 from ..config import Config
 from ..named import NamedValueAbstractSet
+from .._topology import TopologicalSpace, TopologicalFamily
 from ..utils import immutable
 from ._config import DimensionConfig
 from ._elements import Dimension, DimensionElement
-from ._topology import TopologicalSpace, TopologicalFamily
 from ._graph import DimensionGraph
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
