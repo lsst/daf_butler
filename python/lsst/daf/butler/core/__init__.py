@@ -27,4 +27,5 @@ from .storedFileInfo import *
 from .dimensions import *
 from .fileDataset import *
 from . import time_utils
+from ._topology import *
 from .timespan import *
