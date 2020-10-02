@@ -41,13 +41,13 @@ from ..config import Config
 from ..named import NamedValueSet
 from ..utils import immutable
 from .elements import Dimension, DimensionElement, SkyPixDimension
-from .graph import DimensionGraph
-from .config import processElementsConfig, processSkyPixConfig, DimensionConfig
-from .packer import DimensionPackerFactory
+from ._graph import DimensionGraph
+from ._config import processElementsConfig, processSkyPixConfig, DimensionConfig
+from ._packer import DimensionPackerFactory
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .coordinate import DataCoordinate
-    from .packer import DimensionPacker
+    from ._coordinate import DataCoordinate
+    from ._packer import DimensionPacker
 
 
 E = TypeVar("E", bound=DimensionElement)

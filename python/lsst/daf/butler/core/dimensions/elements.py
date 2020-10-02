@@ -42,9 +42,9 @@ from ..named import NamedValueSet
 from .. import ddl
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .universe import DimensionUniverse
-    from .graph import DimensionGraph
-    from .records import DimensionRecord
+    from ._universe import DimensionUniverse
+    from ._graph import DimensionGraph
+    from ._records import DimensionRecord
 
 
 class RelatedDimensions:
@@ -246,7 +246,7 @@ class DimensionElement:
         self._attachGraph()
         # Create and attach a DimensionRecord subclass to hold values of this
         # dimension type.
-        from .records import _subclassDimensionRecord
+        from ._records import _subclassDimensionRecord
         self.RecordClass = _subclassDimensionRecord(self)
 
     def _attachToUniverse(self, universe: DimensionUniverse) -> None:
@@ -262,7 +262,7 @@ class DimensionElement:
 
         Called only by `_finish`, but may be overridden by subclasses.
         """
-        from .graph import DimensionGraph
+        from ._graph import DimensionGraph
         self.graph = DimensionGraph(self.universe, names=self._related.dependencies, conform=False)
 
     def _shouldBeInGraph(self, dimensionNames: AbstractSet[str]) -> bool:
@@ -476,7 +476,7 @@ class Dimension(DimensionElement):
 
     def _attachGraph(self) -> None:
         # Docstring inherited from DimensionElement._attachGraph.
-        from .graph import DimensionGraph
+        from ._graph import DimensionGraph
         self.graph = DimensionGraph(self.universe,
                                     names=self._related.dependencies.union([self.name]),
                                     conform=False)
