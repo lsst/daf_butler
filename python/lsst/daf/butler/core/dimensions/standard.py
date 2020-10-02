@@ -36,9 +36,9 @@ from typing import (
 
 from .. import ddl
 from ..named import NamedValueAbstractSet, NamedValueSet
+from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
 
 from ._elements import Dimension, DimensionCombination, DimensionElement
-from ._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 
