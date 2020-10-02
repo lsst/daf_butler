@@ -368,7 +368,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
             dimensions.
         """
         hasFull: Optional[bool]
-        if graph.dimensions.issubset(self.graph.required):
+        if graph.dimensions <= self.graph.required:
             hasFull = True
         else:
             hasFull = self._hasFull
