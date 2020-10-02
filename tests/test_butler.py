@@ -1237,8 +1237,8 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
 
 @unittest.skipIf(WsgiDAVApp is None, "Warning: wsgidav/cheroot not found!")
 # Mock required environment variables during tests
-@unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
-                                       "WEBDAV_TOKEN_FILE": os.path.join(
+@unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
+                                       "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
                                            TESTDIR, "config/testConfigs/webdav/token")})
 class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
     """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
@@ -1317,8 +1317,8 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         cls.serverThread.join()
 
     # Mock required environment variables during tests
-    @unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
-                                           "WEBDAV_TOKEN_FILE": os.path.join(
+    @unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
+                                           "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
                                                TESTDIR, "config/testConfigs/webdav/token")})
     def setUp(self):
         config = Config(self.configFile)
@@ -1338,8 +1338,8 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         self.tmpConfigFile = posixpath.join(self.rooturi, "butler.yaml")
 
     # Mock required environment variables during tests
-    @unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
-                                           "WEBDAV_TOKEN_FILE": os.path.join(
+    @unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
+                                           "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
                                                TESTDIR, "config/testConfigs/webdav/token")})
     def tearDown(self):
         # Clear temporary directory

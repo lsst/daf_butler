@@ -51,14 +51,14 @@ def getHttpSession() -> requests.Session:
 
     Notes
     -----
-    The WEBDAV_AUTH_METHOD must be set to obtain a session.
+    The LSST_BUTLER_WEBDAV_AUTH must be set to obtain a session.
     Depending on the chosen method, additional
     environment variables are required:
 
-    X509: must set WEBDAV_PROXY_CERT
+    X509: must set LSST_BUTLER_WEBDAV_PROXY_CERT
     (path to proxy certificate used to authenticate requests)
 
-    TOKEN: must set WEBDAV_TOKEN_FILE
+    TOKEN: must set LSST_BUTLER_WEBDAV_TOKEN_FILE
     (file which contains the bearer token used to
     authenticate requests, as a simple string)
 
@@ -75,23 +75,24 @@ def getHttpSession() -> requests.Session:
     log.debug("Creating new HTTP session...")
 
     try:
-        env_auth_method = os.environ['WEBDAV_AUTH_METHOD']
+        env_auth_method = os.environ['LSST_BUTLER_WEBDAV_AUTH']
     except KeyError:
-        raise KeyError("Environment variable WEBDAV_AUTH_METHOD is not set, please use values X509 or TOKEN")
+        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, \
+                      please use values X509 or TOKEN")
 
     if env_auth_method == "X509":
         log.debug("... using x509 authentication.")
         try:
-            proxy_cert = os.environ['WEBDAV_PROXY_CERT']
+            proxy_cert = os.environ['LSST_BUTLER_WEBDAV_PROXY_CERT']
         except KeyError:
-            raise KeyError("Environment variable WEBDAV_PROXY_CERT is not set")
+            raise KeyError("Environment variable LSST_BUTLER_WEBDAV_PROXY_CERT is not set")
         session.cert = (proxy_cert, proxy_cert)
     elif env_auth_method == "TOKEN":
         log.debug("... using bearer-token authentication.")
         refreshToken(session)
 
     else:
-        raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
+        raise ValueError("Environment variable LSST_BUTLER_WEBDAV_AUTH must be set to X509 or TOKEN")
 
     log.debug("Session configured and ready.")
 
@@ -113,7 +114,7 @@ def isTokenAuth() -> bool:
 def refreshToken(session: requests.Session) -> None:
     """Set or update the 'Authorization' header of the session,
     configure bearer token authentication, with the value fetched
-    from WEBDAV_TOKEN_FILE
+    from LSST_BUTLER_WEBDAV_TOKEN_FILE
 
     Parameters
     ----------
@@ -121,12 +122,12 @@ def refreshToken(session: requests.Session) -> None:
         Session on which bearer token authentication must be configured
     """
     try:
-        token_path = os.environ['WEBDAV_TOKEN_FILE']
+        token_path = os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE']
         if not os.path.isfile(token_path):
             raise FileNotFoundError(f"No token file: {token_path}")
-        bearer_token = open(os.environ['WEBDAV_TOKEN_FILE'], 'r').read().replace('\n', '')
+        bearer_token = open(os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE'], 'r').read().replace('\n', '')
     except KeyError:
-        raise KeyError("Environment variable WEBDAV_TOKEN_FILE is not set")
+        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_TOKEN_FILE is not set")
 
     session.headers.update({'Authorization': 'Bearer ' + bearer_token})
 
