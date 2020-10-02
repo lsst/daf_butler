@@ -26,7 +26,6 @@
 # function-scope imports.  The order below is one that is consistent with the
 # unguarded dependencies.
 
-from ._topology import *
 from ._elements import *
 from ._schema import *
 from ._graph import *

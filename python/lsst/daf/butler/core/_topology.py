@@ -39,8 +39,8 @@ from typing import (
 
 import sqlalchemy
 
-from ..named import NamedValueAbstractSet
-from ..utils import immutable
+from .named import NamedValueAbstractSet
+from .utils import immutable
 
 
 @enum.unique

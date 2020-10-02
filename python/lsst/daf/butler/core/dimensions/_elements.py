@@ -38,8 +38,8 @@ from typing import (
 from ..named import NamedValueAbstractSet, NamedValueSet
 from ..utils import cached_getter
 from .. import ddl
+from .._topology import TopologicalRelationshipEndpoint
 
-from ._topology import TopologicalRelationshipEndpoint
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
