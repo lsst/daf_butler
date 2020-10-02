@@ -41,8 +41,8 @@ from typing import (
 
 from ..named import NamedValueAbstractSet, NamedValueSet
 from ..utils import immutable
+from .._topology import TopologicalSpace, TopologicalFamily
 
-from ._topology import TopologicalSpace, TopologicalFamily
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
