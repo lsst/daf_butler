@@ -32,6 +32,7 @@ from typing import (
 )
 
 from ..timespan import Timespan, DatabaseTimespanRepresentation
+from ..utils import immutable
 from ._elements import Dimension, DimensionElement
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
@@ -68,6 +69,7 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
 
 
+@immutable
 class DimensionRecord:
     """Base class for the Python representation of database records for
     a `DimensionElement`.
@@ -130,9 +132,13 @@ class DimensionRecord:
             object.__setattr__(self, name, kwargs.get(name))
         if self.definition.temporal is not None:
             if self.timespan is None:  # type: ignore
-                self.timespan = Timespan(
-                    kwargs.get("datetime_begin"),
-                    kwargs.get("datetime_end"),
+                object.__setattr__(
+                    self,
+                    "timespan",
+                    Timespan(
+                        kwargs.get("datetime_begin"),
+                        kwargs.get("datetime_end"),
+                    )
                 )
 
         from ._coordinate import DataCoordinate
