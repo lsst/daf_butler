@@ -23,114 +23,148 @@ from __future__ import annotations
 
 __all__ = ("DimensionConfig",)
 
-from typing import Any, Dict, Tuple
+from typing import Iterator
 
-from ..config import Config, ConfigSubset
-from ..utils import doImport
+from ..config import ConfigSubset
 from .. import ddl
-from .elements import DimensionElement, Dimension, SkyPixDimension, RelatedDimensions
+from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
+from ._packer import DimensionPackerConstructionVisitor
+from ._skypix import SkyPixConstructionVisitor
+from ._topology import TopologicalSpace
+from .standard import (
+    StandardDimensionElementConstructionVisitor,
+    StandardTopologicalFamilyConstructionVisitor,
+)
 
 
 class DimensionConfig(ConfigSubset):
     """Configuration that defines a `DimensionUniverse`.
 
     The configuration tree for dimensions is a (nested) dictionary
-    with four top-level entries:
+    with five top-level entries:
 
     - version: an integer version number, used as keys in a singleton registry
       of all `DimensionUniverse` instances;
 
-    - skypix: a dictionary whose entries each define a `SkyPixDimension`,
+    - skypix: a dictionary whose entries each define a `SkyPixSystem`,
       along with a special "common" key whose value is the name of a skypix
       dimension that is used to relate all other spatial dimensions in the
       `Registry` database;
 
-    - elements: a nested dictionary whose entries each define a non-skypix
-      `DimensionElement`;
+    - elements: a nested dictionary whose entries each define
+      `StandardDimension` or `StandardDimensionCombination`.
 
-    - packers: a nested dictionary whose entries define a factory for a
+    - topology: a nested dictionary with ``spatial`` and ``temporal`` keys,
+      with dictionary values that each define a `StandardTopologicalFamily`.
+
+    - packers: a nested dictionary whose entries define factories for a
       `DimensionPacker` instance.
+
+    See the documentation for the linked classes above for more information
+    on the configuration syntax.
     """
     component = "dimensions"
     requiredKeys = ("version", "elements", "skypix")
     defaultConfigFile = "dimensions.yaml"
 
+    def _extractSkyPixVisitors(self) -> Iterator[DimensionConstructionVisitor]:
+        """Process the 'skypix' section of the configuration, yielding a
+        construction visitor for each `SkyPixSystem`.
 
-def processSkyPixConfig(config: Config) -> Tuple[Dict[str, SkyPixDimension], SkyPixDimension]:
-    """Process the "skypix" section of a `DimensionConfig`.
+        Yields
+        ------
+        visitor : `DimensionConstructionVisitor`
+            Object that adds a skypix system and its dimensions to an
+            under-construction `DimensionUniverse`.
+        """
+        config = self["skypix"]
+        systemNames = set(config.keys())
+        systemNames.remove("common")
+        for systemName in sorted(systemNames):
+            subconfig = config[systemName]
+            pixelizationClassName = subconfig["class"]
+            maxLevel = subconfig.get("max_level", 24)
+            yield SkyPixConstructionVisitor(systemName, pixelizationClassName, maxLevel)
 
-    Parameters
-    ----------
-    config : `Config`
-        The subset of a `DimensionConfig` that corresponds to the "skypix" key.
+    def _extractElementVisitors(self) -> Iterator[DimensionConstructionVisitor]:
+        """Process the 'elements' section of the configuration, yielding a
+        construction visitor for each `StandardDimension` or
+        `StandardDimensionCombination`.
 
-    Returns
-    -------
-    dimensions: `dict`
-        A dictionary mapping `str` names to partially-constructed
-        `SkyPixDimension` instances; the caller (i.e. a `DimensionUniverse`)
-        is responsible for calling `DimensionElement._finish` to complete
-        construction.
-    common: `SkyPixDimension`
-        The special dimension used to relate all other spatial dimensions in
-        the universe.  This instance is also guaranteed to be a value in
-        the returned ``dimensions``.
-    """
-    skyPixSysNames = set(config.keys())
-    try:
-        skyPixSysNames.remove("common")
-    except KeyError as err:
-        raise ValueError("No common skypix dimension defined in configuration.") from err
-    dimensions = {}
-    for sysName in sorted(skyPixSysNames):
-        subconfig = config[sysName]
-        pixelizationClass = doImport(subconfig["class"])
-        max_level = subconfig.get("max_level", 24)
-        for level in range(max_level + 1):
-            name = f"{sysName}{level}"
-            dimensions[name] = SkyPixDimension(name, pixelizationClass(level))
-    try:
-        common = dimensions[config["common"]]
-    except KeyError as err:
-        raise ValueError(f"Undefined name for common skypix dimension ({config['common']}).") from err
-    return dimensions, common
+        Yields
+        ------
+        visitor : `DimensionConstructionVisitor`
+            Object that adds a `StandardDimension` or
+            `StandardDimensionCombination` to an under-construction
+            `DimensionUniverse`.
+        """
+        for name, subconfig in self["elements"].items():
+            uniqueKeys = [ddl.FieldSpec.fromConfig(c, nullable=False) for c in subconfig.get("keys", ())]
+            if uniqueKeys:
+                uniqueKeys[0].primaryKey = True
+            yield StandardDimensionElementConstructionVisitor(
+                name=name,
+                required=set(subconfig.get("requires", ())),
+                implied=set(subconfig.get("implies", ())),
+                metadata=[ddl.FieldSpec.fromConfig(c) for c in subconfig.get("metadata", ())],
+                cached=subconfig.get("cached", False),
+                viewOf=subconfig.get("view_of", None),
+                alwaysJoin=subconfig.get("always_join", False),
+                uniqueKeys=uniqueKeys,
+            )
 
+    def _extractTopologyVisitors(self) -> Iterator[DimensionConstructionVisitor]:
+        """Process the 'topology' section of the configuration, yielding a
+        construction visitor for each `StandardTopologicalFamily`.
 
-def processElementsConfig(config: Config) -> Dict[str, DimensionElement]:
-    """Process the "elements" section of a `DimensionConfig`.
+        Yields
+        ------
+        visitor : `DimensionConstructionVisitor`
+            Object that adds a `StandardTopologicalFamily` to an
+            under-construction `DimensionUniverse` and updates its member
+            `DimensionElement` instances.
+        """
+        for spaceName, subconfig in self.get("topology", {}).items():
+            space = TopologicalSpace.__members__[spaceName.upper()]
+            for name, members in subconfig.items():
+                yield StandardTopologicalFamilyConstructionVisitor(
+                    name=name,
+                    space=space,
+                    members=members,
+                )
 
-    Parameters
-    ----------
-    config : `Config`
-        The subset of a `DimensionConfig` that corresponds to the "elements"
-        key.
+    def _extractPackerVisitors(self) -> Iterator[DimensionConstructionVisitor]:
+        """Process the 'packers' section of the configuration, yielding
+        construction visitors for each `DimensionPackerFactory`.
 
-    Returns
-    -------
-    dimensions : `dict`
-        A dictionary mapping `str` names to partially-constructed
-        `DimensionElement` instances; the caller (i.e. a `DimensionUniverse`)
-        is responsible for calling `DimensionElement._finish` to complete
-        construction.
-    """
-    elements: Dict[str, DimensionElement] = dict()
-    for name, subconfig in config.items():
-        kwargs: Dict[str, Any] = {}
-        kwargs["related"] = RelatedDimensions(
-            required=set(subconfig.get("requires", ())),
-            implied=set(subconfig.get("implies", ())),
-            spatial=subconfig.get("spatial"),
-            temporal=subconfig.get("temporal"),
-        )
-        kwargs["metadata"] = [ddl.FieldSpec.fromConfig(c) for c in subconfig.get("metadata", ())]
-        kwargs["cached"] = subconfig.get("cached", False)
-        kwargs["viewOf"] = subconfig.get("view_of", None)
-        kwargs["alwaysJoin"] = subconfig.get("always_join", False)
-        keys = subconfig.get("keys")
-        if keys is not None:
-            uniqueKeys = [ddl.FieldSpec.fromConfig(c, nullable=False) for c in keys]
-            uniqueKeys[0].primaryKey = True
-            elements[name] = Dimension(name, uniqueKeys=uniqueKeys, **kwargs)
-        else:
-            elements[name] = DimensionElement(name, **kwargs)
-    return elements
+        Yields
+        ------
+        visitor : `DimensionConstructionVisitor`
+            Object that adds a `DinmensionPackerFactory` to an
+            under-construction `DimensionUniverse`.
+        """
+        for name, subconfig in self["packers"].items():
+            yield DimensionPackerConstructionVisitor(
+                name=name,
+                clsName=subconfig["cls"],
+                fixed=subconfig["fixed"],
+                dimensions=subconfig["dimensions"],
+            )
+
+    def makeBuilder(self) -> DimensionConstructionBuilder:
+        """Construct a `DinmensionConstructionBuilder` that reflects this
+        configuration.
+
+        Returns
+        -------
+        builder : `DimensionConstructionBuilder`
+            A builder object populated with all visitors from this
+            configuration.  The `~DimensionConstructionBuilder.finish` method
+            will not have been called.
+        """
+        builder = DimensionConstructionBuilder(self["version"], self["skypix", "common"])
+        builder.update(self._extractSkyPixVisitors())
+        builder.update(self._extractElementVisitors())
+        builder.update(self._extractTopologyVisitors())
+        builder.update(self._extractPackerVisitors())
+        return builder
