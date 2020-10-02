@@ -336,6 +336,31 @@ def immutable(cls: _T) -> _T:
     return cls
 
 
+_S = TypeVar("_S")
+_R = TypeVar("_R")
+
+
+def cached_getter(func: Callable[[_S], _R]) -> Callable[[_S], _R]:
+    """A decorator that caches the result of a method that takes only ``self``
+    as an argument, returning the cached result on subsequent calls.
+
+    Notes
+    -----
+    This is intended primarily as a stopgap for Python 3.8's more sophisticated
+    ``functools.cached_property``, but it is also explicitly compatible with
+    the `immutable` decorator, which may not be true of ``cached_property``.
+    """
+    attribute = f"_cached_{func.__name__}"
+
+    @functools.wraps(func)
+    def inner(self: _S) -> _R:
+        if not hasattr(self, attribute):
+            object.__setattr__(self, attribute, func(self))
+        return getattr(self, attribute)
+
+    return inner
+
+
 def findFileResources(values: Iterable[str], regex: Optional[str] = None) -> List[str]:
     """Get the files from a list of values. If a value is a file it is added to
     the list of returned files. If a value is a directory, all the files in
