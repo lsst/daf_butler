@@ -34,7 +34,7 @@ from ..named import NamedValueSet
 from ..timespan import DatabaseTimespanRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .elements import DimensionElement, Dimension
+    from ._elements import DimensionElement, Dimension
 
 
 # Most regions are small (they're quadrilaterals), but visit ones can be quite
