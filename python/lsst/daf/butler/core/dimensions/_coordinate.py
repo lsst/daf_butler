@@ -46,11 +46,11 @@ from lsst.sphgeom import Region
 from ..named import NamedKeyMapping, NameLookupMapping, NamedValueSet
 from ..timespan import Timespan
 from .elements import Dimension, DimensionElement
-from .graph import DimensionGraph
-from .records import DimensionRecord
+from ._graph import DimensionGraph
+from ._records import DimensionRecord
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .universe import DimensionUniverse
+    from ._universe import DimensionUniverse
 
 DataIdKey = Union[str, Dimension]
 """Type annotation alias for the keys that can be used to index a
