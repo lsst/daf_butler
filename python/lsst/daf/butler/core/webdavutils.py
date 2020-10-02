@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 __all__ = ("getHttpSession", "isWebdavEndpoint", "webdavCheckFileExists",
-           "folderExists", "webdavDeleteFile")
+           "folderExists", "webdavDeleteFile", "refreshToken")
 
 import os
 import requests
@@ -80,15 +80,15 @@ def getHttpSession() -> requests.Session:
         raise KeyError("Environment variable WEBDAV_AUTH_METHOD is not set, please use values X509 or TOKEN")
 
     if env_auth_method == "X509":
+        log.debug("... using x509 authentication.")
         try:
             proxy_cert = os.environ['WEBDAV_PROXY_CERT']
         except KeyError:
             raise KeyError("Environment variable WEBDAV_PROXY_CERT is not set")
-        log.debug("... using x509 authentication.")
         session.cert = (proxy_cert, proxy_cert)
     elif env_auth_method == "TOKEN":
-        refreshToken(session)
         log.debug("... using bearer-token authentication.")
+        refreshToken(session)
 
     else:
         raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
@@ -100,8 +100,8 @@ def getHttpSession() -> requests.Session:
 
 def refreshToken(session: requests.Session) -> None:
     """Set or update the 'Authorization' header of the session,
-    configure bearer token authentication, with the value of the token
-    fetched from WEBDAV_TOKEN_FILE
+    configure bearer token authentication, with the value fetched
+    from WEBDAV_TOKEN_FILE
 
     Parameters
     ----------
@@ -112,9 +112,7 @@ def refreshToken(session: requests.Session) -> None:
         token_path = os.environ['WEBDAV_TOKEN_FILE']
         if not os.path.isfile(token_path):
             raise FileNotFoundError(f"No token file: {token_path}")
-
         bearer_token = open(os.environ['WEBDAV_TOKEN_FILE'], 'r').read().replace('\n', '')
-        log.debug("Using token %s", bearer_token)
     except KeyError:
         raise KeyError("Environment variable WEBDAV_TOKEN_FILE is not set")
 
