@@ -22,9 +22,9 @@
 import unittest
 import requests
 import responses
+import os
 
-
-from lsst.daf.butler.core.webdavutils import (folderExists, webdavCheckFileExists,
+from lsst.daf.butler.core.webdavutils import (folderExists, webdavCheckFileExists, isTokenAuth,
                                               _getFileURL, webdavDeleteFile, isWebdavEndpoint)
 from lsst.daf.butler import Location, ButlerURI
 
@@ -110,6 +110,12 @@ class WebdavUtilsTestCase(unittest.TestCase):
         self.assertEqual(_getFileURL(s), s)
         self.assertEqual(_getFileURL(buri), s)
         self.assertEqual(_getFileURL(loc), s)
+
+    def testIsTokenAuth(self):
+        with unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN"}):
+            self.assertTrue(isTokenAuth())
+        with unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "X509"}):
+            self.assertFalse(isTokenAuth())
 
 
 if __name__ == "__main__":
