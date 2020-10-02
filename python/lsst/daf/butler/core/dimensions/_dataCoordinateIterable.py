@@ -45,9 +45,9 @@ from typing import (
 import sqlalchemy
 
 from ..simpleQuery import SimpleQuery
-from .coordinate import DataCoordinate
-from .graph import DimensionGraph
-from .universe import DimensionUniverse
+from ._coordinate import DataCoordinate
+from ._graph import DimensionGraph
+from ._universe import DimensionUniverse
 
 
 class DataCoordinateIterable(Iterable[DataCoordinate]):
