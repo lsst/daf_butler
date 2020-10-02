@@ -22,10 +22,10 @@ from __future__ import annotations
 
 __all__ = (
     "Timespan",
-    "TimespanDatabaseRepresentation"
+    "TimespanDatabaseRepresentation",
 )
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Any, ClassVar, Dict, Iterator, Mapping, NamedTuple, Optional, Tuple, Type, TypeVar, Union
 
 import astropy.time
@@ -35,9 +35,7 @@ import warnings
 
 from . import ddl
 from .time_utils import astropy_to_nsec, EPOCH, MAX_TIME, times_equal
-
-
-S = TypeVar("S", bound="TimespanDatabaseRepresentation")
+from ._topology import TopologicalExtentDatabaseRepresentation
 
 
 class Timespan(NamedTuple):
@@ -202,7 +200,10 @@ class Timespan(NamedTuple):
                     yield Timespan(begin=other.end, end=self.end)
 
 
-class TimespanDatabaseRepresentation(ABC):
+_S = TypeVar("_S", bound="TimespanDatabaseRepresentation")
+
+
+class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
     """An interface that encapsulates how timespans are represented in a
     database engine.
 
@@ -323,25 +324,6 @@ class TimespanDatabaseRepresentation(ABC):
         """
         return False
 
-    @classmethod
-    @abstractmethod
-    def fromSelectable(cls: Type[S], selectable: sqlalchemy.sql.FromClause) -> S:
-        """Construct an instance of this class that proxies the columns of
-        this representation in a table or SELECT query.
-
-        Parameters
-        ----------
-        selectable : `sqlalchemy.sql.FromClause`
-            SQLAlchemy object representing a table or SELECT query that has
-            columns in this representation.
-
-        Returns
-        -------
-        instance : `TimespanDatabaseRepresentation`
-            An instance of this representation subclass.
-        """
-        raise NotImplementedError()
-
     @abstractmethod
     def isNull(self) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression that tests whether this timespan is
@@ -355,7 +337,7 @@ class TimespanDatabaseRepresentation(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def overlaps(self: S, other: Union[Timespan, S]) -> sqlalchemy.sql.ColumnElement:
+    def overlaps(self: _S, other: Union[Timespan, _S]) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression representing an overlap operation on
         timespans.
 
