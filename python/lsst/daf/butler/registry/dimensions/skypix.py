@@ -27,7 +27,7 @@ from typing import Iterable, Optional
 import sqlalchemy
 
 from ...core import (
-    DatabaseTimespanRepresentation,
+    TimespanDatabaseRepresentation,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
@@ -72,7 +72,7 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         if builder.hasDimensionKey(self._dimension):
             # If joining some other element or dataset type already brought in

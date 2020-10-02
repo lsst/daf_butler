@@ -31,7 +31,7 @@ from typing import Tuple, Type, TYPE_CHECKING
 
 from .. import ddl
 from ..named import NamedValueSet
-from ..timespan import DatabaseTimespanRepresentation
+from ..timespan import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._elements import DimensionElement, Dimension
@@ -186,16 +186,16 @@ class DimensionElementFields:
             self._tableSpec.fields.add(REGION_FIELD_SPEC)
             names.append(REGION_FIELD_SPEC.name)
         if element.temporal is not None:
-            names.append(DatabaseTimespanRepresentation.NAME)
+            names.append(TimespanDatabaseRepresentation.NAME)
         self.names = tuple(names)
 
-    def makeTableSpec(self, tsRepr: Type[DatabaseTimespanRepresentation]) -> ddl.TableSpec:
+    def makeTableSpec(self, tsRepr: Type[TimespanDatabaseRepresentation]) -> ddl.TableSpec:
         """Construct a complete specification for a table that could hold the
         records of this element.
 
         Parameters
         ----------
-        tsRepr : `type` (`DatabaseTimespanRepresentation` subclass)
+        tsRepr : `type` (`TimespanDatabaseRepresentation` subclass)
             Class object that specifies how timespans are represented in the
             database.
 
