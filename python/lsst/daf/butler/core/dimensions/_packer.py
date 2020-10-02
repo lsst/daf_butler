@@ -30,11 +30,11 @@ from typing import Any, Optional, Tuple, Type, TYPE_CHECKING, Union
 from lsst.utils import doImport
 
 from ..config import Config
-from .graph import DimensionGraph
-from .coordinate import DataCoordinate, DataId
+from ._graph import DimensionGraph
+from ._coordinate import DataCoordinate, DataId
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .universe import DimensionUniverse
+    from ._universe import DimensionUniverse
 
 
 class DimensionPacker(metaclass=ABCMeta):
