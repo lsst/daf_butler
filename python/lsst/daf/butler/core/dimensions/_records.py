@@ -31,7 +31,7 @@ from typing import (
     Type,
 )
 
-from ..timespan import Timespan, DatabaseTimespanRepresentation
+from ..timespan import Timespan, TimespanDatabaseRepresentation
 from ..utils import immutable
 from ._elements import Dimension, DimensionElement
 
@@ -60,7 +60,7 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
     if definition.spatial:
         slots.append(REGION_FIELD_SPEC.name)
     if definition.temporal:
-        slots.append(DatabaseTimespanRepresentation.NAME)
+        slots.append(TimespanDatabaseRepresentation.NAME)
     d = {
         "definition": definition,
         "__slots__": tuple(slots),
