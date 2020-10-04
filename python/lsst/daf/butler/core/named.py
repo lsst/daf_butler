@@ -24,6 +24,8 @@ __all__ = (
     "NamedKeyDict",
     "NamedKeyMapping",
     "NameLookupMapping",
+    "NamedValueAbstractSet",
+    "NamedValueMutableSet",
     "NamedValueSet",
 )
 
