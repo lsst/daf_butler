@@ -1344,6 +1344,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     def tearDown(self):
         # Clear temporary directory
         ButlerURI(self.rooturi).remove()
+        ButlerURI(self.rooturi).session.close()
 
     def _serveWebdav(self, port: int, stopWebdavServer):
         """Starts a local webdav-compatible HTTP server,
