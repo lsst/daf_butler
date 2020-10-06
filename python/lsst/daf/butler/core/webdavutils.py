@@ -95,8 +95,10 @@ def getHttpSession() -> requests.Session:
     else:
         raise ValueError("Environment variable LSST_BUTLER_WEBDAV_AUTH must be set to X509 or TOKEN")
 
-    # This header is required for request redirection in dCache
-    session.headers.update({'Expect': '100-continue'})
+    # This header is required for request redirection, in dCache for example
+    if "LSST_BUTLER_WEBDAV_EXPECT100" in os.environ:
+        log.debug("Expect: 100-Continue header enabled.")
+        session.headers.update({'Expect': '100-continue'})
 
     log.debug("Session configured and ready.")
 
