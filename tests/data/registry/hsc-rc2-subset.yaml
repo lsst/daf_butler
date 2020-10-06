@@ -55,7 +55,7 @@ data:
         full_name: "1_55"
         name_in_raft: "55"
         raft: "1"
-        purpose: SCIENC
+        purpose: SCIENCE
       - instrument: HSC
         id: 3
         full_name: "1_56"
