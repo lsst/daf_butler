@@ -22,7 +22,8 @@
 from __future__ import annotations
 
 __all__ = ("getHttpSession", "isWebdavEndpoint", "webdavCheckFileExists",
-           "folderExists", "webdavDeleteFile", "refreshToken")
+           "folderExists", "webdavDeleteFile", "refreshToken",
+           "finalurl")
 
 import os
 import requests
@@ -231,6 +232,28 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
     log.debug("Detecting HTTP endpoint type...")
     r = requests.options(filepath)
     return True if 'DAV' in r.headers else False
+
+
+def finalurl(r: requests.Response) -> str:
+    """Check whether the remote HTTP endpoint redirects to a different
+    endpoint, and return the final destination of the request.
+    This is needed when using PUT operations, to avoid starting
+    to send the data to the endpoint, before having to send it again once
+    the 307 redirect response is received, and thus wasting bandwidth.
+
+    Parameters
+    ----------
+    r : `requests.Response`
+        An HTTP response received when requesting the endpoint
+
+    Returns
+    destination_url: `string`
+        The final destination to which requests must be sent.
+    """
+    destination_url = r.url
+    if r.status_code == 307:
+        destination_url = r.headers['Location']
+    return destination_url
 
 
 def _getFileURL(path: Union[Location, ButlerURI, str]) -> str:

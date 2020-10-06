@@ -1393,7 +1393,8 @@ class ButlerHttpURI(ButlerURI):
         if not overwrite:
             if self.exists():
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
-        r = self.session.put(self.geturl(), data=data)
+        dest_url = finalurl(self._emptyPut())
+        r = self.session.put(dest_url, data=data)
         if r.status_code not in [201, 202, 204]:
             raise ValueError(f"Can not write file {self}, status code: {r.status_code}")
 
@@ -1436,7 +1437,8 @@ class ButlerHttpURI(ButlerURI):
             # Use local file and upload it
             local_src, is_temporary = src.as_local()
             f = open(local_src, "rb")
-            r = self.session.put(self.geturl(), data=f)
+            dest_url = finalurl(self._emptyPut())
+            r = self.session.put(dest_url, data=f)
             f.close()
             if is_temporary:
                 os.remove(local_src)
@@ -1444,6 +1446,10 @@ class ButlerHttpURI(ButlerURI):
 
         if r.status_code not in [201, 202, 204]:
             raise ValueError(f"Can not transfer file {self}, status code: {r.status_code}")
+
+    def _emptyPut(self) -> requests.Response:
+        return self.session.put(self.geturl(), data=None,
+                                headers={"Content-Length": "0"}, allow_redirects=False)
 
 
 class ButlerInMemoryURI(ButlerURI):
