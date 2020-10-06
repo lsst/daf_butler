@@ -1239,7 +1239,8 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
 # Mock required environment variables during tests
 @unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
                                        "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
-                                           TESTDIR, "config/testConfigs/webdav/token")})
+                                           TESTDIR, "config/testConfigs/webdav/token"),
+                                       "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs"})
 class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
     """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
     a local in-memory SqlRegistry.
@@ -1319,7 +1320,8 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     # Mock required environment variables during tests
     @unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
                                            "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
-                                               TESTDIR, "config/testConfigs/webdav/token")})
+                                               TESTDIR, "config/testConfigs/webdav/token"),
+                                           "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs"})
     def setUp(self):
         config = Config(self.configFile)
 
@@ -1340,7 +1342,8 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     # Mock required environment variables during tests
     @unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
                                            "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
-                                               TESTDIR, "config/testConfigs/webdav/token")})
+                                               TESTDIR, "config/testConfigs/webdav/token"),
+                                           "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs"})
     def tearDown(self):
         # Clear temporary directory
         ButlerURI(self.rooturi).remove()

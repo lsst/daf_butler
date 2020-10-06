@@ -52,6 +52,10 @@ def getHttpSession() -> requests.Session:
 
     Notes
     -----
+    The LSST_BUTLER_WEBDAV_CA_BUNDLE must be set to the directory
+    where CA certificates are stored if you intend to use HTTPS
+    to communicate with the endpoint.
+
     The LSST_BUTLER_WEBDAV_AUTH must be set to obtain a session.
     Depending on the chosen method, additional
     environment variables are required:
@@ -67,7 +71,7 @@ def getHttpSession() -> requests.Session:
     "Expect: 100-Continue" header in all requests. This is required
     on certain endpoints where requests redirection is made.
 
-    NB: requests will read CA certificates in REQUESTS_CA_BUNDLE
+    NB: requests will read CA certificates in LSST_BUTLER_WEBDAV_CA_BUNDLE
     It must be manually exported according to the system CA directory.
     """
 
@@ -95,9 +99,18 @@ def getHttpSession() -> requests.Session:
     elif env_auth_method == "TOKEN":
         log.debug("... using bearer-token authentication.")
         refreshToken(session)
-
     else:
         raise ValueError("Environment variable LSST_BUTLER_WEBDAV_AUTH must be set to X509 or TOKEN")
+
+    ca_bundle = None
+    try:
+        ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
+    except KeyError:
+        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: \
+HTTPS requests will fail. If you intend to use HTTPS, please \
+export this variable.")
+
+    session.verify = ca_bundle
 
     # This header is required for request redirection, in dCache for example
     if "LSST_BUTLER_WEBDAV_EXPECT100" in os.environ:
@@ -240,10 +253,17 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
     isWebdav : `bool`
         True if the endpoint implements Webdav, False if it doesn't.
     """
+    ca_bundle = None
+    try:
+        ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
+    except KeyError:
+        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: \
+HTTPS requests will fail. If you intend to use HTTPS, please \
+export this variable.")
     filepath = _getFileURL(path)
 
     log.debug("Detecting HTTP endpoint type...")
-    r = requests.options(filepath)
+    r = requests.options(filepath, verify=ca_bundle)
     return True if 'DAV' in r.headers else False
 
 
