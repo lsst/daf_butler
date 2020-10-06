@@ -63,6 +63,10 @@ def getHttpSession() -> requests.Session:
     (file which contains the bearer token used to
     authenticate requests, as a simple string)
 
+    (OPTIONAL) LSST_BUTLER_WEBDAV_EXPECT100: if set, we will add an
+    "Expect: 100-Continue" header in all requests. This is required
+    on certain endpoints where requests redirection is made.
+
     NB: requests will read CA certificates in REQUESTS_CA_BUNDLE
     It must be manually exported according to the system CA directory.
     """
@@ -106,6 +110,13 @@ def getHttpSession() -> requests.Session:
 
 
 def isTokenAuth() -> bool:
+    """Returns the status of bearer-token authentication.
+
+    Returns
+    -------
+    isTokenAuth : `bool`
+        True if LSST_BUTLER_WEBDAV_AUTH is set to TOKEN, False otherwise.
+    """
     try:
         env_auth_method = os.environ['LSST_BUTLER_WEBDAV_AUTH']
     except KeyError:
@@ -255,6 +266,7 @@ def finalurl(r: requests.Response) -> str:
     destination_url = r.url
     if r.status_code == 307:
         destination_url = r.headers['Location']
+        log.debug("Request redirected to %s", destination_url)
     return destination_url
 
 

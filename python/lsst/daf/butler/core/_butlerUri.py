@@ -1449,6 +1449,14 @@ class ButlerHttpURI(ButlerURI):
             raise ValueError(f"Can not transfer file {self}, status code: {r.status_code}")
 
     def _emptyPut(self) -> requests.Response:
+        """Send an empty PUT request to current URL. This is used to detect
+        if redirection is enabled before sending actual data.
+
+        Returns
+        -------
+        response : `requests.Response`
+            HTTP Response from the endpoint.
+        """
         return self.session.put(self.geturl(), data=None,
                                 headers={"Content-Length": "0"}, allow_redirects=False)
 
