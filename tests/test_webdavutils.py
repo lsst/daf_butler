@@ -137,8 +137,8 @@ class WebdavUtilsTestCase(unittest.TestCase):
         s = f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}"
         r = f"https://{self.wrongRoot}/{self.existingfolderName}/{self.existingfileName}"
 
-        resp_s = requests.put(s)
-        resp_r = requests.put(r)
+        resp_s = self.session.put(s)
+        resp_r = self.session.put(r)
 
         self.assertEqual(finalurl(resp_s), s)
         self.assertEqual(finalurl(resp_r), s)

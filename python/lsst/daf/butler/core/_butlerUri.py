@@ -1277,7 +1277,7 @@ class ButlerHttpURI(ButlerURI):
     @property
     def session(self) -> requests.Session:
         """Client object to address remote resource."""
-        from .webdavutils import refreshToken, isTokenAuth
+        from .webdavutils import refreshToken, isTokenAuth, getHttpSession, isWebdavEndpoint
         if ButlerHttpURI._sessionInitialized:
             if isTokenAuth():
                 refreshToken(ButlerHttpURI._session)
@@ -1285,7 +1285,6 @@ class ButlerHttpURI(ButlerURI):
 
         baseURL = self.scheme + "://" + self.netloc
 
-        from .webdavutils import getHttpSession, isWebdavEndpoint
         if isWebdavEndpoint(baseURL):
             log.debug("%s looks like a Webdav endpoint.", baseURL)
             s = getHttpSession()
@@ -1389,6 +1388,7 @@ class ButlerHttpURI(ButlerURI):
             If `True` the resource will be overwritten if it exists. Otherwise
             the write will fail.
         """
+        from .webdavutils import finalurl
         log.debug("Writing to remote resource: %s", self.geturl())
         if not overwrite:
             if self.exists():
@@ -1413,6 +1413,7 @@ class ButlerHttpURI(ButlerURI):
         transaction : `DatastoreTransaction`, optional
             Currently unused.
         """
+        from .webdavutils import finalurl
         # Fail early to prevent delays if remote resources are requested
         if transfer not in self.transferModes:
             raise ValueError(f"Transfer mode {transfer} not supported by URI scheme {self.scheme}")
