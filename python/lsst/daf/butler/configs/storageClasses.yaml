@@ -81,6 +81,8 @@ storageClasses:
     pytype: lsst.afw.table.SourceCatalog
   ObjectMaskCatalog:
     pytype: lsst.pipe.tasks.objectMasks.ObjectMaskCatalog
+  ExposureCatalog:
+    pytype: lsst.afw.table.ExposureCatalog
   DataFrame:
     pytype: pandas.DataFrame
     components:
