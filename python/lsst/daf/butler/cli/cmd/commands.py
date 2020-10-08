@@ -22,9 +22,17 @@
 import click
 import yaml
 
-from ..opt import (collection_type_option, dataset_type_option, directory_argument, options_file_option,
-                   glob_argument, repo_argument, transfer_option, verbose_option)
-from ..utils import cli_handle_exception, split_commas, typeStrAcceptsMultiple, unwrap
+from ..opt import (
+    collection_type_option,
+    dataset_type_option,
+    directory_argument,
+    glob_argument,
+    options_file_option,
+    repo_argument,
+    transfer_option,
+    verbose_option,
+)
+from ..utils import cli_handle_exception, split_commas, to_upper, typeStrAcceptsMultiple, unwrap
 from ... import script
 
 
