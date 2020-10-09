@@ -1249,6 +1249,42 @@ class Database(ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
+        """Insert one or more rows into a table, skipping any rows for which
+        insertion would violate any constraint.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            Table rows should be inserted into.
+        *rows
+            Positional arguments are the rows to be inserted, as dictionaries
+            mapping column name to value.  The keys in all dictionaries must
+            be the same.
+
+        Returns
+        -------
+        count : `int`
+            The number of rows actually inserted.
+
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
+            This is raised even if the operation would do nothing even on a
+            writeable database.
+
+        Notes
+        -----
+        May be used inside transaction contexts, so implementations may not
+        perform operations that interrupt transactions.
+
+        Implementations are not required to support `ensure` on tables
+        with autoincrement keys.
+        """
+        raise NotImplementedError()
+
     def delete(self, table: sqlalchemy.schema.Table, columns: Iterable[str], *rows: dict) -> int:
         """Delete one or more rows from a table.
 

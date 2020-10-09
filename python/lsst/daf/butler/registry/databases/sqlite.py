@@ -65,15 +65,16 @@ class _Replace(sqlalchemy.sql.Insert):
     pass
 
 
+# SQLite and PostgreSQL use similar syntax for their ON CONFLICT extension,
+# but SQLAlchemy only knows about PostgreSQL's, so we have to compile some
+# custom text SQL ourselves.
+
 # Hard to infer what types these should be from SQLAlchemy docs; just disable
 # static typing by calling everything "Any".
 @sqlalchemy.ext.compiler.compiles(_Replace, "sqlite")
 def _replace(insert: Any, compiler: Any, **kwargs: Any) -> Any:
     """Generate an INSERT ... ON CONFLICT REPLACE query.
     """
-    # SQLite and PostgreSQL use similar syntax for their ON CONFLICT extension,
-    # but SQLAlchemy only knows about PostgreSQL's, so we have to compile some
-    # custom text SQL ourselves.
     result = compiler.visit_insert(insert, **kwargs)
     preparer = compiler.preparer
     pk_columns = ", ".join([preparer.format_column(col) for col in insert.table.primary_key])
@@ -82,6 +83,21 @@ def _replace(insert: Any, compiler: Any, **kwargs: Any) -> Any:
                if col.name not in insert.table.primary_key]
     updates = ", ".join([f"{col} = excluded.{col}" for col in columns])
     result += f" DO UPDATE SET {updates}"
+    return result
+
+
+class _Ensure(sqlalchemy.sql.Insert):
+    """A SQLAlchemy query that compiles to INSERT ... ON CONFLICT DO NOTHING.
+    """
+    pass
+
+
+@sqlalchemy.ext.compiler.compiles(_Ensure, "sqlite")
+def _ensure(insert: Any, compiler: Any, **kwargs: Any) -> Any:
+    """Generate an INSERT ... ON CONFLICT DO NOTHING query.
+    """
+    result = compiler.visit_insert(insert, **kwargs)
+    result += f" ON CONFLICT DO NOTHING"
     return result
 
 
@@ -416,6 +432,17 @@ class SqliteDatabase(Database):
                 "replace does not support compound primary keys with autoincrement fields."
             )
         self._connection.execute(_Replace(table), *rows)
+
+    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
+        if not (self.isWriteable() or table.key in self._tempTables):
+            raise ReadOnlyDatabaseError(f"Attempt to ensure into read-only database '{self}'.")
+        if not rows:
+            return 0
+        if table.name in self._autoincr:
+            raise NotImplementedError(
+                "ensure does not support compound primary keys with autoincrement fields."
+            )
+        return self._connection.execute(_Ensure(table), *rows).rowcount
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).

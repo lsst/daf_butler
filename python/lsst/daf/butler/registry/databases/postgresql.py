@@ -161,6 +161,18 @@ class PostgresqlDatabase(Database):
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
         self._connection.execute(query, *rows)
 
+    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
+        # Docstring inherited.
+        if not (self.isWriteable() or table.key in self._tempTables):
+            raise ReadOnlyDatabaseError(f"Attempt to esnure into read-only database '{self}'.")
+        if not rows:
+            return 0
+        # Like `replace`, this uses UPSERT, but it's a bit simpler because
+        # we don't care which constraint is violated or specify which columns
+        # to update.
+        query = sqlalchemy.dialects.postgresql.dml.insert(table).on_conflict_do_nothing()
+        return self._connection.execute(query, *rows).rowcount
+
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
     """A single-column `Timespan` representation usable only with

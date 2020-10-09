@@ -522,6 +522,39 @@ class DatabaseTests(ABC):
         db.replace(tables.a, row3, row2a, row1)
         self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2a, row3])
 
+    def testEnsure(self):
+        """Tests for `Database.ensure`.
+        """
+        db = self.makeEmptyDatabase(origin=1)
+        with db.declareStaticTables(create=True) as context:
+            tables = context.addTableTuple(STATIC_TABLE_SPECS)
+        # Use 'ensure' to insert a single row that contains a region and
+        # query to get it back.
+        region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
+        row1 = {"name": "a1", "region": region}
+        self.assertEqual(db.ensure(tables.a, row1), 1)
+        self.assertEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1])
+        # Insert another row without a region.
+        row2 = {"name": "a2", "region": None}
+        self.assertEqual(db.ensure(tables.a, row2), 1)
+        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2])
+        # Use ensure to re-insert both of those rows again, which should do
+        # nothing.
+        self.assertEqual(db.ensure(tables.a, row1, row2), 0)
+        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2])
+        # Attempt to insert row1's key with no region, while
+        # reinserting row2.  This should also do nothing.
+        row1a = {"name": "a1", "region": None}
+        self.assertEqual(db.ensure(tables.a, row1a, row2), 0)
+        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2])
+        # Attempt to insert new rows for both existing keys, this time also
+        # adding a new row.  Pass them in in a different order.  Only the new
+        # row should be added.
+        row2a = {"name": "a2", "region": region}
+        row3 = {"name": "a3", "region": None}
+        self.assertEqual(db.ensure(tables.a, row3, row2a, row1a), 1)
+        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2, row3])
+
     def testTransactionNesting(self):
         """Test that transactions can be nested with the behavior in the
         presence of exceptions working as documented.
