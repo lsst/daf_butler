@@ -1059,11 +1059,6 @@ class Registry:
         ConflictingDefinitionError
             Raised if the record exists in the database (according to primary
             key lookup) but is inconsistent with the given one.
-
-        Notes
-        -----
-        This method cannot be called within transactions, as it needs to be
-        able to perform its own transaction to be concurrent.
         """
         if conform:
             if isinstance(element, str):
