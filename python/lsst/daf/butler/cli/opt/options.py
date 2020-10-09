@@ -59,6 +59,15 @@ collection_type_option = MWOptionDecorator("--collection-type",
                                            type=click.Choice(CollectionTypeCallback.collectionTypes,
                                                              case_sensitive=False))
 
+
+collections_option = MWOptionDecorator("--collections",
+                                       help=unwrap("""One or more expressions that fully or partially identify
+                                                   the collections to search for datasets.If not provided all
+                                                   datasets are returned."""),
+                                       multiple=True,
+                                       callback=split_commas)
+
+
 config_option = MWOptionDecorator("-c", "--config",
                                   callback=split_kv,
                                   help="Config override, as a key-value pair.",
@@ -74,6 +83,9 @@ dataset_type_option = MWOptionDecorator("-d", "--dataset-type",
                                         callback=split_commas,
                                         help="Specific DatasetType(s) to validate.",
                                         multiple=True)
+
+
+datasets_option = MWOptionDecorator("--datasets")
 
 
 logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
@@ -128,3 +140,7 @@ transfer_option = MWOptionDecorator("-t", "--transfer",
 verbose_option = MWOptionDecorator("-v", "--verbose",
                                    help="Increase verbosity.",
                                    is_flag=True)
+
+
+where_option = MWOptionDecorator("--where",
+                                 help="A string expression similar to a SQL WHERE clause.")
