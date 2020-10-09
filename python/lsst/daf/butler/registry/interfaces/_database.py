@@ -1009,9 +1009,11 @@ class Database(ABC):
 
         Notes
         -----
-        This method may not be called within transactions.  It may be called on
-        read-only databases if and only if the matching row does in fact
-        already exist.
+        May be used inside transaction contexts, so implementations may not
+        perform operations that interrupt transactions.
+
+        It may be called on read-only databases if and only if the matching row
+        does in fact already exist.
         """
 
         def check() -> Tuple[int, Optional[List[str]], Optional[List]]:
@@ -1077,58 +1079,34 @@ class Database(ABC):
                 row.update(compared)
             if extra is not None:
                 row.update(extra)
-            insertSql = table.insert().values(row)
-            try:
-                with self.transaction(interrupting=True):
-                    self._connection.execute(insertSql)
-                    # Need to perform check() for this branch inside the
-                    # transaction, so we roll back an insert that didn't do
-                    # what we expected.  That limits the extent to which we
-                    # can reduce duplication between this block and the other
-                    # ones that perform similar logic.
-                    n, bad, result = check()
-                    if n < 1:
-                        raise RuntimeError("Insertion in sync did not seem to affect table.  This is a bug.")
-                    elif n > 1:
-                        raise RuntimeError(f"Keys passed to sync {keys.keys()} do not comprise a "
-                                           f"unique constraint for table {table.name}.")
-                    elif bad:
-                        raise RuntimeError(
-                            f"Conflict ({bad}) in sync after successful insert; this is "
-                            f"possible if the same table is being updated by a concurrent "
-                            f"process that isn't using sync, but it may also be a bug in "
-                            f"daf_butler."
-                        )
-                # No exceptions, so it looks like we inserted the requested row
-                # successfully.
-                inserted = True
-            except sqlalchemy.exc.IntegrityError as err:
-                # Most likely cause is that an equivalent row already exists,
-                # but it could also be some other constraint.  Query for the
-                # row we think we matched to resolve that question.
+            with self.transaction(lock=[table]):
+                inserted = bool(self.ensure(table, row))
+                # Need to perform check() for this branch inside the
+                # transaction, so we roll back an insert that didn't do
+                # what we expected.  That limits the extent to which we
+                # can reduce duplication between this block and the other
+                # ones that perform similar logic.
                 n, bad, result = check()
                 if n < 1:
-                    # There was no matched row; insertion failed for some
-                    # completely different reason.  Just re-raise the original
-                    # IntegrityError.
-                    raise
-                elif n > 2:
-                    # There were multiple matched rows, which means we
-                    # conflicted *and* the arguments were bad to begin with.
+                    raise RuntimeError(
+                        "Necessary insertion in sync did not seem to affect table.  This is a bug."
+                    )
+                elif n > 1:
                     raise RuntimeError(f"Keys passed to sync {keys.keys()} do not comprise a "
-                                       f"unique constraint for table {table.name}.") from err
+                                       f"unique constraint for table {table.name}.")
                 elif bad:
-                    # No logic bug, but data conflicted on the keys given.
-                    raise DatabaseConflictError(f"Conflict in sync for table "
-                                                f"{table.name} on column(s) {bad}.") from err
-                # The desired row is already present and consistent with what
-                # we tried to insert.
-                inserted = False
+                    if inserted:
+                        raise RuntimeError(
+                            f"Conflict ({bad}) in sync after successful insert; this is "
+                            "possible if the same table is being updated by a concurrent "
+                            "process that isn't using sync, but it may also be a bug in "
+                            "daf_butler."
+                        )
+                    else:
+                        raise DatabaseConflictError(
+                            f"Conflict in sync for table {table.name} on column(s) {bad}."
+                        )
         else:
-            assert not self._connection.in_transaction(), (
-                "Calling sync within a transaction block is an error even "
-                "on a read-only database."
-            )
             # Database is not writeable; just see if the row exists.
             n, bad, result = check()
             if n < 1:
@@ -1136,7 +1114,9 @@ class Database(ABC):
             elif n > 1:
                 raise RuntimeError("Keys passed to sync do not comprise a unique constraint.")
             elif bad:
-                raise DatabaseConflictError(f"Conflict in sync on column(s) {bad}.")
+                raise DatabaseConflictError(
+                    f"Conflict in sync for table {table.name} on column(s) {bad}."
+                )
             inserted = False
         if returning is None:
             return None, inserted

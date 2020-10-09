@@ -97,7 +97,7 @@ def _ensure(insert: Any, compiler: Any, **kwargs: Any) -> Any:
     """Generate an INSERT ... ON CONFLICT DO NOTHING query.
     """
     result = compiler.visit_insert(insert, **kwargs)
-    result += f" ON CONFLICT DO NOTHING"
+    result += " ON CONFLICT DO NOTHING"
     return result
 
 

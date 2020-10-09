@@ -471,14 +471,6 @@ class DatabaseTests(ABC):
         # should raise.
         with self.assertRaises(DatabaseConflictError):
             db.sync(tables.b, keys={"name": "b1"}, compared={"value": 20})
-        # Try to sync inside a transaction.  That's always an error, regardless
-        # of whether there would be an insertion or not.
-        with self.assertRaises(AssertionError):
-            with db.transaction():
-                db.sync(tables.b, keys={"name": "b1"}, extra={"value": 10})
-        with self.assertRaises(AssertionError):
-            with db.transaction():
-                db.sync(tables.b, keys={"name": "b2"}, extra={"value": 20})
         # Try to sync in a read-only database.  This should work if and only
         # if the matching row already exists.
         with self.asReadOnly(db) as rodb:
