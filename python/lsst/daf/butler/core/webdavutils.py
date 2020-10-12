@@ -78,8 +78,8 @@ def getHttpSession() -> requests.Session:
     try:
         env_auth_method = os.environ['LSST_BUTLER_WEBDAV_AUTH']
     except KeyError:
-        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, \
-                      please use values X509 or TOKEN")
+        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, "
+                       "please use values X509 or TOKEN")
 
     if env_auth_method == "X509":
         log.debug("... using x509 authentication.")
@@ -98,9 +98,9 @@ def getHttpSession() -> requests.Session:
     try:
         ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
     except KeyError:
-        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: \
-HTTPS requests will fail. If you intend to use HTTPS, please \
-export this variable.")
+        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
+                    "HTTPS requests will fail. If you intend to use HTTPS, please "
+                    "export this variable.")
 
     session.verify = ca_bundle
 
@@ -125,8 +125,8 @@ def isTokenAuth() -> bool:
     try:
         env_auth_method = os.environ['LSST_BUTLER_WEBDAV_AUTH']
     except KeyError:
-        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, \
-                      please use values X509 or TOKEN")
+        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, "
+                       "please use values X509 or TOKEN")
 
     if env_auth_method == "TOKEN":
         return True
@@ -249,9 +249,9 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
     try:
         ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
     except KeyError:
-        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: \
-HTTPS requests will fail. If you intend to use HTTPS, please \
-export this variable.")
+        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
+                    "HTTPS requests will fail. If you intend to use HTTPS, please "
+                    "export this variable.")
     filepath = _getFileURL(path)
 
     log.debug("Detecting HTTP endpoint type...")
