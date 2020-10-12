@@ -222,7 +222,7 @@ class FieldSpec:
     doc: Optional[str] = None
     """Documentation for this field."""
 
-    def __eq__(self, other: Any) -> Union[bool, NotImplemented]:
+    def __eq__(self, other: Any) -> bool:
         if isinstance(other, FieldSpec):
             return self.name == other.name
         else:
