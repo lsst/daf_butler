@@ -52,27 +52,19 @@ def getHttpSession() -> requests.Session:
 
     Notes
     -----
-    The LSST_BUTLER_WEBDAV_CA_BUNDLE must be set to the directory
-    where CA certificates are stored if you intend to use HTTPS
-    to communicate with the endpoint.
-
-    The LSST_BUTLER_WEBDAV_AUTH must be set to obtain a session.
-    Depending on the chosen method, additional
-    environment variables are required:
-
-    X509: must set LSST_BUTLER_WEBDAV_PROXY_CERT
-    (path to proxy certificate used to authenticate requests)
-
-    TOKEN: must set LSST_BUTLER_WEBDAV_TOKEN_FILE
-    (file which contains the bearer token used to
-    authenticate requests, as a simple string)
-
-    (OPTIONAL) LSST_BUTLER_WEBDAV_EXPECT100: if set, we will add an
-    "Expect: 100-Continue" header in all requests. This is required
-    on certain endpoints where requests redirection is made.
-
-    NB: requests will read CA certificates in LSST_BUTLER_WEBDAV_CA_BUNDLE
-    It must be manually exported according to the system CA directory.
+    The following environment variables must be set:
+    - LSST_BUTLER_WEBDAV_CA_BUNDLE: the directory where CA
+        certificates are stored if you intend to use HTTPS to
+        communicate with the endpoint.
+    - LSST_BUTLER_WEBDAV_AUTH: which authentication method to use.
+        Possible values are X509 and TOKEN
+    - (X509 only) LSST_BUTLER_WEBDAV_PROXY_CERT: path to proxy
+        certificate used to authenticate requests
+    - (TOKEN only) LSST_BUTLER_WEBDAV_TOKEN_FILE: file which
+        contains the bearer token used to authenticate requests
+    - (OPTIONAL) LSST_BUTLER_WEBDAV_EXPECT100: if set, we will add an
+        "Expect: 100-Continue" header in all requests. This is required
+        on certain endpoints where requests redirection is made.
     """
 
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
@@ -280,6 +272,7 @@ def finalurl(r: requests.Response) -> str:
         An HTTP response received when requesting the endpoint
 
     Returns
+    -------
     destination_url: `string`
         The final destination to which requests must be sent.
     """
