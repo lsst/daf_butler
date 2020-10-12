@@ -96,7 +96,7 @@ storageClasses:
   PropertyList:
     pytype: lsst.daf.base.PropertyList
   Defects:
-    pytype: lsst.meas.algorithms.Defects
+    pytype: lsst.ip.isr.Defects
   QECurve:
     pytype: lsst.meas.algorithms.Curve
   CrosstalkCalib:
