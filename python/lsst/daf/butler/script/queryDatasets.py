@@ -23,7 +23,7 @@ from .. import Butler
 from ..core.utils import globToRegex
 
 
-def queryDatasets(repo, glob, collections, where, deduplicate, components):
+def queryDatasets(repo, glob, collections, where, find_first, components):
     """Get dataset refs from a repository.
 
     Parameters
@@ -41,7 +41,7 @@ def queryDatasets(repo, glob, collections, where, deduplicate, components):
         A string expression similar to a SQL WHERE clause.  May involve any
         column of a dimension table or (as a shortcut for the primary key
         column of a dimension table) dimension name.
-    deduplicate : `bool`
+    find_first : `bool`
         For each result data ID, only yield one DatasetRef of each DatasetType,
         from the first collection in which a dataset of that dataset type
         appears (according to the order of `collections` passed in).  If used,
@@ -80,5 +80,5 @@ def queryDatasets(repo, glob, collections, where, deduplicate, components):
     return butler.registry.queryDatasets(datasetType=dataset,
                                          collections=collections,
                                          where=where,
-                                         deduplicate=deduplicate,
+                                         deduplicate=find_first,
                                          components=components)
