@@ -22,10 +22,12 @@
 import unittest
 import requests
 import responses
-
+import os
 
 from lsst.daf.butler.core.webdavutils import (folderExists, webdavCheckFileExists,
-                                              _getFileURL, webdavDeleteFile, isWebdavEndpoint)
+                                              isTokenAuth, _getFileURL,
+                                              webdavDeleteFile, isWebdavEndpoint,
+                                              finalurl)
 from lsst.daf.butler import Location, ButlerURI
 
 
@@ -64,6 +66,19 @@ class WebdavUtilsTestCase(unittest.TestCase):
         # Used by isWebdavEndpoint()
         responses.add(responses.OPTIONS, f"https://{self.serverRoot}", status=200, headers={"DAV": "1,2,3"})
         responses.add(responses.OPTIONS, f"https://{self.wrongRoot}", status=200)
+
+        # Use by finalurl()
+        # Without redirection
+        responses.add(responses.PUT,
+                      f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}",
+                      status=200)
+        # With redirection
+        responses.add(responses.PUT,
+                      f"https://{self.wrongRoot}/{self.existingfolderName}/{self.existingfileName}",
+                      headers={"Location":
+                               f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}"
+                               },
+                      status=307)
 
     @responses.activate
     def testFolderExists(self):
@@ -110,6 +125,23 @@ class WebdavUtilsTestCase(unittest.TestCase):
         self.assertEqual(_getFileURL(s), s)
         self.assertEqual(_getFileURL(buri), s)
         self.assertEqual(_getFileURL(loc), s)
+
+    def testIsTokenAuth(self):
+        with unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN"}):
+            self.assertTrue(isTokenAuth())
+        with unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "X509"}):
+            self.assertFalse(isTokenAuth())
+
+    @responses.activate
+    def testFinalurl(self):
+        s = f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}"
+        r = f"https://{self.wrongRoot}/{self.existingfolderName}/{self.existingfileName}"
+
+        resp_s = self.session.put(s)
+        resp_r = self.session.put(r)
+
+        self.assertEqual(finalurl(resp_s), s)
+        self.assertEqual(finalurl(resp_r), s)
 
 
 if __name__ == "__main__":

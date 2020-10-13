@@ -356,8 +356,10 @@ class S3URITestCase(unittest.TestCase):
 
 
 # Mock required environment variables during tests
-@unittest.mock.patch.dict(os.environ, {"WEBDAV_AUTH_METHOD": "TOKEN",
-                                       "WEBDAV_BEARER_TOKEN": "XXXXXX"})
+@unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
+                                       "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
+                                           TESTDIR, "config/testConfigs/webdav/token"),
+                                       "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs"})
 class WebdavURITestCase(unittest.TestCase):
 
     def setUp(self):
@@ -402,21 +404,21 @@ class WebdavURITestCase(unittest.TestCase):
         # Used by ButlerHttpURI.write()
         responses.add(responses.PUT,
                       self.existingFileButlerURI.geturl(),
-                      status=200)
+                      status=201)
 
         # Used by ButlerHttpURI.transfer_from()
         responses.add(responses.Response(url=self.existingFileButlerURI.geturl(),
                                          method="COPY",
                                          headers={"Destination": self.existingFileButlerURI.geturl()},
-                                         status=200))
+                                         status=201))
         responses.add(responses.Response(url=self.existingFileButlerURI.geturl(),
                                          method="COPY",
                                          headers={"Destination": self.notExistingFileButlerURI.geturl()},
-                                         status=200))
+                                         status=201))
         responses.add(responses.Response(url=self.existingFileButlerURI.geturl(),
                                          method="MOVE",
                                          headers={"Destination": self.notExistingFileButlerURI.geturl()},
-                                         status=200))
+                                         status=201))
 
         # Used by ButlerHttpURI.remove()
         responses.add(responses.DELETE,

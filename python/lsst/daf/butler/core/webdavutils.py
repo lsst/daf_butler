@@ -22,12 +22,14 @@
 from __future__ import annotations
 
 __all__ = ("getHttpSession", "isWebdavEndpoint", "webdavCheckFileExists",
-           "folderExists", "webdavDeleteFile")
+           "folderExists", "webdavDeleteFile", "refreshToken",
+           "finalurl")
 
 import os
 import requests
 import logging
-from requests.structures import CaseInsensitiveDict
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 from typing import (
     Optional,
@@ -50,47 +52,106 @@ def getHttpSession() -> requests.Session:
 
     Notes
     -----
-    The WEBDAV_AUTH_METHOD must be set to obtain a session.
-    Depending on the chosen method, additional
-    environment variables are required:
-
-    X509: must set WEBDAV_PROXY_CERT
-    (path to proxy certificate used to authenticate requests)
-
-    TOKEN: must set WEBDAV_BEARER_TOKEN
-    (bearer token used to authenticate requests, as a single string)
-
-    NB: requests will read CA certificates in REQUESTS_CA_BUNDLE
-    It must be manually exported according to the system CA directory.
+    The following environment variables must be set:
+    - LSST_BUTLER_WEBDAV_CA_BUNDLE: the directory where CA
+        certificates are stored if you intend to use HTTPS to
+        communicate with the endpoint.
+    - LSST_BUTLER_WEBDAV_AUTH: which authentication method to use.
+        Possible values are X509 and TOKEN
+    - (X509 only) LSST_BUTLER_WEBDAV_PROXY_CERT: path to proxy
+        certificate used to authenticate requests
+    - (TOKEN only) LSST_BUTLER_WEBDAV_TOKEN_FILE: file which
+        contains the bearer token used to authenticate requests
+    - (OPTIONAL) LSST_BUTLER_WEBDAV_EXPECT100: if set, we will add an
+        "Expect: 100-Continue" header in all requests. This is required
+        on certain endpoints where requests redirection is made.
     """
+
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+
     session = requests.Session()
+    session.mount("http://", HTTPAdapter(max_retries=retries))
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+
     log.debug("Creating new HTTP session...")
 
     try:
-        env_auth_method = os.environ['WEBDAV_AUTH_METHOD']
+        env_auth_method = os.environ['LSST_BUTLER_WEBDAV_AUTH']
     except KeyError:
-        raise KeyError("Environment variable WEBDAV_AUTH_METHOD is not set, please use values X509 or TOKEN")
+        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, "
+                       "please use values X509 or TOKEN")
 
     if env_auth_method == "X509":
-        try:
-            proxy_cert = os.environ['WEBDAV_PROXY_CERT']
-        except KeyError:
-            raise KeyError("Environment variable WEBDAV_PROXY_CERT is not set")
         log.debug("... using x509 authentication.")
+        try:
+            proxy_cert = os.environ['LSST_BUTLER_WEBDAV_PROXY_CERT']
+        except KeyError:
+            raise KeyError("Environment variable LSST_BUTLER_WEBDAV_PROXY_CERT is not set")
         session.cert = (proxy_cert, proxy_cert)
     elif env_auth_method == "TOKEN":
-        try:
-            bearer_token = os.environ['WEBDAV_BEARER_TOKEN']
-        except KeyError:
-            raise KeyError("Environment variable WEBDAV_BEARER_TOKEN is not set")
         log.debug("... using bearer-token authentication.")
-        session.headers = CaseInsensitiveDict({'Authorization': 'Bearer ' + bearer_token})
+        refreshToken(session)
     else:
-        raise ValueError("Environment variable WEBDAV_AUTH_METHOD must be set to X509 or TOKEN")
+        raise ValueError("Environment variable LSST_BUTLER_WEBDAV_AUTH must be set to X509 or TOKEN")
+
+    ca_bundle = None
+    try:
+        ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
+    except KeyError:
+        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
+                    "HTTPS requests will fail. If you intend to use HTTPS, please "
+                    "export this variable.")
+
+    session.verify = ca_bundle
+
+    # This header is required for request redirection, in dCache for example
+    if "LSST_BUTLER_WEBDAV_EXPECT100" in os.environ:
+        log.debug("Expect: 100-Continue header enabled.")
+        session.headers.update({'Expect': '100-continue'})
 
     log.debug("Session configured and ready.")
 
     return session
+
+
+def isTokenAuth() -> bool:
+    """Returns the status of bearer-token authentication.
+
+    Returns
+    -------
+    isTokenAuth : `bool`
+        True if LSST_BUTLER_WEBDAV_AUTH is set to TOKEN, False otherwise.
+    """
+    try:
+        env_auth_method = os.environ['LSST_BUTLER_WEBDAV_AUTH']
+    except KeyError:
+        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, "
+                       "please use values X509 or TOKEN")
+
+    if env_auth_method == "TOKEN":
+        return True
+    return False
+
+
+def refreshToken(session: requests.Session) -> None:
+    """Set or update the 'Authorization' header of the session,
+    configure bearer token authentication, with the value fetched
+    from LSST_BUTLER_WEBDAV_TOKEN_FILE
+
+    Parameters
+    ----------
+    session : `requests.Session`
+        Session on which bearer token authentication must be configured
+    """
+    try:
+        token_path = os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE']
+        if not os.path.isfile(token_path):
+            raise FileNotFoundError(f"No token file: {token_path}")
+        bearer_token = open(os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE'], 'r').read().replace('\n', '')
+    except KeyError:
+        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_TOKEN_FILE is not set")
+
+    session.headers.update({'Authorization': 'Bearer ' + bearer_token})
 
 
 def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
@@ -184,11 +245,42 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
     isWebdav : `bool`
         True if the endpoint implements Webdav, False if it doesn't.
     """
+    ca_bundle = None
+    try:
+        ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
+    except KeyError:
+        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
+                    "HTTPS requests will fail. If you intend to use HTTPS, please "
+                    "export this variable.")
     filepath = _getFileURL(path)
 
     log.debug("Detecting HTTP endpoint type...")
-    r = requests.options(filepath)
+    r = requests.options(filepath, verify=ca_bundle)
     return True if 'DAV' in r.headers else False
+
+
+def finalurl(r: requests.Response) -> str:
+    """Check whether the remote HTTP endpoint redirects to a different
+    endpoint, and return the final destination of the request.
+    This is needed when using PUT operations, to avoid starting
+    to send the data to the endpoint, before having to send it again once
+    the 307 redirect response is received, and thus wasting bandwidth.
+
+    Parameters
+    ----------
+    r : `requests.Response`
+        An HTTP response received when requesting the endpoint
+
+    Returns
+    -------
+    destination_url: `string`
+        The final destination to which requests must be sent.
+    """
+    destination_url = r.url
+    if r.status_code == 307:
+        destination_url = r.headers['Location']
+        log.debug("Request redirected to %s", destination_url)
+    return destination_url
 
 
 def _getFileURL(path: Union[Location, ButlerURI, str]) -> str:

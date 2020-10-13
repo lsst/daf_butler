@@ -421,7 +421,7 @@ class NamedValueSet(NamedValueMutableSet[K]):
     def __repr__(self) -> str:
         return "NamedValueSet({{{}}})".format(", ".join(repr(element) for element in self))
 
-    def __eq__(self, other: Any) -> Union[bool, NotImplemented]:
+    def __eq__(self, other: Any) -> bool:
         if isinstance(other, NamedValueSet):
             return self._dict.keys() == other._dict.keys()
         else:
@@ -433,13 +433,13 @@ class NamedValueSet(NamedValueMutableSet[K]):
     # As per Set's docs, overriding just __le__ and __ge__ for performance will
     # cover the other comparisons, too.
 
-    def __le__(self, other: AbstractSet[K]) -> Union[bool, NotImplemented]:
+    def __le__(self, other: AbstractSet[K]) -> bool:
         if isinstance(other, NamedValueSet):
             return self._dict.keys() <= other._dict.keys()
         else:
             return NotImplemented
 
-    def __ge__(self, other: AbstractSet[K]) -> Union[bool, NotImplemented]:
+    def __ge__(self, other: AbstractSet[K]) -> bool:
         if isinstance(other, NamedValueSet):
             return self._dict.keys() >= other._dict.keys()
         else:

@@ -70,7 +70,7 @@ class FakeDatasetRef:
     def __repr__(self) -> str:
         return f"FakeDatasetRef({self.id})"
 
-    def __eq__(self, other: Any) -> Union[bool, NotImplemented]:
+    def __eq__(self, other: Any) -> bool:
         try:
             return self.id == other.id
         except AttributeError:

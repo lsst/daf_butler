@@ -1271,18 +1271,27 @@ class ButlerPackageResourceURI(ButlerURI):
 
 class ButlerHttpURI(ButlerURI):
     """General HTTP(S) resource."""
+    _session = requests.Session()
+    _sessionInitialized = False
 
     @property
     def session(self) -> requests.Session:
         """Client object to address remote resource."""
-        from .webdavutils import getHttpSession, isWebdavEndpoint
+        from .webdavutils import refreshToken, isTokenAuth, getHttpSession, isWebdavEndpoint
+        if ButlerHttpURI._sessionInitialized:
+            if isTokenAuth():
+                refreshToken(ButlerHttpURI._session)
+            return ButlerHttpURI._session
+
         baseURL = self.scheme + "://" + self.netloc
+
         if isWebdavEndpoint(baseURL):
             log.debug("%s looks like a Webdav endpoint.", baseURL)
-            return getHttpSession()
+            s = getHttpSession()
 
-        log.debug("%s looks like a standard HTTP endpoint.", baseURL)
-        return requests.Session()
+        ButlerHttpURI._session = s
+        ButlerHttpURI._sessionInitialized = True
+        return s
 
     def exists(self) -> bool:
         """Check that a remote HTTP resource exists."""
@@ -1317,7 +1326,10 @@ class ButlerHttpURI(ButlerURI):
             log.debug("Creating new directory: %s", self.geturl())
             r = self.session.request("MKCOL", self.geturl())
             if r.status_code != 201:
-                raise ValueError(f"Can not create directory {self}, status code: {r.status_code}")
+                if r.status_code == 405:
+                    log.debug("Can not create directory: %s may already exist: skipping.", self.geturl())
+                else:
+                    raise ValueError(f"Can not create directory {self}, status code: {r.status_code}")
 
     def remove(self) -> None:
         """Remove the resource."""
@@ -1376,11 +1388,15 @@ class ButlerHttpURI(ButlerURI):
             If `True` the resource will be overwritten if it exists. Otherwise
             the write will fail.
         """
+        from .webdavutils import finalurl
         log.debug("Writing to remote resource: %s", self.geturl())
         if not overwrite:
             if self.exists():
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
-        self.session.put(self.geturl(), data=data)
+        dest_url = finalurl(self._emptyPut())
+        r = self.session.put(dest_url, data=data)
+        if r.status_code not in [201, 202, 204]:
+            raise ValueError(f"Can not write file {self}, status code: {r.status_code}")
 
     def transfer_from(self, src: ButlerURI, transfer: str = "copy",
                       overwrite: bool = False,
@@ -1397,6 +1413,7 @@ class ButlerHttpURI(ButlerURI):
         transaction : `DatastoreTransaction`, optional
             Currently unused.
         """
+        from .webdavutils import finalurl
         # Fail early to prevent delays if remote resources are requested
         if transfer not in self.transferModes:
             raise ValueError(f"Transfer mode {transfer} not supported by URI scheme {self.scheme}")
@@ -1412,20 +1429,36 @@ class ButlerHttpURI(ButlerURI):
 
         if isinstance(src, type(self)):
             if transfer == "move":
-                self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()})
-                log.debug("Direct move via MOVE operation executed.")
+                r = self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()})
+                log.debug("Running move via MOVE HTTP request.")
             else:
-                self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()})
-                log.debug("Direct copy via COPY operation executed.")
+                r = self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()})
+                log.debug("Running copy via COPY HTTP request.")
         else:
             # Use local file and upload it
             local_src, is_temporary = src.as_local()
             f = open(local_src, "rb")
-            self.session.put(self.geturl(), data=f)
+            dest_url = finalurl(self._emptyPut())
+            r = self.session.put(dest_url, data=f)
             f.close()
             if is_temporary:
                 os.remove(local_src)
-            log.debug("Indirect copy via temporary file executed.")
+            log.debug("Running transfer from a local copy of the file.")
+
+        if r.status_code not in [201, 202, 204]:
+            raise ValueError(f"Can not transfer file {self}, status code: {r.status_code}")
+
+    def _emptyPut(self) -> requests.Response:
+        """Send an empty PUT request to current URL. This is used to detect
+        if redirection is enabled before sending actual data.
+
+        Returns
+        -------
+        response : `requests.Response`
+            HTTP Response from the endpoint.
+        """
+        return self.session.put(self.geturl(), data=None,
+                                headers={"Content-Length": "0"}, allow_redirects=False)
 
 
 class ButlerInMemoryURI(ButlerURI):
