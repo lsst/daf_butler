@@ -62,6 +62,7 @@ from .core import (
     DatasetRef,
     DatasetType,
     Datastore,
+    DimensionConfig,
     FileDataset,
     StorageClassFactory,
     Timespan,
@@ -371,7 +372,12 @@ class Butler:
         config.dumpToUri(configURI, overwrite=overwrite)
 
         # Create Registry and populate tables
-        Registry.fromConfig(config, create=createRegistry, butlerRoot=root)
+        if createRegistry:
+            registryConfig = RegistryConfig(config.get("registry"))
+            # TODO: for now DimensionConfig comes from a full config, in the
+            # future it should become separate.
+            dimensionConfig = DimensionConfig(config.get("dimensions"))
+            Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root)
         return config
 
     @classmethod

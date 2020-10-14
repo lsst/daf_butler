@@ -1,3 +1,2 @@
-registry: !include sqliteRegistry.yaml
 datastore: !include s3Datastore.yaml
 storageClasses: !include storageClasses.yaml
