@@ -73,7 +73,7 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
     defaults = Config()
     defaults["datastore", "cls"] = "lsst.daf.butler.datastores.inMemoryDatastore.InMemoryDatastore"
     defaults["datastore", "checksum"] = False  # In case of future changes
-    defaults["registry", "db"] = "sqlite:///:memory:"
+    defaults["registry", "db"] = "sqlite:///<butlerRoot>/gen3.sqlite3"
 
     if config:
         defaults.update(config)
