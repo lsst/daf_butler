@@ -1,3 +1,2 @@
-registry: !include sqliteRegistry.yaml
 datastore: !include webdavDatastore.yaml
 storageClasses: !include storageClasses.yaml
