@@ -61,7 +61,7 @@ def queryDatasets(repo, glob, collections, where, find_first, components):
     butler = Butler(repo)
     dataset = globToRegex(glob)
 
-    if collections and not deduplicate:
+    if collections and not find_first:
         collections = globToRegex(collections)
     elif not collections:
         collections = ...

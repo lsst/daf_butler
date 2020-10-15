@@ -186,7 +186,7 @@ def remove_dataset_type(*args, **kwargs):
               help=unwrap("""A string expression similar to a SQL WHERE clause. May involve any column of a
                           dimension table or a dimension name as a shortcut for the primary key column of a
                           dimension table."""))
-@click.option("--deduplicate",
+@click.option("--find-first",
               is_flag=True,
               help=unwrap("""For each result data ID, only yield one DatasetRef of each DatasetType, from the
                           first collection in which a dataset of that dataset type appears (according to the
