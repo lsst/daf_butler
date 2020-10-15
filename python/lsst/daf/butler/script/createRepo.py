@@ -22,7 +22,8 @@
 from .. import Butler, Config
 
 
-def createRepo(repo, seed_config=None, standalone=False, override=False, outfile=None):
+def createRepo(repo, seed_config=None, dimension_config=None, standalone=False,
+               override=False, outfile=None):
     """Create an empty Gen3 Butler repository.
 
     Parameters
@@ -31,6 +32,8 @@ def createRepo(repo, seed_config=None, standalone=False, override=False, outfile
         URI to the location to create the repo.
     seed_config : `str` or `None`
         Path to an existing YAML config file to apply (on top of defaults).
+    dimension_config : `str` or `None`
+        Path to an existing YAML config file with dimensions configuration.
     standalone : `bool`
         Include all the defaults in the config file in the repo if True.
         Insulates the the repo from changes to package defaults. By default
@@ -43,5 +46,5 @@ def createRepo(repo, seed_config=None, standalone=False, override=False, outfile
         write butler.yaml into the specified repo, by default False.
     """
     config = Config(seed_config) if seed_config is not None else None
-    Butler.makeRepo(repo, config=config, standalone=standalone, forceConfigRoot=not override,
-                    outfile=outfile)
+    Butler.makeRepo(repo, config=config, dimensionConfig=dimension_config, standalone=standalone,
+                    forceConfigRoot=not override, outfile=outfile)
