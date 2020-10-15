@@ -304,7 +304,12 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             components = [componentName]
         else:
             components = [None]
-        builder.joinDataset(datasetType, collections=collections, deduplicate=deduplicate)
+        if not builder.joinDataset(datasetType, collections=collections, deduplicate=deduplicate):
+            raise RuntimeError(
+                f"Error finding datasets of type {datasetType.name} in collections {collections}; "
+                "it is impossible for that dataset to be found in any of those collections "
+                "(most likely because the dataset type is not registered)."
+            )
         query = builder.finish(joinMissing=False)
         return ParentDatasetQueryResults(db=self._db, query=query, components=components,
                                          records=self._records)
