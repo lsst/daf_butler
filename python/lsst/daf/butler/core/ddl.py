@@ -306,6 +306,16 @@ class FieldSpec:
             return self.dtype(nbytes=self.nbytes)
         return self.dtype
 
+    def getPythonType(self) -> type:
+        """Return the Python type associated with this field's (SQL) dtype.
+
+        Returns
+        -------
+        type : `type`
+            Python type associated with this field's (SQL) `dtype`.
+        """
+        return self.dtype().python_type
+
 
 @dataclass
 class ForeignKeySpec:
