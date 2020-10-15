@@ -36,15 +36,13 @@ from .core import (
     ButlerURI,
     Config,
     DatastoreConfig,
-    DimensionConfig,
     StorageClassConfig,
 )
 from .registry import RegistryConfig
 from .transfers import RepoTransferFormatConfig
 
 CONFIG_COMPONENT_CLASSES = (RegistryConfig, StorageClassConfig,
-                            DatastoreConfig, DimensionConfig,
-                            RepoTransferFormatConfig)
+                            DatastoreConfig, RepoTransferFormatConfig)
 
 
 class ButlerConfig(Config):

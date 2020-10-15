@@ -253,7 +253,8 @@ class Butler:
     """
 
     @staticmethod
-    def makeRepo(root: str, config: Union[Config, str, None] = None, standalone: bool = False,
+    def makeRepo(root: str, config: Union[Config, str, None] = None,
+                 dimensionConfig: Union[Config, str, None] = None, standalone: bool = False,
                  createRegistry: bool = True, searchPaths: Optional[List[str]] = None,
                  forceConfigRoot: bool = True, outfile: Optional[str] = None,
                  overwrite: bool = False) -> Config:
@@ -272,6 +273,9 @@ class Butler:
             configuration will be used.  Root-dependent config options
             specified in this config are overwritten if ``forceConfigRoot``
             is `True`.
+        dimensionConfig : `Config` or `str`, optional
+            Configuration for dimensions, will be used to initialize registry
+            database. Only used when ``createRegistry`` is `True`.
         standalone : `bool`
             If True, write all expanded defaults, not just customized or
             repository-specific settings.
@@ -374,9 +378,7 @@ class Butler:
         # Create Registry and populate tables
         if createRegistry:
             registryConfig = RegistryConfig(config.get("registry"))
-            # TODO: for now DimensionConfig comes from a full config, in the
-            # future it should become separate.
-            dimensionConfig = DimensionConfig(config.get("dimensions"))
+            dimensionConfig = DimensionConfig(dimensionConfig)
             Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root)
         return config
 
