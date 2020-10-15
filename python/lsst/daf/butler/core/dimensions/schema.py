@@ -217,6 +217,15 @@ class DimensionElementFields:
             spec = self._tableSpec
         return spec
 
+    def __str__(self) -> str:
+        lines = [f"{self.element.name}: "]
+        lines.extend(f"  {field.name}: {field.dtype().python_type.__name__}" for field in self.standard)
+        if self.element.spatial is not None:
+            lines.append(f"  region: lsst.sphgeom.ConvexPolygon")
+        if self.element.temporal is not None:
+            lines.append(f"  timespan: lsst.daf.butler.Timespan")
+        return "\n".join(lines)
+
     element: DimensionElement
     """The dimension element these fields correspond to (`DimensionElement`).
     """
