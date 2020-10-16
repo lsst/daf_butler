@@ -44,6 +44,7 @@ from .._topology import TopologicalRelationshipEndpoint
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
+    from ._governor import GovernorDimension
     from ._graph import DimensionGraph
     from ._records import DimensionRecord
 
@@ -146,6 +147,23 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     name: str
     """Unique name for this dimension element (`str`).
     """
+
+    @property  # type: ignore
+    @cached_getter
+    def governor(self) -> Optional[GovernorDimension]:
+        """The `GovernorDimension` that is a required dependency of this
+        element, or `None` if there is no such dimension (`GovernorDimension`
+        or `None`).
+        """
+        if len(self.graph.governors) == 1:
+            (result,) = self.graph.governors
+            return result
+        elif len(self.graph.governors) > 1:
+            raise RuntimeError(
+                f"Dimension element {self.name} has multiple governors: {self.graph.governors}."
+            )
+        else:
+            return None
 
     @property
     @abstractmethod
