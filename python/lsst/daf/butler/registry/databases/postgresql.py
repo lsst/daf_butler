@@ -28,7 +28,7 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Type
 import psycopg2
 import sqlalchemy.dialects.postgresql
 
-from ..interfaces import Database, ReadOnlyDatabaseError
+from ..interfaces import Database
 from ..nameShrinker import NameShrinker
 from ...core import DatabaseTimespanRepresentation, ddl, Timespan, time_utils
 
@@ -144,8 +144,7 @@ class PostgresqlDatabase(Database):
         return _RangeTimespanRepresentation
 
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
-        if not (self.isWriteable() or table.key in self._tempTables):
-            raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
+        self.assertTableWriteable(table, f"Cannot replace into read-only table {table}.")
         if not rows:
             return
         # This uses special support for UPSERT in PostgreSQL backend:
@@ -160,6 +159,17 @@ class PostgresqlDatabase(Database):
                 if column.name not in table.primary_key}
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
         self._connection.execute(query, *rows)
+
+    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
+        # Docstring inherited.
+        self.assertTableWriteable(table, f"Cannot ensure into read-only table {table}.")
+        if not rows:
+            return 0
+        # Like `replace`, this uses UPSERT, but it's a bit simpler because
+        # we don't care which constraint is violated or specify which columns
+        # to update.
+        query = sqlalchemy.dialects.postgresql.dml.insert(table).on_conflict_do_nothing()
+        return self._connection.execute(query, *rows).rowcount
 
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):

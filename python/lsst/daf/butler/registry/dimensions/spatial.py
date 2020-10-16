@@ -158,24 +158,9 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
 
     def sync(self, record: DimensionRecord) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
-        inserted = super().sync(record)
-        if inserted:
-            try:
+        with self._db.transaction():
+            inserted = super().sync(record)
+            if inserted:
                 commonSkyPixRows = self._computeCommonSkyPixRows(record)
                 self._db.insert(self._commonSkyPixOverlapTable, *commonSkyPixRows)
-            except Exception as err:
-                # EEK.  We've just failed to insert the overlap table rows
-                # after succesfully inserting the main dimension element table
-                # row, which means the database is now in a slightly
-                # inconsistent state.
-                # Note that we can't use transactions to solve this, because
-                # Database.sync needs to begin and commit its own transation;
-                # see also DM-24355.
-                raise RuntimeError(
-                    f"Failed to add overlap records for {self.element} after "
-                    f"successfully inserting the main row.  This means the "
-                    f"database is in an inconsistent state; please manually "
-                    f"remove the row corresponding to data ID "
-                    f"{record.dataId.byName()}."
-                ) from err
         return inserted

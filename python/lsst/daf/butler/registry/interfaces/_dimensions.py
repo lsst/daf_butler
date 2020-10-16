@@ -240,11 +240,6 @@ class DimensionRecordStorage(ABC):
         sqlalchemy.exc.IntegrityError
             Raised if one or more records violate database integrity
             constraints.
-
-        Notes
-        -----
-        This method cannot be called within transactions, as it needs to be
-        able to perform its own transaction to be concurrent.
         """
         raise NotImplementedError()
 
