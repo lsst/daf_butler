@@ -220,7 +220,7 @@ class PostgresqlRegistryTests(RegistryTests):
         config = self.makeRegistryConfig()
         config["db"] = self.server.url()
         config["namespace"] = namespace
-        return Registry.fromConfig(config, create=True)
+        return Registry.createFromConfig(config)
 
 
 class PostgresqlRegistryNameKeyCollMgrTestCase(PostgresqlRegistryTests, unittest.TestCase):
