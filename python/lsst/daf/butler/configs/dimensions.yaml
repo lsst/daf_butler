@@ -46,7 +46,7 @@ elements:
         doc: >
           Full class name of the Instrument class associated with this
           instrument.
-    cached: true
+    governor: true
 
   band:
     doc: >
@@ -324,7 +324,7 @@ elements:
         type: int
         doc: >
           Number of patches in the y direction in each tract.
-    cached: true
+    governor: true
 
   tract:
     doc: >

@@ -32,14 +32,19 @@ from typing import (
     Mapping,
     Optional,
     Set,
+    TYPE_CHECKING,
 )
 
 from .. import ddl
 from ..named import NamedValueAbstractSet, NamedValueSet
+from ..utils import cached_getter
 from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
 
 from ._elements import Dimension, DimensionCombination, DimensionElement
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
+
+if TYPE_CHECKING:
+    from ._governor import GovernorDimension
 
 
 class StandardTopologicalFamily(TopologicalFamily):
@@ -72,6 +77,27 @@ class StandardTopologicalFamily(TopologicalFamily):
             if member in endpoints:
                 return member
         raise RuntimeError(f"No recognized endpoints for {self.name} in {endpoints}.")
+
+    @property  # type: ignore
+    @cached_getter
+    def governor(self) -> GovernorDimension:
+        """The `GovernorDimension` common to all members of this family
+        (`GovernorDimension`).
+        """
+        governors = set(m.governor for m in self.members)
+        if None in governors:
+            raise RuntimeError(
+                f"Bad {self.space.name} family definition {self.name}: at least one member "
+                f"in {self.members} has no GovernorDimension dependency."
+            )
+        try:
+            (result,) = governors
+        except ValueError:
+            raise RuntimeError(
+                f"Bad {self.space.name} family definition {self.name}: multiple governors {governors} "
+                f"in {self.members}."
+            ) from None
+        return result  # type: ignore
 
     members: NamedValueAbstractSet[DimensionElement]
     """The members of this family, ordered according to the priority used in
@@ -187,7 +213,7 @@ class StandardDimension(Dimension):
         return self._implied
 
     @property
-    def topology(self) -> Mapping[TopologicalSpace, TopologicalFamily]:
+    def topology(self) -> Mapping[TopologicalSpace, StandardTopologicalFamily]:
         # Docstring inherited from TopologicalRelationshipEndpoint
         return MappingProxyType(self._topology)
 
@@ -285,7 +311,7 @@ class StandardDimensionCombination(DimensionCombination):
         return self._implied
 
     @property
-    def topology(self) -> Mapping[TopologicalSpace, TopologicalFamily]:
+    def topology(self) -> Mapping[TopologicalSpace, StandardTopologicalFamily]:
         # Docstring inherited from TopologicalRelationshipEndpoint
         return MappingProxyType(self._topology)
 
