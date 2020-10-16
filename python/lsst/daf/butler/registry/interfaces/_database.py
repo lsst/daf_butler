@@ -420,6 +420,37 @@ class Database(ABC):
         """
         raise NotImplementedError()
 
+    def isTableWriteable(self, table: sqlalchemy.schema.Table) -> bool:
+        """Check whether a table is writeable, either because the database
+        connection is read-write or the table is a temporary table.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy table object to check.
+
+        Returns
+        -------
+        writeable : `bool`
+            Whether this table is writeable.
+        """
+        return self.isWriteable() or table.key in self._tempTables
+
+    def assertTableWriteable(self, table: sqlalchemy.schema.Table, msg: str) -> None:
+        """Raise if the given table is not writeable, either because the
+        database connection is read-write or the table is a temporary table.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy table object to check.
+        msg : `str`, optional
+            If provided, raise `ReadOnlyDatabaseError` instead of returning
+            `False`, with this message.
+        """
+        if not self.isTableWriteable(table):
+            raise ReadOnlyDatabaseError(msg)
+
     @contextmanager
     def declareStaticTables(self, *, create: bool) -> Iterator[StaticTablesContext]:
         """Return a context manager in which the database's static DDL schema
@@ -1071,9 +1102,9 @@ class Database(ABC):
                 toReturn = None
             return 1, inconsistencies, toReturn
 
-        if self.isWriteable() or table.key in self._tempTables:
-            # Database is writeable.  Try an insert first, but allow it to fail
-            # (in only specific ways).
+        if self.isTableWriteable(table):
+            # Try an insert first, but allow it to fail (in only specific
+            # ways).
             row = keys.copy()
             if compared is not None:
                 row.update(compared)
@@ -1174,8 +1205,7 @@ class Database(ABC):
         May be used inside transaction contexts, so implementations may not
         perform operations that interrupt transactions.
         """
-        if not (self.isWriteable() or table.key in self._tempTables):
-            raise ReadOnlyDatabaseError(f"Attempt to insert into read-only database '{self}'.")
+        self.assertTableWriteable(table, f"Cannot insert into read-only table {table}.")
         if select is not None and (rows or returnIds):
             raise TypeError("'select' is incompatible with passing value rows or returnIds=True.")
         if not rows and select is None:
@@ -1299,8 +1329,7 @@ class Database(ABC):
         The default implementation should be sufficient for most derived
         classes.
         """
-        if not (self.isWriteable() or table.key in self._tempTables):
-            raise ReadOnlyDatabaseError(f"Attempt to delete from read-only database '{self}'.")
+        self.assertTableWriteable(table, f"Cannot delete from read-only table {table}.")
         if columns and not rows:
             # If there are no columns, this operation is supposed to delete
             # everything (so we proceed as usual).  But if there are columns,
@@ -1351,8 +1380,7 @@ class Database(ABC):
         The default implementation should be sufficient for most derived
         classes.
         """
-        if not (self.isWriteable() or table.key in self._tempTables):
-            raise ReadOnlyDatabaseError(f"Attempt to update read-only database '{self}'.")
+        self.assertTableWriteable(table, f"Cannot update read-only table {table}.")
         if not rows:
             return 0
         sql = table.update().where(

@@ -33,7 +33,7 @@ import sqlite3
 import sqlalchemy
 import sqlalchemy.ext.compiler
 
-from ..interfaces import Database, ReadOnlyDatabaseError, StaticTablesContext
+from ..interfaces import Database, StaticTablesContext
 from ...core import ddl
 
 
@@ -365,6 +365,7 @@ class SqliteDatabase(Database):
                select: Optional[sqlalchemy.sql.Select] = None,
                names: Optional[Iterable[str]] = None,
                ) -> Optional[List[int]]:
+        self.assertTableWriteable(table, f"Cannot insert into read-only table {table}.")
         autoincr = self._autoincr.get(table.name)
         if autoincr is not None:
             if select is not None:
@@ -423,8 +424,7 @@ class SqliteDatabase(Database):
             return super().insert(table, *rows, select=select, names=names, returnIds=returnIds)
 
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
-        if not (self.isWriteable() or table.key in self._tempTables):
-            raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
+        self.assertTableWriteable(table, f"Cannot replace into read-only table {table}.")
         if not rows:
             return
         if table.name in self._autoincr:
@@ -434,8 +434,7 @@ class SqliteDatabase(Database):
         self._connection.execute(_Replace(table), *rows)
 
     def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
-        if not (self.isWriteable() or table.key in self._tempTables):
-            raise ReadOnlyDatabaseError(f"Attempt to ensure into read-only database '{self}'.")
+        self.assertTableWriteable(table, f"Cannot ensure into read-only table {table}.")
         if not rows:
             return 0
         if table.name in self._autoincr:
