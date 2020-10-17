@@ -287,8 +287,12 @@ class Dimension(DimensionElement):
     @property  # type: ignore
     @cached_getter
     def alternateKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
-        """Additional unique key fields for this dimension that are not the the
+        """Additional unique key fields for this dimension that are not the
         primary key (`NamedValueAbstractSet` of `FieldSpec`).
+
+        If this dimension has required dependencies, the keys of those
+        dimensions are also included in the unique constraints defined for
+        these alternate keys.
         """
         _, *alternateKeys = self.uniqueKeys
         return NamedValueSet(alternateKeys).freeze()
