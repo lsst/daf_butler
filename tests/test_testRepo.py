@@ -72,7 +72,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         temp = tempfile.mkdtemp(dir=TESTDIR)
         try:
             path = os.path.join(temp, 'oddConfig.json')
-            makeTestRepo(self.root, {}, outfile=path, createRegistry=False)
+            makeTestRepo(temp, {}, outfile=path)
             self.assertTrue(os.path.isfile(path))
         finally:
             shutil.rmtree(temp, ignore_errors=True)
