@@ -244,6 +244,13 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(datasetType.dimensions.names, datasetTypeOut.dimensions.names)
         self.assertEqual(datasetType.storageClass, datasetTypeOut.storageClass)
         self.assertIsNone(datasetTypeOut.parentStorageClass)
+        self.assertIs(datasetType.isCalibration(), datasetTypeOut.isCalibration())
+        self.assertFalse(datasetTypeOut.isCalibration())
+
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass, isCalibration=True)
+        datasetTypeOut = pickle.loads(pickle.dumps(datasetType))
+        self.assertIs(datasetType.isCalibration(), datasetTypeOut.isCalibration())
+        self.assertTrue(datasetTypeOut.isCalibration())
 
         # And again with a composite
         componentStorageClass = StorageClass("pickle_component")
