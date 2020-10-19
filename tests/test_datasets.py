@@ -215,6 +215,12 @@ class DatasetTypeTestCase(unittest.TestCase):
         dcopy = copy.deepcopy(datasetType)
         self.assertEqual(dcopy, datasetType)
 
+        # Now with calibration flag set
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass, isCalibration=True)
+        dcopy = copy.deepcopy(datasetType)
+        self.assertEqual(dcopy, datasetType)
+        self.assertTrue(dcopy.isCalibration())
+
         # And again with a composite
         componentStorageClass = StorageClass("copy_component")
         componentDatasetType = DatasetType(DatasetType.nameWithComponent(datasetTypeName, "comp"),

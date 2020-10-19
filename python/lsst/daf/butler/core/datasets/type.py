@@ -483,4 +483,5 @@ class DatasetType:
                            dimensions=deepcopy(self.dimensions, memo),
                            storageClass=deepcopy(self._storageClass or self._storageClassName, memo),
                            parentStorageClass=deepcopy(self._parentStorageClass
-                                                       or self._parentStorageClassName, memo))
+                                                       or self._parentStorageClassName, memo),
+                           isCalibration=deepcopy(self._isCalibration, memo))
