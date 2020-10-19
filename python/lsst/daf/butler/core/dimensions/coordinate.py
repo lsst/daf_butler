@@ -304,6 +304,13 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             ', '.join(f"{d}: {self.get(d, '?')}" for d in self.graph.dimensions.names)
         )
 
+    def __lt__(self, other: Any) -> bool:
+        # Allow DataCoordinate to be sorted
+        # The sort order itself does not matter, just that the order
+        # is reproducible. repr() already includes the keys/values for
+        # this coordinate so use that.
+        return repr(self) < repr(other)
+
     def __iter__(self) -> Iterator[Dimension]:
         return iter(self.keys())
 

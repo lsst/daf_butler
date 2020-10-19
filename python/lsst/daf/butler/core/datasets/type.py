@@ -222,6 +222,15 @@ class DatasetType:
         return hash((self._name, self._dimensions, self._storageClassName,
                      self._parentStorageClassName))
 
+    def __lt__(self, other: Any) -> bool:
+        """Sort using the dataset type name.
+        """
+        if not isinstance(other, type(self)):
+            other_name = str(other)
+        else:
+            other_name = other.name
+        return self.name < other_name
+
     @property
     def name(self) -> str:
         """A string name for the Dataset; must correspond to the same
