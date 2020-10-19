@@ -362,9 +362,10 @@ class Database(ABC):
             passed).  This has no effect if this is the outermost transaction.
         lock : `Iterable` [ `sqlalchemy.schema.Table` ], optional
             A list of tables to lock for the duration of this transaction.
-            These locks are guaranteed to prevent concurrent writes, but only
-            prevent concurrent reads if the database engine requires that in
-            order to block concurrent writes.
+            These locks are guaranteed to prevent concurrent writes and allow
+            this transaction (only) to acquire the same locks (others should
+            block), but only prevent concurrent reads if the database engine
+            requires that in order to block concurrent writes.
 
         Notes
         -----
@@ -414,9 +415,10 @@ class Database(ABC):
         ----------
         tables : `Iterable` [ `sqlalchemy.schema.Table` ], optional
             A list of tables to lock for the duration of this transaction.
-            These locks are guaranteed to prevent concurrent writes, but only
-            prevent concurrent reads if the database engine requires that in
-            order to block concurrent writes.
+            These locks are guaranteed to prevent concurrent writes and allow
+            this transaction (only) to acquire the same locks (others should
+            block), but only prevent concurrent reads if the database engine
+            requires that in order to block concurrent writes.
         """
         raise NotImplementedError()
 
