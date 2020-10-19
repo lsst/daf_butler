@@ -206,7 +206,7 @@ class RepoExportContext:
         future (once `Registry` provides a way to look up that information).
         """
         dataIds = set()
-        for ref in refs:
+        for ref in sorted(refs):
             # The query interfaces that are often used to generate the refs
             # passed here often don't remove duplicates, so do that here for
             # convenience.
@@ -230,38 +230,28 @@ class RepoExportContext:
         For use by `Butler.export` only.
         """
         for element in self._registry.dimensions.sorted(self._records.keys()):
-            # To make export deterministic (DM-26324), the next step is to
-            # implement a way to sort DataCoordinates, then transform the
-            # second argument to:
-            #     *[r[dataId] for dataId in sorted(r.keys())]
-            # where
-            #     r = self._records[element]
-            # (continued below).
-            self._backend.saveDimensionData(element, *self._records[element].values())
+            # To make export deterministic sort the DataCoordinate instances.
+            r = self._records[element]
+            self._backend.saveDimensionData(element, *[r[dataId] for dataId in sorted(r.keys())])
         for datasetsByRun in self._datasets.values():
             for run in datasetsByRun.keys():
                 self._collections[run] = self._registry._collections.find(run)
         for collectionName in self._computeSortedCollections():
             self._backend.saveCollection(self._collections[collectionName])
-        # Continuing for DM-26324: then we need to either make DatasetType
-        # sortable directly or sort the iteration below by its name (as well as
-        # run).
-        for datasetType in self._datasets.keys():
-            for run in self._datasets[datasetType].keys():
-                # Again, for DM-26324: And after that, that we need to sort the
-                # FileDataset objects in the third argument below (maybe by
-                # filename?) and the lists of DatasetRef within those (I'd use
-                # the aforementioned new DataCoordinate sort method, because
-                # I'm not sure dataset_id values are going to be reliably
-                # deterministic themselves).
-                records = self._datasets[datasetType][run]
+        # Sort the dataset types and runs before exporting to ensure
+        # reproducible order in export file.
+        for datasetType in sorted(self._datasets.keys()):
+            for run in sorted(self._datasets[datasetType].keys()):
+                # Sort the FileDataset
+                records = sorted(self._datasets[datasetType][run])
                 self._backend.saveDatasets(datasetType, run, *records)
         # Export associations between datasets and collections.  These need to
         # be sorted (at two levels; they're dicts) or created more
         # deterministically, too, which probably involves more data ID sorting.
-        for collection, associations in self._computeDatasetAssociations().items():
+        datasetAssociations = self._computeDatasetAssociations()
+        for collection in sorted(datasetAssociations):
             self._backend.saveDatasetAssociations(collection, self._collections[collection].type,
-                                                  associations)
+                                                  sorted(datasetAssociations[collection]))
         self._backend.finish()
 
     def _computeSortedCollections(self) -> List[str]:
