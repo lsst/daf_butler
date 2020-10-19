@@ -807,16 +807,14 @@ class ButlerTests(ButlerPutGetTests):
         if self.fullConfigKey is None:
             return
 
-        # Remove the file created in setUp
-        os.unlink(self.tmpConfigFile)
+        # create two separate directories
+        root1 = tempfile.mkdtemp(dir=self.root)
+        root2 = tempfile.mkdtemp(dir=self.root)
 
-        createRegistry = not self.useTempRoot
-        butlerConfig = Butler.makeRepo(self.root, config=Config(self.configFile),
-                                       createRegistry=createRegistry)
+        butlerConfig = Butler.makeRepo(root1, config=Config(self.configFile))
         limited = Config(self.configFile)
         butler1 = Butler(butlerConfig)
-        butlerConfig = Butler.makeRepo(self.root, standalone=True, createRegistry=False,
-                                       config=Config(self.configFile), overwrite=True)
+        butlerConfig = Butler.makeRepo(root2, standalone=True, config=Config(self.configFile))
         full = Config(self.tmpConfigFile)
         butler2 = Butler(butlerConfig)
         # Butlers should have the same configuration regardless of whether
@@ -841,7 +839,7 @@ class ButlerTests(ButlerPutGetTests):
             Butler(butlerConfig)
 
         with self.assertRaises(FileExistsError):
-            Butler.makeRepo(self.root, standalone=True, createRegistry=False,
+            Butler.makeRepo(self.root, standalone=True,
                             config=Config(self.configFile), overwrite=False)
 
     def testStringification(self):
