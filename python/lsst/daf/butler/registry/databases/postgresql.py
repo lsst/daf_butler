@@ -105,7 +105,7 @@ class PostgresqlDatabase(Database):
     def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
         # Docstring inherited.
         for table in tables:
-            self._connection.execute(f"LOCK TABLE {table.key} IN SHARE MODE")
+            self._connection.execute(f"LOCK TABLE {table.key} IN EXCLUSIVE MODE")
 
     def isWriteable(self) -> bool:
         return self._writeable
