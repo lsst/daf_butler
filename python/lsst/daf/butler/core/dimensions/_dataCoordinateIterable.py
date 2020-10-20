@@ -45,9 +45,9 @@ from typing import (
 import sqlalchemy
 
 from ..simpleQuery import SimpleQuery
-from .coordinate import DataCoordinate
-from .graph import DimensionGraph
-from .universe import DimensionUniverse
+from ._coordinate import DataCoordinate
+from ._graph import DimensionGraph
+from ._universe import DimensionUniverse
 
 
 class DataCoordinateIterable(Iterable[DataCoordinate]):
@@ -368,7 +368,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
             dimensions.
         """
         hasFull: Optional[bool]
-        if graph.dimensions.issubset(self.graph.required):
+        if graph.dimensions <= self.graph.required:
             hasFull = True
         else:
             hasFull = self._hasFull
