@@ -157,8 +157,8 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(graph.implied.names, ("physical_filter", "band", "visit_system"))
         self.assertCountEqual(graph.elements.names - graph.dimensions.names,
                               ("visit_detector_region", "visit_definition"))
-        self.assertCountEqual(graph.spatial.names, ("visit_detector_region",))
-        self.assertCountEqual(graph.temporal.names, ("exposure",))
+        self.assertCountEqual(graph.spatial.names, ("observation_regions",))
+        self.assertCountEqual(graph.temporal.names, ("observation_timespans",))
 
     def testSkyMapDimensions(self):
         graph = DimensionGraph(self.universe, names=("patch",))
@@ -166,7 +166,7 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(graph.required.names, ("skymap", "tract", "patch"))
         self.assertCountEqual(graph.implied.names, ())
         self.assertCountEqual(graph.elements.names, graph.dimensions.names)
-        self.assertCountEqual(graph.spatial.names, ("patch",))
+        self.assertCountEqual(graph.spatial.names, ("skymap_regions",))
 
     def testSubsetCalculation(self):
         """Test that independent spatial and temporal options are computed
@@ -175,9 +175,9 @@ class DimensionTestCase(unittest.TestCase):
         graph = DimensionGraph(self.universe, names=("visit", "detector", "tract", "patch", "htm7",
                                                      "exposure"))
         self.assertCountEqual(graph.spatial.names,
-                              ("visit_detector_region", "patch", "htm7"))
+                              ("observation_regions", "skymap_regions", "htm"))
         self.assertCountEqual(graph.temporal.names,
-                              ("exposure",))
+                              ("observation_timespans",))
 
     def testSchemaGeneration(self):
         tableSpecs = NamedKeyDict({})
@@ -537,22 +537,22 @@ class DataCoordinateTestCase(unittest.TestCase):
         for dataId in self.randomDataIds(n=4).subset(
                 DimensionGraph(self.allDataIds.universe, names=["visit"])):
             self.assertIsNotNone(dataId.region)
-            self.assertEqual(dataId.graph.spatial.names, {"visit"})
+            self.assertEqual(dataId.graph.spatial.names, {"observation_regions"})
             self.assertEqual(dataId.region, dataId.records["visit"].region)
         for dataId in self.randomDataIds(n=4).subset(
                 DimensionGraph(self.allDataIds.universe, names=["visit", "detector"])):
             self.assertIsNotNone(dataId.region)
-            self.assertEqual(dataId.graph.spatial.names, {"visit_detector_region"})
+            self.assertEqual(dataId.graph.spatial.names, {"observation_regions"})
             self.assertEqual(dataId.region, dataId.records["visit_detector_region"].region)
         for dataId in self.randomDataIds(n=4).subset(
                 DimensionGraph(self.allDataIds.universe, names=["tract"])):
             self.assertIsNotNone(dataId.region)
-            self.assertEqual(dataId.graph.spatial.names, {"tract"})
+            self.assertEqual(dataId.graph.spatial.names, {"skymap_regions"})
             self.assertEqual(dataId.region, dataId.records["tract"].region)
         for dataId in self.randomDataIds(n=4).subset(
                 DimensionGraph(self.allDataIds.universe, names=["patch"])):
             self.assertIsNotNone(dataId.region)
-            self.assertEqual(dataId.graph.spatial.names, {"patch"})
+            self.assertEqual(dataId.graph.spatial.names, {"skymap_regions"})
             self.assertEqual(dataId.region, dataId.records["patch"].region)
 
     def testTimespans(self):
@@ -562,7 +562,7 @@ class DataCoordinateTestCase(unittest.TestCase):
         for dataId in self.randomDataIds(n=4).subset(
                 DimensionGraph(self.allDataIds.universe, names=["visit"])):
             self.assertIsNotNone(dataId.timespan)
-            self.assertEqual(dataId.graph.temporal.names, {"visit"})
+            self.assertEqual(dataId.graph.temporal.names, {"observation_timespans"})
             self.assertEqual(dataId.timespan, dataId.records["visit"].timespan)
 
     def testIterableStatusFlags(self):
