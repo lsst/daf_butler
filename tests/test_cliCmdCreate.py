@@ -31,6 +31,7 @@ class CreateTest(CliCmdTestBase, unittest.TestCase):
     def defaultExpected():
         return dict(repo=None,
                     seed_config=None,
+                    dimension_config=None,
                     standalone=False,
                     override=False,
                     outfile=None)
@@ -53,11 +54,13 @@ class CreateTest(CliCmdTestBase, unittest.TestCase):
         """Test all parameters."""
         self.run_test(["create", "here",
                        "--seed-config", "foo",
+                       "--dimension-config", "/bar/dim.yaml",
                        "--standalone",
                        "--override",
                        "--outfile", "bar"],
                       self.makeExpected(repo="here",
                                         seed_config="foo",
+                                        dimension_config="/bar/dim.yaml",
                                         standalone=True,
                                         override=True,
                                         outfile="bar"))
