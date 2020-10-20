@@ -138,6 +138,21 @@ class DatasetRef:
             s += f" (id={self.id})"
         return s
 
+    def __lt__(self, other: Any) -> bool:
+        # Sort by run, DatasetType name and then by DataCoordinate
+        # The __str__ representation is probably close enough but we
+        # need to ensure that sorting a DatasetRef matches what you would
+        # get if you sorted DatasetType+DataCoordinate
+        if not isinstance(other, type(self)):
+            return NotImplemented
+
+        # Group by run if defined, takes precedence over DatasetType
+        self_run = "" if self.run is None else self.run
+        other_run = "" if other.run is None else other.run
+
+        # Compare tuples in the priority order
+        return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
+
     def __getnewargs_ex__(self) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
         return ((self.datasetType, self.dataId), {"id": self.id, "run": self.run})
 

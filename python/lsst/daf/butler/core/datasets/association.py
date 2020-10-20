@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from .ref import DatasetRef
 from ..timespan import Timespan
@@ -48,3 +48,10 @@ class DatasetAssociation:
     """Validity range of the dataset if this is a `~CollectionType.CALIBRATION`
     collection (`Timespan` or `None`).
     """
+
+    def __lt__(self, other: Any) -> bool:
+        # Allow sorting of associations
+        if not isinstance(other, type(self)):
+            return NotImplemented
+
+        return (self.ref, self.collection, self.timespan) < (other.ref, other.collection, other.timespan)

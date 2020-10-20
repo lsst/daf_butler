@@ -25,6 +25,7 @@ __all__ = ["FileDataset"]
 
 from dataclasses import dataclass
 from typing import (
+    Any,
     List,
     Optional,
     Union,
@@ -66,3 +67,9 @@ class FileDataset:
             refs = [refs]
         self.refs = refs
         self.formatter = formatter
+
+    def __lt__(self, other: Any) -> bool:
+        # Sort on path alone
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self.path < other.path

@@ -117,8 +117,8 @@ class YamlRepoExportBackend(RepoExportBackend):
             "run": run,
             "records": [
                 {
-                    "dataset_id": [ref.id for ref in dataset.refs],
-                    "data_id": [ref.dataId.byName() for ref in dataset.refs],
+                    "dataset_id": [ref.id for ref in sorted(dataset.refs)],
+                    "data_id": [ref.dataId.byName() for ref in sorted(dataset.refs)],
                     "path": dataset.path,
                     "formatter": dataset.formatter,
                     # TODO: look up and save other collections

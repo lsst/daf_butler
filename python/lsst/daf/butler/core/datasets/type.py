@@ -31,6 +31,8 @@ from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
+    Dict,
     Iterable,
     List,
     Mapping,
@@ -219,6 +221,13 @@ class DatasetType:
         """
         return hash((self._name, self._dimensions, self._storageClassName,
                      self._parentStorageClassName))
+
+    def __lt__(self, other: Any) -> bool:
+        """Sort using the dataset type name.
+        """
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self.name < other.name
 
     @property
     def name(self) -> str:
@@ -461,14 +470,17 @@ class DatasetType:
 
         return lookups + self.storageClass._lookupNames()
 
-    def __reduce__(self) -> Tuple[Type[DatasetType], Tuple[str, DimensionGraph, str, Optional[str]]]:
+    def __reduce__(self) -> Tuple[Callable, Tuple[Type[DatasetType],
+                                                  Tuple[str, DimensionGraph, str, Optional[str]],
+                                                  Dict[str, bool]]]:
         """Support pickling.
 
         StorageClass instances can not normally be pickled, so we pickle
         StorageClass name instead of instance.
         """
-        return (DatasetType, (self.name, self.dimensions, self._storageClassName,
-                              self._parentStorageClassName))
+        return _unpickle_via_factory, (self.__class__, (self.name, self.dimensions, self._storageClassName,
+                                                        self._parentStorageClassName),
+                                       {"isCalibration": self._isCalibration})
 
     def __deepcopy__(self, memo: Any) -> DatasetType:
         """Support for deep copy method.
@@ -483,4 +495,14 @@ class DatasetType:
                            dimensions=deepcopy(self.dimensions, memo),
                            storageClass=deepcopy(self._storageClass or self._storageClassName, memo),
                            parentStorageClass=deepcopy(self._parentStorageClass
-                                                       or self._parentStorageClassName, memo))
+                                                       or self._parentStorageClassName, memo),
+                           isCalibration=deepcopy(self._isCalibration, memo))
+
+
+def _unpickle_via_factory(factory: Callable, args: Any, kwargs: Any) -> DatasetType:
+    """Unpickle something by calling a factory
+
+    Allows subclasses to unpickle using `__reduce__` with keyword
+    arguments as well as positional arguments.
+    """
+    return factory(*args, **kwargs)
