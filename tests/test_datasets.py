@@ -141,6 +141,22 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertNotEqual(DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageA"),
                             DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageB"))
 
+    def testSorting(self):
+        """Can we sort a DatasetType"""
+        storage = StorageClass("test_a")
+        dimensions = self.universe.extract(["instrument"])
+
+        d_a = DatasetType("a", dimensions, storage)
+        d_f = DatasetType("f", dimensions, storage)
+        d_p = DatasetType("p", dimensions, storage)
+
+        sort = sorted([d_p, d_f, d_a])
+        self.assertEqual(sort, [d_a, d_f, d_p])
+
+        # Now with strings
+        with self.assertRaises(TypeError):
+            sort = sorted(["z", d_p, "c", d_f, d_a, "d"])
+
     def testParentPlaceholder(self):
         """Test that a parent placeholder can be replaced."""
         storageComp = StorageClass("component")
@@ -362,6 +378,31 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertIsInstance(ref.dataId, DataCoordinate)
         self.assertEqual(ref.id, 1)
         self.assertEqual(ref.run, run)
+
+    def testSorting(self):
+        """Can we sort a DatasetRef"""
+        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=42))
+        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43))
+        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=44))
+
+        # This will sort them on visit number
+        sort = sorted([ref3, ref1, ref2])
+        self.assertEqual(sort, [ref1, ref2, ref3])
+
+        # Now include a run
+        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=42), run="b", id=2)
+        self.assertEqual(ref1.run, "b")
+        ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=41), run="b", id=2)
+        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="a", id=1)
+        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=44), run="c", id=3)
+
+        # This will sort them on run before visit
+        sort = sorted([ref3, ref1, ref2, ref4])
+        self.assertEqual(sort, [ref2, ref4, ref1, ref3])
+
+        # Now with strings
+        with self.assertRaises(TypeError):
+            sort = sorted(["z", ref1, "c"])
 
     def testResolving(self):
         ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
