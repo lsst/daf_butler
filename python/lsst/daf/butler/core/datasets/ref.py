@@ -24,7 +24,6 @@ __all__ = ["AmbiguousDatasetError", "DatasetRef"]
 
 from typing import (
     Any,
-    Dict,
     Iterable,
     List,
     Optional,
@@ -82,13 +81,14 @@ class DatasetRef:
 
     __slots__ = ("id", "datasetType", "dataId", "run", "hasParentId")
 
-    def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate, *,
-                id: Optional[int] = None,
-                run: Optional[str] = None,
-                hasParentId: bool = False,
-                conform: bool = True) -> DatasetRef:
-        self = super().__new__(cls)
-        assert isinstance(datasetType, DatasetType)
+    def __init__(
+        self,
+        datasetType: DatasetType, dataId: DataCoordinate, *,
+        id: Optional[int] = None,
+        run: Optional[str] = None,
+        hasParentId: bool = False,
+        conform: bool = True
+    ):
         self.id = id
         self.datasetType = datasetType
         self.hasParentId = hasParentId
@@ -105,7 +105,6 @@ class DatasetRef:
             if run is not None:
                 raise ValueError("'run' cannot be provided unless 'id' is.")
             self.run = None
-        return self
 
     def __eq__(self, other: Any) -> bool:
         try:
@@ -153,8 +152,27 @@ class DatasetRef:
         # Compare tuples in the priority order
         return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
 
-    def __getnewargs_ex__(self) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
-        return ((self.datasetType, self.dataId), {"id": self.id, "run": self.run})
+    @classmethod
+    def _unpickle(
+        cls,
+        datasetType: DatasetType,
+        dataId: DataCoordinate,
+        id: Optional[int],
+        run: Optional[str],
+        hasParentId: bool,
+    ) -> DatasetRef:
+        """A custom factory method for use by `__reduce__` as a workaround for
+        its lack of support for keyword arguments.
+        """
+        return cls(datasetType, dataId, id=id, run=run, hasParentId=hasParentId)
+
+    def __reduce__(self) -> tuple:
+        return (self._unpickle, (self.datasetType, self.dataId, self.id, self.run, self.hasParentId))
+
+    def __deepcopy__(self, memo: dict) -> DatasetRef:
+        # DatasetRef is recursively immutable; see note in @immutable
+        # decorator.
+        return self
 
     def resolved(self, id: int, run: str) -> DatasetRef:
         """Return a new `DatasetRef` with the same data ID and dataset type
