@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 from typing import (
     Any,
@@ -84,18 +85,26 @@ class SimpleButlerTestCase(unittest.TestCase):
     can instead utilize an in-memory SQLite Registry and a mocked Datastore.
     """
 
-    def makeRegistry(self) -> Registry:
-        """Create a new `Registry` instance.
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
 
-        The default implementation returns a SQLite in-memory database.
-        """
-        config = RegistryConfig()
-        config["db"] = "sqlite:///:memory:"
-        return Registry.fromConfig(config, create=True)
+    def tearDown(self):
+        if self.root is not None and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
 
     def makeButler(self, **kwargs: Any) -> Butler:
+        """Return new Butler instance on each call.
+        """
         config = ButlerConfig()
-        config["registry", "db"] = "sqlite:///:memory:"
+
+        # make separate temporary directory for registry of this instance
+        tmpdir = tempfile.mkdtemp(dir=self.root)
+        config["registry", "db"] = f"sqlite:///{tmpdir}/gen3.sqlite3"
+
+        # have to make a registry first
+        registryConfig = RegistryConfig(config.get("registry"))
+        Registry.createFromConfig(registryConfig)
+
         with unittest.mock.patch.object(Datastore, "fromConfig", spec=Datastore.fromConfig):
             butler = Butler(config, **kwargs)
             butler.datastore.export = _mock_export

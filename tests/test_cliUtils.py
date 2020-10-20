@@ -41,8 +41,8 @@ class MockerTestCase(unittest.TestCase):
         runner = LogCliRunner(env=mockEnvVar)
         result = runner.invoke(butler.cli, ["create", "repo"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        Mocker.mock.assert_called_with(repo="repo", seed_config=None, standalone=False, override=False,
-                                       outfile=None)
+        Mocker.mock.assert_called_with(repo="repo", seed_config=None, dimension_config=None,
+                                       standalone=False, override=False, outfile=None)
 
 
 class ArgumentHelpGeneratorTestCase(unittest.TestCase):
