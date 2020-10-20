@@ -143,7 +143,6 @@ class DatasetRef:
         # The __str__ representation is probably close enough but we
         # need to ensure that sorting a DatasetRef matches what you would
         # get if you sorted DatasetType+DataCoordinate
-        # Use the dataset_id as a tie breaker
         if not isinstance(other, type(self)):
             return False
 
@@ -151,13 +150,8 @@ class DatasetRef:
         self_run = "" if self.run is None else self.run
         other_run = "" if other.run is None else other.run
 
-        # Can not compare None with int for id so must convert
-        self_id = 0 if self.id is None else self.id
-        other_id = 0 if other.id is None else other.id
-
         # Compare tuples in the priority order
-        return (self_run, self.datasetType,
-                self.dataId, self_id) < (other_run, other.datasetType, other.dataId, other_id)
+        return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
 
     def __getnewargs_ex__(self) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
         return ((self.datasetType, self.dataId), {"id": self.id, "run": self.run})
