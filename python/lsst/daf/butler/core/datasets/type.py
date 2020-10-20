@@ -226,10 +226,8 @@ class DatasetType:
         """Sort using the dataset type name.
         """
         if not isinstance(other, type(self)):
-            other_name = str(other)
-        else:
-            other_name = other.name
-        return self.name < other_name
+            return NotImplemented
+        return self.name < other.name
 
     @property
     def name(self) -> str:

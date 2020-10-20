@@ -52,6 +52,6 @@ class DatasetAssociation:
     def __lt__(self, other: Any) -> bool:
         # Allow sorting of associations
         if not isinstance(other, type(self)):
-            return False
+            return NotImplemented
 
         return (self.ref, self.collection, self.timespan) < (other.ref, other.collection, other.timespan)

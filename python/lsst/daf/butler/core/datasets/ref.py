@@ -144,7 +144,7 @@ class DatasetRef:
         # need to ensure that sorting a DatasetRef matches what you would
         # get if you sorted DatasetType+DataCoordinate
         if not isinstance(other, type(self)):
-            return False
+            return NotImplemented
 
         # Group by run if defined, takes precedence over DatasetType
         self_run = "" if self.run is None else self.run

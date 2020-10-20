@@ -71,7 +71,5 @@ class FileDataset:
     def __lt__(self, other: Any) -> bool:
         # Sort on path alone
         if not isinstance(other, type(self)):
-            other_path = str(other)
-        else:
-            other_path = other.path
-        return self.path < other_path
+            return NotImplemented
+        return self.path < other.path
