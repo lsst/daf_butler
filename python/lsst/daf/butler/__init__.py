@@ -7,7 +7,7 @@ Data Access Butler
 
 from .core import *
 # Import the registry subpackage directly for other symbols.
-from .registry import Registry, CollectionType, CollectionSearch, DatasetTypeRestriction
+from .registry import Registry, RegistryConfig, CollectionType, CollectionSearch, DatasetTypeRestriction
 from ._butlerConfig import *
 from ._deferredDatasetHandle import *
 from ._butler import *
