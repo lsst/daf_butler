@@ -110,15 +110,17 @@ def getHttpSession() -> requests.Session:
                     "export this variable.")
 
     session.verify = ca_bundle
-
-    # This header is required for request redirection, in dCache for example
-    if "LSST_BUTLER_WEBDAV_EXPECT100" in os.environ:
-        log.debug("Expect: 100-Continue header enabled.")
-        session.headers.update({'Expect': '100-continue'})
-
     log.debug("Session configured and ready.")
 
     return session
+
+
+def expect100() -> bool:
+    # This header is required for request redirection, in dCache for example
+    if "LSST_BUTLER_WEBDAV_EXPECT100" in os.environ:
+        log.debug("Expect: 100-Continue header enabled.")
+        return True
+    return False
 
 
 def isTokenAuth() -> bool:
@@ -501,5 +503,9 @@ class ButlerHttpURI(ButlerURI):
         response : `requests.Response`
             HTTP Response from the endpoint.
         """
+        if expect100():
+            return self.session.put(self.geturl(), data=None,
+                                    headers={"Expect": "100-continue", "Content-Length": "0"},
+                                    allow_redirects=False)
         return self.session.put(self.geturl(), data=None,
                                 headers={"Content-Length": "0"}, allow_redirects=False)
