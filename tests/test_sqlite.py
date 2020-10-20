@@ -209,7 +209,7 @@ class SqliteFileRegistryTests(RegistryTests):
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         config = self.makeRegistryConfig()
         config["db"] = f"sqlite:///{filename}"
-        return Registry.fromConfig(config, create=True, butlerRoot=self.root)
+        return Registry.createFromConfig(config, butlerRoot=self.root)
 
 
 class SqliteFileRegistryNameKeyCollMgrTestCase(SqliteFileRegistryTests, unittest.TestCase):
@@ -239,7 +239,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
     def makeRegistry(self) -> Registry:
         config = self.makeRegistryConfig()
         config["db"] = "sqlite://"
-        return Registry.fromConfig(config, create=True)
+        return Registry.createFromConfig(config)
 
     def testRegions(self):
         """Tests for using region fields in `Registry` dimensions.

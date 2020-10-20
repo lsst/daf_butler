@@ -62,6 +62,7 @@ from .core import (
     DatasetRef,
     DatasetType,
     Datastore,
+    DimensionConfig,
     FileDataset,
     StorageClassFactory,
     Timespan,
@@ -252,10 +253,10 @@ class Butler:
     """
 
     @staticmethod
-    def makeRepo(root: str, config: Union[Config, str, None] = None, standalone: bool = False,
-                 createRegistry: bool = True, searchPaths: Optional[List[str]] = None,
-                 forceConfigRoot: bool = True, outfile: Optional[str] = None,
-                 overwrite: bool = False) -> Config:
+    def makeRepo(root: str, config: Union[Config, str, None] = None,
+                 dimensionConfig: Union[Config, str, None] = None, standalone: bool = False,
+                 searchPaths: Optional[List[str]] = None, forceConfigRoot: bool = True,
+                 outfile: Optional[str] = None, overwrite: bool = False) -> Config:
         """Create an empty data repository by adding a butler.yaml config
         to a repository root directory.
 
@@ -271,6 +272,9 @@ class Butler:
             configuration will be used.  Root-dependent config options
             specified in this config are overwritten if ``forceConfigRoot``
             is `True`.
+        dimensionConfig : `Config` or `str`, optional
+            Configuration for dimensions, will be used to initialize registry
+            database.
         standalone : `bool`
             If True, write all expanded defaults, not just customized or
             repository-specific settings.
@@ -279,8 +283,6 @@ class Butler:
             may be good or bad, depending on the nature of the changes).
             Future *additions* to the defaults will still be picked up when
             initializing `Butlers` to repos created with ``standalone=True``.
-        createRegistry : `bool`, optional
-            If `True` create a new Registry.
         searchPaths : `list` of `str`, optional
             Directory paths to search when calculating the full butler
             configuration.
@@ -371,7 +373,10 @@ class Butler:
         config.dumpToUri(configURI, overwrite=overwrite)
 
         # Create Registry and populate tables
-        Registry.fromConfig(config, create=createRegistry, butlerRoot=root)
+        registryConfig = RegistryConfig(config.get("registry"))
+        dimensionConfig = DimensionConfig(dimensionConfig)
+        Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root)
+
         return config
 
     @classmethod
