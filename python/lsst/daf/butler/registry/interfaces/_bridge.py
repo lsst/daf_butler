@@ -59,10 +59,8 @@ class FakeDatasetRef:
     """
     __slots__ = ("id",)
 
-    def __new__(cls, id: int) -> FakeDatasetRef:
-        self = super().__new__(cls)
+    def __init__(self, id: int):
         self.id = id
-        return self
 
     def __str__(self) -> str:
         return f"dataset_id={self.id}"

@@ -25,16 +25,25 @@ from __future__ import annotations
 __all__ = ("DimensionPacker",)
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Optional, Tuple, Type, TYPE_CHECKING, Union
+from typing import (
+    AbstractSet,
+    Any,
+    Iterable,
+    Optional,
+    Tuple,
+    Type,
+    TYPE_CHECKING,
+    Union,
+)
 
 from lsst.utils import doImport
 
-from ..config import Config
-from .graph import DimensionGraph
-from .coordinate import DataCoordinate, DataId
+from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
+from ._coordinate import DataCoordinate, DataId
+from ._graph import DimensionGraph
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .universe import DimensionUniverse
+    from ._universe import DimensionUniverse
 
 
 class DimensionPacker(metaclass=ABCMeta):
@@ -169,33 +178,35 @@ class DimensionPackerFactory:
     from configuration.
 
     This class is primarily intended for internal use by `DimensionUniverse`.
-    """
 
-    def __init__(self, fixed: DimensionGraph, dimensions: DimensionGraph, clsName: str):
-        self.fixed = fixed
-        self.dimensions = dimensions
+    Parameters
+    ----------
+    clsName : `str`
+        Fully-qualified name of the packer class this factory constructs.
+    fixed : `AbstractSet` [ `str` ]
+        Names of dimensions whose values must be provided to the packer when it
+        is constructed.  This will be expanded lazily into a `DimensionGraph`
+        prior to `DimensionPacker` construction.
+    dimensions : `AbstractSet` [ `str` ]
+        Names of dimensions whose values are passed to `DimensionPacker.pack`.
+        This will be expanded lazily into a `DimensionGraph` prior to
+        `DimensionPacker` construction.
+    """
+    def __init__(
+        self,
+        clsName: str,
+        fixed: AbstractSet[str],
+        dimensions: AbstractSet[str],
+    ):
+        # We defer turning these into DimensionGraph objects until first use
+        # because __init__ is called before a DimensionUniverse exists, and
+        # DimensionGraph instances can only be constructed afterwards.
+        self._fixed: Union[AbstractSet[str], DimensionGraph] = fixed
+        self._dimensions: Union[AbstractSet[str], DimensionGraph] = dimensions
         self._clsName = clsName
         self._cls: Optional[Type[DimensionPacker]] = None
 
-    @classmethod
-    def fromConfig(cls, universe: DimensionUniverse, config: Config) -> DimensionPackerFactory:
-        """Construct a `DimensionPackerFactory` from a piece of dimension
-        configuration.
-
-        Parameters
-        ----------
-        universe : `DimensionGraph`
-            All dimension objects known to the `Registry`.
-        config : `Config`
-            A dict-like `Config` node corresponding to a single entry
-            in the ``packers`` section of a `DimensionConfig`.
-        """
-        fixed = DimensionGraph(universe=universe, names=config["fixed"])
-        dimensions = DimensionGraph(universe=universe, names=config["dimensions"])
-        clsName = config["cls"]
-        return cls(fixed=fixed, dimensions=dimensions, clsName=clsName)
-
-    def __call__(self, fixed: DataCoordinate) -> DimensionPacker:
+    def __call__(self, universe: DimensionUniverse, fixed: DataCoordinate) -> DimensionPacker:
         """Construct a `DimensionPacker` instance for the given fixed data ID.
 
         Parameters
@@ -205,23 +216,55 @@ class DimensionPackerFactory:
             packer.  Must be expanded with all metadata known to the
             `Registry`.  ``fixed.hasRecords()`` must return `True`.
         """
-        assert fixed.graph.issuperset(self.fixed)
+        # Construct DimensionGraph instances if necessary on first use.
+        # See related comment in __init__.
+        if not isinstance(self._fixed, DimensionGraph):
+            self._fixed = universe.extract(self._fixed)
+        if not isinstance(self._dimensions, DimensionGraph):
+            self._dimensions = universe.extract(self._dimensions)
+        assert fixed.graph.issuperset(self._fixed)
         if self._cls is None:
             self._cls = doImport(self._clsName)
-        return self._cls(fixed, self.dimensions)
+        return self._cls(fixed, self._dimensions)
 
-    # Class attributes below are shadowed by instance attributes, and are
-    # present just to hold the docstrings for those instance attributes.
 
-    fixed: DimensionGraph
-    """The dimensions provided to new packers at construction
-    (`DimensionGraph`)
+class DimensionPackerConstructionVisitor(DimensionConstructionVisitor):
+    """Builder visitor for a single `DimensionPacker`.
 
-    The packed ID values are only unique and reversible with these
-    dimensions held fixed.
+    A single `DimensionPackerConstructionVisitor` should be added to a
+    `DimensionConstructionBuilder` for each `DimensionPackerFactory` that
+    should be added to a universe.
+
+    Parameters
+    ----------
+    name : `str`
+        Name used to identify this configuration of the packer in a
+        `DimensionUniverse`.
+    clsName : `str`
+        Fully-qualified name of a `DimensionPacker` subclass.
+    fixed : `Iterable` [ `str` ]
+        Names of dimensions whose values must be provided to the packer when it
+        is constructed.  This will be expanded lazily into a `DimensionGraph`
+        prior to `DimensionPacker` construction.
+    dimensions : `Iterable` [ `str` ]
+        Names of dimensions whose values are passed to `DimensionPacker.pack`.
+        This will be expanded lazily into a `DimensionGraph` prior to
+        `DimensionPacker` construction.
     """
+    def __init__(self, name: str, clsName: str, fixed: Iterable[str], dimensions: Iterable[str]):
+        super().__init__(name)
+        self._fixed = set(fixed)
+        self._dimensions = set(dimensions)
+        self._clsName = clsName
 
-    dimensions: DimensionGraph
-    """The dimensions of data IDs packed by the instances constructed by this
-    factory (`DimensionGraph`).
-    """
+    def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
+        # Docstring inherited from DimensionConstructionVisitor.
+        return False
+
+    def visit(self, builder: DimensionConstructionBuilder) -> None:
+        # Docstring inherited from DimensionConstructionVisitor.
+        builder.packers[self.name] = DimensionPackerFactory(
+            clsName=self._clsName,
+            fixed=self._fixed,
+            dimensions=self._dimensions,
+        )
