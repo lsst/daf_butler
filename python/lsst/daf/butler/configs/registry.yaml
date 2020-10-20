@@ -1,6 +1,6 @@
 # Default with a sqlLite registry
 registry:
-  db: 'sqlite:///:memory:'
+  db: 'sqlite:///<butlerRoot>/gen3.sqlite3'
   engines:
     sqlite: lsst.daf.butler.registry.databases.sqlite.SqliteDatabase
     postgresql: lsst.daf.butler.registry.databases.postgresql.PostgresqlDatabase
