@@ -23,10 +23,11 @@ from __future__ import annotations
 
 __all__ = ("DimensionConfig",)
 
-from typing import Iterator
+from typing import Iterator, Iterable, Optional, Union
 
-from ..config import ConfigSubset
+from ..config import Config, ConfigSubset
 from .. import ddl
+from .._butlerUri import ButlerURI
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 from ._packer import DimensionPackerConstructionVisitor
 from ._skypix import SkyPixConstructionVisitor
@@ -62,10 +63,80 @@ class DimensionConfig(ConfigSubset):
 
     See the documentation for the linked classes above for more information
     on the configuration syntax.
+
+    Parameters
+    ----------
+    other : `Config` or `str` or `dict`, optional
+        Argument specifying the configuration information as understood
+        by `Config`. If `None` is passed then defaults are loaded from
+        "dimensions.yaml", otherwise defaults are not loaded.
+    validate : `bool`, optional
+        If `True` required keys will be checked to ensure configuration
+        consistency.
+    searchPaths : `list` or `tuple`, optional
+        Explicit additional paths to search for defaults. They should
+        be supplied in priority order. These paths have higher priority
+        than those read from the environment in
+        `ConfigSubset.defaultSearchPaths()`.  Paths can be `str` referring to
+        the local file system or URIs, `ButlerURI`.
     """
-    component = "dimensions"
+
     requiredKeys = ("version", "elements", "skypix")
     defaultConfigFile = "dimensions.yaml"
+
+    def __init__(self, other: Union[Config, ButlerURI, str, None] = None, validate: bool = True,
+                 searchPaths: Optional[Iterable[Union[str, ButlerURI]]] = None):
+        # if argument is not None then do not load/merge defaults
+        mergeDefaults = other is None
+        super().__init__(other=other, validate=validate, mergeDefaults=mergeDefaults,
+                         searchPaths=searchPaths)
+
+    def _updateWithConfigsFromPath(self, searchPaths: Iterable[Union[str, ButlerURI]],
+                                   configFile: str) -> None:
+        """Search the supplied paths reading config from first found.
+
+        Raises
+        ------
+        FileNotFoundError
+            Raised if config file is not found in any of given locations.
+
+        Notes
+        -----
+        This method overrides base class method with different behavior.
+        Instead of merging all found files into a single configuration it
+        finds first matching file and reads it.
+        """
+        uri = ButlerURI(configFile)
+        if uri.isabs() and uri.exists():
+            # Assume this resource exists
+            self._updateWithOtherConfigFile(configFile)
+            self.filesRead.append(configFile)
+        else:
+            for pathDir in searchPaths:
+                if isinstance(pathDir, (str, ButlerURI)):
+                    pathDir = ButlerURI(pathDir, forceDirectory=True)
+                    file = pathDir.join(configFile)
+                    if file.exists():
+                        self.filesRead.append(file)
+                        self._updateWithOtherConfigFile(file)
+                        break
+                else:
+                    raise TypeError(f"Unexpected search path type encountered: {pathDir!r}")
+            else:
+                raise FileNotFoundError(f"Could not find {configFile} in search path {searchPaths}")
+
+    def _updateWithOtherConfigFile(self, file: Union[ButlerURI, str]) -> None:
+        """Override for base class method.
+
+        Parameters
+        ----------
+        file : `Config`, `str`, `ButlerURI`, or `dict`
+            Entity that can be converted to a `ConfigSubset`.
+        """
+        # Use this class to read the defaults so that subsetting can happen
+        # correctly.
+        externalConfig = type(self)(file, validate=False)
+        self.update(externalConfig)
 
     def _extractSkyPixVisitors(self) -> Iterator[DimensionConstructionVisitor]:
         """Process the 'skypix' section of the configuration, yielding a
