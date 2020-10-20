@@ -388,13 +388,9 @@ class ButlerTests(ButlerPutGetTests):
 
     def setUp(self):
         """Create a new butler root for each test."""
-        if self.useTempRoot:
-            self.root = tempfile.mkdtemp(dir=TESTDIR)
-            Butler.makeRepo(self.root, config=Config(self.configFile))
-            self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
-        else:
-            self.root = None
-            self.tmpConfigFile = self.configFile
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        Butler.makeRepo(self.root, config=Config(self.configFile))
+        self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
 
     def testConstructor(self):
         """Independent test of constructor.
@@ -818,16 +814,14 @@ class ButlerTests(ButlerPutGetTests):
         if self.fullConfigKey is None:
             return
 
-        # Remove the file created in setUp
-        os.unlink(self.tmpConfigFile)
+        # create two separate directories
+        root1 = tempfile.mkdtemp(dir=self.root)
+        root2 = tempfile.mkdtemp(dir=self.root)
 
-        createRegistry = not self.useTempRoot
-        butlerConfig = Butler.makeRepo(self.root, config=Config(self.configFile),
-                                       createRegistry=createRegistry)
+        butlerConfig = Butler.makeRepo(root1, config=Config(self.configFile))
         limited = Config(self.configFile)
         butler1 = Butler(butlerConfig)
-        butlerConfig = Butler.makeRepo(self.root, standalone=True, createRegistry=False,
-                                       config=Config(self.configFile), overwrite=True)
+        butlerConfig = Butler.makeRepo(root2, standalone=True, config=Config(self.configFile))
         full = Config(self.tmpConfigFile)
         butler2 = Butler(butlerConfig)
         # Butlers should have the same configuration regardless of whether
@@ -852,7 +846,7 @@ class ButlerTests(ButlerPutGetTests):
             Butler(butlerConfig)
 
         with self.assertRaises(FileExistsError):
-            Butler.makeRepo(self.root, standalone=True, createRegistry=False,
+            Butler.makeRepo(self.root, standalone=True,
                             config=Config(self.configFile), overwrite=False)
 
     def testStringification(self):
@@ -1041,7 +1035,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     validationCanFail = False
     datastoreStr = ["datastore='InMemory"]
     datastoreName = ["InMemoryDatastore@"]
-    registryStr = ":memory:"
+    registryStr = "/gen3.sqlite3"
 
     def testIngest(self):
         pass
@@ -1184,7 +1178,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
     datastoreName = ["S3Datastore@s3://{bucketName}/{root}"]
     """The expected format of the S3Datastore string."""
 
-    registryStr = ":memory:"
+    registryStr = "/gen3.sqlite3"
     """Expected format of the Registry string."""
 
     def genRoot(self):
@@ -1211,6 +1205,10 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
             self.root = self.genRoot()
         rooturi = f"s3://{self.bucketName}/{self.root}"
         config.update({"datastore": {"datastore": {"root": rooturi}}})
+
+        # need local folder to store registry database
+        self.reg_dir = tempfile.mkdtemp(dir=TESTDIR)
+        config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
 
         # MOTO needs to know that we expect Bucket bucketname to exist
         # (this used to be the class attribute bucketName)
@@ -1240,6 +1238,9 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         # unset any potentially set dummy credentials
         if self.usingDummyCredentials:
             unsetAwsEnvCredentials()
+
+        if self.reg_dir is not None and os.path.exists(self.reg_dir):
+            shutil.rmtree(self.reg_dir, ignore_errors=True)
 
 
 @unittest.skipIf(WsgiDAVApp is None, "Warning: wsgidav/cheroot not found!")
@@ -1279,7 +1280,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     datastoreName = ["WebdavDatastore@https://{serverName}/{root}"]
     """The expected format of the WebdavDatastore string."""
 
-    registryStr = ":memory:"
+    registryStr = "/gen3.sqlite3"
     """Expected format of the Registry string."""
 
     serverThread = None
@@ -1337,6 +1338,10 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         self.rooturi = f"http://{self.serverName}:{self.portNumber}/{self.root}"
         config.update({"datastore": {"datastore": {"root": self.rooturi}}})
 
+        # need local folder to store registry database
+        self.reg_dir = tempfile.mkdtemp(dir=TESTDIR)
+        config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
+
         self.datastoreStr = f"datastore={self.root}"
         self.datastoreName = [f"WebdavDatastore@{self.rooturi}"]
 
@@ -1355,6 +1360,9 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         # Clear temporary directory
         ButlerURI(self.rooturi).remove()
         ButlerURI(self.rooturi).session.close()
+
+        if self.reg_dir is not None and os.path.exists(self.reg_dir):
+            shutil.rmtree(self.reg_dir, ignore_errors=True)
 
     def _serveWebdav(self, port: int, stopWebdavServer):
         """Starts a local webdav-compatible HTTP server,
