@@ -36,7 +36,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from ...core import ddl, Timespan
+from ...core import ddl, DimensionUniverse, Timespan
 from ..wildcards import CollectionSearch
 from .._collectionType import CollectionType
 from ._versioning import VersionedExtension
@@ -145,7 +145,7 @@ class ChainedCollectionRecord(CollectionRecord):
         Name of the collection.
     """
 
-    def __init__(self, key: Any, name: str):
+    def __init__(self, key: Any, name: str, universe: DimensionUniverse):
         super().__init__(key=key, name=name, type=CollectionType.CHAINED)
         self._children = CollectionSearch.fromExpression([])
 
@@ -181,10 +181,10 @@ class ChainedCollectionRecord(CollectionRecord):
                                     collectionTypes={CollectionType.CHAINED}):
             if record == self:
                 raise ValueError(f"Cycle in collection chaining when defining '{self.name}'.")
-        self._update(manager, children)
+        self._update(manager, children, children.universe)
         self._children = children
 
-    def refresh(self, manager: CollectionManager) -> None:
+    def refresh(self, manager: CollectionManager, universe: DimensionUniverse) -> None:
         """Load children from the database, using the given manager to resolve
         collection primary key values into records.
 
@@ -199,11 +199,14 @@ class ChainedCollectionRecord(CollectionRecord):
         manager : `CollectionManager`
             The object that manages this records instance and all records
             instances that may appear as its children.
+        universe : `DimensionUniverse`
+            Object managing all known dimensions.
         """
-        self._children = self._load(manager)
+        self._children = self._load(manager, universe)
 
     @abstractmethod
-    def _update(self, manager: CollectionManager, children: CollectionSearch) -> None:
+    def _update(self, manager: CollectionManager, children: CollectionSearch,
+                universe: DimensionUniverse) -> None:
         """Protected implementation hook for setting the `children` property.
 
         This method should be implemented by subclasses to update the database
@@ -219,11 +222,13 @@ class ChainedCollectionRecord(CollectionRecord):
         children : `CollectionSearch`
             A collection search path that should be resolved to set the child
             collections of this chain.  Guaranteed not to contain cycles.
+        universe : `DimensionUniverse`
+            Object managing all known dimensions.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def _load(self, manager: CollectionManager) -> CollectionSearch:
+    def _load(self, manager: CollectionManager, universe: DimensionUniverse) -> CollectionSearch:
         """Protected implementation hook for `refresh`.
 
         This method should be implemented by subclasses to retrieve the chain's
@@ -236,6 +241,8 @@ class ChainedCollectionRecord(CollectionRecord):
         manager : `CollectionManager`
             The object that manages this records instance and all records
             instances that may appear as its children.
+        universe : `DimensionUniverse`
+            Object managing all known dimensions.
         """
         raise NotImplementedError()
 
@@ -386,15 +393,20 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def refresh(self) -> None:
+    def refresh(self, universe: DimensionUniverse) -> None:
         """Ensure all other operations on this manager are aware of any
         collections that may have been registered by other clients since it
         was initialized or last refreshed.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            Object managing all known dimensions.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def register(self, name: str, type: CollectionType) -> CollectionRecord:
+    def register(self, name: str, type: CollectionType, universe: DimensionUniverse) -> CollectionRecord:
         """Ensure that a collection of the given name and type are present
         in the layer this manager is associated with.
 
@@ -404,6 +416,8 @@ class CollectionManager(VersionedExtension):
             Name of the collection.
         type : `CollectionType`
             Enumeration value indicating the type of collection.
+        universe : `DimensionUniverse`
+            Object managing all known dimensions.
 
         Returns
         -------

@@ -307,7 +307,7 @@ class Registry:
                 # now.
                 _LOG.warning(f"Registry schema digest mismatch: {exc}")
 
-        self._collections.refresh()
+        self._collections.refresh(universe=self._dimensions.universe)
         self._datasets.refresh(universe=self._dimensions.universe)
 
     def __str__(self) -> str:
@@ -426,7 +426,7 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        self._collections.register(name, type)
+        self._collections.register(name, type, universe=self.dimensions)
 
     def getCollectionType(self, name: str) -> CollectionType:
         """Return an enumeration value indicating the type of the given
@@ -462,7 +462,7 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        self._collections.register(name, CollectionType.RUN)
+        self._collections.register(name, CollectionType.RUN, universe=self.dimensions)
 
     @transactional
     def removeCollection(self, name: str) -> None:
