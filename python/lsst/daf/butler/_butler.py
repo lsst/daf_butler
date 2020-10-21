@@ -1009,7 +1009,7 @@ class Butler:
             raise TypeError(f"Cannot prune {collectionType.name} collection {name} with purge=True.")
         with self.registry.transaction():
             if unstore:
-                for ref in self.registry.queryDatasets(..., collections=name, deduplicate=True):
+                for ref in self.registry.queryDatasets(..., collections=name, findFirst=True):
                     if self.datastore.exists(ref):
                         self.datastore.trash(ref)
             self.registry.removeCollection(name)

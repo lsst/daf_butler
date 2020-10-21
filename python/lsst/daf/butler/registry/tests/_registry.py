@@ -1022,7 +1022,7 @@ class RegistryTests(ABC):
             self.assertEqual(items[key], value)
 
     def testQueryDatasetsDeduplication(self):
-        """Test that the deduplicate option to queryDatasets selects datasets
+        """Test that the findFirst option to queryDatasets selects datasets
         from collections in the order given".
         """
         registry = self.makeRegistry()
@@ -1041,7 +1041,7 @@ class RegistryTests(ABC):
         )
         self.assertCountEqual(
             list(registry.queryDatasets("bias", collections=["imported_g", "imported_r"],
-                                        deduplicate=True)),
+                                        findFirst=True)),
             [
                 registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
                 registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g"),
@@ -1051,7 +1051,7 @@ class RegistryTests(ABC):
         )
         self.assertCountEqual(
             list(registry.queryDatasets("bias", collections=["imported_r", "imported_g"],
-                                        deduplicate=True)),
+                                        findFirst=True)),
             [
                 registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
                 registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r"),
@@ -1139,7 +1139,7 @@ class RegistryTests(ABC):
                 subsetDataIds.findDatasets(
                     bias,
                     collections=["imported_r", "imported_g"],
-                    deduplicate=False
+                    findFirst=False
                 )
             ),
             expectedAllBiases
@@ -1149,17 +1149,17 @@ class RegistryTests(ABC):
                 subsetDataIds.findDatasets(
                     bias,
                     collections=["imported_r", "imported_g"],
-                    deduplicate=True
+                    findFirst=True
                 )
             ), expectedDeduplicatedBiases
         )
         # Materialize the bias dataset queries (only) by putting the results
         # into temporary tables, then repeat those tests.
         with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                        deduplicate=False).materialize() as biases:
+                                        findFirst=False).materialize() as biases:
             self.assertCountEqual(list(biases), expectedAllBiases)
         with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                        deduplicate=True).materialize() as biases:
+                                        findFirst=True).materialize() as biases:
             self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
         # Materialize the data ID subset query, but not the dataset queries.
         with subsetDataIds.materialize() as subsetDataIds:
@@ -1170,7 +1170,7 @@ class RegistryTests(ABC):
                     subsetDataIds.findDatasets(
                         bias,
                         collections=["imported_r", "imported_g"],
-                        deduplicate=False
+                        findFirst=False
                     )
                 ),
                 expectedAllBiases
@@ -1180,16 +1180,16 @@ class RegistryTests(ABC):
                     subsetDataIds.findDatasets(
                         bias,
                         collections=["imported_r", "imported_g"],
-                        deduplicate=True
+                        findFirst=True
                     )
                 ), expectedDeduplicatedBiases
             )
             # Materialize the dataset queries, too.
             with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                            deduplicate=False).materialize() as biases:
+                                            findFirst=False).materialize() as biases:
                 self.assertCountEqual(list(biases), expectedAllBiases)
             with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                            deduplicate=True).materialize() as biases:
+                                            findFirst=True).materialize() as biases:
                 self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
         # Materialize the original query, but none of the follow-up queries.
         with dataIds.materialize() as dataIds:
@@ -1212,7 +1212,7 @@ class RegistryTests(ABC):
                     subsetDataIds.findDatasets(
                         bias,
                         collections=["imported_r", "imported_g"],
-                        deduplicate=False
+                        findFirst=False
                     )
                 ),
                 expectedAllBiases
@@ -1222,16 +1222,16 @@ class RegistryTests(ABC):
                     subsetDataIds.findDatasets(
                         bias,
                         collections=["imported_r", "imported_g"],
-                        deduplicate=True
+                        findFirst=True
                     )
                 ), expectedDeduplicatedBiases
             )
             # Materialize just the bias dataset queries.
             with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                            deduplicate=False).materialize() as biases:
+                                            findFirst=False).materialize() as biases:
                 self.assertCountEqual(list(biases), expectedAllBiases)
             with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                            deduplicate=True).materialize() as biases:
+                                            findFirst=True).materialize() as biases:
                 self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
             # Materialize the subset data ID query, but not the dataset
             # queries.
@@ -1243,7 +1243,7 @@ class RegistryTests(ABC):
                         subsetDataIds.findDatasets(
                             bias,
                             collections=["imported_r", "imported_g"],
-                            deduplicate=False
+                            findFirst=False
                         )
                     ),
                     expectedAllBiases
@@ -1253,17 +1253,17 @@ class RegistryTests(ABC):
                         subsetDataIds.findDatasets(
                             bias,
                             collections=["imported_r", "imported_g"],
-                            deduplicate=True
+                            findFirst=True
                         )
                     ), expectedDeduplicatedBiases
                 )
                 # Materialize the bias dataset queries, too, so now we're
                 # materializing every single step.
                 with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                                deduplicate=False).materialize() as biases:
+                                                findFirst=False).materialize() as biases:
                     self.assertCountEqual(list(biases), expectedAllBiases)
                 with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                                deduplicate=True).materialize() as biases:
+                                                findFirst=True).materialize() as biases:
                     self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
 
     def testEmptyDimensionsQueries(self):
@@ -1284,15 +1284,15 @@ class RegistryTests(ABC):
         (dataset2,) = registry.insertDatasets(schema, dataIds=[dataId], run=run2)
         # Query directly for both of the datasets, and each one, one at a time.
         self.assertCountEqual(
-            list(registry.queryDatasets(schema, collections=[run1, run2], deduplicate=False)),
+            list(registry.queryDatasets(schema, collections=[run1, run2], findFirst=False)),
             [dataset1, dataset2]
         )
         self.assertEqual(
-            list(registry.queryDatasets(schema, collections=[run1, run2], deduplicate=True)),
+            list(registry.queryDatasets(schema, collections=[run1, run2], findFirst=True)),
             [dataset1],
         )
         self.assertEqual(
-            list(registry.queryDatasets(schema, collections=[run2, run1], deduplicate=True)),
+            list(registry.queryDatasets(schema, collections=[run2, run1], findFirst=True)),
             [dataset2],
         )
         # Query for data IDs with no dimensions.
@@ -1303,15 +1303,15 @@ class RegistryTests(ABC):
         )
         # Use queried data IDs to find the datasets.
         self.assertCountEqual(
-            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+            list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
             [dataset1, dataset2],
         )
         self.assertEqual(
-            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+            list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
             [dataset1],
         )
         self.assertEqual(
-            list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+            list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
             [dataset2],
         )
         # Now materialize the data ID query results and repeat those tests.
@@ -1321,15 +1321,15 @@ class RegistryTests(ABC):
                 DataCoordinateSequence([dataId], registry.dimensions.empty)
             )
             self.assertCountEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
                 [dataset1, dataset2],
             )
             self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
                 [dataset1],
             )
             self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
                 [dataset2],
             )
         # Query for non-empty data IDs, then subset that to get the empty one.
@@ -1340,15 +1340,15 @@ class RegistryTests(ABC):
             DataCoordinateSequence([dataId], registry.dimensions.empty)
         )
         self.assertCountEqual(
-            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+            list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
             [dataset1, dataset2],
         )
         self.assertEqual(
-            list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+            list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
             [dataset1],
         )
         self.assertEqual(
-            list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+            list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
             [dataset2],
         )
         with dataIds.materialize() as dataIds:
@@ -1357,15 +1357,15 @@ class RegistryTests(ABC):
                 DataCoordinateSequence([dataId], registry.dimensions.empty)
             )
             self.assertCountEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
                 [dataset1, dataset2],
             )
             self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
                 [dataset1],
             )
             self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
                 [dataset2],
             )
         # Query for non-empty data IDs, then materialize, then subset to get
@@ -1377,15 +1377,15 @@ class RegistryTests(ABC):
                 DataCoordinateSequence([dataId], registry.dimensions.empty)
             )
             self.assertCountEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
                 [dataset1, dataset2],
             )
             self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
                 [dataset1],
             )
             self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
                 [dataset2],
             )
             with dataIds.materialize() as dataIds:
@@ -1394,15 +1394,15 @@ class RegistryTests(ABC):
                     DataCoordinateSequence([dataId], registry.dimensions.empty)
                 )
                 self.assertCountEqual(
-                    list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=False)),
+                    list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
                     [dataset1, dataset2],
                 )
                 self.assertEqual(
-                    list(dataIds.findDatasets(schema, collections=[run1, run2], deduplicate=True)),
+                    list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
                     [dataset1],
                 )
                 self.assertEqual(
-                    list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
+                    list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
                     [dataset2],
                 )
 
