@@ -39,7 +39,7 @@ from typing import (
 
 import sqlalchemy
 
-from ...core import TimespanDatabaseRepresentation, ddl, Timespan
+from ...core import DimensionUniverse, TimespanDatabaseRepresentation, ddl, Timespan
 from .._collectionType import CollectionType
 from ..interfaces import (
     ChainedCollectionRecord,
@@ -246,13 +246,17 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
         Collection name.
     table : `sqlalchemy.schema.Table`
         Table for chain relationship records.
+    universe : `DimensionUniverse`
+        Object managing all known dimensions.
     """
-    def __init__(self, db: Database, key: Any, name: str, *, table: sqlalchemy.schema.Table):
-        super().__init__(key=key, name=name)
+    def __init__(self, db: Database, key: Any, name: str, *, table: sqlalchemy.schema.Table,
+                 universe: DimensionUniverse):
+        super().__init__(key=key, name=name, universe=universe)
         self._db = db
         self._table = table
 
-    def _update(self, manager: CollectionManager, children: CollectionSearch) -> None:
+    def _update(self, manager: CollectionManager, children: CollectionSearch,
+                universe: DimensionUniverse) -> None:
         # Docstring inherited from ChainedCollectionRecord.
         rows = []
         position = itertools.count()
@@ -268,7 +272,7 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
             self._db.delete(self._table, ["parent"], {"parent": self.key})
             self._db.insert(self._table, *rows)
 
-    def _load(self, manager: CollectionManager) -> CollectionSearch:
+    def _load(self, manager: CollectionManager, universe: DimensionUniverse) -> CollectionSearch:
         # Docstring inherited from ChainedCollectionRecord.
         sql = sqlalchemy.sql.select(
             [self._table.columns.child, self._table.columns.dataset_type_name]
@@ -323,7 +327,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         self._collectionIdName = collectionIdName
         self._records: Dict[K, CollectionRecord] = {}  # indexed by record ID
 
-    def refresh(self) -> None:
+    def refresh(self, universe: DimensionUniverse) -> None:
         # Docstring inherited from CollectionManager.
         sql = sqlalchemy.sql.select(
             self._tables.collection.columns + self._tables.run.columns
@@ -354,16 +358,17 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                 record = DefaultChainedCollectionRecord(db=self._db,
                                                         key=collection_id,
                                                         table=self._tables.collection_chain,
-                                                        name=name)
+                                                        name=name,
+                                                        universe=universe)
                 chains.append(record)
             else:
                 record = CollectionRecord(key=collection_id, name=name, type=type)
             records.append(record)
         self._setRecordCache(records)
         for chain in chains:
-            chain.refresh(self)
+            chain.refresh(self, universe)
 
-    def register(self, name: str, type: CollectionType) -> CollectionRecord:
+    def register(self, name: str, type: CollectionType, universe: DimensionUniverse) -> CollectionRecord:
         # Docstring inherited from CollectionManager.
         record = self._getByName(name)
         if record is None:
@@ -394,7 +399,8 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                 )
             elif type is CollectionType.CHAINED:
                 record = DefaultChainedCollectionRecord(db=self._db, key=collection_id, name=name,
-                                                        table=self._tables.collection_chain)
+                                                        table=self._tables.collection_chain,
+                                                        universe=universe)
             else:
                 record = CollectionRecord(key=collection_id, name=name, type=type)
             self._addCachedRecord(record)
