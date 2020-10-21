@@ -395,7 +395,13 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(collections, {"ingest"})
 
         butler2 = Butler(butler=butler, collections=["other"])
-        self.assertEqual(butler2.collections, CollectionSearch.fromExpression(["other"]))
+        self.assertEqual(
+            butler2.collections,
+            CollectionSearch.fromExpression(
+                ["other"],
+                universe=butler2.registry.dimensions,
+            )
+        )
         self.assertIsNone(butler2.run)
         self.assertIs(butler.registry, butler2.registry)
         self.assertIs(butler.datastore, butler2.datastore)

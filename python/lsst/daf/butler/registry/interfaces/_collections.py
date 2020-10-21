@@ -147,7 +147,7 @@ class ChainedCollectionRecord(CollectionRecord):
 
     def __init__(self, key: Any, name: str, universe: DimensionUniverse):
         super().__init__(key=key, name=name, type=CollectionType.CHAINED)
-        self._children = CollectionSearch.fromExpression([])
+        self._children = CollectionSearch.fromExpression([], universe=universe)
 
     @property
     def children(self) -> CollectionSearch:
