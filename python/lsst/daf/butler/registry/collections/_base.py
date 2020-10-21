@@ -31,10 +31,12 @@ from typing import (
     Generic,
     Iterable,
     Iterator,
+    List,
     Optional,
     Type,
     TYPE_CHECKING,
     TypeVar,
+    Tuple,
 )
 
 import sqlalchemy
@@ -48,7 +50,7 @@ from ..interfaces import (
     MissingCollectionError,
     RunRecord,
 )
-from ..wildcards import CollectionSearch, Ellipsis
+from ..wildcards import CollectionContentRestriction, CollectionSearch
 
 if TYPE_CHECKING:
     from ..interfaces import Database
@@ -153,7 +155,8 @@ def makeCollectionChainTableSpec(collectionIdName: str, collectionIdType: type) 
             ddl.FieldSpec("parent", dtype=collectionIdType, primaryKey=True),
             ddl.FieldSpec("position", dtype=sqlalchemy.SmallInteger, primaryKey=True),
             ddl.FieldSpec("child", dtype=collectionIdType, nullable=False),
-            ddl.FieldSpec("dataset_type_name", dtype=sqlalchemy.String, length=128, nullable=True),
+            ddl.FieldSpec("restriction_key", dtype=sqlalchemy.String, length=128, nullable=False),
+            ddl.FieldSpec("restriction_value", dtype=sqlalchemy.String, length=128, nullable=True),
         ],
         foreignKeys=[
             _makeCollectionForeignKey("parent", collectionIdName, onDelete="CASCADE"),
@@ -261,40 +264,67 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
         rows = []
         position = itertools.count()
         for child, restriction in children.iterPairs(manager, flattenChains=False):
-            if restriction.names is Ellipsis:
-                rows.append({"parent": self.key, "child": child.key,
-                             "position": next(position), "dataset_type_name": None})
-            else:
-                for name in restriction.names:
-                    rows.append({"parent": self.key, "child": child.key,
-                                 "position": next(position), "dataset_type_name": name})
+            for restriction_key, restriction_value in restriction.toPairs():
+                rows.append({
+                    "parent": self.key,
+                    "child": child.key,
+                    "position": next(position),
+                    "restriction_key": restriction_key,
+                    "restriction_value": restriction_value,
+                })
         with self._db.transaction():
             self._db.delete(self._table, ["parent"], {"parent": self.key})
             self._db.insert(self._table, *rows)
 
     def _load(self, manager: CollectionManager, universe: DimensionUniverse) -> CollectionSearch:
         # Docstring inherited from ChainedCollectionRecord.
-        sql = sqlalchemy.sql.select(
-            [self._table.columns.child, self._table.columns.dataset_type_name]
-        ).select_from(
+        sql = sqlalchemy.sql.select([
+            self._table.columns.child,
+            self._table.columns.restriction_key,
+            self._table.columns.restriction_value,
+        ]).select_from(
             self._table
         ).where(
             self._table.columns.parent == self.key
         ).order_by(
             self._table.columns.position
         )
-        # It's fine to have consecutive rows with the same collection name
-        # and different dataset type names - CollectionSearch will group those
-        # up for us.
-        children = []
-        for row in self._db.query(sql):
-            key = row[self._table.columns.child]
-            restriction = row[self._table.columns.dataset_type_name]
-            if not restriction:
-                restriction = ...  # we store ... as "" in the database
-            record = manager[key]
-            children.append((record.name, restriction))
-        return CollectionSearch.fromExpression(children)
+
+        def processRows(rows: Iterable) -> Iterator[Tuple[str, CollectionContentRestriction]]:
+            """Process result rows from the SQL query.
+
+            This is written as a closure generator so we can yield a
+            (collection name, restriction) tuple whenever we see a new child
+            collection, even though this isn't every query result row.
+            """
+            child_record: Optional[CollectionRecord] = None
+            restriction_pairs: List[Tuple[str, Optional[str]]] = []
+            for row in rows:
+                child_key = row[self._table.columns.child]
+                if child_record is None:
+                    # First row overall.
+                    child_record = manager[child_key]
+                elif child_key != child_record.key:
+                    # First row for a new child collection; yield the last one
+                    # and start over.
+                    yield (
+                        child_record.name,
+                        CollectionContentRestriction.fromPairs(restriction_pairs, universe)
+                    )
+                    restriction_pairs = []
+                    child_record = manager[child_key]
+                restriction_pairs.append((
+                    row[self._table.columns.restriction_key],
+                    row[self._table.columns.restriction_value],
+                ))
+            if child_record is not None:
+                # Finished the last child, yield it.
+                yield (
+                    child_record.name,
+                    CollectionContentRestriction.fromPairs(restriction_pairs, universe)
+                )
+
+        return CollectionSearch.fromExpression(processRows(self._db.query(sql)), universe)
 
 
 K = TypeVar("K")
