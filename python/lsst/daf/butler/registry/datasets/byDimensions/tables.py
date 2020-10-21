@@ -215,6 +215,13 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                         "table."
                     ),
                 ),
+                ddl.FieldSpec(
+                    name="ingest_date",
+                    dtype=sqlalchemy.TIMESTAMP,
+                    default=sqlalchemy.sql.func.now(),
+                    nullable=False,
+                    doc="Time of dataset ingestion.",
+                ),
                 # Foreign key field/constraint to run added below.
             ],
             foreignKeys=[
