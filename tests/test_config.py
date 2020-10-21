@@ -382,6 +382,18 @@ formatters:
             self.assertEqual(c["formatters", "calexp"], 3)
             self.assertEqual(c["testing"], "hello")
 
+        with self.assertRaises(ValueError):
+            Config.fromString("", format="unknown")
+
+        with self.assertRaises(ValueError):
+            Config.fromString(serialized["yaml"], format="json")
+
+        # This JSON can be parsed by YAML parser
+        j = Config.fromString(serialized["json"])
+        y = Config.fromString(serialized["yaml"])
+        self.assertEqual(j["formatters", "calexp"], 3)
+        self.assertEqual(j.toDict(), y.toDict())
+
         # Round trip JSON -> Config -> YAML -> Config -> JSON -> Config
         c1 = Config.fromString(serialized["json"], format="json")
         yaml = c1.dump(format="yaml")
