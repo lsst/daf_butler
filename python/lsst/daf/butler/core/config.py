@@ -27,6 +27,7 @@ __all__ = ("Config", "ConfigSubset")
 
 import collections
 import copy
+import json
 import logging
 import pprint
 import os
@@ -168,7 +169,7 @@ class Config(collections.abc.MutableMapping):
     Storage formats supported:
 
     - yaml: read and write is supported.
-
+    - json: read and write is supported but no ``!include`` directive.
 
     Parameters
     ----------
@@ -245,6 +246,31 @@ class Config(collections.abc.MutableMapping):
         return type(self)(self)
 
     @classmethod
+    def fromString(cls, string: str, format: str = "yaml") -> Config:
+        """Create a new Config instance from a serialized string.
+
+        Parameters
+        ----------
+        string : `str`
+            String containing content in specified format
+        format : `str`, optional
+            Format of the supplied string. Can be ``json`` or ``yaml``.
+
+        Returns
+        -------
+        c : `Config`
+            Newly-constructed Config.
+        """
+        if format == "yaml":
+            new_config = cls().__initFromYaml(string)
+        elif format == "json":
+            new_config = cls().__initFromJson(string)
+        else:
+            raise ValueError(f"Unexpected format of string: {format}")
+        new_config._processExplicitIncludes()
+        return new_config
+
+    @classmethod
     def fromYaml(cls, string: str) -> Config:
         """Create a new Config instance from a YAML string.
 
@@ -258,9 +284,7 @@ class Config(collections.abc.MutableMapping):
         c : `Config`
             Newly-constructed Config.
         """
-        new_config = cls().__initFromYaml(string)
-        new_config._processExplicitIncludes()
-        return new_config
+        return cls.fromString(string, format="yaml")
 
     def __initFromUri(self, path: str) -> None:
         """Load a file from a path or an URI.
@@ -271,13 +295,18 @@ class Config(collections.abc.MutableMapping):
             Path or a URI to a persisted config file.
         """
         uri = ButlerURI(path)
-        if uri.getExtension() == ".yaml":
+        ext = uri.getExtension()
+        if ext == ".yaml":
             log.debug("Opening YAML config file: %s", uri.geturl())
             content = uri.read()
             # Use a stream so we can name it
             stream = io.BytesIO(content)
             stream.name = uri.geturl()
             self.__initFromYaml(stream)
+        elif ext == ".json":
+            log.debug("Opening JSON config file: %s", uri.geturl())
+            content = uri.read()
+            self.__initFromJson(content)
         else:
             raise RuntimeError(f"Unhandled config file type: {uri}")
         self.configFile = uri
@@ -298,6 +327,29 @@ class Config(collections.abc.MutableMapping):
             If there is an error loading the file.
         """
         content = yaml.load(stream, Loader=Loader)
+        if content is None:
+            content = {}
+        self._data = content
+        return self
+
+    def __initFromJson(self, stream):
+        """Loads a JSON config from any readable stream that contains one.
+
+        Parameters
+        ----------
+        stream: `IO` or `str`
+            Stream to pass to the JSON loader. This can include a string as
+            well as an IO stream.
+
+        Raises
+        ------
+        TypeError:
+            Raised if there is an error loading the content.
+        """
+        if isinstance(stream, (bytes, str)):
+            content = json.loads(stream)
+        else:
+            content = json.load(stream)
         if content is None:
             content = {}
         self._data = content
@@ -754,23 +806,33 @@ class Config(collections.abc.MutableMapping):
     #######
     # i/o #
 
-    def dump(self, output: Optional[IO] = None) -> Optional[str]:
-        """Writes the config to a yaml stream.
+    def dump(self, output: Optional[IO] = None, format: str = "yaml") -> Optional[str]:
+        """Writes the config to an output stream.
 
         Parameters
         ----------
         output : `IO`, optional
-            The YAML stream to use for output. If `None` the YAML content
+            The stream to use for output. If `None` the serialized content
             will be returned.
+        format : `str`, optional
+            The format to use for the output. Can be "yaml" or "json".
 
         Returns
         -------
-        yaml : `str` or `None`
+        serialized : `str` or `None`
             If a stream was given the stream will be used and the return
-            value will be `None`. If the stream was `None` the YAML
+            value will be `None`. If the stream was `None` the
             serialization will be returned as a string.
         """
-        return yaml.safe_dump(self._data, output, default_flow_style=False)
+        if format == "yaml":
+            return yaml.safe_dump(self._data, output, default_flow_style=False)
+        elif format == "json":
+            if output is not None:
+                json.dump(self._data, output, ensure_ascii=False)
+                return
+            else:
+                return json.dumps(self._data, ensure_ascii=False)
+        raise ValueError(f"Unsupported format for Config serialization: {format}")
 
     def dumpToUri(self, uri: Union[ButlerURI, str], updateFile: bool = True,
                   defaultFileName: str = "butler.yaml",
@@ -799,7 +861,11 @@ class Config(collections.abc.MutableMapping):
         if updateFile and not uri.getExtension():
             uri.updateFile(defaultFileName)
 
-        uri.write(self.dump().encode(), overwrite=overwrite)
+        # Try to work out the format from the extension
+        ext = uri.getExtension()
+        format = ext[1:].lower()
+
+        uri.write(self.dump(format=format).encode(), overwrite=overwrite)
         self.configFile = uri
 
     @staticmethod

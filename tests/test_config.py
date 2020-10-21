@@ -366,15 +366,41 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(c._D, c2._D)  # Check that the child inherits
         self.assertNotEqual(c2._D, Config._D)
 
-    def testStringYaml(self):
+    def testSerializedString(self):
         """Test that we can create configs from strings"""
 
-        c = Config.fromYaml("""
+        serialized = {
+            "yaml": """
 testing: hello
 formatters:
-  calexp: 3""")
-        self.assertEqual(c["formatters", "calexp"], 3)
-        self.assertEqual(c["testing"], "hello")
+  calexp: 3""",
+            "json": '{"testing": "hello", "formatters": {"calexp": 3}}'
+        }
+
+        for format, string in serialized.items():
+            c = Config.fromString(string, format=format)
+            self.assertEqual(c["formatters", "calexp"], 3)
+            self.assertEqual(c["testing"], "hello")
+
+        with self.assertRaises(ValueError):
+            Config.fromString("", format="unknown")
+
+        with self.assertRaises(ValueError):
+            Config.fromString(serialized["yaml"], format="json")
+
+        # This JSON can be parsed by YAML parser
+        j = Config.fromString(serialized["json"])
+        y = Config.fromString(serialized["yaml"])
+        self.assertEqual(j["formatters", "calexp"], 3)
+        self.assertEqual(j.toDict(), y.toDict())
+
+        # Round trip JSON -> Config -> YAML -> Config -> JSON -> Config
+        c1 = Config.fromString(serialized["json"], format="json")
+        yaml = c1.dump(format="yaml")
+        c2 = Config.fromString(yaml, format="yaml")
+        json = c2.dump(format="json")
+        c3 = Config.fromString(json, format="json")
+        self.assertEqual(c3.toDict(), c1.toDict())
 
 
 class ConfigSubsetTestCase(unittest.TestCase):
@@ -546,6 +572,17 @@ class ConfigSubsetTestCase(unittest.TestCase):
         self.assertEqual(c["addon", "comp", "item11"], -1)
         self.assertEqual(c["addon", "comp", "item50"], 500)
 
+        c = Config(os.path.join(self.configDir, "configIncludes.json"))
+        self.assertEqual(c["comp", "item2"], "hello")
+        self.assertEqual(c["comp", "item50"], 5000)
+        self.assertEqual(c["comp", "item1"], "first")
+        self.assertEqual(c["comp", "item10"], "tenth")
+        self.assertEqual(c["comp", "item11"], "eleventh")
+        self.assertEqual(c["unrelated"], 1)
+        self.assertEqual(c["addon", "comp", "item1"], "posix")
+        self.assertEqual(c["addon", "comp", "item11"], -1)
+        self.assertEqual(c["addon", "comp", "item50"], 500)
+
         # Now test with an environment variable in includeConfigs
         with modified_environment(SPECIAL_BUTLER_DIR=self.configDir3):
             c = Config(os.path.join(self.configDir, "configIncludesEnv.yaml"))
@@ -600,15 +637,16 @@ class FileWriteConfigTestCase(unittest.TestCase):
 
         c = Config({"1": 2, "3": 4, "key3": 6, "dict": {"a": 1, "b": 2}})
 
-        outpath = os.path.join(self.tmpdir, "test.yaml")
-        c.dumpToUri(outpath)
+        for format in ("yaml", "json"):
+            outpath = os.path.join(self.tmpdir, f"test.{format}")
+            c.dumpToUri(outpath)
 
-        c2 = Config(outpath)
-        self.assertEqual(c2, c)
+            c2 = Config(outpath)
+            self.assertEqual(c2, c)
 
-        c.dumpToUri(outpath, overwrite=True)
-        with self.assertRaises(FileExistsError):
-            c.dumpToUri(outpath, overwrite=False)
+            c.dumpToUri(outpath, overwrite=True)
+            with self.assertRaises(FileExistsError):
+                c.dumpToUri(outpath, overwrite=False)
 
 
 if __name__ == "__main__":
