@@ -375,7 +375,7 @@ class DatasetTypeRestriction:
 
         Parameters
         ----------
-        args
+        *args
             Positional arguments are `DatasetTypeRestriction` instances.
         """
         result: Set[str] = set()
@@ -416,8 +416,8 @@ def _yieldCollectionRecords(
     includeChains: Optional[bool] = None,
 ) -> Iterator[Tuple[CollectionRecord, DatasetTypeRestriction]]:
     """A helper function containing common logic for `CollectionSearch.iter`
-    and `CollectionQuery.iter`: recursively yield `CollectionRecord` only they
-    match the criteria given in other arguments.
+    and `CollectionQuery.iter`: recursively yield `CollectionRecord` only if
+    they match the criteria given in other arguments.
 
     Parameters
     ----------
