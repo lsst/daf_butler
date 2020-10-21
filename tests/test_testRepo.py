@@ -71,7 +71,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         # outfile has the most obvious effects of any Butler.makeRepo keyword
         temp = tempfile.mkdtemp(dir=TESTDIR)
         try:
-            path = os.path.join(temp, 'oddConfig.py')
+            path = os.path.join(temp, 'oddConfig.json')
             makeTestRepo(self.root, {}, outfile=path, createRegistry=False)
             self.assertTrue(os.path.isfile(path))
         finally:
