@@ -48,7 +48,7 @@ from lsst.daf.butler import (
     ddl,
     DimensionUniverse,
 )
-from lsst.daf.butler import addDimensionForeignKey, DatabaseTimespanRepresentation
+from lsst.daf.butler import addDimensionForeignKey, TimespanDatabaseRepresentation
 from lsst.daf.butler.registry.interfaces import CollectionManager
 
 
@@ -321,7 +321,7 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
 
 
 def makeCalibTableSpec(datasetType: DatasetType, collections: Type[CollectionManager],
-                       tsRepr: Type[DatabaseTimespanRepresentation]) -> ddl.TableSpec:
+                       tsRepr: Type[TimespanDatabaseRepresentation]) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag +
     validity range table used by the classes in this package.
 
@@ -359,7 +359,7 @@ def makeCalibTableSpec(datasetType: DatasetType, collections: Type[CollectionMan
     )
     # Record fields that should go in the temporal lookup index/constraint,
     # starting with the dataset type.
-    index: List[Union[str, Type[DatabaseTimespanRepresentation]]] = ["dataset_type_id"]
+    index: List[Union[str, Type[TimespanDatabaseRepresentation]]] = ["dataset_type_id"]
     # Add foreign key fields to dataset table (not part of the temporal
     # lookup/constraint).
     addDatasetForeignKey(tableSpec, nullable=False, onDelete="CASCADE")
