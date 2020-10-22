@@ -39,7 +39,7 @@ from ._base import (
     makeRunTableSpec,
     makeCollectionChainTableSpec,
 )
-from ...core import DatabaseTimespanRepresentation, ddl
+from ...core import TimespanDatabaseRepresentation, ddl
 from ..interfaces import CollectionRecord, VersionTuple
 
 if TYPE_CHECKING:
@@ -54,7 +54,7 @@ _KEY_FIELD_SPEC = ddl.FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, pr
 _VERSION = VersionTuple(0, 3, 0)
 
 
-def _makeTableSpecs(tsRepr: Type[DatabaseTimespanRepresentation]) -> CollectionTablesTuple:
+def _makeTableSpecs(tsRepr: Type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
     return CollectionTablesTuple(
         collection=ddl.TableSpec(
             fields=[

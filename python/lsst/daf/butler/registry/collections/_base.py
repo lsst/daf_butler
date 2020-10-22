@@ -39,7 +39,7 @@ from typing import (
 
 import sqlalchemy
 
-from ...core import DatabaseTimespanRepresentation, ddl, Timespan
+from ...core import TimespanDatabaseRepresentation, ddl, Timespan
 from .._collectionType import CollectionType
 from ..interfaces import (
     ChainedCollectionRecord,
@@ -86,7 +86,7 @@ CollectionTablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run"
 
 
 def makeRunTableSpec(collectionIdName: str, collectionIdType: type,
-                     tsRepr: Type[DatabaseTimespanRepresentation]) -> ddl.TableSpec:
+                     tsRepr: Type[TimespanDatabaseRepresentation]) -> ddl.TableSpec:
     """Define specification for "run" table.
 
     Parameters
@@ -96,8 +96,8 @@ def makeRunTableSpec(collectionIdName: str, collectionIdType: type,
     collectionIdType
         Type of the PK column in the collections table, one of the
         `sqlalchemy` types.
-    tsRepr : `type` [ `DatabaseTimespanRepresentation` ]
-        Subclass of `DatabaseTimespanRepresentation` that encapsulates how
+    tsRepr : `type` [ `TimespanDatabaseRepresentation` ]
+        Subclass of `TimespanDatabaseRepresentation` that encapsulates how
         timespans are stored in this database.
 
 

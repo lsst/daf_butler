@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = (
     "Dimension",
+    "DimensionCombination",
     "DimensionElement",
 )
 
@@ -38,8 +39,8 @@ from typing import (
 from ..named import NamedValueAbstractSet, NamedValueSet
 from ..utils import cached_getter
 from .. import ddl
+from .._topology import TopologicalRelationshipEndpoint
 
-from ._topology import TopologicalRelationshipEndpoint
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
@@ -286,8 +287,12 @@ class Dimension(DimensionElement):
     @property  # type: ignore
     @cached_getter
     def alternateKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
-        """Additional unique key fields for this dimension that are not the the
+        """Additional unique key fields for this dimension that are not the
         primary key (`NamedValueAbstractSet` of `FieldSpec`).
+
+        If this dimension has required dependencies, the keys of those
+        dimensions are also included in the unique constraints defined for
+        these alternate keys.
         """
         _, *alternateKeys = self.uniqueKeys
         return NamedValueSet(alternateKeys).freeze()
