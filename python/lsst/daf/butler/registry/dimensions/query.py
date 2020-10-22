@@ -27,7 +27,7 @@ from typing import Iterable, Optional
 import sqlalchemy
 
 from ...core import (
-    DatabaseTimespanRepresentation,
+    TimespanDatabaseRepresentation,
     DataCoordinateIterable,
     Dimension,
     DimensionElement,
@@ -121,7 +121,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         assert regions is None, "Should be guaranteed by constructor checks."

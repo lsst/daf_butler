@@ -716,8 +716,8 @@ class DatabaseTests(ABC):
 
         asyncio.run(testSolutionWithLocking())
 
-    def testDatabaseTimespanRepresentation(self):
-        """Tests for `DatabaseTimespanRepresentation` and the `Database`
+    def testTimespanDatabaseRepresentation(self):
+        """Tests for `TimespanDatabaseRepresentation` and the `Database`
         methods that interact with it.
         """
         # Make some test timespans to play with, with the full suite of
