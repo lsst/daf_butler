@@ -55,7 +55,7 @@ class PruneCollectionsTest(unittest.TestCase):
 
             # Verify the tagged collection can be removed:
             result = self.runner.invoke(butlerCli, ["prune-collection", repoName,
-                                                    "--collection", taggedName,
+                                                    taggedName,
                                                     "--unstore"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             result = self.runner.invoke(butlerCli, ["query-collections", repoName])
@@ -65,7 +65,7 @@ class PruneCollectionsTest(unittest.TestCase):
 
             # Verify the run can be removed:
             result = self.runner.invoke(butlerCli, ["prune-collection", repoName,
-                                                    "--collection", runName,
+                                                    runName,
                                                     "--purge",
                                                     "--unstore"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))

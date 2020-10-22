@@ -24,6 +24,7 @@ import yaml
 
 from ..opt import (
     collection_type_option,
+    collection_argument,
     collections_option,
     dataset_type_option,
     datasets_option,
@@ -122,11 +123,10 @@ def config_validate(*args, **kwargs):
 
 @click.command()
 @repo_argument(required=True)
-@click.option("--collection",
-              help=unwrap("""Name of the collection to remove. If this is a TAGGED or CHAINED collection,
-                          datasets within the collection are not modified unless --unstore is passed. If this
-                          is a RUN collection, --purge and --unstore must be passed, and all datasets in it
-                          are fully removed from the data repository. """))
+@collection_argument(help=unwrap("""COLLECTION is the Name of the collection to remove. If this is a tagged or
+                          chained collection, datasets within the collection are not modified unless --unstore
+                          is passed. If this is a run collection, --purge and --unstore must be passed, and
+                          all datasets in it are fully removed from the data repository."""))
 @click.option("--purge",
               help=unwrap("""Permit RUN collections to be removed, fully removing datasets within them.
                           Requires --unstore as an added precaution against accidental deletion. Must not be

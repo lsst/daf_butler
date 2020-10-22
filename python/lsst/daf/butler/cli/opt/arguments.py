@@ -22,6 +22,8 @@
 from ..utils import MWArgumentDecorator, split_commas
 
 
+collection_argument = MWArgumentDecorator("collection")
+
 dimensions_argument = MWArgumentDecorator("dimensions",
                                           callback=split_commas,
                                           nargs=-1)
@@ -39,5 +41,3 @@ locations_argument = MWArgumentDecorator("locations",
                                          nargs=-1)
 
 repo_argument = MWArgumentDecorator("repo")
-
-
