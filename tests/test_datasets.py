@@ -50,7 +50,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         """
         datasetTypeName = "test"
         storageClass = StorageClass("test_StructuredData")
-        dimensions = self.universe.extract(("instrument", "visit"))
+        dimensions = self.universe.extract(("visit", "instrument"))
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         self.assertEqual(datasetType.name, datasetTypeName)
         self.assertEqual(datasetType.storageClass, storageClass)
@@ -381,24 +381,27 @@ class DatasetRefTestCase(unittest.TestCase):
 
     def testSorting(self):
         """Can we sort a DatasetRef"""
-        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=42))
-        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43))
-        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=44))
+        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=1))
+        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10))
+        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=22))
+
+        # Enable detailed diff report
+        self.maxDiff = None
 
         # This will sort them on visit number
         sort = sorted([ref3, ref1, ref2])
-        self.assertEqual(sort, [ref1, ref2, ref3])
+        self.assertEqual(sort, [ref1, ref2, ref3], msg=f"Got order: {[r.dataId for r in sort]}")
 
         # Now include a run
-        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=42), run="b", id=2)
+        ref1 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="b", id=2)
         self.assertEqual(ref1.run, "b")
-        ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=41), run="b", id=2)
-        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=43), run="a", id=1)
-        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=44), run="c", id=3)
+        ref4 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=10), run="b", id=2)
+        ref2 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=4), run="a", id=1)
+        ref3 = DatasetRef(self.datasetType, dict(instrument="DummyCam", visit=104), run="c", id=3)
 
         # This will sort them on run before visit
         sort = sorted([ref3, ref1, ref2, ref4])
-        self.assertEqual(sort, [ref2, ref4, ref1, ref3])
+        self.assertEqual(sort, [ref2, ref4, ref1, ref3], msg=f"Got order: {[r.dataId for r in sort]}")
 
         # Now with strings
         with self.assertRaises(TypeError):

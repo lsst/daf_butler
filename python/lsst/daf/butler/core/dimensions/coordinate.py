@@ -306,10 +306,14 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
     def __lt__(self, other: Any) -> bool:
         # Allow DataCoordinate to be sorted
-        # The sort order itself does not matter, just that the order
-        # is reproducible. repr() already includes the keys/values for
-        # this coordinate so use that.
-        return repr(self) < repr(other)
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        # Form tuple of tuples for each DataCoordinate:
+        # names has guaranteed ordering
+        self_kv = tuple((str(d), self.get(d, "?")) for d in self.graph.dimensions.names)
+        other_kv = tuple((str(d), other.get(d, "?")) for d in other.graph.dimensions.names)
+
+        return self_kv < other_kv
 
     def __iter__(self) -> Iterator[Dimension]:
         return iter(self.keys())
