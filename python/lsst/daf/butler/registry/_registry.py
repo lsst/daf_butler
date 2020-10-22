@@ -285,11 +285,15 @@ class Registry:
             context.addInitializer(lambda db: versions.storeManagersConfig())
             context.addInitializer(lambda db: versions.storeManagersVersions())
             # dump universe config as json into attributes (faster than YAML)
-            # `dimCfg` is to make freaking mypy happy
-            dimCfg: DimensionConfig = dimensionConfig
-            context.addInitializer(
-                lambda db: self._attributes.set(_DIMENSIONS_ATTR, dimCfg.dump(format="json") or "")
-            )
+            json = dimensionConfig.dump(format="json")
+            if json is not None:
+                # Convert Optional[str] to str for mypy
+                json_str = json
+                context.addInitializer(
+                    lambda db: self._attributes.set(_DIMENSIONS_ATTR, json_str)
+                )
+            else:
+                raise RuntimeError("Unexpectedly failed to serialize DimensionConfig to JSON")
 
         if not create:
             # verify that configured versions are compatible with schema
