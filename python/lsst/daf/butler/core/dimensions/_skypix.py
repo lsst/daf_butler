@@ -29,6 +29,7 @@ __all__ = (
 from types import MappingProxyType
 from typing import (
     AbstractSet,
+    Dict,
     Mapping,
     Optional,
     Type,
@@ -77,6 +78,9 @@ class SkyPixSystem(TopologicalFamily):
         super().__init__(name, TopologicalSpace.SPATIAL)
         self.maxLevel = maxLevel
         self.PixelizationClass = PixelizationClass
+        self._members: Dict[int, SkyPixDimension] = {}
+        for level in range(maxLevel + 1):
+            self._members[level] = SkyPixDimension(self, level)
 
     def choose(self, endpoints: NamedValueAbstractSet[TopologicalRelationshipEndpoint]) -> SkyPixDimension:
         # Docstring inherited from TopologicalFamily.
@@ -90,6 +94,9 @@ class SkyPixSystem(TopologicalFamily):
         if best is None:
             raise RuntimeError(f"No recognized endpoints for {self.name} in {endpoints}.")
         return best
+
+    def __getitem__(self, level: int) -> SkyPixDimension:
+        return self._members[level]
 
 
 class SkyPixDimension(Dimension):
@@ -223,6 +230,6 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
         )
         builder.topology[TopologicalSpace.SPATIAL].add(system)
         for level in range(maxLevel + 1):
-            dimension = SkyPixDimension(system, level)
+            dimension = system[level]
             builder.dimensions.add(dimension)
             builder.elements.add(dimension)
