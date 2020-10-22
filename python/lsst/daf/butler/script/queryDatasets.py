@@ -79,7 +79,7 @@ class _Table:
 
         refInfo = next(iter(self.datasetRefs))
         columnNames = ["type", "run", "id",
-                       *[str(item) for item in refInfo.datasetRef.dataId.keys()]]
+                       *[str(item) for item in refInfo.datasetRef.dataId.full.keys()]]
         if refInfo.uri:
             columnNames.append("URI")
 
@@ -88,7 +88,7 @@ class _Table:
             row = [datasetTypeName,
                    refInfo.datasetRef.run,
                    refInfo.datasetRef.id,
-                   *[str(value) for value in refInfo.datasetRef.dataId.values()]]
+                   *[str(value) for value in refInfo.datasetRef.dataId.full.values()]]
             if refInfo.uri:
                 row.append(refInfo.uri)
             rows.append(row)
