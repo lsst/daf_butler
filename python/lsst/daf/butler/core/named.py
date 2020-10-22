@@ -23,8 +23,11 @@ from __future__ import annotations
 __all__ = (
     "NamedKeyDict",
     "NamedKeyMapping",
-    "NameLookupMapping",
+    "NamedValueAbstractSet",
+    "NamedValueMutableSet",
     "NamedValueSet",
+    "NameLookupMapping",
+    "NameMappingSetView",
 )
 
 from abc import abstractmethod
@@ -101,6 +104,11 @@ class NamedKeyMapping(Mapping[K_co, V_co]):
             not a view.
         """
         return dict(zip(self.names, self.values()))
+
+    @abstractmethod
+    def keys(self) -> NamedValueAbstractSet[K_co]:
+        # TODO: docs
+        raise NotImplementedError()
 
     @abstractmethod
     def __getitem__(self, key: Union[str, K_co]) -> V_co:
@@ -219,8 +227,8 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
             del self._dict[key]
             del self._names[key.name]
 
-    def keys(self) -> KeysView[K]:
-        return self._dict.keys()
+    def keys(self) -> NamedValueAbstractSet[K]:
+        return NameMappingSetView(self._names)
 
     def values(self) -> ValuesView[V]:
         return self._dict.values()
@@ -294,6 +302,69 @@ class NamedValueAbstractSet(AbstractSet[K_co]):
             return default
 
 
+class NameMappingSetView(NamedValueAbstractSet[K_co]):
+    """A lightweight implementation of `NamedValueAbstractSet` backed by a
+    mapping from name to named object.
+
+    Parameters
+    ----------
+    mapping : `Mapping` [ `str`, `object` ]
+        Mapping this object will provide a view of.
+    """
+    def __init__(self, mapping: Mapping[str, K_co]):
+        self._mapping = mapping
+
+    __slots__ = ("_mapping",)
+
+    @property
+    def names(self) -> AbstractSet[str]:
+        # Docstring inherited from NamedValueAbstractSet.
+        return self._mapping.keys()
+
+    def asMapping(self) -> Mapping[str, K_co]:
+        # Docstring inherited from NamedValueAbstractSet.
+        return self._mapping
+
+    def __getitem__(self, key: Union[str, K_co]) -> K_co:
+        if isinstance(key, str):
+            return self._mapping[key]
+        else:
+            return self._mapping[key.name]
+
+    def __contains__(self, key: Any) -> bool:
+        return getattr(key, "name", key) in self._mapping
+
+    def __len__(self) -> int:
+        return len(self._mapping)
+
+    def __iter__(self) -> Iterator[K_co]:
+        return iter(self._mapping.values())
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, NamedValueAbstractSet):
+            return self.names == other.names
+        else:
+            return set(self._mapping.values()) == other
+
+    def __le__(self, other: AbstractSet[K]) -> bool:
+        if isinstance(other, NamedValueAbstractSet):
+            return self.names <= other.names
+        else:
+            return set(self._mapping.values()) <= other
+
+    def __ge__(self, other: AbstractSet[K]) -> bool:
+        if isinstance(other, NamedValueAbstractSet):
+            return self.names >= other.names
+        else:
+            return set(self._mapping.values()) >= other
+
+    def __str__(self) -> str:
+        return "{{{}}}".format(", ".join(str(element) for element in self))
+
+    def __repr__(self) -> str:
+        return f"NameMappingSetView({self._mapping})"
+
+
 class NamedValueMutableSet(NamedValueAbstractSet[K], MutableSet[K]):
     """An abstract base class that adds mutation interfaces to
     `NamedValueAbstractSet`.
@@ -365,7 +436,7 @@ class NamedValueMutableSet(NamedValueAbstractSet[K], MutableSet[K]):
         raise NotImplementedError()
 
 
-class NamedValueSet(NamedValueMutableSet[K]):
+class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
     """A custom mutable set class that requires elements to have a ``.name``
     attribute, which can then be used as keys in `dict`-like lookup.
 
@@ -392,58 +463,11 @@ class NamedValueSet(NamedValueMutableSet[K]):
     their iterator order is not the same.
     """
 
-    __slots__ = ("_dict",)
-
     def __init__(self, elements: Iterable[K] = ()):
-        self._dict = {element.name: element for element in elements}
-
-    @property
-    def names(self) -> KeysView[str]:
-        # Docstring inherited.
-        return self._dict.keys()
-
-    def asMapping(self) -> Mapping[str, K]:
-        # Docstring inherited.
-        return self._dict
-
-    def __contains__(self, key: Any) -> bool:
-        return getattr(key, "name", key) in self._dict
-
-    def __len__(self) -> int:
-        return len(self._dict)
-
-    def __iter__(self) -> Iterator[K]:
-        return iter(self._dict.values())
-
-    def __str__(self) -> str:
-        return "{{{}}}".format(", ".join(str(element) for element in self))
+        super().__init__({element.name: element for element in elements})
 
     def __repr__(self) -> str:
         return "NamedValueSet({{{}}})".format(", ".join(repr(element) for element in self))
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, NamedValueSet):
-            return self._dict.keys() == other._dict.keys()
-        else:
-            return NotImplemented
-
-    def __hash__(self) -> int:
-        return hash(frozenset(self._dict.keys()))
-
-    # As per Set's docs, overriding just __le__ and __ge__ for performance will
-    # cover the other comparisons, too.
-
-    def __le__(self, other: AbstractSet[K]) -> bool:
-        if isinstance(other, NamedValueSet):
-            return self._dict.keys() <= other._dict.keys()
-        else:
-            return NotImplemented
-
-    def __ge__(self, other: AbstractSet[K]) -> bool:
-        if isinstance(other, NamedValueSet):
-            return self._dict.keys() >= other._dict.keys()
-        else:
-            return NotImplemented
 
     def issubset(self, other: AbstractSet[K]) -> bool:
         return self <= other
@@ -451,21 +475,8 @@ class NamedValueSet(NamedValueMutableSet[K]):
     def issuperset(self, other: AbstractSet[K]) -> bool:
         return self >= other
 
-    def __getitem__(self, key: Union[str, K]) -> K:
-        if isinstance(key, str):
-            return self._dict[key]
-        else:
-            return self._dict[key.name]
-
-    def get(self, key: Union[str, K], default: Any = None) -> Any:
-        # Docstring inherited
-        if isinstance(key, str):
-            return self._dict.get(key, default)
-        else:
-            return self._dict.get(key.name, default)
-
     def __delitem__(self, name: str) -> None:
-        del self._dict[name]
+        del self._mapping[name]
 
     def add(self, element: K) -> None:
         """Add an element to the set.
@@ -475,11 +486,11 @@ class NamedValueSet(NamedValueMutableSet[K]):
         AttributeError
             Raised if the element does not have a ``.name`` attribute.
         """
-        self._dict[element.name] = element
+        self._mapping[element.name] = element
 
     def remove(self, element: Union[str, K]) -> Any:
         # Docstring inherited.
-        del self._dict[getattr(element, "name", element)]
+        del self._mapping[getattr(element, "name", element)]
 
     def discard(self, element: Union[str, K]) -> Any:
         # Docstring inherited.
@@ -493,7 +504,7 @@ class NamedValueSet(NamedValueMutableSet[K]):
         if not args:
             return super().pop()
         else:
-            return self._dict.pop(*args)
+            return self._mapping.pop(*args)
 
     def update(self, elements: Iterable[K]) -> None:
         """Add multple new elements to the set.
@@ -510,7 +521,7 @@ class NamedValueSet(NamedValueMutableSet[K]):
         """Return a new `NamedValueSet` with the same elements.
         """
         result = NamedValueSet.__new__(NamedValueSet)
-        result._dict = dict(self._dict)
+        result._mapping = dict(self._mapping)
         return result
 
     def freeze(self) -> NamedValueAbstractSet[K]:
@@ -525,6 +536,8 @@ class NamedValueSet(NamedValueMutableSet[K]):
             to a new variable (and considering any previous references
             invalidated) should allow for more accurate static type checking.
         """
-        if not isinstance(self._dict, MappingProxyType):
-            self._dict = MappingProxyType(self._dict)  # type: ignore
+        if not isinstance(self._mapping, MappingProxyType):
+            self._mapping = MappingProxyType(self._mapping)  # type: ignore
         return self
+
+    _mapping: Dict[str, K]

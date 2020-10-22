@@ -50,7 +50,7 @@ import warnings
 import astropy.time
 import sqlalchemy
 
-from ...core import DatabaseTimespanRepresentation, ddl, time_utils
+from ...core import TimespanDatabaseRepresentation, ddl, time_utils
 from .._exceptions import ConflictingDefinitionError
 
 _IN_SAVEPOINT_TRANSACTION = "IN_SAVEPOINT_TRANSACTION"
@@ -697,7 +697,7 @@ class Database(ABC):
         )
 
     def _convertExclusionConstraintSpec(self, table: str,
-                                        spec: Tuple[Union[str, Type[DatabaseTimespanRepresentation]], ...],
+                                        spec: Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...],
                                         metadata: sqlalchemy.MetaData) -> sqlalchemy.schema.Constraint:
         """Convert a `tuple` from `ddl.TableSpec.exclusion` into a SQLAlchemy
         constraint representation.
@@ -960,7 +960,7 @@ class Database(ABC):
             raise TypeError(f"Table {table.key} was not created by makeTemporaryTable.")
 
     @classmethod
-    def getTimespanRepresentation(cls) -> Type[DatabaseTimespanRepresentation]:
+    def getTimespanRepresentation(cls) -> Type[TimespanDatabaseRepresentation]:
         """Return a `type` that encapsulates the way `Timespan` objects are
         recommended to be stored in this database.
 
@@ -993,7 +993,7 @@ class Database(ABC):
            that code in our own interfaces to encapsulate timespan
            representations there.
         """
-        return DatabaseTimespanRepresentation.Compound
+        return TimespanDatabaseRepresentation.Compound
 
     def sync(self, table: sqlalchemy.schema.Table, *,
              keys: Dict[str, Any],

@@ -27,7 +27,7 @@ from typing import Dict, Iterable, Optional
 import sqlalchemy
 
 from ...core import (
-    DatabaseTimespanRepresentation,
+    TimespanDatabaseRepresentation,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
@@ -98,7 +98,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         assert regions is None, "This implementation does not handle spatial joins."
@@ -127,7 +127,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         for row in self._db.query(query.combine()):
             values = dict(row)
             if self.element.temporal is not None:
-                values[DatabaseTimespanRepresentation.NAME] = tsRepr.extract(values)
+                values[TimespanDatabaseRepresentation.NAME] = tsRepr.extract(values)
             yield RecordClass(**values)
 
     def insert(self, *records: DimensionRecord) -> None:
@@ -136,7 +136,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         if self.element.temporal is not None:
             tsRepr = self._db.getTimespanRepresentation()
             for row in elementRows:
-                timespan = row.pop(DatabaseTimespanRepresentation.NAME)
+                timespan = row.pop(TimespanDatabaseRepresentation.NAME)
                 tsRepr.update(timespan, result=row)
         with self._db.transaction():
             self._db.insert(self._table, *elementRows)
@@ -149,7 +149,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
             keys[name] = compared.pop(name)
         if self.element.temporal is not None:
             tsRepr = self._db.getTimespanRepresentation()
-            timespan = compared.pop(DatabaseTimespanRepresentation.NAME)
+            timespan = compared.pop(TimespanDatabaseRepresentation.NAME)
             tsRepr.update(timespan, result=compared)
         _, inserted = self._db.sync(
             self._table,
