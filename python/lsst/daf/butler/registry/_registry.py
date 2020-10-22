@@ -89,7 +89,7 @@ if TYPE_CHECKING:
 _LOG = logging.getLogger(__name__)
 
 # key for dimensions configuration in attributes table
-_DIMENSIONS_ATTR = "config:dimensions.yaml"
+_DIMENSIONS_ATTR = "config:dimensions.json"
 
 
 class Registry:
@@ -248,10 +248,10 @@ class Registry:
                 versions.checkManagersConfig()
                 versions.checkManagersVersions(writeable)
 
-                # get YAML as astring from database
-                dimensionsYaml = self._attributes.get(_DIMENSIONS_ATTR)
-                if dimensionsYaml is not None:
-                    dimensionConfig = DimensionConfig(Config.fromYaml(dimensionsYaml))
+                # get serialized as a string from database
+                dimensionsString = self._attributes.get(_DIMENSIONS_ATTR)
+                if dimensionsString is not None:
+                    dimensionConfig = DimensionConfig(Config.fromString(dimensionsString, format="json"))
                 else:
                     raise LookupError(f"Registry attribute {_DIMENSIONS_ATTR} is missing from database")
 
@@ -284,12 +284,16 @@ class Registry:
             # store managers and their versions in attributes table
             context.addInitializer(lambda db: versions.storeManagersConfig())
             context.addInitializer(lambda db: versions.storeManagersVersions())
-            # dump universe config as yaml into attributes
-            # `dimCfg` is to make freaking mypy happy
-            dimCfg: DimensionConfig = dimensionConfig
-            context.addInitializer(
-                lambda db: self._attributes.set(_DIMENSIONS_ATTR, dimCfg.dump() or "")
-            )
+            # dump universe config as json into attributes (faster than YAML)
+            json = dimensionConfig.dump(format="json")
+            if json is not None:
+                # Convert Optional[str] to str for mypy
+                json_str = json
+                context.addInitializer(
+                    lambda db: self._attributes.set(_DIMENSIONS_ATTR, json_str)
+                )
+            else:
+                raise RuntimeError("Unexpectedly failed to serialize DimensionConfig to JSON")
 
         if not create:
             # verify that configured versions are compatible with schema
