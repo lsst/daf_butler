@@ -30,7 +30,7 @@ import sqlalchemy.dialects.postgresql
 
 from ..interfaces import Database
 from ..nameShrinker import NameShrinker
-from ...core import DatabaseTimespanRepresentation, ddl, Timespan, time_utils
+from ...core import TimespanDatabaseRepresentation, ddl, Timespan, time_utils
 
 
 class PostgresqlDatabase(Database):
@@ -120,7 +120,7 @@ class PostgresqlDatabase(Database):
         return self._shrinker.expand(shrunk)
 
     def _convertExclusionConstraintSpec(self, table: str,
-                                        spec: Tuple[Union[str, Type[DatabaseTimespanRepresentation]], ...],
+                                        spec: Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...],
                                         metadata: sqlalchemy.MetaData) -> sqlalchemy.schema.Constraint:
         # Docstring inherited.
         args = []
@@ -129,17 +129,17 @@ class PostgresqlDatabase(Database):
             if isinstance(item, str):
                 args.append((sqlalchemy.schema.Column(item), "="))
                 names.append(item)
-            elif issubclass(item, DatabaseTimespanRepresentation):
+            elif issubclass(item, TimespanDatabaseRepresentation):
                 assert item is self.getTimespanRepresentation()
-                args.append((sqlalchemy.schema.Column(DatabaseTimespanRepresentation.NAME), "&&"))
-                names.append(DatabaseTimespanRepresentation.NAME)
+                args.append((sqlalchemy.schema.Column(TimespanDatabaseRepresentation.NAME), "&&"))
+                names.append(TimespanDatabaseRepresentation.NAME)
         return sqlalchemy.dialects.postgresql.ExcludeConstraint(
             *args,
             name=self.shrinkDatabaseEntityName("_".join(names)),
         )
 
     @classmethod
-    def getTimespanRepresentation(cls) -> Type[DatabaseTimespanRepresentation]:
+    def getTimespanRepresentation(cls) -> Type[TimespanDatabaseRepresentation]:
         # Docstring inherited.
         return _RangeTimespanRepresentation
 
@@ -243,8 +243,8 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
             return self.expr.op("&&", is_comparison=True)(other)
 
 
-class _RangeTimespanRepresentation(DatabaseTimespanRepresentation):
-    """An implementation of `DatabaseTimespanRepresentation` that uses
+class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
+    """An implementation of `TimespanDatabaseRepresentation` that uses
     `_RangeTimespanType` to store a timespan in a single
     PostgreSQL-specific field.
 
