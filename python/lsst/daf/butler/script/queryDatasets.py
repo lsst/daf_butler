@@ -141,7 +141,7 @@ def queryDatasets(repo, glob, collections, where, find_first, show_uri):
     datasets = butler.registry.queryDatasets(datasetType=dataset,
                                              collections=collections,
                                              where=where,
-                                             deduplicate=find_first)
+                                             findFirst=find_first)
 
     tables = defaultdict(_Table)
 

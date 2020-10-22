@@ -1212,7 +1212,7 @@ class Registry:
                       dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
                       dataId: Optional[DataId] = None,
                       where: Optional[str] = None,
-                      deduplicate: bool = False,
+                      findFirst: bool = False,
                       components: Optional[bool] = None,
                       **kwargs: Any) -> queries.DatasetQueryResults:
         """Query for and iterate over dataset references matching user-provided
@@ -1247,7 +1247,7 @@ class Registry:
             any column of a dimension table or (as a shortcut for the primary
             key column of a dimension table) dimension name.  See
             :ref:`daf_butler_dimension_expressions` for more information.
-        deduplicate : `bool`, optional
+        findFirst : `bool`, optional
             If `True` (`False` is default), for each result data ID, only
             yield one `DatasetRef` of each `DatasetType`, from the first
             collection in which a dataset of that dataset type appears
@@ -1276,7 +1276,7 @@ class Registry:
         ------
         TypeError
             Raised when the arguments are incompatible, such as when a
-            collection wildcard is passed when ``deduplicate`` is `True`.
+            collection wildcard is passed when ``findFirst`` is `True`.
 
         Notes
         -----
@@ -1291,7 +1291,7 @@ class Registry:
         `queryDatasets` with the returned data IDs passed as constraints.
         """
         # Standardize the collections expression.
-        if deduplicate:
+        if findFirst:
             collections = CollectionSearch.fromExpression(collections)
         else:
             collections = CollectionQuery.fromExpression(collections)
@@ -1338,7 +1338,7 @@ class Registry:
                     dimensions=dimensions,
                     dataId=standardizedDataId,
                     where=where,
-                    deduplicate=deduplicate
+                    findFirst=findFirst
                 )
                 if isinstance(parentResults, queries.ParentDatasetQueryResults):
                     chain.append(
@@ -1366,10 +1366,10 @@ class Registry:
         builder = self.makeQueryBuilder(summary)
         # Add the dataset subquery to the query, telling the QueryBuilder to
         # include the rank of the selected collection in the results only if we
-        # need to deduplicate.  Note that if any of the collections are
+        # need to findFirst.  Note that if any of the collections are
         # actually wildcard expressions, and we've asked for deduplication,
         # this will raise TypeError for us.
-        if not builder.joinDataset(datasetType, collections, isResult=True, deduplicate=deduplicate):
+        if not builder.joinDataset(datasetType, collections, isResult=True, findFirst=findFirst):
             return queries.ChainedDatasetQueryResults(())
         query = builder.finish()
         return queries.ParentDatasetQueryResults(self._db, query, components=[None])

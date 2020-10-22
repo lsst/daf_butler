@@ -96,7 +96,7 @@ class QueryBuilder:
         self._elements[element] = fromClause
 
     def joinDataset(self, datasetType: DatasetType, collections: Any, *,
-                    isResult: bool = True, deduplicate: bool = False) -> bool:
+                    isResult: bool = True, findFirst: bool = False) -> bool:
         """Add a dataset search or constraint to the query.
 
         Unlike other `QueryBuilder` join methods, this *must* be called
@@ -122,7 +122,7 @@ class QueryBuilder:
             only to constrain the data IDs returned by the query.
             `joinDataset` may be called with ``isResult=True`` at most one time
             on a particular `QueryBuilder` instance.
-        deduplicate : `bool`, optional
+        findFirst : `bool`, optional
             If `True` (`False` is default), only include the first match for
             each data ID, searching the given collections in order.  Requires
             that all entries in ``collections`` be regular strings, so there is
@@ -139,7 +139,7 @@ class QueryBuilder:
             return no results.
         """
         assert datasetType.dimensions.issubset(self.summary.requested)
-        if isResult and deduplicate:
+        if isResult and findFirst:
             collections = CollectionSearch.fromExpression(collections)
         else:
             collections = CollectionQuery.fromExpression(collections)
@@ -180,7 +180,7 @@ class QueryBuilder:
             if ssq is None:
                 continue
             assert {c.name for c in ssq.columns} == baseColumnNames
-            if deduplicate:
+            if findFirst:
                 ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
             subsubqueries.append(ssq.combine())
         if not subsubqueries:
@@ -188,7 +188,7 @@ class QueryBuilder:
         subquery = sqlalchemy.sql.union_all(*subsubqueries)
         columns: Optional[DatasetQueryColumns] = None
         if isResult:
-            if deduplicate:
+            if findFirst:
                 # Rewrite the subquery (currently a UNION ALL over
                 # per-collection subsubqueries) to select the rows with the
                 # lowest rank per data ID.  The block below will set subquery

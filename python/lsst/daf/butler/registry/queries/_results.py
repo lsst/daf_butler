@@ -254,7 +254,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             )
 
     def findDatasets(self, datasetType: Union[DatasetType, str], collections: Any, *,
-                     deduplicate: bool = True) -> ParentDatasetQueryResults:
+                     findFirst: bool = True) -> ParentDatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
         Parameters
@@ -267,7 +267,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             to search for the dataset, such as a `str`, `re.Pattern`, or
             iterable  thereof.  ``...`` can be used to return all collections.
             See :ref:`daf_butler_collection_expressions` for more information.
-        deduplicate : `bool`, optional
+        findFirst : `bool`, optional
             If `True` (default), for each result data ID, only yield one
             `DatasetRef`, from the first collection in which a dataset of that
             dataset type appears (according to the order of ``collections``
@@ -304,7 +304,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             components = [componentName]
         else:
             components = [None]
-        builder.joinDataset(datasetType, collections=collections, deduplicate=deduplicate)
+        builder.joinDataset(datasetType, collections=collections, findFirst=findFirst)
         query = builder.finish(joinMissing=False)
         return ParentDatasetQueryResults(db=self._db, query=query, components=components,
                                          records=self._records)
