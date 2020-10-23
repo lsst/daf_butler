@@ -111,10 +111,15 @@ class _Table:
         sort_late = []
         for dim in dimensions:
             if dim.spatial or dim.temporal:
-                sort_early.append(str(dim))
+                sort_early.extend(dim.required.names)
             else:
                 sort_late.append(str(dim))
         sort_keys = sort_first + sort_early + sort_late
+
+        # The required names above means that we have the possibility of
+        # repeats of sort keys. Now have to remove them
+        # (order is retained by dict creation).
+        sort_keys = list(dict.fromkeys(sort_keys).keys())
 
         dataset_table.sort(sort_keys)
         return dataset_table
