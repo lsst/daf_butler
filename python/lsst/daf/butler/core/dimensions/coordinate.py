@@ -306,10 +306,15 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
     def __lt__(self, other: Any) -> bool:
         # Allow DataCoordinate to be sorted
-        # The sort order itself does not matter, just that the order
-        # is reproducible. repr() already includes the keys/values for
-        # this coordinate so use that.
-        return repr(self) < repr(other)
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        # Form tuple of tuples for each DataCoordinate:
+        # Unlike repr() we only use required keys here to ensure that
+        # __eq__ can not be true simultaneously with __lt__ being true.
+        self_kv = tuple(self.items())
+        other_kv = tuple(other.items())
+
+        return self_kv < other_kv
 
     def __iter__(self) -> Iterator[Dimension]:
         return iter(self.keys())

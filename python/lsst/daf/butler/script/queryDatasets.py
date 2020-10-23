@@ -21,7 +21,7 @@
 
 from astropy.table import Table as AstropyTable
 from collections import defaultdict, namedtuple
-from numpy import array
+import numpy as np
 
 from .. import Butler
 from ..core.utils import globToRegex
@@ -78,22 +78,51 @@ class _Table:
             raise RuntimeError(f"No DatasetRefs were provided for dataset type {datasetTypeName}")
 
         refInfo = next(iter(self.datasetRefs))
+        dimensions = list(refInfo.datasetRef.dataId.full.keys())
         columnNames = ["type", "run", "id",
-                       *[str(item) for item in refInfo.datasetRef.dataId.keys()]]
+                       *[str(item) for item in dimensions]]
+
+        # Need to hint the column types for numbers since the per-row
+        # constructor of Table does not work this out on its own and sorting
+        # will not work properly without.
+        typeMap = {float: np.float, int: np.int64}
+        columnTypes = [None, None, np.int64,
+                       *[typeMap.get(type(value)) for value in refInfo.datasetRef.dataId.full.values()]]
         if refInfo.uri:
             columnNames.append("URI")
+            columnTypes.append(None)
 
         rows = []
-        for refInfo in sorted(self.datasetRefs):
+        for refInfo in self.datasetRefs:
             row = [datasetTypeName,
                    refInfo.datasetRef.run,
                    refInfo.datasetRef.id,
-                   *[str(value) for value in refInfo.datasetRef.dataId.values()]]
+                   *[value for value in refInfo.datasetRef.dataId.full.values()]]
             if refInfo.uri:
                 row.append(refInfo.uri)
             rows.append(row)
 
-        return AstropyTable(array(rows), names=columnNames)
+        dataset_table = AstropyTable(np.array(rows), names=columnNames, dtype=columnTypes)
+
+        # For sorting we want to ignore the id
+        # We also want to move temporal or spatial dimensions earlier
+        sort_first = ["type", "run"]
+        sort_early = []
+        sort_late = []
+        for dim in dimensions:
+            if dim.spatial or dim.temporal:
+                sort_early.extend(dim.required.names)
+            else:
+                sort_late.append(str(dim))
+        sort_keys = sort_first + sort_early + sort_late
+
+        # The required names above means that we have the possibility of
+        # repeats of sort keys. Now have to remove them
+        # (order is retained by dict creation).
+        sort_keys = list(dict.fromkeys(sort_keys).keys())
+
+        dataset_table.sort(sort_keys)
+        return dataset_table
 
 
 def queryDatasets(repo, glob, collections, where, find_first, show_uri):

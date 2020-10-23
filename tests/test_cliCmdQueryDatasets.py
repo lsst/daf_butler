@@ -57,6 +57,9 @@ class QueryDatasetsTest(unittest.TestCase):
         diff = io.StringIO()
         self.assertEqual(len(tables), len(expectedTables))
         for table, expected in zip(tables, expectedTables):
+            # Assert that we are testing what we think we are testing
+            self.assertIsInstance(table, AstropyTable)
+            self.assertIsInstance(expected, AstropyTable)
             self.assertTrue(report_diff_values(table, expected, fileobj=diff), msg=diff.getvalue())
 
     @staticmethod
@@ -140,35 +143,38 @@ class QueryDatasetsTest(unittest.TestCase):
 
         expectedTables = (
             AstropyTable(array((
-                ("test_metric_comp.data", "ingest/run", "1", "DummyCamComp", "423",
+                ("test_metric_comp.data", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
                  self.butler.datastore.root.join(
                      "ingest/run/test_metric_comp.data/"
                      "test_metric_comp_v00000423_fDummyCamComp_data.yaml")),
-                ("test_metric_comp.data", "ingest/run", "2", "DummyCamComp", "424",
+                ("test_metric_comp.data", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
                  self.butler.datastore.root.join(
                      "ingest/run/test_metric_comp.data/"
                      "test_metric_comp_v00000424_fDummyCamComp_data.yaml")))),
-                names=("type", "run", "id", "instrument", "visit", "URI")),
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                       "visit", "URI")),
             AstropyTable(array((
-                ("test_metric_comp.output", "ingest/run", "1", "DummyCamComp", "423",
+                ("test_metric_comp.output", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
                     self.butler.datastore.root.join(
                         "ingest/run/test_metric_comp.output/"
                         "test_metric_comp_v00000423_fDummyCamComp_output.yaml")),
-                ("test_metric_comp.output", "ingest/run", "2", "DummyCamComp", "424",
+                ("test_metric_comp.output", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
                     self.butler.datastore.root.join(
                         "ingest/run/test_metric_comp.output/"
                         "test_metric_comp_v00000424_fDummyCamComp_output.yaml")))),
-                names=("type", "run", "id", "instrument", "visit", "URI")),
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                       "visit", "URI")),
             AstropyTable(array((
-                ("test_metric_comp.summary", "ingest/run", "1", "DummyCamComp", "423",
+                ("test_metric_comp.summary", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
                     self.butler.datastore.root.join(
                         "ingest/run/test_metric_comp.summary/"
                         "test_metric_comp_v00000423_fDummyCamComp_summary.yaml")),
-                ("test_metric_comp.summary", "ingest/run", "2", "DummyCamComp", "424",
+                ("test_metric_comp.summary", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
                     self.butler.datastore.root.join(
                         "ingest/run/test_metric_comp.summary/"
                         "test_metric_comp_v00000424_fDummyCamComp_summary.yaml")))),
-                names=("type", "run", "id", "instrument", "visit", "URI"))
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                       "visit", "URI")),
         )
 
         self._assertTablesEqual(tables, expectedTables)
@@ -179,9 +185,9 @@ class QueryDatasetsTest(unittest.TestCase):
 
         expectedTables = (
             AstropyTable(array((
-                ("test_metric_comp", "ingest/run", "1", "DummyCamComp", "423"),
-                ("test_metric_comp", "ingest/run", "2", "DummyCamComp", "424"))),
-                names=("type", "run", "id", "instrument", "visit")
+                ("test_metric_comp", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423"),
+                ("test_metric_comp", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424"))),
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system", "visit")
             ),
         )
 
@@ -194,9 +200,9 @@ class QueryDatasetsTest(unittest.TestCase):
 
         expectedTables = (
             AstropyTable(array(
-                ("test_metric_comp", "ingest/run", "1", "DummyCamComp", "423")),
-                names=("type", "run", "id", "instrument", "visit")
-            )
+                ("test_metric_comp", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423")),
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system", "visit"),
+            ),
         )
 
         self._assertTablesEqual(tables, expectedTables)
@@ -222,13 +228,13 @@ class QueryDatasetsTest(unittest.TestCase):
 
         expectedTables = (
             AstropyTable(array((
-                ("test_metric_comp", "ingest/run", "1", "DummyCamComp", "423"),
-                ("test_metric_comp", "ingest/run", "2", "DummyCamComp", "424"))),
-                names=("type", "run", "id", "instrument", "visit")
+                ("test_metric_comp", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423"),
+                ("test_metric_comp", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424"))),
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system", "visit")
             ),
             AstropyTable(array((
-                ("alt_test_metric_comp", "ingest/run", "3", "DummyCamComp", "425"))),
-                names=("type", "run", "id", "instrument", "visit")
+                ("alt_test_metric_comp", "ingest/run", "3", "R", "DummyCamComp", "d-r", "1", "425"))),
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system", "visit")
             )
         )
 
@@ -254,52 +260,55 @@ class QueryDatasetsTest(unittest.TestCase):
         expectedTables = (
             AstropyTable(array(
                 (
-                    ("test_metric_comp.data", "foo", "3", "DummyCamComp", "424",
+                    ("test_metric_comp.data", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
                         self.butler.datastore.root.join(
                             "foo/test_metric_comp.data/"
                             "test_metric_comp_v00000424_fDummyCamComp_data.yaml")),
-                    ("test_metric_comp.data", "ingest/run", "1", "DummyCamComp", "423",
+                    ("test_metric_comp.data", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
                         self.butler.datastore.root.join(
                             "ingest/run/test_metric_comp.data/"
                             "test_metric_comp_v00000423_fDummyCamComp_data.yaml")),
-                    ("test_metric_comp.data", "ingest/run", "2", "DummyCamComp", "424",
+                    ("test_metric_comp.data", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
                         self.butler.datastore.root.join(
                             "ingest/run/test_metric_comp.data/"
                             "test_metric_comp_v00000424_fDummyCamComp_data.yaml")),
                 )),
-                names=("type", "run", "id", "instrument", "visit", "URI")),
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                       "visit", "URI")),
             AstropyTable(array(
                 (
-                    ("test_metric_comp.output", "foo", "3", "DummyCamComp", "424",
+                    ("test_metric_comp.output", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
                         self.butler.datastore.root.join(
                             "foo/test_metric_comp.output/"
                             "test_metric_comp_v00000424_fDummyCamComp_output.yaml")),
-                    ("test_metric_comp.output", "ingest/run", "1", "DummyCamComp", "423",
+                    ("test_metric_comp.output", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
                         self.butler.datastore.root.join(
                             "ingest/run/test_metric_comp.output/"
                             "test_metric_comp_v00000423_fDummyCamComp_output.yaml")),
-                    ("test_metric_comp.output", "ingest/run", "2", "DummyCamComp", "424",
+                    ("test_metric_comp.output", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
                         self.butler.datastore.root.join(
                             "ingest/run/test_metric_comp.output/"
                             "test_metric_comp_v00000424_fDummyCamComp_output.yaml")),
                 )),
-                names=("type", "run", "id", "instrument", "visit", "URI")),
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                       "visit", "URI")),
             AstropyTable(array(
                 (
-                    ("test_metric_comp.summary", "foo", "3", "DummyCamComp", "424",
+                    ("test_metric_comp.summary", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
                         self.butler.datastore.root.join(
                             "foo/test_metric_comp.summary/"
                             "test_metric_comp_v00000424_fDummyCamComp_summary.yaml")),
-                    ("test_metric_comp.summary", "ingest/run", "1", "DummyCamComp", "423",
+                    ("test_metric_comp.summary", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
                         self.butler.datastore.root.join(
                             "ingest/run/test_metric_comp.summary/"
                             "test_metric_comp_v00000423_fDummyCamComp_summary.yaml")),
-                    ("test_metric_comp.summary", "ingest/run", "2", "DummyCamComp", "424",
+                    ("test_metric_comp.summary", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
                         self.butler.datastore.root.join(
                             "ingest/run/test_metric_comp.summary/"
                             "test_metric_comp_v00000424_fDummyCamComp_summary.yaml")),
                 )),
-                names=("type", "run", "id", "instrument", "visit", "URI"))
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                       "visit", "URI")),
         )
 
         self._assertTablesEqual(tables, expectedTables)
@@ -314,39 +323,42 @@ class QueryDatasetsTest(unittest.TestCase):
         expectedTables = (
             AstropyTable(array(
                 (
-                    ("test_metric_comp.data", "foo", "3", "DummyCamComp", "424",
+                    ("test_metric_comp.data", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
                         self.butler.datastore.root.join(
                             "foo/test_metric_comp.data/test_metric_comp_v00000424_fDummyCamComp_data.yaml")),
-                    ("test_metric_comp.data", "ingest/run", "1", "DummyCamComp", "423",
+                    ("test_metric_comp.data", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
                         self.butler.datastore.root.join(
                             "ingest/run/test_metric_comp.data/"
                             "test_metric_comp_v00000423_fDummyCamComp_data.yaml")),
                 )),
-                names=("type", "run", "id", "instrument", "visit", "URI")),
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                       "visit", "URI")),
             AstropyTable(array(
                 (
-                    ("test_metric_comp.output", "foo", "3", "DummyCamComp", "424",
+                    ("test_metric_comp.output", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
                         self.butler.datastore.root.join(
                             "foo/test_metric_comp.output/"
                             "test_metric_comp_v00000424_fDummyCamComp_output.yaml")),
-                    ("test_metric_comp.output", "ingest/run", "1", "DummyCamComp", "423",
+                    ("test_metric_comp.output", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
                         self.butler.datastore.root.join(
                             "ingest/run/test_metric_comp.output/"
                             "test_metric_comp_v00000423_fDummyCamComp_output.yaml")),
                 )),
-                names=("type", "run", "id", "instrument", "visit", "URI")),
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                       "visit", "URI")),
             AstropyTable(array(
                 (
-                    ("test_metric_comp.summary", "foo", "3", "DummyCamComp", "424",
+                    ("test_metric_comp.summary", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
                         self.butler.datastore.root.join(
                             "foo/test_metric_comp.summary/"
                             "test_metric_comp_v00000424_fDummyCamComp_summary.yaml")),
-                    ("test_metric_comp.summary", "ingest/run", "1", "DummyCamComp", "423",
+                    ("test_metric_comp.summary", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
                         self.butler.datastore.root.join(
                             "ingest/run/test_metric_comp.summary/"
                             "test_metric_comp_v00000423_fDummyCamComp_summary.yaml")),
                 )),
-                names=("type", "run", "id", "instrument", "visit", "URI"))
+                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                       "visit", "URI")),
         )
 
         self._assertTablesEqual(tables, expectedTables)
