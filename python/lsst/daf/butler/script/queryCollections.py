@@ -19,11 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from astropy.table import Table
+import itertools
+from numpy import array
+
 from .. import Butler
 from ..core.utils import globToRegex
 
 
-def queryCollections(repo, glob, collection_type, flatten_chains, include_chains):
+def queryCollections(repo, glob, collection_type, chains):
     """Get the collections whose names match an expression.
 
     Parameters
@@ -36,19 +40,15 @@ def queryCollections(repo, glob, collection_type, flatten_chains, include_chains
         the dataset type names to search for.
     collection_type : `Iterable` [ `CollectionType` ], optional
         If provided, only return collections of these types.
-    flatten_chains : `bool`
-        If `True` (`False` is default), recursively yield the child collections
-        of matching `~CollectionType.CHAINED` collections.
-    include_chains : `bool` or `None`
-        If `True`, yield records for matching `~CollectionType.CHAINED`
-        collections.  Default is the opposite of ``flattenChains``: include
-        either CHAINED collections or their children, but not both.
+    chains : `str`
+        Must be one of "FLATTEN", "TABLE", or "TREE" (case sensitive).
+        Affects contents and formatting of results, see
+        ``cli.commands.query_collections``.
 
     Returns
     -------
-    collections : `dict` [`str`, [`str`]]
-        A dict whose key is "collections" and whose value is a list of
-        collection names.
+    collections : `astropy.table.Table`
+        A table containing information about collections.
     """
     butler = Butler(repo)
     expression = globToRegex(glob)
@@ -57,8 +57,71 @@ def queryCollections(repo, glob, collection_type, flatten_chains, include_chains
     kwargs = {}
     if expression:
         kwargs["expression"] = expression
-    collections = butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
-                                                   flattenChains=flatten_chains,
-                                                   includeChains=include_chains,
-                                                   **kwargs)
-    return {"collections": list(collections)}
+
+    if chains == "TABLE":
+        collectionNames = butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
+                                                           **kwargs)
+        collectionNames = list(collectionNames)  # Materialize list for multiple use.
+        collectionTypes = [butler.registry.getCollectionType(c).name for c in collectionNames]
+        collectionDefinitions = [butler.registry.getCollectionChain(name) if colType == "CHAINED" else ""
+                                 for name, colType in zip(collectionNames, collectionTypes)]
+
+        # Only add a definition column if at least one definition row is
+        # populated:
+        if any(collectionDefinitions):
+            return Table((collectionNames, collectionTypes, collectionDefinitions),
+                         names=("Name", "Type", "Definition"))
+        return Table((collectionNames, collectionTypes), names=("Name", "Type"))
+    elif chains == "TREE":
+        def getCollections(collectionName, nesting=0):
+            """Get a list of the name and type of the passed-in collection,
+            and its child collections, if it is a CHAINED collection. Child
+            collection names are indended from their parents by adding spaces
+            before the collection name.
+
+            Parameters
+            ----------
+            collectionName : `str`
+                The name of the collection to get.
+            nesting : `int`
+                The amount of indent to apply before each collection.
+
+            Returns
+            -------
+            collections : `list` [`tuple` [`str`, `str`]]
+                Tuples of the collection name and its type. Starts with the
+                passed-in collection, and if it is a CHAINED collection, each
+                of its children follows, and so on.
+            """
+            def nested(val):
+                stepDepth = 2
+                return " " * (stepDepth * nesting) + val
+
+            collectionType = butler.registry.getCollectionType(collectionName).name
+            if collectionType == "CHAINED":
+                # Get the child collections of the chained collection:
+                childCollections = list(butler.registry.getCollectionChain(collectionName))
+
+                # Fill in the child collections of the chained collection:
+                collections = itertools.chain(*[getCollections(child, nesting + 1)
+                                                for child in childCollections])
+
+                # Insert the chained (parent) collection at the beginning of
+                # the list, and return the list:
+                return [(nested(collectionName), "CHAINED")] + list(collections)
+            else:
+                return [(nested(collectionName), collectionType)]
+
+        collectionNames = butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
+                                                           **kwargs)
+        collections = itertools.chain(*[getCollections(name) for name in collectionNames])
+        return Table(array(list(collections)), names=("Name", "Type"))
+    elif chains == "FLATTEN":
+        collectionNames = list(butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
+                                                                flattenChains=True,
+                                                                **kwargs))
+        collectionTypes = [butler.registry.getCollectionType(c).name for c in collectionNames]
+        return Table((collectionNames,
+                      collectionTypes),
+                     names=("Name", "Type"))
+    raise RuntimeError(f"Value for --chains not recognized: {chains}")
