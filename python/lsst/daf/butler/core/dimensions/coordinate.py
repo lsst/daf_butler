@@ -309,9 +309,10 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         if not isinstance(other, type(self)):
             return NotImplemented
         # Form tuple of tuples for each DataCoordinate:
-        # names has guaranteed ordering
-        self_kv = tuple((str(d), self.get(d, "?")) for d in self.graph.dimensions.names)
-        other_kv = tuple((str(d), other.get(d, "?")) for d in other.graph.dimensions.names)
+        # Unlike repr() we only use required keys here to ensure that
+        # __eq__ can not be true simultaneously with __lt__ being true.
+        self_kv = tuple(self.items())
+        other_kv = tuple(other.items())
 
         return self_kv < other_kv
 
