@@ -24,12 +24,20 @@ Butler top level classes.
 """
 from __future__ import annotations
 
-__all__ = ("Butler", "ButlerValidationError")
+__all__ = (
+    "Butler",
+    "ButlerValidationError",
+    "PruneCollectionsArgsError",
+    "PurgeWithoutUnstorePruneCollectionsError",
+    "RunWithoutPurgePruneCollectionsError",
+    "PurgeUnsupportedPruneCollectionsError",
+)
 
-import os
+
 from collections import defaultdict
 import contextlib
 import logging
+import os
 from typing import (
     Any,
     ClassVar,
@@ -82,6 +90,40 @@ log = logging.getLogger(__name__)
 class ButlerValidationError(ValidationError):
     """There is a problem with the Butler configuration."""
     pass
+
+
+class PruneCollectionsArgsError(TypeError):
+    """Base class for errors relating to Butler.pruneCollections input
+    arguments.
+    """
+    pass
+
+
+class PurgeWithoutUnstorePruneCollectionsError(PruneCollectionsArgsError):
+    """Raised when purge and unstore are both required to be True, and
+    purge is True but unstore is False.
+    """
+
+    def __init__(self):
+        super().__init__("Cannot pass purge=True without unstore=True.")
+
+
+class RunWithoutPurgePruneCollectionsError(PruneCollectionsArgsError):
+    """Raised when pruning a RUN collection but purge is False."""
+
+    def __init__(self, collectionType):
+        self.collectionType = collectionType
+        super().__init__(f"Cannot prune RUN collection {self.collectionType.name} without purge=True.")
+
+
+class PurgeUnsupportedPruneCollectionsError(PruneCollectionsArgsError):
+    """Raised when purge is True but is not supported for the given
+    collection."""
+
+    def __init__(self, collectionType):
+        self.collectionType = collectionType
+        super().__init__(
+            f"Cannot prune {self.collectionType} collection {self.collectionType.name} with purge=True.")
 
 
 class Butler:
@@ -1068,19 +1110,21 @@ class Butler:
             Raised if the butler is read-only or arguments are mutually
             inconsistent.
         """
+
         # See pruneDatasets comments for more information about the logic here;
         # the cases are almost the same, but here we can rely on Registry to
         # take care everything but Datastore deletion when we remove the
         # collection.
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        if purge and not unstore:
-            raise TypeError("Cannot pass purge=True without unstore=True.")
         collectionType = self.registry.getCollectionType(name)
+        if purge and not unstore:
+            raise PurgeWithoutUnstorePruneCollectionsError()
         if collectionType is CollectionType.RUN and not purge:
-            raise TypeError(f"Cannot prune RUN collection {name} without purge=True.")
+            raise RunWithoutPurgePruneCollectionsError(collectionType)
         if collectionType is not CollectionType.RUN and purge:
-            raise TypeError(f"Cannot prune {collectionType.name} collection {name} with purge=True.")
+            raise PurgeUnsupportedPruneCollectionsError(collectionType)
+
         with self.registry.transaction():
             if unstore:
                 for ref in self.registry.queryDatasets(..., collections=name, findFirst=True):
