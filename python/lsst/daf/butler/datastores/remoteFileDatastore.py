@@ -153,7 +153,7 @@ class RemoteFileDatastore(FileLikeDatastore):
             with tempfile.NamedTemporaryFile(suffix=location.getExtension()) as tmpFile:
                 tmpLocation = Location(*os.path.split(tmpFile.name))
                 formatter._fileDescriptor.location = tmpLocation
-                log.debug("Writing dataset to temporary directory at ", tmpLocation.uri)
+                log.debug("Writing dataset to temporary directory at %s", tmpLocation.uri)
                 formatter.write(inMemoryDataset)
                 location.uri.transfer_from(tmpLocation.uri, transfer="copy", overwrite=True)
             log.debug("Successfully wrote dataset to %s via a temporary file.", location.uri)
