@@ -26,7 +26,7 @@
 
 from __future__ import annotations
 
-__all__ = ("DataCoordinate", "DataId")
+__all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue")
 
 from abc import abstractmethod
 import numbers
