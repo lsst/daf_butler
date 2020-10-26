@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import Iterator, List, Optional, Union
+from typing import AbstractSet, Iterator, List, Optional, Union
 
 from sqlalchemy.sql import ColumnElement
 
@@ -72,9 +72,9 @@ class QueryWhereExpression:
                 raise RuntimeError(f"Failed to parse user expression `{expression}'.") from exc
             visitor = InspectionVisitor(universe)
             assert self.tree is not None
-            self.tree.visit(visitor)
-            self.keys = visitor.keys
-            self.metadata = visitor.metadata
+            summary = self.tree.visit(visitor)
+            self.keys = summary.dimensions
+            self.metadata = summary.columns
         else:
             self.tree = None
             self.keys = NamedValueSet()
@@ -89,7 +89,7 @@ class QueryWhereExpression:
     (`NamedValueSet` of `Dimension`).
     """
 
-    metadata: NamedKeyDict[DimensionElement, List[str]]
+    metadata: NamedKeyDict[DimensionElement, AbstractSet[str]]
     """All dimension elements metadata fields referenced by the expression
     (`NamedKeyDict` mapping `DimensionElement` to a `set` of field names).
     """

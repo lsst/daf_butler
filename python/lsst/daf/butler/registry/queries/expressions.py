@@ -22,12 +22,28 @@ from __future__ import annotations
 
 __all__ = ()  # all symbols intentionally private; for internal package use.
 
-from typing import Any, List, Mapping, Optional, Tuple, TYPE_CHECKING, Union
+import dataclasses
+from typing import (
+    Any,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    TYPE_CHECKING,
+    Union,
+)
 
 import sqlalchemy
 from sqlalchemy.ext.compiler import compiles
 
-from ...core import DimensionUniverse, Dimension, DimensionElement, NamedKeyDict, NamedValueSet
+from ...core import (
+    DimensionUniverse,
+    Dimension,
+    DimensionElement,
+    NamedKeyDict,
+    NamedValueSet,
+)
 from ...core.ddl import AstropyTimeNsecTai
 from .exprParser import Node, TreeVisitor
 from ._structs import QueryColumns
@@ -159,7 +175,49 @@ def categorizeElementId(universe: DimensionUniverse, name: str) -> Tuple[Dimensi
         return dimension, None
 
 
-class InspectionVisitor(TreeVisitor[None]):
+@dataclasses.dataclass
+class InspectionSummary:
+    """Result object used by `InspectionVisitor` to gather information about
+    a parsed expression.
+    """
+
+    def merge(self, other: InspectionSummary) -> InspectionSummary:
+        """Merge ``other`` into ``self``, making ``self`` a summary of both
+        expression tree branches.
+
+        Parameters
+        ----------
+        other : `InspectionSummary`
+            The other summary object.
+
+        Returns
+        -------
+        self : `InspectionSummary`
+            The merged summary (updated in-place).
+        """
+        self.dimensions.update(other.dimensions)
+        for element, columns in other.columns.items():
+            self.columns.setdefault(element, set()).update(columns)
+        self.hasIngestDate = self.hasIngestDate or other.hasIngestDate
+        return self
+
+    dimensions: NamedValueSet[Dimension] = dataclasses.field(default_factory=NamedValueSet)
+    """Dimensions whose primary keys were referenced anywhere in this branch
+    (`NamedValueSet` [ `Dimension` ]).
+    """
+
+    columns: NamedKeyDict[DimensionElement, Set[str]] = dataclasses.field(default_factory=NamedKeyDict)
+    """Dimension element tables whose columns were referenced anywhere in this
+    branch (`NamedKeyDict` [ `DimensionElement`, `set` [ `str` ] ]).
+    """
+
+    hasIngestDate: bool = False
+    """Whether this expression includes the special dataset ingest date
+    identifier (`bool`).
+    """
+
+
+class InspectionVisitor(TreeVisitor[InspectionSummary]):
     """Implements TreeVisitor to identify dimension elements that need
     to be included in a query, prior to actually constructing a SQLAlchemy
     WHERE clause from it.
@@ -172,61 +230,71 @@ class InspectionVisitor(TreeVisitor[None]):
 
     def __init__(self, universe: DimensionUniverse):
         self.universe = universe
-        self.keys: NamedValueSet[Dimension] = NamedValueSet()
-        self.metadata: NamedKeyDict[DimensionElement, List[str]] = NamedKeyDict()
-        self.hasIngestDate: bool = False
 
-    def visitNumericLiteral(self, value: str, node: Node) -> None:
+    def visitNumericLiteral(self, value: str, node: Node) -> InspectionSummary:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
-        pass
+        return InspectionSummary()
 
-    def visitStringLiteral(self, value: str, node: Node) -> None:
+    def visitStringLiteral(self, value: str, node: Node) -> InspectionSummary:
         # Docstring inherited from TreeVisitor.visitStringLiteral
-        pass
+        return InspectionSummary()
 
-    def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> None:
+    def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> InspectionSummary:
         # Docstring inherited from TreeVisitor.visitTimeLiteral
-        pass
+        return InspectionSummary()
 
-    def visitIdentifier(self, name: str, node: Node) -> None:
+    def visitIdentifier(self, name: str, node: Node) -> InspectionSummary:
         # Docstring inherited from TreeVisitor.visitIdentifier
         if categorizeIngestDateId(name):
             self.hasIngestDate = True
-            return
+            return InspectionSummary(
+                hasIngestDate=True,
+            )
         element, column = categorizeElementId(self.universe, name)
-        if column is not None:
-            self.metadata.setdefault(element, []).append(column)
-        else:
+        if column is None:
             assert isinstance(element, Dimension)
-            self.keys.add(element)
+            return InspectionSummary(
+                dimensions=NamedValueSet({element}),
+            )
+        else:
+            return InspectionSummary(columns=NamedKeyDict({element: {column}}))
 
-    def visitUnaryOp(self, operator: str, operand: Any, node: Node) -> None:
+    def visitUnaryOp(self, operator: str, operand: InspectionSummary, node: Node
+                     ) -> InspectionSummary:
         # Docstring inherited from TreeVisitor.visitUnaryOp
-        pass
+        return operand
 
-    def visitBinaryOp(self, operator: str, lhs: Any, rhs: Any, node: Node) -> None:
+    def visitBinaryOp(self, operator: str, lhs: InspectionSummary, rhs: InspectionSummary, node: Node
+                      ) -> InspectionSummary:
         # Docstring inherited from TreeVisitor.visitBinaryOp
-        pass
+        return lhs.merge(rhs)
 
-    def visitIsIn(self, lhs: Any, values: List[Any], not_in: bool, node: Node) -> None:
+    def visitIsIn(self, lhs: InspectionSummary, values: List[InspectionSummary], not_in: bool, node: Node
+                  ) -> InspectionSummary:
         # Docstring inherited from TreeVisitor.visitIsIn
-        pass
+        for v in values:
+            lhs.merge(v)
+        return lhs
 
-    def visitParens(self, expression: Any, node: Node) -> None:
+    def visitParens(self, expression: InspectionSummary, node: Node) -> InspectionSummary:
         # Docstring inherited from TreeVisitor.visitParens
-        pass
+        return expression
 
-    def visitTupleNode(self, items: Tuple[Any, ...], node: Node) -> None:
+    def visitTupleNode(self, items: Tuple[InspectionSummary, ...], node: Node) -> InspectionSummary:
         # Docstring inherited from base class
-        pass
+        result = InspectionSummary()
+        for i in items:
+            result.merge(i)
+        return result
 
-    def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node) -> None:
+    def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node
+                          ) -> InspectionSummary:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
-        pass
+        return InspectionSummary()
 
-    def visitPointNode(self, ra: Any, dec: Any, node: Node) -> None:
+    def visitPointNode(self, ra: InspectionSummary, dec: InspectionSummary, node: Node) -> InspectionSummary:
         # Docstring inherited from base class
-        pass
+        return InspectionSummary()
 
 
 class ClauseVisitor(TreeVisitor[sqlalchemy.sql.ColumnElement]):
