@@ -40,6 +40,7 @@ from ...core import (
     NamedValueSet,
     SkyPixDimension,
 )
+from ...core.utils import cached_getter, immutable
 from ..interfaces import (
     CollectionManager,
     DatasetRecordStorageManager,
@@ -50,7 +51,7 @@ from ..interfaces import (
 from .exprParser import Node, ParserYacc  # type: ignore
 
 
-@dataclass
+@immutable
 class QueryWhereExpression:
     """A struct representing a parsed user-provided WHERE expression.
 
@@ -94,7 +95,7 @@ class QueryWhereExpression:
     """
 
 
-@dataclass
+@immutable
 class QuerySummary:
     """A struct that holds and categorizes the dimensions involved in a query.
 
@@ -157,7 +158,8 @@ class QuerySummary:
         """
         return self.requested.universe
 
-    @property
+    @property  # type: ignore
+    @cached_getter
     def spatial(self) -> NamedValueSet[DimensionElement]:
         """Dimension elements whose regions and skypix IDs should be included
         in the query (`NamedValueSet` of `DimensionElement`).
@@ -193,7 +195,8 @@ class QuerySummary:
             result.add(self.universe.commonSkyPix)
         return result
 
-    @property
+    @property  # type: ignore
+    @cached_getter
     def temporal(self) -> NamedValueSet[DimensionElement]:
         """Dimension elements whose timespans should be included in the
         query (`NamedValueSet` of `DimensionElement`).
@@ -215,7 +218,8 @@ class QuerySummary:
             return NamedValueSet()
         return result
 
-    @property
+    @property  # type: ignore
+    @cached_getter
     def mustHaveKeysJoined(self) -> DimensionGraph:
         """Dimensions whose primary keys must be used in the JOIN ON clauses
         of the query, even if their tables do not appear (`DimensionGraph`).
@@ -227,7 +231,8 @@ class QuerySummary:
         names = set(self.requested.names | self.expression.keys.names)
         return DimensionGraph(self.universe, names=names)
 
-    @property
+    @property  # type: ignore
+    @cached_getter
     def mustHaveTableJoined(self) -> NamedValueSet[DimensionElement]:
         """Dimension elements whose associated tables must appear in the
         query's FROM clause (`NamedValueSet` of `DimensionElement`).
