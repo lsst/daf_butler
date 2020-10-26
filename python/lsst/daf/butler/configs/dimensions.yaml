@@ -201,7 +201,7 @@ elements:
         name: id
         type: int
       -
-        name: name
+        name: obs_id
         type: string
         length: 64
     requires: [instrument]

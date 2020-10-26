@@ -283,11 +283,11 @@ class RegistryTests(ABC):
         # Insert a few more dimension records for the next test.
         registry.insertDimensionData(
             "exposure",
-            {"instrument": "Cam1", "id": 1, "name": "one", "physical_filter": "Cam1-G"},
+            {"instrument": "Cam1", "id": 1, "obs_id": "one", "physical_filter": "Cam1-G"},
         )
         registry.insertDimensionData(
             "exposure",
-            {"instrument": "Cam1", "id": 2, "name": "two", "physical_filter": "Cam1-G"},
+            {"instrument": "Cam1", "id": 2, "obs_id": "two", "physical_filter": "Cam1-G"},
         )
         registry.insertDimensionData(
             "visit_system",
@@ -682,12 +682,12 @@ class RegistryTests(ABC):
         )
         registry.insertDimensionData(
             "exposure",
-            dict(instrument="DummyCam", id=100, name="100", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=101, name="101", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=110, name="110", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=111, name="111", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=200, name="200", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=201, name="201", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=100, obs_id="100", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=101, obs_id="101", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=110, obs_id="110", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=111, obs_id="111", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=200, obs_id="200", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=201, obs_id="201", physical_filter="dummy_r"),
         )
         registry.insertDimensionData(
             "visit_definition",
