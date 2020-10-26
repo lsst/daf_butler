@@ -28,6 +28,7 @@ __all__ = ("butler_import",
            "query_dataset_types",
            "query_datasets",
            "remove_dataset_type",
+           "certify_calibrations",
            )
 
 
@@ -40,4 +41,5 @@ from .commands import (butler_import,
                        query_dataset_types,
                        query_datasets,
                        remove_dataset_type,
+                       certify_calibrations,
                        )

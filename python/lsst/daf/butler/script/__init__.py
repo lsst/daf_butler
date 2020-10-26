@@ -28,3 +28,4 @@ from .queryCollections import queryCollections
 from .queryDatasets import queryDatasets
 from .queryDatasetTypes import queryDatasetTypes
 from .removeDatasetType import removeDatasetType
+from .certifyCalibrations import certifyCalibrations
