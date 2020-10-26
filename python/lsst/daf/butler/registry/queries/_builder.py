@@ -386,12 +386,12 @@ class QueryBuilder:
         For internal use by `QueryBuilder` only; will be called (and should
         only by called) by `finish`.
         """
-        if self.summary.expression.tree is not None:
+        if self.summary.where.tree is not None:
             visitor = ClauseVisitor(self.summary.universe, self._columns, self._elements)
-            self._simpleQuery.where.append(self.summary.expression.tree.visit(visitor))
+            self._simpleQuery.where.append(self.summary.where.tree.visit(visitor))
         for dimension, columnsInQuery in self._columns.keys.items():
-            if dimension in self.summary.dataId.graph:
-                givenKey = self.summary.dataId[dimension]
+            if dimension in self.summary.where.dataId.graph:
+                givenKey = self.summary.where.dataId[dimension]
                 # Add a WHERE term for each column that corresponds to each
                 # key.  This is redundant with the JOIN ON clauses that make
                 # them equal to each other, but more constraints have a chance
@@ -401,22 +401,22 @@ class QueryBuilder:
             else:
                 # Dimension is not fully identified, but it might be a skypix
                 # dimension that's constrained by a given region.
-                if self.summary.whereRegion is not None and isinstance(dimension, SkyPixDimension):
+                if self.summary.where.region is not None and isinstance(dimension, SkyPixDimension):
                     # We know the region now.
                     givenSkyPixIds: List[int] = []
-                    for begin, end in dimension.pixelization.envelope(self.summary.whereRegion):
+                    for begin, end in dimension.pixelization.envelope(self.summary.where.region):
                         givenSkyPixIds.extend(range(begin, end))
                     for columnInQuery in columnsInQuery:
                         self._simpleQuery.where.append(columnInQuery.in_(givenSkyPixIds))
         # If we are given an dataId with a timespan, and there are one or more
         # timespans in the query that aren't given, add a WHERE expression for
         # each of them.
-        if self.summary.dataId.graph.temporal and self.summary.temporal:
+        if self.summary.where.dataId.graph.temporal and self.summary.temporal:
             # Timespan is known now.
-            givenInterval = self.summary.dataId.timespan
+            givenInterval = self.summary.where.dataId.timespan
             assert givenInterval is not None
             for element, intervalInQuery in self._columns.timespans.items():
-                assert element not in self.summary.dataId.graph.elements
+                assert element not in self.summary.where.dataId.graph.elements
                 self._simpleQuery.where.append(intervalInQuery.overlaps(givenInterval))
 
     def finish(self, joinMissing: bool = True) -> Query:
@@ -445,7 +445,7 @@ class QueryBuilder:
             return EmptyQuery(self.summary.requested.universe, managers=self._managers)
         return DirectQuery(graph=self.summary.requested,
                            uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
-                           whereRegion=self.summary.dataId.region,
+                           whereRegion=self.summary.where.dataId.region,
                            simpleQuery=self._simpleQuery,
                            columns=self._columns,
                            managers=self._managers)

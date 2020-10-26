@@ -227,7 +227,10 @@ def expandUniqueId(butler, partialId):
 
     query = " AND ".join(f"{dimension} = {value!r}" for dimension, value in partialId.items())
 
-    dataId = list(registry.queryDataIds(dimensions, where=query))
+    # Much of the purpose of this function is to do something we explicitly
+    # reject most of the time: query for a governor dimension (e.g. instrument)
+    # given something that depends on it (e.g. visit), hence check=False.
+    dataId = list(registry.queryDataIds(dimensions, where=query, check=False))
     if len(dataId) == 1:
         return dataId[0]
     else:
