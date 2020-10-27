@@ -157,6 +157,10 @@ class InspectionVisitor(TreeVisitor[None]):
         # Docstring inherited from TreeVisitor.visitRangeLiteral
         pass
 
+    def visitPointNode(self, ra: Any, dec: Any, node: Node) -> None:
+        # Docstring inherited from base class
+        pass
+
 
 class ClauseVisitor(TreeVisitor[sqlalchemy.sql.ColumnElement]):
     """Implements TreeVisitor to convert the tree into a SQLAlchemy WHERE
@@ -313,3 +317,10 @@ class ClauseVisitor(TreeVisitor[sqlalchemy.sql.ColumnElement]):
         # Just return a triple and let parent clauses handle it,
         # stride can be None which means the same as 1.
         return (start, stop, stride or 1)
+
+    def visitPointNode(self, ra: Any, dec: Any, node: Node) -> None:
+        # Docstring inherited from base class
+
+        # this is a placeholder for future extension, we enabled syntax but
+        # do not support actual use just yet.
+        raise NotImplementedError("POINT() function is not supported yet")

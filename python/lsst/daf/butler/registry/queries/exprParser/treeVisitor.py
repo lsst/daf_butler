@@ -180,3 +180,41 @@ class TreeVisitor(Generic[T]):
         node : `Node`
             Corresponding tree node, mostly useful for diagnostics.
         """
+
+    def visitFunctionCall(self, name: str, args: List[T], node: Node) -> T:
+        """Visit FunctionCall node.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the function.
+        args : `list` of `object`
+            Arguments to function, list of objects returned by methods of
+            this class as a result of transformation of function arguments.
+        node : `Node`
+            Corresponding tree node, mostly useful for diagnostics.
+
+        Notes
+        -----
+        For now we only have to support one specific function ``POINT()``
+        and for that function we define special node type `PointNode`.
+        `FunctionCall` node type represents a generic function and regular
+        visitors do not handle generic function. This non-abstract method
+        is a common implementation for those visitors which raises an
+        exception.
+        """
+        raise ValueError(f"Unknown function '{name}' in expression")
+
+    @abstractmethod
+    def visitPointNode(self, ra: T, dec: T, node: Node) -> T:
+        """Visit PointNode node.
+
+        Parameters
+        ----------
+        ra, dec : `object`
+            Representation of 'ra' and 'dec' values, objects returned by
+            methods of this class as a result of transformation of function
+            arguments.
+        node : `Node`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
