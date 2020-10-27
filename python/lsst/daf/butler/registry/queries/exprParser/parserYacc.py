@@ -35,7 +35,7 @@ import re
 #  Imports for other modules --
 # -----------------------------
 import astropy.time
-from .exprTree import (BinaryOp, Identifier, IsIn, NumericLiteral, Parens,
+from .exprTree import (BinaryOp, function_call, Identifier, IsIn, NumericLiteral, Parens,
                        RangeLiteral, StringLiteral, TimeLiteral, UnaryOp)
 from .ply import yacc
 from .parserLex import ParserLex
@@ -323,6 +323,11 @@ class ParserYacc:
         """
         p[0] = Identifier(p[1])
 
+    def p_simple_expr_function_call(self, p):
+        """ simple_expr : function_call
+        """
+        p[0] = p[1]
+
     def p_simple_expr_unary(self, p):
         """ simple_expr : ADD simple_expr %prec UPLUS
                         | SUB simple_expr %prec UMINUS
@@ -365,6 +370,24 @@ class ParserYacc:
         # RANGE_LITERAL value is tuple of three numbers
         start, stop, stride = p[1]
         p[0] = RangeLiteral(start, stop, stride)
+
+    def p_function_call(self, p):
+        """ function_call : SIMPLE_IDENTIFIER LPAREN expr_list RPAREN
+        """
+        p[0] = function_call(p[1], p[3])
+
+    def p_expr_list(self, p):
+        """ expr_list : expr_list COMMA expr
+                      | expr
+                      | empty
+        """
+        if len(p) == 2:
+            if p[1] is None:
+                p[0] = []
+            else:
+                p[0] = [p[1]]
+        else:
+            p[0] = p[1] + [p[3]]
 
     # ---------- end of all grammar rules ----------
 

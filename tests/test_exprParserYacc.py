@@ -294,6 +294,53 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertIsInstance(tree.operand, exprTree.Identifier)
         self.assertEqual(tree.operand.name, 'b')
 
+    def testFunctionCall(self):
+        """Tests for function calls
+        """
+        parser = ParserYacc()
+
+        tree = parser.parse("f()")
+        self.assertIsInstance(tree, exprTree.FunctionCall)
+        self.assertEqual(tree.name, "f")
+        self.assertEqual(tree.args, [])
+
+        tree = parser.parse("f1(a)")
+        self.assertIsInstance(tree, exprTree.FunctionCall)
+        self.assertEqual(tree.name, "f1")
+        self.assertEqual(len(tree.args), 1)
+        self.assertIsInstance(tree.args[0], exprTree.Identifier)
+        self.assertEqual(tree.args[0].name, "a")
+
+        tree = parser.parse("anything_goes('a', x+y, ((a AND b) or (C = D)), NOT T < 42., Z IN (1,2,3,4))")
+        self.assertIsInstance(tree, exprTree.FunctionCall)
+        self.assertEqual(tree.name, "anything_goes")
+        self.assertEqual(len(tree.args), 5)
+        self.assertIsInstance(tree.args[0], exprTree.StringLiteral)
+        self.assertIsInstance(tree.args[1], exprTree.BinaryOp)
+        self.assertIsInstance(tree.args[2], exprTree.Parens)
+        self.assertIsInstance(tree.args[3], exprTree.UnaryOp)
+        self.assertIsInstance(tree.args[4], exprTree.IsIn)
+
+        with self.assertRaises(ParseError):
+            parser.parse("f.ff()")
+
+    def testPointNode(self):
+        """Tests for POINT() function
+        """
+        parser = ParserYacc()
+
+        # POINT function makes special node type
+        tree = parser.parse("POINT(Object.ra, 0.0)")
+        self.assertIsInstance(tree, exprTree.PointNode)
+        self.assertIsInstance(tree.ra, exprTree.Identifier)
+        self.assertEqual(tree.ra.name, "Object.ra")
+        self.assertIsInstance(tree.dec, exprTree.NumericLiteral)
+        self.assertEqual(tree.dec.value, "0.0")
+
+        # it is not case sensitive
+        tree = parser.parse("Point(1, 1)")
+        self.assertIsInstance(tree, exprTree.PointNode)
+
     def testExpression(self):
         """Test for more or less complete expression"""
         parser = ParserYacc()
