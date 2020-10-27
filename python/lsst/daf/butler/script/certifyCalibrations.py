@@ -45,9 +45,9 @@ def certifyCalibrations(repo, input_collection, output_collection, dataset_type_
     datasetTypeName : `str`
         Name of the dataset type to certify.
     begin_date : `str`, optional
-        Date this calibration should start being used.
+        ISO-8601 date (TAI) this calibration should start being used.
     end_date : `str`, optional
-        Date this calibration should stop being used.
+        ISO-8601 date (TAI) this calibration should stop being used.
     search_all_inputs : `bool`, optional
         Search all children of the inputCollection if it is a CHAINED
         collection, instead of just the most recent one.
@@ -55,8 +55,8 @@ def certifyCalibrations(repo, input_collection, output_collection, dataset_type_
     butler = Butler(repo, writeable=True)
     registry = butler.registry
     timespan = Timespan(
-        begin=astropy.time.Time(begin_date) if begin_date is not None else None,
-        end=astropy.time.Time(end_date) if end_date is not None else None,
+        begin=astropy.time.Time(begin_date, scale='tai') if begin_date is not None else None,
+        end=astropy.time.Time(end_date, scale='tai') if end_date is not None else None,
     )
     if not search_all_inputs:
         try:

@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 __all__ = ("butler_import",
+           "certify_calibrations",
            "create",
            "config_dump",
            "config_validate",
@@ -28,11 +29,11 @@ __all__ = ("butler_import",
            "query_dataset_types",
            "query_datasets",
            "remove_dataset_type",
-           "certify_calibrations",
            )
 
 
 from .commands import (butler_import,
+                       certify_calibrations,
                        create,
                        config_dump,
                        config_validate,
@@ -41,5 +42,4 @@ from .commands import (butler_import,
                        query_dataset_types,
                        query_datasets,
                        remove_dataset_type,
-                       certify_calibrations,
                        )
