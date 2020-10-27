@@ -362,6 +362,45 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertIsInstance(tree.rhs.rhs, exprTree.StringLiteral)
         self.assertEqual(tree.rhs.rhs.value, 'i')
 
+    def testSubstitution(self):
+        """Test for identifier substitution"""
+        # substitution is not recursive, so we can swap id2/id3
+        idMap = {
+            "id1": exprTree.StringLiteral("id1 value"),
+            "id2": exprTree.Identifier("id3"),
+            "id3": exprTree.Identifier("id2"),
+            "POINT": exprTree.StringLiteral("not used"),
+            "OR": exprTree.StringLiteral("not used"),
+        }
+        parser = ParserYacc(idMap=idMap)
+
+        expression = ("id1 = 'v'")
+        tree = parser.parse(expression)
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, '=')
+        self.assertIsInstance(tree.lhs, exprTree.StringLiteral)
+        self.assertEqual(tree.lhs.value, "id1 value")
+
+        expression = ("id2 - id3")
+        tree = parser.parse(expression)
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, '-')
+        self.assertIsInstance(tree.lhs, exprTree.Identifier)
+        self.assertEqual(tree.lhs.name, "id3")
+        self.assertIsInstance(tree.rhs, exprTree.Identifier)
+        self.assertEqual(tree.rhs.name, "id2")
+
+        # reserved words are not substituted
+        expression = ("id2 OR id3")
+        tree = parser.parse(expression)
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, "OR")
+
+        # function names are not substituted
+        expression = ("POINT(1, 2)")
+        tree = parser.parse(expression)
+        self.assertIsInstance(tree, exprTree.PointNode)
+
     def testException(self):
         """Test for exceptional cases"""
 
