@@ -98,7 +98,7 @@ class ParserLexTestCase(unittest.TestCase):
         # not reserved
         token = "ISNOTIN"
         lexer.input(token)
-        self._assertToken(lexer.token(), "IDENTIFIER", token)
+        self._assertToken(lexer.token(), "SIMPLE_IDENTIFIER", token)
         self.assertIsNone(lexer.token())
 
     def testStringLiteral(self):
@@ -173,15 +173,17 @@ class ParserLexTestCase(unittest.TestCase):
         lexer = ParserLex.make_lexer()
 
         lexer.input("ID id _012 a_b_C")
-        self._assertToken(lexer.token(), "IDENTIFIER", "ID")
-        self._assertToken(lexer.token(), "IDENTIFIER", "id")
-        self._assertToken(lexer.token(), "IDENTIFIER", "_012")
-        self._assertToken(lexer.token(), "IDENTIFIER", "a_b_C")
+        self._assertToken(lexer.token(), "SIMPLE_IDENTIFIER", "ID")
+        self._assertToken(lexer.token(), "SIMPLE_IDENTIFIER", "id")
+        self._assertToken(lexer.token(), "SIMPLE_IDENTIFIER", "_012")
+        self._assertToken(lexer.token(), "SIMPLE_IDENTIFIER", "a_b_C")
         self.assertIsNone(lexer.token())
 
-        lexer.input("a.b _._")
-        self._assertToken(lexer.token(), "IDENTIFIER", "a.b")
-        self._assertToken(lexer.token(), "IDENTIFIER", "_._")
+        lexer.input("a.b a.b.c _._ _._._")
+        self._assertToken(lexer.token(), "QUALIFIED_IDENTIFIER", "a.b")
+        self._assertToken(lexer.token(), "QUALIFIED_IDENTIFIER", "a.b.c")
+        self._assertToken(lexer.token(), "QUALIFIED_IDENTIFIER", "_._")
+        self._assertToken(lexer.token(), "QUALIFIED_IDENTIFIER", "_._._")
         self.assertIsNone(lexer.token())
 
         lexer.input(".id")
@@ -189,12 +191,12 @@ class ParserLexTestCase(unittest.TestCase):
             lexer.token()
 
         lexer.input("id.")
-        self._assertToken(lexer.token(), "IDENTIFIER", "id")
+        self._assertToken(lexer.token(), "SIMPLE_IDENTIFIER", "id")
         with self.assertRaises(ParserLexError):
             lexer.token()
 
-        lexer.input("id.id.id")
-        self._assertToken(lexer.token(), "IDENTIFIER", "id.id")
+        lexer.input("id.id.id.id")
+        self._assertToken(lexer.token(), "QUALIFIED_IDENTIFIER", "id.id.id")
         with self.assertRaises(ParserLexError):
             lexer.token()
 
@@ -208,37 +210,37 @@ class ParserLexTestCase(unittest.TestCase):
                 "or visit IN (1..50:2)")
         tokens = (("LPAREN", "("),
                   ("LPAREN", "("),
-                  ("IDENTIFIER", "instrument"),
+                  ("SIMPLE_IDENTIFIER", "instrument"),
                   ("EQ", "="),
                   ("STRING_LITERAL", "HSC"),
                   ("AND", "AND"),
-                  ("IDENTIFIER", "detector"),
+                  ("SIMPLE_IDENTIFIER", "detector"),
                   ("NE", "!="),
                   ("NUMERIC_LITERAL", "9"),
                   ("RPAREN", ")"),
                   ("OR", "OR"),
-                  ("IDENTIFIER", "instrument"),
+                  ("SIMPLE_IDENTIFIER", "instrument"),
                   ("EQ", "="),
                   ("STRING_LITERAL", "CFHT"),
                   ("RPAREN", ")"),
                   ("AND", "AND"),
-                  ("IDENTIFIER", "tract"),
+                  ("SIMPLE_IDENTIFIER", "tract"),
                   ("EQ", "="),
                   ("NUMERIC_LITERAL", "8766"),
                   ("AND", "AND"),
-                  ("IDENTIFIER", "patch.cell_x"),
+                  ("QUALIFIED_IDENTIFIER", "patch.cell_x"),
                   ("GT", ">"),
                   ("NUMERIC_LITERAL", "5"),
                   ("AND", "AND"),
-                  ("IDENTIFIER", "patch.cell_y"),
+                  ("QUALIFIED_IDENTIFIER", "patch.cell_y"),
                   ("LT", "<"),
                   ("NUMERIC_LITERAL", "4"),
                   ("AND", "AND"),
-                  ("IDENTIFIER", "band"),
+                  ("SIMPLE_IDENTIFIER", "band"),
                   ("EQ", "="),
                   ("STRING_LITERAL", "i"),
                   ("OR", "or"),
-                  ("IDENTIFIER", "visit"),
+                  ("SIMPLE_IDENTIFIER", "visit"),
                   ("IN", "IN"),
                   ("LPAREN", "("),
                   ("RANGE_LITERAL", (1, 50, 2)),
@@ -260,17 +262,17 @@ class ParserLexTestCase(unittest.TestCase):
             self.assertEqual(exc.lineno, lineno)
 
         lexer = ParserLex.make_lexer()
-        expr = "a.b.c"
+        expr = "a.b.c.d"
         lexer.input(expr)
-        self._assertToken(lexer.token(), "IDENTIFIER", "a.b")
+        self._assertToken(lexer.token(), "QUALIFIED_IDENTIFIER", "a.b.c")
         with self.assertRaises(ParserLexError) as catcher:
             lexer.token()
-        _assertExc(catcher.exception, expr, ".c", 3, 1)
+        _assertExc(catcher.exception, expr, ".d", 5, 1)
 
         lexer = ParserLex.make_lexer()
         expr = "a \n& b"
         lexer.input(expr)
-        self._assertToken(lexer.token(), "IDENTIFIER", "a")
+        self._assertToken(lexer.token(), "SIMPLE_IDENTIFIER", "a")
         with self.assertRaises(ParserLexError) as catcher:
             lexer.token()
         _assertExc(catcher.exception, expr, "& b", 3, 2)
@@ -278,7 +280,7 @@ class ParserLexTestCase(unittest.TestCase):
         lexer = ParserLex.make_lexer()
         expr = "a\n=\n1e5.e2"
         lexer.input(expr)
-        self._assertToken(lexer.token(), "IDENTIFIER", "a")
+        self._assertToken(lexer.token(), "SIMPLE_IDENTIFIER", "a")
         self._assertToken(lexer.token(), "EQ", "=")
         self._assertToken(lexer.token(), "NUMERIC_LITERAL", "1e5")
         with self.assertRaises(ParserLexError) as catcher:
