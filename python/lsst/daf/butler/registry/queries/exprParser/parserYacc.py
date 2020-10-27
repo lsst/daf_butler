@@ -190,6 +190,9 @@ class ParserEOFError(ParserYaccError):
 
 class ParserYacc:
     """Class which defines PLY grammar.
+
+    Based on MySQL grammar for expressions
+    (https://dev.mysql.com/doc/refman/5.7/en/expressions.html).
     """
 
     def __init__(self, **kwargs):
@@ -315,7 +318,8 @@ class ParserYacc:
         p[0] = p[1]
 
     def p_simple_expr_id(self, p):
-        """ simple_expr : IDENTIFIER
+        """ simple_expr : SIMPLE_IDENTIFIER
+                        | QUALIFIED_IDENTIFIER
         """
         p[0] = Identifier(p[1])
 
