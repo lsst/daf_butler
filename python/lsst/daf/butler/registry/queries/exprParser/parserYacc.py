@@ -193,14 +193,26 @@ class ParserYacc:
 
     Based on MySQL grammar for expressions
     (https://dev.mysql.com/doc/refman/5.7/en/expressions.html).
+
+    Parameters
+    ----------
+    idMap : `collections.abc.Mapping` [ `str`, `Node` ], optional
+        Mapping that provides substitutions for identifiers in the expression.
+        The key in the map is the identifier name, the value is the
+        `exprTree.Node` instance that will replace identifier in the full
+        expression. If identifier does not exist in the mapping then
+        `Identifier` is inserted into parse tree.
+    **kwargs
+        optional keyword arguments that are passed to `yacc.yacc` constructor.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, idMap=None, **kwargs):
 
         kw = dict(write_tables=0, debug=False)
         kw.update(kwargs)
 
         self.parser = yacc.yacc(module=self, **kw)
+        self._idMap = idMap or {}
 
     def parse(self, input, lexer=None, debug=False, tracking=False):
         """Parse input expression ad return parsed tree object.
@@ -321,7 +333,10 @@ class ParserYacc:
         """ simple_expr : SIMPLE_IDENTIFIER
                         | QUALIFIED_IDENTIFIER
         """
-        p[0] = Identifier(p[1])
+        node = self._idMap.get(p[1])
+        if node is None:
+            node = Identifier(p[1])
+        p[0] = node
 
     def p_simple_expr_function_call(self, p):
         """ simple_expr : function_call
