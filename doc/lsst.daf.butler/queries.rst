@@ -86,9 +86,9 @@ false (if it is a valid expression). Expression can contain a bunch of
 standard logical operators, comparisons, literals, and identifiers which are
 references to registry objects.
 
-A few words in expression grammar are reserved: ``AND``, ``OR``, ``NOT`` and
-``IN``. Reserved words are not case sensitive and can appear in either upper
-or lower case, or a mixture of both.
+A few words in expression grammar are reserved: ``AND``, ``OR``, ``NOT``,
+``IN``, and ``OVERLAPS``. Reserved words are not case sensitive and can appear
+in either upper or lower case, or a mixture of both.
 
 Language operator precedence rules are the same as for the other languages
 like C++ or Python. When in doubt use grouping operators (parentheses) for
@@ -194,17 +194,21 @@ IN operator. Its general syntax looks like:
 
 .. code-block:: sql
 
-    <expression> IN ( <literal1>[, <literal2>, ... ])
-    <expression> NOT IN ( <literal1>[, <literal2>, ... ])
+    <expression> IN ( <item1>[, <item2>, ... ])
+    <expression> NOT IN ( <item1>[, <item2>, ... ])
 
-where each item in the right hand side list is one of the supported literals.
-Unlike regular SQL IN operator the list cannot contain expressions, only
-literals. The extension to regular SQL IN is that literals can be range
-literals as defined above. It can also be a mixture of integer literals and
-range literals (language allows mixing of string literals and ranges but it
-may not make sense when translated to SQL).
+where each item in the right hand side list is one of the supported literals
+or identifiers. Unlike regular SQL IN operator the list cannot contain
+expressions, only literals or identifiers. The extension to regular SQL IN is
+that literals can be range literals as defined above. The query language
+allows mixing of different types of literals and ranges but it may not make
+sense to mix them when expressions is translated to SQL.
 
-For an example of range usage, these two expressions are equivalent:
+Regular use of ``IN`` operator is for checking whether an integer number is in
+set of numbers. For that case the list on right side can be a mixture of
+integer literals, identifiers that represent integers, and range literals.
+
+For an example of this type of usage, these two expressions are equivalent:
 
 .. code-block:: sql
 
@@ -217,6 +221,62 @@ as are these:
 
    visit NOT IN (100, 110, 130..145:5)
    visit Not In (100, 110, 130, 135, 140, 145)
+
+Another usage of ``IN`` operator is for checking whether a timestamp or a time
+range is contained wholly in other time range. Time range in this case can be
+specified as a tuple of two time literals or identifers each representing a
+timestamp, or as a single identifier representing a time range. In case a
+single identifier appears on the right side of ``IN`` it has to be enclosed
+in parentheses.
+
+Here are few examples for checking containment in a time range:
+
+.. code-block:: sql
+
+    -- using literals for both timestamp and time range
+    T'2020-01-01' IN (T'2019-01-01', '2020-01-01')
+    (T'2020-01-01', T'2020-02-01') NOT IN (T'2019-01-01', '2020-01-01')
+
+    -- using identifiers for each timestamp in a time range
+    T'2020-01-01' IN (interval.begin, interval.end)
+    T'2020-01-01' NOT IN (interval_id)
+
+    -- identifier on left side can represent either a timestamp or time range
+    timestamp_id IN (interval.begin, interval.end)
+    range_id NOT IN (interval_id)
+
+The same ``IN`` operator can be used for checking containment of a point or
+region inside other region. Presently there are no special literal type for
+regions, so this can only be done with regions represented by identifiers. Few
+examples of region containment:
+
+.. code-block:: sql
+
+    POINT(ra, dec) IN (region1)
+    region2 NOT IN (region1)
+
+
+OVERLAPS operator
+^^^^^^^^^^^^^^^^^
+
+The ``OVERLAPS`` operator checks for overlapping time ranges or regions, its
+argument have to have consistent types. Like with ``IN`` operator time ranges
+can be represented with a tuple of two timestamps (literals or identifiers) or
+with a single identifier. Regions can only be used as identifiers.
+``OVERLAPS`` syntax is similar to ``IN`` but it does not require  parentheses
+on right hand side when there is a single identifier representing a time range
+or a region.
+
+Few examples of the syntax:
+
+.. code-block:: sql
+
+    (T'2020-01-01', T'2022-01-01') OVERLAPS (T'2019-01-01', '2021-01-01')
+    (interval.begin, interval.end) OVERLAPS interval_2
+    interval_1 OVERLAPS interval_2
+
+    NOT (region_1 OVERLAPS region_2)
+
 
 Boolean operators
 ^^^^^^^^^^^^^^^^^
@@ -235,6 +295,19 @@ Parentheses should be used to change evaluation order (precedence) of
 sub-expressions in the full expression.
 
 
+Function call
+^^^^^^^^^^^^^
+
+Function call syntax is similar to other languages, expression for call
+consists of an identifier followed by zero or more comma-separated arguments
+enclosed in parentheses (e.g. ``func(1, 2, 3)``). An argument to a function
+can be any expression.
+
+Presently there only one construct that uses this syntax, ``POINT(ra, dec)``
+is function which declares (or returns) sky coordinates similarly to ADQL
+syntax. Name of the ``POINT`` function is not case-sensitive.
+
+
 .. _time-literals-syntax:
 
 Time literals
@@ -246,7 +319,7 @@ supported time formats. For internal time representation Registry uses
 `astropy.time.Time`_ class and parser converts time string into an instance
 of that class. For string-based time formats such as ISO the conversion
 of a time string to an object is done by the ``Time`` constructor. The syntax
-of the string could be anything that is suported by ``astropy``, for details
+of the string could be anything that is supported by ``astropy``, for details
 see `astropy.time`_ reference. For numeric time formats such as MJD the parser
 converts string to a floating point number and passes that number to ``Time``
 constructor.
@@ -261,9 +334,9 @@ Parser guesses time format from the content of the time string:
   "fits" format.
 - If string matches ``year:day:time`` format then "yday" is used.
 
-The format can be specified explicitely by prefixing time string with a format
+The format can be specified explicitly by prefixing time string with a format
 name and slash, e.g. ``T'mjd/58938.515'``. Any of the formats supported by
-``astropy`` can be specified explicitely.
+``astropy`` can be specified explicitly.
 
 Time scale that parser passes to ``Time`` constructor depends on time format,
 by default parser uses:
@@ -272,7 +345,7 @@ by default parser uses:
 - "tt" scale for "cxcsec" format,
 - "tai" scale for anything else.
 
-Default scale can be overriden by adding a suffix to time string consisting
+Default scale can be overridden by adding a suffix to time string consisting
 of a slash and time scale name, e.g. ``T'58938.515/tai'``. Any combination of
 explicit time format and time scale can be given at the same time, e.g.
 ``T'58938.515'``, ``T'mjd/58938.515'``, ``T'58938.515/tai'``, and
