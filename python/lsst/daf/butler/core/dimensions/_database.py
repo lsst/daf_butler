@@ -24,6 +24,7 @@ from __future__ import annotations
 __all__ = (
     "DatabaseDimension",
     "DatabaseDimensionCombination",
+    "DatabaseDimensionElement",
 )
 
 from types import MappingProxyType
@@ -146,7 +147,32 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
                                    f"{self._space.name} families: {other.name} and {family.name}.")
 
 
-class DatabaseDimension(Dimension):
+class DatabaseDimensionElement(DimensionElement):
+    """An intermediate base class for `DimensionElement` classes whose
+    instances that map directly to a database table or query.
+    """
+
+    def __init__(self, name: str):
+        super().__init__(name)
+        self._topology: Dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
+
+    @property
+    def topology(self) -> Mapping[TopologicalSpace, DatabaseTopologicalFamily]:
+        # Docstring inherited from TopologicalRelationshipEndpoint
+        return MappingProxyType(self._topology)
+
+    @property
+    def spatial(self) -> Optional[DatabaseTopologicalFamily]:
+        # Docstring inherited from TopologicalRelationshipEndpoint
+        return self.topology.get(TopologicalSpace.SPATIAL)
+
+    @property
+    def temporal(self) -> Optional[DatabaseTopologicalFamily]:
+        # Docstring inherited from TopologicalRelationshipEndpoint
+        return self.topology.get(TopologicalSpace.TEMPORAL)
+
+
+class DatabaseDimension(Dimension, DatabaseDimensionElement):
     """A `Dimension` implementation that maps directly to a database table or
     query.
 
@@ -179,10 +205,10 @@ class DatabaseDimension(Dimension):
 
     Notes
     -----
-    Similarly, `DatabaseDimension` objects may belong to a `TopologicalFamily`,
-    but it is the responsibility of
-    `DatabaseTopologicalFamilyConstructionVisitor` to update the
-    `~TopologicalRelationshipEndpoint.topology` attribute of their members.
+    `DatabaseDimension` objects may belong to a `TopologicalFamily`, but it is
+    the responsibility of `DatabaseTopologicalFamilyConstructionVisitor` to
+    update the `~TopologicalRelationshipEndpoint.topology` attribute of their
+    members.
     """
     def __init__(
         self,
@@ -198,7 +224,6 @@ class DatabaseDimension(Dimension):
         required.add(self)
         self._required = required.freeze()
         self._implied = implied
-        self._topology: Dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
         self._metadata = metadata
         self._cached = cached
         self._viewOf = viewOf
@@ -213,11 +238,6 @@ class DatabaseDimension(Dimension):
     def implied(self) -> NamedValueAbstractSet[Dimension]:
         # Docstring inherited from DimensionElement.
         return self._implied
-
-    @property
-    def topology(self) -> Mapping[TopologicalSpace, DatabaseTopologicalFamily]:
-        # Docstring inherited from TopologicalRelationshipEndpoint
-        return MappingProxyType(self._topology)
 
     @property
     def metadata(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
@@ -240,7 +260,7 @@ class DatabaseDimension(Dimension):
         return self._uniqueKeys
 
 
-class DatabaseDimensionCombination(DimensionCombination):
+class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElement):
     """A `DimensionCombination` implementation that maps directly to a database
     table or query.
 
