@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 __all__ = ("butler_import",
+           "certify_calibrations",
            "create",
            "config_dump",
            "config_validate",
@@ -32,6 +33,7 @@ __all__ = ("butler_import",
 
 
 from .commands import (butler_import,
+                       certify_calibrations,
                        create,
                        config_dump,
                        config_validate,

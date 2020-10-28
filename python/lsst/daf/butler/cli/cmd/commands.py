@@ -202,3 +202,23 @@ def query_datasets(**kwargs):
         print("")
         table.pprint_all()
     print("")
+
+
+@click.command()
+@repo_argument(required=True)
+@click.argument('input-collection')
+@click.argument('output-collection')
+@click.argument('dataset-type-name')
+@click.option("--begin-date", type=str, default=None,
+              help=unwrap("""ISO-8601 datetime (TAI) of the beginning of the validity range for the
+                          certified calibrations."""))
+@click.option("--end-date", type=str, default=None,
+              help=unwrap("""ISO-8601 datetime (TAI) of the end of the validity range for the
+                          certified calibrations."""))
+@click.option("--search-all-inputs", is_flag=True, default=False,
+              help=unwrap("""Search all children of the inputCollection if it is a CHAINED collection,
+                          instead of just the most recent one."""))
+def certify_calibrations(*args, **kwargs):
+    """Certify calibrations in a repository.
+    """
+    cli_handle_exception(script.certifyCalibrations, *args, **kwargs)
