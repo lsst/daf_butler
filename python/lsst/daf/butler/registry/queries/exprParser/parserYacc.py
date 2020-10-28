@@ -36,7 +36,7 @@ import re
 # -----------------------------
 import astropy.time
 from .exprTree import (BinaryOp, function_call, Identifier, IsIn, NumericLiteral, Parens,
-                       RangeLiteral, StringLiteral, TimeLiteral, UnaryOp)
+                       RangeLiteral, StringLiteral, TimeLiteral, TupleNode, UnaryOp)
 from .ply import yacc
 from .parserLex import ParserLex
 
@@ -353,6 +353,13 @@ class ParserYacc:
         """ simple_expr : LPAREN expr RPAREN
         """
         p[0] = Parens(p[2])
+
+    def p_simple_expr_tuple(self, p):
+        """ simple_expr : LPAREN expr COMMA expr RPAREN
+        """
+        # For now we only support tuples with two items,
+        # these are used for time ranges.
+        p[0] = TupleNode((p[2], p[4]))
 
     def p_literal_num(self, p):
         """ literal : NUMERIC_LITERAL

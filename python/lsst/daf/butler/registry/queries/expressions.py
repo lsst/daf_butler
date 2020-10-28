@@ -153,6 +153,10 @@ class InspectionVisitor(TreeVisitor[None]):
         # Docstring inherited from TreeVisitor.visitParens
         pass
 
+    def visitTupleNode(self, items: Tuple[Any, ...], node: Node) -> None:
+        # Docstring inherited from base class
+        pass
+
     def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
         pass
@@ -309,6 +313,11 @@ class ClauseVisitor(TreeVisitor[sqlalchemy.sql.ColumnElement]):
                     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitParens
         return expression.self_group()
+
+    def visitTupleNode(self, items: Tuple[sqlalchemy.sql.ColumnElement, ...], node: Node
+                       ) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited from base class
+        return sqlalchemy.sql.expression.Tuple(*items)
 
     def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node
                           ) -> sqlalchemy.sql.ColumnElement:
