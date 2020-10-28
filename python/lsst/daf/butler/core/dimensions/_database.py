@@ -22,6 +22,8 @@
 from __future__ import annotations
 
 __all__ = (
+    "DatabaseDimension",
+    "DatabaseDimensionCombination",
 )
 
 from types import MappingProxyType
@@ -47,9 +49,9 @@ if TYPE_CHECKING:
     from ._governor import GovernorDimension
 
 
-class StandardTopologicalFamily(TopologicalFamily):
-    """A `TopologicalFamily` implementation for the `StandardDimension` and
-    `StandardDimensionCombination` objects that have direct database
+class DatabaseTopologicalFamily(TopologicalFamily):
+    """A `TopologicalFamily` implementation for the `DatabaseDimension` and
+    `DatabaseDimensionCombination` objects that have direct database
     representations.
 
     Parameters
@@ -105,8 +107,8 @@ class StandardTopologicalFamily(TopologicalFamily):
     """
 
 
-class StandardTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor):
-    """A construction visitor for `StandardTopologicalFamily`.
+class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor):
+    """A construction visitor for `DatabaseTopologicalFamily`.
 
     This visitor depends on (and is thus visited after) its members.
 
@@ -130,21 +132,21 @@ class StandardTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
     def visit(self, builder: DimensionConstructionBuilder) -> None:
         # Docstring inherited from DimensionConstructionVisitor.
         members = NamedValueSet(builder.elements[name] for name in self._members)
-        family = StandardTopologicalFamily(
+        family = DatabaseTopologicalFamily(
             self.name,
             self._space,
             members=members.freeze()
         )
         builder.topology[self._space].add(family)
         for member in members:
-            assert isinstance(member, (StandardDimension, StandardDimensionCombination))
+            assert isinstance(member, (DatabaseDimension, DatabaseDimensionCombination))
             other = member._topology.setdefault(self._space, family)
             if other is not family:
                 raise RuntimeError(f"{member.name} is declared to be a member of (at least) two "
                                    f"{self._space.name} families: {other.name} and {family.name}.")
 
 
-class StandardDimension(Dimension):
+class DatabaseDimension(Dimension):
     """A `Dimension` implementation that maps directly to a database table or
     query.
 
@@ -167,7 +169,7 @@ class StandardDimension(Dimension):
         Whether to cache the records of this dimension in memory when they are
         fetched from the database.
     viewOf : `str`, optional
-        Name of another `StandardDimension` or `StandardDimensionCombination`
+        Name of another `DatabaseDimension` or `DatabaseDimensionCombination`
         whose records this dimension's records summarize.
     uniqueKeys : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
         Fields that can each be used to uniquely identify this dimension (given
@@ -177,9 +179,9 @@ class StandardDimension(Dimension):
 
     Notes
     -----
-    Similarly, `StandardDimension` objects may belong to a `TopologicalFamily`,
+    Similarly, `DatabaseDimension` objects may belong to a `TopologicalFamily`,
     but it is the responsibility of
-    `StandardTopologicalFamilyConstructionVisitor` to update the
+    `DatabaseTopologicalFamilyConstructionVisitor` to update the
     `~TopologicalRelationshipEndpoint.topology` attribute of their members.
     """
     def __init__(
@@ -196,7 +198,7 @@ class StandardDimension(Dimension):
         required.add(self)
         self._required = required.freeze()
         self._implied = implied
-        self._topology: Dict[TopologicalSpace, StandardTopologicalFamily] = {}
+        self._topology: Dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
         self._metadata = metadata
         self._cached = cached
         self._viewOf = viewOf
@@ -213,7 +215,7 @@ class StandardDimension(Dimension):
         return self._implied
 
     @property
-    def topology(self) -> Mapping[TopologicalSpace, StandardTopologicalFamily]:
+    def topology(self) -> Mapping[TopologicalSpace, DatabaseTopologicalFamily]:
         # Docstring inherited from TopologicalRelationshipEndpoint
         return MappingProxyType(self._topology)
 
@@ -238,7 +240,7 @@ class StandardDimension(Dimension):
         return self._uniqueKeys
 
 
-class StandardDimensionCombination(DimensionCombination):
+class DatabaseDimensionCombination(DimensionCombination):
     """A `DimensionCombination` implementation that maps directly to a database
     table or query.
 
@@ -260,7 +262,7 @@ class StandardDimensionCombination(DimensionCombination):
         Whether to cache the records of this combination in memory when they
         are fetched from the database.
     viewOf : `str`, optional
-        Name of another `StandardDimension` or `StandardDimensionCombination`
+        Name of another `DatabaseDimension` or `DatabaseDimensionCombination`
         whose records this combination's records summarize.
     alwaysJoin : `bool`, optional
         If `True`, always include this element in any query or data ID in
@@ -269,12 +271,12 @@ class StandardDimensionCombination(DimensionCombination):
 
     Notes
     -----
-    `StandardDimensionCombination` objects may belong to a `TopologicalFamily`,
+    `DatabaseDimensionCombination` objects may belong to a `TopologicalFamily`,
     but it is the responsibility of
-    `StandardTopologicalFamilyConstructionVisitor` to update the
+    `DatabaseTopologicalFamilyConstructionVisitor` to update the
     `~TopologicalRelationshipEndpoint.topology` attribute of their members.
 
-    This class has a lot in common with `StandardDimension`, but they are
+    This class has a lot in common with `DatabaseDimension`, but they are
     expected to diverge in future changes, and the only way to make them share
     method implementations would be via multiple inheritance.  Given the
     trivial nature of all of those implementations, this does not seem worth
@@ -294,7 +296,7 @@ class StandardDimensionCombination(DimensionCombination):
         super().__init__(name)
         self._required = required
         self._implied = implied
-        self._topology: Dict[TopologicalSpace, StandardTopologicalFamily] = {}
+        self._topology: Dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
         self._metadata = metadata
         self._cached = cached
         self._viewOf = viewOf
@@ -311,7 +313,7 @@ class StandardDimensionCombination(DimensionCombination):
         return self._implied
 
     @property
-    def topology(self) -> Mapping[TopologicalSpace, StandardTopologicalFamily]:
+    def topology(self) -> Mapping[TopologicalSpace, DatabaseTopologicalFamily]:
         # Docstring inherited from TopologicalRelationshipEndpoint
         return MappingProxyType(self._topology)
 
@@ -336,9 +338,9 @@ class StandardDimensionCombination(DimensionCombination):
         return self._alwaysJoin
 
 
-class StandardDimensionElementConstructionVisitor(DimensionConstructionVisitor):
-    """A construction visitor for `StandardDimension` and
-    `StandardDimensionCombination`.
+class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
+    """A construction visitor for `DatabaseDimension` and
+    `DatabaseDimensionCombination`.
 
     Parameters
     ----------
@@ -357,14 +359,14 @@ class StandardDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         Whether to cache the records of this element in memory when they
         are fetched from the database.
     viewOf : `str`, optional
-        Name of another `StandardDimension` or `StandardDimensionCombination`
+        Name of another `DatabaseDimension` or `DatabaseDimensionCombination`
         whose records this element's records summarize.
     uniqueKeys : `Iterable` [ `ddl.FieldSpec` ]
         Fields that can each be used to uniquely identify this dimension (given
         values for all required dimensions).  The first of these is used as
         (part of) this dimension's table's primary key, while others are used
         to define unique constraints.  Should be empty for
-        `StandardDimensionCombination` definitions.
+        `DatabaseDimensionCombination` definitions.
     alwaysJoin : `bool`, optional
         If `True`, always include this element in any query or data ID in
         which its ``required`` dimensions appear, because it defines a
@@ -418,7 +420,7 @@ class StandardDimensionElementConstructionVisitor(DimensionConstructionVisitor):
             if self._alwaysJoin:
                 raise RuntimeError(f"'alwaysJoin' is not a valid option for Dimension object {self.name}.")
             # Special handling for creating Dimension instances.
-            dimension = StandardDimension(
+            dimension = DatabaseDimension(
                 self.name,
                 required=required,
                 implied=implied.freeze(),
@@ -431,7 +433,7 @@ class StandardDimensionElementConstructionVisitor(DimensionConstructionVisitor):
             builder.elements.add(dimension)
         else:
             # Special handling for creating DimensionCombination instances.
-            combination = StandardDimensionCombination(
+            combination = DatabaseDimensionCombination(
                 self.name,
                 required=required,
                 implied=implied.freeze(),
