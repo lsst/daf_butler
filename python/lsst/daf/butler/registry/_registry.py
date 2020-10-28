@@ -307,6 +307,7 @@ class Registry:
                 # now.
                 _LOG.warning(f"Registry schema digest mismatch: {exc}")
 
+        self._dimensions.refresh()
         self._collections.refresh(universe=self._dimensions.universe)
         self._datasets.refresh(universe=self._dimensions.universe)
 
