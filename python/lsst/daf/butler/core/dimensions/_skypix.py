@@ -101,10 +101,13 @@ class SkyPixDimension(Dimension):
         Integer level of this pixelization (smaller numbers are coarser grids).
     """
     def __init__(self, system: SkyPixSystem, level: int):
-        super().__init__(f"{system.name}{level}")
         self.system = system
         self.level = level
         self.pixelization = system.PixelizationClass(level)
+
+    @property
+    def name(self) -> str:
+        return f"{self.system.name}{self.level}"
 
     @property
     def required(self) -> NamedValueAbstractSet[Dimension]:
