@@ -341,6 +341,31 @@ class ParserLexTestCase(unittest.TestCase):
         tree = parser.parse("Point(1, 1)")
         self.assertIsInstance(tree, exprTree.PointNode)
 
+    def testTupleNode(self):
+        """Tests for tuple
+        """
+        parser = ParserYacc()
+
+        # test with simple identifier and literal
+        tree = parser.parse("(Object.ra, 0.0)")
+        self.assertIsInstance(tree, exprTree.TupleNode)
+        self.assertEqual(len(tree.items), 2)
+        self.assertIsInstance(tree.items[0], exprTree.Identifier)
+        self.assertEqual(tree.items[0].name, "Object.ra")
+        self.assertIsInstance(tree.items[1], exprTree.NumericLiteral)
+        self.assertEqual(tree.items[1].value, "0.0")
+
+        # any expression can appear in tuple
+        tree = parser.parse("(x+y, ((a AND b) or (C = D)))")
+        self.assertIsInstance(tree, exprTree.TupleNode)
+        self.assertEqual(len(tree.items), 2)
+        self.assertIsInstance(tree.items[0], exprTree.BinaryOp)
+        self.assertIsInstance(tree.items[1], exprTree.Parens)
+
+        # only two items can appear in a tuple
+        with self.assertRaises(ParseError):
+            parser.parse("(1, 2, 3)")
+
     def testExpression(self):
         """Test for more or less complete expression"""
         parser = ParserYacc()
@@ -417,12 +442,12 @@ class ParserLexTestCase(unittest.TestCase):
         expression = "(1, 2, 3)"
         with self.assertRaises(ParseError) as catcher:
             parser.parse(expression)
-        _assertExc(catcher.exception, expression, ",", 2, 1, 2)
+        _assertExc(catcher.exception, expression, ",", 5, 1, 5)
 
         expression = "\n(1\n,\n 2, 3)"
         with self.assertRaises(ParseError) as catcher:
             parser.parse(expression)
-        _assertExc(catcher.exception, expression, ",", 4, 3, 0)
+        _assertExc(catcher.exception, expression, ",", 8, 4, 2)
 
         expression = "T'not-a-time'"
         with self.assertRaises(ParseError) as catcher:
