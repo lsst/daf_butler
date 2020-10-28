@@ -20,14 +20,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["DimensionRecordStorage", "DimensionRecordStorageManager"]
+__all__ = (
+    "DimensionRecordStorage",
+    "DimensionRecordStorageManager",
+    "GovernorDimensionRecordStorage",
+)
 
 from abc import ABC, abstractmethod
-from typing import Iterable, Optional, Type, TYPE_CHECKING
+from typing import AbstractSet, Iterable, Optional, Type, TYPE_CHECKING
 
 import sqlalchemy
 
-from ...core import SkyPixDimension
+from ...core import GovernorDimension, SkyPixDimension
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -106,7 +110,10 @@ class DimensionRecordStorage(ABC):
         At present, these defaults are always used, but we may add support for
         explicitly setting the class to use in configuration in the future.
         """
-        if not ignoreCached and element.cached:
+        if isinstance(element, GovernorDimension):
+            from ..dimensions.governor import BasicGovernorDimensionRecordStorage
+            return BasicGovernorDimensionRecordStorage
+        elif not ignoreCached and element.cached:
             from ..dimensions.caching import CachingDimensionRecordStorage
             return CachingDimensionRecordStorage
         elif element.hasTable():
@@ -273,6 +280,37 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
 
+class GovernorDimensionRecordStorage(DimensionRecordStorage):
+    """Addtional interface for `DimensionRecordStorage` objects that provide
+    storage for `GovernorDimension` instances.
+    """
+
+    @property
+    @abstractmethod
+    def element(self) -> GovernorDimension:
+        # Docstring inherited from DimensionRecordStorage.
+        raise NotImplementedError()
+
+    @abstractmethod
+    def refresh(self) -> None:
+        """Ensure all other operations on this manager are aware of any
+        changes made by other clients since it was initialized or last
+        refreshed.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def values(self) -> AbstractSet[str]:
+        """All primary key values for this dimension (`set` [ `str` ]).
+
+        This may rely on an in-memory cache and hence not reflect changes to
+        the set of values made by other `Butler` / `Registry` clients.  Call
+        `refresh` to ensure up-to-date results.
+        """
+        raise NotImplementedError()
+
+
 class DimensionRecordStorageManager(VersionedExtension):
     """An interface for managing the dimension records in a `Registry`.
 
@@ -322,8 +360,8 @@ class DimensionRecordStorageManager(VersionedExtension):
     @abstractmethod
     def refresh(self) -> None:
         """Ensure all other operations on this manager are aware of any
-        dataset types that may have been registered by other clients since
-        it was initialized or last refreshed.
+        changes made by other clients since it was initialized or last
+        refreshed.
         """
         raise NotImplementedError()
 
