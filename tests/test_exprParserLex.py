@@ -81,22 +81,20 @@ class ParserLexTestCase(unittest.TestCase):
         """Test for reserved words"""
         lexer = ParserLex.make_lexer()
 
-#         tokens = "IS NOT IN NULL OR AND BETWEEN LIKE ESCAPE REGEXP"
-        tokens = "NOT IN OR AND"
+        tokens = "NOT IN OR AND OVERLAPS"
         lexer.input(tokens)
         for token in tokens.split():
             self._assertToken(lexer.token(), token, token)
         self.assertIsNone(lexer.token())
 
-#         tokens = "is not in null or and between like escape regexp"
-        tokens = "not in or and"
+        tokens = "not in or and overlaps"
         lexer.input(tokens)
         for token in tokens.split():
-            self._assertToken(lexer.token(), token.upper(), token)
+            self._assertToken(lexer.token(), token.upper(), token.upper())
         self.assertIsNone(lexer.token())
 
         # not reserved
-        token = "ISNOTIN"
+        token = "NOTIN"
         lexer.input(token)
         self._assertToken(lexer.token(), "SIMPLE_IDENTIFIER", token)
         self.assertIsNone(lexer.token())
@@ -239,7 +237,7 @@ class ParserLexTestCase(unittest.TestCase):
                   ("SIMPLE_IDENTIFIER", "band"),
                   ("EQ", "="),
                   ("STRING_LITERAL", "i"),
-                  ("OR", "or"),
+                  ("OR", "OR"),
                   ("SIMPLE_IDENTIFIER", "visit"),
                   ("IN", "IN"),
                   ("LPAREN", "("),
