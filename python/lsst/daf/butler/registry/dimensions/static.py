@@ -31,6 +31,7 @@ from ..interfaces import (
     StaticTablesContext,
     DimensionRecordStorageManager,
     DimensionRecordStorage,
+    GovernorDimensionRecordStorage,
     VersionTuple
 )
 
@@ -76,7 +77,10 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
 
     def refresh(self) -> None:
         # Docstring inherited from DimensionRecordStorageManager.
-        pass
+        for dimension in self.universe.getGovernorDimensions():
+            storage = self._records[dimension]
+            assert isinstance(storage, GovernorDimensionRecordStorage)
+            storage.refresh()
 
     def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
         # Docstring inherited from DimensionRecordStorageManager.
