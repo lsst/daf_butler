@@ -31,7 +31,10 @@ from typing import (
     Iterable,
     Mapping,
     Optional,
+    TYPE_CHECKING,
 )
+
+from lsst.utils import doImport
 
 from .. import ddl
 from ..named import NamedValueAbstractSet, NamedValueSet
@@ -39,6 +42,13 @@ from .._topology import TopologicalFamily, TopologicalSpace
 
 from ._elements import Dimension
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
+
+if TYPE_CHECKING:
+    from ...registry.interfaces import (
+        Database,
+        GovernorDimensionRecordStorage,
+        StaticTablesContext,
+    )
 
 
 class GovernorDimension(Dimension):
@@ -49,6 +59,10 @@ class GovernorDimension(Dimension):
     ----------
     name : `str`
         Name of the dimension.
+    storage : `dict`
+        Fully qualified name of the `GovernorDimensionRecordStorage` subclass
+        that will back this element in the registry (in a "cls" key) along
+        with any other construction keyword arguments (in other keys).
     metadata : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
         Field specifications for all non-key fields in this dimension's table.
     uniqueKeys : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
@@ -82,11 +96,13 @@ class GovernorDimension(Dimension):
     """
     def __init__(
         self,
-        name: str, *,
+        name: str,
+        storage: dict, *,
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
         uniqueKeys: NamedValueAbstractSet[ddl.FieldSpec],
     ):
         self._name = name
+        self._storage = storage
         self._required = NamedValueSet({self}).freeze()
         self._metadata = metadata
         self._uniqueKeys = uniqueKeys
@@ -125,19 +141,20 @@ class GovernorDimension(Dimension):
         return self._metadata
 
     @property
-    def cached(self) -> bool:
-        # Docstring inherited from DimensionElement.
-        return True
-
-    @property
-    def viewOf(self) -> Optional[str]:
-        # Docstring inherited from DimensionElement.
-        return None
-
-    @property
     def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
         # Docstring inherited from Dimension.
         return self._uniqueKeys
+
+    def makeStorage(
+        self,
+        db: Database, *,
+        context: Optional[StaticTablesContext] = None,
+    ) -> GovernorDimensionRecordStorage:
+        # Docstring inherited from DimensionElement.
+        from ...registry.interfaces import GovernorDimensionRecordStorage
+        cls = doImport(self._storage["cls"])
+        assert issubclass(cls, GovernorDimensionRecordStorage)
+        return cls.initialize(db, self, context=context, config=self._storage)
 
 
 class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
@@ -147,6 +164,10 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
     ----------
     name : `str`
         Name of the dimension.
+    storage : `dict`
+        Fully qualified name of the `GovernorDimensionRecordStorage` subclass
+        that will back this element in the registry (in a "cls" key) along
+        with any other construction keyword arguments (in other keys).
     metadata : `Iterable` [ `ddl.FieldSpec` ]
         Field specifications for all non-key fields in this element's table.
     uniqueKeys : `Iterable` [ `ddl.FieldSpec` ]
@@ -158,10 +179,12 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
     def __init__(
         self,
         name: str,
+        storage: dict, *,
         metadata: Iterable[ddl.FieldSpec] = (),
         uniqueKeys: Iterable[ddl.FieldSpec] = (),
     ):
         super().__init__(name)
+        self._storage = storage
         self._metadata = NamedValueSet(metadata).freeze()
         self._uniqueKeys = NamedValueSet(uniqueKeys).freeze()
 
@@ -174,6 +197,7 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
         # Special handling for creating Dimension instances.
         dimension = GovernorDimension(
             self.name,
+            storage=self._storage,
             metadata=self._metadata,
             uniqueKeys=self._uniqueKeys,
         )

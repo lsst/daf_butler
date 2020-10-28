@@ -38,6 +38,8 @@ from typing import (
     TYPE_CHECKING,
 )
 
+from lsst.utils import doImport
+
 from .. import ddl
 from ..named import NamedValueAbstractSet, NamedValueSet
 from ..utils import cached_getter
@@ -48,6 +50,11 @@ from .construction import DimensionConstructionBuilder, DimensionConstructionVis
 
 if TYPE_CHECKING:
     from ._governor import GovernorDimension
+    from ...registry.interfaces import (
+        Database,
+        DatabaseDimensionRecordStorage,
+        StaticTablesContext,
+    )
 
 
 class DatabaseTopologicalFamily(TopologicalFamily):
@@ -155,32 +162,28 @@ class DatabaseDimensionElement(DimensionElement):
     ----------
     name : `str`
         Name of the dimension.
+    storage : `dict`
+        Fully qualified name of the `DatabaseDimensionRecordStorage` subclass
+        that will back this element in the registry (in a "cls" key) along
+        with any other construction keyword arguments (in other keys).
     implied : `NamedValueAbstractSet` [ `Dimension` ]
         Other dimensions whose keys are included in this dimension's (logical)
         table as foreign keys.
     metadata : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
         Field specifications for all non-key fields in this dimension's table.
-    cached : `bool`
-        Whether to cache the records of this dimension in memory when they are
-        fetched from the database.
-    viewOf : `str`, optional
-        Name of another `DatabaseDimension` or `DatabaseDimensionCombination`
-        whose records this dimension's records summarize.
     """
 
     def __init__(
         self,
-        name: str, *,
+        name: str,
+        storage: dict, *,
         implied: NamedValueAbstractSet[Dimension],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
-        cached: bool,
-        viewOf: Optional[str],
     ):
         self._name = name
+        self._storage = storage
         self._implied = implied
         self._metadata = metadata
-        self._cached = cached
-        self._viewOf = viewOf
         self._topology: Dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
 
     @property
@@ -199,14 +202,17 @@ class DatabaseDimensionElement(DimensionElement):
         return self._metadata
 
     @property
-    def cached(self) -> bool:
-        # Docstring inherited from DimensionElement.
-        return self._cached
-
-    @property
     def viewOf(self) -> Optional[str]:
         # Docstring inherited from DimensionElement.
-        return self._viewOf
+        # This is a bit encapsulation-breaking; these storage config values
+        # are supposed to be opaque here, and just forwarded on to some
+        # DimensionRecordStorage implementation.  The long-term fix is to
+        # move viewOf entirely, by changing the code that relies on it to rely
+        # on the DimensionRecordStorage object instead.
+        storage = self._storage.get("nested")
+        if storage is None:
+            storage = self._storage
+        return storage.get("view_of")
 
     @property
     def topology(self) -> Mapping[TopologicalSpace, DatabaseTopologicalFamily]:
@@ -223,6 +229,17 @@ class DatabaseDimensionElement(DimensionElement):
         # Docstring inherited from TopologicalRelationshipEndpoint
         return self.topology.get(TopologicalSpace.TEMPORAL)
 
+    def makeStorage(
+        self,
+        db: Database, *,
+        context: Optional[StaticTablesContext] = None,
+    ) -> DatabaseDimensionRecordStorage:
+        # Docstring inherited from DimensionElement.
+        from ...registry.interfaces import DatabaseDimensionRecordStorage
+        cls = doImport(self._storage["cls"])
+        assert issubclass(cls, DatabaseDimensionRecordStorage)
+        return cls.initialize(db, self, context=context, config=self._storage)
+
 
 class DatabaseDimension(Dimension, DatabaseDimensionElement):
     """A `Dimension` implementation that maps directly to a database table or
@@ -232,6 +249,10 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
     ----------
     name : `str`
         Name of the dimension.
+    storage : `dict`
+        Fully qualified name of the `DatabaseDimensionRecordStorage` subclass
+        that will back this element in the registry (in a "cls" key) along
+        with any other construction keyword arguments (in other keys).
     required : `NamedValueSet` [ `Dimension` ]
         Other dimensions whose keys are part of the compound primary key for
         this dimension's (logical) table, as well as references to their own
@@ -243,12 +264,6 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
         table as foreign keys.
     metadata : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
         Field specifications for all non-key fields in this dimension's table.
-    cached : `bool`
-        Whether to cache the records of this dimension in memory when they are
-        fetched from the database.
-    viewOf : `str`, optional
-        Name of another `DatabaseDimension` or `DatabaseDimensionCombination`
-        whose records this dimension's records summarize.
     uniqueKeys : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
         Fields that can each be used to uniquely identify this dimension (given
         values for all required dimensions).  The first of these is used as
@@ -264,15 +279,14 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
     """
     def __init__(
         self,
-        name: str, *,
+        name: str,
+        storage: dict, *,
         required: NamedValueSet[Dimension],
         implied: NamedValueAbstractSet[Dimension],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
-        cached: bool,
-        viewOf: Optional[str],
         uniqueKeys: NamedValueAbstractSet[ddl.FieldSpec],
     ):
-        super().__init__(name, implied=implied, metadata=metadata, cached=cached, viewOf=viewOf)
+        super().__init__(name, storage=storage, implied=implied, metadata=metadata)
         required.add(self)
         self._required = required.freeze()
         self._uniqueKeys = uniqueKeys
@@ -296,6 +310,10 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     ----------
     name : `str`
         Name of the dimension.
+    storage : `dict`
+        Fully qualified name of the `DatabaseDimensionRecordStorage` subclass
+        that will back this element in the registry (in a "cls" key) along
+        with any other construction keyword arguments (in other keys).
     required : `NamedValueAbstractSet` [ `Dimension` ]
         Dimensions whose keys define the compound primary key for this
         combinations's (logical) table, as well as references to their own
@@ -306,12 +324,6 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     metadata : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
         Field specifications for all non-key fields in this combination's
         table.
-    cached : `bool`
-        Whether to cache the records of this combination in memory when they
-        are fetched from the database.
-    viewOf : `str`, optional
-        Name of another `DatabaseDimension` or `DatabaseDimensionCombination`
-        whose records this combination's records summarize.
     alwaysJoin : `bool`, optional
         If `True`, always include this element in any query or data ID in
         which its ``required`` dimensions appear, because it defines a
@@ -333,15 +345,14 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     """
     def __init__(
         self,
-        name: str, *,
+        name: str,
+        storage: dict, *,
         required: NamedValueAbstractSet[Dimension],
         implied: NamedValueAbstractSet[Dimension],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
-        cached: bool,
-        viewOf: Optional[str],
         alwaysJoin: bool,
     ):
-        super().__init__(name, implied=implied, metadata=metadata, cached=cached, viewOf=viewOf)
+        super().__init__(name, storage=storage, implied=implied, metadata=metadata)
         self._required = required
         self._alwaysJoin = alwaysJoin
 
@@ -364,6 +375,10 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
     ----------
     name : `str`
         Name of the dimension.
+    storage : `dict`
+        Fully qualified name of the `DatabaseDimensionRecordStorage` subclass
+        that will back this element in the registry (in a "cls" key) along
+        with any other construction keyword arguments (in other keys).
     required : `Set` [ `Dimension` ]
         Names of dimensions whose keys define the compound primary key for this
         element's (logical) table, as well as references to their own
@@ -373,12 +388,6 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         (logical) table as foreign keys.
     metadata : `Iterable` [ `ddl.FieldSpec` ]
         Field specifications for all non-key fields in this element's table.
-    cached : `bool`
-        Whether to cache the records of this element in memory when they
-        are fetched from the database.
-    viewOf : `str`, optional
-        Name of another `DatabaseDimension` or `DatabaseDimensionCombination`
-        whose records this element's records summarize.
     uniqueKeys : `Iterable` [ `ddl.FieldSpec` ]
         Fields that can each be used to uniquely identify this dimension (given
         values for all required dimensions).  The first of these is used as
@@ -395,20 +404,18 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
     def __init__(
         self,
         name: str,
+        storage: dict,
         required: Set[str],
         implied: Set[str],
         metadata: Iterable[ddl.FieldSpec] = (),
-        cached: bool = False,
-        viewOf: Optional[str] = None,
         uniqueKeys: Iterable[ddl.FieldSpec] = (),
         alwaysJoin: bool = False,
     ):
         super().__init__(name)
+        self._storage = storage
         self._required = required
         self._implied = implied
         self._metadata = NamedValueSet(metadata).freeze()
-        self._cached = cached
-        self._viewOf = viewOf
         self._uniqueKeys = NamedValueSet(uniqueKeys).freeze()
         self._alwaysJoin = alwaysJoin
 
@@ -440,11 +447,10 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
             # Special handling for creating Dimension instances.
             dimension = DatabaseDimension(
                 self.name,
+                storage=self._storage,
                 required=required,
                 implied=implied.freeze(),
                 metadata=self._metadata,
-                cached=self._cached,
-                viewOf=self._viewOf,
                 uniqueKeys=self._uniqueKeys,
             )
             builder.dimensions.add(dimension)
@@ -453,11 +459,10 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
             # Special handling for creating DimensionCombination instances.
             combination = DatabaseDimensionCombination(
                 self.name,
+                storage=self._storage,
                 required=required,
                 implied=implied.freeze(),
                 metadata=self._metadata,
-                cached=self._cached,
-                viewOf=self._viewOf,
                 alwaysJoin=self._alwaysJoin,
             )
             builder.elements.add(combination)

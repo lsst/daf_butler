@@ -187,17 +187,17 @@ class DimensionConfig(ConfigSubset):
                     )
                 yield GovernorDimensionConstructionVisitor(
                     name=name,
+                    storage=subconfig["storage"],
                     metadata=metadata,
                     uniqueKeys=uniqueKeys,
                 )
             else:
                 yield DatabaseDimensionElementConstructionVisitor(
                     name=name,
+                    storage=subconfig["storage"],
                     required=set(subconfig.get("requires", ())),
                     implied=set(subconfig.get("implies", ())),
                     metadata=metadata,
-                    cached=subconfig.get("cached", False),
-                    viewOf=subconfig.get("view_of", None),
                     alwaysJoin=subconfig.get("always_join", False),
                     uniqueKeys=uniqueKeys,
                 )
