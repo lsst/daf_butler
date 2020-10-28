@@ -260,6 +260,41 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertIsInstance(tree.values[1], exprTree.NumericLiteral)
         self.assertEqual(tree.values[1].value, '-2000')
 
+        # test for time contained in time range, all literals
+        tree = parser.parse("T'2020-01-01' in (T'2020-01-01', T'2020-01-02')")
+        self.assertIsInstance(tree, exprTree.IsIn)
+        self.assertFalse(tree.not_in)
+        self.assertIsInstance(tree.lhs, exprTree.TimeLiteral)
+        self.assertEqual(len(tree.values), 2)
+        self.assertIsInstance(tree.values[0], exprTree.TimeLiteral)
+        self.assertIsInstance(tree.values[1], exprTree.TimeLiteral)
+
+        # test for time range contained in time range
+        tree = parser.parse("(T'2020-01-01', t1) in (T'2020-01-01', t2)")
+        self.assertIsInstance(tree, exprTree.IsIn)
+        self.assertFalse(tree.not_in)
+        self.assertIsInstance(tree.lhs, exprTree.TupleNode)
+        self.assertEqual(len(tree.values), 2)
+        self.assertIsInstance(tree.values[0], exprTree.TimeLiteral)
+        self.assertIsInstance(tree.values[1], exprTree.Identifier)
+
+        # test for point in region (we don't have region syntax yet, use
+        # identifier)
+        tree = parser.parse("point(1, 2) in (region1)")
+        self.assertIsInstance(tree, exprTree.IsIn)
+        self.assertFalse(tree.not_in)
+        self.assertIsInstance(tree.lhs, exprTree.PointNode)
+        self.assertEqual(len(tree.values), 1)
+        self.assertIsInstance(tree.values[0], exprTree.Identifier)
+
+        # parens on right hand side are required
+        with self.assertRaises(ParseError):
+            parser.parse("point(1, 2) in region1")
+
+        # and we don't support full expressions in RHS list
+        with self.assertRaises(ParseError):
+            parser.parse("point(1, 2) in (x + y)")
+
     def testCompareOps(self):
         """Tests for comparison operators
         """
