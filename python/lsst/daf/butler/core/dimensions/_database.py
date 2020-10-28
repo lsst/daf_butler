@@ -150,16 +150,63 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
 class DatabaseDimensionElement(DimensionElement):
     """An intermediate base class for `DimensionElement` classes whose
     instances that map directly to a database table or query.
+
+    Parameters
+    ----------
+    name : `str`
+        Name of the dimension.
+    implied : `NamedValueAbstractSet` [ `Dimension` ]
+        Other dimensions whose keys are included in this dimension's (logical)
+        table as foreign keys.
+    metadata : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
+        Field specifications for all non-key fields in this dimension's table.
+    cached : `bool`
+        Whether to cache the records of this dimension in memory when they are
+        fetched from the database.
+    viewOf : `str`, optional
+        Name of another `DatabaseDimension` or `DatabaseDimensionCombination`
+        whose records this dimension's records summarize.
     """
 
-    def __init__(self, name: str):
+    def __init__(
+        self,
+        name: str, *,
+        implied: NamedValueAbstractSet[Dimension],
+        metadata: NamedValueAbstractSet[ddl.FieldSpec],
+        cached: bool,
+        viewOf: Optional[str],
+    ):
         self._name = name
+        self._implied = implied
+        self._metadata = metadata
+        self._cached = cached
+        self._viewOf = viewOf
         self._topology: Dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
 
     @property
     def name(self) -> str:
         # Docstring inherited from TopoogicalRelationshipEndpoint.
         return self._name
+
+    @property
+    def implied(self) -> NamedValueAbstractSet[Dimension]:
+        # Docstring inherited from DimensionElement.
+        return self._implied
+
+    @property
+    def metadata(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
+        # Docstring inherited from DimensionElement.
+        return self._metadata
+
+    @property
+    def cached(self) -> bool:
+        # Docstring inherited from DimensionElement.
+        return self._cached
+
+    @property
+    def viewOf(self) -> Optional[str]:
+        # Docstring inherited from DimensionElement.
+        return self._viewOf
 
     @property
     def topology(self) -> Mapping[TopologicalSpace, DatabaseTopologicalFamily]:
@@ -225,39 +272,15 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
         viewOf: Optional[str],
         uniqueKeys: NamedValueAbstractSet[ddl.FieldSpec],
     ):
-        super().__init__(name)
+        super().__init__(name, implied=implied, metadata=metadata, cached=cached, viewOf=viewOf)
         required.add(self)
         self._required = required.freeze()
-        self._implied = implied
-        self._metadata = metadata
-        self._cached = cached
-        self._viewOf = viewOf
         self._uniqueKeys = uniqueKeys
 
     @property
     def required(self) -> NamedValueAbstractSet[Dimension]:
         # Docstring inherited from DimensionElement.
         return self._required
-
-    @property
-    def implied(self) -> NamedValueAbstractSet[Dimension]:
-        # Docstring inherited from DimensionElement.
-        return self._implied
-
-    @property
-    def metadata(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
-        # Docstring inherited from DimensionElement.
-        return self._metadata
-
-    @property
-    def cached(self) -> bool:
-        # Docstring inherited from DimensionElement.
-        return self._cached
-
-    @property
-    def viewOf(self) -> Optional[str]:
-        # Docstring inherited from DimensionElement.
-        return self._viewOf
 
     @property
     def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
@@ -318,43 +341,14 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
         viewOf: Optional[str],
         alwaysJoin: bool,
     ):
-        super().__init__(name)
+        super().__init__(name, implied=implied, metadata=metadata, cached=cached, viewOf=viewOf)
         self._required = required
-        self._implied = implied
-        self._metadata = metadata
-        self._cached = cached
-        self._viewOf = viewOf
         self._alwaysJoin = alwaysJoin
 
     @property
     def required(self) -> NamedValueAbstractSet[Dimension]:
         # Docstring inherited from DimensionElement.
         return self._required
-
-    @property
-    def implied(self) -> NamedValueAbstractSet[Dimension]:
-        # Docstring inherited from DimensionElement.
-        return self._implied
-
-    @property
-    def topology(self) -> Mapping[TopologicalSpace, DatabaseTopologicalFamily]:
-        # Docstring inherited from TopologicalRelationshipEndpoint
-        return MappingProxyType(self._topology)
-
-    @property
-    def metadata(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
-        # Docstring inherited from DimensionElement.
-        return self._metadata
-
-    @property
-    def cached(self) -> bool:
-        # Docstring inherited from DimensionElement.
-        return self._cached
-
-    @property
-    def viewOf(self) -> Optional[str]:
-        # Docstring inherited from DimensionElement.
-        return self._viewOf
 
     @property
     def alwaysJoin(self) -> bool:
