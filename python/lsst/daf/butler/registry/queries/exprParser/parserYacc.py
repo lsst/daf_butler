@@ -244,6 +244,7 @@ class ParserYacc:
     precedence = (
         ('left', 'OR'),
         ('left', 'AND'),
+        ('nonassoc', 'OVERLAPS'),  # Nonassociative operators
         ('nonassoc', 'EQ', 'NE'),  # Nonassociative operators
         ('nonassoc', 'LT', 'LE', 'GT', 'GE'),  # Nonassociative operators
         ('left', 'ADD', 'SUB'),
@@ -283,6 +284,7 @@ class ParserYacc:
                          | bool_primary LE predicate
                          | bool_primary GE predicate
                          | bool_primary GT predicate
+                         | bool_primary OVERLAPS predicate
                          | predicate
         """
         if len(p) == 2:
