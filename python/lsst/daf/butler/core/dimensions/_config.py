@@ -33,9 +33,9 @@ from .construction import DimensionConstructionBuilder, DimensionConstructionVis
 from ._governor import GovernorDimensionConstructionVisitor
 from ._packer import DimensionPackerConstructionVisitor
 from ._skypix import SkyPixConstructionVisitor
-from .standard import (
-    StandardDimensionElementConstructionVisitor,
-    StandardTopologicalFamilyConstructionVisitor,
+from ._database import (
+    DatabaseDimensionElementConstructionVisitor,
+    DatabaseTopologicalFamilyConstructionVisitor,
 )
 
 
@@ -191,7 +191,7 @@ class DimensionConfig(ConfigSubset):
                     uniqueKeys=uniqueKeys,
                 )
             else:
-                yield StandardDimensionElementConstructionVisitor(
+                yield DatabaseDimensionElementConstructionVisitor(
                     name=name,
                     required=set(subconfig.get("requires", ())),
                     implied=set(subconfig.get("implies", ())),
@@ -216,7 +216,7 @@ class DimensionConfig(ConfigSubset):
         for spaceName, subconfig in self.get("topology", {}).items():
             space = TopologicalSpace.__members__[spaceName.upper()]
             for name, members in subconfig.items():
-                yield StandardTopologicalFamilyConstructionVisitor(
+                yield DatabaseTopologicalFamilyConstructionVisitor(
                     name=name,
                     space=space,
                     members=members,
