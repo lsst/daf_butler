@@ -27,7 +27,10 @@ lsst.log, and only uses it if it has been setup by another package."""
 import click
 from collections import namedtuple
 from functools import partial
+from io import StringIO
 import logging
+import re
+import subprocess
 import unittest
 
 from lsst.daf.butler.cli.butler import cli as butlerCli
@@ -167,6 +170,66 @@ class CliLogTestBase():
         is printed instead, that CliLog is still reset."""
 
         self.runTest(partial(self.runner.invoke, butlerCli, ["command-log-settings-test", "--help"]))
+
+    def testLongLog(self):
+        """Verify the timestamp is in the log messages when the --long-log
+        flag is set."""
+
+        # When longlog=True, loglines start with the log level and a
+        # timestamp with the following format:
+        # "year-month-day T hour-minute-second.millisecond-zoneoffset"
+        # If lsst.log is importable then the timestamp will have
+        # milliseconds, as described above. If lsst.log is NOT
+        # importable then milliseconds (and the preceding ".") are
+        # omitted (the python `time` module does not support
+        # milliseconds in its format string). Examples of expected
+        # strings follow:
+        # lsst.log:   "DEBUG 2020-10-29T10:20:31.518-0700 ..."
+        # pure python "DEBUG 2020-10-28T10:20:31-0700 ...""
+        # The log level name can change, we verify there is an all
+        # caps word there but do not verify the word. We do not verify
+        # the rest of the log string, assume that if the timestamp is
+        # in the string that the rest of the string will appear as
+        # expected.
+        # N.B. this test is defined in daf_butler which does not depend
+        # on lsst.log. However, CliLog may be used in packages that do
+        # depend on lsst.log and so both forms of timestamps must be
+        # supported. These packages should have a test (the file is
+        # usually called test_cliLog.py) that subclasses CliLogTestBase
+        # and unittest.TestCase so that these tests are run in that
+        # package.
+        timestampRegex = re.compile(
+            r"^[A-Z]+ [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(.[0-9]{3})?[-,+][0-9]{4} .*")
+
+        # When longlog=False, log lines start with the module name and
+        # log level, for example:
+        # lsst.daf.butler.core.config DEBUG: ...
+        modulesRegex = re.compile(
+            r"^([a-z]+\.)+[a-z]+ [A-Z]+: .*")
+
+        with self.runner.isolated_filesystem():
+            for longlog in (True, False):
+                # The click test does not capture logging emitted from lsst.log
+                # so use subprocess to run the test instead.
+                if longlog:
+                    args = ("butler", "--log-level", "DEBUG", "--long-log", "create", "here")
+                else:
+                    args = ("butler", "--log-level", "DEBUG", "create", "here")
+                result = subprocess.run(args, capture_output=True)
+                output = StringIO((result.stderr.decode()))
+                startedWithTimestamp = any([timestampRegex.match(line) for line in output.readlines()])
+                output.seek(0)
+                startedWithModule = any(modulesRegex.match(line) for line in output.readlines())
+                if longlog:
+                    self.assertTrue(startedWithTimestamp,
+                                    msg=f"did not find timestamp in: \n{output.getvalue()}")
+                    self.assertFalse(startedWithModule,
+                                     msg=f"found lines starting with module in: \n{output.getvalue()}")
+                else:
+                    self.assertFalse(startedWithTimestamp,
+                                     msg=f"found timestamp in: \n{output.getvalue()}")
+                    self.assertTrue(startedWithModule,
+                                    msg=f"did not find lines starting with module in: \n{output.getvalue()}")
 
 
 if __name__ == "__main__":
