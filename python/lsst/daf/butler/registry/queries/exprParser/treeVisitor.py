@@ -24,7 +24,7 @@ from __future__ import annotations
 __all__ = ['TreeVisitor']
 
 from abc import abstractmethod
-from typing import Generic, List, Optional, TYPE_CHECKING, TypeVar
+from typing import Generic, List, Optional, Tuple, TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
     import astropy.time
@@ -177,6 +177,20 @@ class TreeVisitor(Generic[T]):
             Expression inside parentheses, this object is returned by one of
             the methods of this class as a result of transformation of some
             other tree node.
+        node : `Node`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
+
+    @abstractmethod
+    def visitTupleNode(self, items: Tuple[T, ...], node: Node) -> T:
+        """Visit TupleNode node.
+
+        Parameters
+        ----------
+        items : `tuple` of `object`
+            Expressions inside parentheses, tuple of objects returned by one
+            of the methods of this class as a result of transformation of
+            tuple items.
         node : `Node`
             Corresponding tree node, mostly useful for diagnostics.
         """

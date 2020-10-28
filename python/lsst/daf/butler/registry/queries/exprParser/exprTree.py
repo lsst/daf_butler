@@ -31,9 +31,9 @@ to database directly.
 
 from __future__ import annotations
 
-__all__ = ['Node', 'BinaryOp', 'Identifier', 'IsIn', 'NumericLiteral',
-           'Parens', 'RangeLiteral', 'StringLiteral', 'TimeLiteral',
-           'UnaryOp']
+__all__ = ['Node', 'BinaryOp', 'FunctionCall', 'Identifier', 'IsIn', 'NumericLiteral',
+           'Parens', 'RangeLiteral', 'StringLiteral', 'TimeLiteral', 'TupleNode',
+           'UnaryOp', 'function_call']
 
 # -------------------------------
 #  Imports of standard modules --
@@ -315,6 +315,32 @@ class Parens(Node):
 
     def __str__(self) -> str:
         return "({expr})".format(**vars(self))
+
+
+class TupleNode(Node):
+    """Node representing a tuple, sequence of parenthesized expressions.
+
+    Tuple is used to represent time ranges, for now parser supports tuples
+    with two items, though this class can be used to represent different
+    number of items in sequence.
+
+    Attributes
+    ----------
+    items : tuple of Node
+        Expressions inside parentheses.
+    """
+    def __init__(self, items: Tuple[Node, ...]):
+        Node.__init__(self, items)
+        self.items = items
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        items = tuple(item.visit(visitor) for item in self.items)
+        return visitor.visitTupleNode(items, self)
+
+    def __str__(self) -> str:
+        items = ", ".join(str(item) for item in self.items)
+        return f"({items})"
 
 
 class FunctionCall(Node):
