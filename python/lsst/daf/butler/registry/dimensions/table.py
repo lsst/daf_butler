@@ -27,14 +27,20 @@ from typing import Dict, Iterable, Optional
 import sqlalchemy
 
 from ...core import (
-    TimespanDatabaseRepresentation,
+    Config,
+    DatabaseDimensionElement,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
     NamedKeyDict,
     SimpleQuery,
+    TimespanDatabaseRepresentation,
 )
-from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
+from ..interfaces import (
+    Database,
+    DatabaseDimensionRecordStorage,
+    StaticTablesContext,
+)
 from ..queries import QueryBuilder
 
 
@@ -48,7 +54,7 @@ term in the WHERE clause for each one.
 """
 
 
-class TableDimensionRecordStorage(DimensionRecordStorage):
+class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
     """A record storage implementation uses a regular database table.
 
     For spatial dimension elements, use `SpatialDimensionRecordStorage`
@@ -59,12 +65,12 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
     db : `Database`
         Interface to the database engine and namespace that will hold these
         dimension records.
-    element : `DimensionElement`
+    element : `DatabaseDimensionElement`
         The element whose records this storage will manage.
     table : `sqlalchemy.schema.Table`
         The logical table for the element.
     """
-    def __init__(self, db: Database, element: DimensionElement, *, table: sqlalchemy.schema.Table):
+    def __init__(self, db: Database, element: DatabaseDimensionElement, *, table: sqlalchemy.schema.Table):
         self._db = db
         self._table = table
         self._element = element
@@ -75,8 +81,9 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         }
 
     @classmethod
-    def initialize(cls, db: Database, element: DimensionElement, *,
-                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
+    def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
+                   context: Optional[StaticTablesContext] = None,
+                   config: Config) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DimensionRecordStorage.
         spec = element.RecordClass.fields.makeTableSpec(tsRepr=db.getTimespanRepresentation())
         if context is not None:
@@ -86,7 +93,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         return cls(db, element, table=table)
 
     @property
-    def element(self) -> DimensionElement:
+    def element(self) -> DatabaseDimensionElement:
         # Docstring inherited from DimensionRecordStorage.element.
         return self._element
 
