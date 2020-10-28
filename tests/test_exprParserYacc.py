@@ -215,6 +215,28 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertEqual(tree.lhs.value, '333')
         self.assertEqual(tree.rhs.value, '76')
 
+        # tests for overlaps operator
+        tree = parser.parse("region1 OVERLAPS region2")
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, "OVERLAPS")
+        self.assertIsInstance(tree.lhs, exprTree.Identifier)
+        self.assertIsInstance(tree.rhs, exprTree.Identifier)
+
+        # time ranges with literals
+        tree = parser.parse("(T'2020-01-01', T'2020-01-02') overlaps (T'2020-01-01', T'2020-01-02')")
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, "OVERLAPS")
+        self.assertIsInstance(tree.lhs, exprTree.TupleNode)
+        self.assertIsInstance(tree.rhs, exprTree.TupleNode)
+
+        # but syntax allows anything, it's visitor responsibility to decide
+        # what are the right operands
+        tree = parser.parse("x+y Overlaps function(x-y)")
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, "OVERLAPS")
+        self.assertIsInstance(tree.lhs, exprTree.BinaryOp)
+        self.assertIsInstance(tree.rhs, exprTree.FunctionCall)
+
     def testIsIn(self):
         """Tests for IN
         """
