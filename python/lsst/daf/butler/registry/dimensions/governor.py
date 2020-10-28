@@ -27,16 +27,16 @@ from typing import AbstractSet, Dict, Iterable, Optional
 import sqlalchemy
 
 from ...core import (
-    TimespanDatabaseRepresentation,
+    Config,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
     GovernorDimension,
     NamedKeyDict,
+    TimespanDatabaseRepresentation,
 )
 from ..interfaces import (
     Database,
-    DimensionRecordStorage,
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
@@ -66,10 +66,10 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         self._cache: Dict[str, DimensionRecord] = {}
 
     @classmethod
-    def initialize(cls, db: Database, element: DimensionElement, *,
-                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
+    def initialize(cls, db: Database, element: GovernorDimension, *,
+                   context: Optional[StaticTablesContext] = None,
+                   config: Config) -> GovernorDimensionRecordStorage:
         # Docstring inherited from DimensionRecordStorage.
-        assert isinstance(element, GovernorDimension)
         spec = element.RecordClass.fields.makeTableSpec(tsRepr=db.getTimespanRepresentation())
         if context is not None:
             table = context.addTable(element.name, spec)
