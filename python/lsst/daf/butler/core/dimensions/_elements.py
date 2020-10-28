@@ -144,10 +144,6 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     associated (`DimensionUniverse`).
     """
 
-    name: str
-    """Unique name for this dimension element (`str`).
-    """
-
     @property  # type: ignore
     @cached_getter
     def governor(self) -> Optional[GovernorDimension]:

@@ -153,8 +153,13 @@ class DatabaseDimensionElement(DimensionElement):
     """
 
     def __init__(self, name: str):
-        super().__init__(name)
+        self._name = name
         self._topology: Dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
+
+    @property
+    def name(self) -> str:
+        # Docstring inherited from TopoogicalRelationshipEndpoint.
+        return self._name
 
     @property
     def topology(self) -> Mapping[TopologicalSpace, DatabaseTopologicalFamily]:
@@ -316,7 +321,6 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
         super().__init__(name)
         self._required = required
         self._implied = implied
-        self._topology: Dict[TopologicalSpace, DatabaseTopologicalFamily] = {}
         self._metadata = metadata
         self._cached = cached
         self._viewOf = viewOf

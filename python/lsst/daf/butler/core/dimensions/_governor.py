@@ -86,7 +86,7 @@ class GovernorDimension(Dimension):
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
         uniqueKeys: NamedValueAbstractSet[ddl.FieldSpec],
     ):
-        super().__init__(name)
+        self._name = name
         self._required = NamedValueSet({self}).freeze()
         self._metadata = metadata
         self._uniqueKeys = uniqueKeys
@@ -98,6 +98,11 @@ class GovernorDimension(Dimension):
                             f"{self.MAX_KEY_LENGTH} (configured value is {self.primaryKey.length}).")
 
     MAX_KEY_LENGTH = 128
+
+    @property
+    def name(self) -> str:
+        # Docstring inherited from TopoogicalRelationshipEndpoint.
+        return self._name
 
     @property
     def required(self) -> NamedValueAbstractSet[Dimension]:
