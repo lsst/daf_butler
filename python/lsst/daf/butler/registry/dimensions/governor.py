@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["BasicGovernorDimensionRecordStorage"]
 
-from typing import AbstractSet, Dict, Iterable, Optional
+from typing import AbstractSet, Callable, Dict, Iterable, List, Optional
 
 import sqlalchemy
 
@@ -64,6 +64,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         self._dimension = dimension
         self._table = table
         self._cache: Dict[str, DimensionRecord] = {}
+        self._callbacks: List[Callable[[DimensionRecord], None]] = []
 
     @classmethod
     def initialize(cls, db: Database, element: GovernorDimension, *,
@@ -99,6 +100,10 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         # Docstring inherited from GovernorDimensionRecordStorage.
         return self._cache.keys()
 
+    def registerInsertionListener(self, callback: Callable[[DimensionRecord], None]) -> None:
+        # Docstring inherited from GovernorDimensionRecordStorage.
+        self._callbacks.append(callback)
+
     def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         self._cache.clear()
@@ -120,7 +125,10 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         elementRows = [record.toDict() for record in records]
         with self._db.transaction():
             self._db.insert(self._table, *elementRows)
-        self._cache.update((getattr(record, self.element.primaryKey.name), record) for record in records)
+        for record in records:
+            self._cache[getattr(record, self.element.primaryKey.name)] = record
+            for callback in self._callbacks:
+                callback(record)
 
     def sync(self, record: DimensionRecord) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
@@ -136,6 +144,8 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
             )
         if inserted:
             self._cache[getattr(record, self.element.primaryKey.name)] = record
+            for callback in self._callbacks:
+                callback(record)
         return inserted
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:

@@ -29,7 +29,7 @@ __all__ = (
 )
 
 from abc import ABC, abstractmethod
-from typing import AbstractSet, Iterable, Optional, TYPE_CHECKING
+from typing import AbstractSet, Callable, Iterable, Optional, TYPE_CHECKING
 
 import sqlalchemy
 
@@ -267,6 +267,20 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         This may rely on an in-memory cache and hence not reflect changes to
         the set of values made by other `Butler` / `Registry` clients.  Call
         `refresh` to ensure up-to-date results.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def registerInsertionListener(self, callback: Callable[[DimensionRecord], None]) -> None:
+        """Add a function or method to be called after new records for this
+        dimension are inserted by `insert` or `sync`.
+
+        Parameters
+        ----------
+        callback
+            Callable that takes a single `DimensionRecord` argument.  This will
+            be called immediately after any successful insertion, in the same
+            transaction.
         """
         raise NotImplementedError()
 
