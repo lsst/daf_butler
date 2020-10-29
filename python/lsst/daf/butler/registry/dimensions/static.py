@@ -24,7 +24,6 @@ from typing import List, Optional
 
 import sqlalchemy
 
-from ...core import NamedKeyDict, SkyPixDimension
 from ...core.dimensions import DimensionElement, DimensionUniverse, GovernorDimension
 from ..interfaces import (
     Database,
@@ -73,12 +72,16 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     def initialize(cls, db: Database, context: StaticTablesContext, *,
                    universe: DimensionUniverse) -> DimensionRecordStorageManager:
         # Docstring inherited from DimensionRecordStorageManager.
+        # Start by initializing governor dimensions; those go both in the main
+        # 'records' mapping we'll pass to init, and a local dictionary that we
+        # can pass in when initializing storage for DatabaseDimensionElements.
         governors: NamedKeyDict[GovernorDimension, GovernorDimensionRecordStorage] = NamedKeyDict()
         records: NamedKeyDict[DimensionElement, DimensionRecordStorage] = NamedKeyDict()
         for dimension in universe.getGovernorDimensions():
-            storage = dimension.makeStorage(db, context=context)
-            governors[dimension] = storage
-            records[dimension] = storage
+            governorStorage = dimension.makeStorage(db, context=context)
+            governors[dimension] = governorStorage
+            records[dimension] = governorStorage
+        # Next we initialize storage for DatabaseDimensionElements.
         for element in universe.getDatabaseElements():
             records[element] = element.makeStorage(db, context=context, governors=governors)
         return cls(db=db, records=records, universe=universe)

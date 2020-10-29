@@ -21,15 +21,23 @@
 from __future__ import annotations
 
 __all__ = (
+    "DatabaseDimensionRecordStorage",
     "DimensionRecordStorage",
     "DimensionRecordStorageManager",
     "GovernorDimensionRecordStorage",
     "SkyPixDimensionRecordStorage",
-    "DatabaseDimensionRecordStorage",
 )
 
 from abc import ABC, abstractmethod
-from typing import AbstractSet, Callable, Iterable, Optional, TYPE_CHECKING
+from typing import (
+    AbstractSet,
+    Callable,
+    Iterable,
+    Optional,
+    Tuple,
+    TYPE_CHECKING,
+    Union,
+)
 
 import sqlalchemy
 
@@ -49,6 +57,9 @@ if TYPE_CHECKING:
     )
     from ..queries import QueryBuilder
     from ._database import Database, StaticTablesContext
+
+
+OverlapSide = Union[SkyPixDimension, Tuple[DatabaseDimensionElement, str]]
 
 
 class DimensionRecordStorage(ABC):
@@ -269,6 +280,14 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         `refresh` to ensure up-to-date results.
         """
         raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def table(self) -> sqlalchemy.schema.Table:
+        """The SQLAlchemy table that backs this dimension
+        (`sqlalchemy.schema.Table`).
+        """
+        raise NotImplementedError
 
     @abstractmethod
     def registerInsertionListener(self, callback: Callable[[DimensionRecord], None]) -> None:

@@ -204,7 +204,7 @@ elements:
           and observation and multiple visits can be combined from a
           relatively long period.
     storage:
-      cls: lsst.daf.butler.registry.dimensions.spatial.SpatialDimensionRecordStorage
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
   exposure:
     doc: >
@@ -357,7 +357,7 @@ elements:
         type: int
     requires: [skymap]
     storage:
-      cls: lsst.daf.butler.registry.dimensions.spatial.SpatialDimensionRecordStorage
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
   patch:
     doc: >
@@ -381,7 +381,7 @@ elements:
         doc: >
           Which row this patch occupies in the tract's grid of patches.
     storage:
-      cls: lsst.daf.butler.registry.dimensions.spatial.SpatialDimensionRecordStorage
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
   visit_detector_region:
     doc: >
@@ -389,7 +389,7 @@ elements:
       visit-detector combinations.
     requires: [visit, detector]
     storage:
-      cls: lsst.daf.butler.registry.dimensions.spatial.SpatialDimensionRecordStorage
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
   visit_system:
     doc: >
