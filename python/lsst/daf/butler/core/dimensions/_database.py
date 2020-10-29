@@ -25,6 +25,7 @@ __all__ = (
     "DatabaseDimension",
     "DatabaseDimensionCombination",
     "DatabaseDimensionElement",
+    "DatabaseTopologicalFamily",
 )
 
 from types import MappingProxyType

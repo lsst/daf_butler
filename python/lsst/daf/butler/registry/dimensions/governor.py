@@ -100,6 +100,10 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         # Docstring inherited from GovernorDimensionRecordStorage.
         return self._cache.keys()
 
+    @property
+    def table(self) -> sqlalchemy.schema.Table:
+        return self._table
+
     def registerInsertionListener(self, callback: Callable[[DimensionRecord], None]) -> None:
         # Docstring inherited from GovernorDimensionRecordStorage.
         self._callbacks.append(callback)
