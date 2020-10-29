@@ -31,9 +31,9 @@ to database directly.
 
 from __future__ import annotations
 
-__all__ = ['Node', 'BinaryOp', 'Identifier', 'IsIn', 'NumericLiteral',
-           'Parens', 'RangeLiteral', 'StringLiteral', 'TimeLiteral',
-           'UnaryOp']
+__all__ = ['Node', 'BinaryOp', 'FunctionCall', 'Identifier', 'IsIn', 'NumericLiteral',
+           'Parens', 'RangeLiteral', 'StringLiteral', 'TimeLiteral', 'TupleNode',
+           'UnaryOp', 'function_call']
 
 # -------------------------------
 #  Imports of standard modules --
@@ -81,7 +81,7 @@ class Node(ABC):
         Parameters
         ----------
         visitor : `TreeVisitor`
-            Instance of vistor type.
+            Instance of visitor type.
         """
 
 
@@ -315,3 +315,107 @@ class Parens(Node):
 
     def __str__(self) -> str:
         return "({expr})".format(**vars(self))
+
+
+class TupleNode(Node):
+    """Node representing a tuple, sequence of parenthesized expressions.
+
+    Tuple is used to represent time ranges, for now parser supports tuples
+    with two items, though this class can be used to represent different
+    number of items in sequence.
+
+    Attributes
+    ----------
+    items : tuple of Node
+        Expressions inside parentheses.
+    """
+    def __init__(self, items: Tuple[Node, ...]):
+        Node.__init__(self, items)
+        self.items = items
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        items = tuple(item.visit(visitor) for item in self.items)
+        return visitor.visitTupleNode(items, self)
+
+    def __str__(self) -> str:
+        items = ", ".join(str(item) for item in self.items)
+        return f"({items})"
+
+
+class FunctionCall(Node):
+    """Node representing a function call.
+
+    Attributes
+    ----------
+    function : `str`
+        Name of the function.
+    args : `list` [ `Node` ]
+        Arguments passed to function.
+    """
+    def __init__(self, function: str, args: List[Node]):
+        Node.__init__(self, tuple(args))
+        self.name = function
+        self.args = args[:]
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        args = [arg.visit(visitor) for arg in self.args]
+        return visitor.visitFunctionCall(self.name, args, self)
+
+    def __str__(self) -> str:
+        args = ", ".join(str(arg) for arg in self.args)
+        return f"{self.name}({args})"
+
+
+class PointNode(Node):
+    """Node representing a point, (ra, dec) pair.
+
+    Attributes
+    ----------
+    ra : `Node`
+        Node representing ra value.
+    dec : `Node`
+        Node representing dec value.
+    """
+    def __init__(self, ra: Node, dec: Node):
+        Node.__init__(self, (ra, dec))
+        self.ra = ra
+        self.dec = dec
+
+    def visit(self, visitor: TreeVisitor) -> Any:
+        # Docstring inherited from Node.visit
+        ra = self.ra.visit(visitor)
+        dec = self.dec.visit(visitor)
+        return visitor.visitPointNode(ra, dec, self)
+
+    def __str__(self) -> str:
+        return f"POINT({self.ra}, {self.dec})"
+
+
+def function_call(function: str, args: List[Node]) -> Node:
+    """Factory method for nodes representing function calls.
+
+    Attributes
+    ----------
+    function : `str`
+        Name of the function.
+    args : `list` [ `Node` ]
+        Arguments passed to function.
+
+    Notes
+    -----
+    Our parser supports arbitrary functions with arbitrary list of parameters.
+    For now the main purpose of the syntax is to support POINT(ra, dec)
+    construct, and to simplify implementation of visitors we define special
+    type of node for that. This method makes `PointNode` instance for that
+    special function call and generic `FunctionCall` instance for all other
+    functions.
+    """
+    if function.upper() == "POINT":
+        if len(args) != 2:
+            raise ValueError("POINT requires two arguments (ra, dec)")
+        return PointNode(*args)
+    else:
+        # generic function call
+        return FunctionCall(function, args)
