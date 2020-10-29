@@ -120,9 +120,18 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         """Init the logging system and config it for the command.
 
         Subcommands may further configure the log settings."""
-        CliLog.initLog(longlog=ctx.params.get(long_log_option.name(), False))
-        if log_level_option.name() in ctx.params:
-            CliLog.setLogLevels(ctx.params[log_level_option.name()])
+        if isinstance(ctx, click.Context):
+            CliLog.initLog(longlog=ctx.params.get(long_log_option.name(), False))
+            if log_level_option.name() in ctx.params:
+                CliLog.setLogLevels(ctx.params[log_level_option.name()])
+        else:
+            # This works around a bug in sphinx-click, where it passes in the
+            # click.MultiCommand instead of the context.
+            # https://github.com/click-contrib/sphinx-click/issues/70
+            CliLog.initLog(longlog=False)
+            logging.debug("The passed-in context was not a click.Context, could not determine longlog or log"
+                          "level values.")
+
 
     @classmethod
     def getPluginList(cls):
