@@ -109,19 +109,6 @@ class RegistryTests(ABC):
         backend.register()
         backend.load(datastore=None)
 
-    def assertRowCount(self, registry: Registry, table: str, count: int):
-        """Check the number of rows in table.
-        """
-        # TODO: all tests that rely on this method should be rewritten, as it
-        # needs to depend on Registry implementation details to have any chance
-        # of working.
-        sql = sqlalchemy.sql.select(
-            [sqlalchemy.sql.func.count()]
-        ).select_from(
-            getattr(registry._tables, table)
-        )
-        self.assertEqual(registry._db.query(sql).scalar(), count)
-
     def testOpaque(self):
         """Tests for `Registry.registerOpaqueTable`,
         `Registry.insertOpaqueData`, `Registry.fetchOpaqueData`, and
