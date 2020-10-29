@@ -143,6 +143,13 @@ elements:
     implies: [physical_filter, visit_system]
     metadata:
       -
+        name: day_obs
+        type: int
+        doc: >
+          Day of observation as defined by the observatory (YYYYMMDD format).
+          If a visit crosses multiple days this entry will be the earliest
+          day of any of the exposures that make up the visit.
+      -
         name: exposure_time
         type: float
         doc: >
@@ -201,7 +208,7 @@ elements:
         name: id
         type: int
       -
-        name: name
+        name: obs_id
         type: string
         length: 64
     requires: [instrument]
@@ -227,6 +234,18 @@ elements:
         doc: >
           The reason this observation was taken. (e.g. science,
           filter scan, unknown).
+      -
+        name: day_obs
+        type: int
+        doc: >
+          Day of observation as defined by the observatory (YYYYMMDD format).
+      -
+        name: seq_num
+        type: int
+        doc: >
+          Counter for the observation within a larger sequence. Context
+          of the sequence number is observatory specific. Can be
+          a global counter or counter within day_obs.
       -
         name: group_name
         type: string
