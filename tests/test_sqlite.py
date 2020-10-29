@@ -34,6 +34,7 @@ from lsst.sphgeom import ConvexPolygon, UnitVector3d
 
 from lsst.daf.butler import ddl
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
+from lsst.daf.butler.registry.attributes import MissingAttributesTableError
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.registry import Registry
 
@@ -326,6 +327,17 @@ class SqliteMemoryRegistryTests(RegistryTests):
         self.assertIsInstance(getRegion({"htm9": 1000}), ConvexPolygon)
         # patch_htm7_overlap should not be empty
         self.assertNotEqual(len(list(registry.queryDataIds(["patch", "htm7"]))), 0)
+
+    def testMissingAttributes(self):
+        """Test for instantiating a registry against outdated schema which
+        misses butler_attributes table.
+        """
+        # TODO: Once we have stable gen3 schema everywhere this test can be
+        # dropped (DM-27373).
+        config = self.makeRegistryConfig()
+        config["db"] = "sqlite://"
+        with self.assertRaises(MissingAttributesTableError):
+            Registry.fromConfig(config)
 
 
 class SqliteMemoryRegistryNameKeyCollMgrTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
