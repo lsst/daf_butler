@@ -27,7 +27,6 @@ from typing import Iterable, Optional
 import sqlalchemy
 
 from ...core import (
-    Config,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
@@ -36,7 +35,7 @@ from ...core import (
     TimespanDatabaseRepresentation,
 )
 from ..queries import QueryBuilder
-from ..interfaces import Database, SkyPixDimensionRecordStorage, StaticTablesContext
+from ..interfaces import SkyPixDimensionRecordStorage
 
 
 class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
@@ -52,13 +51,6 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
     """
     def __init__(self, dimension: SkyPixDimension):
         self._dimension = dimension
-
-    @classmethod
-    def initialize(cls, db: Database, element: SkyPixDimension, *,
-                   context: Optional[StaticTablesContext] = None,
-                   config: Optional[Config] = None) -> SkyPixDimensionRecordStorage:
-        # Docstring inherited from DimensionRecordStorage.
-        return cls(element)
 
     @property
     def element(self) -> SkyPixDimension:

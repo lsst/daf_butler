@@ -48,11 +48,7 @@ from ._elements import Dimension
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
-    from ...registry.interfaces import (
-        Database,
-        SkyPixDimensionRecordStorage,
-        StaticTablesContext,
-    )
+    from ...registry.interfaces import SkyPixDimensionRecordStorage
 
 
 class SkyPixSystem(TopologicalFamily):
@@ -148,14 +144,17 @@ class SkyPixDimension(Dimension):
         # Docstring inherited from DimensionElement.hasTable.
         return False
 
-    def makeStorage(
-        self,
-        db: Database, *,
-        context: Optional[StaticTablesContext] = None,
-    ) -> SkyPixDimensionRecordStorage:
-        # Docstring inherited from DimensionElement.
+    def makeStorage(self) -> SkyPixDimensionRecordStorage:
+        """Construct the `DimensionRecordStorage` instance that should
+        be used to back this element in a registry.
+
+        Returns
+        -------
+        storage : `SkyPixDimensionRecordStorage`
+            Storage object that should back this element in a registry.
+        """
         from ...registry.dimensions.skypix import BasicSkyPixDimensionRecordStorage
-        return BasicSkyPixDimensionRecordStorage.initialize(db, self, context=context)
+        return BasicSkyPixDimensionRecordStorage(self)
 
     @property
     def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:

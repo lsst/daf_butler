@@ -41,7 +41,7 @@ from typing import (
 from lsst.utils import doImport
 
 from .. import ddl
-from ..named import NamedValueAbstractSet, NamedValueSet
+from ..named import NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
 from ..utils import cached_getter
 from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
 
@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from ...registry.interfaces import (
         Database,
         DatabaseDimensionRecordStorage,
+        GovernorDimensionRecordStorage,
         StaticTablesContext,
     )
 
@@ -233,12 +234,31 @@ class DatabaseDimensionElement(DimensionElement):
         self,
         db: Database, *,
         context: Optional[StaticTablesContext] = None,
+        governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
-        # Docstring inherited from DimensionElement.
+        """Construct the `DimensionRecordStorage` instance that should
+        be used to back this element in a registry.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+        governors : `NamedKeyMapping`
+            Mapping from `GovernorDimension` to the record storage backend for
+            that dimension, containing all governor dimensions.
+
+        Returns
+        -------
+        storage : `DatabaseDimensionRecordStorage`
+            Storage object that should back this element in a registry.
+        """
         from ...registry.interfaces import DatabaseDimensionRecordStorage
         cls = doImport(self._storage["cls"])
         assert issubclass(cls, DatabaseDimensionRecordStorage)
-        return cls.initialize(db, self, context=context, config=self._storage)
+        return cls.initialize(db, self, context=context, config=self._storage, governors=governors)
 
 
 class DatabaseDimension(Dimension, DatabaseDimensionElement):

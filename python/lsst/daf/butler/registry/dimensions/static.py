@@ -24,8 +24,8 @@ from typing import List, Optional
 
 import sqlalchemy
 
-from ...core import NamedKeyDict
-from ...core.dimensions import DimensionElement, DimensionUniverse
+from ...core import NamedKeyDict, SkyPixDimension
+from ...core.dimensions import DimensionElement, DimensionUniverse, GovernorDimension
 from ..interfaces import (
     Database,
     StaticTablesContext,
@@ -73,9 +73,14 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     def initialize(cls, db: Database, context: StaticTablesContext, *,
                    universe: DimensionUniverse) -> DimensionRecordStorageManager:
         # Docstring inherited from DimensionRecordStorageManager.
+        governors: NamedKeyDict[GovernorDimension, GovernorDimensionRecordStorage] = NamedKeyDict()
         records: NamedKeyDict[DimensionElement, DimensionRecordStorage] = NamedKeyDict()
-        for element in universe.getStaticElements():
-            records[element] = element.makeStorage(db, context=context)
+        for dimension in universe.getGovernorDimensions():
+            storage = dimension.makeStorage(db, context=context)
+            governors[dimension] = storage
+            records[dimension] = storage
+        for element in universe.getDatabaseElements():
+            records[element] = element.makeStorage(db, context=context, governors=governors)
         return cls(db=db, records=records, universe=universe)
 
     def refresh(self) -> None:
@@ -87,11 +92,14 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
 
     def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
         # Docstring inherited from DimensionRecordStorageManager.
-        return self._records.get(element)
+        r = self._records.get(element)
+        if r is None and isinstance(element, SkyPixDimension):
+            return self.universe.skypix[element.system][element.level].makeStorage()
+        return r
 
     def register(self, element: DimensionElement) -> DimensionRecordStorage:
         # Docstring inherited from DimensionRecordStorageManager.
-        result = self._records.get(element)
+        result = self.get(element)
         assert result, "All records instances should be created in initialize()."
         return result
 

@@ -33,7 +33,9 @@ from ...core import (
     ddl,
     DimensionElement,
     DimensionRecord,
+    GovernorDimension,
     NamedKeyDict,
+    NamedKeyMapping,
     NamedValueSet,
     REGION_FIELD_SPEC,
     TimespanDatabaseRepresentation,
@@ -41,6 +43,7 @@ from ...core import (
 from ..interfaces import (
     Database,
     DatabaseDimensionRecordStorage,
+    GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
 from ..queries import QueryBuilder
@@ -102,10 +105,15 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         assert element.spatial is not None
 
     @classmethod
-    def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
-                   context: Optional[StaticTablesContext] = None,
-                   config: Config) -> DatabaseDimensionRecordStorage:
-        # Docstring inherited from DimensionRecordStorage.
+    def initialize(
+        cls,
+        db: Database,
+        element: DatabaseDimensionElement, *,
+        context: Optional[StaticTablesContext] = None,
+        config: Config,
+        governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+    ) -> DatabaseDimensionRecordStorage:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
         if context is not None:
             method = context.addTable
         else:

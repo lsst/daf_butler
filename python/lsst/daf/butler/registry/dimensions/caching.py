@@ -36,12 +36,15 @@ from ...core import (
     DataCoordinateSet,
     DimensionElement,
     DimensionRecord,
+    GovernorDimension,
     NamedKeyDict,
+    NamedKeyMapping,
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import (
     Database,
     DatabaseDimensionRecordStorage,
+    GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
 from ..queries import QueryBuilder
@@ -62,13 +65,18 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         self._cache: Dict[DataCoordinate, Optional[DimensionRecord]] = {}
 
     @classmethod
-    def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
-                   context: Optional[StaticTablesContext] = None,
-                   config: Config) -> DatabaseDimensionRecordStorage:
-        # Docstring inherited from DimensionRecordStorage.
+    def initialize(
+        cls,
+        db: Database,
+        element: DatabaseDimensionElement, *,
+        context: Optional[StaticTablesContext] = None,
+        config: Config,
+        governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+    ) -> DatabaseDimensionRecordStorage:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
         config = config["nested"]
         NestedClass = doImport(config["cls"])
-        nested = NestedClass.initialize(db, element, context=context, config=config)
+        nested = NestedClass.initialize(db, element, context=context, config=config, governors=governors)
         return cls(nested)
 
     @property

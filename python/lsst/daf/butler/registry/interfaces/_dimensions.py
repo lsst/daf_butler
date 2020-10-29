@@ -44,6 +44,7 @@ if TYPE_CHECKING:
         DimensionRecord,
         DimensionUniverse,
         NamedKeyDict,
+        NamedKeyMapping,
         TimespanDatabaseRepresentation,
     )
     from ..queries import QueryBuilder
@@ -219,17 +220,18 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
 
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, element: GovernorDimension, *,
+    def initialize(cls, db: Database, dimension: GovernorDimension, *,
                    context: Optional[StaticTablesContext] = None,
-                   config: Config) -> GovernorDimensionRecordStorage:
+                   config: Config,
+                   ) -> GovernorDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
         Parameters
         ----------
         db : `Database`
             Interface to the underlying database engine and namespace.
-        element : `GovernorDimension`
-            Dimension element the new instance will manage records for.
+        dimension : `GovernorDimension`
+            Dimension the new instance will manage records for.
         context : `StaticTablesContext`, optional
             If provided, an object to use to create any new tables.  If not
             provided, ``db.ensureTableExists`` should be used instead.
@@ -274,32 +276,6 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
     storage for `SkyPixDimension` instances.
     """
 
-    @classmethod
-    @abstractmethod
-    def initialize(cls, db: Database, element: SkyPixDimension, *,
-                   context: Optional[StaticTablesContext] = None,
-                   config: Config) -> SkyPixDimensionRecordStorage:
-        """Construct an instance of this class using a standardized interface.
-
-        Parameters
-        ----------
-        db : `Database`
-            Interface to the underlying database engine and namespace.
-        element : `SkyPixDimensoin`
-            Dimension element the new instance will manage records for.
-        context : `StaticTablesContext`, optional
-            If provided, an object to use to create any new tables.  If not
-            provided, ``db.ensureTableExists`` should be used instead.
-        config : `Config`
-            Extra configuration options specific to the implementation.
-
-        Returns
-        -------
-        storage : `SkyPixDimensionRecordStorage`
-            A new `SkyPixDimensionRecordStorage` subclass instance.
-        """
-        raise NotImplementedError()
-
     @property
     @abstractmethod
     def element(self) -> SkyPixDimension:
@@ -316,7 +292,9 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
     @abstractmethod
     def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
                    context: Optional[StaticTablesContext] = None,
-                   config: Config) -> DatabaseDimensionRecordStorage:
+                   config: Config,
+                   governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+                   ) -> DatabaseDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
         Parameters
@@ -330,6 +308,8 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
             provided, ``db.ensureTableExists`` should be used instead.
         config : `Config`
             Extra configuration options specific to the implementation.
+        governors : `NamedKeyMapping`
+            Mapping containing all governor dimension storage implementations.
 
         Returns
         -------
