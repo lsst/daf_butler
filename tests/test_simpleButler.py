@@ -284,14 +284,14 @@ class SimpleButlerTestCase(unittest.TestCase):
             {
                 "instrument": "Cam1",
                 "id": 3,
-                "name": "three",
+                "obs_id": "three",
                 "timespan": Timespan(t1, t2),
                 "physical_filter": "Cam1-G",
             },
             {
                 "instrument": "Cam1",
                 "id": 4,
-                "name": "four",
+                "obs_id": "four",
                 "timespan": Timespan(t2, t3),
                 "physical_filter": "Cam1-G",
             },
