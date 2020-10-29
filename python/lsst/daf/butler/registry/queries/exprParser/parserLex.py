@@ -105,6 +105,7 @@ class ParserLex:
         OR="OR",
         AND="AND",
         NOT="NOT",
+        OVERLAPS="OVERLAPS",
         # BETWEEN="BETWEEN",
         # LIKE="LIKE",
         # ESCAPE="ESCAPE",
@@ -117,9 +118,9 @@ class ParserLex:
         'TIME_LITERAL',
         'STRING_LITERAL',
         'RANGE_LITERAL',
-        # 'TIME_LITERAL',
         # 'DURATION_LITERAL',
-        'IDENTIFIER',
+        'QUALIFIED_IDENTIFIER',
+        'SIMPLE_IDENTIFIER',
         'LPAREN', 'RPAREN',
         'EQ', 'NE', 'LT', 'LE', 'GT', 'GE',
         'ADD', 'SUB', 'MUL', 'DIV', 'MOD',
@@ -184,11 +185,22 @@ class ParserLex:
         """
         return t
 
-    # identifiers can have dot, and we only support ASCII
-    def t_IDENTIFIER(self, t):
-        r"[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?"
-        # Check for reserved words
-        t.type = self.reserved.get(t.value.upper(), 'IDENTIFIER')
+    # qualified identifiers have one or two dots
+    def t_QUALIFIED_IDENTIFIER(self, t):
+        r"[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*){1,2}"
+        t.type = 'QUALIFIED_IDENTIFIER'
+        return t
+
+    # we only support ASCII in identifier names
+    def t_SIMPLE_IDENTIFIER(self, t):
+        r"[a-zA-Z_][a-zA-Z0-9_]*"
+        # Check for reserved words and make sure they are upper case
+        reserved = self.reserved.get(t.value.upper())
+        if reserved is not None:
+            t.type = reserved
+            t.value = reserved
+        else:
+            t.type = "SIMPLE_IDENTIFIER"
         return t
 
     def t_error(self, t):

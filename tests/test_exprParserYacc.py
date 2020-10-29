@@ -215,6 +215,28 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertEqual(tree.lhs.value, '333')
         self.assertEqual(tree.rhs.value, '76')
 
+        # tests for overlaps operator
+        tree = parser.parse("region1 OVERLAPS region2")
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, "OVERLAPS")
+        self.assertIsInstance(tree.lhs, exprTree.Identifier)
+        self.assertIsInstance(tree.rhs, exprTree.Identifier)
+
+        # time ranges with literals
+        tree = parser.parse("(T'2020-01-01', T'2020-01-02') overlaps (T'2020-01-01', T'2020-01-02')")
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, "OVERLAPS")
+        self.assertIsInstance(tree.lhs, exprTree.TupleNode)
+        self.assertIsInstance(tree.rhs, exprTree.TupleNode)
+
+        # but syntax allows anything, it's visitor responsibility to decide
+        # what are the right operands
+        tree = parser.parse("x+y Overlaps function(x-y)")
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, "OVERLAPS")
+        self.assertIsInstance(tree.lhs, exprTree.BinaryOp)
+        self.assertIsInstance(tree.rhs, exprTree.FunctionCall)
+
     def testIsIn(self):
         """Tests for IN
         """
@@ -260,6 +282,41 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertIsInstance(tree.values[1], exprTree.NumericLiteral)
         self.assertEqual(tree.values[1].value, '-2000')
 
+        # test for time contained in time range, all literals
+        tree = parser.parse("T'2020-01-01' in (T'2020-01-01', T'2020-01-02')")
+        self.assertIsInstance(tree, exprTree.IsIn)
+        self.assertFalse(tree.not_in)
+        self.assertIsInstance(tree.lhs, exprTree.TimeLiteral)
+        self.assertEqual(len(tree.values), 2)
+        self.assertIsInstance(tree.values[0], exprTree.TimeLiteral)
+        self.assertIsInstance(tree.values[1], exprTree.TimeLiteral)
+
+        # test for time range contained in time range
+        tree = parser.parse("(T'2020-01-01', t1) in (T'2020-01-01', t2)")
+        self.assertIsInstance(tree, exprTree.IsIn)
+        self.assertFalse(tree.not_in)
+        self.assertIsInstance(tree.lhs, exprTree.TupleNode)
+        self.assertEqual(len(tree.values), 2)
+        self.assertIsInstance(tree.values[0], exprTree.TimeLiteral)
+        self.assertIsInstance(tree.values[1], exprTree.Identifier)
+
+        # test for point in region (we don't have region syntax yet, use
+        # identifier)
+        tree = parser.parse("point(1, 2) in (region1)")
+        self.assertIsInstance(tree, exprTree.IsIn)
+        self.assertFalse(tree.not_in)
+        self.assertIsInstance(tree.lhs, exprTree.PointNode)
+        self.assertEqual(len(tree.values), 1)
+        self.assertIsInstance(tree.values[0], exprTree.Identifier)
+
+        # parens on right hand side are required
+        with self.assertRaises(ParseError):
+            parser.parse("point(1, 2) in region1")
+
+        # and we don't support full expressions in RHS list
+        with self.assertRaises(ParseError):
+            parser.parse("point(1, 2) in (x + y)")
+
     def testCompareOps(self):
         """Tests for comparison operators
         """
@@ -294,6 +351,78 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertIsInstance(tree.operand, exprTree.Identifier)
         self.assertEqual(tree.operand.name, 'b')
 
+    def testFunctionCall(self):
+        """Tests for function calls
+        """
+        parser = ParserYacc()
+
+        tree = parser.parse("f()")
+        self.assertIsInstance(tree, exprTree.FunctionCall)
+        self.assertEqual(tree.name, "f")
+        self.assertEqual(tree.args, [])
+
+        tree = parser.parse("f1(a)")
+        self.assertIsInstance(tree, exprTree.FunctionCall)
+        self.assertEqual(tree.name, "f1")
+        self.assertEqual(len(tree.args), 1)
+        self.assertIsInstance(tree.args[0], exprTree.Identifier)
+        self.assertEqual(tree.args[0].name, "a")
+
+        tree = parser.parse("anything_goes('a', x+y, ((a AND b) or (C = D)), NOT T < 42., Z IN (1,2,3,4))")
+        self.assertIsInstance(tree, exprTree.FunctionCall)
+        self.assertEqual(tree.name, "anything_goes")
+        self.assertEqual(len(tree.args), 5)
+        self.assertIsInstance(tree.args[0], exprTree.StringLiteral)
+        self.assertIsInstance(tree.args[1], exprTree.BinaryOp)
+        self.assertIsInstance(tree.args[2], exprTree.Parens)
+        self.assertIsInstance(tree.args[3], exprTree.UnaryOp)
+        self.assertIsInstance(tree.args[4], exprTree.IsIn)
+
+        with self.assertRaises(ParseError):
+            parser.parse("f.ff()")
+
+    def testPointNode(self):
+        """Tests for POINT() function
+        """
+        parser = ParserYacc()
+
+        # POINT function makes special node type
+        tree = parser.parse("POINT(Object.ra, 0.0)")
+        self.assertIsInstance(tree, exprTree.PointNode)
+        self.assertIsInstance(tree.ra, exprTree.Identifier)
+        self.assertEqual(tree.ra.name, "Object.ra")
+        self.assertIsInstance(tree.dec, exprTree.NumericLiteral)
+        self.assertEqual(tree.dec.value, "0.0")
+
+        # it is not case sensitive
+        tree = parser.parse("Point(1, 1)")
+        self.assertIsInstance(tree, exprTree.PointNode)
+
+    def testTupleNode(self):
+        """Tests for tuple
+        """
+        parser = ParserYacc()
+
+        # test with simple identifier and literal
+        tree = parser.parse("(Object.ra, 0.0)")
+        self.assertIsInstance(tree, exprTree.TupleNode)
+        self.assertEqual(len(tree.items), 2)
+        self.assertIsInstance(tree.items[0], exprTree.Identifier)
+        self.assertEqual(tree.items[0].name, "Object.ra")
+        self.assertIsInstance(tree.items[1], exprTree.NumericLiteral)
+        self.assertEqual(tree.items[1].value, "0.0")
+
+        # any expression can appear in tuple
+        tree = parser.parse("(x+y, ((a AND b) or (C = D)))")
+        self.assertIsInstance(tree, exprTree.TupleNode)
+        self.assertEqual(len(tree.items), 2)
+        self.assertIsInstance(tree.items[0], exprTree.BinaryOp)
+        self.assertIsInstance(tree.items[1], exprTree.Parens)
+
+        # only two items can appear in a tuple
+        with self.assertRaises(ParseError):
+            parser.parse("(1, 2, 3)")
+
     def testExpression(self):
         """Test for more or less complete expression"""
         parser = ParserYacc()
@@ -315,6 +444,45 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertIsInstance(tree.rhs.rhs, exprTree.StringLiteral)
         self.assertEqual(tree.rhs.rhs.value, 'i')
 
+    def testSubstitution(self):
+        """Test for identifier substitution"""
+        # substitution is not recursive, so we can swap id2/id3
+        idMap = {
+            "id1": exprTree.StringLiteral("id1 value"),
+            "id2": exprTree.Identifier("id3"),
+            "id3": exprTree.Identifier("id2"),
+            "POINT": exprTree.StringLiteral("not used"),
+            "OR": exprTree.StringLiteral("not used"),
+        }
+        parser = ParserYacc(idMap=idMap)
+
+        expression = ("id1 = 'v'")
+        tree = parser.parse(expression)
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, '=')
+        self.assertIsInstance(tree.lhs, exprTree.StringLiteral)
+        self.assertEqual(tree.lhs.value, "id1 value")
+
+        expression = ("id2 - id3")
+        tree = parser.parse(expression)
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, '-')
+        self.assertIsInstance(tree.lhs, exprTree.Identifier)
+        self.assertEqual(tree.lhs.name, "id3")
+        self.assertIsInstance(tree.rhs, exprTree.Identifier)
+        self.assertEqual(tree.rhs.name, "id2")
+
+        # reserved words are not substituted
+        expression = ("id2 OR id3")
+        tree = parser.parse(expression)
+        self.assertIsInstance(tree, exprTree.BinaryOp)
+        self.assertEqual(tree.op, "OR")
+
+        # function names are not substituted
+        expression = ("POINT(1, 2)")
+        tree = parser.parse(expression)
+        self.assertIsInstance(tree, exprTree.PointNode)
+
     def testException(self):
         """Test for exceptional cases"""
 
@@ -331,12 +499,12 @@ class ParserLexTestCase(unittest.TestCase):
         expression = "(1, 2, 3)"
         with self.assertRaises(ParseError) as catcher:
             parser.parse(expression)
-        _assertExc(catcher.exception, expression, ",", 2, 1, 2)
+        _assertExc(catcher.exception, expression, ",", 5, 1, 5)
 
         expression = "\n(1\n,\n 2, 3)"
         with self.assertRaises(ParseError) as catcher:
             parser.parse(expression)
-        _assertExc(catcher.exception, expression, ",", 4, 3, 0)
+        _assertExc(catcher.exception, expression, ",", 8, 4, 2)
 
         expression = "T'not-a-time'"
         with self.assertRaises(ParseError) as catcher:

@@ -35,8 +35,8 @@ import re
 #  Imports for other modules --
 # -----------------------------
 import astropy.time
-from .exprTree import (BinaryOp, Identifier, IsIn, NumericLiteral, Parens,
-                       RangeLiteral, StringLiteral, TimeLiteral, UnaryOp)
+from .exprTree import (BinaryOp, function_call, Identifier, IsIn, NumericLiteral, Parens,
+                       RangeLiteral, StringLiteral, TimeLiteral, TupleNode, UnaryOp)
 from .ply import yacc
 from .parserLex import ParserLex
 
@@ -190,14 +190,29 @@ class ParserEOFError(ParserYaccError):
 
 class ParserYacc:
     """Class which defines PLY grammar.
+
+    Based on MySQL grammar for expressions
+    (https://dev.mysql.com/doc/refman/5.7/en/expressions.html).
+
+    Parameters
+    ----------
+    idMap : `collections.abc.Mapping` [ `str`, `Node` ], optional
+        Mapping that provides substitutions for identifiers in the expression.
+        The key in the map is the identifier name, the value is the
+        `exprTree.Node` instance that will replace identifier in the full
+        expression. If identifier does not exist in the mapping then
+        `Identifier` is inserted into parse tree.
+    **kwargs
+        optional keyword arguments that are passed to `yacc.yacc` constructor.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, idMap=None, **kwargs):
 
         kw = dict(write_tables=0, debug=False)
         kw.update(kwargs)
 
         self.parser = yacc.yacc(module=self, **kw)
+        self._idMap = idMap or {}
 
     def parse(self, input, lexer=None, debug=False, tracking=False):
         """Parse input expression ad return parsed tree object.
@@ -229,6 +244,7 @@ class ParserYacc:
     precedence = (
         ('left', 'OR'),
         ('left', 'AND'),
+        ('nonassoc', 'OVERLAPS'),  # Nonassociative operators
         ('nonassoc', 'EQ', 'NE'),  # Nonassociative operators
         ('nonassoc', 'LT', 'LE', 'GT', 'GE'),  # Nonassociative operators
         ('left', 'ADD', 'SUB'),
@@ -268,6 +284,7 @@ class ParserYacc:
                          | bool_primary LE predicate
                          | bool_primary GE predicate
                          | bool_primary GT predicate
+                         | bool_primary OVERLAPS predicate
                          | predicate
         """
         if len(p) == 2:
@@ -276,8 +293,8 @@ class ParserYacc:
             p[0] = BinaryOp(lhs=p[1], op=p[2], rhs=p[3])
 
     def p_predicate(self, p):
-        """ predicate : bit_expr IN LPAREN literal_list RPAREN
-                      | bit_expr NOT IN LPAREN literal_list RPAREN
+        """ predicate : bit_expr IN LPAREN literal_or_id_list RPAREN
+                      | bit_expr NOT IN LPAREN literal_or_id_list RPAREN
                       | bit_expr
         """
         if len(p) == 6:
@@ -287,9 +304,20 @@ class ParserYacc:
         else:
             p[0] = p[1]
 
-    def p_literal_list(self, p):
-        """ literal_list : literal_list COMMA literal
-                         | literal
+    def p_identifier(self, p):
+        """ identifier : SIMPLE_IDENTIFIER
+                       | QUALIFIED_IDENTIFIER
+        """
+        node = self._idMap.get(p[1])
+        if node is None:
+            node = Identifier(p[1])
+        p[0] = node
+
+    def p_literal_or_id_list(self, p):
+        """ literal_or_id_list : literal_or_id_list COMMA literal
+                               | literal_or_id_list COMMA identifier
+                               | literal
+                               | identifier
         """
         if len(p) == 2:
             p[0] = [p[1]]
@@ -315,9 +343,14 @@ class ParserYacc:
         p[0] = p[1]
 
     def p_simple_expr_id(self, p):
-        """ simple_expr : IDENTIFIER
+        """ simple_expr : identifier
         """
-        p[0] = Identifier(p[1])
+        p[0] = p[1]
+
+    def p_simple_expr_function_call(self, p):
+        """ simple_expr : function_call
+        """
+        p[0] = p[1]
 
     def p_simple_expr_unary(self, p):
         """ simple_expr : ADD simple_expr %prec UPLUS
@@ -329,6 +362,13 @@ class ParserYacc:
         """ simple_expr : LPAREN expr RPAREN
         """
         p[0] = Parens(p[2])
+
+    def p_simple_expr_tuple(self, p):
+        """ simple_expr : LPAREN expr COMMA expr RPAREN
+        """
+        # For now we only support tuples with two items,
+        # these are used for time ranges.
+        p[0] = TupleNode((p[2], p[4]))
 
     def p_literal_num(self, p):
         """ literal : NUMERIC_LITERAL
@@ -361,6 +401,24 @@ class ParserYacc:
         # RANGE_LITERAL value is tuple of three numbers
         start, stop, stride = p[1]
         p[0] = RangeLiteral(start, stop, stride)
+
+    def p_function_call(self, p):
+        """ function_call : SIMPLE_IDENTIFIER LPAREN expr_list RPAREN
+        """
+        p[0] = function_call(p[1], p[3])
+
+    def p_expr_list(self, p):
+        """ expr_list : expr_list COMMA expr
+                      | expr
+                      | empty
+        """
+        if len(p) == 2:
+            if p[1] is None:
+                p[0] = []
+            else:
+                p[0] = [p[1]]
+        else:
+            p[0] = p[1] + [p[3]]
 
     # ---------- end of all grammar rules ----------
 
