@@ -132,7 +132,6 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             logging.debug("The passed-in context was not a click.Context, could not determine longlog or log"
                           "level values.")
 
-
     @classmethod
     def getPluginList(cls):
         """Get the list of importable yaml files that contain cli data for this

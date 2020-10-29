@@ -199,13 +199,13 @@ class CliLogTestBase():
         # and unittest.TestCase so that these tests are run in that
         # package.
         timestampRegex = re.compile(
-            r"^[A-Z]+ [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(.[0-9]{3})?[-,+][0-9]{4} .*")
+            r".* [A-Z]+ [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(.[0-9]{3})?[-,+][0-9]{4} .*")
 
         # When longlog=False, log lines start with the module name and
         # log level, for example:
         # lsst.daf.butler.core.config DEBUG: ...
         modulesRegex = re.compile(
-            r"^([a-z]+\.)+[a-z]+ [A-Z]+: .*")
+            r".* ([a-z]+\.)+[a-z]+ [A-Z]+: .*")
 
         with self.runner.isolated_filesystem():
             for longlog in (True, False):
@@ -216,7 +216,10 @@ class CliLogTestBase():
                 else:
                     args = ("butler", "--log-level", "DEBUG", "create", "here")
                 result = subprocess.run(args, capture_output=True)
-                output = StringIO((result.stderr.decode()))
+                # There are cases where the newlines are stripped from the log
+                # output (like in Jenkins), since we can't depend on newlines
+                # in log output they are removed here from test output.
+                output = StringIO((result.stderr.decode().replace("\n", " ")))
                 startedWithTimestamp = any([timestampRegex.match(line) for line in output.readlines()])
                 output.seek(0)
                 startedWithModule = any(modulesRegex.match(line) for line in output.readlines())
