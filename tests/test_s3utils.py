@@ -32,8 +32,8 @@ except ImportError:
         """
         return cls
 
-from lsst.daf.butler.core.s3utils import (getS3Client, bucketExists, s3CheckFileExists,
-                                          setAwsEnvCredentials, unsetAwsEnvCredentials)
+from lsst.daf.butler.core._butlerUri.s3utils import (getS3Client, bucketExists, s3CheckFileExists,
+                                                     setAwsEnvCredentials, unsetAwsEnvCredentials)
 from lsst.daf.butler import Location, ButlerURI
 
 

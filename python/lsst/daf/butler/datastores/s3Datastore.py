@@ -60,7 +60,7 @@ from lsst.daf.butler import (
 )
 
 from .remoteFileDatastore import RemoteFileDatastore
-from lsst.daf.butler.core.s3utils import getS3Client, bucketExists
+from lsst.daf.butler.core._butlerUri.s3utils import getS3Client, bucketExists
 
 if TYPE_CHECKING:
     from .fileLikeDatastore import DatastoreFileGetInformation

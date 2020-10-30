@@ -24,10 +24,10 @@ import requests
 import responses
 import os
 
-from lsst.daf.butler.core.webdavutils import (folderExists, webdavCheckFileExists,
-                                              isTokenAuth, _getFileURL,
-                                              webdavDeleteFile, isWebdavEndpoint,
-                                              finalurl)
+from lsst.daf.butler.core._butlerUri.http import (folderExists, webdavCheckFileExists,
+                                                  isTokenAuth, _getFileURL,
+                                                  webdavDeleteFile, isWebdavEndpoint,
+                                                  finalurl)
 from lsst.daf.butler import Location, ButlerURI
 
 
@@ -84,9 +84,9 @@ class WebdavUtilsTestCase(unittest.TestCase):
     def testFolderExists(self):
 
         self.assertTrue(folderExists(f"https://{self.serverRoot}/{self.existingfolderName}",
-                        session=self.session))
+                                     session=self.session))
         self.assertFalse(folderExists(f"https://{self.serverRoot}/{self.notExistingfolderName}",
-                         session=self.session))
+                                      session=self.session))
 
     @responses.activate
     def testWebdavCheckFileExists(self):
