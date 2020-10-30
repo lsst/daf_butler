@@ -234,9 +234,8 @@ def certify_calibrations(*args, **kwargs):
 
 @click.command()
 @repo_argument(required=True)
-@dimensions_argument(help=unwrap("""DIMENSIONS are dimensions of the data IDs to yield. Will be expanded to a
-                                 complete DimensionGraph. --collections is required if using this
-                                 argument."""))
+@dimensions_argument(help=unwrap("""DIMENSIONS are the keys of the data IDs to yield, such as exposure,
+                                 instrument, or tract. Will be expanded to include any dependencies."""))
 @collections_option()
 @datasets_option(help=unwrap("""An expression that fully or partially identifies dataset types that should
                              constrain the yielded data IDs.  For example, including "raw" here would
@@ -246,9 +245,10 @@ def certify_calibrations(*args, **kwargs):
 @where_option(help=whereHelp)
 @options_file_option()
 def query_data_ids(**kwargs):
-    """List the data IDs in a repository."""
+    """List the data IDs in a repository.
+    """
     table = cli_handle_exception(script.queryDataIds, **kwargs)
     if table:
         table.pprint_all()
     else:
-        print("None")
+        print("No results.")
