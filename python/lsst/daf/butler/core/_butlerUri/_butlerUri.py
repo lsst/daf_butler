@@ -159,7 +159,7 @@ class ButlerURI:
                 from .http import ButlerHttpURI
                 subclass = ButlerHttpURI
             elif parsed.scheme == "resource":
-                # Rules for scheme names disasllow pkg_resource
+                # Rules for scheme names disallow pkg_resource
                 from .packageresource import ButlerPackageResourceURI
                 subclass = ButlerPackageResourceURI
             elif parsed.scheme == "mem":

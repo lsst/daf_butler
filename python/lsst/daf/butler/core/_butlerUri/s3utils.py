@@ -42,7 +42,7 @@ try:
 except ImportError:
     botocore = None
 
-from .location import Location
+from ..location import Location
 from ._butlerUri import ButlerURI
 
 

@@ -26,6 +26,8 @@ import os.path
 import logging
 import tempfile
 
+__all__ = ('ButlerS3URI',)
+
 from typing import (
     TYPE_CHECKING,
     Optional,
@@ -35,6 +37,7 @@ from typing import (
 
 from .utils import NoTransaction
 from ._butlerUri import ButlerURI
+from .s3utils import getS3Client, s3CheckFileExists, bucketExists
 
 
 if TYPE_CHECKING:
@@ -54,12 +57,9 @@ class ButlerS3URI(ButlerURI):
     def client(self) -> boto3.client:
         """Client object to address remote resource."""
         # Defer import for circular dependencies
-        from ..s3utils import getS3Client
         return getS3Client()
 
     def exists(self) -> bool:
-        # s3utils itself imports ButlerURI so defer this import
-        from ..s3utils import s3CheckFileExists, bucketExists
         if self.is_root:
             # Only check for the bucket since the path is irrelevant
             return bucketExists(self.netloc)
@@ -67,8 +67,6 @@ class ButlerS3URI(ButlerURI):
         return exists
 
     def size(self) -> int:
-        # s3utils itself imports ButlerURI so defer this import
-        from ..s3utils import s3CheckFileExists
         if self.dirLike:
             return 0
         _, sz = s3CheckFileExists(self, client=self.client)
@@ -106,7 +104,6 @@ class ButlerS3URI(ButlerURI):
 
     def mkdir(self) -> None:
         # Defer import for circular dependencies
-        from ..s3utils import bucketExists
         if not bucketExists(self.netloc):
             raise ValueError(f"Bucket {self.netloc} does not exist for {self}!")
 

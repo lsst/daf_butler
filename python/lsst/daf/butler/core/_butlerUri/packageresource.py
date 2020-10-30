@@ -22,6 +22,8 @@
 import pkg_resources
 import logging
 
+__all__ = ('ButlerPackageResourceURI',)
+
 from ._butlerUri import ButlerURI
 
 log = logging.getLogger(__name__)

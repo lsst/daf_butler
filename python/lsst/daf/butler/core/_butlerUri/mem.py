@@ -21,6 +21,8 @@
 
 from typing import Tuple
 
+__all__ = ('ButlerInMemoryURI',)
+
 from ._butlerUri import ButlerURI
 
 

@@ -29,6 +29,8 @@ import posixpath
 import copy
 import logging
 
+__all__ = ('ButlerFileURI',)
+
 from typing import (
     TYPE_CHECKING,
     cast,

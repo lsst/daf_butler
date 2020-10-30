@@ -27,6 +27,8 @@ import urllib
 import os.path
 import logging
 
+__all__ = ('ButlerSchemelessURI',)
+
 from pathlib import PurePath
 
 from typing import (
