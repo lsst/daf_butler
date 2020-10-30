@@ -199,7 +199,7 @@ class CliLogTestBase():
         # and unittest.TestCase so that these tests are run in that
         # package.
         timestampRegex = re.compile(
-            r".* [A-Z]+ [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(.[0-9]{3})?[-,+][0-9]{4} .*")
+            r".*[A-Z]+ [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(.[0-9]{3})?([-,+][0-9]{4}|Z) .*")
 
         # When longlog=False, log lines start with the module name and
         # log level, for example:
