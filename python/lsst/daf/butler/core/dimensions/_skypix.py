@@ -32,6 +32,7 @@ from typing import (
     Mapping,
     Optional,
     Type,
+    TYPE_CHECKING,
 )
 
 import sqlalchemy
@@ -44,6 +45,13 @@ from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, Topo
 from ..named import NamedValueAbstractSet, NamedValueSet
 from ._elements import Dimension
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
+
+if TYPE_CHECKING:
+    from ...registry.interfaces import (
+        Database,
+        SkyPixDimensionRecordStorage,
+        StaticTablesContext,
+    )
 
 
 class SkyPixSystem(TopologicalFamily):
@@ -101,10 +109,13 @@ class SkyPixDimension(Dimension):
         Integer level of this pixelization (smaller numbers are coarser grids).
     """
     def __init__(self, system: SkyPixSystem, level: int):
-        super().__init__(f"{system.name}{level}")
         self.system = system
         self.level = level
         self.pixelization = system.PixelizationClass(level)
+
+    @property
+    def name(self) -> str:
+        return f"{self.system.name}{self.level}"
 
     @property
     def required(self) -> NamedValueAbstractSet[Dimension]:
@@ -126,19 +137,18 @@ class SkyPixDimension(Dimension):
         # Docstring inherited from DimensionElement.
         return NamedValueSet().freeze()
 
-    @property
-    def cached(self) -> bool:
-        # Docstring inherited from DimensionElement.
-        return False
-
-    @property
-    def viewOf(self) -> Optional[str]:
-        # Docstring inherited from DimensionElement.
-        return None
-
     def hasTable(self) -> bool:
         # Docstring inherited from DimensionElement.hasTable.
         return False
+
+    def makeStorage(
+        self,
+        db: Database, *,
+        context: Optional[StaticTablesContext] = None,
+    ) -> SkyPixDimensionRecordStorage:
+        # Docstring inherited from DimensionElement.
+        from ...registry.dimensions.skypix import BasicSkyPixDimensionRecordStorage
+        return BasicSkyPixDimensionRecordStorage.initialize(db, self, context=context)
 
     @property
     def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:

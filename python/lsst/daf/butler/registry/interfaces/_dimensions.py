@@ -20,24 +20,31 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["DimensionRecordStorage", "DimensionRecordStorageManager"]
+__all__ = (
+    "DimensionRecordStorage",
+    "DimensionRecordStorageManager",
+    "GovernorDimensionRecordStorage",
+    "SkyPixDimensionRecordStorage",
+    "DatabaseDimensionRecordStorage",
+)
 
 from abc import ABC, abstractmethod
-from typing import Iterable, Optional, Type, TYPE_CHECKING
+from typing import AbstractSet, Iterable, Optional, TYPE_CHECKING
 
 import sqlalchemy
 
-from ...core import SkyPixDimension
+from ...core import DatabaseDimensionElement, GovernorDimension, SkyPixDimension
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import (
-        TimespanDatabaseRepresentation,
+        Config,
         DataCoordinateIterable,
         DimensionElement,
         DimensionRecord,
         DimensionUniverse,
         NamedKeyDict,
+        TimespanDatabaseRepresentation,
     )
     from ..queries import QueryBuilder
     from ._database import Database, StaticTablesContext
@@ -57,74 +64,6 @@ class DimensionRecordStorage(ABC):
     potentially-defaultable implementations are extremely trivial, so asking
     subclasses to provide them is not a significant burden.
     """
-
-    @classmethod
-    @abstractmethod
-    def initialize(cls, db: Database, element: DimensionElement, *,
-                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
-        """Construct an instance of this class using a standardized interface.
-
-        Parameters
-        ----------
-        db : `Database`
-            Interface to the underlying database engine and namespace.
-        element : `DimensionElement`
-            Dimension element the new instance will manage records for.
-        context : `StaticTablesContext`, optional
-            If provided, an object to use to create any new tables.  If not
-            provided, ``db.ensureTableExists`` should be used instead.
-
-        Returns
-        -------
-        storage : `DimensionRecordStorage`
-            A new `DimensionRecordStorage` subclass instance.
-        """
-        raise NotImplementedError()
-
-    @staticmethod
-    def getDefaultImplementation(element: DimensionElement, ignoreCached: bool = False
-                                 ) -> Type[DimensionRecordStorage]:
-        """Return the default `DimensionRecordStorage` implementation for the
-        given `DimensionElement`.
-
-        Parameters
-        ----------
-        element : `DimensionElement`
-            The element whose properties should be examined to determine the
-            appropriate default implementation class.
-        ignoreCached : `bool`, optional
-            If `True`, ignore `DimensionElement.cached` and always return the
-            storage implementation that would be used without caching.
-
-        Returns
-        -------
-        cls : `type`
-            A concrete subclass of `DimensionRecordStorage`.
-
-        Notes
-        -----
-        At present, these defaults are always used, but we may add support for
-        explicitly setting the class to use in configuration in the future.
-        """
-        if not ignoreCached and element.cached:
-            from ..dimensions.caching import CachingDimensionRecordStorage
-            return CachingDimensionRecordStorage
-        elif element.hasTable():
-            if element.viewOf is not None:
-                if element.spatial is not None:
-                    raise NotImplementedError("Spatial view dimension storage is not supported.")
-                from ..dimensions.query import QueryDimensionRecordStorage
-                return QueryDimensionRecordStorage
-            elif element.spatial is not None:
-                from ..dimensions.spatial import SpatialDimensionRecordStorage
-                return SpatialDimensionRecordStorage
-            else:
-                from ..dimensions.table import TableDimensionRecordStorage
-                return TableDimensionRecordStorage
-        elif isinstance(element, SkyPixDimension):
-            from ..dimensions.skypix import SkyPixDimensionRecordStorage
-            return SkyPixDimensionRecordStorage
-        raise NotImplementedError(f"No default DimensionRecordStorage class for {element}.")
 
     @property
     @abstractmethod
@@ -273,6 +212,139 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
 
+class GovernorDimensionRecordStorage(DimensionRecordStorage):
+    """Intermediate interface for `DimensionRecordStorage` objects that provide
+    storage for `GovernorDimension` instances.
+    """
+
+    @classmethod
+    @abstractmethod
+    def initialize(cls, db: Database, element: GovernorDimension, *,
+                   context: Optional[StaticTablesContext] = None,
+                   config: Config) -> GovernorDimensionRecordStorage:
+        """Construct an instance of this class using a standardized interface.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        element : `GovernorDimension`
+            Dimension element the new instance will manage records for.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+        config : `Config`
+            Extra configuration options specific to the implementation.
+
+        Returns
+        -------
+        storage : `GovernorDimensionRecordStorage`
+            A new `GovernorDimensionRecordStorage` subclass instance.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def element(self) -> GovernorDimension:
+        # Docstring inherited from DimensionRecordStorage.
+        raise NotImplementedError()
+
+    @abstractmethod
+    def refresh(self) -> None:
+        """Ensure all other operations on this manager are aware of any
+        changes made by other clients since it was initialized or last
+        refreshed.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def values(self) -> AbstractSet[str]:
+        """All primary key values for this dimension (`set` [ `str` ]).
+
+        This may rely on an in-memory cache and hence not reflect changes to
+        the set of values made by other `Butler` / `Registry` clients.  Call
+        `refresh` to ensure up-to-date results.
+        """
+        raise NotImplementedError()
+
+
+class SkyPixDimensionRecordStorage(DimensionRecordStorage):
+    """Intermediate interface for `DimensionRecordStorage` objects that provide
+    storage for `SkyPixDimension` instances.
+    """
+
+    @classmethod
+    @abstractmethod
+    def initialize(cls, db: Database, element: SkyPixDimension, *,
+                   context: Optional[StaticTablesContext] = None,
+                   config: Config) -> SkyPixDimensionRecordStorage:
+        """Construct an instance of this class using a standardized interface.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        element : `SkyPixDimensoin`
+            Dimension element the new instance will manage records for.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+        config : `Config`
+            Extra configuration options specific to the implementation.
+
+        Returns
+        -------
+        storage : `SkyPixDimensionRecordStorage`
+            A new `SkyPixDimensionRecordStorage` subclass instance.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def element(self) -> SkyPixDimension:
+        # Docstring inherited from DimensionRecordStorage.
+        raise NotImplementedError()
+
+
+class DatabaseDimensionRecordStorage(DimensionRecordStorage):
+    """Intermediate interface for `DimensionRecordStorage` objects that provide
+    storage for `DatabaseDimensionElement` instances.
+    """
+
+    @classmethod
+    @abstractmethod
+    def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
+                   context: Optional[StaticTablesContext] = None,
+                   config: Config) -> DatabaseDimensionRecordStorage:
+        """Construct an instance of this class using a standardized interface.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        element : `DatabaseDimensionElement`
+            Dimension element the new instance will manage records for.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+        config : `Config`
+            Extra configuration options specific to the implementation.
+
+        Returns
+        -------
+        storage : `DatabaseDimensionRecordStorage`
+            A new `DatabaseDimensionRecordStorage` subclass instance.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def element(self) -> DatabaseDimensionElement:
+        # Docstring inherited from DimensionRecordStorage.
+        raise NotImplementedError()
+
+
 class DimensionRecordStorageManager(VersionedExtension):
     """An interface for managing the dimension records in a `Registry`.
 
@@ -322,8 +394,8 @@ class DimensionRecordStorageManager(VersionedExtension):
     @abstractmethod
     def refresh(self) -> None:
         """Ensure all other operations on this manager are aware of any
-        dataset types that may have been registered by other clients since
-        it was initialized or last refreshed.
+        changes made by other clients since it was initialized or last
+        refreshed.
         """
         raise NotImplementedError()
 

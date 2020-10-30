@@ -47,6 +47,7 @@ from .._topology import TopologicalSpace, TopologicalFamily
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
     from ._elements import DimensionElement, Dimension
+    from ._governor import GovernorDimension
 
 
 @immutable
@@ -135,6 +136,12 @@ class DimensionGraph:
         return self
 
     def _finish(self) -> None:
+        # Make a set containing just the governor dimensions in this graph.
+        # Need local import to avoid cycle.
+        from ._governor import GovernorDimension
+        self.governors = NamedValueSet(
+            d for d in self.dimensions if isinstance(d, GovernorDimension)
+        ).freeze()
         # Split dependencies up into "required" and "implied" subsets.
         # Note that a dimension may be required in one graph and implied in
         # another.
@@ -422,6 +429,11 @@ class DimensionGraph:
 
     This is the set used for dict-like lookups, including the ``in`` operator,
     on `DimensionGraph` itself.
+    """
+
+    governors: NamedValueAbstractSet[GovernorDimension]
+    """A true `~collections.abc.Set` of all true `GovernorDimension` instances
+    in the graph (`NamedValueAbstractSet` of `GovernorDimension`).
     """
 
     required: NamedValueAbstractSet[Dimension]

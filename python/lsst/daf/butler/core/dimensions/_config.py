@@ -30,11 +30,12 @@ from .. import ddl
 from .._butlerUri import ButlerURI
 from .._topology import TopologicalSpace
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
+from ._governor import GovernorDimensionConstructionVisitor
 from ._packer import DimensionPackerConstructionVisitor
 from ._skypix import SkyPixConstructionVisitor
-from .standard import (
-    StandardDimensionElementConstructionVisitor,
-    StandardTopologicalFamilyConstructionVisitor,
+from ._database import (
+    DatabaseDimensionElementConstructionVisitor,
+    DatabaseTopologicalFamilyConstructionVisitor,
 )
 
 
@@ -170,19 +171,36 @@ class DimensionConfig(ConfigSubset):
             `DimensionUniverse`.
         """
         for name, subconfig in self["elements"].items():
+            metadata = [ddl.FieldSpec.fromConfig(c) for c in subconfig.get("metadata", ())]
             uniqueKeys = [ddl.FieldSpec.fromConfig(c, nullable=False) for c in subconfig.get("keys", ())]
             if uniqueKeys:
                 uniqueKeys[0].primaryKey = True
-            yield StandardDimensionElementConstructionVisitor(
-                name=name,
-                required=set(subconfig.get("requires", ())),
-                implied=set(subconfig.get("implies", ())),
-                metadata=[ddl.FieldSpec.fromConfig(c) for c in subconfig.get("metadata", ())],
-                cached=subconfig.get("cached", False),
-                viewOf=subconfig.get("view_of", None),
-                alwaysJoin=subconfig.get("always_join", False),
-                uniqueKeys=uniqueKeys,
-            )
+            if subconfig.get("governor", False):
+                unsupported = {"required", "implied", "viewOf", "alwaysJoin"}
+                if not unsupported.isdisjoint(subconfig.keys()):
+                    raise RuntimeError(
+                        f"Unsupported config key(s) for governor {name}: {unsupported & subconfig.keys()}."
+                    )
+                if not subconfig.get("cached", True):
+                    raise RuntimeError(
+                        f"Governor dimension {name} is always cached."
+                    )
+                yield GovernorDimensionConstructionVisitor(
+                    name=name,
+                    storage=subconfig["storage"],
+                    metadata=metadata,
+                    uniqueKeys=uniqueKeys,
+                )
+            else:
+                yield DatabaseDimensionElementConstructionVisitor(
+                    name=name,
+                    storage=subconfig["storage"],
+                    required=set(subconfig.get("requires", ())),
+                    implied=set(subconfig.get("implies", ())),
+                    metadata=metadata,
+                    alwaysJoin=subconfig.get("always_join", False),
+                    uniqueKeys=uniqueKeys,
+                )
 
     def _extractTopologyVisitors(self) -> Iterator[DimensionConstructionVisitor]:
         """Process the 'topology' section of the configuration, yielding a
@@ -198,7 +216,7 @@ class DimensionConfig(ConfigSubset):
         for spaceName, subconfig in self.get("topology", {}).items():
             space = TopologicalSpace.__members__[spaceName.upper()]
             for name, members in subconfig.items():
-                yield StandardTopologicalFamilyConstructionVisitor(
+                yield DatabaseTopologicalFamilyConstructionVisitor(
                     name=name,
                     space=space,
                     members=members,

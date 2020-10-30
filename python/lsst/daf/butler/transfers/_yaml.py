@@ -36,6 +36,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    Union,
 )
 from collections import defaultdict
 
@@ -57,7 +58,11 @@ from ..core import (
 from ..core.utils import iterable
 from ..core.named import NamedValueSet
 from ..registry import CollectionType, Registry
-from ..registry.wildcards import DatasetTypeRestriction
+from ..registry.wildcards import (
+    CollectionContentRestriction,
+    DatasetTypeRestriction,
+    GovernorDimensionRestriction,
+)
 from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord
 from ._interfaces import RepoExportBackend, RepoImportBackend
 
@@ -96,10 +101,20 @@ class YamlRepoExportBackend(RepoExportBackend):
             data["timespan_begin"] = record.timespan.begin
             data["timespan_end"] = record.timespan.end
         elif isinstance(record, ChainedCollectionRecord):
-            data["children"] = [
-                [name, list(restriction.names) if restriction.names is not ... else None]  # type: ignore
-                for name, restriction in record.children
-            ]
+            children: List[Union[str, Dict[str, Any]]] = []
+            for name, restriction in record.children:
+                row: Dict[str, Any] = {
+                    "name": name,
+                }
+                if restriction.datasetTypes != restriction.datasetTypes.any:
+                    row["dataset_types"] = list(restriction.datasetTypes.names)  # type: ignore
+                for dimension, values in restriction.dimensions.mapping.items():
+                    row[dimension.name] = list(values)
+                if len(row) == 1:
+                    children.append(name)
+                else:
+                    children.append(row)
+            data["children"] = children
         self.data.append(data)
 
     def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset) -> None:
@@ -192,7 +207,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         # TODO: When version numbers become meaningful, check here that we can
         # read the version in the file.
         self.runs: Dict[str, Tuple[Optional[str], Timespan]] = {}
-        self.chains: Dict[str, List[Tuple[str, DatasetTypeRestriction]]] = {}
+        self.chains: Dict[str, List[Tuple[str, CollectionContentRestriction]]] = {}
         self.collections: Dict[str, CollectionType] = {}
         self.datasetTypes: NamedValueSet[DatasetType] = NamedValueSet()
         self.dimensions: Mapping[DimensionElement, List[DimensionRecord]] = defaultdict(list)
@@ -200,6 +215,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         self.calibAssociations: Dict[str, Dict[Timespan, List[int]]] = defaultdict(dict)
         self.refsByFileId: Dict[int, DatasetRef] = {}
         self.registry: Registry = registry
+        unrestricted = CollectionContentRestriction(universe=self.registry.dimensions)
         datasetData = []
         for data in wrapper["data"]:
             if data["type"] == "dimension":
@@ -226,11 +242,35 @@ class YamlRepoImportBackend(RepoImportBackend):
                     )
                 elif collectionType is CollectionType.CHAINED:
                     children = []
-                    for name, restriction_data in data["children"]:
-                        if restriction_data is None:
-                            restriction = DatasetTypeRestriction.any
+                    for child in data["children"]:
+                        if isinstance(child, str):
+                            # Modern form for collections with no restrictions.
+                            name = child
+                            restriction = unrestricted
+                        elif isinstance(child, list) and len(child) == 2:
+                            # Old form with dataset type restrictions only,
+                            # supported for backwards compatibility.
+                            name, restriction_data = child
+                            if restriction_data is None:
+                                restriction = unrestricted
+                            else:
+                                restriction = CollectionContentRestriction.fromExpression(
+                                    restriction_data,
+                                    universe=self.registry.dimensions,
+                                )
                         else:
-                            restriction = DatasetTypeRestriction.fromExpression(restriction_data)
+                            # Modern form that supports restrictions.
+                            mapping = dict(child)
+                            name = mapping.pop("name")
+                            datasetTypes = DatasetTypeRestriction.fromExpression(
+                                mapping.pop("dataset_types", ...)
+                            )
+                            dimensions = GovernorDimensionRestriction(self.registry.dimensions, **mapping)
+                            restriction = CollectionContentRestriction(
+                                datasetTypes,
+                                dimensions,
+                                universe=self.registry.dimensions,
+                            )
                         children.append((name, restriction))
                     self.chains[data["name"]] = children
                 else:

@@ -57,7 +57,7 @@ from .._registry import (
     Registry,
     RegistryConfig,
 )
-from ..wildcards import DatasetTypeRestriction
+from ..wildcards import CollectionContentRestriction
 from ..interfaces import MissingCollectionError, ButlerAttributeExistsError
 
 
@@ -527,9 +527,9 @@ class RegistryTests(ABC):
         registry.setCollectionChain(chain1, [tag1, (run1, "flat"), run2])
         self.assertEqual(
             list(registry.getCollectionChain(chain1)),
-            [(tag1, DatasetTypeRestriction.any),
-             (run1, DatasetTypeRestriction.fromExpression("flat")),
-             (run2, DatasetTypeRestriction.any)]
+            [(tag1, CollectionContentRestriction(universe=registry.dimensions)),
+             (run1, CollectionContentRestriction.fromExpression("flat", universe=registry.dimensions)),
+             (run2, CollectionContentRestriction(universe=registry.dimensions))]
         )
         # Searching for dataId1 or dataId2 in the chain should return ref1 and
         # ref2, because both are in tag1.

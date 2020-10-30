@@ -28,15 +28,21 @@ import sqlalchemy
 
 from ...core import (
     addDimensionForeignKey,
-    TimespanDatabaseRepresentation,
+    Config,
+    DatabaseDimensionElement,
     ddl,
     DimensionElement,
     DimensionRecord,
     NamedKeyDict,
     NamedValueSet,
     REGION_FIELD_SPEC,
+    TimespanDatabaseRepresentation,
 )
-from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
+from ..interfaces import (
+    Database,
+    DatabaseDimensionRecordStorage,
+    StaticTablesContext,
+)
 from ..queries import QueryBuilder
 from .table import TableDimensionRecordStorage
 
@@ -89,15 +95,16 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         The logical table for the overlap table with the dimension universe's
         common skypix dimension.
     """
-    def __init__(self, db: Database, element: DimensionElement, *, table: sqlalchemy.schema.Table,
+    def __init__(self, db: Database, element: DatabaseDimensionElement, *, table: sqlalchemy.schema.Table,
                  commonSkyPixOverlapTable: sqlalchemy.schema.Table):
         super().__init__(db, element, table=table)
         self._commonSkyPixOverlapTable = commonSkyPixOverlapTable
         assert element.spatial is not None
 
     @classmethod
-    def initialize(cls, db: Database, element: DimensionElement, *,
-                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
+    def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
+                   context: Optional[StaticTablesContext] = None,
+                   config: Config) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DimensionRecordStorage.
         if context is not None:
             method = context.addTable

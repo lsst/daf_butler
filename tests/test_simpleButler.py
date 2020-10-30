@@ -236,11 +236,12 @@ class SimpleButlerTestCase(unittest.TestCase):
         self.assertIs(registry2.getCollectionType("chain2"), CollectionType.CHAINED)
         self.assertEqual(
             registry2.getCollectionChain("chain1"),
-            CollectionSearch.fromExpression(["tag1", "run1", "chain2"]),
+            CollectionSearch.fromExpression(["tag1", "run1", "chain2"], universe=registry2.dimensions),
         )
         self.assertEqual(
             registry2.getCollectionChain("chain2"),
-            CollectionSearch.fromExpression([("calibration1", ["bias"]), "run1"]),
+            CollectionSearch.fromExpression([("calibration1", ["bias"]), "run1"],
+                                            universe=registry2.dimensions),
         )
         # Check that tag collection contents are the same.
         self.maxDiff = None

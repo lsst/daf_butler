@@ -44,8 +44,14 @@ from .._topology import TopologicalRelationshipEndpoint
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
+    from ._governor import GovernorDimension
     from ._graph import DimensionGraph
     from ._records import DimensionRecord
+    from ...registry.interfaces import (
+        Database,
+        DimensionRecordStorage,
+        StaticTablesContext,
+    )
 
 
 class DimensionElement(TopologicalRelationshipEndpoint):
@@ -143,9 +149,22 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     associated (`DimensionUniverse`).
     """
 
-    name: str
-    """Unique name for this dimension element (`str`).
-    """
+    @property  # type: ignore
+    @cached_getter
+    def governor(self) -> Optional[GovernorDimension]:
+        """The `GovernorDimension` that is a required dependency of this
+        element, or `None` if there is no such dimension (`GovernorDimension`
+        or `None`).
+        """
+        if len(self.graph.governors) == 1:
+            (result,) = self.graph.governors
+            return result
+        elif len(self.graph.governors) > 1:
+            raise RuntimeError(
+                f"Dimension element {self.name} has multiple governors: {self.graph.governors}."
+            )
+        else:
+            return None
 
     @property
     @abstractmethod
@@ -234,20 +253,11 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         raise NotImplementedError()
 
     @property
-    @abstractmethod
-    def cached(self) -> bool:
-        """Whether `Registry` should cache records of this element in-memory
-        (`bool`).
-        """
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
     def viewOf(self) -> Optional[str]:
         """Name of another table this element's records are drawn from (`str`
         or `None`).
         """
-        raise NotImplementedError()
+        return None
 
     @property
     def alwaysJoin(self) -> bool:
@@ -256,6 +266,34 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         relationship between those dimensions that must always be satisfied.
         """
         return False
+
+    @abstractmethod
+    def makeStorage(
+        self,
+        db: Database, *,
+        context: Optional[StaticTablesContext] = None,
+    ) -> DimensionRecordStorage:
+        """Construct the `DimensionRecordStorage` instance that should
+        be used to back this element in a registry.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+        **kwargs
+            Opaque keyword arguments forwarded from config to the
+            ``initialize`` of the appropriate `DimensionRecordStorage`
+            subclass.
+
+        Returns
+        -------
+        storage : `DimensionRecordStorage`
+            Storage object that should back this element in a registry.
+        """
+        raise NotImplementedError()
 
 
 class Dimension(DimensionElement):
