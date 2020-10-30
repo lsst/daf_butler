@@ -184,6 +184,13 @@ def addArgumentHelp(doc, helpText):
     if doc is None:
         doc = helpText
     else:
+        # See click documentation for details:
+        # https://click.palletsprojects.com/en/7.x/documentation/#truncating-help-texts
+        # In short, text for the click command help can be truncated by putting
+        # "\f" in the docstring, everything after it should be removed
+        if "\f" in doc:
+            doc = doc.split("\f")[0]
+
         doclines = doc.splitlines()
         doclines.insert(1, helpText)
         doclines.insert(1, "\n")
