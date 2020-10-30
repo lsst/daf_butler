@@ -75,10 +75,8 @@ class DeferredDatasetHandle:
         else:
             mergedParameters = {}
 
-        if component is not None:
-            return self.butler.get(self.ref.datasetType.componentTypeName(component),
-                                   self.ref.dataId, parameters=mergedParameters)
-        return self.butler.getDirect(self.ref, parameters=mergedParameters)
+        ref = self.ref.makeComponentRef(component) if component is not None else self.ref
+        return self.butler.getDirect(ref, parameters=mergedParameters)
 
     @property
     def dataId(self) -> DataCoordinate:
