@@ -97,8 +97,16 @@ class ConfigTestCase(unittest.TestCase):
     """Tests of simple Config"""
 
     def testBadConfig(self):
-        for badArg in ([], "file.fits"):
+        for badArg in ([],  # Bad argument
+                       __file__,  # Bad file extension for existing file
+                       ):
             with self.assertRaises(RuntimeError):
+                Config(badArg)
+        for badArg in ("file.fits",  # File that does not exist with bad extension
+                       "b/c/d/",  # Directory that does not exist
+                       "file.yaml",  # Good extension for missing file
+                       ):
+            with self.assertRaises(FileNotFoundError):
                 Config(badArg)
 
     def testBasics(self):
