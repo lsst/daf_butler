@@ -308,7 +308,15 @@ class Config(collections.abc.MutableMapping):
             content = uri.read()
             self.__initFromJson(content)
         else:
-            raise RuntimeError(f"Unhandled config file type: {uri}")
+            # This URI does not have a valid extension. It might be because
+            # we ended up with a directory and not a file. Before we complain
+            # about an extension, do an existence check.  No need to do
+            # the (possibly expensive) existence check in the default code
+            # path above because we will find out soon enough that the file
+            # is not there.
+            if not uri.exists():
+                raise FileNotFoundError(f"Config location {uri} does not exist.")
+            raise RuntimeError(f"The Config URI does not have a supported extension: {uri}")
         self.configFile = uri
 
     def __initFromYaml(self, stream):
