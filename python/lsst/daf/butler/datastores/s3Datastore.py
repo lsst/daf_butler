@@ -38,21 +38,6 @@ from typing import (
     Callable
 )
 
-# https://pypi.org/project/backoff/
-try:
-    import backoff
-except ImportError:
-    class Backoff():
-        @staticmethod
-        def expo(func: Callable, *args: Any, **kwargs: Any) -> Callable:
-            return func
-
-        @staticmethod
-        def on_exception(func: Callable, *args: Any, **kwargs: Any) -> Callable:
-            return func
-
-    backoff = Backoff
-
 from lsst.daf.butler import (
     DatasetRef,
     Location,
@@ -69,23 +54,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# settings for "backoff" retry decorators. these retries are belt-and-
-# suspenders along with the retries built into Boto3, to account for
-# semantic differences in errors between S3-like providers.
-retryable_io_errors = (
-    # http.client
-    ImproperConnectionState, HTTPException,
-    # urllib3.exceptions
-    RequestError, HTTPError,
-    # built-ins
-    TimeoutError, ConnectionError)
-retryable_client_errors = (
-    # botocore.exceptions
-    ClientError,
-    # built-ins
-    PermissionError)
-all_retryable_errors = retryable_client_errors + retryable_io_errors
-max_retry_time = 60
+
 
 
 class S3Datastore(RemoteFileDatastore):
