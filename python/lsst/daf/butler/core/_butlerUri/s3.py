@@ -31,6 +31,8 @@ __all__ = ('ButlerS3URI',)
 from typing import (
     TYPE_CHECKING,
     Optional,
+    Any,
+    Callable,
     Tuple,
     Union,
 )
@@ -38,6 +40,11 @@ from typing import (
 from .utils import NoTransaction
 from ._butlerUri import ButlerURI
 from .s3utils import getS3Client, s3CheckFileExists, bucketExists
+
+from botocore.exceptions import ClientError
+from http.client import ImproperConnectionState, HTTPException
+from urllib3.exceptions import RequestError, HTTPError
+
 
 
 if TYPE_CHECKING:
