@@ -717,3 +717,49 @@ def _read_yaml_presets(file_uri, cmd_name):
     log.debug("Reading command line overrides for subcommand %s from URI %s", cmd_name, file_uri)
     config = Config(file_uri)
     return config[cmd_name]
+
+
+def sortAstropyTable(table, dimensions, sort_first=None):
+    """Sort an astropy table, with prioritization given to columns in this
+    order:
+    1. the provided named columns
+    2. spatial and temporal columns
+    3. the rest of the columns
+
+    The table is sorted in-place, and is also returned for convenience.
+
+    Parameters
+    ----------
+    table : `astropy.table.Table`
+        The table to sort
+    dimensions : `list` [``Dimension``]
+        The dimensions of the dataIds in the table (the dimensions should be
+        the same for all the dataIds). Used to determine if the column is
+        spatial, temporal, or neither.
+    sort_first : `list` [`str`]
+        The names of columns that should be sorted first, before spatial and
+        temporal columns.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        For convenience, the table that has been sorted.
+    """
+    # For sorting we want to ignore the id
+    # We also want to move temporal or spatial dimensions earlier
+    sort_first = sort_first or []
+    sort_early = []
+    sort_late = []
+    for dim in dimensions:
+        if dim.spatial or dim.temporal:
+            sort_early.extend(dim.required.names)
+        else:
+            sort_late.append(str(dim))
+    sort_keys = sort_first + sort_early + sort_late
+    # The required names above means that we have the possibility of
+    # repeats of sort keys. Now have to remove them
+    # (order is retained by dict creation).
+    sort_keys = list(dict.fromkeys(sort_keys).keys())
+
+    table.sort(sort_keys)
+    return table

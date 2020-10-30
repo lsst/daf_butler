@@ -73,7 +73,7 @@ class QueryDataIdsTest(unittest.TestCase):
         diff = io.StringIO()
         self.assertEqual(len(tables), len(expectedTables))
         for table, expected in zip(tables, expectedTables):
-            self.assertTrue(report_diff_values(table, expected, fileobj=diff), msg=diff.getvalue())
+            self.assertTrue(report_diff_values(table, expected, fileobj=diff), msg="\n" + diff.getvalue())
 
     def setUp(self):
         self.root = tempfile.mkdtemp(dir=TESTDIR)
@@ -135,10 +135,10 @@ class QueryDataIdsTest(unittest.TestCase):
         res = self._queryDataIds(self.root, dimensions=("visit",))
         expected = AstropyTable(
             array((
-                ("R", "DummyCamComp", "d-r", "423", "1"),
-                ("R", "DummyCamComp", "d-r", "424", "1")
+                ("R", "DummyCamComp", "d-r", "1", "423"),
+                ("R", "DummyCamComp", "d-r", "1", "424")
             )),
-            names=("band", "instrument", "physical_filter", "visit", "visit_system")
+            names=("band", "instrument", "physical_filter", "visit_system", "visit")
         )
         self._assertTablesEqual(res, expected)
 
@@ -152,10 +152,10 @@ class QueryDataIdsTest(unittest.TestCase):
         res = self._queryDataIds(self.root, datasets="test_metric_comp")
         expected = AstropyTable(
             array((
-                ("R", "DummyCamComp", "d-r", "423", "1"),
-                ("R", "DummyCamComp", "d-r", "424", "1")
+                ("R", "DummyCamComp", "d-r", "1", "423"),
+                ("R", "DummyCamComp", "d-r", "1", "424")
             )),
-            names=("band", "instrument", "physical_filter", "visit", "visit_system")
+            names=("band", "instrument", "physical_filter", "visit_system", "visit")
         )
         self._assertTablesEqual(res, expected)
 
@@ -164,9 +164,9 @@ class QueryDataIdsTest(unittest.TestCase):
         res = self._queryDataIds(self.root, dimensions=("visit",), where="visit=423")
         expected = AstropyTable(
             array((
-                ("R", "DummyCamComp", "d-r", "423", "1"),
+                ("R", "DummyCamComp", "d-r", "1", "423"),
             )),
-            names=("band", "instrument", "physical_filter", "visit", "visit_system")
+            names=("band", "instrument", "physical_filter", "visit_system", "visit")
         )
         self._assertTablesEqual(res, expected)
 
@@ -188,10 +188,10 @@ class QueryDataIdsTest(unittest.TestCase):
                                  datasets="test_metric_comp")
         expected = AstropyTable(
             array((
-                ("R", "DummyCamComp", "d-r", "423", "1"),
-                ("R", "DummyCamComp", "d-r", "424", "1")
+                ("R", "DummyCamComp", "d-r", "1", "423"),
+                ("R", "DummyCamComp", "d-r", "1", "424")
             )),
-            names=("band", "instrument", "physical_filter", "visit", "visit_system")
+            names=("band", "instrument", "physical_filter", "visit_system", "visit")
         )
         self._assertTablesEqual(res, expected)
 
@@ -200,9 +200,9 @@ class QueryDataIdsTest(unittest.TestCase):
                                  datasets="test_metric_comp")
         expected = AstropyTable(
             array((
-                ("R", "DummyCamComp", "d-r", "425", "1"),
+                ("R", "DummyCamComp", "d-r", "1", "425"),
             )),
-            names=("band", "instrument", "physical_filter", "visit", "visit_system")
+            names=("band", "instrument", "physical_filter", "visit_system", "visit")
         )
         self._assertTablesEqual(res, expected)
 
