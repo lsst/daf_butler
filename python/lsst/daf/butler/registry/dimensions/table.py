@@ -59,6 +59,7 @@ from ...core import (
 )
 from ..interfaces import (
     Database,
+    DatabaseDimensionOverlapStorage,
     DatabaseDimensionRecordStorage,
     GovernorDimensionRecordStorage,
     StaticTablesContext,
@@ -108,6 +109,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                                        self._element.RecordClass.fields.dimensions.names)
         }
         self._skyPixOverlap = skyPixOverlap
+        self._otherOverlaps: List[DatabaseDimensionOverlapStorage] = []
 
     @classmethod
     def initialize(
@@ -242,6 +244,10 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         if self._skyPixOverlap is not None:
             result.extend(self._skyPixOverlap.digestTables())
         return result
+
+    def connect(self, overlaps: DatabaseDimensionOverlapStorage) -> None:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
+        self._otherOverlaps.append(overlaps)
 
 
 class _SkyPixOverlapStorage:
