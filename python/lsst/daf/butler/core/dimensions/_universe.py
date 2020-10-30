@@ -40,12 +40,13 @@ from typing import (
 )
 
 from ..config import Config
-from ..named import NamedValueAbstractSet
+from ..named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalSpace, TopologicalFamily
-from ..utils import immutable
+from ..utils import cached_getter, immutable
 from ._config import DimensionConfig
 from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph
+from ._governor import GovernorDimension
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._coordinate import DataCoordinate
@@ -208,6 +209,19 @@ class DimensionUniverse:
             A frozen set of `Dimension` instances.
         """
         return self._dimensions
+
+    @cached_getter
+    def getGovernorDimensions(self) -> NamedValueAbstractSet[GovernorDimension]:
+        """Return a set of all `GovernorDimension` instances in this universe.
+
+        Returns
+        -------
+        governors : `NamedValueAbstractSet` [ `GovernorDimension` ]
+            A frozen set of `GovernorDimension` instances.
+        """
+        return NamedValueSet(
+            d for d in self._dimensions if isinstance(d, GovernorDimension)
+        ).freeze()
 
     def getElementIndex(self, name: str) -> int:
         """Return the position of the named dimension element in this

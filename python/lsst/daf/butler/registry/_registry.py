@@ -307,7 +307,8 @@ class Registry:
                 # now.
                 _LOG.warning(f"Registry schema digest mismatch: {exc}")
 
-        self._collections.refresh()
+        self._dimensions.refresh()
+        self._collections.refresh(universe=self._dimensions.universe)
         self._datasets.refresh(universe=self._dimensions.universe)
 
     def __str__(self) -> str:
@@ -426,7 +427,7 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        self._collections.register(name, type)
+        self._collections.register(name, type, universe=self.dimensions)
 
     def getCollectionType(self, name: str) -> CollectionType:
         """Return an enumeration value indicating the type of the given
@@ -462,7 +463,7 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        self._collections.register(name, CollectionType.RUN)
+        self._collections.register(name, CollectionType.RUN, universe=self.dimensions)
 
     @transactional
     def removeCollection(self, name: str) -> None:
@@ -551,7 +552,7 @@ class Registry:
         if record.type is not CollectionType.CHAINED:
             raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
         assert isinstance(record, ChainedCollectionRecord)
-        children = CollectionSearch.fromExpression(children)
+        children = CollectionSearch.fromExpression(children, universe=self.dimensions)
         if children != record.children:
             record.update(self._collections, children)
 
@@ -702,7 +703,7 @@ class Registry:
             storage = self._datasets[datasetType]
         dataId = DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions,
                                             universe=self.dimensions, **kwargs)
-        collections = CollectionSearch.fromExpression(collections)
+        collections = CollectionSearch.fromExpression(collections, universe=self.dimensions)
         for collectionRecord in collections.iter(self._collections, datasetType=storage.datasetType):
             if (collectionRecord.type is CollectionType.CALIBRATION
                     and (not storage.datasetType.isCalibration() or timespan is None)):
@@ -1263,7 +1264,7 @@ class Registry:
         collection : `str`
             The name of a collection that matches ``expression``.
         """
-        query = CollectionQuery.fromExpression(expression)
+        query = CollectionQuery.fromExpression(expression, universe=self.dimensions)
         for record in query.iter(self._collections, datasetType=datasetType,
                                  collectionTypes=frozenset(collectionTypes),
                                  flattenChains=flattenChains, includeChains=includeChains):
@@ -1383,9 +1384,9 @@ class Registry:
         """
         # Standardize the collections expression.
         if findFirst:
-            collections = CollectionSearch.fromExpression(collections)
+            collections = CollectionSearch.fromExpression(collections, universe=self.dimensions)
         else:
-            collections = CollectionQuery.fromExpression(collections)
+            collections = CollectionQuery.fromExpression(collections, universe=self.dimensions)
         # Standardize and expand the data ID provided as a constraint.
         standardizedDataId = self.expandDataId(dataId, **kwargs)
 
@@ -1553,7 +1554,7 @@ class Registry:
             # Preprocess collections expression in case the original included
             # single-pass iterators (we'll want to use it multiple times
             # below).
-            collections = CollectionQuery.fromExpression(collections)
+            collections = CollectionQuery.fromExpression(collections, universe=self.dimensions)
 
         summary = queries.QuerySummary(
             requested=DimensionGraph(self.dimensions, names=queryDimensionNames),
@@ -1652,7 +1653,7 @@ class Registry:
             Object representing the relationship beween a single dataset and
             a single collection.
         """
-        collections = CollectionQuery.fromExpression(collections)
+        collections = CollectionQuery.fromExpression(collections, universe=self.dimensions)
         tsRepr = self._db.getTimespanRepresentation()
         if isinstance(datasetType, str):
             storage = self._datasets[datasetType]

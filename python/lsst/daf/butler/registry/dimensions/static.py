@@ -31,6 +31,7 @@ from ..interfaces import (
     StaticTablesContext,
     DimensionRecordStorageManager,
     DimensionRecordStorage,
+    GovernorDimensionRecordStorage,
     VersionTuple
 )
 
@@ -58,8 +59,12 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     universe : `DimensionUniverse`
         All known dimensions.
     """
-    def __init__(self, db: Database, records: NamedKeyDict[DimensionElement, DimensionRecordStorage], *,
-                 universe: DimensionUniverse):
+    def __init__(
+        self,
+        db: Database, *,
+        records: NamedKeyDict[DimensionElement, DimensionRecordStorage],
+        universe: DimensionUniverse,
+    ):
         super().__init__(universe=universe)
         self._db = db
         self._records = records
@@ -70,13 +75,15 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited from DimensionRecordStorageManager.
         records: NamedKeyDict[DimensionElement, DimensionRecordStorage] = NamedKeyDict()
         for element in universe.getStaticElements():
-            ImplementationClass = DimensionRecordStorage.getDefaultImplementation(element)
-            records[element] = ImplementationClass.initialize(db, element, context=context)
+            records[element] = element.makeStorage(db, context=context)
         return cls(db=db, records=records, universe=universe)
 
     def refresh(self) -> None:
         # Docstring inherited from DimensionRecordStorageManager.
-        pass
+        for dimension in self.universe.getGovernorDimensions():
+            storage = self._records[dimension]
+            assert isinstance(storage, GovernorDimensionRecordStorage)
+            storage.refresh()
 
     def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
         # Docstring inherited from DimensionRecordStorageManager.

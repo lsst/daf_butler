@@ -137,14 +137,14 @@ class TopologicalFamily(ABC):
 class TopologicalRelationshipEndpoint(ABC):
     """An abstract base class whose instances represent a logical table that
     may participate in overlap joins defined by a `TopologicalSpace`.
-
-    Parameters
-    ----------
-    name : `str`
-        Unique string identifier for this endpoint.
     """
-    def __init__(self, name: str):
-        self.name = name
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Unique string identifier for this endpoint (`str`).
+        """
+        raise NotImplementedError()
 
     @property
     @abstractmethod
@@ -165,10 +165,6 @@ class TopologicalRelationshipEndpoint(ABC):
         """This endpoint's `~TopologicalSpace.TEMPORAL` family.
         """
         return self.topology.get(TopologicalSpace.TEMPORAL)
-
-    name: str
-    """Unique string identifier for this endpoint (`str`).
-    """
 
 
 _S = TypeVar("_S", bound="TopologicalExtentDatabaseRepresentation")

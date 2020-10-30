@@ -140,6 +140,7 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(graph.implied.names, ("physical_filter", "band", "visit_system"))
         self.assertCountEqual(graph.elements.names - graph.dimensions.names,
                               ("visit_detector_region", "visit_definition"))
+        self.assertCountEqual(graph.governors.names, {"instrument"})
 
     def testCalibrationDimensions(self):
         graph = DimensionGraph(self.universe, names=("physical_filter", "detector"))
@@ -148,6 +149,7 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(graph.required.names, ("instrument", "detector", "physical_filter"))
         self.assertCountEqual(graph.implied.names, ("band",))
         self.assertCountEqual(graph.elements.names, graph.dimensions.names)
+        self.assertCountEqual(graph.governors.names, {"instrument"})
 
     def testObservationDimensions(self):
         graph = DimensionGraph(self.universe, names=("exposure", "detector", "visit"))
@@ -159,6 +161,11 @@ class DimensionTestCase(unittest.TestCase):
                               ("visit_detector_region", "visit_definition"))
         self.assertCountEqual(graph.spatial.names, ("observation_regions",))
         self.assertCountEqual(graph.temporal.names, ("observation_timespans",))
+        self.assertCountEqual(graph.governors.names, {"instrument"})
+        self.assertEqual(graph.spatial.names, {"observation_regions"})
+        self.assertEqual(graph.temporal.names, {"observation_timespans"})
+        self.assertEqual(next(iter(graph.spatial)).governor, self.universe["instrument"])
+        self.assertEqual(next(iter(graph.temporal)).governor, self.universe["instrument"])
 
     def testSkyMapDimensions(self):
         graph = DimensionGraph(self.universe, names=("patch",))
@@ -167,6 +174,9 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(graph.implied.names, ())
         self.assertCountEqual(graph.elements.names, graph.dimensions.names)
         self.assertCountEqual(graph.spatial.names, ("skymap_regions",))
+        self.assertCountEqual(graph.governors.names, {"skymap"})
+        self.assertEqual(graph.spatial.names, {"skymap_regions"})
+        self.assertEqual(next(iter(graph.spatial)).governor, self.universe["skymap"])
 
     def testSubsetCalculation(self):
         """Test that independent spatial and temporal options are computed
