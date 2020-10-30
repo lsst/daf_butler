@@ -251,4 +251,7 @@ def query_data_ids(**kwargs):
     if table:
         table.pprint_all()
     else:
-        print("No results.")
+        if not kwargs.get("dimensions") and not kwargs.get("datasets"):
+            print("No results. Try requesting some dimensions or datasets, see --help for more information.")
+        else:
+            print("No results. Try --help for more information.")
