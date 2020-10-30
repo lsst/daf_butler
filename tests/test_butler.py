@@ -132,10 +132,14 @@ class ButlerPutGetTests:
     def assertGetComponents(self, butler, datasetRef, components, reference):
         datasetType = datasetRef.datasetType
         dataId = datasetRef.dataId
+        deferred = butler.getDirectDeferred(datasetRef)
+
         for component in components:
             compTypeName = datasetType.componentTypeName(component)
             result = butler.get(compTypeName, dataId)
             self.assertEqual(result, getattr(reference, component))
+            result_deferred = deferred.get(component=component)
+            self.assertEqual(result_deferred, result)
 
     def tearDown(self):
         if self.root is not None and os.path.exists(self.root):
@@ -209,6 +213,9 @@ class ButlerPutGetTests:
                 self.assertEqual(metric, metricOut)
                 # Test getDeferred with a datasetRef
                 metricOut = butler.getDeferred(ref).get()
+                self.assertEqual(metric, metricOut)
+                # and deferred direct with ref
+                metricOut = butler.getDirectDeferred(ref).get()
                 self.assertEqual(metric, metricOut)
 
                 # Check we can get components
