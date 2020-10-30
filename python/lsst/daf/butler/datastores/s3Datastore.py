@@ -27,34 +27,19 @@ __all__ = ("S3Datastore", )
 
 import logging
 
-from botocore.exceptions import ClientError
-from http.client import ImproperConnectionState, HTTPException
-from urllib3.exceptions import RequestError, HTTPError
-
 from typing import (
     TYPE_CHECKING,
-    Any,
     Union,
-    Callable
-)
-
-from lsst.daf.butler import (
-    DatasetRef,
-    Location,
-    StoredFileInfo,
 )
 
 from .remoteFileDatastore import RemoteFileDatastore
 from lsst.daf.butler.core._butlerUri.s3utils import getS3Client, bucketExists
 
 if TYPE_CHECKING:
-    from .fileLikeDatastore import DatastoreFileGetInformation
     from lsst.daf.butler import DatastoreConfig
     from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
-
-
 
 
 class S3Datastore(RemoteFileDatastore):
@@ -98,44 +83,3 @@ class S3Datastore(RemoteFileDatastore):
             # parameters, so for now we do not create a bucket if one is
             # missing. Further discussion can make this happen though.
             raise IOError(f"Bucket {self.locationFactory.netloc} does not exist!")
-
-    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
-    def _artifact_exists(self, location: Location) -> bool:
-        """Check that an artifact exists in this datastore at the specified
-        location.
-
-        Parameters
-        ----------
-        location : `Location`
-            Expected location of the artifact associated with this datastore.
-
-        Returns
-        -------
-        exists : `bool`
-            True if the location can be found, false otherwise.
-        """
-        # Exists to allow backoff retry
-        return super()._artifact_exists(location)
-
-    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
-    def _delete_artifact(self, location: Location) -> None:
-        """Delete the artifact from the datastore.
-
-        Parameters
-        ----------
-        location : `Location`
-            Location of the artifact associated with this datastore.
-        """
-        # Exists to allow backoff retry
-        return super()._delete_artifact(location)
-
-    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
-    def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
-                                   ref: DatasetRef, isComponent: bool = False) -> Any:
-        # Exists to allow backoff retry
-        return super()._read_artifact_into_memory(getInfo, ref, isComponent)
-
-    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
-    def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
-        # Exists to allow backoff retry
-        return super()._write_in_memory_to_artifact(inMemoryDataset, ref)
