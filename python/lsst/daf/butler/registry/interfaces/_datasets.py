@@ -46,6 +46,7 @@ from ._versioning import VersionedExtension
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
     from ._database import Database, StaticTablesContext
+    from ._dimensions import DimensionRecordStorageManager
     from ._collections import CollectionManager, CollectionRecord, RunRecord
 
 
@@ -298,8 +299,13 @@ class DatasetRecordStorageManager(VersionedExtension):
 
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, context: StaticTablesContext, *, collections: CollectionManager,
-                   universe: DimensionUniverse) -> DatasetRecordStorageManager:
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext, *,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+    ) -> DatasetRecordStorageManager:
         """Construct an instance of the manager.
 
         Parameters
@@ -311,8 +317,8 @@ class DatasetRecordStorageManager(VersionedExtension):
             to declare any tables that should always be present.
         collections: `CollectionManager`
             Manager object for the collections in this `Registry`.
-        universe : `DimensionUniverse`
-            Universe graph containing all dimensions known to this `Registry`.
+        dimensions : `DimensionRecordStorageManager`
+            Manager object for the dimensions in this `Registry`.
 
         Returns
         -------

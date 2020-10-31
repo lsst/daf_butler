@@ -264,7 +264,7 @@ class Registry:
             self._collections = collections.initialize(self._db, context)
             self._datasets = datasets.initialize(self._db, context,
                                                  collections=self._collections,
-                                                 universe=self._dimensions.universe)
+                                                 dimensions=self._dimensions)
             self._opaque = opaque.initialize(self._db, context)
             self._datastoreBridges = datastoreBridges.initialize(self._db, context,
                                                                  opaque=self._opaque,
