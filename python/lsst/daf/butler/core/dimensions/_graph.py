@@ -229,47 +229,6 @@ class DimensionGraph:
     def __repr__(self) -> str:
         return f"DimensionGraph({str(self)})"
 
-    @classmethod
-    def decode(cls, encoded: bytes, *, universe: DimensionUniverse) -> DimensionGraph:
-        """Construct a `DimensionGraph` from its encoded representation.
-
-        Parameters
-        ----------
-        encoded : `bytes`
-            Byte string produced by `DimensionGraph.encode`.
-        universe : `DimensionUniverse`
-            Universe the new graph is a part of.  Must have the same dimensions
-            as the original universe.
-
-        Returns
-        -------
-        graph : `DimensionGraph`
-            A new (or possibly cached) `DimensionGraph` instance matching the
-            given encoding.
-        """
-        dimensions = []
-        mask = int.from_bytes(encoded, "big")
-        for dimension in universe.getStaticDimensions():
-            index = universe.getDimensionIndex(dimension.name)
-            if mask & (1 << index):
-                dimensions.append(dimension)
-        return cls(universe, dimensions=dimensions, conform=False)
-
-    def encode(self) -> bytes:
-        """Encode a `DimensionGraph` into a byte string.
-
-        Returns
-        -------
-        encoded : `bytes`
-            Encoded representation of the graph.  Length is guaranteed to be
-            equal to `DimensionUniverse.getEncodeLength`.
-        """
-        mask = 0
-        for dimension in self.dimensions:
-            index = self.universe.getDimensionIndex(dimension.name)
-            mask |= (1 << index)
-        return mask.to_bytes(self.universe.getEncodeLength(), byteorder="big")
-
     def isdisjoint(self, other: DimensionGraph) -> bool:
         """Test whether the intersection of two graphs is empty.
 
