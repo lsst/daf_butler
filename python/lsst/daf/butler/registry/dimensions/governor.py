@@ -49,8 +49,6 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
 
     Parameters
     ----------
-    Parameters
-    ----------
     db : `Database`
         Interface to the database engine and namespace that will hold these
         dimension records.
