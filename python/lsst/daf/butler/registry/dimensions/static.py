@@ -92,8 +92,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Start by initializing governor dimensions; those go both in the main
         # 'records' mapping we'll pass to init, and a local dictionary that we
         # can pass in when initializing storage for DatabaseDimensionElements.
-        governors: NamedKeyDict[GovernorDimension, GovernorDimensionRecordStorage] = NamedKeyDict()
-        records: NamedKeyDict[DimensionElement, DimensionRecordStorage] = NamedKeyDict()
+        governors = NamedKeyDict[GovernorDimension, GovernorDimensionRecordStorage]()
+        records = NamedKeyDict[DimensionElement, DimensionRecordStorage]()
         for dimension in universe.getGovernorDimensions():
             governorStorage = dimension.makeStorage(db, context=context)
             governors[dimension] = governorStorage
@@ -101,8 +101,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Next we initialize storage for DatabaseDimensionElements.
         # We remember the spatial ones (grouped by family) so we can go back
         # and initialize overlap storage for them later.
-        spatial: NamedKeyDict[DatabaseTopologicalFamily, List[DatabaseDimensionRecordStorage]] \
-            = NamedKeyDict()
+        spatial = NamedKeyDict[DatabaseTopologicalFamily, List[DatabaseDimensionRecordStorage]]()
         for element in universe.getDatabaseElements():
             elementStorage = element.makeStorage(db, context=context, governors=governors)
             records[element] = elementStorage
