@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from lsst.daf.butler.registry.interfaces import (
         CollectionManager,
         Database,
+        DimensionRecordStorageManager,
         StaticTablesContext,
     )
     from .tables import StaticDatasetTablesTuple
@@ -76,24 +77,38 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         Interface to the underlying database engine and namespace.
     collections : `CollectionManager`
         Manager object for the collections in this `Registry`.
+    dimensions : `DimensionRecordStorageManager`
+        Manager object for the dimensions in this `Registry`.
     static : `StaticDatasetTablesTuple`
         Named tuple of `sqlalchemy.schema.Table` instances for all static
         tables used by this class.
     """
-    def __init__(self, *, db: Database, collections: CollectionManager, static: StaticDatasetTablesTuple):
+    def __init__(
+        self, *,
+        db: Database,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+        static: StaticDatasetTablesTuple,
+    ):
         self._db = db
         self._collections = collections
+        self._dimensions = dimensions
         self._static = static
         self._byName: Dict[str, ByDimensionsDatasetRecordStorage] = {}
         self._byId: Dict[int, ByDimensionsDatasetRecordStorage] = {}
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext, *, collections: CollectionManager,
-                   universe: DimensionUniverse) -> DatasetRecordStorageManager:
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext, *,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+    ) -> DatasetRecordStorageManager:
         # Docstring inherited from DatasetRecordStorageManager.
-        specs = makeStaticTableSpecs(type(collections), universe=universe)
+        specs = makeStaticTableSpecs(type(collections), universe=dimensions.universe)
         static: StaticDatasetTablesTuple = context.addTableTuple(specs)  # type: ignore
-        return cls(db=db, collections=collections, static=static)
+        return cls(db=db, collections=collections, dimensions=dimensions, static=static)
 
     @classmethod
     def addDatasetForeignKey(cls, tableSpec: ddl.TableSpec, *, name: str = "dataset",
