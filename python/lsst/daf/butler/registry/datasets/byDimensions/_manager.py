@@ -18,7 +18,6 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     ddl,
-    DimensionGraph,
     DimensionUniverse,
 )
 from lsst.daf.butler.registry import ConflictingDefinitionError, OrphanedRecordError
@@ -124,7 +123,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         c = self._static.dataset_type.columns
         for row in self._db.query(self._static.dataset_type.select()).fetchall():
             name = row[c.name]
-            dimensions = DimensionGraph.decode(row[c.dimensions_encoded], universe=universe)
+            dimensions = self._dimensions.loadDimensionGraph(row[c.dimensions_key])
             calibTableName = row[c.calibration_association_table]
             datasetType = DatasetType(name, dimensions, row[c.storage_class],
                                       isCalibration=(calibTableName is not None))
@@ -180,13 +179,15 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
                              f" Rejecting {datasetType.name}")
         storage = self._byName.get(datasetType.name)
         if storage is None:
-            tagTableName = makeTagTableName(datasetType)
-            calibTableName = makeCalibTableName(datasetType) if datasetType.isCalibration() else None
+            dimensionsKey = self._dimensions.saveDimensionGraph(datasetType.dimensions)
+            tagTableName = makeTagTableName(datasetType, dimensionsKey)
+            calibTableName = (makeCalibTableName(datasetType, dimensionsKey)
+                              if datasetType.isCalibration() else None)
             row, inserted = self._db.sync(
                 self._static.dataset_type,
                 keys={"name": datasetType.name},
                 compared={
-                    "dimensions_encoded": datasetType.dimensions.encode(),
+                    "dimensions_key": dimensionsKey,
                     "storage_class": datasetType.storageClass.name,
                 },
                 extra={

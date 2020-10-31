@@ -163,13 +163,12 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                     )
                 ),
                 ddl.FieldSpec(
-                    name="dimensions_encoded",
-                    dtype=ddl.Base64Bytes,
-                    nbytes=universe.getEncodeLength(),
+                    name="dimensions_key",
+                    dtype=sqlalchemy.BigInteger,
                     nullable=False,
                     doc=(
-                        "An opaque (but reversible) encoding of the set of "
-                        "dimensions used to identify dataset of this type."
+                        "Unique key for the set of dimensions that identifies "
+                        "datasets of this type."
                     ),
                 ),
                 ddl.FieldSpec(
@@ -234,7 +233,7 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
     return specs
 
 
-def makeTagTableName(datasetType: DatasetType) -> str:
+def makeTagTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
     """Construct the name for a dynamic (DatasetType-dependent) tag table used
     by the classes in this package.
 
@@ -243,16 +242,18 @@ def makeTagTableName(datasetType: DatasetType) -> str:
     datasetType : `DatasetType`
         Dataset type to construct a name for.  Multiple dataset types may
         share the same table.
+    dimensionsKey : `int`
+        Integer key used to save ``datasetType.dimensions`` to the database.
 
     Returns
     -------
     name : `str`
         Name for the table.
     """
-    return f"dataset_tags_{datasetType.dimensions.encode().hex()}"
+    return f"dataset_tags_{dimensionsKey:08d}"
 
 
-def makeCalibTableName(datasetType: DatasetType) -> str:
+def makeCalibTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
     """Construct the name for a dynamic (DatasetType-dependent) tag + validity
     range table used by the classes in this package.
 
@@ -261,6 +262,8 @@ def makeCalibTableName(datasetType: DatasetType) -> str:
     datasetType : `DatasetType`
         Dataset type to construct a name for.  Multiple dataset types may
         share the same table.
+    dimensionsKey : `int`
+        Integer key used to save ``datasetType.dimensions`` to the database.
 
     Returns
     -------
@@ -268,7 +271,7 @@ def makeCalibTableName(datasetType: DatasetType) -> str:
         Name for the table.
     """
     assert datasetType.isCalibration()
-    return f"dataset_calibs_{datasetType.dimensions.encode().hex()}"
+    return f"dataset_calibs_{dimensionsKey:08d}"
 
 
 def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManager]) -> ddl.TableSpec:
