@@ -43,6 +43,7 @@ from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ._database import Database, StaticTablesContext
+    from ._dimensions import DimensionRecordStorageManager
 
 
 class MissingCollectionError(Exception):
@@ -181,10 +182,10 @@ class ChainedCollectionRecord(CollectionRecord):
                                     collectionTypes={CollectionType.CHAINED}):
             if record == self:
                 raise ValueError(f"Cycle in collection chaining when defining '{self.name}'.")
-        self._update(manager, children, children.universe)
+        self._update(manager, children)
         self._children = children
 
-    def refresh(self, manager: CollectionManager, universe: DimensionUniverse) -> None:
+    def refresh(self, manager: CollectionManager) -> None:
         """Load children from the database, using the given manager to resolve
         collection primary key values into records.
 
@@ -199,14 +200,11 @@ class ChainedCollectionRecord(CollectionRecord):
         manager : `CollectionManager`
             The object that manages this records instance and all records
             instances that may appear as its children.
-        universe : `DimensionUniverse`
-            Object managing all known dimensions.
         """
-        self._children = self._load(manager, universe)
+        self._children = self._load(manager)
 
     @abstractmethod
-    def _update(self, manager: CollectionManager, children: CollectionSearch,
-                universe: DimensionUniverse) -> None:
+    def _update(self, manager: CollectionManager, children: CollectionSearch) -> None:
         """Protected implementation hook for setting the `children` property.
 
         This method should be implemented by subclasses to update the database
@@ -222,13 +220,11 @@ class ChainedCollectionRecord(CollectionRecord):
         children : `CollectionSearch`
             A collection search path that should be resolved to set the child
             collections of this chain.  Guaranteed not to contain cycles.
-        universe : `DimensionUniverse`
-            Object managing all known dimensions.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def _load(self, manager: CollectionManager, universe: DimensionUniverse) -> CollectionSearch:
+    def _load(self, manager: CollectionManager) -> CollectionSearch:
         """Protected implementation hook for `refresh`.
 
         This method should be implemented by subclasses to retrieve the chain's
@@ -241,8 +237,6 @@ class ChainedCollectionRecord(CollectionRecord):
         manager : `CollectionManager`
             The object that manages this records instance and all records
             instances that may appear as its children.
-        universe : `DimensionUniverse`
-            Object managing all known dimensions.
         """
         raise NotImplementedError()
 
@@ -262,7 +256,8 @@ class CollectionManager(VersionedExtension):
 
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, context: StaticTablesContext) -> CollectionManager:
+    def initialize(cls, db: Database, context: StaticTablesContext, *,
+                   dimensions: DimensionRecordStorageManager) -> CollectionManager:
         """Construct an instance of the manager.
 
         Parameters
@@ -273,6 +268,8 @@ class CollectionManager(VersionedExtension):
             Context object obtained from `Database.declareStaticTables`; used
             to declare any tables that should always be present in a layer
             implemented with this manager.
+        dimensions : `DimensionRecordStorageManager`
+            Manager object for the dimensions in this `Registry`.
 
         Returns
         -------
@@ -393,20 +390,15 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def refresh(self, universe: DimensionUniverse) -> None:
+    def refresh(self) -> None:
         """Ensure all other operations on this manager are aware of any
         collections that may have been registered by other clients since it
         was initialized or last refreshed.
-
-        Parameters
-        ----------
-        universe : `DimensionUniverse`
-            Object managing all known dimensions.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def register(self, name: str, type: CollectionType, universe: DimensionUniverse) -> CollectionRecord:
+    def register(self, name: str, type: CollectionType) -> CollectionRecord:
         """Ensure that a collection of the given name and type are present
         in the layer this manager is associated with.
 
@@ -416,8 +408,6 @@ class CollectionManager(VersionedExtension):
             Name of the collection.
         type : `CollectionType`
             Enumeration value indicating the type of collection.
-        universe : `DimensionUniverse`
-            Object managing all known dimensions.
 
         Returns
         -------

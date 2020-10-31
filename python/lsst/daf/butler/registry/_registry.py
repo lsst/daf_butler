@@ -261,7 +261,7 @@ class Registry:
         with self._db.declareStaticTables(create=create) as context:
             self._attributes = attributes.initialize(self._db, context)
             self._dimensions = dimensions.initialize(self._db, context, universe=universe)
-            self._collections = collections.initialize(self._db, context)
+            self._collections = collections.initialize(self._db, context, dimensions=self._dimensions)
             self._datasets = datasets.initialize(self._db, context,
                                                  collections=self._collections,
                                                  dimensions=self._dimensions)
@@ -308,8 +308,8 @@ class Registry:
                 _LOG.warning(f"Registry schema digest mismatch: {exc}")
 
         self._dimensions.refresh()
-        self._collections.refresh(universe=self._dimensions.universe)
-        self._datasets.refresh(universe=self._dimensions.universe)
+        self._collections.refresh()
+        self._datasets.refresh()
 
     def __str__(self) -> str:
         return str(self._db)
@@ -427,7 +427,7 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        self._collections.register(name, type, universe=self.dimensions)
+        self._collections.register(name, type)
 
     def getCollectionType(self, name: str) -> CollectionType:
         """Return an enumeration value indicating the type of the given
@@ -463,7 +463,7 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        self._collections.register(name, CollectionType.RUN, universe=self.dimensions)
+        self._collections.register(name, CollectionType.RUN)
 
     @transactional
     def removeCollection(self, name: str) -> None:
@@ -617,7 +617,7 @@ class Registry:
         If the dataset type is not registered the method will return without
         action.
         """
-        self._datasets.remove(name, universe=self._dimensions.universe)
+        self._datasets.remove(name)
 
     def getDatasetType(self, name: str) -> DatasetType:
         """Get the `DatasetType`.
@@ -784,7 +784,7 @@ class Registry:
             A ref to the Dataset, or `None` if no matching Dataset
             was found.
         """
-        ref = self._datasets.getDatasetRef(id, universe=self.dimensions)
+        ref = self._datasets.getDatasetRef(id)
         if ref is None:
             return None
         return ref

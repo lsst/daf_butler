@@ -43,7 +43,7 @@ from ...core import TimespanDatabaseRepresentation, ddl
 from ..interfaces import CollectionRecord, VersionTuple
 
 if TYPE_CHECKING:
-    from ..interfaces import Database, StaticTablesContext
+    from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext
 
 
 _KEY_FIELD_SPEC = ddl.FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True,
@@ -85,18 +85,32 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
         Named tuple of SQLAlchemy table objects.
     collectionIdName : `str`
         Name of the column in collections table that identifies it (PK).
+    dimensions : `DimensionRecordStorageManager`
+        Manager object for the dimensions in this `Registry`.
     """
-    def __init__(self, db: Database, tables: CollectionTablesTuple, collectionIdName: str):
-        super().__init__(db=db, tables=tables, collectionIdName=collectionIdName)
+    def __init__(
+        self,
+        db: Database,
+        tables: CollectionTablesTuple,
+        collectionIdName: str,
+        dimensions: DimensionRecordStorageManager,
+    ):
+        super().__init__(db=db, tables=tables, collectionIdName=collectionIdName, dimensions=dimensions)
         self._nameCache: Dict[str, CollectionRecord] = {}  # indexed by collection name
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext) -> SynthIntKeyCollectionManager:
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext, *,
+        dimensions: DimensionRecordStorageManager,
+    ) -> SynthIntKeyCollectionManager:
         # Docstring inherited from CollectionManager.
         return cls(
             db,
             tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
-            collectionIdName="collection_id"
+            collectionIdName="collection_id",
+            dimensions=dimensions,
         )
 
     @classmethod
