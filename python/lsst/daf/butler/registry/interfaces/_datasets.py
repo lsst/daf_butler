@@ -44,7 +44,6 @@ from ...core import (
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
-    from ...core import DimensionUniverse
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
     from ._collections import CollectionManager, CollectionRecord, RunRecord
@@ -363,7 +362,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def refresh(self, *, universe: DimensionUniverse) -> None:
+    def refresh(self) -> None:
         """Ensure all other operations on this manager are aware of any
         dataset types that may have been registered by other clients since
         it was initialized or last refreshed.
@@ -446,15 +445,13 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def remove(self, name: str, *, universe: DimensionUniverse) -> None:
+    def remove(self, name: str) -> None:
         """Remove the dataset type.
 
         Parameters
         ----------
         name : `str`
             Name of the dataset type.
-        universe : `DimensionUniverse`
-            Universe to use to trigger a refresh following removal.
         """
         raise NotImplementedError()
 
@@ -470,7 +467,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def getDatasetRef(self, id: int, *, universe: DimensionUniverse) -> Optional[DatasetRef]:
+    def getDatasetRef(self, id: int) -> Optional[DatasetRef]:
         """Return a `DatasetRef` for the given dataset primary key
         value.
 
@@ -478,8 +475,6 @@ class DatasetRecordStorageManager(VersionedExtension):
         ----------
         id : `int`
             Autoincrement primary key value for the dataset.
-        universe : `DimensionUniverse`
-            All known dimensions.
 
         Returns
         -------

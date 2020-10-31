@@ -18,7 +18,6 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     ddl,
-    DimensionUniverse,
 )
 from lsst.daf.butler.registry import ConflictingDefinitionError, OrphanedRecordError
 from lsst.daf.butler.registry.interfaces import (
@@ -116,7 +115,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         return addDatasetForeignKey(tableSpec, name=name, onDelete=onDelete, constraint=constraint, **kwargs)
 
-    def refresh(self, *, universe: DimensionUniverse) -> None:
+    def refresh(self) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         byName = {}
         byId = {}
@@ -144,7 +143,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         self._byName = byName
         self._byId = byId
 
-    def remove(self, name: str, *, universe: DimensionUniverse) -> None:
+    def remove(self, name: str) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         compositeName, componentName = DatasetType.splitDatasetTypeName(name)
         if componentName is not None:
@@ -159,7 +158,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
 
         # Now refresh everything -- removal is rare enough that this does
         # not need to be fast.
-        self.refresh(universe=universe)
+        self.refresh()
 
     def find(self, name: str) -> Optional[DatasetRecordStorage]:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -226,7 +225,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         for storage in self._byName.values():
             yield storage.datasetType
 
-    def getDatasetRef(self, id: int, *, universe: DimensionUniverse) -> Optional[DatasetRef]:
+    def getDatasetRef(self, id: int) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         sql = sqlalchemy.sql.select(
             [
@@ -243,7 +242,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             return None
         recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
         if recordsForType is None:
-            self.refresh(universe=universe)
+            self.refresh()
             recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
             assert recordsForType is not None, "Should be guaranteed by foreign key constraints."
         return DatasetRef(
