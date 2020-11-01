@@ -26,9 +26,10 @@ from lsst.daf.butler import (
 from lsst.daf.butler.registry import ConflictingDefinitionError
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
 
+
 if TYPE_CHECKING:
     from ...interfaces import CollectionManager, CollectionRecord, Database, RunRecord
-    from .tables import StaticDatasetTablesTuple
+    from .tables import CollectionSummaryTables, StaticDatasetTablesTuple
 
 
 class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
@@ -44,6 +45,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                  dataset_type_id: int,
                  collections: CollectionManager,
                  static: StaticDatasetTablesTuple,
+                 summaries: CollectionSummaryTables,
                  tags: sqlalchemy.schema.Table,
                  calibs: Optional[sqlalchemy.schema.Table]):
         super().__init__(datasetType=datasetType)
@@ -51,9 +53,38 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._db = db
         self._collections = collections
         self._static = static
+        self._summaries = summaries
         self._tags = tags
         self._calibs = calibs
         self._runKeyColumn = collections.getRunForeignKeyName()
+
+    def _ensureSummaries(self, collection: CollectionRecord, governorValues: Dict[str, Set[str]]) -> None:
+        """Update the summary table to associate the given collection with
+        ``self.datasetType`` and the given governor dimension values.
+
+        Parameters
+        ----------
+        collection : `CollectionRecord`
+            Collection whose summary should be updated.
+        governorValues : `dict` [ `str`, `set` [ `str ` ] ]
+            Mapping from `GovernorDimension` names to sets of values they may
+            have in the data IDs of the dataests in this collection.
+        """
+        self._db.ensure(
+            self._summaries.datasetType,
+            {
+                "dataset_type_id": self._dataset_type_id,
+                self._collections.getCollectionForeignKeyName(): collection.key,
+            }
+        )
+        for governorName, values in governorValues.items():
+            self._db.ensure(
+                self._summaries.dimensions[governorName],
+                *[{
+                    self._collections.getCollectionForeignKeyName(): collection.key,
+                    governorName: v
+                } for v in values],
+            )
 
     def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
@@ -61,13 +92,26 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             "dataset_type_id": self._dataset_type_id,
             self._runKeyColumn: run.key,
         }
-        dataIds = list(dataIds)
-        # Insert into the static dataset table, generating autoincrement
-        # dataset_id values.
+        # Iterate over data IDs, transforming a possibly-single-pass iterable
+        # into a list, and remembering any governor dimension values we see.
+        governorValues: Dict[str, Set[str]] = {
+            name: set() for name in self.datasetType.dimensions.governors.names
+        }
+        dataIdList = []
+        for dataId in dataIds:
+            dataIdList.append(dataId)
+            for governorName, values in governorValues.items():
+                values.add(dataId[governorName])  # type: ignore
         with self._db.transaction():
-            datasetIds = self._db.insert(self._static.dataset, *([staticRow]*len(dataIds)),
+            # Insert into the static dataset table, generating autoincrement
+            # dataset_id values.
+            datasetIds = self._db.insert(self._static.dataset, *([staticRow]*len(dataIdList)),
                                          returnIds=True)
             assert datasetIds is not None
+            # Update the summary tables for this collection in case this is the
+            # first time this dataset type or these governor values will be
+            # inserted there.
+            self._ensureSummaries(run, governorValues)
             # Combine the generated dataset_id values and data ID fields to
             # form rows to be inserted into the tags table.
             protoTagsRow = {
@@ -76,12 +120,12 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             }
             tagsRows = [
                 dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
-                for dataId, dataset_id in zip(dataIds, datasetIds)
+                for dataId, dataset_id in zip(dataIdList, datasetIds)
             ]
             # Insert those rows into the tags table.  This is where we'll
             # get any unique constraint violations.
             self._db.insert(self._tags, *tagsRows)
-        for dataId, datasetId in zip(dataIds, datasetIds):
+        for dataId, datasetId in zip(dataIdList, datasetIds):
             yield DatasetRef(
                 datasetType=self.datasetType,
                 dataId=dataId,
@@ -145,11 +189,21 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             "dataset_type_id": self._dataset_type_id,
         }
         rows = []
+        governorValues: Dict[str, Set[str]] = {
+            name: set() for name in self.datasetType.dimensions.governors.names
+        }
         for dataset in datasets:
             row = dict(protoRow, dataset_id=dataset.getCheckedId())
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
+            for governorName, values in governorValues.items():
+                values.add(dataset.dataId[governorName])  # type: ignore
             rows.append(row)
+        # Update the summary tables for this collection in case this is the
+        # first time this dataset type or these governor values will be
+        # inserted there.
+        self._ensureSummaries(collection, governorValues)
+        # Update the tag table itself.
         self._db.replace(self._tags, *rows)
 
     def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
@@ -206,15 +260,25 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             "dataset_type_id": self._dataset_type_id,
         }
         rows = []
+        governorValues: Dict[str, Set[str]] = {
+            name: set() for name in self.datasetType.dimensions.governors.names
+        }
         dataIds: Optional[Set[DataCoordinate]] = set() if not tsRepr.hasExclusionConstraint() else None
         for dataset in datasets:
             row = dict(protoRow, dataset_id=dataset.getCheckedId())
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
             tsRepr.update(timespan, result=row)
+            for governorName, values in governorValues.items():
+                values.add(dataset.dataId[governorName])  # type: ignore
             rows.append(row)
             if dataIds is not None:
                 dataIds.add(dataset.dataId)
+        # Update the summary tables for this collection in case this is the
+        # first time this dataset type or these governor values will be
+        # inserted there.
+        self._ensureSummaries(collection, governorValues)
+        # Update the association table itself.
         if tsRepr.hasExclusionConstraint():
             # Rely on database constraint to enforce invariants; we just
             # reraise the exception for consistency across DB engines.
