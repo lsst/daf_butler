@@ -1321,7 +1321,7 @@ class Registry:
         collections
             An expression that fully or partially identifies the collections
             to search for datasets, such as a `str`, `re.Pattern`, or iterable
-            thereof.  `...` can be used to datasets from all
+            thereof.  `...` can be used to find datasets from all
             `~CollectionType.RUN` collections (no other collections are
             necessary, because all datasets are in a ``RUN`` collection).  See
             :ref:`daf_butler_collection_expressions` for more information.
