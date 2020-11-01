@@ -27,10 +27,11 @@ from lsst.daf.butler.registry.interfaces import (
 )
 
 from .tables import (
-    makeStaticTableSpecs,
     addDatasetForeignKey,
+    CollectionSummaryTables,
     makeCalibTableName,
     makeCalibTableSpec,
+    makeStaticTableSpecs,
     makeTagTableName,
     makeTagTableSpec,
 )
@@ -80,6 +81,8 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
     static : `StaticDatasetTablesTuple`
         Named tuple of `sqlalchemy.schema.Table` instances for all static
         tables used by this class.
+    summaries : `CollectionSummaryTables`
+        Structure containing tables that summarize the contents of collections.
     """
     def __init__(
         self, *,
@@ -87,11 +90,13 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
+        summaries: CollectionSummaryTables,
     ):
         self._db = db
         self._collections = collections
         self._dimensions = dimensions
         self._static = static
+        self._summaries = summaries
         self._byName: Dict[str, ByDimensionsDatasetRecordStorage] = {}
         self._byId: Dict[int, ByDimensionsDatasetRecordStorage] = {}
 
@@ -106,7 +111,13 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         specs = makeStaticTableSpecs(type(collections), universe=dimensions.universe)
         static: StaticDatasetTablesTuple = context.addTableTuple(specs)  # type: ignore
-        return cls(db=db, collections=collections, dimensions=dimensions, static=static)
+        summaries = CollectionSummaryTables.initialize(
+            db,
+            context,
+            collections=collections,
+            dimensions=dimensions,
+        )
+        return cls(db=db, collections=collections, dimensions=dimensions, static=static, summaries=summaries)
 
     @classmethod
     def addDatasetForeignKey(cls, tableSpec: ddl.TableSpec, *, name: str = "dataset",
@@ -135,7 +146,8 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             else:
                 calibs = None
             storage = ByDimensionsDatasetRecordStorage(db=self._db, datasetType=datasetType,
-                                                       static=self._static, tags=tags, calibs=calibs,
+                                                       static=self._static, summaries=self._summaries,
+                                                       tags=tags, calibs=calibs,
                                                        dataset_type_id=row["id"],
                                                        collections=self._collections)
             byName[datasetType.name] = storage
@@ -209,7 +221,8 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             else:
                 calibs = None
             storage = ByDimensionsDatasetRecordStorage(db=self._db, datasetType=datasetType,
-                                                       static=self._static, tags=tags, calibs=calibs,
+                                                       static=self._static, summaries=self._summaries,
+                                                       tags=tags, calibs=calibs,
                                                        dataset_type_id=row["id"],
                                                        collections=self._collections)
             self._byName[datasetType.name] = storage
