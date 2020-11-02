@@ -404,10 +404,7 @@ class ButlerTests(ButlerPutGetTests):
         butler2 = Butler(butler=butler, collections=["other"])
         self.assertEqual(
             butler2.collections,
-            CollectionSearch.fromExpression(
-                ["other"],
-                universe=butler2.registry.dimensions,
-            )
+            CollectionSearch.fromExpression(["other"])
         )
         self.assertIsNone(butler2.run)
         self.assertIs(butler.registry, butler2.registry)
