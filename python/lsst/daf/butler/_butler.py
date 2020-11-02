@@ -554,6 +554,68 @@ class Butler:
         else:
             idNumber = None
         timespan: Optional[Timespan] = None
+
+        # Process dimension records that are using record information
+        # rather than ids
+        newDataId: dict[Any, Any] = {}
+        byRecord: dict[Any, dict[str, Any]] = defaultdict(dict)
+
+        # if all the dataId comes from keyword parameters we do not need
+        # to do anything here because they can't be of the form
+        # exposure.obs_id because a "." is not allowed in a keyword parameter.
+        if dataId:
+            for k, v in dataId.items():
+                # If we have a Dimension we do not need to do anything
+                # because it cannot be a compound key.
+                if isinstance(k, str) and "." in k:
+                    # Someone is using a more human-readable dataId
+                    dimension, record = k.split(".", 1)
+                    byRecord[dimension][record] = v
+                else:
+                    newDataId[k] = v
+
+        if byRecord:
+            # Some record specifiers were found so we need to convert
+            # them to the Id form
+            for dimensionName, values in byRecord.items():
+                if dimensionName in newDataId:
+                    log.warning("DataId specified explicit %s dimension value of %s in addition to"
+                                " general record specifiers for it of %s.  Ignoring record information.",
+                                dimensionName, newDataId[dimensionName], str(values))
+                    continue
+
+                # Build up a WHERE expression -- use single quotes
+                def quote(s):
+                    if isinstance(s, str):
+                        return f"'{s}'"
+                    else:
+                        return s
+
+                where = " AND ".join(f"{dimensionName}.{k} = {quote(v)}"
+                                     for k, v in values.items())
+
+                # Hopefully we get a single record that matches
+                records = set(self.registry.queryDimensionRecords(dimensionName, dataId=newDataId,
+                                                                  where=where, **kwds))
+
+                if len(records) != 1:
+                    if len(records) > 1:
+                        log.debug("Received %d records from constraints of %s", len(records), str(values))
+                        for r in records:
+                            log.debug("- %s", str(r))
+                        raise RuntimeError(f"DataId specification for dimension {dimensionName} is not"
+                                           f" uniquely constrained to a single dataset by {values}."
+                                           f" Got {len(records)} results.")
+                    raise RuntimeError(f"DataId specification for dimension {dimensionName} matched no"
+                                       f" records when constrained by {values}")
+
+                # Get the primary key from the real dimension object
+                dimension = self.registry.dimensions[dimensionName]
+                newDataId[dimensionName] = getattr(records.pop(), dimension.primaryKey.name)
+
+            # We have modified the dataId so need to switch to it
+            dataId = newDataId
+
         if datasetType.isCalibration():
             # Because this is a calibration dataset, first try to make a
             # standardize the data ID without restricting the dimensions to
