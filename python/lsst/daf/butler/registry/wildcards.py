@@ -31,8 +31,6 @@ __all__ = (
 
 from collections import defaultdict
 from dataclasses import dataclass
-import itertools
-import operator
 import re
 from typing import (
     AbstractSet,
@@ -45,6 +43,7 @@ from typing import (
     Iterator,
     List,
     Optional,
+    Sequence,
     Set,
     Tuple,
     TYPE_CHECKING,
@@ -663,13 +662,11 @@ class CollectionContentRestriction:
 def _yieldCollectionRecords(
     manager: CollectionManager,
     record: CollectionRecord,
-    restriction: CollectionContentRestriction,
-    datasetType: Optional[DatasetType] = None,
     collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
     done: Optional[Set[str]] = None,
     flattenChains: bool = True,
     includeChains: Optional[bool] = None,
-) -> Iterator[Tuple[CollectionRecord, CollectionContentRestriction]]:
+) -> Iterator[CollectionRecord]:
     """A helper function containing common logic for `CollectionSearch.iter`
     and `CollectionQuery.iter`: recursively yield `CollectionRecord` only if
     they match the criteria given in other arguments.
@@ -680,12 +677,6 @@ def _yieldCollectionRecords(
         Object responsible for managing the collection tables in a `Registry`.
     record : `CollectionRecord`
         Record to conditionally yield.
-    restriction : `CollectionContentRestriction`
-        A restriction that must match ``datasetType`` (if given) in order to
-        yield ``record``.
-    datasetType : `DatasetType`, optional
-        If given, a `DatasetType` instance that must be included in
-        ``restriction`` in order to yield ``record``.
     collectionTypes : `AbstractSet` [ `CollectionType` ], optional
         If provided, only yield collections of these types.
     done : `set` [ `str` ], optional
@@ -704,8 +695,6 @@ def _yieldCollectionRecords(
     ------
     record : `CollectionRecord`
         Matching collection records.
-    restriction : `CollectionContentRestriction`
-        The given dataset type restriction.
     """
     if done is None:
         done = set()
@@ -713,14 +702,13 @@ def _yieldCollectionRecords(
     if record.type in collectionTypes:
         done.add(record.name)
         if record.type is not CollectionType.CHAINED or includeChains:
-            yield record, restriction
+            yield record
     if flattenChains and record.type is CollectionType.CHAINED:
         done.add(record.name)
         # We know this is a ChainedCollectionRecord because of the enum value,
         # but MyPy doesn't.
-        yield from record.children.iterPairs(  # type: ignore
+        yield from record.children.iter(  # type: ignore
             manager,
-            datasetType=datasetType,
             collectionTypes=collectionTypes,
             done=done,
             flattenChains=flattenChains,
@@ -728,8 +716,8 @@ def _yieldCollectionRecords(
         )
 
 
-class CollectionSearch:
-    """An ordered search path of collections and their content restrictions.
+class CollectionSearch(Sequence[str]):
+    """An ordered search path of collections.
 
     The `fromExpression` method should almost always be used to construct
     instances, as the regular constructor performs no checking of inputs (and
@@ -737,40 +725,33 @@ class CollectionSearch:
 
     Parameters
     ----------
-    items : `list` [ `tuple` [ `str`, `CollectionContentRestriction` ] ]
-        Tuples that relate a collection name to the restriction on dataset
-        types to search for within it.  This is not a mapping because the
-        same collection name may appear multiple times with different
-        restrictions.
-    universe : `DimensionUniverse`
-        Object managing all known dimensions.
+    collections : `tuple` [ `str` ]
+        Tuple of collection names, ordered from the first searched to the last
+        searched.
 
     Notes
     -----
-    A `CollectionSearch` is used to find a single dataset according to its
-    dataset type and data ID, giving preference to collections in which the
-    order they are specified.  A `CollectionQuery` can be constructed from
-    a broader range of expressions but does not order the collections to be
-    searched.
+    A `CollectionSearch` is used to find a single dataset (or set of datasets
+    with different dataset types or data IDs) according to its dataset type and
+    data ID, giving preference to collections in the order in which they are
+    specified.  A `CollectionQuery` can be constructed from a broader range of
+    expressions but does not order the collections to be searched.
 
-    `CollectionSearch` is iterable, yielding two-element tuples of `str`
-    (collection name) and `CollectionContentRestriction`.
+    `CollectionSearch` is an immutable sequence of `str` collection names.
 
     A `CollectionSearch` instance constructed properly (e.g. via
     `fromExpression`) is a unique representation of a particular search path;
     it is exactly the same internally and compares as equal to any
-    `CollectionSearch` constructed from an equivalent expression,
-    regardless of how different the original expressions appear.
+    `CollectionSearch` constructed from an equivalent expression, regardless of
+    how different the original expressions appear.
     """
-    def __init__(self, items: List[Tuple[str, CollectionContentRestriction]], universe: DimensionUniverse):
-        assert all(isinstance(v, CollectionContentRestriction) for _, v in items)
-        self._items = items
-        self.universe = universe
+    def __init__(self, collections: Tuple[str, ...]):
+        self._collections = collections
 
-    __slots__ = ("_items", "universe")
+    __slots__ = ("_collections",)
 
     @classmethod
-    def fromExpression(cls, expression: Any, universe: DimensionUniverse) -> CollectionSearch:
+    def fromExpression(cls, expression: Any) -> CollectionSearch:
         """Process a general expression to construct a `CollectionSearch`
         instance.
 
@@ -779,20 +760,12 @@ class CollectionSearch:
         expression
             May be:
              - a `str` collection name;
-             - a two-element `tuple` containing a `str` and any expression
-               accepted by `CollectionContentRestriction.fromExpression`;
-             - any non-mapping iterable containing either of the above;
-             - a mapping from `str` to any expression accepted by
-               `CollectionContentRestriction.fromExpression`.
+             - an iterable of `str` collection names;
              - another `CollectionSearch` instance (passed through
                unchanged).
 
-            Multiple consecutive entries for the same collection with different
-            restrictions will be merged.  Non-consecutive entries will not,
-            because that actually represents a different search path.
-        universe : `DimensionUniverse`
-            Object managing all dimensions.
-
+            Duplicate entries will be removed (preserving the first appearance
+            of each collection name).
         Returns
         -------
         collections : `CollectionSearch`
@@ -808,53 +781,15 @@ class CollectionSearch:
             expression,
             allowAny=False,
             allowPatterns=False,
-            coerceItemValue=lambda x: CollectionContentRestriction.fromExpression(x, universe),
-            defaultItemValue=CollectionContentRestriction(universe=universe)
         )
         assert wildcard is not Ellipsis
         assert not wildcard.patterns
-        assert not wildcard.strings
-        return cls(
-            # Consolidate repetitions of the same collection name.
-            [(name, CollectionContentRestriction.union(universe, *tuple(item[1] for item in items)))
-             for name, items in itertools.groupby(wildcard.items, key=operator.itemgetter(0))],
-            universe
-        )
-
-    def iterPairs(
-        self, manager: CollectionManager, *,
-        datasetType: Optional[DatasetType] = None,
-        collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
-        done: Optional[Set[str]] = None,
-        flattenChains: bool = True,
-        includeChains: Optional[bool] = None,
-    ) -> Iterator[Tuple[CollectionRecord, CollectionContentRestriction]]:
-        """Like `iter`, but yield pairs of `CollectionRecord`,
-        `CollectionContentRestriction` instead of just the former.
-
-        See `iter` for all parameter descriptions.
-
-        Yields
-        ------
-        record : `CollectionRecord`
-            Matching collection records.
-        restriction : `CollectionContentRestriction`
-            The given collection content restriction.
-        """
-        if done is None:
-            done = set()
-        for name, restriction in self._items:
-            if name not in done and (datasetType is None or datasetType in restriction.datasetTypes):
-                yield from _yieldCollectionRecords(
-                    manager,
-                    manager.find(name),
-                    restriction,
-                    datasetType=datasetType,
-                    collectionTypes=collectionTypes,
-                    done=done,
-                    flattenChains=flattenChains,
-                    includeChains=includeChains,
-                )
+        assert not wildcard.items
+        deduplicated = []
+        for name in wildcard.strings:
+            if name not in deduplicated:
+                deduplicated.append(name)
+        return cls(tuple(deduplicated))
 
     def iter(
         self, manager: CollectionManager, *,
@@ -876,9 +811,6 @@ class CollectionSearch:
         manager : `CollectionManager`
             Object responsible for managing the collection tables in a
             `Registry`.
-        datasetType : `DatasetType`, optional
-            If given, only yield collections whose dataset type restrictions
-            include this dataset type.
         collectionTypes : `AbstractSet` [ `CollectionType` ], optional
             If provided, only yield collections of these types.
         done : `set`, optional
@@ -901,30 +833,38 @@ class CollectionSearch:
         record : `CollectionRecord`
             Matching collection records.
         """
-        for record, _ in self.iterPairs(manager, datasetType=datasetType, collectionTypes=collectionTypes,
-                                        done=done, flattenChains=flattenChains, includeChains=includeChains):
-            yield record
+        if done is None:
+            done = set()
+        for name in self:
+            if name not in done:
+                yield from _yieldCollectionRecords(
+                    manager,
+                    manager.find(name),
+                    collectionTypes=collectionTypes,
+                    done=done,
+                    flattenChains=flattenChains,
+                    includeChains=includeChains,
+                )
 
-    def __iter__(self) -> Iterator[Tuple[str, CollectionContentRestriction]]:
-        yield from self._items
+    def __iter__(self) -> Iterator[str]:
+        yield from self._collections
 
     def __len__(self) -> int:
-        return len(self._items)
+        return len(self._collections)
+
+    def __getitem__(self, index: Any) -> str:
+        return self._collections[index]
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, CollectionSearch):
-            return self._items == other._items
+            return self._collections == other._collections
         return False
 
     def __str__(self) -> str:
-        return "[{}]".format(", ".join(f"{k}: {v}" for k, v in self._items))
+        return "[{}]".format(", ".join(self))
 
     def __repr__(self) -> str:
-        return f"CollectionSearch({self._items!r})"
-
-    universe: DimensionUniverse
-    """Object that manages all known dimensions (`DimensionUniverse`).
-    """
+        return f"CollectionSearch({self._collections!r})"
 
 
 class CollectionQuery:
@@ -961,17 +901,15 @@ class CollectionQuery:
     def __init__(
         self,
         search: Union[CollectionSearch, EllipsisType] = Ellipsis,
-        patterns: Tuple[re.Pattern, ...] = (), *,
-        universe: DimensionUniverse,
+        patterns: Tuple[re.Pattern, ...] = (),
     ):
         self._search = search
         self._patterns = patterns
-        self.universe = universe
 
-    __slots__ = ("_search", "_patterns", "universe")
+    __slots__ = ("_search", "_patterns")
 
     @classmethod
-    def fromExpression(cls, expression: Any, universe: DimensionUniverse) -> CollectionQuery:
+    def fromExpression(cls, expression: Any) -> CollectionQuery:
         """Process a general expression to construct a `CollectionQuery`
         instance.
 
@@ -980,21 +918,14 @@ class CollectionQuery:
         expression
             May be:
              - a `str` collection name;
-             - a two-element `tuple` containing a `str` and any expression
-               accepted by `CollectionContentRestriction.fromExpression`;
              - an `re.Pattern` instance to match (with `re.Pattern.fullmatch`)
                against collection names;
-             - any non-mapping iterable containing any of the above;
-             - a mapping from `str` to any expression accepted by
-               `CollectionContentRestriction`.
+             - any iterable containing any of the above;
              - a `CollectionSearch` instance;
              - another `CollectionQuery` instance (passed through unchanged).
 
-            Multiple consecutive entries for the same collection with different
-            restrictions will be merged.  Non-consecutive entries will not,
-            because that actually represents a different search path.
-        universe : `DimensionUniverse`
-            Object managing all dimensions.
+            Duplicate collection names will be removed (preserving the first
+            appearance of each collection name).
 
         Returns
         -------
@@ -1004,84 +935,25 @@ class CollectionQuery:
         if isinstance(expression, cls):
             return expression
         if expression is Ellipsis:
-            return cls(universe=universe)
+            return cls()
         if isinstance(expression, CollectionSearch):
-            return cls(search=expression, patterns=(), universe=universe)
+            return cls(search=expression, patterns=())
         wildcard = CategorizedWildcard.fromExpression(
             expression,
             allowAny=True,
             allowPatterns=True,
-            coerceItemValue=lambda x: CollectionContentRestriction.fromExpression(x, universe),
-            defaultItemValue=CollectionContentRestriction(universe=universe)
         )
         if wildcard is Ellipsis:
-            return cls(universe=universe)
-        assert not wildcard.strings, \
-            "All bare strings should be transformed to (str, DatasetTypeRestriction) tuples."
+            return cls()
+        assert not wildcard.items, \
+            "We should no longer be transforming to (str, DatasetTypeRestriction) tuples."
         return cls(
-            search=CollectionSearch.fromExpression(wildcard.items, universe),
+            search=CollectionSearch.fromExpression(wildcard.strings),
             patterns=tuple(wildcard.patterns),
-            universe=universe,
         )
-
-    def iterPairs(
-        self, manager: CollectionManager, *,
-        datasetType: Optional[DatasetType] = None,
-        collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
-        flattenChains: bool = True,
-        includeChains: Optional[bool] = None,
-    ) -> Iterator[Tuple[CollectionRecord, CollectionContentRestriction]]:
-        """Like `iter`, but yield pairs of `CollectionRecord`,
-        `CollectionContentRestriction` instead of just the former.
-
-        See `iter` for all parameter descriptions.
-
-        Yields
-        ------
-        record : `CollectionRecord`
-            Matching collection records.
-        restriction : `CollectionContentRestriction`
-            The given dataset type restriction.
-
-        """
-        unrestricted = CollectionContentRestriction(universe=self.universe)
-        if self._search is Ellipsis:
-            for record in manager:
-                yield from _yieldCollectionRecords(
-                    manager,
-                    record,
-                    unrestricted,
-                    datasetType=datasetType,
-                    collectionTypes=collectionTypes,
-                    flattenChains=flattenChains,
-                    includeChains=includeChains,
-                )
-        else:
-            done: Set[str] = set()
-            yield from self._search.iterPairs(
-                manager,
-                datasetType=datasetType,
-                collectionTypes=collectionTypes,
-                done=done,
-                flattenChains=flattenChains,
-                includeChains=includeChains,
-            )
-            for record in manager:
-                if record.name not in done and any(p.fullmatch(record.name) for p in self._patterns):
-                    yield from _yieldCollectionRecords(
-                        manager,
-                        record,
-                        unrestricted,
-                        datasetType=datasetType,
-                        collectionTypes=collectionTypes,
-                        done=done,
-                        flattenChains=flattenChains,
-                        includeChains=includeChains,
-                    )
 
     def iter(
         self, manager: CollectionManager, *,
-        datasetType: Optional[DatasetType] = None,
         collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
         flattenChains: bool = True,
         includeChains: Optional[bool] = None,
@@ -1098,9 +970,6 @@ class CollectionQuery:
         manager : `CollectionManager`
             Object responsible for managing the collection tables in a
             `Registry`.
-        datasetType : `DatasetType`, optional
-            If given, only yield collections whose dataset type restrictions
-            include this dataset type.
         collectionTypes : `AbstractSet` [ `CollectionType` ], optional
             If provided, only yield collections of these types.
         flattenChains : `bool`, optional
@@ -1117,16 +986,37 @@ class CollectionQuery:
         record : `CollectionRecord`
             Matching collection records.
         """
-        for record, _ in self.iterPairs(manager, datasetType=datasetType, collectionTypes=collectionTypes,
-                                        flattenChains=flattenChains, includeChains=includeChains):
-            yield record
+        if self._search is Ellipsis:
+            for record in manager:
+                yield from _yieldCollectionRecords(
+                    manager,
+                    record,
+                    collectionTypes=collectionTypes,
+                    flattenChains=flattenChains,
+                    includeChains=includeChains,
+                )
+        else:
+            done: Set[str] = set()
+            yield from self._search.iter(
+                manager,
+                collectionTypes=collectionTypes,
+                done=done,
+                flattenChains=flattenChains,
+                includeChains=includeChains,
+            )
+            for record in manager:
+                if record.name not in done and any(p.fullmatch(record.name) for p in self._patterns):
+                    yield from _yieldCollectionRecords(
+                        manager,
+                        record,
+                        collectionTypes=collectionTypes,
+                        done=done,
+                        flattenChains=flattenChains,
+                        includeChains=includeChains,
+                    )
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, CollectionQuery):
             return self._search == other._search and self._patterns == other._patterns
         else:
             return False
-
-    universe: DimensionUniverse
-    """Object that manages all known dimensions (`DimensionUniverse`).
-    """

@@ -140,13 +140,13 @@ class QueryBuilder:
         """
         assert datasetType.dimensions.issubset(self.summary.requested)
         if isResult and findFirst:
-            collections = CollectionSearch.fromExpression(collections, self._managers.dimensions.universe)
+            collections = CollectionSearch.fromExpression(collections)
         else:
-            collections = CollectionQuery.fromExpression(collections, self._managers.dimensions.universe)
+            collections = CollectionQuery.fromExpression(collections)
         # If we are searching all collections with no constraints, loop over
         # RUN collections only, because that will include all datasets.
         collectionTypes: AbstractSet[CollectionType]
-        if collections == CollectionQuery(universe=self._managers.dimensions.universe):
+        if collections == CollectionQuery():
             collectionTypes = {CollectionType.RUN}
         else:
             collectionTypes = CollectionType.all()
@@ -161,7 +161,6 @@ class QueryBuilder:
         baseColumnNames = {"id", runKeyName} if isResult else set()
         baseColumnNames.update(datasetType.dimensions.required.names)
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
-                                                                 datasetType=datasetType,
                                                                  collectionTypes=collectionTypes)):
             if collectionRecord.type is CollectionType.CALIBRATION:
                 if datasetType.isCalibration():
