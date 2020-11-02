@@ -33,12 +33,15 @@ from ...core import (
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
+    GovernorDimension,
     NamedKeyDict,
+    NamedKeyMapping,
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import (
     Database,
     DatabaseDimensionRecordStorage,
+    GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
 from ..queries import QueryBuilder
@@ -85,10 +88,15 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
             raise NotImplementedError("Cannot use query to back temporal dimension.")
 
     @classmethod
-    def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
-                   context: Optional[StaticTablesContext] = None,
-                   config: Config) -> DatabaseDimensionRecordStorage:
-        # Docstring inherited from DimensionRecordStorage.
+    def initialize(
+        cls,
+        db: Database,
+        element: DatabaseDimensionElement, *,
+        context: Optional[StaticTablesContext] = None,
+        config: Config,
+        governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+    ) -> DatabaseDimensionRecordStorage:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
         viewOf = config["view_of"]
         return cls(db, element, viewOf)
 

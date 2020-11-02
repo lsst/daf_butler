@@ -99,6 +99,9 @@ class TopologicalFamily(ABC):
             return self.space == other.space and self.name == other.name
         return False
 
+    def __hash__(self) -> int:
+        return hash(self.name)
+
     def __contains__(self, other: TopologicalRelationshipEndpoint) -> bool:
         return other.topology.get(self.space) == self
 

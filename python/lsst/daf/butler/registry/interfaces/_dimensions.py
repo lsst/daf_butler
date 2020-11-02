@@ -21,15 +21,24 @@
 from __future__ import annotations
 
 __all__ = (
+    "DatabaseDimensionOverlapStorage",
+    "DatabaseDimensionRecordStorage",
     "DimensionRecordStorage",
     "DimensionRecordStorageManager",
     "GovernorDimensionRecordStorage",
     "SkyPixDimensionRecordStorage",
-    "DatabaseDimensionRecordStorage",
 )
 
 from abc import ABC, abstractmethod
-from typing import AbstractSet, Iterable, Optional, TYPE_CHECKING
+from typing import (
+    AbstractSet,
+    Callable,
+    Iterable,
+    Optional,
+    Tuple,
+    TYPE_CHECKING,
+    Union,
+)
 
 import sqlalchemy
 
@@ -44,10 +53,14 @@ if TYPE_CHECKING:
         DimensionRecord,
         DimensionUniverse,
         NamedKeyDict,
+        NamedKeyMapping,
         TimespanDatabaseRepresentation,
     )
     from ..queries import QueryBuilder
     from ._database import Database, StaticTablesContext
+
+
+OverlapSide = Union[SkyPixDimension, Tuple[DatabaseDimensionElement, str]]
 
 
 class DimensionRecordStorage(ABC):
@@ -219,17 +232,18 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
 
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, element: GovernorDimension, *,
+    def initialize(cls, db: Database, dimension: GovernorDimension, *,
                    context: Optional[StaticTablesContext] = None,
-                   config: Config) -> GovernorDimensionRecordStorage:
+                   config: Config,
+                   ) -> GovernorDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
         Parameters
         ----------
         db : `Database`
             Interface to the underlying database engine and namespace.
-        element : `GovernorDimension`
-            Dimension element the new instance will manage records for.
+        dimension : `GovernorDimension`
+            Dimension the new instance will manage records for.
         context : `StaticTablesContext`, optional
             If provided, an object to use to create any new tables.  If not
             provided, ``db.ensureTableExists`` should be used instead.
@@ -268,37 +282,33 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         """
         raise NotImplementedError()
 
+    @property
+    @abstractmethod
+    def table(self) -> sqlalchemy.schema.Table:
+        """The SQLAlchemy table that backs this dimension
+        (`sqlalchemy.schema.Table`).
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def registerInsertionListener(self, callback: Callable[[DimensionRecord], None]) -> None:
+        """Add a function or method to be called after new records for this
+        dimension are inserted by `insert` or `sync`.
+
+        Parameters
+        ----------
+        callback
+            Callable that takes a single `DimensionRecord` argument.  This will
+            be called immediately after any successful insertion, in the same
+            transaction.
+        """
+        raise NotImplementedError()
+
 
 class SkyPixDimensionRecordStorage(DimensionRecordStorage):
     """Intermediate interface for `DimensionRecordStorage` objects that provide
     storage for `SkyPixDimension` instances.
     """
-
-    @classmethod
-    @abstractmethod
-    def initialize(cls, db: Database, element: SkyPixDimension, *,
-                   context: Optional[StaticTablesContext] = None,
-                   config: Config) -> SkyPixDimensionRecordStorage:
-        """Construct an instance of this class using a standardized interface.
-
-        Parameters
-        ----------
-        db : `Database`
-            Interface to the underlying database engine and namespace.
-        element : `SkyPixDimensoin`
-            Dimension element the new instance will manage records for.
-        context : `StaticTablesContext`, optional
-            If provided, an object to use to create any new tables.  If not
-            provided, ``db.ensureTableExists`` should be used instead.
-        config : `Config`
-            Extra configuration options specific to the implementation.
-
-        Returns
-        -------
-        storage : `SkyPixDimensionRecordStorage`
-            A new `SkyPixDimensionRecordStorage` subclass instance.
-        """
-        raise NotImplementedError()
 
     @property
     @abstractmethod
@@ -316,7 +326,9 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
     @abstractmethod
     def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
                    context: Optional[StaticTablesContext] = None,
-                   config: Config) -> DatabaseDimensionRecordStorage:
+                   config: Config,
+                   governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+                   ) -> DatabaseDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
         Parameters
@@ -330,6 +342,8 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
             provided, ``db.ensureTableExists`` should be used instead.
         config : `Config`
             Extra configuration options specific to the implementation.
+        governors : `NamedKeyMapping`
+            Mapping containing all governor dimension storage implementations.
 
         Returns
         -------
@@ -342,6 +356,82 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
     @abstractmethod
     def element(self) -> DatabaseDimensionElement:
         # Docstring inherited from DimensionRecordStorage.
+        raise NotImplementedError()
+
+    def connect(self, overlaps: DatabaseDimensionOverlapStorage) -> None:
+        """Inform this record storage object of the object that will manage
+        the overlaps between this element and another element.
+
+        This will only be called if ``self.element.spatial is not None``,
+        and will be called immediately after construction (before any other
+        methods).  In the future, implementations will be required to call a
+        method on any connected overlap storage objects any time new records
+        for the element are inserted.
+
+        Parameters
+        ----------
+        overlaps : `DatabaseDimensionRecordStorage`
+            Object managing overlaps between this element and another
+            database-backed element.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not support spatial elements.")
+
+
+class DatabaseDimensionOverlapStorage(ABC):
+    """A base class for objects that manage overlaps between a pair of
+    database-backed dimensions.
+    """
+
+    @classmethod
+    @abstractmethod
+    def initialize(
+        cls,
+        db: Database,
+        elementStorage: Tuple[DatabaseDimensionRecordStorage, DatabaseDimensionRecordStorage],
+        governorStorage: Tuple[GovernorDimensionRecordStorage, GovernorDimensionRecordStorage],
+        context: Optional[StaticTablesContext] = None,
+    ) -> DatabaseDimensionOverlapStorage:
+        """Construct an instance of this class using a standardized interface.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        elementStorage : `tuple` [ `DatabaseDimensionRecordStorage` ]
+            Storage objects for the elements this object will related.
+        governorStorage : `tuple` [ `GovernorDimensionRecordStorage` ]
+            Storage objects for the governor dimensions of the elements this
+            object will related.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+
+        Returns
+        -------
+        storage : `DatabaseDimensionOverlapStorage`
+            A new `DatabaseDimensionOverlapStorage` subclass instance.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def elements(self) -> Tuple[DatabaseDimensionElement, DatabaseDimensionElement]:
+        """The pair of elements whose overlaps this object manages.
+
+        The order of elements is the same as their ordering within the
+        `DimensionUniverse`.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+        """Return tables used for schema digest.
+
+        Returns
+        -------
+        tables : `Iterable` [ `sqlalchemy.schema.Table` ]
+            Possibly empty set of tables for schema digest calculations.
+        """
         raise NotImplementedError()
 
 

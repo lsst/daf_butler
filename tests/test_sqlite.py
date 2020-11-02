@@ -20,7 +20,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from contextlib import contextmanager
-import itertools
 import os
 import os.path
 import shutil
@@ -29,8 +28,6 @@ import tempfile
 import unittest
 
 import sqlalchemy
-
-from lsst.sphgeom import ConvexPolygon, UnitVector3d
 
 from lsst.daf.butler import ddl
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
@@ -241,92 +238,6 @@ class SqliteMemoryRegistryTests(RegistryTests):
         config = self.makeRegistryConfig()
         config["db"] = "sqlite://"
         return Registry.createFromConfig(config)
-
-    def testRegions(self):
-        """Tests for using region fields in `Registry` dimensions.
-        """
-        # TODO: the test regions used here are enormous (significant fractions
-        # of the sphere), and that makes this test prohibitively slow on
-        # most real databases.  These should be made more realistic, and the
-        # test moved to daf/butler/registry/tests/registry.py.
-        registry = self.makeRegistry()
-        regionTract = ConvexPolygon((UnitVector3d(1, 0, 0),
-                                     UnitVector3d(0, 1, 0),
-                                     UnitVector3d(0, 0, 1)))
-        regionPatch = ConvexPolygon((UnitVector3d(1, 1, 0),
-                                     UnitVector3d(0, 1, 0),
-                                     UnitVector3d(0, 0, 1)))
-        regionVisit = ConvexPolygon((UnitVector3d(1, 0, 0),
-                                     UnitVector3d(0, 1, 1),
-                                     UnitVector3d(0, 0, 1)))
-        regionVisitDetector = ConvexPolygon((UnitVector3d(1, 0, 0),
-                                             UnitVector3d(0, 1, 0),
-                                             UnitVector3d(0, 1, 1)))
-        for a, b in itertools.combinations((regionTract, regionPatch, regionVisit, regionVisitDetector), 2):
-            self.assertNotEqual(a, b)
-
-        # This depends on current dimensions.yaml definitions
-        self.assertEqual(len(list(registry.queryDataIds(["patch", "htm7"]))), 0)
-
-        # Add some dimension entries
-        registry.insertDimensionData("instrument", {"name": "DummyCam"})
-        registry.insertDimensionData("physical_filter",
-                                     {"instrument": "DummyCam", "name": "dummy_r", "band": "r"},
-                                     {"instrument": "DummyCam", "name": "dummy_i", "band": "i"})
-        for detector in (1, 2, 3, 4, 5):
-            registry.insertDimensionData("detector", {"instrument": "DummyCam", "id": detector,
-                                                      "full_name": str(detector)})
-        registry.insertDimensionData("visit",
-                                     {"instrument": "DummyCam", "id": 0, "name": "zero",
-                                      "physical_filter": "dummy_r", "region": regionVisit},
-                                     {"instrument": "DummyCam", "id": 1, "name": "one",
-                                      "physical_filter": "dummy_i"})
-        registry.insertDimensionData("skymap", {"skymap": "DummySkyMap", "hash": bytes()})
-        registry.insertDimensionData("tract", {"skymap": "DummySkyMap", "tract": 0, "region": regionTract})
-        registry.insertDimensionData("patch",
-                                     {"skymap": "DummySkyMap", "tract": 0, "patch": 0,
-                                      "cell_x": 0, "cell_y": 0, "region": regionPatch})
-        registry.insertDimensionData("visit_detector_region",
-                                     {"instrument": "DummyCam", "visit": 0, "detector": 2,
-                                      "region": regionVisitDetector})
-
-        def getRegion(dataId):
-            return registry.expandDataId(dataId).region
-
-        # Get region for a tract
-        self.assertEqual(regionTract, getRegion({"skymap": "DummySkyMap", "tract": 0}))
-        # Attempt to get region for a non-existent tract
-        with self.assertRaises(LookupError):
-            getRegion({"skymap": "DummySkyMap", "tract": 1})
-        # Get region for a (tract, patch) combination
-        self.assertEqual(regionPatch, getRegion({"skymap": "DummySkyMap", "tract": 0, "patch": 0}))
-        # Get region for a non-existent (tract, patch) combination
-        with self.assertRaises(LookupError):
-            getRegion({"skymap": "DummySkyMap", "tract": 0, "patch": 1})
-        # Get region for a visit
-        self.assertEqual(regionVisit, getRegion({"instrument": "DummyCam", "visit": 0}))
-        # Attempt to get region for a non-existent visit
-        with self.assertRaises(LookupError):
-            getRegion({"instrument": "DummyCam", "visit": 10})
-        # Get region for a (visit, detector) combination
-        self.assertEqual(regionVisitDetector,
-                         getRegion({"instrument": "DummyCam", "visit": 0, "detector": 2}))
-        # Attempt to get region for a non-existent (visit, detector)
-        # combination.  This returns None rather than raising because we don't
-        # want to require the region record to be present.
-        self.assertIsNone(getRegion({"instrument": "DummyCam", "visit": 0, "detector": 3}))
-        # getRegion for a dataId containing no spatial dimensions should
-        # return None
-        self.assertIsNone(getRegion({"instrument": "DummyCam"}))
-        # Expanding a data ID with a mix of spatial dimensions should not fail,
-        # but it may not be implemented, so we don't test that we can get the
-        # region.
-        registry.expandDataId({"instrument": "DummyCam", "visit": 0, "detector": 2,
-                               "skymap": "DummySkyMap", "tract": 0})
-        # Check if we can get the region for a skypix
-        self.assertIsInstance(getRegion({"htm9": 1000}), ConvexPolygon)
-        # patch_htm7_overlap should not be empty
-        self.assertNotEqual(len(list(registry.queryDataIds(["patch", "htm7"]))), 0)
 
     def testMissingAttributes(self):
         """Test for instantiating a registry against outdated schema which

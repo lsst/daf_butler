@@ -150,7 +150,22 @@ class GovernorDimension(Dimension):
         db: Database, *,
         context: Optional[StaticTablesContext] = None,
     ) -> GovernorDimensionRecordStorage:
-        # Docstring inherited from DimensionElement.
+        """Construct the `DimensionRecordStorage` instance that should
+        be used to back this element in a registry.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+
+        Returns
+        -------
+        storage : `GovernorDimensionRecordStorage`
+            Storage object that should back this element in a registry.
+        """
         from ...registry.interfaces import GovernorDimensionRecordStorage
         cls = doImport(self._storage["cls"])
         assert issubclass(cls, GovernorDimensionRecordStorage)

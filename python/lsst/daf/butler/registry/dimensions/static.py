@@ -20,15 +20,25 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import List, Optional
+import itertools
+from typing import Dict, List, Optional, Tuple
 
 import sqlalchemy
 
-from ...core import NamedKeyDict
-from ...core.dimensions import DimensionElement, DimensionUniverse
+from ...core import (
+    DatabaseDimensionElement,
+    DatabaseTopologicalFamily,
+    DimensionElement,
+    DimensionUniverse,
+    GovernorDimension,
+    NamedKeyDict,
+    SkyPixDimension,
+)
 from ..interfaces import (
     Database,
     StaticTablesContext,
+    DatabaseDimensionRecordStorage,
+    DatabaseDimensionOverlapStorage,
     DimensionRecordStorageManager,
     DimensionRecordStorage,
     GovernorDimensionRecordStorage,
@@ -56,6 +66,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     records : `NamedKeyDict`
         Mapping from `DimensionElement` to `DimensionRecordStorage` for that
         element.
+    overlaps : `list` [ `DatabaseDimensionOverlapStorage` ]
+        Objects that manage materialized overlaps between database-backed
+        dimensions.
     universe : `DimensionUniverse`
         All known dimensions.
     """
@@ -63,20 +76,63 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         self,
         db: Database, *,
         records: NamedKeyDict[DimensionElement, DimensionRecordStorage],
+        overlaps: Dict[Tuple[DatabaseDimensionElement, DatabaseDimensionElement],
+                       DatabaseDimensionOverlapStorage],
         universe: DimensionUniverse,
     ):
         super().__init__(universe=universe)
         self._db = db
         self._records = records
+        self._overlaps = overlaps
 
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext, *,
                    universe: DimensionUniverse) -> DimensionRecordStorageManager:
         # Docstring inherited from DimensionRecordStorageManager.
-        records: NamedKeyDict[DimensionElement, DimensionRecordStorage] = NamedKeyDict()
-        for element in universe.getStaticElements():
-            records[element] = element.makeStorage(db, context=context)
-        return cls(db=db, records=records, universe=universe)
+        # Start by initializing governor dimensions; those go both in the main
+        # 'records' mapping we'll pass to init, and a local dictionary that we
+        # can pass in when initializing storage for DatabaseDimensionElements.
+        governors = NamedKeyDict[GovernorDimension, GovernorDimensionRecordStorage]()
+        records = NamedKeyDict[DimensionElement, DimensionRecordStorage]()
+        for dimension in universe.getGovernorDimensions():
+            governorStorage = dimension.makeStorage(db, context=context)
+            governors[dimension] = governorStorage
+            records[dimension] = governorStorage
+        # Next we initialize storage for DatabaseDimensionElements.
+        # We remember the spatial ones (grouped by family) so we can go back
+        # and initialize overlap storage for them later.
+        spatial = NamedKeyDict[DatabaseTopologicalFamily, List[DatabaseDimensionRecordStorage]]()
+        for element in universe.getDatabaseElements():
+            elementStorage = element.makeStorage(db, context=context, governors=governors)
+            records[element] = elementStorage
+            if element.spatial is not None:
+                spatial.setdefault(element.spatial, []).append(elementStorage)
+        # Finally we initialize overlap storage.  The implementation class for
+        # this is currently hard-coded (it's not obvious there will ever be
+        # others).  Note that overlaps between database-backed dimensions and
+        # skypix dimensions is internal to `DatabaseDimensionRecordStorage`,
+        # and hence is not included here.
+        from ..dimensions.overlaps import CrossFamilyDimensionOverlapStorage
+        overlaps: Dict[Tuple[DatabaseDimensionElement, DatabaseDimensionElement],
+                       DatabaseDimensionOverlapStorage] = {}
+        for (family1, storages1), (family2, storages2) in itertools.combinations(spatial.items(), 2):
+            for elementStoragePair in itertools.product(storages1, storages2):
+                governorStoragePair = (governors[family1.governor], governors[family2.governor])
+                if elementStoragePair[0].element > elementStoragePair[1].element:
+                    # mypy doesn't realize that tuple(reversed(...)) preserves
+                    # the number of elements.
+                    elementStoragePair = tuple(reversed(elementStoragePair))  # type: ignore
+                    governorStoragePair = tuple(reversed(governorStoragePair))  # type: ignore
+                overlapStorage = CrossFamilyDimensionOverlapStorage.initialize(
+                    db,
+                    elementStoragePair,
+                    governorStoragePair,
+                    context=context,
+                )
+                elementStoragePair[0].connect(overlapStorage)
+                elementStoragePair[1].connect(overlapStorage)
+                overlaps[overlapStorage.elements] = overlapStorage
+        return cls(db=db, records=records, overlaps=overlaps, universe=universe)
 
     def refresh(self) -> None:
         # Docstring inherited from DimensionRecordStorageManager.
@@ -87,11 +143,14 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
 
     def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
         # Docstring inherited from DimensionRecordStorageManager.
-        return self._records.get(element)
+        r = self._records.get(element)
+        if r is None and isinstance(element, SkyPixDimension):
+            return self.universe.skypix[element.system][element.level].makeStorage()
+        return r
 
     def register(self, element: DimensionElement) -> DimensionRecordStorage:
         # Docstring inherited from DimensionRecordStorageManager.
-        result = self._records.get(element)
+        result = self.get(element)
         assert result, "All records instances should be created in initialize()."
         return result
 
@@ -110,4 +169,6 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         tables: List[sqlalchemy.schema.Table] = []
         for recStorage in self._records.values():
             tables += recStorage.digestTables()
+        for overlapStorage in self._overlaps.values():
+            tables += overlapStorage.digestTables()
         return self._defaultSchemaDigest(tables, self._db.dialect)
