@@ -23,6 +23,7 @@ from __future__ import annotations
 __all__ = ["RegistryTests"]
 
 from abc import ABC, abstractmethod
+from collections import defaultdict
 import itertools
 import os
 import re
@@ -108,19 +109,6 @@ class RegistryTests(ABC):
             backend = YamlRepoImportBackend(stream, registry)
         backend.register()
         backend.load(datastore=None)
-
-    def assertRowCount(self, registry: Registry, table: str, count: int):
-        """Check the number of rows in table.
-        """
-        # TODO: all tests that rely on this method should be rewritten, as it
-        # needs to depend on Registry implementation details to have any chance
-        # of working.
-        sql = sqlalchemy.sql.select(
-            [sqlalchemy.sql.func.count()]
-        ).select_from(
-            getattr(registry._tables, table)
-        )
-        self.assertEqual(registry._db.query(sql).scalar(), count)
 
     def testOpaque(self):
         """Tests for `Registry.registerOpaqueTable`,
@@ -910,42 +898,67 @@ class RegistryTests(ABC):
                                      where="skymap = 'Mars'").toSet()
         self.assertEqual(len(rows), 0)
 
-    def testSpatialMatch(self):
-        """Test involving spatial match using join tables.
-
-        Note that realistic test needs a reasonably-defined skypix and regions
-        in registry tables which is hard to implement in this simple test.
-        So we do not actually fill registry with any data and all queries will
-        return empty result, but this is still useful for coverage of the code
-        that generates query.
+    def testSpatialJoin(self):
+        """Test queries that involve spatial overlap joins.
         """
         registry = self.makeRegistry()
+        self.loadData(registry, "hsc-rc2-subset.yaml")
 
-        # dataset types
-        collection = "test"
-        registry.registerRun(name=collection)
-        storageClass = StorageClass("testDataset")
-        registry.storageClasses.registerStorageClass(storageClass)
+        # Dictionary of spatial DatabaseDimensionElements, keyed by the name of
+        # the TopologicalFamily they belong to.  We'll relate all elements in
+        # each family to all of the elements in each other family.
+        families = defaultdict(set)
+        # Dictionary of {element.name: {dataId: region}}.
+        regions = {}
+        for element in registry.dimensions.getDatabaseElements():
+            if element.spatial is not None:
+                families[element.spatial.name].add(element)
+                regions[element.name] = {
+                    record.dataId: record.region for record in registry.queryDimensionRecords(element)
+                }
 
-        calexpType = DatasetType(name="CALEXP",
-                                 dimensions=registry.dimensions.extract(("instrument", "visit", "detector")),
-                                 storageClass=storageClass)
-        registry.registerDatasetType(calexpType)
+        # If this check fails, it's not necessarily a problem - it may just be
+        # a reasonable change to the default dimension definitions - but the
+        # test below depends on there being more than one family to do anything
+        # useful.
+        self.assertEqual(len(families), 2)
 
-        coaddType = DatasetType(name="deepCoadd_calexp",
-                                dimensions=registry.dimensions.extract(("skymap", "tract", "patch",
-                                                                        "band")),
-                                storageClass=storageClass)
-        registry.registerDatasetType(coaddType)
+        # Overlap DatabaseDimensionElements with each other.
+        for family1, family2 in itertools.combinations(families, 2):
+            for element1, element2 in itertools.product(families[family1], families[family2]):
+                graph = DimensionGraph.union(element1.graph, element2.graph)
+                # Construct expected set of overlapping data IDs via a
+                # brute-force comparison of the regions we've already fetched.
+                expected = {
+                    DataCoordinate.standardize(
+                        {**dataId1.byName(), **dataId2.byName()},
+                        graph=graph
+                    )
+                    for (dataId1, region1), (dataId2, region2)
+                    in itertools.product(regions[element1.name].items(), regions[element2.name].items())
+                    if not region1.isDisjointFrom(region2)
+                }
+                self.assertGreater(len(expected), 2, msg="Test that we aren't just comparing empty sets.")
+                queried = set(registry.queryDataIds(graph))
+                self.assertEqual(expected, queried)
 
-        dimensions = DimensionGraph(
-            registry.dimensions,
-            dimensions=(calexpType.dimensions.required | coaddType.dimensions.required)
-        )
-
-        # without data this should run OK but return empty set
-        rows = registry.queryDataIds(dimensions, datasets=calexpType, collections=collection).toSet()
-        self.assertEqual(len(rows), 0)
+        # Overlap each DatabaseDimensionElement with the commonSkyPix system.
+        commonSkyPix = registry.dimensions.commonSkyPix
+        for elementName, regions in regions.items():
+            graph = DimensionGraph.union(registry.dimensions[elementName].graph, commonSkyPix.graph)
+            expected = set()
+            for dataId, region in regions.items():
+                for begin, end in commonSkyPix.pixelization.envelope(region):
+                    expected.update(
+                        DataCoordinate.standardize(
+                            {commonSkyPix.name: index, **dataId.byName()},
+                            graph=graph
+                        )
+                        for index in range(begin, end)
+                    )
+            self.assertGreater(len(expected), 2, msg="Test that we aren't just comparing empty sets.")
+            queried = set(registry.queryDataIds(graph))
+            self.assertEqual(expected, queried)
 
     def testAbstractQuery(self):
         """Test that we can run a query that just lists the known

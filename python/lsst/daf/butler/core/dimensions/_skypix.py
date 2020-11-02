@@ -29,6 +29,7 @@ __all__ = (
 from types import MappingProxyType
 from typing import (
     AbstractSet,
+    Dict,
     Mapping,
     Optional,
     Type,
@@ -47,11 +48,7 @@ from ._elements import Dimension
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
-    from ...registry.interfaces import (
-        Database,
-        SkyPixDimensionRecordStorage,
-        StaticTablesContext,
-    )
+    from ...registry.interfaces import SkyPixDimensionRecordStorage
 
 
 class SkyPixSystem(TopologicalFamily):
@@ -77,6 +74,9 @@ class SkyPixSystem(TopologicalFamily):
         super().__init__(name, TopologicalSpace.SPATIAL)
         self.maxLevel = maxLevel
         self.PixelizationClass = PixelizationClass
+        self._members: Dict[int, SkyPixDimension] = {}
+        for level in range(maxLevel + 1):
+            self._members[level] = SkyPixDimension(self, level)
 
     def choose(self, endpoints: NamedValueAbstractSet[TopologicalRelationshipEndpoint]) -> SkyPixDimension:
         # Docstring inherited from TopologicalFamily.
@@ -90,6 +90,9 @@ class SkyPixSystem(TopologicalFamily):
         if best is None:
             raise RuntimeError(f"No recognized endpoints for {self.name} in {endpoints}.")
         return best
+
+    def __getitem__(self, level: int) -> SkyPixDimension:
+        return self._members[level]
 
 
 class SkyPixDimension(Dimension):
@@ -141,14 +144,17 @@ class SkyPixDimension(Dimension):
         # Docstring inherited from DimensionElement.hasTable.
         return False
 
-    def makeStorage(
-        self,
-        db: Database, *,
-        context: Optional[StaticTablesContext] = None,
-    ) -> SkyPixDimensionRecordStorage:
-        # Docstring inherited from DimensionElement.
+    def makeStorage(self) -> SkyPixDimensionRecordStorage:
+        """Construct the `DimensionRecordStorage` instance that should
+        be used to back this element in a registry.
+
+        Returns
+        -------
+        storage : `SkyPixDimensionRecordStorage`
+            Storage object that should back this element in a registry.
+        """
         from ...registry.dimensions.skypix import BasicSkyPixDimensionRecordStorage
-        return BasicSkyPixDimensionRecordStorage.initialize(db, self, context=context)
+        return BasicSkyPixDimensionRecordStorage(self)
 
     @property
     def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
@@ -223,6 +229,6 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
         )
         builder.topology[TopologicalSpace.SPATIAL].add(system)
         for level in range(maxLevel + 1):
-            dimension = SkyPixDimension(system, level)
+            dimension = system[level]
             builder.dimensions.add(dimension)
             builder.elements.add(dimension)

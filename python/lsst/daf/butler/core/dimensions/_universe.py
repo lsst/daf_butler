@@ -47,11 +47,12 @@ from ._config import DimensionConfig
 from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph
 from ._governor import GovernorDimension
+from ._database import DatabaseDimensionElement
+from ._skypix import SkyPixDimension, SkyPixSystem
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._coordinate import DataCoordinate
     from ._packer import DimensionPacker, DimensionPackerFactory
-    from ._skypix import SkyPixDimension
     from .construction import DimensionConstructionBuilder
 
 
@@ -222,6 +223,30 @@ class DimensionUniverse:
         return NamedValueSet(
             d for d in self._dimensions if isinstance(d, GovernorDimension)
         ).freeze()
+
+    @cached_getter
+    def getDatabaseElements(self) -> NamedValueAbstractSet[DatabaseDimensionElement]:
+        """Return a set of all `DatabaseDimensionElement` instances in this
+        universe.
+
+        This does not include `GovernorDimension` instances, which are backed
+        by the database but do not inherit from `DatabaseDimensionElement`.
+
+        Returns
+        -------
+        elements : `NamedValueAbstractSet` [ `DatabaseDimensionElement` ]
+            A frozen set of `DatabaseDimensionElement` instances.
+        """
+        return NamedValueSet(d for d in self._elements if isinstance(d, DatabaseDimensionElement)).freeze()
+
+    @property  # type: ignore
+    @cached_getter
+    def skypix(self) -> NamedValueAbstractSet[SkyPixSystem]:
+        """All skypix systems known to this universe
+        (`NamedValueAbstractSet` [ `SkyPixSystem` ]).
+        """
+        return NamedValueSet([family for family in self._topology[TopologicalSpace.SPATIAL]
+                              if isinstance(family, SkyPixSystem)]).freeze()
 
     def getElementIndex(self, name: str) -> int:
         """Return the position of the named dimension element in this
