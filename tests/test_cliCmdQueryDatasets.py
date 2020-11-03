@@ -24,9 +24,7 @@
 
 import astropy
 from astropy.table import Table as AstropyTable
-from astropy.utils.diff import report_diff_values
 from numpy import array
-import io
 import os
 import shutil
 import tempfile
@@ -41,26 +39,16 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler import script
 from lsst.daf.butler.tests import MetricsExample
+from lsst.daf.butler.tests.utils import ButlerTestHelper
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-class QueryDatasetsTest(unittest.TestCase):
+class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory = StorageClassFactory()
-
-    def _assertTablesEqual(self, tables, expectedTables):
-        """Verify that a list of astropy tables matches a list of expected
-        astropy tables."""
-        diff = io.StringIO()
-        self.assertEqual(len(tables), len(expectedTables))
-        for table, expected in zip(tables, expectedTables):
-            # Assert that we are testing what we think we are testing
-            self.assertIsInstance(table, AstropyTable)
-            self.assertIsInstance(expected, AstropyTable)
-            self.assertTrue(report_diff_values(table, expected, fileobj=diff), msg=diff.getvalue())
 
     @staticmethod
     def _makeExampleMetrics():
@@ -177,7 +165,7 @@ class QueryDatasetsTest(unittest.TestCase):
                        "visit", "URI")),
         )
 
-        self._assertTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables)
 
     def testNoShowURI(self):
         """Test for expected output without show_uri (default is False)."""
@@ -191,7 +179,7 @@ class QueryDatasetsTest(unittest.TestCase):
             ),
         )
 
-        self._assertTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables)
 
     def testWhere(self):
         """Test using the where clause to reduce the number of rows returned.
@@ -205,7 +193,7 @@ class QueryDatasetsTest(unittest.TestCase):
             ),
         )
 
-        self._assertTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables)
 
     def testGlobDatasetType(self):
         """Test specifying dataset type."""
@@ -238,7 +226,7 @@ class QueryDatasetsTest(unittest.TestCase):
             )
         )
 
-        self._assertTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables)
 
     def testFindFirstAndCollections(self):
         """Test the find-first option, and the collections option, since it
@@ -311,7 +299,7 @@ class QueryDatasetsTest(unittest.TestCase):
                        "visit", "URI")),
         )
 
-        self._assertTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables)
 
         # Verify that with find first the duplicate dataset is eliminated and
         # the more recent dataset is returned.
@@ -361,7 +349,7 @@ class QueryDatasetsTest(unittest.TestCase):
                        "visit", "URI")),
         )
 
-        self._assertTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables)
 
 
 if __name__ == "__main__":

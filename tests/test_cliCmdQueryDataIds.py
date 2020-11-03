@@ -24,9 +24,7 @@
 
 import astropy
 from astropy.table import Table as AstropyTable
-from astropy.utils.diff import report_diff_values
 from numpy import array
-import io
 import os
 import shutil
 import tempfile
@@ -40,12 +38,13 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler import script
 from lsst.daf.butler.tests import addDatasetType, MetricsExample
+from lsst.daf.butler.tests.utils import ButlerTestHelper
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-class QueryDataIdsTest(unittest.TestCase):
+class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory = StorageClassFactory()
@@ -66,14 +65,6 @@ class QueryDataIdsTest(unittest.TestCase):
                                    collections=collections,
                                    datasets=datasets,
                                    where=where)
-
-    def _assertTablesEqual(self, tables, expectedTables):
-        """Verify that a list of astropy tables matches a list of expected
-        astropy tables."""
-        diff = io.StringIO()
-        self.assertEqual(len(tables), len(expectedTables))
-        for table, expected in zip(tables, expectedTables):
-            self.assertTrue(report_diff_values(table, expected, fileobj=diff), msg="\n" + diff.getvalue())
 
     def setUp(self):
         self.root = tempfile.mkdtemp(dir=TESTDIR)
@@ -135,12 +126,12 @@ class QueryDataIdsTest(unittest.TestCase):
         res = self._queryDataIds(self.root, dimensions=("visit",))
         expected = AstropyTable(
             array((
-                ("R", "DummyCamComp", "d-r", "1", "423"),
-                ("R", "DummyCamComp", "d-r", "1", "424")
+                ("R", "DummyCamComp", "d-r", 1, 423),
+                ("R", "DummyCamComp", "d-r", 1, 424)
             )),
             names=("band", "instrument", "physical_filter", "visit_system", "visit")
         )
-        self._assertTablesEqual(res, expected)
+        self.assertAstropyTablesEqual(res, expected)
 
     def testNull(self):
         "Test asking for nothing."
@@ -152,23 +143,23 @@ class QueryDataIdsTest(unittest.TestCase):
         res = self._queryDataIds(self.root, datasets="test_metric_comp")
         expected = AstropyTable(
             array((
-                ("R", "DummyCamComp", "d-r", "1", "423"),
-                ("R", "DummyCamComp", "d-r", "1", "424")
+                ("R", "DummyCamComp", "d-r", 1, 423),
+                ("R", "DummyCamComp", "d-r", 1, 424)
             )),
             names=("band", "instrument", "physical_filter", "visit_system", "visit")
         )
-        self._assertTablesEqual(res, expected)
+        self.assertAstropyTablesEqual(res, expected)
 
     def testWhere(self):
         """Test getting datasets."""
         res = self._queryDataIds(self.root, dimensions=("visit",), where="visit=423")
         expected = AstropyTable(
             array((
-                ("R", "DummyCamComp", "d-r", "1", "423"),
+                ("R", "DummyCamComp", "d-r", 1, 423),
             )),
             names=("band", "instrument", "physical_filter", "visit_system", "visit")
         )
-        self._assertTablesEqual(res, expected)
+        self.assertAstropyTablesEqual(res, expected)
 
     def testCollections(self):
         """Test getting datasets using the collections option."""
@@ -188,23 +179,23 @@ class QueryDataIdsTest(unittest.TestCase):
                                  datasets="test_metric_comp")
         expected = AstropyTable(
             array((
-                ("R", "DummyCamComp", "d-r", "1", "423"),
-                ("R", "DummyCamComp", "d-r", "1", "424")
+                ("R", "DummyCamComp", "d-r", 1, 423),
+                ("R", "DummyCamComp", "d-r", 1, 424)
             )),
             names=("band", "instrument", "physical_filter", "visit_system", "visit")
         )
-        self._assertTablesEqual(res, expected)
+        self.assertAstropyTablesEqual(res, expected)
 
         # Verify the new dataset is found in the "foo" collection.
         res = self._queryDataIds(repo=self.root, dimensions=("visit",), collections=("foo",),
                                  datasets="test_metric_comp")
         expected = AstropyTable(
             array((
-                ("R", "DummyCamComp", "d-r", "1", "425"),
+                ("R", "DummyCamComp", "d-r", 1, 425),
             )),
             names=("band", "instrument", "physical_filter", "visit_system", "visit")
         )
-        self._assertTablesEqual(res, expected)
+        self.assertAstropyTablesEqual(res, expected)
 
 
 if __name__ == "__main__":
