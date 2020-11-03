@@ -58,7 +58,6 @@ from .._registry import (
     Registry,
     RegistryConfig,
 )
-from ..wildcards import CollectionContentRestriction
 from ..interfaces import MissingCollectionError, ButlerAttributeExistsError
 
 
@@ -494,10 +493,7 @@ class RegistryTests(ABC):
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
         self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
         self.assertIsNone(registry.findDataset(datasetType, dataId3, collections=tag1))
-        # Register a chained collection that searches:
-        # 1. 'tag1'
-        # 2. 'run1', but only for the flat dataset
-        # 3. 'run2'
+        # Register a chained collection that searches [tag1, run2]
         chain1 = "chain1"
         registry.registerCollection(chain1, type=CollectionType.CHAINED)
         self.assertIs(registry.getCollectionType(chain1), CollectionType.CHAINED)
@@ -512,12 +508,10 @@ class RegistryTests(ABC):
         with self.assertRaises(ValueError):
             registry.setCollectionChain(chain1, [tag1, chain1])
         # Add the child collections.
-        registry.setCollectionChain(chain1, [tag1, (run1, "flat"), run2])
+        registry.setCollectionChain(chain1, [tag1, run2])
         self.assertEqual(
             list(registry.getCollectionChain(chain1)),
-            [(tag1, CollectionContentRestriction(universe=registry.dimensions)),
-             (run1, CollectionContentRestriction.fromExpression("flat", universe=registry.dimensions)),
-             (run2, CollectionContentRestriction(universe=registry.dimensions))]
+            [tag1, run2]
         )
         # Searching for dataId1 or dataId2 in the chain should return ref1 and
         # ref2, because both are in tag1.
@@ -526,21 +520,15 @@ class RegistryTests(ABC):
         # Now disassociate ref2 from tag1.  The search (for bias) with
         # dataId2 in chain1 should then:
         # 1. not find it in tag1
-        # 2. not look in tag2, because it's restricted to flat here
-        # 3. find a different dataset in run2
+        # 2. find a different dataset in run2
         registry.disassociate(tag1, [ref2])
         ref2b = registry.findDataset(datasetType, dataId2, collections=chain1)
         self.assertNotEqual(ref2b, ref2)
         self.assertEqual(ref2b, registry.findDataset(datasetType, dataId2, collections=run2))
-        # Look in the chain for a flat that is in run1; should get the
-        # same ref as if we'd searched run1 directly.
-        dataId3 = {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}
-        self.assertEqual(registry.findDataset("flat", dataId3, collections=chain1),
-                         registry.findDataset("flat", dataId3, collections=run1),)
         # Define a new chain so we can test recursive chains.
         chain2 = "chain2"
         registry.registerCollection(chain2, type=CollectionType.CHAINED)
-        registry.setCollectionChain(chain2, [(run2, "bias"), chain1])
+        registry.setCollectionChain(chain2, [run2, chain1])
         # Query for collections matching a regex.
         self.assertCountEqual(
             list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),
