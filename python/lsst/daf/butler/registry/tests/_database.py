@@ -27,6 +27,7 @@ import asyncio
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 import itertools
+import math
 from typing import ContextManager, Iterable, Set, Tuple
 import warnings
 
@@ -895,3 +896,16 @@ class DatabaseTests(ABC):
         ).select_from(aTable.join(bTable, onclause=sqlalchemy.sql.literal(True)))
         queried = {(row["a"], row["b"]): row["f"] for row in db.query(sql).fetchall()}
         self.assertEqual(expected, queried)
+
+    def testFloatingPointSync(self):
+        db = self.makeEmptyDatabase(origin=1)
+        spec = ddl.TableSpec(
+            fields=[
+                ddl.FieldSpec("id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+                ddl.FieldSpec("value", dtype=sqlalchemy.Float, nullable=False),
+            ]
+        )
+        with db.declareStaticTables(create=True) as context:
+            table = context.addTable("t", spec)
+        db.sync(table, keys={"id": 1}, compared={"value": math.pi})
+        db.sync(table, keys={"id": 1}, compared={"value": math.pi})
