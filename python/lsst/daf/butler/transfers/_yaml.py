@@ -63,8 +63,22 @@ from ..registry.wildcards import (
     DatasetTypeRestriction,
     GovernorDimensionRestriction,
 )
-from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord
+from ..registry.interfaces import (
+    ChainedCollectionRecord,
+    CollectionRecord,
+    RunRecord,
+    VersionTuple,
+)
+from ..registry.versions import IncompatibleVersionError
 from ._interfaces import RepoExportBackend, RepoImportBackend
+
+
+EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 0)
+"""Export format version.
+
+Files with a different major version or a newer minor version cannot be read by
+this version of the code.
+"""
 
 
 class YamlRepoExportBackend(RepoExportBackend):
@@ -177,7 +191,7 @@ class YamlRepoExportBackend(RepoExportBackend):
         yaml.dump(
             {
                 "description": "Butler Data Repository Export",
-                "version": 0,
+                "version": str(EXPORT_FORMAT_VERSION),
                 "data": self.data,
             },
             stream=self.stream,
@@ -204,8 +218,22 @@ class YamlRepoImportBackend(RepoImportBackend):
         # because `register` can't be put inside a transaction, we'd rather not
         # run that at all if there's going to be problem later in `load`.
         wrapper = yaml.safe_load(stream)
-        # TODO: When version numbers become meaningful, check here that we can
-        # read the version in the file.
+        if wrapper["version"] == 0:
+            # Grandfather-in 'version: 0' -> 1.0.0, which is what we wrote
+            # before we really tried to do versioning here.
+            fileVersion = VersionTuple(1, 0, 0)
+        else:
+            fileVersion = VersionTuple.fromString(wrapper["version"])
+            if fileVersion.major != EXPORT_FORMAT_VERSION.major:
+                raise IncompatibleVersionError(
+                    f"Cannot read repository export file with version={fileVersion} "
+                    f"({EXPORT_FORMAT_VERSION.major}.x.x required)."
+                )
+            if fileVersion.minor > EXPORT_FORMAT_VERSION.minor:
+                raise IncompatibleVersionError(
+                    f"Cannot read repository export file with version={fileVersion} "
+                    f"< {EXPORT_FORMAT_VERSION.major}.{EXPORT_FORMAT_VERSION.minor}.x required."
+                )
         self.runs: Dict[str, Tuple[Optional[str], Timespan]] = {}
         self.chains: Dict[str, List[Tuple[str, CollectionContentRestriction]]] = {}
         self.collections: Dict[str, CollectionType] = {}
