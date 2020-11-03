@@ -532,9 +532,7 @@ class Registry:
             a call to `Registry.registerCollection`.
         children : `Any`
             An expression defining an ordered search of child collections,
-            generally an iterable of `str`.  Restrictions on the dataset types
-            to be searched can also be included, by passing mapping or an
-            iterable containing tuples; see
+            generally an iterable of `str`; see
             :ref:`daf_butler_collection_expressions` for more information.
 
         Raises
@@ -552,7 +550,7 @@ class Registry:
         if record.type is not CollectionType.CHAINED:
             raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
         assert isinstance(record, ChainedCollectionRecord)
-        children = CollectionSearch.fromExpression(children, universe=self.dimensions)
+        children = CollectionSearch.fromExpression(children)
         if children != record.children:
             record.update(self._collections, children)
 
@@ -657,10 +655,9 @@ class Registry:
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
         collections
-            An expression that fully or partially identifies the collections
-            to search for the dataset, such as a `str`, `DatasetType`, or
-            iterable  thereof.  See :ref:`daf_butler_collection_expressions`
-            for more information.
+            An expression that fully or partially identifies the collections to
+            search for the dataset; see
+            :ref:`daf_butler_collection_expressions` for more information.
         timespan : `Timespan`, optional
             A timespan that the validity range of the dataset must overlap.
             If not provided, any `~CollectionType.CALIBRATION` collections
@@ -703,8 +700,8 @@ class Registry:
             storage = self._datasets[datasetType]
         dataId = DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions,
                                             universe=self.dimensions, **kwargs)
-        collections = CollectionSearch.fromExpression(collections, universe=self.dimensions)
-        for collectionRecord in collections.iter(self._collections, datasetType=storage.datasetType):
+        collections = CollectionSearch.fromExpression(collections)
+        for collectionRecord in collections.iter(self._collections):
             if (collectionRecord.type is CollectionType.CALIBRATION
                     and (not storage.datasetType.isCalibration() or timespan is None)):
                 continue
@@ -755,7 +752,7 @@ class Registry:
                 raise LookupError(f"DatasetType with name '{datasetType}' has not been registered.")
         runRecord = self._collections.find(run)
         if runRecord.type is not CollectionType.RUN:
-            raise TypeError("Given collection is of type {runRecord.type.name}; RUN collection required.")
+            raise TypeError(f"Given collection is of type {runRecord.type.name}; RUN collection required.")
         assert isinstance(runRecord, RunRecord)
         expandedDataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions)
                            for dataId in dataIds]
@@ -1245,10 +1242,9 @@ class Registry:
             See :ref:`daf_butler_collection_expressions` for more
             information.
         datasetType : `DatasetType`, optional
-            If provided, only yield collections that should be searched for
-            this dataset type according to ``expression``.  If this is
-            not provided, any dataset type restrictions in ``expression`` are
-            ignored.
+            If provided, only yield collections that may contain datasets of
+            this type.  This is a conservative approximation in general; it may
+            yield collections that do not have any such datasets.
         collectionTypes : `AbstractSet` [ `CollectionType` ], optional
             If provided, only yield collections of these types.
         flattenChains : `bool`, optional
@@ -1264,9 +1260,11 @@ class Registry:
         collection : `str`
             The name of a collection that matches ``expression``.
         """
-        query = CollectionQuery.fromExpression(expression, universe=self.dimensions)
-        for record in query.iter(self._collections, datasetType=datasetType,
-                                 collectionTypes=frozenset(collectionTypes),
+        # Right now the datasetTypes argument is completely ignored, but that
+        # is consistent with its [lack of] guarantees.  DM-24939 or a follow-up
+        # ticket will take care of that.
+        query = CollectionQuery.fromExpression(expression)
+        for record in query.iter(self._collections, collectionTypes=frozenset(collectionTypes),
                                  flattenChains=flattenChains, includeChains=includeChains):
             yield record.name
 
@@ -1321,7 +1319,7 @@ class Registry:
         collections
             An expression that fully or partially identifies the collections
             to search for datasets, such as a `str`, `re.Pattern`, or iterable
-            thereof.  `...` can be used to datasets from all
+            thereof.  `...` can be used to find datasets from all
             `~CollectionType.RUN` collections (no other collections are
             necessary, because all datasets are in a ``RUN`` collection).  See
             :ref:`daf_butler_collection_expressions` for more information.
@@ -1384,9 +1382,9 @@ class Registry:
         """
         # Standardize the collections expression.
         if findFirst:
-            collections = CollectionSearch.fromExpression(collections, universe=self.dimensions)
+            collections = CollectionSearch.fromExpression(collections)
         else:
-            collections = CollectionQuery.fromExpression(collections, universe=self.dimensions)
+            collections = CollectionQuery.fromExpression(collections)
         # Standardize and expand the data ID provided as a constraint.
         standardizedDataId = self.expandDataId(dataId, **kwargs)
 
@@ -1554,7 +1552,7 @@ class Registry:
             # Preprocess collections expression in case the original included
             # single-pass iterators (we'll want to use it multiple times
             # below).
-            collections = CollectionQuery.fromExpression(collections, universe=self.dimensions)
+            collections = CollectionQuery.fromExpression(collections)
 
         summary = queries.QuerySummary(
             requested=DimensionGraph(self.dimensions, names=queryDimensionNames),
@@ -1653,13 +1651,13 @@ class Registry:
             Object representing the relationship beween a single dataset and
             a single collection.
         """
-        collections = CollectionQuery.fromExpression(collections, universe=self.dimensions)
+        collections = CollectionQuery.fromExpression(collections)
         tsRepr = self._db.getTimespanRepresentation()
         if isinstance(datasetType, str):
             storage = self._datasets[datasetType]
         else:
             storage = self._datasets[datasetType.name]
-        for collectionRecord in collections.iter(self._collections, datasetType=datasetType,
+        for collectionRecord in collections.iter(self._collections,
                                                  collectionTypes=frozenset(collectionTypes),
                                                  flattenChains=flattenChains):
             query = storage.select(collectionRecord)

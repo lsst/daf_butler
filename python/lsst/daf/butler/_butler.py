@@ -230,7 +230,7 @@ class Butler:
                 collections = (run,)
             else:
                 collections = ()
-        self.collections = CollectionSearch.fromExpression(collections, universe=self.registry.dimensions)
+        self.collections = CollectionSearch.fromExpression(collections)
         if chains is None:
             chains = {}
         self.run = run
@@ -574,7 +574,7 @@ class Butler:
             if not collections:
                 raise TypeError("No input collections provided.")
         else:
-            collections = CollectionSearch.fromExpression(collections, universe=self.registry.dimensions)
+            collections = CollectionSearch.fromExpression(collections)
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
         ref = self.registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)

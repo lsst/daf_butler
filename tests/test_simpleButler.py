@@ -46,7 +46,7 @@ from lsst.daf.butler import (
     Registry,
     Timespan,
 )
-from lsst.daf.butler.registry import CollectionSearch, RegistryConfig
+from lsst.daf.butler.registry import RegistryConfig
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -199,7 +199,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         registry1.registerCollection("chain1", CollectionType.CHAINED)
         registry1.registerCollection("chain2", CollectionType.CHAINED)
         registry1.setCollectionChain("chain1", ["tag1", "run1", "chain2"])
-        registry1.setCollectionChain("chain2", [("calibration1", ["bias"]), "run1"])
+        registry1.setCollectionChain("chain2", ["calibration1", "run1"])
         # Associate some datasets into the TAGGED and CALIBRATION collections.
         flats1 = list(registry1.queryDatasets("flat", collections=...))
         registry1.associate("tag1", flats1)
@@ -235,13 +235,12 @@ class SimpleButlerTestCase(unittest.TestCase):
         self.assertIs(registry2.getCollectionType("chain1"), CollectionType.CHAINED)
         self.assertIs(registry2.getCollectionType("chain2"), CollectionType.CHAINED)
         self.assertEqual(
-            registry2.getCollectionChain("chain1"),
-            CollectionSearch.fromExpression(["tag1", "run1", "chain2"], universe=registry2.dimensions),
+            list(registry2.getCollectionChain("chain1")),
+            ["tag1", "run1", "chain2"],
         )
         self.assertEqual(
-            registry2.getCollectionChain("chain2"),
-            CollectionSearch.fromExpression([("calibration1", ["bias"]), "run1"],
-                                            universe=registry2.dimensions),
+            list(registry2.getCollectionChain("chain2")),
+            ["calibration1", "run1"],
         )
         # Check that tag collection contents are the same.
         self.maxDiff = None

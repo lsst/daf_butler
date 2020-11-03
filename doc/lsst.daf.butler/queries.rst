@@ -34,17 +34,10 @@ Arguments that specify one or more collections are similar to those for dataset 
 
  - `str` values (the full collection name);
  - `re.Pattern` values (matched to the collection name, via `~re.Pattern.fullmatch`);
- - a `tuple` of (`str`, *dataset-type-restriction*) - see below;
  - iterables of any of the above;
  - the special value "``...``", which matches all collections;
- - a mapping from `str` to *dataset-type-restriction*.
 
-A *dataset-type-restriction* is a :ref:`DatasetType expression <daf_butler_dataset_type_expressions>` that limits a search for datasets in the associated collection to just the specified dataset types.
-Unlike most other DatasetType expressions, it may not contain regular expressions (but it may be "``...``", which is the implied value when no
-restriction is given, as it means "no restriction").
-In contexts where restrictions are meaningless (e.g. `~Registry.queryCollections` when the ``datasetType`` argument is `None`) they are allowed but ignored.
-
-Collection expressions are processed by the `~registry.wildcards.CollectionQuery`, and `~registry.wildcards.DatasetTypeRestriction` classes.
+Collection expressions are processed by the `~registry.wildcards.CollectionQuery` class.
 User code will rarely need to interact with these directly, but they can be passed to `Registry` instead of the expression objects themselves, and hence may be useful as a way to transform an expression that may include single-pass iterators into an equivalent form that can be reused.
 
 Ordered collection searches
@@ -53,8 +46,6 @@ Ordered collection searches
 An *ordered* collection expression is required in contexts where we want to search collections only until a dataset with a particular dataset type and data ID is found.
 These include all direct `Butler` operations, the definitions of `~CollectionType.CHAINED` collections, `Registry.findDataset`, and the ``findFirst=True`` mode of `Registry.queryDatasets`.
 In these contexts, regular expressions and "``...``" are not allowed for collection names, because they make it impossible to unambiguously define the order in which to search.
-Dataset type restrictions are allowed in these contexts, and those
-may be (and usually are) "``...``".
 
 Ordered collection searches are processed by the `~registry.wildcards.CollectionSearch` class.
 

@@ -273,7 +273,7 @@ class RepoExportContext:
         for record in self._collections.values():
             if record.type is CollectionType.CHAINED:
                 assert isinstance(record, ChainedCollectionRecord)
-                chains[record.name] = [child for child, _ in record.children]
+                chains[record.name] = list(record.children)
             else:
                 result.append(record.name)
         result.sort()

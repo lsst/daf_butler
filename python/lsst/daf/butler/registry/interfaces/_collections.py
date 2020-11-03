@@ -148,7 +148,7 @@ class ChainedCollectionRecord(CollectionRecord):
 
     def __init__(self, key: Any, name: str, universe: DimensionUniverse):
         super().__init__(key=key, name=name, type=CollectionType.CHAINED)
-        self._children = CollectionSearch.fromExpression([], universe=universe)
+        self._children = CollectionSearch.fromExpression([])
 
     @property
     def children(self) -> CollectionSearch:
@@ -237,6 +237,12 @@ class ChainedCollectionRecord(CollectionRecord):
         manager : `CollectionManager`
             The object that manages this records instance and all records
             instances that may appear as its children.
+
+        Returns
+        -------
+        children : `CollectionSearch`
+            The ordered sequence of collection names that defines the chained
+            collection.  Guaranteed not to contain cycles.
         """
         raise NotImplementedError()
 
