@@ -173,12 +173,6 @@ elements:
           constituent exposures (i.e. it should not include time between
           exposures).
       -
-        name: seeing
-        type: float
-        doc: >
-          Average seeing, measured as the FWHM of the Gaussian with the same
-          effective area (arcsec).
-      -
         name: target_name
         type: string
         length: 64
