@@ -30,11 +30,6 @@ jobs:
       - name: Install cryptography package for moto
         run: pip install cryptography
 
-      # It seems like pip install of requirements for a URL package
-      # does not install those dependencies
-      - name: Install sphgeom dependencies
-        run: pip install -r https://raw.githubusercontent.com/lsst/sphgeom/master/requirements.txt
-
       - name: Install dependencies
         run: pip install -r requirements.txt
 
