@@ -33,9 +33,11 @@ __all__ = (
 
 from typing import (
     Any,
+    Generic,
     List,
     Optional,
     Type,
+    TypeVar,
     Union,
 )
 
@@ -47,9 +49,17 @@ from lsst.daf.butler import (
     DatasetType,
     ddl,
     DimensionUniverse,
+    GovernorDimension,
+    NamedKeyDict,
+    NamedKeyMapping,
 )
 from lsst.daf.butler import addDimensionForeignKey, TimespanDatabaseRepresentation
-from lsst.daf.butler.registry.interfaces import CollectionManager
+from lsst.daf.butler.registry.interfaces import (
+    CollectionManager,
+    Database,
+    DimensionRecordStorageManager,
+    StaticTablesContext,
+)
 
 
 DATASET_TYPE_NAME_LENGTH = 128
@@ -233,6 +243,109 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
     return specs
 
 
+_T = TypeVar("_T")
+
+
+class CollectionSummaryTables(Generic[_T]):
+    """Structure that holds the table or table specification objects that
+    summarize the contents of collections.
+
+    Parameters
+    ----------
+    datasetType
+        Table [specification] that summarizes which dataset types are in each
+        collection.
+    dimensions
+        Mapping of table [specifications] that summarize which governor
+        dimension values are present in the data IDs of each collection.
+    """
+    def __init__(
+        self,
+        datasetType: _T,
+        dimensions: NamedKeyMapping[GovernorDimension, _T],
+    ):
+        self.datasetType = datasetType
+        self.dimensions = dimensions
+
+    @classmethod
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext, *,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+    ) -> CollectionSummaryTables[sqlalchemy.schema.Table]:
+        """Create all summary tables (or check that they have been created).
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        context : `StaticTablesContext`
+            Context object obtained from `Database.declareStaticTables`; used
+            to declare any tables that should always be present.
+        collections: `CollectionManager`
+            Manager object for the collections in this `Registry`.
+        dimensions : `DimensionRecordStorageManager`
+            Manager object for the dimensions in this `Registry`.
+
+        Returns
+        -------
+        tables : `CollectionSummaryTables` [ `sqlalchemy.schema.Table` ]
+            Structure containing table objects.
+        """
+        specs = cls.makeTableSpecs(collections, dimensions)
+        return CollectionSummaryTables(
+            datasetType=context.addTable("collection_summary_dataset_type", specs.datasetType),
+            dimensions=NamedKeyDict({
+                dimension: context.addTable(f"collection_summary_{dimension.name}", spec)
+                for dimension, spec in specs.dimensions.items()
+            }).freeze(),
+        )
+
+    @classmethod
+    def makeTableSpecs(
+        cls,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+    ) -> CollectionSummaryTables[ddl.TableSpec]:
+        """Create specifications for all summary tables.
+
+        Parameters
+        ----------
+        collections: `CollectionManager`
+            Manager object for the collections in this `Registry`.
+        dimensions : `DimensionRecordStorageManager`
+            Manager object for the dimensions in this `Registry`.
+
+        Returns
+        -------
+        tables : `CollectionSummaryTables` [ `ddl.TableSpec` ]
+            Structure containing table specifications.
+        """
+        # Spec for collection_summary_dataset_type.
+        datasetTypeTableSpec = ddl.TableSpec(fields=[])
+        collections.addCollectionForeignKey(datasetTypeTableSpec, primaryKey=True, onDelete="CASCADE")
+        datasetTypeTableSpec.fields.add(
+            ddl.FieldSpec("dataset_type_id", dtype=sqlalchemy.BigInteger, primaryKey=True)
+        )
+        datasetTypeTableSpec.foreignKeys.append(
+            ddl.ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",),
+                               onDelete="CASCADE")
+        )
+        # Specs for collection_summary_<dimension>.
+        dimensionTableSpecs = NamedKeyDict[GovernorDimension, ddl.TableSpec]()
+        for dimension in dimensions.universe.getGovernorDimensions():
+            tableSpec = ddl.TableSpec(fields=[])
+            collections.addCollectionForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE")
+            addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
+            dimensionTableSpecs[dimension] = tableSpec
+        return CollectionSummaryTables(
+            datasetType=datasetTypeTableSpec,
+            dimensions=dimensionTableSpecs.freeze(),
+        )
+
+
 def makeTagTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
     """Construct the name for a dynamic (DatasetType-dependent) tag table used
     by the classes in this package.
@@ -313,11 +426,29 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
     addDatasetForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE")
     # Add foreign key fields to collection table (part of the primary key and
     # the data ID unique constraint).
-    fieldSpec = collections.addCollectionForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE")
-    constraint.append(fieldSpec.name)
+    collectionFieldSpec = collections.addCollectionForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE")
+    constraint.append(collectionFieldSpec.name)
+    # Add foreign key constraint to the collection_summary_dataset_type table.
+    tableSpec.foreignKeys.append(
+        ddl.ForeignKeySpec(
+            "collection_summary_dataset_type",
+            source=(collectionFieldSpec.name, "dataset_type_id"),
+            target=(collectionFieldSpec.name, "dataset_type_id"),
+        )
+    )
     for dimension in datasetType.dimensions.required:
         fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
         constraint.append(fieldSpec.name)
+        # If this is a governor dimension, add a foreign key constraint to the
+        # collection_summary_<dimension> table.
+        if isinstance(dimension, GovernorDimension):
+            tableSpec.foreignKeys.append(
+                ddl.ForeignKeySpec(
+                    f"collection_summary_{dimension.name}",
+                    source=(collectionFieldSpec.name, fieldSpec.name),
+                    target=(collectionFieldSpec.name, fieldSpec.name),
+                )
+            )
     # Actually add the unique constraint.
     tableSpec.unique.add(tuple(constraint))
     return tableSpec
@@ -368,12 +499,30 @@ def makeCalibTableSpec(datasetType: DatasetType, collections: Type[CollectionMan
     addDatasetForeignKey(tableSpec, nullable=False, onDelete="CASCADE")
     # Add foreign key fields to collection table (part of the temporal lookup
     # index/constraint).
-    fieldSpec = collections.addCollectionForeignKey(tableSpec, nullable=False, onDelete="CASCADE")
-    index.append(fieldSpec.name)
+    collectionFieldSpec = collections.addCollectionForeignKey(tableSpec, nullable=False, onDelete="CASCADE")
+    index.append(collectionFieldSpec.name)
+    # Add foreign key constraint to the collection_summary_dataset_type table.
+    tableSpec.foreignKeys.append(
+        ddl.ForeignKeySpec(
+            "collection_summary_dataset_type",
+            source=(collectionFieldSpec.name, "dataset_type_id"),
+            target=(collectionFieldSpec.name, "dataset_type_id"),
+        )
+    )
     # Add dimension fields (part of the temporal lookup index.constraint).
     for dimension in datasetType.dimensions.required:
         fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
         index.append(fieldSpec.name)
+        # If this is a governor dimension, add a foreign key constraint to the
+        # collection_summary_<dimension> table.
+        if isinstance(dimension, GovernorDimension):
+            tableSpec.foreignKeys.append(
+                ddl.ForeignKeySpec(
+                    f"collection_summary_{dimension.name}",
+                    source=(collectionFieldSpec.name, fieldSpec.name),
+                    target=(collectionFieldSpec.name, fieldSpec.name),
+                )
+            )
     # Add validity-range field(s) (part of the temporal lookup
     # index/constraint).
     tsFieldSpecs = tsRepr.makeFieldSpecs(nullable=False)
