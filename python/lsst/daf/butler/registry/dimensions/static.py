@@ -50,7 +50,7 @@ from ..interfaces import (
 
 
 # This has to be updated on every schema change
-_VERSION = VersionTuple(5, 0, 0)
+_VERSION = VersionTuple(6, 0, 0)
 
 
 class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
