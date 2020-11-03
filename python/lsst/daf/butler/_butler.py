@@ -362,6 +362,13 @@ class Butler:
 
         if standalone:
             config.merge(full)
+        else:
+            # Always expand the registry.managers section into the per-repo
+            # config, because after the database schema is created, it's not
+            # allowed to change anymore.  Note that in the standalone=True
+            # branch, _everything_ in the config is expanded, so there's no
+            # need to special case this.
+            Config.updateParameters(RegistryConfig, config, full, toCopy=("managers",), overwrite=False)
         if outfile is not None:
             # When writing to a separate location we must include
             # the root of the butler repo in the config else it won't know
