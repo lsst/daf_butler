@@ -20,15 +20,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from collections import defaultdict
 import itertools
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import sqlalchemy
 
 from ...core import (
     DatabaseDimensionElement,
     DatabaseTopologicalFamily,
+    ddl,
     DimensionElement,
+    DimensionGraph,
     DimensionUniverse,
     GovernorDimension,
     NamedKeyDict,
@@ -69,6 +72,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     overlaps : `list` [ `DatabaseDimensionOverlapStorage` ]
         Objects that manage materialized overlaps between database-backed
         dimensions.
+    dimensionGraphStorage : `_DimensionGraphStorage`
+        Object that manages saved `DimensionGraph` definitions.
     universe : `DimensionUniverse`
         All known dimensions.
     """
@@ -78,12 +83,14 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         records: NamedKeyDict[DimensionElement, DimensionRecordStorage],
         overlaps: Dict[Tuple[DatabaseDimensionElement, DatabaseDimensionElement],
                        DatabaseDimensionOverlapStorage],
+        dimensionGraphStorage: _DimensionGraphStorage,
         universe: DimensionUniverse,
     ):
         super().__init__(universe=universe)
         self._db = db
         self._records = records
         self._overlaps = overlaps
+        self._dimensionGraphStorage = dimensionGraphStorage
 
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext, *,
@@ -132,7 +139,10 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 elementStoragePair[0].connect(overlapStorage)
                 elementStoragePair[1].connect(overlapStorage)
                 overlaps[overlapStorage.elements] = overlapStorage
-        return cls(db=db, records=records, overlaps=overlaps, universe=universe)
+        # Create table that stores DimensionGraph definitions.
+        dimensionGraphStorage = _DimensionGraphStorage.initialize(db, context, universe=universe)
+        return cls(db=db, records=records, universe=universe, overlaps=overlaps,
+                   dimensionGraphStorage=dimensionGraphStorage)
 
     def refresh(self) -> None:
         # Docstring inherited from DimensionRecordStorageManager.
@@ -154,6 +164,14 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         assert result, "All records instances should be created in initialize()."
         return result
 
+    def saveDimensionGraph(self, graph: DimensionGraph) -> int:
+        # Docstring inherited from DimensionRecordStorageManager.
+        return self._dimensionGraphStorage.save(graph)
+
+    def loadDimensionGraph(self, key: int) -> DimensionGraph:
+        # Docstring inherited from DimensionRecordStorageManager.
+        return self._dimensionGraphStorage.load(key)
+
     def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorageManager.
         for storage in self._records.values():
@@ -172,3 +190,168 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         for overlapStorage in self._overlaps.values():
             tables += overlapStorage.digestTables()
         return self._defaultSchemaDigest(tables, self._db.dialect)
+
+
+class _DimensionGraphStorage:
+    """Helper object that manages saved DimensionGraph definitions.
+
+    Should generally be constructed by calling `initialize` instead of invoking
+    the constructor directly.
+
+    Parameters
+    ----------
+    db : `Database`
+        Interface to the underlying database engine and namespace.
+    idTable : `sqlalchemy.schema.Table`
+        Table that just holds unique IDs for dimension graphs.
+    definitionTable : `sqlalchemy.schema.Table`
+        Table that maps dimension names to the IDs of the dimension graphs to
+        which they belong.
+    universe : `DimensionUniverse`
+        All known dimensions.
+    """
+    def __init__(
+        self,
+        db: Database,
+        idTable: sqlalchemy.schema.Table,
+        definitionTable: sqlalchemy.schema.Table,
+        universe: DimensionUniverse,
+    ):
+        self._db = db
+        self._idTable = idTable
+        self._definitionTable = definitionTable
+        self._universe = universe
+        self._keysByGraph: Dict[DimensionGraph, int] = {universe.empty: 0}
+        self._graphsByKey: Dict[int, DimensionGraph] = {0: universe.empty}
+
+    @classmethod
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext, *,
+        universe: DimensionUniverse,
+    ) -> _DimensionGraphStorage:
+        """Construct a new instance, including creating tables if necessary.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        context : `StaticTablesContext`
+            Context object obtained from `Database.declareStaticTables`; used
+            to declare any tables that should always be present.
+        universe : `DimensionUniverse`
+            All known dimensions.
+
+        Returns
+        -------
+        storage : `_DimensionGraphStorage`
+            New instance of this class.
+        """
+        # We need two tables just so we have one where the autoincrement key is
+        # the only primary key column, as is required by (at least) SQLite.  In
+        # other databases, we might be able to use a Sequence directly.
+        idTable = context.addTable(
+            "dimension_graph_key",
+            ddl.TableSpec(
+                fields=[
+                    ddl.FieldSpec(
+                        name="id",
+                        dtype=sqlalchemy.BigInteger,
+                        autoincrement=True,
+                        primaryKey=True,
+                    ),
+                ],
+            )
+        )
+        definitionTable = context.addTable(
+            "dimension_graph_definition",
+            ddl.TableSpec(
+                fields=[
+                    ddl.FieldSpec(name="dimension_graph_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+                    ddl.FieldSpec(name="dimension_name", dtype=sqlalchemy.Text, primaryKey=True),
+                ],
+                foreignKeys=[
+                    ddl.ForeignKeySpec(
+                        "dimension_graph_key",
+                        source=("dimension_graph_id",),
+                        target=("id",),
+                        onDelete="CASCADE",
+                    ),
+                ],
+            )
+        )
+        return cls(db, idTable, definitionTable, universe=universe)
+
+    def refresh(self) -> None:
+        """Refresh the in-memory cache of saved DimensionGraph definitions.
+
+        This should be done automatically whenever needed, but it can also
+        be called explicitly.
+        """
+        dimensionNamesByKey: Dict[int, Set[str]] = defaultdict(set)
+        for row in self._db.query(self._definitionTable.select()):
+            key = row[self._definitionTable.columns.dimension_graph_id]
+            dimensionNamesByKey[key].add(row[self._definitionTable.columns.dimension_name])
+        keysByGraph: Dict[DimensionGraph, int] = {self._universe.empty: 0}
+        graphsByKey: Dict[int, DimensionGraph] = {0: self._universe.empty}
+        for key, dimensionNames in dimensionNamesByKey.items():
+            graph = DimensionGraph(self._universe, names=dimensionNames)
+            keysByGraph[graph] = key
+            graphsByKey[key] = graph
+        self._graphsByKey = graphsByKey
+        self._keysByGraph = keysByGraph
+
+    def save(self, graph: DimensionGraph) -> int:
+        """Save a `DimensionGraph` definition to the database, allowing it to
+        be retrieved later via the returned key.
+
+        Parameters
+        ----------
+        graph : `DimensionGraph`
+            Set of dimensions to save.
+
+        Returns
+        -------
+        key : `int`
+            Integer used as the unique key for this `DimensionGraph` in the
+            database.
+        """
+        key = self._keysByGraph.get(graph)
+        if key is None:
+            # Don't permit this to be done inside some other transaction, so
+            # we don't have to worry about that transaction rolling back and
+            # invalidating our in-memory cache.
+            with self._db.transaction(interrupting=True):
+                (key,) = self._db.insert(self._idTable, {}, returnIds=True)  # type: ignore
+                self._db.insert(
+                    self._definitionTable,
+                    *[
+                        {"dimension_graph_id": key, "dimension_name": name}
+                        for name in graph.required.names
+                    ],
+                )
+            self._keysByGraph[graph] = key
+            self._graphsByKey[key] = graph
+        return key
+
+    def load(self, key: int) -> DimensionGraph:
+        """Retrieve a `DimensionGraph` that was previously saved in the
+        database.
+
+        Parameters
+        ----------
+        key : `int`
+            Integer used as the unique key for this `DimensionGraph` in the
+            database.
+
+        Returns
+        -------
+        graph : `DimensionGraph`
+            Retrieved graph.
+        """
+        graph = self._graphsByKey.get(key)
+        if graph is None:
+            self.refresh()
+            graph = self._graphsByKey[key]
+        return graph
