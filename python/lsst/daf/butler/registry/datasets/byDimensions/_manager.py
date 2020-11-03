@@ -18,8 +18,6 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     ddl,
-    DimensionGraph,
-    DimensionUniverse,
 )
 from lsst.daf.butler.registry import ConflictingDefinitionError, OrphanedRecordError
 from lsst.daf.butler.registry.interfaces import (
@@ -42,6 +40,7 @@ if TYPE_CHECKING:
     from lsst.daf.butler.registry.interfaces import (
         CollectionManager,
         Database,
+        DimensionRecordStorageManager,
         StaticTablesContext,
     )
     from .tables import StaticDatasetTablesTuple
@@ -76,24 +75,38 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         Interface to the underlying database engine and namespace.
     collections : `CollectionManager`
         Manager object for the collections in this `Registry`.
+    dimensions : `DimensionRecordStorageManager`
+        Manager object for the dimensions in this `Registry`.
     static : `StaticDatasetTablesTuple`
         Named tuple of `sqlalchemy.schema.Table` instances for all static
         tables used by this class.
     """
-    def __init__(self, *, db: Database, collections: CollectionManager, static: StaticDatasetTablesTuple):
+    def __init__(
+        self, *,
+        db: Database,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+        static: StaticDatasetTablesTuple,
+    ):
         self._db = db
         self._collections = collections
+        self._dimensions = dimensions
         self._static = static
         self._byName: Dict[str, ByDimensionsDatasetRecordStorage] = {}
         self._byId: Dict[int, ByDimensionsDatasetRecordStorage] = {}
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext, *, collections: CollectionManager,
-                   universe: DimensionUniverse) -> DatasetRecordStorageManager:
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext, *,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+    ) -> DatasetRecordStorageManager:
         # Docstring inherited from DatasetRecordStorageManager.
-        specs = makeStaticTableSpecs(type(collections), universe=universe)
+        specs = makeStaticTableSpecs(type(collections), universe=dimensions.universe)
         static: StaticDatasetTablesTuple = context.addTableTuple(specs)  # type: ignore
-        return cls(db=db, collections=collections, static=static)
+        return cls(db=db, collections=collections, dimensions=dimensions, static=static)
 
     @classmethod
     def addDatasetForeignKey(cls, tableSpec: ddl.TableSpec, *, name: str = "dataset",
@@ -102,14 +115,14 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         return addDatasetForeignKey(tableSpec, name=name, onDelete=onDelete, constraint=constraint, **kwargs)
 
-    def refresh(self, *, universe: DimensionUniverse) -> None:
+    def refresh(self) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         byName = {}
         byId = {}
         c = self._static.dataset_type.columns
         for row in self._db.query(self._static.dataset_type.select()).fetchall():
             name = row[c.name]
-            dimensions = DimensionGraph.decode(row[c.dimensions_encoded], universe=universe)
+            dimensions = self._dimensions.loadDimensionGraph(row[c.dimensions_key])
             calibTableName = row[c.calibration_association_table]
             datasetType = DatasetType(name, dimensions, row[c.storage_class],
                                       isCalibration=(calibTableName is not None))
@@ -130,7 +143,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         self._byName = byName
         self._byId = byId
 
-    def remove(self, name: str, *, universe: DimensionUniverse) -> None:
+    def remove(self, name: str) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         compositeName, componentName = DatasetType.splitDatasetTypeName(name)
         if componentName is not None:
@@ -145,7 +158,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
 
         # Now refresh everything -- removal is rare enough that this does
         # not need to be fast.
-        self.refresh(universe=universe)
+        self.refresh()
 
     def find(self, name: str) -> Optional[DatasetRecordStorage]:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -165,13 +178,15 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
                              f" Rejecting {datasetType.name}")
         storage = self._byName.get(datasetType.name)
         if storage is None:
-            tagTableName = makeTagTableName(datasetType)
-            calibTableName = makeCalibTableName(datasetType) if datasetType.isCalibration() else None
+            dimensionsKey = self._dimensions.saveDimensionGraph(datasetType.dimensions)
+            tagTableName = makeTagTableName(datasetType, dimensionsKey)
+            calibTableName = (makeCalibTableName(datasetType, dimensionsKey)
+                              if datasetType.isCalibration() else None)
             row, inserted = self._db.sync(
                 self._static.dataset_type,
                 keys={"name": datasetType.name},
                 compared={
-                    "dimensions_encoded": datasetType.dimensions.encode(),
+                    "dimensions_key": dimensionsKey,
                     "storage_class": datasetType.storageClass.name,
                 },
                 extra={
@@ -210,7 +225,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         for storage in self._byName.values():
             yield storage.datasetType
 
-    def getDatasetRef(self, id: int, *, universe: DimensionUniverse) -> Optional[DatasetRef]:
+    def getDatasetRef(self, id: int) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         sql = sqlalchemy.sql.select(
             [
@@ -227,7 +242,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             return None
         recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
         if recordsForType is None:
-            self.refresh(universe=universe)
+            self.refresh()
             recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
             assert recordsForType is not None, "Should be guaranteed by foreign key constraints."
         return DatasetRef(
