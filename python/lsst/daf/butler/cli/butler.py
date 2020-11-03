@@ -129,8 +129,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             # click.MultiCommand instead of the context.
             # https://github.com/click-contrib/sphinx-click/issues/70
             CliLog.initLog(longlog=False)
-            logging.debug("The passed-in context was not a click.Context, could not determine longlog or log"
-                          "level values.")
+            logging.debug("The passed-in context was not a click.Context, could not determine --long-log or "
+                          "--log-level values.")
 
     @classmethod
     def getPluginList(cls):
