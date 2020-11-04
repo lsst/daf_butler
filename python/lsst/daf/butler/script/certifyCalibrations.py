@@ -60,7 +60,7 @@ def certifyCalibrations(repo, input_collection, output_collection, dataset_type_
     )
     if not search_all_inputs:
         try:
-            input_collection, _ = next(iter(registry.getCollectionChain(input_collection)))
+            input_collection = next(iter(registry.getCollectionChain(input_collection)))
         except TypeError:
             # Not a CHAINED collection; do nothing.
             pass
