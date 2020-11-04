@@ -88,8 +88,6 @@ class JsonFormatter(FileFormatter):
             The file could not be written.
         """
         with open(self.fileDescriptor.location.path, "wb") as fd:
-            if hasattr(inMemoryDataset, "_asdict"):
-                inMemoryDataset = inMemoryDataset._asdict()
             fd.write(self._toBytes(inMemoryDataset))
 
     def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
@@ -133,6 +131,8 @@ class JsonFormatter(FileFormatter):
         Exception
             The object could not be serialized.
         """
+        if hasattr(inMemoryDataset, "_asdict"):
+            inMemoryDataset = inMemoryDataset._asdict()
         return json.dumps(inMemoryDataset, ensure_ascii=False).encode()
 
     def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,

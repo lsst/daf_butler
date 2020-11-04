@@ -105,7 +105,8 @@ class YamlFormatter(FileFormatter):
         """Write the in memory dataset to file on disk.
 
         Will look for `_asdict()` method to aid YAML serialization, following
-        the approach of the simplejson module.
+        the approach of the simplejson module.  The `dict` will be passed
+        to the relevant constructor on read.
 
         Parameters
         ----------
@@ -118,12 +119,14 @@ class YamlFormatter(FileFormatter):
             The file could not be written.
         """
         with open(self.fileDescriptor.location.path, "wb") as fd:
-            if hasattr(inMemoryDataset, "_asdict"):
-                inMemoryDataset = inMemoryDataset._asdict()
             fd.write(self._toBytes(inMemoryDataset))
 
     def _toBytes(self, inMemoryDataset: Any) -> bytes:
         """Write the in memory dataset to a bytestring.
+
+        Will look for `_asdict()` method to aid YAML serialization, following
+        the approach of the simplejson module.  The `dict` will be passed
+        to the relevant constructor on read.
 
         Parameters
         ----------
@@ -140,6 +143,8 @@ class YamlFormatter(FileFormatter):
         Exception
             The object could not be serialized.
         """
+        if hasattr(inMemoryDataset, "_asdict"):
+            inMemoryDataset = inMemoryDataset._asdict()
         return yaml.dump(inMemoryDataset).encode()
 
     def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
