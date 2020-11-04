@@ -65,7 +65,7 @@ class YamlFormatter(FileFormatter):
 
         Notes
         -----
-        The `~yaml.UnsafeLoader` is used when parsing the YAML file.
+        The `~yaml.SafeLoader` is used when parsing the YAML file.
         """
         try:
             with open(path, "rb") as fd:
@@ -90,8 +90,12 @@ class YamlFormatter(FileFormatter):
         inMemoryDataset : `object`
             The requested data as an object, or None if the string could
             not be read.
+
+        Notes
+        -----
+        The `~yaml.SafeLoader` is used when parsing the YAML.
         """
-        data = yaml.load(serializedDataset, Loader=yaml.FullLoader)
+        data = yaml.safe_load(serializedDataset)
 
         try:
             data = data.exportAsDict()
@@ -115,6 +119,12 @@ class YamlFormatter(FileFormatter):
         ------
         Exception
             The file could not be written.
+
+        Notes
+        -----
+        The `~yaml.SafeDumper` is used when generating the YAML serialization.
+        This will fail for data structures that have complex python classes
+        without a registered YAML representer.
         """
         with open(self.fileDescriptor.location.path, "wb") as fd:
             fd.write(self._toBytes(inMemoryDataset))
@@ -140,10 +150,16 @@ class YamlFormatter(FileFormatter):
         ------
         Exception
             The object could not be serialized.
+
+        Notes
+        -----
+        The `~yaml.SafeDumper` is used when generating the YAML serialization.
+        This will fail for data structures that have complex python classes
+        without a registered YAML representer.
         """
         if hasattr(inMemoryDataset, "_asdict"):
             inMemoryDataset = inMemoryDataset._asdict()
-        return yaml.dump(inMemoryDataset).encode()
+        return yaml.safe_dump(inMemoryDataset).encode()
 
     def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
                     pytype: Optional[Type[Any]] = None) -> Any:
