@@ -47,6 +47,10 @@ class YamlFormatter(FileFormatter):
     unsupportedParameters = None
     """This formatter does not support any parameters"""
 
+    supportedWriteParameters = frozenset({"unsafe_dump"})
+    """Allow the normal yaml.dump to be used to write the YAML. Use this
+    if you know that your class has registered representers."""
+
     def _readFile(self, path: str, pytype: Type[Any] = None) -> Any:
         """Read a file from the path in YAML format.
 
@@ -159,7 +163,12 @@ class YamlFormatter(FileFormatter):
         """
         if hasattr(inMemoryDataset, "_asdict"):
             inMemoryDataset = inMemoryDataset._asdict()
-        return yaml.safe_dump(inMemoryDataset).encode()
+        unsafe_dump = self.writeParameters.get("unsafe_dump", False)
+        if unsafe_dump:
+            serialized = yaml.dump(inMemoryDataset)
+        else:
+            serialized = yaml.safe_dump(inMemoryDataset)
+        return serialized.encode()
 
     def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
                     pytype: Optional[Type[Any]] = None) -> Any:

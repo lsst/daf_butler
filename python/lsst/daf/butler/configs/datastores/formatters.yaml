@@ -43,11 +43,20 @@ Packages:
   formatter: lsst.obs.base.formatters.packages.PackagesFormatter
   parameters:
     format: yaml
-PropertyList: lsst.daf.butler.formatters.yaml.YamlFormatter
-PropertySet: lsst.daf.butler.formatters.yaml.YamlFormatter
+PropertyList:
+  formatter: lsst.daf.butler.formatters.yaml.YamlFormatter
+  parameters:
+    unsafe_dump: true
+PropertySet:
+  formatter: lsst.daf.butler.formatters.yaml.YamlFormatter
+  parameters:
+    unsafe_dump: true
 NumpyArray: lsst.daf.butler.formatters.pickle.PickleFormatter
 Plot: lsst.daf.butler.formatters.matplotlib.MatplotlibFormatter
-MetricValue: lsst.daf.butler.formatters.yaml.YamlFormatter
+MetricValue:
+  formatter: lsst.daf.butler.formatters.yaml.YamlFormatter
+  parameters:
+    unsafe_dump: true
 BrighterFatterKernel: lsst.daf.butler.formatters.pickle.PickleFormatter
 StructuredDataDict: lsst.daf.butler.formatters.yaml.YamlFormatter
 Filter: lsst.obs.base.formatters.filter.FilterFormatter
