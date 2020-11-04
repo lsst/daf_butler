@@ -60,14 +60,10 @@ class JsonFormatter(FileFormatter):
         Returns
         -------
         data : `object`
-            Either data as Python object read from JSON file, or None
-            if the file could not be opened.
+            Data as Python object read from JSON file.
         """
-        try:
-            with open(path, "rb") as fd:
-                data = self._fromBytes(fd.read(), pytype)
-        except FileNotFoundError:
-            data = None
+        with open(path, "rb") as fd:
+            data = self._fromBytes(fd.read(), pytype)
 
         return data
 

@@ -91,10 +91,8 @@ class YamlFormatter(FileFormatter):
             The requested data as an object, or None if the string could
             not be read.
         """
-        try:
-            data = yaml.load(serializedDataset, Loader=yaml.FullLoader)
-        except yaml.YAMLError:
-            data = None
+        data = yaml.load(serializedDataset, Loader=yaml.FullLoader)
+
         try:
             data = data.exportAsDict()
         except AttributeError:
