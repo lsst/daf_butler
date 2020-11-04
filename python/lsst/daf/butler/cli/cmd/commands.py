@@ -22,14 +22,30 @@
 import click
 import yaml
 
-from ..opt import (collection_type_option, dataset_type_option, directory_argument, options_file_option,
-                   glob_argument, repo_argument, transfer_option, verbose_option)
+from ..opt import (
+    collection_type_option,
+    collections_option,
+    dataset_type_option,
+    datasets_option,
+    dimensions_argument,
+    directory_argument,
+    glob_argument,
+    options_file_option,
+    repo_argument,
+    transfer_option,
+    verbose_option,
+    where_option,
+)
+
 from ..utils import cli_handle_exception, split_commas, typeStrAcceptsMultiple, unwrap
 from ... import script
 
 
 willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
 existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."
+whereHelp = unwrap("""A string expression similar to a SQL WHERE clause. May involve any column of a dimension
+                   table or a dimension name as a shortcut for the primary key column of a dimension
+                   table.""")
 
 
 # The conversion from the import command name to the butler_import function
@@ -174,16 +190,8 @@ def remove_dataset_type(*args, **kwargs):
 @repo_argument(required=True)
 @glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
                     "dataset types to be queried.")
-@click.option("--collections",
-              help=unwrap("""One or more expressions that fully or partially identify the collections to
-                          search for datasets.If not provided all datasets are returned."""),
-              multiple=True,
-              metavar=typeStrAcceptsMultiple,
-              callback=split_commas)
-@click.option("--where",
-              help=unwrap("""A string expression similar to a SQL WHERE clause. May involve any column of a
-                          dimension table or a dimension name as a shortcut for the primary key column of a
-                          dimension table."""))
+@collections_option()
+@where_option(help=whereHelp)
 @click.option("--find-first",
               is_flag=True,
               help=unwrap("""For each result data ID, only yield one DatasetRef of each DatasetType, from the
@@ -222,3 +230,28 @@ def certify_calibrations(*args, **kwargs):
     """Certify calibrations in a repository.
     """
     cli_handle_exception(script.certifyCalibrations, *args, **kwargs)
+
+
+@click.command()
+@repo_argument(required=True)
+@dimensions_argument(help=unwrap("""DIMENSIONS are the keys of the data IDs to yield, such as exposure,
+                                 instrument, or tract. Will be expanded to include any dependencies."""))
+@collections_option()
+@datasets_option(help=unwrap("""An expression that fully or partially identifies dataset types that should
+                             constrain the yielded data IDs.  For example, including "raw" here would
+                             constrain the yielded "instrument", "exposure", "detector", and
+                             "physical_filter" values to only those for which at least one "raw" dataset
+                             exists in "collections"."""))
+@where_option(help=whereHelp)
+@options_file_option()
+def query_data_ids(**kwargs):
+    """List the data IDs in a repository.
+    """
+    table = cli_handle_exception(script.queryDataIds, **kwargs)
+    if table:
+        table.pprint_all()
+    else:
+        if not kwargs.get("dimensions") and not kwargs.get("datasets"):
+            print("No results. Try requesting some dimensions or datasets, see --help for more information.")
+        else:
+            print("No results. Try --help for more information.")

@@ -59,6 +59,15 @@ collection_type_option = MWOptionDecorator("--collection-type",
                                            type=click.Choice(CollectionTypeCallback.collectionTypes,
                                                              case_sensitive=False))
 
+
+collections_option = MWOptionDecorator("--collections",
+                                       help=unwrap("""One or more expressions that fully or partially identify
+                                                   the collections to search for datasets.If not provided all
+                                                   datasets are returned."""),
+                                       multiple=True,
+                                       callback=split_commas)
+
+
 config_option = MWOptionDecorator("-c", "--config",
                                   callback=split_kv,
                                   help="Config override, as a key-value pair.",
@@ -74,6 +83,9 @@ dataset_type_option = MWOptionDecorator("-d", "--dataset-type",
                                         callback=split_commas,
                                         help="Specific DatasetType(s) to validate.",
                                         multiple=True)
+
+
+datasets_option = MWOptionDecorator("--datasets")
 
 
 logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
@@ -93,6 +105,15 @@ log_level_option = MWOptionDecorator("--log-level",
 long_log_option = MWOptionDecorator("--long-log",
                                     help="Make log messages appear in long format.",
                                     is_flag=True)
+
+
+options_file_option = MWOptionDecorator("--options-file", "-@",
+                                        expose_value=False,  # This option should not be forwarded
+                                        help=unwrap("""URI to YAML file containing overrides
+                                                    of command line options. The YAML should be organized
+                                                    as a hierarchy with subcommand names at the top
+                                                    level options for that subcommand below."""),
+                                        callback=yaml_presets)
 
 
 processes_option = MWOptionDecorator("-j", "--processes",
@@ -121,10 +142,5 @@ verbose_option = MWOptionDecorator("-v", "--verbose",
                                    is_flag=True)
 
 
-options_file_option = MWOptionDecorator("--options-file", "-@",
-                                        expose_value=False,  # This option should not be forwarded
-                                        help=unwrap("""URI to YAML file containing overrides
-                                                    of command line options. The YAML should be organized
-                                                    as a hierarchy with subcommand names at the top
-                                                    level options for that subcommand below."""),
-                                        callback=yaml_presets)
+where_option = MWOptionDecorator("--where",
+                                 help="A string expression similar to a SQL WHERE clause.")

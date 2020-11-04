@@ -25,6 +25,8 @@ import numpy as np
 
 from .. import Butler
 from ..core.utils import globToRegex
+from ..cli.utils import sortAstropyTable
+
 
 _RefInfo = namedtuple("RefInfo", "datasetRef uri")
 
@@ -32,11 +34,6 @@ _RefInfo = namedtuple("RefInfo", "datasetRef uri")
 class _Table:
     """Aggregates rows for a single dataset type, and creates an astropy table
     with the aggregated data. Eliminates duplicate rows.
-
-    Parameters
-    ----------
-    columnNames : `list` [`str`]
-        The names of columns.
     """
 
     def __init__(self):
@@ -103,26 +100,7 @@ class _Table:
             rows.append(row)
 
         dataset_table = AstropyTable(np.array(rows), names=columnNames, dtype=columnTypes)
-
-        # For sorting we want to ignore the id
-        # We also want to move temporal or spatial dimensions earlier
-        sort_first = ["type", "run"]
-        sort_early = []
-        sort_late = []
-        for dim in dimensions:
-            if dim.spatial or dim.temporal:
-                sort_early.extend(dim.required.names)
-            else:
-                sort_late.append(str(dim))
-        sort_keys = sort_first + sort_early + sort_late
-
-        # The required names above means that we have the possibility of
-        # repeats of sort keys. Now have to remove them
-        # (order is retained by dict creation).
-        sort_keys = list(dict.fromkeys(sort_keys).keys())
-
-        dataset_table.sort(sort_keys)
-        return dataset_table
+        return sortAstropyTable(dataset_table, dimensions, ["type", "run"])
 
 
 def queryDatasets(repo, glob, collections, where, find_first, show_uri):

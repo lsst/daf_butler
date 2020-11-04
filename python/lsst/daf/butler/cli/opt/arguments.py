@@ -35,3 +35,7 @@ repo_argument = MWArgumentDecorator("repo")
 locations_argument = MWArgumentDecorator("locations",
                                          callback=split_commas,
                                          nargs=-1)
+
+dimensions_argument = MWArgumentDecorator("dimensions",
+                                          callback=split_commas,
+                                          nargs=-1)

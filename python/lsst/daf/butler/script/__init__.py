@@ -25,6 +25,7 @@ from .configDump import configDump
 from .configValidate import configValidate
 from .pruneCollection import pruneCollection
 from .queryCollections import queryCollections
+from .queryDataIds import queryDataIds
 from .queryDatasets import queryDatasets
 from .queryDatasetTypes import queryDatasetTypes
 from .removeDatasetType import removeDatasetType
