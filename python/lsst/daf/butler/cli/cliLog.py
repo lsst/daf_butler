@@ -39,12 +39,22 @@ log4j.appender.A1.layout.ConversionPattern={}
 
 
 class CliLog:
-    """Interface for managing python logging and lsst.log. Handles
-    initialization so that lsst.log is a handler for python logging.
+    """Interface for managing python logging and ``lsst.log``.
 
-    Handles log uninitialization, which allows command line interface code that
-    initializes logging to run unit tests that execute in batches, without
-    affecting other unit tests. """
+    .. warning::
+
+       When ``lsst.log`` is importable it is the primary logger, and
+       ``lsst.log`` is set up to be a handler for python logging - so python
+       logging will be processed by ``lsst.log``.
+
+    This class defines log format strings for the log output and timestamp
+    formats, for both ``lsst.log`` and python logging. If lsst.log is
+    importable then the ``lsstLog_`` format strings will be used, otherwise
+    the ``pylog_`` format strings will be used.
+
+    This class can perform log uninitialization, which allows command line
+    interface code that initializes logging to run unit tests that execute in
+    batches, without affecting other unit tests. See ``resetLog``."""
 
     defaultLsstLogLevel = lsstLog.FATAL if lsstLog is not None else None
 
