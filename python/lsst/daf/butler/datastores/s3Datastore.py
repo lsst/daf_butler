@@ -27,65 +27,19 @@ __all__ = ("S3Datastore", )
 
 import logging
 
-from botocore.exceptions import ClientError
-from http.client import ImproperConnectionState, HTTPException
-from urllib3.exceptions import RequestError, HTTPError
-
 from typing import (
     TYPE_CHECKING,
-    Any,
     Union,
-    Callable
-)
-
-# https://pypi.org/project/backoff/
-try:
-    import backoff
-except ImportError:
-    class Backoff():
-        @staticmethod
-        def expo(func: Callable, *args: Any, **kwargs: Any) -> Callable:
-            return func
-
-        @staticmethod
-        def on_exception(func: Callable, *args: Any, **kwargs: Any) -> Callable:
-            return func
-
-    backoff = Backoff
-
-from lsst.daf.butler import (
-    DatasetRef,
-    Location,
-    StoredFileInfo,
 )
 
 from .remoteFileDatastore import RemoteFileDatastore
 from lsst.daf.butler.core._butlerUri.s3utils import getS3Client, bucketExists
 
 if TYPE_CHECKING:
-    from .fileLikeDatastore import DatastoreFileGetInformation
     from lsst.daf.butler import DatastoreConfig
     from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
-
-# settings for "backoff" retry decorators. these retries are belt-and-
-# suspenders along with the retries built into Boto3, to account for
-# semantic differences in errors between S3-like providers.
-retryable_io_errors = (
-    # http.client
-    ImproperConnectionState, HTTPException,
-    # urllib3.exceptions
-    RequestError, HTTPError,
-    # built-ins
-    TimeoutError, ConnectionError)
-retryable_client_errors = (
-    # botocore.exceptions
-    ClientError,
-    # built-ins
-    PermissionError)
-all_retryable_errors = retryable_client_errors + retryable_io_errors
-max_retry_time = 60
 
 
 class S3Datastore(RemoteFileDatastore):
@@ -129,44 +83,3 @@ class S3Datastore(RemoteFileDatastore):
             # parameters, so for now we do not create a bucket if one is
             # missing. Further discussion can make this happen though.
             raise IOError(f"Bucket {self.locationFactory.netloc} does not exist!")
-
-    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
-    def _artifact_exists(self, location: Location) -> bool:
-        """Check that an artifact exists in this datastore at the specified
-        location.
-
-        Parameters
-        ----------
-        location : `Location`
-            Expected location of the artifact associated with this datastore.
-
-        Returns
-        -------
-        exists : `bool`
-            True if the location can be found, false otherwise.
-        """
-        # Exists to allow backoff retry
-        return super()._artifact_exists(location)
-
-    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
-    def _delete_artifact(self, location: Location) -> None:
-        """Delete the artifact from the datastore.
-
-        Parameters
-        ----------
-        location : `Location`
-            Location of the artifact associated with this datastore.
-        """
-        # Exists to allow backoff retry
-        return super()._delete_artifact(location)
-
-    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
-    def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
-                                   ref: DatasetRef, isComponent: bool = False) -> Any:
-        # Exists to allow backoff retry
-        return super()._read_artifact_into_memory(getInfo, ref, isComponent)
-
-    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
-    def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
-        # Exists to allow backoff retry
-        return super()._write_in_memory_to_artifact(inMemoryDataset, ref)

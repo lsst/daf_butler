@@ -31,6 +31,8 @@ __all__ = ('ButlerS3URI',)
 from typing import (
     TYPE_CHECKING,
     Optional,
+    Any,
+    Callable,
     Tuple,
     Union,
 )
@@ -39,6 +41,9 @@ from .utils import NoTransaction
 from ._butlerUri import ButlerURI
 from .s3utils import getS3Client, s3CheckFileExists, bucketExists
 
+from botocore.exceptions import ClientError
+from http.client import ImproperConnectionState, HTTPException
+from urllib3.exceptions import RequestError, HTTPError
 
 if TYPE_CHECKING:
     try:
@@ -46,6 +51,40 @@ if TYPE_CHECKING:
     except ImportError:
         pass
     from ..datastore import DatastoreTransaction
+
+# https://pypi.org/project/backoff/
+try:
+    import backoff
+except ImportError:
+    class Backoff():
+        @staticmethod
+        def expo(func: Callable, *args: Any, **kwargs: Any) -> Callable:
+            return func
+
+        @staticmethod
+        def on_exception(func: Callable, *args: Any, **kwargs: Any) -> Callable:
+            return func
+
+    backoff = Backoff
+
+# settings for "backoff" retry decorators. these retries are belt-and-
+# suspenders along with the retries built into Boto3, to account for
+# semantic differences in errors between S3-like providers.
+retryable_io_errors = (
+    # http.client
+    ImproperConnectionState, HTTPException,
+    # urllib3.exceptions
+    RequestError, HTTPError,
+    # built-ins
+    TimeoutError, ConnectionError)
+retryable_client_errors = (
+    # botocore.exceptions
+    ClientError,
+    # built-ins
+    PermissionError)
+all_retryable_errors = retryable_client_errors + retryable_io_errors
+max_retry_time = 60
+
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +98,7 @@ class ButlerS3URI(ButlerURI):
         # Defer import for circular dependencies
         return getS3Client()
 
+    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
     def exists(self) -> bool:
         if self.is_root:
             # Only check for the bucket since the path is irrelevant
@@ -66,12 +106,14 @@ class ButlerS3URI(ButlerURI):
         exists, _ = s3CheckFileExists(self, client=self.client)
         return exists
 
+    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
     def size(self) -> int:
         if self.dirLike:
             return 0
         _, sz = s3CheckFileExists(self, client=self.client)
         return sz
 
+    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
     def remove(self) -> None:
         """Remove the resource."""
 
@@ -81,6 +123,7 @@ class ButlerS3URI(ButlerURI):
         # response all the time
         self.client.delete_object(Bucket=self.netloc, Key=self.relativeToPathRoot)
 
+    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def read(self, size: int = -1) -> bytes:
         args = {}
         if size > 0:
@@ -95,6 +138,7 @@ class ButlerS3URI(ButlerURI):
         response["Body"].close()
         return body
 
+    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def write(self, data: bytes, overwrite: bool = True) -> None:
         if not overwrite:
             if self.exists():
@@ -102,8 +146,8 @@ class ButlerS3URI(ButlerURI):
         self.client.put_object(Bucket=self.netloc, Key=self.relativeToPathRoot,
                                Body=data)
 
+    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def mkdir(self) -> None:
-        # Defer import for circular dependencies
         if not bucketExists(self.netloc):
             raise ValueError(f"Bucket {self.netloc} does not exist for {self}!")
 
@@ -114,6 +158,7 @@ class ButlerS3URI(ButlerURI):
         if not self.path == "/":
             self.client.put_object(Bucket=self.netloc, Key=self.relativeToPathRoot)
 
+    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def as_local(self) -> Tuple[str, bool]:
         """Download object from S3 and place in temporary directory.
 
@@ -128,6 +173,7 @@ class ButlerS3URI(ButlerURI):
             self.client.download_fileobj(self.netloc, self.relativeToPathRoot, tmpFile)
         return tmpFile.name, True
 
+    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def transfer_from(self, src: ButlerURI, transfer: str = "copy",
                       overwrite: bool = False,
                       transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
