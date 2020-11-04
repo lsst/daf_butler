@@ -153,8 +153,16 @@ class InspectionVisitor(TreeVisitor[None]):
         # Docstring inherited from TreeVisitor.visitParens
         pass
 
+    def visitTupleNode(self, items: Tuple[Any, ...], node: Node) -> None:
+        # Docstring inherited from base class
+        pass
+
     def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
+        pass
+
+    def visitPointNode(self, ra: Any, dec: Any, node: Node) -> None:
+        # Docstring inherited from base class
         pass
 
 
@@ -306,6 +314,11 @@ class ClauseVisitor(TreeVisitor[sqlalchemy.sql.ColumnElement]):
         # Docstring inherited from TreeVisitor.visitParens
         return expression.self_group()
 
+    def visitTupleNode(self, items: Tuple[sqlalchemy.sql.ColumnElement, ...], node: Node
+                       ) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited from base class
+        return sqlalchemy.sql.expression.Tuple(*items)
+
     def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node
                           ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
@@ -313,3 +326,10 @@ class ClauseVisitor(TreeVisitor[sqlalchemy.sql.ColumnElement]):
         # Just return a triple and let parent clauses handle it,
         # stride can be None which means the same as 1.
         return (start, stop, stride or 1)
+
+    def visitPointNode(self, ra: Any, dec: Any, node: Node) -> None:
+        # Docstring inherited from base class
+
+        # this is a placeholder for future extension, we enabled syntax but
+        # do not support actual use just yet.
+        raise NotImplementedError("POINT() function is not supported yet")

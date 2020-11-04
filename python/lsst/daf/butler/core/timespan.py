@@ -22,10 +22,10 @@ from __future__ import annotations
 
 __all__ = (
     "Timespan",
-    "DatabaseTimespanRepresentation"
+    "TimespanDatabaseRepresentation",
 )
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Any, ClassVar, Dict, Iterator, Mapping, NamedTuple, Optional, Tuple, Type, TypeVar, Union
 
 import astropy.time
@@ -35,9 +35,7 @@ import warnings
 
 from . import ddl
 from .time_utils import astropy_to_nsec, EPOCH, MAX_TIME, times_equal
-
-
-S = TypeVar("S", bound="DatabaseTimespanRepresentation")
+from ._topology import TopologicalExtentDatabaseRepresentation
 
 
 class Timespan(NamedTuple):
@@ -202,7 +200,10 @@ class Timespan(NamedTuple):
                     yield Timespan(begin=other.end, end=self.end)
 
 
-class DatabaseTimespanRepresentation(ABC):
+_S = TypeVar("_S", bound="TimespanDatabaseRepresentation")
+
+
+class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
     """An interface that encapsulates how timespans are represented in a
     database engine.
 
@@ -217,8 +218,8 @@ class DatabaseTimespanRepresentation(ABC):
     Actual field names may be derived from this, rather than exactly this.
     """
 
-    Compound: ClassVar[Type[DatabaseTimespanRepresentation]]
-    """A concrete subclass of `DatabaseTimespanRepresentation` that simply
+    Compound: ClassVar[Type[TimespanDatabaseRepresentation]]
+    """A concrete subclass of `TimespanDatabaseRepresentation` that simply
     uses two separate fields for the begin (inclusive) and end (excusive)
     endpoints.
 
@@ -323,25 +324,6 @@ class DatabaseTimespanRepresentation(ABC):
         """
         return False
 
-    @classmethod
-    @abstractmethod
-    def fromSelectable(cls: Type[S], selectable: sqlalchemy.sql.FromClause) -> S:
-        """Construct an instance of this class that proxies the columns of
-        this representation in a table or SELECT query.
-
-        Parameters
-        ----------
-        selectable : `sqlalchemy.sql.FromClause`
-            SQLAlchemy object representing a table or SELECT query that has
-            columns in this representation.
-
-        Returns
-        -------
-        instance : `DatabaseTimespanRepresentation`
-            An instance of this representation subclass.
-        """
-        raise NotImplementedError()
-
     @abstractmethod
     def isNull(self) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression that tests whether this timespan is
@@ -355,15 +337,15 @@ class DatabaseTimespanRepresentation(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def overlaps(self: S, other: Union[Timespan, S]) -> sqlalchemy.sql.ColumnElement:
+    def overlaps(self: _S, other: Union[Timespan, _S]) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression representing an overlap operation on
         timespans.
 
         Parameters
         ----------
-        other : `Timespan` or `DatabaseTimespanRepresentation`
+        other : `Timespan` or `TimespanDatabaseRepresentation`
             The timespan to overlap ``self`` with; either a Python `Timespan`
-            literal or an instance of the same `DatabaseTimespanRepresentation`
+            literal or an instance of the same `TimespanDatabaseRepresentation`
             as ``self``, representing a timespan in some other table or query
             within the same database.
 
@@ -375,12 +357,12 @@ class DatabaseTimespanRepresentation(ABC):
         raise NotImplementedError()
 
 
-class _CompoundDatabaseTimespanRepresentation(DatabaseTimespanRepresentation):
-    """An implementation of `DatabaseTimespanRepresentation` that simply stores
+class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
+    """An implementation of `TimespanDatabaseRepresentation` that simply stores
     the endpoints in two separate fields.
 
     This type should generally be accessed via
-    `DatabaseTimespanRepresentation.Compound`, and should be constructed only
+    `TimespanDatabaseRepresentation.Compound`, and should be constructed only
     via the `fromSelectable` method.
 
     Parameters
@@ -486,7 +468,7 @@ class _CompoundDatabaseTimespanRepresentation(DatabaseTimespanRepresentation):
         return Timespan(begin=begin, end=end)
 
     @classmethod
-    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause) -> _CompoundDatabaseTimespanRepresentation:
+    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause) -> _CompoundTimespanDatabaseRepresentation:
         # Docstring inherited.
         return cls(begin=selectable.columns[f"{cls.NAME}_begin"],
                    end=selectable.columns[f"{cls.NAME}_end"])
@@ -495,13 +477,13 @@ class _CompoundDatabaseTimespanRepresentation(DatabaseTimespanRepresentation):
         # Docstring inherited.
         return self.begin.is_(None)
 
-    def overlaps(self, other: Union[Timespan, _CompoundDatabaseTimespanRepresentation]
+    def overlaps(self, other: Union[Timespan, _CompoundTimespanDatabaseRepresentation]
                  ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         if isinstance(other, Timespan):
             begin = EPOCH if other.begin is None else other.begin
             end = MAX_TIME if other.end is None else other.end
-        elif isinstance(other, _CompoundDatabaseTimespanRepresentation):
+        elif isinstance(other, _CompoundTimespanDatabaseRepresentation):
             begin = other.begin
             end = other.end
         else:
@@ -509,4 +491,4 @@ class _CompoundDatabaseTimespanRepresentation(DatabaseTimespanRepresentation):
         return sqlalchemy.sql.and_(self.end > begin, end > self.begin)
 
 
-DatabaseTimespanRepresentation.Compound = _CompoundDatabaseTimespanRepresentation
+TimespanDatabaseRepresentation.Compound = _CompoundTimespanDatabaseRepresentation

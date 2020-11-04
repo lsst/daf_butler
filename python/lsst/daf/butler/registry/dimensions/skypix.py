@@ -20,25 +20,25 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["SkyPixDimensionRecordStorage"]
+__all__ = ["BasicSkyPixDimensionRecordStorage"]
 
 from typing import Iterable, Optional
 
 import sqlalchemy
 
 from ...core import (
-    DatabaseTimespanRepresentation,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
     NamedKeyDict,
     SkyPixDimension,
+    TimespanDatabaseRepresentation,
 )
 from ..queries import QueryBuilder
-from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
+from ..interfaces import SkyPixDimensionRecordStorage
 
 
-class SkyPixDimensionRecordStorage(DimensionRecordStorage):
+class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
     """A storage implementation specialized for `SkyPixDimension` records.
 
     `SkyPixDimension` records are never stored in a database, but are instead
@@ -52,15 +52,8 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
     def __init__(self, dimension: SkyPixDimension):
         self._dimension = dimension
 
-    @classmethod
-    def initialize(cls, db: Database, element: DimensionElement, *,
-                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
-        # Docstring inherited from DimensionRecordStorage.
-        assert isinstance(element, SkyPixDimension)
-        return cls(element)
-
     @property
-    def element(self) -> DimensionElement:
+    def element(self) -> SkyPixDimension:
         # Docstring inherited from DimensionRecordStorage.element.
         return self._dimension
 
@@ -72,7 +65,7 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         if builder.hasDimensionKey(self._dimension):
             # If joining some other element or dataset type already brought in

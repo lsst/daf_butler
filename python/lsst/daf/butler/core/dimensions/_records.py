@@ -31,13 +31,13 @@ from typing import (
     Type,
 )
 
-from .elements import Dimension
-from ..timespan import Timespan, DatabaseTimespanRepresentation
+from ..timespan import Timespan, TimespanDatabaseRepresentation
+from ..utils import immutable
+from ._elements import Dimension, DimensionElement
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .elements import DimensionElement
-    from .coordinate import DataCoordinate
-    from .schema import DimensionElementFields
+    from ._coordinate import DataCoordinate
+    from ._schema import DimensionElementFields
 
 
 def _reconstructDimensionRecord(definition: DimensionElement, mapping: Dict[str, Any]) -> DimensionRecord:
@@ -54,13 +54,13 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
 
     For internal use by `DimensionRecord`.
     """
-    from .schema import DimensionElementFields, REGION_FIELD_SPEC
+    from ._schema import DimensionElementFields, REGION_FIELD_SPEC
     fields = DimensionElementFields(definition)
     slots = list(fields.standard.names)
     if definition.spatial:
         slots.append(REGION_FIELD_SPEC.name)
     if definition.temporal:
-        slots.append(DatabaseTimespanRepresentation.NAME)
+        slots.append(TimespanDatabaseRepresentation.NAME)
     d = {
         "definition": definition,
         "__slots__": tuple(slots),
@@ -69,6 +69,7 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
 
 
+@immutable
 class DimensionRecord:
     """Base class for the Python representation of database records for
     a `DimensionElement`.
@@ -131,12 +132,16 @@ class DimensionRecord:
             object.__setattr__(self, name, kwargs.get(name))
         if self.definition.temporal is not None:
             if self.timespan is None:  # type: ignore
-                self.timespan = Timespan(
-                    kwargs.get("datetime_begin"),
-                    kwargs.get("datetime_end"),
+                object.__setattr__(
+                    self,
+                    "timespan",
+                    Timespan(
+                        kwargs.get("datetime_begin"),
+                        kwargs.get("datetime_end"),
+                    )
                 )
 
-        from .coordinate import DataCoordinate
+        from ._coordinate import DataCoordinate
         object.__setattr__(
             self,
             "dataId",

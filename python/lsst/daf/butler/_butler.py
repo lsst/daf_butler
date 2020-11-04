@@ -62,6 +62,7 @@ from .core import (
     DatasetRef,
     DatasetType,
     Datastore,
+    DimensionConfig,
     FileDataset,
     StorageClassFactory,
     Timespan,
@@ -252,10 +253,10 @@ class Butler:
     """
 
     @staticmethod
-    def makeRepo(root: str, config: Union[Config, str, None] = None, standalone: bool = False,
-                 createRegistry: bool = True, searchPaths: Optional[List[str]] = None,
-                 forceConfigRoot: bool = True, outfile: Optional[str] = None,
-                 overwrite: bool = False) -> Config:
+    def makeRepo(root: str, config: Union[Config, str, None] = None,
+                 dimensionConfig: Union[Config, str, None] = None, standalone: bool = False,
+                 searchPaths: Optional[List[str]] = None, forceConfigRoot: bool = True,
+                 outfile: Optional[str] = None, overwrite: bool = False) -> Config:
         """Create an empty data repository by adding a butler.yaml config
         to a repository root directory.
 
@@ -271,6 +272,9 @@ class Butler:
             configuration will be used.  Root-dependent config options
             specified in this config are overwritten if ``forceConfigRoot``
             is `True`.
+        dimensionConfig : `Config` or `str`, optional
+            Configuration for dimensions, will be used to initialize registry
+            database.
         standalone : `bool`
             If True, write all expanded defaults, not just customized or
             repository-specific settings.
@@ -279,8 +283,6 @@ class Butler:
             may be good or bad, depending on the nature of the changes).
             Future *additions* to the defaults will still be picked up when
             initializing `Butlers` to repos created with ``standalone=True``.
-        createRegistry : `bool`, optional
-            If `True` create a new Registry.
         searchPaths : `list` of `str`, optional
             Directory paths to search when calculating the full butler
             configuration.
@@ -360,6 +362,13 @@ class Butler:
 
         if standalone:
             config.merge(full)
+        else:
+            # Always expand the registry.managers section into the per-repo
+            # config, because after the database schema is created, it's not
+            # allowed to change anymore.  Note that in the standalone=True
+            # branch, _everything_ in the config is expanded, so there's no
+            # need to special case this.
+            Config.updateParameters(RegistryConfig, config, full, toCopy=("managers",), overwrite=False)
         if outfile is not None:
             # When writing to a separate location we must include
             # the root of the butler repo in the config else it won't know
@@ -371,7 +380,10 @@ class Butler:
         config.dumpToUri(configURI, overwrite=overwrite)
 
         # Create Registry and populate tables
-        Registry.fromConfig(config, create=createRegistry, butlerRoot=root)
+        registryConfig = RegistryConfig(config.get("registry"))
+        dimensionConfig = DimensionConfig(dimensionConfig)
+        Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root)
+
         return config
 
     @classmethod
@@ -542,6 +554,68 @@ class Butler:
         else:
             idNumber = None
         timespan: Optional[Timespan] = None
+
+        # Process dimension records that are using record information
+        # rather than ids
+        newDataId: dict[Any, Any] = {}
+        byRecord: dict[Any, dict[str, Any]] = defaultdict(dict)
+
+        # if all the dataId comes from keyword parameters we do not need
+        # to do anything here because they can't be of the form
+        # exposure.obs_id because a "." is not allowed in a keyword parameter.
+        if dataId:
+            for k, v in dataId.items():
+                # If we have a Dimension we do not need to do anything
+                # because it cannot be a compound key.
+                if isinstance(k, str) and "." in k:
+                    # Someone is using a more human-readable dataId
+                    dimension, record = k.split(".", 1)
+                    byRecord[dimension][record] = v
+                else:
+                    newDataId[k] = v
+
+        if byRecord:
+            # Some record specifiers were found so we need to convert
+            # them to the Id form
+            for dimensionName, values in byRecord.items():
+                if dimensionName in newDataId:
+                    log.warning("DataId specified explicit %s dimension value of %s in addition to"
+                                " general record specifiers for it of %s.  Ignoring record information.",
+                                dimensionName, newDataId[dimensionName], str(values))
+                    continue
+
+                # Build up a WHERE expression -- use single quotes
+                def quote(s):
+                    if isinstance(s, str):
+                        return f"'{s}'"
+                    else:
+                        return s
+
+                where = " AND ".join(f"{dimensionName}.{k} = {quote(v)}"
+                                     for k, v in values.items())
+
+                # Hopefully we get a single record that matches
+                records = set(self.registry.queryDimensionRecords(dimensionName, dataId=newDataId,
+                                                                  where=where, **kwds))
+
+                if len(records) != 1:
+                    if len(records) > 1:
+                        log.debug("Received %d records from constraints of %s", len(records), str(values))
+                        for r in records:
+                            log.debug("- %s", str(r))
+                        raise RuntimeError(f"DataId specification for dimension {dimensionName} is not"
+                                           f" uniquely constrained to a single dataset by {values}."
+                                           f" Got {len(records)} results.")
+                    raise RuntimeError(f"DataId specification for dimension {dimensionName} matched no"
+                                       f" records when constrained by {values}")
+
+                # Get the primary key from the real dimension object
+                dimension = self.registry.dimensions[dimensionName]
+                newDataId[dimensionName] = getattr(records.pop(), dimension.primaryKey.name)
+
+            # We have modified the dataId so need to switch to it
+            dataId = newDataId
+
         if datasetType.isCalibration():
             # Because this is a calibration dataset, first try to make a
             # standardize the data ID without restricting the dimensions to

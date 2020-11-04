@@ -24,12 +24,14 @@ from __future__ import annotations
 __all__ = ["DimensionGraph"]
 
 import itertools
+from types import MappingProxyType
 from typing import (
+    AbstractSet,
     Any,
     Dict,
     Iterable,
     Iterator,
-    KeysView,
+    Mapping,
     Optional,
     Set,
     Tuple,
@@ -37,12 +39,15 @@ from typing import (
     Union,
 )
 
-from ..named import NamedValueSet
+from ..named import NamedValueAbstractSet, NamedValueSet
 from ..utils import immutable
+from .._topology import TopologicalSpace, TopologicalFamily
+
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .universe import DimensionUniverse
-    from .elements import DimensionElement, Dimension
+    from ._universe import DimensionUniverse
+    from ._elements import DimensionElement, Dimension
+    from ._governor import GovernorDimension
 
 
 @immutable
@@ -80,18 +85,20 @@ class DimensionGraph:
 
     Notes
     -----
-    `DimensionGraph` should be used instead of other collections in any context
-    where a collection of dimensions is required and a `DimensionUniverse` is
-    available.
-
-    While `DimensionUniverse` inherits from `DimensionGraph`, it should
-    otherwise not be used as a base class.
+    `DimensionGraph` should be used instead of other collections in most
+    contexts where a collection of dimensions is required and a
+    `DimensionUniverse` is available.  Exceptions include cases where order
+    matters (and is different from the consistent ordering defined by the
+    `DimensionUniverse`), or complete `~collection.abc.Set` semantics are
+    required.
     """
-
-    def __new__(cls, universe: DimensionUniverse,
-                dimensions: Optional[Iterable[Dimension]] = None,
-                names: Optional[Iterable[str]] = None,
-                conform: bool = True) -> DimensionGraph:
+    def __new__(
+        cls,
+        universe: DimensionUniverse,
+        dimensions: Optional[Iterable[Dimension]] = None,
+        names: Optional[Iterable[str]] = None,
+        conform: bool = True
+    ) -> DimensionGraph:
         conformedNames: Set[str]
         if names is None:
             if dimensions is None:
@@ -108,9 +115,7 @@ class DimensionGraph:
                 raise TypeError("Only one of 'dimensions' and 'names' may be provided.")
             conformedNames = set(names)
         if conform:
-            # Expand given dimensions to include all dependencies.
-            for name in tuple(conformedNames):  # iterate over a temporary copy so we can modify the original
-                conformedNames.update(universe[name]._related.dependencies)
+            universe.expandDimensionNameSet(conformedNames)
         # Look in the cache of existing graphs, with the expanded set of names.
         cacheKey = frozenset(conformedNames)
         self = universe._cache.get(cacheKey, None)
@@ -122,62 +127,41 @@ class DimensionGraph:
         self.universe = universe
         # Reorder dimensions by iterating over the universe (which is
         # ordered already) and extracting the ones in the set.
-        self.dimensions = NamedValueSet(universe.sorted(conformedNames))
+        self.dimensions = NamedValueSet(universe.sorted(conformedNames)).freeze()
         # Make a set that includes both the dimensions and any
         # DimensionElements whose dependencies are in self.dimensions.
         self.elements = NamedValueSet(e for e in universe.getStaticElements()
-                                      if e._shouldBeInGraph(self.dimensions.names))
+                                      if e.required.names <= self.dimensions.names).freeze()
         self._finish()
         return self
 
     def _finish(self) -> None:
-        """Complete construction of the graph.
-
-        This is intended for internal use by `DimensionGraph` and
-        `DimensionUniverse` only.
-        """
-        # Freeze the sets the constructor is responsible for populating.
-        self.dimensions.freeze()
-        self.elements.freeze()
-
+        # Make a set containing just the governor dimensions in this graph.
+        # Need local import to avoid cycle.
+        from ._governor import GovernorDimension
+        self.governors = NamedValueSet(
+            d for d in self.dimensions if isinstance(d, GovernorDimension)
+        ).freeze()
         # Split dependencies up into "required" and "implied" subsets.
         # Note that a dimension may be required in one graph and implied in
         # another.
-        self.required = NamedValueSet()
-        self.implied = NamedValueSet()
+        required: NamedValueSet[Dimension] = NamedValueSet()
+        implied: NamedValueSet[Dimension] = NamedValueSet()
         for i1, dim1 in enumerate(self.dimensions):
             for i2, dim2 in enumerate(self.dimensions):
-                if dim1.name in dim2._related.implied:
-                    self.implied.add(dim1)
+                if dim1.name in dim2.implied.names:
+                    implied.add(dim1)
                     break
             else:
                 # If no other dimension implies dim1, it's required.
-                self.required.add(dim1)
-        self.required.freeze()
-        self.implied.freeze()
+                required.add(dim1)
+        self.required = required.freeze()
+        self.implied = implied.freeze()
 
-        # Compute sets of spatial and temporal elements.
-        # This contain the values of the `.spatial` and `.temporal` attributes
-        # of all elements, unless those attributes are not in the graph.
-        # In that case, the element whose attribute is not in the graph is
-        # added instead.  This ensures that these sets contain the
-        # most-specific spatial and temporal elements, not the summary elements
-        # that aggregate them, unless the summaries are all that we have.
-        self.spatial = NamedValueSet()
-        self.temporal = NamedValueSet()
-        for element in self.elements:
-            if element.spatial is not None:
-                if element.spatial in self.elements:
-                    self.spatial.add(element.spatial)
-                else:
-                    self.spatial.add(element)
-            if element.temporal is not None:
-                if element.temporal in self.elements:
-                    self.temporal.add(element.temporal)
-                else:
-                    self.temporal.add(element)
-        self.spatial.freeze()
-        self.temporal.freeze()
+        self.topology = MappingProxyType({
+            space: NamedValueSet(e.topology[space] for e in self.elements if space in e.topology).freeze()
+            for space in TopologicalSpace.__members__.values()
+        })
 
         # Build mappings from dimension to index; this is really for
         # DataCoordinate, but we put it in DimensionGraph because many
@@ -192,8 +176,13 @@ class DimensionGraph:
     def __getnewargs__(self) -> tuple:
         return (self.universe, None, tuple(self.dimensions.names), False)
 
+    def __deepcopy__(self, memo: dict) -> DimensionGraph:
+        # DimensionGraph is recursively immutable; see note in @immutable
+        # decorator.
+        return self
+
     @property
-    def names(self) -> KeysView[str]:
+    def names(self) -> AbstractSet[str]:
         """A set of the names of all dimensions in the graph (`KeysView`).
         """
         return self.dimensions.names
@@ -240,47 +229,6 @@ class DimensionGraph:
     def __repr__(self) -> str:
         return f"DimensionGraph({str(self)})"
 
-    @classmethod
-    def decode(cls, encoded: bytes, *, universe: DimensionUniverse) -> DimensionGraph:
-        """Construct a `DimensionGraph` from its encoded representation.
-
-        Parameters
-        ----------
-        encoded : `bytes`
-            Byte string produced by `DimensionGraph.encode`.
-        universe : `DimensionUniverse`
-            Universe the new graph is a part of.  Must have the same dimensions
-            as the original universe.
-
-        Returns
-        -------
-        graph : `DimensionGraph`
-            A new (or possibly cached) `DimensionGraph` instance matching the
-            given encoding.
-        """
-        dimensions = []
-        mask = int.from_bytes(encoded, "big")
-        for dimension in universe.getStaticDimensions():
-            index = universe.getDimensionIndex(dimension.name)
-            if mask & (1 << index):
-                dimensions.append(dimension)
-        return cls(universe, dimensions=dimensions, conform=False)
-
-    def encode(self) -> bytes:
-        """Encode a `DimensionGraph` into a byte string.
-
-        Returns
-        -------
-        encoded : `bytes`
-            Encoded representation of the graph.  Length is guaranteed to be
-            equal to `DimensionUniverse.getEncodeLength`.
-        """
-        mask = 0
-        for dimension in self.dimensions:
-            index = self.universe.getDimensionIndex(dimension.name)
-            mask |= (1 << index)
-        return mask.to_bytes(self.universe.getEncodeLength(), byteorder="big")
-
     def isdisjoint(self, other: DimensionGraph) -> bool:
         """Test whether the intersection of two graphs is empty.
 
@@ -293,14 +241,14 @@ class DimensionGraph:
 
         Returns `True` if ``self`` is empty.
         """
-        return self.dimensions.issubset(other.dimensions)
+        return self.dimensions <= other.dimensions
 
     def issuperset(self, other: DimensionGraph) -> bool:
         """Test whether all dimensions in ``other`` are also in ``self``.
 
         Returns `True` if ``other`` is empty.
         """
-        return self.dimensions.issuperset(other.dimensions)
+        return self.dimensions >= other.dimensions
 
     def __eq__(self, other: Any) -> bool:
         """Test whether ``self`` and ``other`` have exactly the same dimensions
@@ -403,6 +351,20 @@ class DimensionGraph:
             self._primaryKeyTraversalOrder = order
         return order
 
+    @property
+    def spatial(self) -> NamedValueAbstractSet[TopologicalFamily]:
+        """The `~TopologicalSpace.SPATIAL` families represented by the elements
+        in this graph.
+        """
+        return self.topology[TopologicalSpace.SPATIAL]
+
+    @property
+    def temporal(self) -> NamedValueAbstractSet[TopologicalFamily]:
+        """The `~TopologicalSpace.TEMPORAL` families represented by the
+        elements in this graph.
+        """
+        return self.topology[TopologicalSpace.TEMPORAL]
+
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
 
@@ -411,40 +373,42 @@ class DimensionGraph:
     (`DimensionUniverse`).
     """
 
-    dimensions: NamedValueSet[Dimension]
+    dimensions: NamedValueAbstractSet[Dimension]
     """A true `~collections.abc.Set` of all true `Dimension` instances in the
-    graph (`NamedValueSet` of `Dimension`).
+    graph (`NamedValueAbstractSet` of `Dimension`).
 
     This is the set used for iteration, ``len()``, and most set-like operations
     on `DimensionGraph` itself.
     """
 
-    elements: NamedValueSet[DimensionElement]
+    elements: NamedValueAbstractSet[DimensionElement]
     """A true `~collections.abc.Set` of all `DimensionElement` instances in the
-    graph; a superset of `dimensions` (`NamedValueSet` of `DimensionElement`).
+    graph; a superset of `dimensions` (`NamedValueAbstractSet` of
+    `DimensionElement`).
 
     This is the set used for dict-like lookups, including the ``in`` operator,
     on `DimensionGraph` itself.
     """
 
-    required: NamedValueSet[Dimension]
-    """The subset of `dimensions` whose elments must be directly identified via
-    their primary keys in a data ID in order to identify the rest of the
-    elements in the graph (`NamedValueSet` of `Dimension`).
+    governors: NamedValueAbstractSet[GovernorDimension]
+    """A true `~collections.abc.Set` of all true `GovernorDimension` instances
+    in the graph (`NamedValueAbstractSet` of `GovernorDimension`).
     """
 
-    implied: NamedValueSet[Dimension]
+    required: NamedValueAbstractSet[Dimension]
+    """The subset of `dimensions` whose elments must be directly identified via
+    their primary keys in a data ID in order to identify the rest of the
+    elements in the graph (`NamedValueAbstractSet` of `Dimension`).
+    """
+
+    implied: NamedValueAbstractSet[Dimension]
     """The subset of `dimensions` whose elements need not be directly
-    identified via their primary keys in a data ID (`NamedValueSet` of
+    identified via their primary keys in a data ID (`NamedValueAbstractSet` of
     `Dimension`).
     """
 
-    spatial: NamedValueSet[DimensionElement]
-    """Elements that are associated with independent spatial regions
-    (`NamedValueSet` of `DimensionElement`).
-    """
-
-    temporal: NamedValueSet[DimensionElement]
-    """Elements that are associated with independent spatial regions
-    (`NamedValueSet` of `DimensionElement`).
+    topology: Mapping[TopologicalSpace, NamedValueAbstractSet[TopologicalFamily]]
+    """Families of elements in this graph that can participate in topological
+    relationships (`Mapping` from `TopologicalSpace` to
+    `NamedValueAbstractSet` of `TopologicalFamily`).
     """

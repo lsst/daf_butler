@@ -44,6 +44,12 @@ from .interfaces import (
 )
 
 
+class MissingAttributesTableError(RuntimeError):
+    """Exception raised when a database is missing attributes table.
+    """
+    pass
+
+
 # This manager is supposed to have super-stable schema that never changes
 # but there may be cases when we need data migration on this table so we
 # keep version for it as well.
@@ -80,15 +86,36 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         table = context.addTable(cls._TABLE_NAME, cls._TABLE_SPEC)
         return cls(db=db, table=table)
 
+    def _checkTableExists(self) -> None:
+        """Check that attributes table exists or raise an exception.
+
+        This should not be called on every read operation but instead only
+        when an exception is raised from SELECT query.
+        """
+        # Database metadata is likely not populated at this point yet, so we
+        # have to use low-level connection object to check it.
+        # TODO: Once we have stable gen3 schema everywhere this test can be
+        # dropped (DM-27373).
+        if not self._table.exists(bind=self._db._connection):
+            raise MissingAttributesTableError(
+                f"`{self._table.name}` table is missing from schema, schema has to"
+                " be initialized before use (database is probably outdated)."
+            ) from None
+
     def get(self, name: str, default: Optional[str] = None) -> Optional[str]:
         # Docstring inherited from ButlerAttributeManager.
-        sql = sqlalchemy.sql.select([self._table.columns.value]).where(
-            self._table.columns.name == name
-        )
-        row = self._db.query(sql).fetchone()
-        if row is not None:
-            return row[0]
-        return default
+        try:
+            sql = sqlalchemy.sql.select([self._table.columns.value]).where(
+                self._table.columns.name == name
+            )
+            row = self._db.query(sql).fetchone()
+            if row is not None:
+                return row[0]
+            return default
+        except sqlalchemy.exc.OperationalError:
+            # if this is due to missing table raise different exception
+            self._checkTableExists()
+            raise
 
     def set(self, name: str, value: str, *, force: bool = False) -> None:
         # Docstring inherited from ButlerAttributeManager.
@@ -124,9 +151,14 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
 
     def empty(self) -> bool:
         # Docstring inherited from ButlerAttributeManager.
-        sql = sqlalchemy.sql.select([sqlalchemy.sql.func.count()]).select_from(self._table)
-        row = self._db.query(sql).fetchone()
-        return row[0] == 0
+        try:
+            sql = sqlalchemy.sql.select([sqlalchemy.sql.func.count()]).select_from(self._table)
+            row = self._db.query(sql).fetchone()
+            return row[0] == 0
+        except sqlalchemy.exc.OperationalError:
+            # if this is due to missing table raise different exception
+            self._checkTableExists()
+            raise
 
     @classmethod
     def currentVersion(cls) -> Optional[VersionTuple]:

@@ -27,18 +27,27 @@ from typing import Iterable, Optional
 import sqlalchemy
 
 from ...core import (
-    DatabaseTimespanRepresentation,
+    Config,
+    DatabaseDimension,
+    DatabaseDimensionElement,
     DataCoordinateIterable,
-    Dimension,
     DimensionElement,
     DimensionRecord,
+    GovernorDimension,
     NamedKeyDict,
+    NamedKeyMapping,
+    TimespanDatabaseRepresentation,
 )
-from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
+from ..interfaces import (
+    Database,
+    DatabaseDimensionRecordStorage,
+    GovernorDimensionRecordStorage,
+    StaticTablesContext,
+)
 from ..queries import QueryBuilder
 
 
-class QueryDimensionRecordStorage(DimensionRecordStorage):
+class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
     """A read-only record storage implementation backed by SELECT query.
 
     At present, the only query this class supports is a SELECT DISTNCT over the
@@ -51,21 +60,22 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
     db : `Database`
         Interface to the database engine and namespace that will hold these
         dimension records.
-    element : `DimensionElement`
+    element : `DatabaseDimensionElement`
         The element whose records this storage will manage.
     """
-    def __init__(self, db: Database, element: DimensionElement):
-        assert element.viewOf is not None
+    def __init__(self, db: Database, element: DatabaseDimensionElement, viewOf: str):
+        assert isinstance(element, DatabaseDimension), \
+            "An element cannot be a dependency unless it is a dimension."
         self._db = db
         self._element = element
-        self._target = element.universe[element.viewOf]
+        self._target = element.universe[viewOf]
         self._targetSpec = self._target.RecordClass.fields.makeTableSpec(
             tsRepr=self._db.getTimespanRepresentation(),
         )
+        self._viewOf = viewOf
         self._query = None  # Constructed on first use.
         if element not in self._target.graph.dimensions:
             raise NotImplementedError("Query-backed dimension must be a dependency of its target.")
-        assert isinstance(element, Dimension), "An element cannot be a dependency unless it is a dimension."
         if element.metadata:
             raise NotImplementedError("Cannot use query to back dimension with metadata.")
         if element.implied:
@@ -78,13 +88,20 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             raise NotImplementedError("Cannot use query to back temporal dimension.")
 
     @classmethod
-    def initialize(cls, db: Database, element: DimensionElement, *,
-                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
-        # Docstring inherited from DimensionRecordStorage.
-        return cls(db, element)
+    def initialize(
+        cls,
+        db: Database,
+        element: DatabaseDimensionElement, *,
+        context: Optional[StaticTablesContext] = None,
+        config: Config,
+        governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+    ) -> DatabaseDimensionRecordStorage:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
+        viewOf = config["view_of"]
+        return cls(db, element, viewOf)
 
     @property
-    def element(self) -> DimensionElement:
+    def element(self) -> DatabaseDimension:
         # Docstring inherited from DimensionRecordStorage.element.
         return self._element
 
@@ -121,7 +138,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         assert regions is None, "Should be guaranteed by constructor checks."

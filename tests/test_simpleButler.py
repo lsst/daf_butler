@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 from typing import (
     Any,
@@ -45,7 +46,7 @@ from lsst.daf.butler import (
     Registry,
     Timespan,
 )
-from lsst.daf.butler.registry import CollectionSearch, RegistryConfig
+from lsst.daf.butler.registry import RegistryConfig
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -84,18 +85,26 @@ class SimpleButlerTestCase(unittest.TestCase):
     can instead utilize an in-memory SQLite Registry and a mocked Datastore.
     """
 
-    def makeRegistry(self) -> Registry:
-        """Create a new `Registry` instance.
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
 
-        The default implementation returns a SQLite in-memory database.
-        """
-        config = RegistryConfig()
-        config["db"] = "sqlite:///:memory:"
-        return Registry.fromConfig(config, create=True)
+    def tearDown(self):
+        if self.root is not None and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
 
     def makeButler(self, **kwargs: Any) -> Butler:
+        """Return new Butler instance on each call.
+        """
         config = ButlerConfig()
-        config["registry", "db"] = "sqlite:///:memory:"
+
+        # make separate temporary directory for registry of this instance
+        tmpdir = tempfile.mkdtemp(dir=self.root)
+        config["registry", "db"] = f"sqlite:///{tmpdir}/gen3.sqlite3"
+
+        # have to make a registry first
+        registryConfig = RegistryConfig(config.get("registry"))
+        Registry.createFromConfig(registryConfig)
+
         with unittest.mock.patch.object(Datastore, "fromConfig", spec=Datastore.fromConfig):
             butler = Butler(config, **kwargs)
             butler.datastore.export = _mock_export
@@ -190,7 +199,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         registry1.registerCollection("chain1", CollectionType.CHAINED)
         registry1.registerCollection("chain2", CollectionType.CHAINED)
         registry1.setCollectionChain("chain1", ["tag1", "run1", "chain2"])
-        registry1.setCollectionChain("chain2", [("calibration1", ["bias"]), "run1"])
+        registry1.setCollectionChain("chain2", ["calibration1", "run1"])
         # Associate some datasets into the TAGGED and CALIBRATION collections.
         flats1 = list(registry1.queryDatasets("flat", collections=...))
         registry1.associate("tag1", flats1)
@@ -226,12 +235,12 @@ class SimpleButlerTestCase(unittest.TestCase):
         self.assertIs(registry2.getCollectionType("chain1"), CollectionType.CHAINED)
         self.assertIs(registry2.getCollectionType("chain2"), CollectionType.CHAINED)
         self.assertEqual(
-            registry2.getCollectionChain("chain1"),
-            CollectionSearch.fromExpression(["tag1", "run1", "chain2"]),
+            list(registry2.getCollectionChain("chain1")),
+            ["tag1", "run1", "chain2"],
         )
         self.assertEqual(
-            registry2.getCollectionChain("chain2"),
-            CollectionSearch.fromExpression([("calibration1", ["bias"]), "run1"]),
+            list(registry2.getCollectionChain("chain2")),
+            ["calibration1", "run1"],
         )
         # Check that tag collection contents are the same.
         self.maxDiff = None
@@ -275,14 +284,14 @@ class SimpleButlerTestCase(unittest.TestCase):
             {
                 "instrument": "Cam1",
                 "id": 3,
-                "name": "three",
+                "obs_id": "three",
                 "timespan": Timespan(t1, t2),
                 "physical_filter": "Cam1-G",
             },
             {
                 "instrument": "Cam1",
                 "id": 4,
-                "name": "four",
+                "obs_id": "four",
                 "timespan": Timespan(t2, t3),
                 "physical_filter": "Cam1-G",
             },
@@ -293,6 +302,22 @@ class SimpleButlerTestCase(unittest.TestCase):
         self.assertEqual(bias2a_id, bias2a.id)
         bias3b_id, _ = butler.get("bias", {"instrument": "Cam1", "exposure": 4, "detector": 3},
                                   collections="calibs")
+        self.assertEqual(bias3b_id, bias3b.id)
+
+        # Get using the kwarg form
+        bias3b_id, _ = butler.get("bias",
+                                  instrument="Cam1", exposure=4, detector=3,
+                                  collections="calibs")
+        self.assertEqual(bias3b_id, bias3b.id)
+
+        # Do it again but using the record information
+        bias2a_id, _ = butler.get("bias", {"instrument": "Cam1", "exposure.obs_id": "three",
+                                           "detector.full_name": "Ab"},
+                                  collections="calibs")
+        self.assertEqual(bias2a_id, bias2a.id)
+        bias3b_id, _ = butler.get("bias", {"exposure.obs_id": "four",
+                                           "detector.full_name": "Ba"},
+                                  collections="calibs", instrument="Cam1")
         self.assertEqual(bias3b_id, bias3b.id)
 
 

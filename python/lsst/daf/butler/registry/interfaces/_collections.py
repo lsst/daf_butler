@@ -36,13 +36,14 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from ...core import ddl, Timespan
+from ...core import ddl, DimensionUniverse, Timespan
 from ..wildcards import CollectionSearch
 from .._collectionType import CollectionType
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ._database import Database, StaticTablesContext
+    from ._dimensions import DimensionRecordStorageManager
 
 
 class MissingCollectionError(Exception):
@@ -145,7 +146,7 @@ class ChainedCollectionRecord(CollectionRecord):
         Name of the collection.
     """
 
-    def __init__(self, key: Any, name: str):
+    def __init__(self, key: Any, name: str, universe: DimensionUniverse):
         super().__init__(key=key, name=name, type=CollectionType.CHAINED)
         self._children = CollectionSearch.fromExpression([])
 
@@ -236,6 +237,12 @@ class ChainedCollectionRecord(CollectionRecord):
         manager : `CollectionManager`
             The object that manages this records instance and all records
             instances that may appear as its children.
+
+        Returns
+        -------
+        children : `CollectionSearch`
+            The ordered sequence of collection names that defines the chained
+            collection.  Guaranteed not to contain cycles.
         """
         raise NotImplementedError()
 
@@ -255,7 +262,8 @@ class CollectionManager(VersionedExtension):
 
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, context: StaticTablesContext) -> CollectionManager:
+    def initialize(cls, db: Database, context: StaticTablesContext, *,
+                   dimensions: DimensionRecordStorageManager) -> CollectionManager:
         """Construct an instance of the manager.
 
         Parameters
@@ -266,6 +274,8 @@ class CollectionManager(VersionedExtension):
             Context object obtained from `Database.declareStaticTables`; used
             to declare any tables that should always be present in a layer
             implemented with this manager.
+        dimensions : `DimensionRecordStorageManager`
+            Manager object for the dimensions in this `Registry`.
 
         Returns
         -------

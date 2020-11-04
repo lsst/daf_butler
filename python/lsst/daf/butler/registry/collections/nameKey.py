@@ -38,21 +38,21 @@ from ._base import (
     makeCollectionChainTableSpec,
 )
 
-from ...core import DatabaseTimespanRepresentation, ddl
+from ...core import TimespanDatabaseRepresentation, ddl
 from ..interfaces import VersionTuple
 
 if TYPE_CHECKING:
-    from ..interfaces import CollectionRecord, Database, StaticTablesContext
+    from ..interfaces import CollectionRecord, Database, DimensionRecordStorageManager, StaticTablesContext
 
 
 _KEY_FIELD_SPEC = ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, primaryKey=True)
 
 
 # This has to be updated on every schema change
-_VERSION = VersionTuple(0, 3, 0)
+_VERSION = VersionTuple(1, 0, 0)
 
 
-def _makeTableSpecs(tsRepr: Type[DatabaseTimespanRepresentation]) -> CollectionTablesTuple:
+def _makeTableSpecs(tsRepr: Type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
     return CollectionTablesTuple(
         collection=ddl.TableSpec(
             fields=[
@@ -76,12 +76,18 @@ class NameKeyCollectionManager(DefaultCollectionManager):
     """
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext) -> NameKeyCollectionManager:
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext, *,
+        dimensions: DimensionRecordStorageManager,
+    ) -> NameKeyCollectionManager:
         # Docstring inherited from CollectionManager.
         return cls(
             db,
             tables=context.addTableTuple(_makeTableSpecs(db.getTimespanRepresentation())),  # type: ignore
             collectionIdName="name",
+            dimensions=dimensions,
         )
 
     @classmethod

@@ -54,6 +54,7 @@ from ..core import (
     DatasetType,
     ddl,
     Dimension,
+    DimensionConfig,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
@@ -87,6 +88,9 @@ if TYPE_CHECKING:
 
 _LOG = logging.getLogger(__name__)
 
+# key for dimensions configuration in attributes table
+_DIMENSIONS_ATTR = "config:dimensions.json"
+
 
 class Registry:
     """Registry interface.
@@ -95,8 +99,6 @@ class Registry:
     ----------
     database : `Database`
         Database instance to store Registry.
-    universe : `DimensionUniverse`
-        Full set of dimensions for Registry.
     attributes : `type`
         Manager class implementing `ButlerAttributeManager`.
     opaque : `type`
@@ -109,6 +111,8 @@ class Registry:
         Manager class implementing `DatasetRecordStorageManager`.
     datastoreBridges : `type`
         Manager class implementing `DatastoreRegistryBridgeManager`.
+    dimensionConfig : `DimensionConfig`, optional
+        Dimension universe configuration, only used when ``create`` is True.
     writeable : `bool`, optional
         If True then Registry will support write operations.
     create : `bool`, optional
@@ -122,19 +126,70 @@ class Registry:
     """
 
     @classmethod
-    def fromConfig(cls, config: Union[ButlerConfig, RegistryConfig, Config, str], create: bool = False,
+    def createFromConfig(cls, config: Optional[Union[RegistryConfig, str]] = None,
+                         dimensionConfig: Optional[Union[DimensionConfig, str]] = None,
+                         butlerRoot: Optional[str] = None) -> Registry:
+        """Create registry database and return `Registry` instance.
+
+        This method initializes database contents, database must be empty
+        prior to calling this method.
+
+        Parameters
+        ----------
+        config : `RegistryConfig` or `str`, optional
+            Registry configuration, if missing then default configuration will
+            be loaded from registry.yaml.
+        dimensionConfig : `DimensionConfig` or `str`, optional
+            Dimensions configuration, if missing then default configuration
+            will be loaded from dimensions.yaml.
+        butlerRoot : `str`, optional
+            Path to the repository root this `Registry` will manage.
+
+        Returns
+        -------
+        registry : `Registry`
+            A new `Registry` instance.
+        """
+        if isinstance(config, str):
+            config = RegistryConfig(config)
+        elif config is None:
+            config = RegistryConfig()
+        elif not isinstance(config, RegistryConfig):
+            raise TypeError(f"Incompatible Registry configuration type: {type(config)}")
+        config.replaceRoot(butlerRoot)
+
+        if isinstance(dimensionConfig, str):
+            dimensionConfig = DimensionConfig(config)
+        elif dimensionConfig is None:
+            dimensionConfig = DimensionConfig()
+        elif not isinstance(dimensionConfig, DimensionConfig):
+            raise TypeError(f"Incompatible Dimension configuration type: {type(dimensionConfig)}")
+
+        DatabaseClass = config.getDatabaseClass()
+        database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
+                                         namespace=config.get("namespace"))
+        attributes = doImport(config["managers", "attributes"])
+        opaque = doImport(config["managers", "opaque"])
+        dimensions = doImport(config["managers", "dimensions"])
+        collections = doImport(config["managers", "collections"])
+        datasets = doImport(config["managers", "datasets"])
+        datastoreBridges = doImport(config["managers", "datastores"])
+
+        return cls(database, dimensions=dimensions, attributes=attributes, opaque=opaque,
+                   collections=collections, datasets=datasets, datastoreBridges=datastoreBridges,
+                   dimensionConfig=dimensionConfig, create=True)
+
+    @classmethod
+    def fromConfig(cls, config: Union[ButlerConfig, RegistryConfig, Config, str],
                    butlerRoot: Optional[str] = None, writeable: bool = True) -> Registry:
         """Create `Registry` subclass instance from `config`.
 
-        Uses ``registry.cls`` from `config` to determine which subclass to
-        instantiate.
+        Registry database must be inbitialized prior to calling this method.
 
         Parameters
         ----------
         config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
             Registry configuration
-        create : `bool`, optional
-            Assume empty Registry and create a new one.
         butlerRoot : `str`, optional
             Path to the repository root this `Registry` will manage.
         writeable : `bool`, optional
@@ -154,7 +209,6 @@ class Registry:
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
                                          namespace=config.get("namespace"), writeable=writeable)
-        universe = DimensionUniverse(config)
         attributes = doImport(config["managers", "attributes"])
         opaque = doImport(config["managers", "opaque"])
         dimensions = doImport(config["managers", "dimensions"])
@@ -162,33 +216,60 @@ class Registry:
         datasets = doImport(config["managers", "datasets"])
         datastoreBridges = doImport(config["managers", "datastores"])
 
-        return cls(database, universe, dimensions=dimensions, attributes=attributes, opaque=opaque,
+        return cls(database, dimensions=dimensions, attributes=attributes, opaque=opaque,
                    collections=collections, datasets=datasets, datastoreBridges=datastoreBridges,
-                   writeable=writeable, create=create)
+                   dimensionConfig=None, writeable=writeable)
 
-    def __init__(self, database: Database, universe: DimensionUniverse, *,
+    def __init__(self, database: Database, *,
                  attributes: Type[ButlerAttributeManager],
                  opaque: Type[OpaqueTableStorageManager],
                  dimensions: Type[DimensionRecordStorageManager],
                  collections: Type[CollectionManager],
                  datasets: Type[DatasetRecordStorageManager],
                  datastoreBridges: Type[DatastoreRegistryBridgeManager],
+                 dimensionConfig: Optional[DimensionConfig] = None,
                  writeable: bool = True,
                  create: bool = False):
         self._db = database
         self.storageClasses = StorageClassFactory()
+
+        # With existing registry we have to read dimensions config from
+        # database before we initialize all other managers.
+        if dimensionConfig is None:
+            assert not create, "missing DimensionConfig when create=True"
+            with self._db.declareStaticTables(create=False) as context:
+                self._attributes = attributes.initialize(self._db, context)
+
+                versions = ButlerVersionsManager(
+                    self._attributes,
+                    dict(attributes=self._attributes)
+                )
+                # verify that configured versions are compatible with schema
+                versions.checkManagersConfig()
+                versions.checkManagersVersions(writeable)
+
+                # get serialized as a string from database
+                dimensionsString = self._attributes.get(_DIMENSIONS_ATTR)
+                if dimensionsString is not None:
+                    dimensionConfig = DimensionConfig(Config.fromString(dimensionsString, format="json"))
+                else:
+                    raise LookupError(f"Registry attribute {_DIMENSIONS_ATTR} is missing from database")
+
+        # make universe
+        universe = DimensionUniverse(dimensionConfig)
+
         with self._db.declareStaticTables(create=create) as context:
             self._attributes = attributes.initialize(self._db, context)
             self._dimensions = dimensions.initialize(self._db, context, universe=universe)
-            self._collections = collections.initialize(self._db, context)
+            self._collections = collections.initialize(self._db, context, dimensions=self._dimensions)
             self._datasets = datasets.initialize(self._db, context,
                                                  collections=self._collections,
-                                                 universe=self.dimensions)
+                                                 dimensions=self._dimensions)
             self._opaque = opaque.initialize(self._db, context)
             self._datastoreBridges = datastoreBridges.initialize(self._db, context,
                                                                  opaque=self._opaque,
                                                                  datasets=datasets,
-                                                                 universe=self.dimensions)
+                                                                 universe=self._dimensions.universe)
             versions = ButlerVersionsManager(
                 self._attributes,
                 dict(
@@ -203,6 +284,16 @@ class Registry:
             # store managers and their versions in attributes table
             context.addInitializer(lambda db: versions.storeManagersConfig())
             context.addInitializer(lambda db: versions.storeManagersVersions())
+            # dump universe config as json into attributes (faster than YAML)
+            json = dimensionConfig.dump(format="json")
+            if json is not None:
+                # Convert Optional[str] to str for mypy
+                json_str = json
+                context.addInitializer(
+                    lambda db: self._attributes.set(_DIMENSIONS_ATTR, json_str)
+                )
+            else:
+                raise RuntimeError("Unexpectedly failed to serialize DimensionConfig to JSON")
 
         if not create:
             # verify that configured versions are compatible with schema
@@ -216,8 +307,9 @@ class Registry:
                 # now.
                 _LOG.warning(f"Registry schema digest mismatch: {exc}")
 
+        self._dimensions.refresh()
         self._collections.refresh()
-        self._datasets.refresh(universe=self._dimensions.universe)
+        self._datasets.refresh()
 
     def __str__(self) -> str:
         return str(self._db)
@@ -440,9 +532,7 @@ class Registry:
             a call to `Registry.registerCollection`.
         children : `Any`
             An expression defining an ordered search of child collections,
-            generally an iterable of `str`.  Restrictions on the dataset types
-            to be searched can also be included, by passing mapping or an
-            iterable containing tuples; see
+            generally an iterable of `str`; see
             :ref:`daf_butler_collection_expressions` for more information.
 
         Raises
@@ -525,7 +615,7 @@ class Registry:
         If the dataset type is not registered the method will return without
         action.
         """
-        self._datasets.remove(name, universe=self._dimensions.universe)
+        self._datasets.remove(name)
 
     def getDatasetType(self, name: str) -> DatasetType:
         """Get the `DatasetType`.
@@ -565,10 +655,9 @@ class Registry:
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
         collections
-            An expression that fully or partially identifies the collections
-            to search for the dataset, such as a `str`, `DatasetType`, or
-            iterable  thereof.  See :ref:`daf_butler_collection_expressions`
-            for more information.
+            An expression that fully or partially identifies the collections to
+            search for the dataset; see
+            :ref:`daf_butler_collection_expressions` for more information.
         timespan : `Timespan`, optional
             A timespan that the validity range of the dataset must overlap.
             If not provided, any `~CollectionType.CALIBRATION` collections
@@ -612,7 +701,7 @@ class Registry:
         dataId = DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions,
                                             universe=self.dimensions, **kwargs)
         collections = CollectionSearch.fromExpression(collections)
-        for collectionRecord in collections.iter(self._collections, datasetType=storage.datasetType):
+        for collectionRecord in collections.iter(self._collections):
             if (collectionRecord.type is CollectionType.CALIBRATION
                     and (not storage.datasetType.isCalibration() or timespan is None)):
                 continue
@@ -663,7 +752,7 @@ class Registry:
                 raise LookupError(f"DatasetType with name '{datasetType}' has not been registered.")
         runRecord = self._collections.find(run)
         if runRecord.type is not CollectionType.RUN:
-            raise TypeError("Given collection is of type {runRecord.type.name}; RUN collection required.")
+            raise TypeError(f"Given collection is of type {runRecord.type.name}; RUN collection required.")
         assert isinstance(runRecord, RunRecord)
         expandedDataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions)
                            for dataId in dataIds]
@@ -692,7 +781,7 @@ class Registry:
             A ref to the Dataset, or `None` if no matching Dataset
             was found.
         """
-        ref = self._datasets.getDatasetRef(id, universe=self.dimensions)
+        ref = self._datasets.getDatasetRef(id)
         if ref is None:
             return None
         return ref
@@ -1153,10 +1242,9 @@ class Registry:
             See :ref:`daf_butler_collection_expressions` for more
             information.
         datasetType : `DatasetType`, optional
-            If provided, only yield collections that should be searched for
-            this dataset type according to ``expression``.  If this is
-            not provided, any dataset type restrictions in ``expression`` are
-            ignored.
+            If provided, only yield collections that may contain datasets of
+            this type.  This is a conservative approximation in general; it may
+            yield collections that do not have any such datasets.
         collectionTypes : `AbstractSet` [ `CollectionType` ], optional
             If provided, only yield collections of these types.
         flattenChains : `bool`, optional
@@ -1172,9 +1260,11 @@ class Registry:
         collection : `str`
             The name of a collection that matches ``expression``.
         """
+        # Right now the datasetTypes argument is completely ignored, but that
+        # is consistent with its [lack of] guarantees.  DM-24939 or a follow-up
+        # ticket will take care of that.
         query = CollectionQuery.fromExpression(expression)
-        for record in query.iter(self._collections, datasetType=datasetType,
-                                 collectionTypes=frozenset(collectionTypes),
+        for record in query.iter(self._collections, collectionTypes=frozenset(collectionTypes),
                                  flattenChains=flattenChains, includeChains=includeChains):
             yield record.name
 
@@ -1229,7 +1319,7 @@ class Registry:
         collections
             An expression that fully or partially identifies the collections
             to search for datasets, such as a `str`, `re.Pattern`, or iterable
-            thereof.  `...` can be used to datasets from all
+            thereof.  `...` can be used to find datasets from all
             `~CollectionType.RUN` collections (no other collections are
             necessary, because all datasets are in a ``RUN`` collection).  See
             :ref:`daf_butler_collection_expressions` for more information.
@@ -1567,7 +1657,7 @@ class Registry:
             storage = self._datasets[datasetType]
         else:
             storage = self._datasets[datasetType.name]
-        for collectionRecord in collections.iter(self._collections, datasetType=datasetType,
+        for collectionRecord in collections.iter(self._collections,
                                                  collectionTypes=frozenset(collectionTypes),
                                                  flattenChains=flattenChains):
             query = storage.select(collectionRecord)

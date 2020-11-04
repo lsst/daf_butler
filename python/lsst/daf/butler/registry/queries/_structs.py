@@ -29,7 +29,7 @@ from sqlalchemy.sql import ColumnElement
 
 from lsst.sphgeom import Region
 from ...core import (
-    DatabaseTimespanRepresentation,
+    TimespanDatabaseRepresentation,
     DataCoordinate,
     DatasetType,
     Dimension,
@@ -166,7 +166,12 @@ class QuerySummary:
         # - it's the most precise spatial element for its system in the
         #   requested dimensions (i.e. in `self.requested.spatial`);
         # - it isn't also given at query construction time.
-        result = NamedValueSet(self.mustHaveKeysJoined.spatial - self.dataId.graph.elements)
+        result: NamedValueSet[DimensionElement] = NamedValueSet()
+        for family in self.mustHaveKeysJoined.spatial:
+            element = family.choose(self.mustHaveKeysJoined.elements)
+            assert isinstance(element, DimensionElement)
+            if element not in self.dataId.graph.elements:
+                result.add(element)
         if len(result) == 1:
             # There's no spatial join, but there might be a WHERE filter based
             # on a given region.
@@ -197,7 +202,12 @@ class QuerySummary:
         # - it's the most precise temporal element for its system in the
         #   requested dimensions (i.e. in `self.requested.temporal`);
         # - it isn't also given at query construction time.
-        result = NamedValueSet(self.mustHaveKeysJoined.temporal - self.dataId.graph.elements)
+        result: NamedValueSet[DimensionElement] = NamedValueSet()
+        for family in self.mustHaveKeysJoined.temporal:
+            element = family.choose(self.mustHaveKeysJoined.elements)
+            assert isinstance(element, DimensionElement)
+            if element not in self.dataId.graph.elements:
+                result.add(element)
         if len(result) == 1 and not self.dataId.graph.temporal:
             # No temporal join or filter.  Even if this element might be
             # associated with temporal information, we don't need it for this
@@ -282,10 +292,10 @@ class QueryColumns:
     dimensions in `QuerySummary.requested` and `QuerySummary.dataId.graph`.
     """
 
-    timespans: NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]
+    timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]
     """Columns that correspond to timespans for elements that participate in a
     temporal join or filter in the query (`NamedKeyDict` mapping
-    `DimensionElement` to `DatabaseTimespanRepresentation`).
+    `DimensionElement` to `TimespanDatabaseRepresentation`).
 
     In a `Query`, the keys of this dictionary must be exactly the elements
     in `QuerySummary.temporal`.

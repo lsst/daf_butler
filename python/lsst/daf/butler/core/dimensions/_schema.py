@@ -31,10 +31,10 @@ from typing import Tuple, Type, TYPE_CHECKING
 
 from .. import ddl
 from ..named import NamedValueSet
-from ..timespan import DatabaseTimespanRepresentation
+from ..timespan import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .elements import DimensionElement, Dimension
+    from ._elements import DimensionElement, Dimension
 
 
 # Most regions are small (they're quadrilaterals), but visit ones can be quite
@@ -186,16 +186,16 @@ class DimensionElementFields:
             self._tableSpec.fields.add(REGION_FIELD_SPEC)
             names.append(REGION_FIELD_SPEC.name)
         if element.temporal is not None:
-            names.append(DatabaseTimespanRepresentation.NAME)
+            names.append(TimespanDatabaseRepresentation.NAME)
         self.names = tuple(names)
 
-    def makeTableSpec(self, tsRepr: Type[DatabaseTimespanRepresentation]) -> ddl.TableSpec:
+    def makeTableSpec(self, tsRepr: Type[TimespanDatabaseRepresentation]) -> ddl.TableSpec:
         """Construct a complete specification for a table that could hold the
         records of this element.
 
         Parameters
         ----------
-        tsRepr : `type` (`DatabaseTimespanRepresentation` subclass)
+        tsRepr : `type` (`TimespanDatabaseRepresentation` subclass)
             Class object that specifies how timespans are represented in the
             database.
 
@@ -216,6 +216,15 @@ class DimensionElementFields:
         else:
             spec = self._tableSpec
         return spec
+
+    def __str__(self) -> str:
+        lines = [f"{self.element.name}: "]
+        lines.extend(f"  {field.name}: {field.getPythonType().__name__}" for field in self.standard)
+        if self.element.spatial is not None:
+            lines.append("  region: lsst.sphgeom.ConvexPolygon")
+        if self.element.temporal is not None:
+            lines.append("  timespan: lsst.daf.butler.Timespan")
+        return "\n".join(lines)
 
     element: DimensionElement
     """The dimension element these fields correspond to (`DimensionElement`).

@@ -26,43 +26,61 @@ from typing import Dict, Iterable, Optional, Set
 
 import sqlalchemy
 
+from lsst.utils import doImport
+
 from ...core import (
-    DatabaseTimespanRepresentation,
+    Config,
+    DatabaseDimensionElement,
     DataCoordinate,
     DataCoordinateIterable,
     DataCoordinateSet,
     DimensionElement,
     DimensionRecord,
+    GovernorDimension,
     NamedKeyDict,
+    NamedKeyMapping,
+    TimespanDatabaseRepresentation,
 )
-from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
+from ..interfaces import (
+    Database,
+    DatabaseDimensionRecordStorage,
+    GovernorDimensionRecordStorage,
+    StaticTablesContext,
+)
 from ..queries import QueryBuilder
 
 
-class CachingDimensionRecordStorage(DimensionRecordStorage):
+class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
     """A record storage implementation that adds caching to some other nested
     storage implementation.
 
     Parameters
     ----------
-    nested : `DimensionRecordStorage`
+    nested : `DatabaseDimensionRecordStorage`
         The other storage to cache fetches from and to delegate all other
         operations to.
     """
-    def __init__(self, nested: DimensionRecordStorage):
+    def __init__(self, nested: DatabaseDimensionRecordStorage):
         self._nested = nested
         self._cache: Dict[DataCoordinate, Optional[DimensionRecord]] = {}
 
     @classmethod
-    def initialize(cls, db: Database, element: DimensionElement, *,
-                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
-        # Docstring inherited from DimensionRecordStorage.
-        NestedClass = DimensionRecordStorage.getDefaultImplementation(element, ignoreCached=True)
-        nested = NestedClass.initialize(db, element, context=context)
+    def initialize(
+        cls,
+        db: Database,
+        element: DatabaseDimensionElement, *,
+        context: Optional[StaticTablesContext] = None,
+        config: Config,
+        governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+    ) -> DatabaseDimensionRecordStorage:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
+        config = config["nested"]
+        NestedClass = doImport(config["cls"])
+        nested = NestedClass.initialize(db, element, context=context, config=config, governors=governors)
         return cls(nested)
 
     @property
-    def element(self) -> DimensionElement:
+    def element(self) -> DatabaseDimensionElement:
         # Docstring inherited from DimensionRecordStorage.element.
         return self._nested.element
 
@@ -75,7 +93,7 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         return self._nested.join(builder, regions=regions, timespans=timespans)

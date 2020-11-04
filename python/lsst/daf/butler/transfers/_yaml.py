@@ -37,6 +37,7 @@ from typing import (
     Tuple,
     Type,
 )
+import warnings
 from collections import defaultdict
 
 import yaml
@@ -57,9 +58,22 @@ from ..core import (
 from ..core.utils import iterable
 from ..core.named import NamedValueSet
 from ..registry import CollectionType, Registry
-from ..registry.wildcards import DatasetTypeRestriction
-from ..registry.interfaces import ChainedCollectionRecord, CollectionRecord, RunRecord
+from ..registry.interfaces import (
+    ChainedCollectionRecord,
+    CollectionRecord,
+    RunRecord,
+    VersionTuple,
+)
+from ..registry.versions import IncompatibleVersionError
 from ._interfaces import RepoExportBackend, RepoImportBackend
+
+
+EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 0)
+"""Export format version.
+
+Files with a different major version or a newer minor version cannot be read by
+this version of the code.
+"""
 
 
 class YamlRepoExportBackend(RepoExportBackend):
@@ -96,10 +110,7 @@ class YamlRepoExportBackend(RepoExportBackend):
             data["timespan_begin"] = record.timespan.begin
             data["timespan_end"] = record.timespan.end
         elif isinstance(record, ChainedCollectionRecord):
-            data["children"] = [
-                [name, list(restriction.names) if restriction.names is not ... else None]  # type: ignore
-                for name, restriction in record.children
-            ]
+            data["children"] = list(record.children)
         self.data.append(data)
 
     def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset) -> None:
@@ -162,7 +173,7 @@ class YamlRepoExportBackend(RepoExportBackend):
         yaml.dump(
             {
                 "description": "Butler Data Repository Export",
-                "version": 0,
+                "version": str(EXPORT_FORMAT_VERSION),
                 "data": self.data,
             },
             stream=self.stream,
@@ -189,10 +200,24 @@ class YamlRepoImportBackend(RepoImportBackend):
         # because `register` can't be put inside a transaction, we'd rather not
         # run that at all if there's going to be problem later in `load`.
         wrapper = yaml.safe_load(stream)
-        # TODO: When version numbers become meaningful, check here that we can
-        # read the version in the file.
+        if wrapper["version"] == 0:
+            # Grandfather-in 'version: 0' -> 1.0.0, which is what we wrote
+            # before we really tried to do versioning here.
+            fileVersion = VersionTuple(1, 0, 0)
+        else:
+            fileVersion = VersionTuple.fromString(wrapper["version"])
+            if fileVersion.major != EXPORT_FORMAT_VERSION.major:
+                raise IncompatibleVersionError(
+                    f"Cannot read repository export file with version={fileVersion} "
+                    f"({EXPORT_FORMAT_VERSION.major}.x.x required)."
+                )
+            if fileVersion.minor > EXPORT_FORMAT_VERSION.minor:
+                raise IncompatibleVersionError(
+                    f"Cannot read repository export file with version={fileVersion} "
+                    f"< {EXPORT_FORMAT_VERSION.major}.{EXPORT_FORMAT_VERSION.minor}.x required."
+                )
         self.runs: Dict[str, Tuple[Optional[str], Timespan]] = {}
-        self.chains: Dict[str, List[Tuple[str, DatasetTypeRestriction]]] = {}
+        self.chains: Dict[str, List[str]] = {}
         self.collections: Dict[str, CollectionType] = {}
         self.datasetTypes: NamedValueSet[DatasetType] = NamedValueSet()
         self.dimensions: Mapping[DimensionElement, List[DimensionRecord]] = defaultdict(list)
@@ -226,12 +251,16 @@ class YamlRepoImportBackend(RepoImportBackend):
                     )
                 elif collectionType is CollectionType.CHAINED:
                     children = []
-                    for name, restriction_data in data["children"]:
-                        if restriction_data is None:
-                            restriction = DatasetTypeRestriction.any
-                        else:
-                            restriction = DatasetTypeRestriction.fromExpression(restriction_data)
-                        children.append((name, restriction))
+                    for child in data["children"]:
+                        if not isinstance(child, str):
+                            warnings.warn(
+                                f"CHAINED collection {data['name']} includes restrictions on child "
+                                "collection searches, which are no longer suppored and will be ignored."
+                            )
+                            # Old form with dataset type restrictions only,
+                            # supported for backwards compatibility.
+                            child, _ = child
+                        children.append(child)
                     self.chains[data["name"]] = children
                 else:
                     self.collections[data["name"]] = collectionType

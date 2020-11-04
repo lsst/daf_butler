@@ -23,6 +23,7 @@ from __future__ import annotations
 __all__ = ["RegistryTests"]
 
 from abc import ABC, abstractmethod
+from collections import defaultdict
 import itertools
 import os
 import re
@@ -57,7 +58,6 @@ from .._registry import (
     Registry,
     RegistryConfig,
 )
-from ..wildcards import DatasetTypeRestriction
 from ..interfaces import MissingCollectionError, ButlerAttributeExistsError
 
 
@@ -108,19 +108,6 @@ class RegistryTests(ABC):
             backend = YamlRepoImportBackend(stream, registry)
         backend.register()
         backend.load(datastore=None)
-
-    def assertRowCount(self, registry: Registry, table: str, count: int):
-        """Check the number of rows in table.
-        """
-        # TODO: all tests that rely on this method should be rewritten, as it
-        # needs to depend on Registry implementation details to have any chance
-        # of working.
-        sql = sqlalchemy.sql.select(
-            [sqlalchemy.sql.func.count()]
-        ).select_from(
-            getattr(registry._tables, table)
-        )
-        self.assertEqual(registry._db.query(sql).scalar(), count)
 
     def testOpaque(self):
         """Tests for `Registry.registerOpaqueTable`,
@@ -283,11 +270,11 @@ class RegistryTests(ABC):
         # Insert a few more dimension records for the next test.
         registry.insertDimensionData(
             "exposure",
-            {"instrument": "Cam1", "id": 1, "name": "one", "physical_filter": "Cam1-G"},
+            {"instrument": "Cam1", "id": 1, "obs_id": "one", "physical_filter": "Cam1-G"},
         )
         registry.insertDimensionData(
             "exposure",
-            {"instrument": "Cam1", "id": 2, "name": "two", "physical_filter": "Cam1-G"},
+            {"instrument": "Cam1", "id": 2, "obs_id": "two", "physical_filter": "Cam1-G"},
         )
         registry.insertDimensionData(
             "visit_system",
@@ -506,10 +493,7 @@ class RegistryTests(ABC):
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
         self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
         self.assertIsNone(registry.findDataset(datasetType, dataId3, collections=tag1))
-        # Register a chained collection that searches:
-        # 1. 'tag1'
-        # 2. 'run1', but only for the flat dataset
-        # 3. 'run2'
+        # Register a chained collection that searches [tag1, run2]
         chain1 = "chain1"
         registry.registerCollection(chain1, type=CollectionType.CHAINED)
         self.assertIs(registry.getCollectionType(chain1), CollectionType.CHAINED)
@@ -524,12 +508,10 @@ class RegistryTests(ABC):
         with self.assertRaises(ValueError):
             registry.setCollectionChain(chain1, [tag1, chain1])
         # Add the child collections.
-        registry.setCollectionChain(chain1, [tag1, (run1, "flat"), run2])
+        registry.setCollectionChain(chain1, [tag1, run2])
         self.assertEqual(
             list(registry.getCollectionChain(chain1)),
-            [(tag1, DatasetTypeRestriction.any),
-             (run1, DatasetTypeRestriction.fromExpression("flat")),
-             (run2, DatasetTypeRestriction.any)]
+            [tag1, run2]
         )
         # Searching for dataId1 or dataId2 in the chain should return ref1 and
         # ref2, because both are in tag1.
@@ -538,21 +520,15 @@ class RegistryTests(ABC):
         # Now disassociate ref2 from tag1.  The search (for bias) with
         # dataId2 in chain1 should then:
         # 1. not find it in tag1
-        # 2. not look in tag2, because it's restricted to flat here
-        # 3. find a different dataset in run2
+        # 2. find a different dataset in run2
         registry.disassociate(tag1, [ref2])
         ref2b = registry.findDataset(datasetType, dataId2, collections=chain1)
         self.assertNotEqual(ref2b, ref2)
         self.assertEqual(ref2b, registry.findDataset(datasetType, dataId2, collections=run2))
-        # Look in the chain for a flat that is in run1; should get the
-        # same ref as if we'd searched run1 directly.
-        dataId3 = {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}
-        self.assertEqual(registry.findDataset("flat", dataId3, collections=chain1),
-                         registry.findDataset("flat", dataId3, collections=run1),)
         # Define a new chain so we can test recursive chains.
         chain2 = "chain2"
         registry.registerCollection(chain2, type=CollectionType.CHAINED)
-        registry.setCollectionChain(chain2, [(run2, "bias"), chain1])
+        registry.setCollectionChain(chain2, [run2, chain1])
         # Query for collections matching a regex.
         self.assertCountEqual(
             list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),
@@ -682,12 +658,12 @@ class RegistryTests(ABC):
         )
         registry.insertDimensionData(
             "exposure",
-            dict(instrument="DummyCam", id=100, name="100", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=101, name="101", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=110, name="110", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=111, name="111", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=200, name="200", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=201, name="201", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=100, obs_id="100", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=101, obs_id="101", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=110, obs_id="110", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=111, obs_id="111", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=200, obs_id="200", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=201, obs_id="201", physical_filter="dummy_r"),
         )
         registry.insertDimensionData(
             "visit_definition",
@@ -910,42 +886,67 @@ class RegistryTests(ABC):
                                      where="skymap = 'Mars'").toSet()
         self.assertEqual(len(rows), 0)
 
-    def testSpatialMatch(self):
-        """Test involving spatial match using join tables.
-
-        Note that realistic test needs a reasonably-defined skypix and regions
-        in registry tables which is hard to implement in this simple test.
-        So we do not actually fill registry with any data and all queries will
-        return empty result, but this is still useful for coverage of the code
-        that generates query.
+    def testSpatialJoin(self):
+        """Test queries that involve spatial overlap joins.
         """
         registry = self.makeRegistry()
+        self.loadData(registry, "hsc-rc2-subset.yaml")
 
-        # dataset types
-        collection = "test"
-        registry.registerRun(name=collection)
-        storageClass = StorageClass("testDataset")
-        registry.storageClasses.registerStorageClass(storageClass)
+        # Dictionary of spatial DatabaseDimensionElements, keyed by the name of
+        # the TopologicalFamily they belong to.  We'll relate all elements in
+        # each family to all of the elements in each other family.
+        families = defaultdict(set)
+        # Dictionary of {element.name: {dataId: region}}.
+        regions = {}
+        for element in registry.dimensions.getDatabaseElements():
+            if element.spatial is not None:
+                families[element.spatial.name].add(element)
+                regions[element.name] = {
+                    record.dataId: record.region for record in registry.queryDimensionRecords(element)
+                }
 
-        calexpType = DatasetType(name="CALEXP",
-                                 dimensions=registry.dimensions.extract(("instrument", "visit", "detector")),
-                                 storageClass=storageClass)
-        registry.registerDatasetType(calexpType)
+        # If this check fails, it's not necessarily a problem - it may just be
+        # a reasonable change to the default dimension definitions - but the
+        # test below depends on there being more than one family to do anything
+        # useful.
+        self.assertEqual(len(families), 2)
 
-        coaddType = DatasetType(name="deepCoadd_calexp",
-                                dimensions=registry.dimensions.extract(("skymap", "tract", "patch",
-                                                                        "band")),
-                                storageClass=storageClass)
-        registry.registerDatasetType(coaddType)
+        # Overlap DatabaseDimensionElements with each other.
+        for family1, family2 in itertools.combinations(families, 2):
+            for element1, element2 in itertools.product(families[family1], families[family2]):
+                graph = DimensionGraph.union(element1.graph, element2.graph)
+                # Construct expected set of overlapping data IDs via a
+                # brute-force comparison of the regions we've already fetched.
+                expected = {
+                    DataCoordinate.standardize(
+                        {**dataId1.byName(), **dataId2.byName()},
+                        graph=graph
+                    )
+                    for (dataId1, region1), (dataId2, region2)
+                    in itertools.product(regions[element1.name].items(), regions[element2.name].items())
+                    if not region1.isDisjointFrom(region2)
+                }
+                self.assertGreater(len(expected), 2, msg="Test that we aren't just comparing empty sets.")
+                queried = set(registry.queryDataIds(graph))
+                self.assertEqual(expected, queried)
 
-        dimensions = DimensionGraph(
-            registry.dimensions,
-            dimensions=(calexpType.dimensions.required | coaddType.dimensions.required)
-        )
-
-        # without data this should run OK but return empty set
-        rows = registry.queryDataIds(dimensions, datasets=calexpType, collections=collection).toSet()
-        self.assertEqual(len(rows), 0)
+        # Overlap each DatabaseDimensionElement with the commonSkyPix system.
+        commonSkyPix = registry.dimensions.commonSkyPix
+        for elementName, regions in regions.items():
+            graph = DimensionGraph.union(registry.dimensions[elementName].graph, commonSkyPix.graph)
+            expected = set()
+            for dataId, region in regions.items():
+                for begin, end in commonSkyPix.pixelization.envelope(region):
+                    expected.update(
+                        DataCoordinate.standardize(
+                            {commonSkyPix.name: index, **dataId.byName()},
+                            graph=graph
+                        )
+                        for index in range(begin, end)
+                    )
+            self.assertGreater(len(expected), 2, msg="Test that we aren't just comparing empty sets.")
+            queried = set(registry.queryDataIds(graph))
+            self.assertEqual(expected, queried)
 
     def testAbstractQuery(self):
         """Test that we can run a query that just lists the known
@@ -971,8 +972,8 @@ class RegistryTests(ABC):
         """Test basic functionality of attribute manager.
         """
         # number of attributes with schema versions in a fresh database,
-        # 6 managers with 3 records per manager
-        VERSION_COUNT = 6 * 3
+        # 6 managers with 3 records per manager, plus config for dimensions
+        VERSION_COUNT = 6 * 3 + 1
 
         registry = self.makeRegistry()
         attributes = registry._attributes

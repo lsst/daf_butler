@@ -20,27 +20,47 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["DimensionRecordStorage", "DimensionRecordStorageManager"]
+__all__ = (
+    "DatabaseDimensionOverlapStorage",
+    "DatabaseDimensionRecordStorage",
+    "DimensionRecordStorage",
+    "DimensionRecordStorageManager",
+    "GovernorDimensionRecordStorage",
+    "SkyPixDimensionRecordStorage",
+)
 
 from abc import ABC, abstractmethod
-from typing import Iterable, Optional, Type, TYPE_CHECKING
+from typing import (
+    AbstractSet,
+    Callable,
+    Iterable,
+    Optional,
+    Tuple,
+    TYPE_CHECKING,
+    Union,
+)
 
 import sqlalchemy
 
-from ...core import SkyPixDimension
+from ...core import DatabaseDimensionElement, DimensionGraph, GovernorDimension, SkyPixDimension
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import (
-        DatabaseTimespanRepresentation,
+        Config,
         DataCoordinateIterable,
         DimensionElement,
         DimensionRecord,
         DimensionUniverse,
         NamedKeyDict,
+        NamedKeyMapping,
+        TimespanDatabaseRepresentation,
     )
     from ..queries import QueryBuilder
     from ._database import Database, StaticTablesContext
+
+
+OverlapSide = Union[SkyPixDimension, Tuple[DatabaseDimensionElement, str]]
 
 
 class DimensionRecordStorage(ABC):
@@ -57,74 +77,6 @@ class DimensionRecordStorage(ABC):
     potentially-defaultable implementations are extremely trivial, so asking
     subclasses to provide them is not a significant burden.
     """
-
-    @classmethod
-    @abstractmethod
-    def initialize(cls, db: Database, element: DimensionElement, *,
-                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
-        """Construct an instance of this class using a standardized interface.
-
-        Parameters
-        ----------
-        db : `Database`
-            Interface to the underlying database engine and namespace.
-        element : `DimensionElement`
-            Dimension element the new instance will manage records for.
-        context : `StaticTablesContext`, optional
-            If provided, an object to use to create any new tables.  If not
-            provided, ``db.ensureTableExists`` should be used instead.
-
-        Returns
-        -------
-        storage : `DimensionRecordStorage`
-            A new `DimensionRecordStorage` subclass instance.
-        """
-        raise NotImplementedError()
-
-    @staticmethod
-    def getDefaultImplementation(element: DimensionElement, ignoreCached: bool = False
-                                 ) -> Type[DimensionRecordStorage]:
-        """Return the default `DimensionRecordStorage` implementation for the
-        given `DimensionElement`.
-
-        Parameters
-        ----------
-        element : `DimensionElement`
-            The element whose properties should be examined to determine the
-            appropriate default implementation class.
-        ignoreCached : `bool`, optional
-            If `True`, ignore `DimensionElement.cached` and always return the
-            storage implementation that would be used without caching.
-
-        Returns
-        -------
-        cls : `type`
-            A concrete subclass of `DimensionRecordStorage`.
-
-        Notes
-        -----
-        At present, these defaults are always used, but we may add support for
-        explicitly setting the class to use in configuration in the future.
-        """
-        if not ignoreCached and element.cached:
-            from ..dimensions.caching import CachingDimensionRecordStorage
-            return CachingDimensionRecordStorage
-        elif element.hasTable():
-            if element.viewOf is not None:
-                if element.spatial is not None:
-                    raise NotImplementedError("Spatial view dimension storage is not supported.")
-                from ..dimensions.query import QueryDimensionRecordStorage
-                return QueryDimensionRecordStorage
-            elif element.spatial is not None:
-                from ..dimensions.spatial import SpatialDimensionRecordStorage
-                return SpatialDimensionRecordStorage
-            else:
-                from ..dimensions.table import TableDimensionRecordStorage
-                return TableDimensionRecordStorage
-        elif isinstance(element, SkyPixDimension):
-            from ..dimensions.skypix import SkyPixDimensionRecordStorage
-            return SkyPixDimensionRecordStorage
-        raise NotImplementedError(f"No default DimensionRecordStorage class for {element}.")
 
     @property
     @abstractmethod
@@ -148,7 +100,7 @@ class DimensionRecordStorage(ABC):
         self,
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, DatabaseTimespanRepresentation]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> sqlalchemy.sql.FromClause:
         """Add the dimension element's logical table to a query under
         construction.
@@ -273,6 +225,216 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
 
+class GovernorDimensionRecordStorage(DimensionRecordStorage):
+    """Intermediate interface for `DimensionRecordStorage` objects that provide
+    storage for `GovernorDimension` instances.
+    """
+
+    @classmethod
+    @abstractmethod
+    def initialize(cls, db: Database, dimension: GovernorDimension, *,
+                   context: Optional[StaticTablesContext] = None,
+                   config: Config,
+                   ) -> GovernorDimensionRecordStorage:
+        """Construct an instance of this class using a standardized interface.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        dimension : `GovernorDimension`
+            Dimension the new instance will manage records for.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+        config : `Config`
+            Extra configuration options specific to the implementation.
+
+        Returns
+        -------
+        storage : `GovernorDimensionRecordStorage`
+            A new `GovernorDimensionRecordStorage` subclass instance.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def element(self) -> GovernorDimension:
+        # Docstring inherited from DimensionRecordStorage.
+        raise NotImplementedError()
+
+    @abstractmethod
+    def refresh(self) -> None:
+        """Ensure all other operations on this manager are aware of any
+        changes made by other clients since it was initialized or last
+        refreshed.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def values(self) -> AbstractSet[str]:
+        """All primary key values for this dimension (`set` [ `str` ]).
+
+        This may rely on an in-memory cache and hence not reflect changes to
+        the set of values made by other `Butler` / `Registry` clients.  Call
+        `refresh` to ensure up-to-date results.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def table(self) -> sqlalchemy.schema.Table:
+        """The SQLAlchemy table that backs this dimension
+        (`sqlalchemy.schema.Table`).
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def registerInsertionListener(self, callback: Callable[[DimensionRecord], None]) -> None:
+        """Add a function or method to be called after new records for this
+        dimension are inserted by `insert` or `sync`.
+
+        Parameters
+        ----------
+        callback
+            Callable that takes a single `DimensionRecord` argument.  This will
+            be called immediately after any successful insertion, in the same
+            transaction.
+        """
+        raise NotImplementedError()
+
+
+class SkyPixDimensionRecordStorage(DimensionRecordStorage):
+    """Intermediate interface for `DimensionRecordStorage` objects that provide
+    storage for `SkyPixDimension` instances.
+    """
+
+    @property
+    @abstractmethod
+    def element(self) -> SkyPixDimension:
+        # Docstring inherited from DimensionRecordStorage.
+        raise NotImplementedError()
+
+
+class DatabaseDimensionRecordStorage(DimensionRecordStorage):
+    """Intermediate interface for `DimensionRecordStorage` objects that provide
+    storage for `DatabaseDimensionElement` instances.
+    """
+
+    @classmethod
+    @abstractmethod
+    def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
+                   context: Optional[StaticTablesContext] = None,
+                   config: Config,
+                   governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+                   ) -> DatabaseDimensionRecordStorage:
+        """Construct an instance of this class using a standardized interface.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        element : `DatabaseDimensionElement`
+            Dimension element the new instance will manage records for.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+        config : `Config`
+            Extra configuration options specific to the implementation.
+        governors : `NamedKeyMapping`
+            Mapping containing all governor dimension storage implementations.
+
+        Returns
+        -------
+        storage : `DatabaseDimensionRecordStorage`
+            A new `DatabaseDimensionRecordStorage` subclass instance.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def element(self) -> DatabaseDimensionElement:
+        # Docstring inherited from DimensionRecordStorage.
+        raise NotImplementedError()
+
+    def connect(self, overlaps: DatabaseDimensionOverlapStorage) -> None:
+        """Inform this record storage object of the object that will manage
+        the overlaps between this element and another element.
+
+        This will only be called if ``self.element.spatial is not None``,
+        and will be called immediately after construction (before any other
+        methods).  In the future, implementations will be required to call a
+        method on any connected overlap storage objects any time new records
+        for the element are inserted.
+
+        Parameters
+        ----------
+        overlaps : `DatabaseDimensionRecordStorage`
+            Object managing overlaps between this element and another
+            database-backed element.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not support spatial elements.")
+
+
+class DatabaseDimensionOverlapStorage(ABC):
+    """A base class for objects that manage overlaps between a pair of
+    database-backed dimensions.
+    """
+
+    @classmethod
+    @abstractmethod
+    def initialize(
+        cls,
+        db: Database,
+        elementStorage: Tuple[DatabaseDimensionRecordStorage, DatabaseDimensionRecordStorage],
+        governorStorage: Tuple[GovernorDimensionRecordStorage, GovernorDimensionRecordStorage],
+        context: Optional[StaticTablesContext] = None,
+    ) -> DatabaseDimensionOverlapStorage:
+        """Construct an instance of this class using a standardized interface.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        elementStorage : `tuple` [ `DatabaseDimensionRecordStorage` ]
+            Storage objects for the elements this object will related.
+        governorStorage : `tuple` [ `GovernorDimensionRecordStorage` ]
+            Storage objects for the governor dimensions of the elements this
+            object will related.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+
+        Returns
+        -------
+        storage : `DatabaseDimensionOverlapStorage`
+            A new `DatabaseDimensionOverlapStorage` subclass instance.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def elements(self) -> Tuple[DatabaseDimensionElement, DatabaseDimensionElement]:
+        """The pair of elements whose overlaps this object manages.
+
+        The order of elements is the same as their ordering within the
+        `DimensionUniverse`.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
+        """Return tables used for schema digest.
+
+        Returns
+        -------
+        tables : `Iterable` [ `sqlalchemy.schema.Table` ]
+            Possibly empty set of tables for schema digest calculations.
+        """
+        raise NotImplementedError()
+
+
 class DimensionRecordStorageManager(VersionedExtension):
     """An interface for managing the dimension records in a `Registry`.
 
@@ -322,8 +484,8 @@ class DimensionRecordStorageManager(VersionedExtension):
     @abstractmethod
     def refresh(self) -> None:
         """Ensure all other operations on this manager are aware of any
-        dataset types that may have been registered by other clients since
-        it was initialized or last refreshed.
+        changes made by other clients since it was initialized or last
+        refreshed.
         """
         raise NotImplementedError()
 
@@ -382,6 +544,53 @@ class DimensionRecordStorageManager(VersionedExtension):
         TransactionInterruption
             Raised if this operation is invoked within a `Database.transaction`
             context.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def saveDimensionGraph(self, graph: DimensionGraph) -> int:
+        """Save a `DimensionGraph` definition to the database, allowing it to
+        be retrieved later via the returned key.
+
+        Parameters
+        ----------
+        graph : `DimensionGraph`
+            Set of dimensions to save.
+
+        Returns
+        -------
+        key : `int`
+            Integer used as the unique key for this `DimensionGraph` in the
+            database.
+
+        Raises
+        ------
+        TransactionInterruption
+            Raised if this operation is invoked within a `Database.transaction`
+            context.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def loadDimensionGraph(self, key: int) -> DimensionGraph:
+        """Retrieve a `DimensionGraph` that was previously saved in the
+        database.
+
+        Parameters
+        ----------
+        key : `int`
+            Integer used as the unique key for this `DimensionGraph` in the
+            database.
+
+        Returns
+        -------
+        graph : `DimensionGraph`
+            Retrieved graph.
+
+        Raises
+        ------
+        KeyError
+            Raised if the given key cannot be found in the database.
         """
         raise NotImplementedError()
 

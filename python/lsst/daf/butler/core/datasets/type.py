@@ -146,6 +146,8 @@ class DatasetType:
                                  "a universe must be provided.")
             dimensions = universe.extract(dimensions)
         self._dimensions = dimensions
+        if name in self._dimensions.universe.getGovernorDimensions().names:
+            raise ValueError(f"Governor dimension name {name} cannot be used as a dataset type name.")
         if not isinstance(storageClass, (StorageClass, str)):
             raise ValueError("StorageClass argument must be StorageClass or str. "
                              f"Got {storageClass}")

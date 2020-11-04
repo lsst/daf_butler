@@ -31,10 +31,10 @@ from ...core import (
     SkyPixDimension,
     Dimension,
     DatasetType,
-    NamedKeyDict,
-    NamedValueSet,
     SimpleQuery,
 )
+
+from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 
 from .._collectionType import CollectionType
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns, RegistryManagers
@@ -146,7 +146,7 @@ class QueryBuilder:
         # If we are searching all collections with no constraints, loop over
         # RUN collections only, because that will include all datasets.
         collectionTypes: AbstractSet[CollectionType]
-        if collections == CollectionQuery.any:
+        if collections == CollectionQuery():
             collectionTypes = {CollectionType.RUN}
         else:
             collectionTypes = CollectionType.all()
@@ -161,7 +161,6 @@ class QueryBuilder:
         baseColumnNames = {"id", runKeyName} if isResult else set()
         baseColumnNames.update(datasetType.dimensions.required.names)
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
-                                                                 datasetType=datasetType,
                                                                  collectionTypes=collectionTypes)):
             if collectionRecord.type is CollectionType.CALIBRATION:
                 if datasetType.isCalibration():
@@ -260,7 +259,7 @@ class QueryBuilder:
         self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
         return True
 
-    def joinTable(self, table: sqlalchemy.sql.FromClause, dimensions: NamedValueSet[Dimension], *,
+    def joinTable(self, table: sqlalchemy.sql.FromClause, dimensions: NamedValueAbstractSet[Dimension], *,
                   datasets: Optional[DatasetQueryColumns] = None) -> None:
         """Join an arbitrary table to the query via dimension relationships.
 
