@@ -153,7 +153,7 @@ class JsonFormatter(FileFormatter):
         inMemoryDataset : `object`
             Object of expected type `pytype`.
         """
-        if pytype is not None and not hasattr(builtins, pytype.__name__):
+        if inMemoryDataset is not None and pytype is not None and not hasattr(builtins, pytype.__name__):
             if storageClass.isComposite():
                 inMemoryDataset = storageClass.delegate().assemble(inMemoryDataset, pytype=pytype)
             elif not isinstance(inMemoryDataset, pytype):
