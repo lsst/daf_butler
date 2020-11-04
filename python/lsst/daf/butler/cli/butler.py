@@ -28,13 +28,11 @@ import traceback
 import yaml
 
 from .cliLog import CliLog
-from .opt import log_level_option
+from .opt import log_level_option, long_log_option
 from lsst.utils import doImport
 
 
 log = logging.getLogger(__name__)
-
-LONG_LOG_FLAG = "--long-log"
 
 
 class LoaderCLI(click.MultiCommand, abc.ABC):
@@ -122,9 +120,17 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         """Init the logging system and config it for the command.
 
         Subcommands may further configure the log settings."""
-        CliLog.initLog(longlog=LONG_LOG_FLAG in ctx.params)
-        if log_level_option.name() in ctx.params:
-            CliLog.setLogLevels(ctx.params[log_level_option.name()])
+        if isinstance(ctx, click.Context):
+            CliLog.initLog(longlog=ctx.params.get(long_log_option.name(), False))
+            if log_level_option.name() in ctx.params:
+                CliLog.setLogLevels(ctx.params[log_level_option.name()])
+        else:
+            # This works around a bug in sphinx-click, where it passes in the
+            # click.MultiCommand instead of the context.
+            # https://github.com/click-contrib/sphinx-click/issues/70
+            CliLog.initLog(longlog=False)
+            logging.debug("The passed-in context was not a click.Context, could not determine --long-log or "
+                          "--log-level values.")
 
     @classmethod
     def getPluginList(cls):
@@ -301,9 +307,11 @@ class ButlerCLI(LoaderCLI):
 
 @click.command(cls=ButlerCLI, context_settings=dict(help_option_names=["-h", "--help"]))
 @log_level_option()
-def cli(log_level):
+@long_log_option()
+def cli(log_level, long_log):
     # log_level is handled by get_command and list_commands, and is called in
-    # one of those functions before this is called.
+    # one of those functions before this is called. long_log is handled by
+    # setup_logging.
     pass
 
 

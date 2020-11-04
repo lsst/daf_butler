@@ -39,17 +39,44 @@ log4j.appender.A1.layout.ConversionPattern={}
 
 
 class CliLog:
-    """Interface for managing python logging and lsst.log. Handles
-    initialization so that lsst.log is a handler for python logging.
+    """Interface for managing python logging and ``lsst.log``.
 
-    Handles log uninitialization, which allows command line interface code that
-    initializes logging to run unit tests that execute in batches, without
-    affecting other unit tests. """
+    .. warning::
+
+       When ``lsst.log`` is importable it is the primary logger, and
+       ``lsst.log`` is set up to be a handler for python logging - so python
+       logging will be processed by ``lsst.log``.
+
+    This class defines log format strings for the log output and timestamp
+    formats, for both ``lsst.log`` and python logging. If lsst.log is
+    importable then the ``lsstLog_`` format strings will be used, otherwise
+    the ``pylog_`` format strings will be used.
+
+    This class can perform log uninitialization, which allows command line
+    interface code that initializes logging to run unit tests that execute in
+    batches, without affecting other unit tests. See ``resetLog``."""
 
     defaultLsstLogLevel = lsstLog.FATAL if lsstLog is not None else None
 
-    longLogFmt = "%-5p %d{yyyy-MM-ddTHH:mm:ss.SSSZ} %c (%X{LABEL})(%F:%L)- %m%n"
-    normalLogFmt = "%c %p: %m%n"
+    lsstLog_longLogFmt = "%-5p %d{yyyy-MM-ddTHH:mm:ss.SSSZ} %c (%X{LABEL})(%F:%L)- %m%n"
+    """The log format used when the lsst.log package is importable and the log
+    is initialized with longlog=True."""
+
+    lsstLog_normalLogFmt = "%c %p: %m%n"
+    """The log format used when the lsst.log package is importable and the log
+    is initialized with longlog=False."""
+
+    pylog_longLogFmt = "%(levelname)s %(asctime)s %(name)s %(filename)s:%(lineno)s - %(message)s"
+    """The log format used when the lsst.log package is not importable and the
+    log is initialized with longlog=True."""
+
+    pylog_longLogDateFmt = "%Y-%m-%dT%H:%M:%S%z"
+    """The log date format used when the lsst.log package is not importable and
+    the log is initialized with longlog=True."""
+
+    pylog_normalFmt = "%(name)s %(levelname)s: %(message)s"
+    """The log format used when the lsst.log package is not importable and the
+    log is initialized with longlog=False."""
 
     _initialized = False
     _lsstLogHandler = None
@@ -83,7 +110,8 @@ class CliLog:
             # LSST_LOG_CONFIG exists. The file it points to would already
             # configure lsst.log.
             if not os.path.isfile(os.environ.get("LSST_LOG_CONFIG", "")):
-                lsstLog.configure_prop(_LOG_PROP.format(cls.longLogFmt if longlog else cls.normalLogFmt))
+                lsstLog.configure_prop(_LOG_PROP.format(
+                    cls.lsstLog_longLogFmt if longlog else cls.lsstLog_normalLogFmt))
             cls._recordComponentSetting(None)
             pythonLogger = logging.getLogger()
             pythonLogger.setLevel(logging.INFO)
@@ -92,7 +120,12 @@ class CliLog:
             pythonLogger.addHandler(cls._lsstLogHandler)
         else:
             cls._recordComponentSetting(None)
-            logging.basicConfig(level=logging.INFO)
+            if longlog:
+                logging.basicConfig(level=logging.INFO,
+                                    format=cls.pylog_longLogFmt,
+                                    datefmt=cls.pylog_longLogDateFmt)
+            else:
+                logging.basicConfig(level=logging.INFO, format=cls.pylog_normalFmt)
 
         # also capture warnings and send them to logging
         logging.captureWarnings(True)
