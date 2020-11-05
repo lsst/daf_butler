@@ -35,8 +35,7 @@ log = logging.getLogger(__name__)
 
 @deprecated(reason="S3Datastore no longer necessary. Please switch to"
             " lsst.daf.butler.datastores.fileLikeDatastore.FileLikeDatastore and rename configuration file."
-            " Will soon be removed.",
-            category=FutureWarning)
+            " Will soon be removed.")
 class S3Datastore(RemoteFileDatastore):
     """Basic S3 Object Storage backed Datastore.
 
