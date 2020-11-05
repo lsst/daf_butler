@@ -30,17 +30,12 @@ jobs:
       - name: Install cryptography package for moto
         run: pip install cryptography
 
-      # It seems like pip install of requirements for a URL package
-      # does not install those dependencies
-      - name: Install sphgeom dependencies
-        run: pip install -r https://raw.githubusercontent.com/lsst/sphgeom/master/requirements.txt
-
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       # We have two cores so we can speed up the testing with xdist
-      - name: Install xdist and openfiles
-        run: pip install pytest-xdist pytest-openfiles
+      - name: Install pytest packages
+        run: pip install pytest pytest-flake8 pytest-xdist pytest-openfiles
 
       - name: Build and install
         run: pip install -v .
