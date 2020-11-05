@@ -71,6 +71,11 @@ class RemoteFileDatastore(FileLikeDatastore):
     `"move"`, `"copy"`, and `None` (no transfer).
     """
 
+    defaultConfigFile = "datastores/remoteFileDatastore.yaml"
+    """Path to configuration defaults. Accessed within the ``config`` resource
+    or relative to a search path. Can be None if no defaults specified.
+    """
+
     def __init__(self, config: Union[DatastoreConfig, str],
                  bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         super().__init__(config, bridgeManager, butlerRoot)

@@ -1,0 +1,12 @@
+datastore:
+  cls: lsst.daf.butler.datastores.remoteFileDatastore.RemoteFileDatastore
+  root: <butlerRoot>/datastore
+  records:
+    table: remote_datastore_records
+  create: true
+  templates:
+    # The default is to include all possible dimensions and dataset type
+    # in the filename.
+    default: "{run:/}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{label:?}/{band:?}/{subfilter:?}/{physical_filter:?}/{visit:?}/{datasetType}_{component:?}_{tract:?}_{patch:?}_{label:?}_{band:?}_{physical_filter:?}_{visit:?}_{exposure:?}_{detector:?}_{instrument:?}_{skymap:?}_{skypix:?}_{run}"
+  formatters: !include formatters.yaml
+  composites: !include composites.yaml

@@ -1203,8 +1203,8 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
     returned by Butler stringification.
     """
 
-    datastoreName = ["S3Datastore@s3://{bucketName}/{root}"]
-    """The expected format of the S3Datastore string."""
+    datastoreName = ["RemoteFileDatastore@s3://{bucketName}/{root}"]
+    """The expected format of the S3 Datastore string."""
 
     registryStr = "/gen3.sqlite3"
     """Expected format of the Registry string."""
@@ -1244,7 +1244,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         s3.create_bucket(Bucket=self.bucketName)
 
         self.datastoreStr = f"datastore={self.root}"
-        self.datastoreName = [f"S3Datastore@{rooturi}"]
+        self.datastoreName = [f"RemoteFileDatastore@{rooturi}"]
         Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
         self.tmpConfigFile = posixpath.join(rooturi, "butler.yaml")
 
@@ -1305,7 +1305,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     returned by Butler stringification.
     """
 
-    datastoreName = ["WebdavDatastore@https://{serverName}/{root}"]
+    datastoreName = ["RemoteFileDatastore@https://{serverName}/{root}"]
     """The expected format of the WebdavDatastore string."""
 
     registryStr = "/gen3.sqlite3"
@@ -1371,7 +1371,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
 
         self.datastoreStr = f"datastore={self.root}"
-        self.datastoreName = [f"WebdavDatastore@{self.rooturi}"]
+        self.datastoreName = [f"RemoteFileDatastore@{self.rooturi}"]
 
         if not isWebdavEndpoint(self.rooturi):
             raise OSError("Webdav server not running properly: cannot run tests.")

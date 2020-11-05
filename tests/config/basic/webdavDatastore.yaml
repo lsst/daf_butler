@@ -1,5 +1,5 @@
 datastore:
-  cls: lsst.daf.butler.datastores.webdavDatastore.WebdavDatastore
+  cls: lsst.daf.butler.datastores.remoteFileDatastore.RemoteFileDatastore
   root: http://anywebdavserver/butlerRoot
   templates: !include templates.yaml
   formatters: !include formatters.yaml

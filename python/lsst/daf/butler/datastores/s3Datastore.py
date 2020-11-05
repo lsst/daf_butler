@@ -26,22 +26,17 @@ from __future__ import annotations
 __all__ = ("S3Datastore", )
 
 import logging
-
-from typing import (
-    TYPE_CHECKING,
-    Union,
-)
+from deprecated.sphinx import deprecated
 
 from .remoteFileDatastore import RemoteFileDatastore
-from lsst.daf.butler.core._butlerUri.s3utils import getS3Client, bucketExists
-
-if TYPE_CHECKING:
-    from lsst.daf.butler import DatastoreConfig
-    from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
 
+@deprecated(reason="S3Datastore no longer necessary. Please switch to"
+            " lsst.daf.butler.datastores.fileLikeDatastore.FileLikeDatastore and rename configuration file."
+            " Will soon be removed.",
+            category=FutureWarning)
 class S3Datastore(RemoteFileDatastore):
     """Basic S3 Object Storage backed Datastore.
 
@@ -70,16 +65,3 @@ class S3Datastore(RemoteFileDatastore):
     """Path to configuration defaults. Accessed within the ``configs`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
-
-    def __init__(self, config: Union[DatastoreConfig, str],
-                 bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
-        super().__init__(config, bridgeManager, butlerRoot)
-
-        self.client = getS3Client()
-        if not bucketExists(self.locationFactory.netloc):
-            # PosixDatastore creates the root directory if one does not exist.
-            # Calling s3 client.create_bucket is possible but also requires
-            # ACL LocationConstraints, Permissions and other configuration
-            # parameters, so for now we do not create a bucket if one is
-            # missing. Further discussion can make this happen though.
-            raise IOError(f"Bucket {self.locationFactory.netloc} does not exist!")

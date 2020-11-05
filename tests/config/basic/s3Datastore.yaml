@@ -1,5 +1,5 @@
 datastore:
-  cls: lsst.daf.butler.datastores.s3Datastore.S3Datastore
+  cls: lsst.daf.butler.datastores.remoteFileDatastore.RemoteFileDatastore
   root: s3://anybucketname/butlerRoot
   templates: !include templates.yaml
   formatters: !include formatters.yaml
