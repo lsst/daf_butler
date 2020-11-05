@@ -370,6 +370,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
+               ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
                ) -> SimpleQuery:
         # Docstring inherited from DatasetRecordStorage.
         assert collection.type is not CollectionType.CHAINED
@@ -400,6 +401,18 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # We always constrain (never retrieve) the collection from the tags
         # table.
         kwargs[self._collections.getCollectionForeignKeyName()] = collection.key
+        # select and/or constrain ingest time
+        if ingestDate is not None:
+            kwargs["ingest_date"] = SimpleQuery.Select
+        if isinstance(ingestDate, Timespan):
+            # Tmespan is astropy Time (usually in TAI) and ingest_date is
+            # TIMESTAMP, convert values to Python datetime for sqlalchemy.
+            if ingestDate.begin is not None:
+                begin = ingestDate.begin.utc.datetime
+                query.where.append(self._static.dataset.ingest_date >= begin)
+            if ingestDate.end is not None:
+                end = ingestDate.end.utc.datetime
+                query.where.append(self._static.dataset.ingest_date < end)
         # And now we finally join in the tags or calibs table.
         if collection.type is CollectionType.CALIBRATION:
             assert self._calibs is not None, \
