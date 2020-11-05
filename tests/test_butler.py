@@ -129,14 +129,14 @@ class ButlerPutGetTests:
         cls.storageClassFactory = StorageClassFactory()
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
-    def assertGetComponents(self, butler, datasetRef, components, reference):
+    def assertGetComponents(self, butler, datasetRef, components, reference, collections=None):
         datasetType = datasetRef.datasetType
         dataId = datasetRef.dataId
         deferred = butler.getDirectDeferred(datasetRef)
 
         for component in components:
             compTypeName = datasetType.componentTypeName(component)
-            result = butler.get(compTypeName, dataId)
+            result = butler.get(compTypeName, dataId, collections=collections)
             self.assertEqual(result, getattr(reference, component))
             result_deferred = deferred.get(component=component)
             self.assertEqual(result_deferred, result)
@@ -194,25 +194,41 @@ class ButlerPutGetTests:
 
         # Put and remove the dataset once as a DatasetRef, once as a dataId,
         # and once with a DatasetType
+
+        # Keep track of any collections we add and do not clean up
+        expected_collections = {run, tag}
+
+        counter = 0
         for args in ((refIn,), (datasetTypeName, dataId), (datasetType, dataId)):
+            # Since we are using subTest we can get cascading failures
+            # here with the first attempt failing and the others failing
+            # immediately because the dataset already exists. Work around
+            # this by using a distinct run collection each time
+            counter += 1
+            this_run = f"put_run_{counter}"
+            this_tag = f"put_tag_{counter}"
+            butler.registry.registerCollection(this_run, type=CollectionType.RUN)
+            butler.registry.registerCollection(this_tag, type=CollectionType.TAGGED)
+            expected_collections.update({this_run, this_tag})
+
             with self.subTest(args=args):
-                ref = butler.put(metric, *args)
+                ref = butler.put(metric, *args, run=this_run, tags=[this_tag])
                 self.assertIsInstance(ref, DatasetRef)
 
                 # Test getDirect
                 metricOut = butler.getDirect(ref)
                 self.assertEqual(metric, metricOut)
                 # Test get
-                metricOut = butler.get(ref.datasetType.name, dataId)
+                metricOut = butler.get(ref.datasetType.name, dataId, collections=this_run)
                 self.assertEqual(metric, metricOut)
                 # Test get with a datasetRef
-                metricOut = butler.get(ref)
+                metricOut = butler.get(ref, collections=this_run)
                 self.assertEqual(metric, metricOut)
                 # Test getDeferred with dataId
-                metricOut = butler.getDeferred(ref.datasetType.name, dataId).get()
+                metricOut = butler.getDeferred(ref.datasetType.name, dataId, collections=this_run).get()
                 self.assertEqual(metric, metricOut)
                 # Test getDeferred with a datasetRef
-                metricOut = butler.getDeferred(ref).get()
+                metricOut = butler.getDeferred(ref, collections=this_run).get()
                 self.assertEqual(metric, metricOut)
                 # and deferred direct with ref
                 metricOut = butler.getDirectDeferred(ref).get()
@@ -221,13 +237,14 @@ class ButlerPutGetTests:
                 # Check we can get components
                 if storageClass.isComposite():
                     self.assertGetComponents(butler, ref,
-                                             ("summary", "data", "output"), metric)
+                                             ("summary", "data", "output"), metric,
+                                             collections=this_run)
 
                 # Remove from the tagged collection only; after that we
                 # shouldn't be able to find it unless we use the dataset_id.
-                butler.pruneDatasets([ref])
+                butler.pruneDatasets([ref], tags=[this_tag])
                 with self.assertRaises(LookupError):
-                    butler.datasetExists(*args)
+                    butler.datasetExists(*args, collections=this_tag)
                 # Registry still knows about it, if we use the dataset_id.
                 self.assertEqual(butler.registry.getDataset(ref.id), ref)
                 # If we use the output ref with the dataset_id, we should
@@ -236,11 +253,11 @@ class ButlerPutGetTests:
 
                 # Reinsert into collection, then delete from Datastore *and*
                 # remove from collection.
-                butler.registry.associate(tag, [ref])
-                butler.pruneDatasets([ref], unstore=True)
+                butler.registry.associate(this_tag, [ref])
+                butler.pruneDatasets([ref], unstore=True, tags=[this_tag])
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
-                    butler.datasetExists(*args)
+                    butler.datasetExists(*args, collections=this_tag)
                 # Now getDirect() should fail, too.
                 with self.assertRaises(FileNotFoundError, msg=f"Checking ref {ref} not found"):
                     butler.getDirect(ref)
@@ -248,17 +265,25 @@ class ButlerPutGetTests:
                 self.assertEqual(butler.registry.getDataset(ref.id), ref)
 
                 # Now remove the dataset completely.
-                butler.pruneDatasets([ref], purge=True, unstore=True)
+                butler.pruneDatasets([ref], purge=True, unstore=True, tags=[this_tag], run=this_run)
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
-                    butler.datasetExists(*args)
+                    butler.datasetExists(*args, collections=this_run)
                 # getDirect() should still fail.
                 with self.assertRaises(FileNotFoundError):
                     butler.getDirect(ref)
                 # Registry shouldn't be able to find it by dataset_id anymore.
                 self.assertIsNone(butler.registry.getDataset(ref.id))
 
-        # Put the dataset again, since the last thing we did was remove it.
+                # Cleanup
+                for coll in (this_run, this_tag):
+                    # Do explicit registry removal since we know they are
+                    # empty
+                    butler.registry.removeCollection(coll)
+                    expected_collections.remove(coll)
+
+        # Put the dataset again, since the last thing we did was remove it
+        # and we want to use the default collection.
         ref = butler.put(metric, refIn)
 
         # Get with parameters
@@ -324,7 +349,7 @@ class ButlerPutGetTests:
 
         # Check we have a collection
         collections = set(butler.registry.queryCollections())
-        self.assertEqual(collections, {run, tag})
+        self.assertEqual(collections, expected_collections)
 
         # Clean up to check that we can remove something that may have
         # already had a component removed

@@ -60,14 +60,10 @@ class JsonFormatter(FileFormatter):
         Returns
         -------
         data : `object`
-            Either data as Python object read from JSON file, or None
-            if the file could not be opened.
+            Data as Python object read from JSON file.
         """
-        try:
-            with open(path, "rb") as fd:
-                data = self._fromBytes(fd.read(), pytype)
-        except FileNotFoundError:
-            data = None
+        with open(path, "rb") as fd:
+            data = self._fromBytes(fd.read(), pytype)
 
         return data
 
@@ -88,8 +84,6 @@ class JsonFormatter(FileFormatter):
             The file could not be written.
         """
         with open(self.fileDescriptor.location.path, "wb") as fd:
-            if hasattr(inMemoryDataset, "_asdict"):
-                inMemoryDataset = inMemoryDataset._asdict()
             fd.write(self._toBytes(inMemoryDataset))
 
     def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
@@ -133,6 +127,8 @@ class JsonFormatter(FileFormatter):
         Exception
             The object could not be serialized.
         """
+        if hasattr(inMemoryDataset, "_asdict"):
+            inMemoryDataset = inMemoryDataset._asdict()
         return json.dumps(inMemoryDataset, ensure_ascii=False).encode()
 
     def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
@@ -153,7 +149,7 @@ class JsonFormatter(FileFormatter):
         inMemoryDataset : `object`
             Object of expected type `pytype`.
         """
-        if pytype is not None and not hasattr(builtins, pytype.__name__):
+        if inMemoryDataset is not None and pytype is not None and not hasattr(builtins, pytype.__name__):
             if storageClass.isComposite():
                 inMemoryDataset = storageClass.delegate().assemble(inMemoryDataset, pytype=pytype)
             elif not isinstance(inMemoryDataset, pytype):

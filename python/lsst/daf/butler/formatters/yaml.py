@@ -47,6 +47,10 @@ class YamlFormatter(FileFormatter):
     unsupportedParameters = None
     """This formatter does not support any parameters"""
 
+    supportedWriteParameters = frozenset({"unsafe_dump"})
+    """Allow the normal yaml.dump to be used to write the YAML. Use this
+    if you know that your class has registered representers."""
+
     def _readFile(self, path: str, pytype: Type[Any] = None) -> Any:
         """Read a file from the path in YAML format.
 
@@ -65,7 +69,7 @@ class YamlFormatter(FileFormatter):
 
         Notes
         -----
-        The `~yaml.UnsafeLoader` is used when parsing the YAML file.
+        The `~yaml.SafeLoader` is used when parsing the YAML file.
         """
         try:
             with open(path, "rb") as fd:
@@ -90,11 +94,13 @@ class YamlFormatter(FileFormatter):
         inMemoryDataset : `object`
             The requested data as an object, or None if the string could
             not be read.
+
+        Notes
+        -----
+        The `~yaml.SafeLoader` is used when parsing the YAML.
         """
-        try:
-            data = yaml.load(serializedDataset, Loader=yaml.FullLoader)
-        except yaml.YAMLError:
-            data = None
+        data = yaml.safe_load(serializedDataset)
+
         try:
             data = data.exportAsDict()
         except AttributeError:
@@ -105,7 +111,8 @@ class YamlFormatter(FileFormatter):
         """Write the in memory dataset to file on disk.
 
         Will look for `_asdict()` method to aid YAML serialization, following
-        the approach of the simplejson module.
+        the approach of the simplejson module.  The `dict` will be passed
+        to the relevant constructor on read.
 
         Parameters
         ----------
@@ -116,14 +123,22 @@ class YamlFormatter(FileFormatter):
         ------
         Exception
             The file could not be written.
+
+        Notes
+        -----
+        The `~yaml.SafeDumper` is used when generating the YAML serialization.
+        This will fail for data structures that have complex python classes
+        without a registered YAML representer.
         """
         with open(self.fileDescriptor.location.path, "wb") as fd:
-            if hasattr(inMemoryDataset, "_asdict"):
-                inMemoryDataset = inMemoryDataset._asdict()
             fd.write(self._toBytes(inMemoryDataset))
 
     def _toBytes(self, inMemoryDataset: Any) -> bytes:
         """Write the in memory dataset to a bytestring.
+
+        Will look for `_asdict()` method to aid YAML serialization, following
+        the approach of the simplejson module.  The `dict` will be passed
+        to the relevant constructor on read.
 
         Parameters
         ----------
@@ -139,8 +154,21 @@ class YamlFormatter(FileFormatter):
         ------
         Exception
             The object could not be serialized.
+
+        Notes
+        -----
+        The `~yaml.SafeDumper` is used when generating the YAML serialization.
+        This will fail for data structures that have complex python classes
+        without a registered YAML representer.
         """
-        return yaml.dump(inMemoryDataset).encode()
+        if hasattr(inMemoryDataset, "_asdict"):
+            inMemoryDataset = inMemoryDataset._asdict()
+        unsafe_dump = self.writeParameters.get("unsafe_dump", False)
+        if unsafe_dump:
+            serialized = yaml.dump(inMemoryDataset)
+        else:
+            serialized = yaml.safe_dump(inMemoryDataset)
+        return serialized.encode()
 
     def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
                     pytype: Optional[Type[Any]] = None) -> Any:
@@ -160,7 +188,7 @@ class YamlFormatter(FileFormatter):
         inMemoryDataset : `object`
             Object of expected type `pytype`.
         """
-        if pytype is not None and not hasattr(builtins, pytype.__name__):
+        if inMemoryDataset is not None and pytype is not None and not hasattr(builtins, pytype.__name__):
             if storageClass.isComposite():
                 inMemoryDataset = storageClass.delegate().assemble(inMemoryDataset, pytype=pytype)
             elif not isinstance(inMemoryDataset, pytype):
