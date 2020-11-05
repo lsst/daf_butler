@@ -105,6 +105,10 @@ class ParquetFormatterTestCase(unittest.TestCase):
         df4 = self.butler.get(self.datasetType, dataId={},
                               parameters={"columns": {"filter": ["r"], "column": "a"}})
         self.assertTrue(df1.loc[:, [("r", "a")]].equals(df4))
+        column_list = [('g', 'a'), ('r', 'c')]
+        df5 = self.butler.get(self.datasetType, dataId={},
+                              parameters={'columns': column_list})
+        self.assertTrue(df1.loc[:, column_list].equals(df5))
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d"]})
