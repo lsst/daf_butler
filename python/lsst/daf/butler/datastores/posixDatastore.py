@@ -32,7 +32,6 @@ from typing import (
     Any,
     ClassVar,
     Optional,
-    Union
 )
 
 from .fileLikeDatastore import FileLikeDatastore
@@ -41,8 +40,6 @@ from lsst.daf.butler import StoredFileInfo, DatasetRef
 
 if TYPE_CHECKING:
     from .fileLikeDatastore import DatastoreFileGetInformation
-    from lsst.daf.butler import DatastoreConfig
-    from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
@@ -82,19 +79,6 @@ class PosixDatastore(FileLikeDatastore):
     """Path to configuration defaults. Accessed within the ``configs`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
-
-    def __init__(self, config: Union[DatastoreConfig, str],
-                 bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
-        super().__init__(config, bridgeManager, butlerRoot)
-
-        # Check that root is a valid URI for this datastore
-        if self.root.scheme and self.root.scheme != "file":
-            raise ValueError(f"Root location must only be a file URI not {self.root}")
-
-        if not self.root.exists():
-            if "create" not in self.config or not self.config["create"]:
-                raise ValueError(f"No valid root and not allowed to create one at: {self.root}")
-            self.root.mkdir()
 
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:

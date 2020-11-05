@@ -28,7 +28,6 @@ import tempfile
 from typing import (
     TYPE_CHECKING,
     Any,
-    Union,
 )
 
 from .fileLikeDatastore import FileLikeDatastore
@@ -41,8 +40,6 @@ from lsst.daf.butler import (
 
 if TYPE_CHECKING:
     from .fileLikeDatastore import DatastoreFileGetInformation
-    from lsst.daf.butler import DatastoreConfig
-    from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
@@ -75,17 +72,6 @@ class RemoteFileDatastore(FileLikeDatastore):
     """Path to configuration defaults. Accessed within the ``config`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
-
-    def __init__(self, config: Union[DatastoreConfig, str],
-                 bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
-        super().__init__(config, bridgeManager, butlerRoot)
-        if not self.root.exists():
-            if "create" not in self.config or not self.config["create"]:
-                raise ValueError(f"No valid root and not allowed to create one at: {self.root}")
-            try:
-                self.root.mkdir()
-            except ValueError as e:
-                raise ValueError(f"Can not create datastore root '{self.root}', check permissions.") from e
 
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:

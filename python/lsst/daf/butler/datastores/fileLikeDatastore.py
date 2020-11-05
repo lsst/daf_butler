@@ -277,6 +277,16 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Determine whether checksums should be used - default to False
         self.useChecksum = self.config.get("checksum", False)
 
+        # Check existence and create directory structure if necessary
+        if not self.root.exists():
+            if "create" not in self.config or not self.config["create"]:
+                raise ValueError(f"No valid root and not allowed to create one at: {self.root}")
+            try:
+                self.root.mkdir()
+            except Exception as e:
+                raise ValueError(f"Can not create datastore root '{self.root}', check permissions."
+                                 f" Got error: {e}") from e
+
     def __str__(self) -> str:
         return str(self.root)
 
