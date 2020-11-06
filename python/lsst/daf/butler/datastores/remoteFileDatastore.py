@@ -26,7 +26,6 @@ import os.path
 import tempfile
 
 from typing import (
-    TYPE_CHECKING,
     Any,
 )
 
@@ -37,9 +36,6 @@ from lsst.daf.butler import (
     Location,
     StoredFileInfo,
 )
-
-if TYPE_CHECKING:
-    from .fileLikeDatastore import DatastoreFileGetInformation
 
 log = logging.getLogger(__name__)
 
@@ -72,45 +68,6 @@ class RemoteFileDatastore(FileLikeDatastore):
     """Path to configuration defaults. Accessed within the ``config`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
-
-    def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
-                                   ref: DatasetRef, isComponent: bool = False) -> Any:
-        location = getInfo.location
-
-        log.debug("Downloading data from %s", location.uri)
-        serializedDataset = location.uri.read()
-
-        storedFileInfo = getInfo.info
-        if len(serializedDataset) != storedFileInfo.file_size:
-            raise RuntimeError("Integrity failure in Datastore. "
-                               f"Size of file {location.path} ({len(serializedDataset)}) "
-                               f"does not match recorded size of {storedFileInfo.file_size}")
-
-        # format the downloaded bytes into appropriate object directly, or via
-        # tempfile (when formatter does not support to/from/Bytes). This is
-        # equivalent of PosixDatastore formatter.read try-except block.
-        formatter = getInfo.formatter
-        try:
-            result = formatter.fromBytes(serializedDataset,
-                                         component=getInfo.component if isComponent else None)
-        except NotImplementedError:
-            # formatter might not always have an extension so mypy complains
-            # We can either ignore the complaint or use a temporary location
-            tmpLoc = Location(".", "temp")
-            tmpLoc = formatter.makeUpdatedLocation(tmpLoc)
-            with tempfile.NamedTemporaryFile(suffix=tmpLoc.getExtension()) as tmpFile:
-                tmpFile.write(serializedDataset)
-                # Flush the write. Do not close the file because that
-                # will delete it.
-                tmpFile.flush()
-                formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
-                result = formatter.read(component=getInfo.component if isComponent else None)
-        except Exception as e:
-            raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
-                             f" ({ref.datasetType.name} from {location.uri}): {e}") from e
-
-        return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
-                                      isComponent=isComponent)
 
     def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)

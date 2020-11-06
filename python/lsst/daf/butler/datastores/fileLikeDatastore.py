@@ -26,7 +26,6 @@ __all__ = ("FileLikeDatastore", )
 
 import hashlib
 import logging
-import os
 from abc import abstractmethod
 
 from sqlalchemy import BigInteger, String
@@ -828,7 +827,6 @@ class FileLikeDatastore(GenericBaseDatastore):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
         """Read the artifact from datastore into in memory object.
@@ -847,7 +845,61 @@ class FileLikeDatastore(GenericBaseDatastore):
         inMemoryDataset : `object`
             The artifact as a python object.
         """
-        raise NotImplementedError()
+        location = getInfo.location
+        uri = location.uri
+        log.debug("Accessing data from %s", uri)
+
+        # Cannot recalculate checksum but can compare size as a quick check
+        recorded_size = getInfo.info.file_size
+        resource_size = uri.size()
+        if resource_size != recorded_size:
+            raise RuntimeError("Integrity failure in Datastore. "
+                               f"Size of file {uri} ({resource_size}) "
+                               f"does not match size recorded in registry of {recorded_size}")
+
+        # For the general case we have choices for how to proceed.
+        # 1. Always use a local file (downloading the remote resource to a
+        #    temporary file if needed).
+        # 2. Use a threshold size and read into memory and use bytes.
+        # Use both for now with an arbitrary hand off size.
+        # This allows small datasets to be downloaded from remote object
+        # stores without requiring a temporary file.
+
+        formatter = getInfo.formatter
+        nbytes_max = 10_000_000  # Arbitrary number that we can tune
+        if resource_size <= nbytes_max and formatter.can_read_bytes():
+            serializedDataset = uri.read()
+            log.debug("Deserializing %s from %d bytes from location %s with formatter %s",
+                      f"component {getInfo.component}" if isComponent else "",
+                      len(serializedDataset), uri, formatter.name())
+            try:
+                result = formatter.fromBytes(serializedDataset,
+                                             component=getInfo.component if isComponent else None)
+            except Exception as e:
+                raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
+                                 f" ({ref.datasetType.name} from {uri}): {e}") from e
+        else:
+            # Read from file
+            with uri.as_local() as local_uri:
+                # Have to update the Location associated with the formatter
+                # because formatter.read does not allow an override.
+                # This could be improved.
+                msg = ""
+                if uri != local_uri:
+                    formatter._fileDescriptor.location = Location(*local_uri.split())
+                    msg = "(via download to local file)"
+
+                log.debug("Reading %s from location %s %s with formatter %s",
+                          f"component {getInfo.component}" if isComponent else "",
+                          uri, msg, formatter.name())
+                try:
+                    result = formatter.read(component=getInfo.component if isComponent else None)
+                except Exception as e:
+                    raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
+                                     f" ({ref.datasetType.name} from {uri}): {e}") from e
+
+        return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
+                                      isComponent=isComponent)
 
     def exists(self, ref: DatasetRef) -> bool:
         """Check if the dataset exists in the datastore.
