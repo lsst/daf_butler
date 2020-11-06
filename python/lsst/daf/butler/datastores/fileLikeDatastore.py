@@ -1480,7 +1480,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         if algorithm not in hashlib.algorithms_guaranteed:
             raise NameError("The specified algorithm '{}' is not supported by hashlib".format(algorithm))
 
-        if uri.scheme and uri.scheme != "file":
+        if not uri.isLocal:
             return None
 
         hasher = hashlib.new(algorithm)

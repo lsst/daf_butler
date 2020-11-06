@@ -106,6 +106,9 @@ class ButlerURI:
     be made whether to quote it to be consistent.
     """
 
+    isLocal = False
+    """If `True` this URI refers to a local file."""
+
     # This is not an ABC with abstract methods because the __new__ being
     # a factory confuses mypy such that it assumes that every constructor
     # returns a ButlerURI and then determines that all the abstract methods

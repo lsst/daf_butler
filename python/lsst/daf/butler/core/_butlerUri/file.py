@@ -57,6 +57,9 @@ class ButlerFileURI(ButlerURI):
     transferModes = ("copy", "link", "symlink", "hardlink", "relsymlink", "auto", "move")
     transferDefault: str = "link"
 
+    # By definition refers to a local file
+    isLocal = True
+
     @property
     def ospath(self) -> str:
         """Path component of the URI localized to current OS.

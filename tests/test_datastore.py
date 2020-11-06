@@ -583,7 +583,7 @@ class DatastoreTests(DatastoreTestsBase):
                     datastore.ingest(FileDataset(path=os.path.abspath(sympath), refs=ref), transfer=mode)
 
                     uri = datastore.getURI(ref)
-                    self.assertTrue(not uri.scheme or uri.scheme == "file", f"Check {uri.scheme}")
+                    self.assertTrue(uri.isLocal, f"Check {uri.scheme}")
                     self.assertTrue(os.path.islink(uri.ospath), f"Check {uri} is a symlink")
 
                     linkTarget = os.readlink(uri.ospath)

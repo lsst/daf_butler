@@ -76,7 +76,7 @@ def replaceRoot(configRoot: str, butlerRoot: Optional[Union[ButlerURI, str]]) ->
     # Use absolute file path if this refers to a local file, else use
     # unchanged since all other URI schemes are absolute
     uri = ButlerURI(butlerRoot)
-    if not uri.scheme or uri.scheme == "file":
+    if uri.isLocal:
         # This will be a local file with URI quoting removed
         butlerRoot = os.path.abspath(uri.ospath)
 
