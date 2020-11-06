@@ -652,10 +652,14 @@ class DirectQuery(Query):
         base = self._columns.datasets
         if base is None:
             return None
+        ingestDate = base.ingestDate
+        if ingestDate is not None:
+            ingestDate = ingestDate.label("ingest_date")
         return DatasetQueryColumns(
             datasetType=base.datasetType,
             id=base.id.label("dataset_id"),
             runKey=base.runKey.label(self.managers.collections.getRunForeignKeyName()),
+            ingestDate=ingestDate,
         )
 
     @property
@@ -777,6 +781,7 @@ class MaterializedQuery(Query):
                 datasetType=self._datasetType,
                 id=self._table.columns["dataset_id"],
                 runKey=self._table.columns[self.managers.collections.getRunForeignKeyName()],
+                ingestDate=None,
             )
         else:
             return None

@@ -379,11 +379,14 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # the id and run fields from that; passing them as kwargs here tells
         # SimpleQuery to handle them whether they're constraints or results.
         # We always constraint the dataset_type_id here as well.
+        static_kwargs = {self._runKeyColumn: run}
+        if ingestDate is not None:
+            static_kwargs["ingest_date"] = SimpleQuery.Select
         query.join(
             self._static.dataset,
             id=id,
             dataset_type_id=self._dataset_type_id,
-            **{self._runKeyColumn: run}
+            **static_kwargs
         )
         # If and only if the collection is a RUN, we constrain it in the static
         # table (and also the tags or calibs table below)
@@ -401,9 +404,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # We always constrain (never retrieve) the collection from the tags
         # table.
         kwargs[self._collections.getCollectionForeignKeyName()] = collection.key
-        # select and/or constrain ingest time
-        if ingestDate is not None:
-            kwargs["ingest_date"] = SimpleQuery.Select
+        # constrain ingest time
         if isinstance(ingestDate, Timespan):
             # Tmespan is astropy Time (usually in TAI) and ingest_date is
             # TIMESTAMP, convert values to Python datetime for sqlalchemy.
