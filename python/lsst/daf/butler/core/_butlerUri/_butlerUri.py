@@ -77,6 +77,8 @@ class ButlerURI:
     forceDirectory: `bool`, optional
         If `True` forces the URI to end with a separator, otherwise given URI
         is interpreted as is.
+    isTemporary : `bool`, optional
+        If `True` indicates that this URI points to a temporary resource.
     """
 
     _pathLib: Type[PurePath] = PurePosixPath
@@ -110,12 +112,13 @@ class ButlerURI:
     # are still abstract. If they are not marked abstract but just raise
     # mypy is fine with it.
 
-    # mypy is confused without this
+    # mypy is confused without these
     _uri: urllib.parse.ParseResult
+    isTemporary: bool
 
     def __new__(cls, uri: Union[str, urllib.parse.ParseResult, ButlerURI],
                 root: Optional[Union[str, ButlerURI]] = None, forceAbsolute: bool = True,
-                forceDirectory: bool = False) -> ButlerURI:
+                forceDirectory: bool = False, isTemporary: bool = False) -> ButlerURI:
         parsed: urllib.parse.ParseResult
         dirLike: bool
         subclass: Optional[Type] = None
@@ -185,6 +188,7 @@ class ButlerURI:
         self = object.__new__(subclass)
         self._uri = parsed
         self.dirLike = dirLike
+        self.isTemporary = isTemporary
         return self
 
     @property
