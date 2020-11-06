@@ -210,6 +210,27 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support writing")
 
+    @classmethod
+    def can_read_bytes(cls) -> bool:
+        """Indicate if this formatter can format from bytes.
+
+        Returns
+        -------
+        can : `bool`
+            `True` if the `fromBytes` method is implemented.
+        """
+        # We have no property to read so instead try to format from a byte
+        # and see what happens
+        try:
+            # We know the arguments are incompatible
+            cls.fromBytes(cls, b"")  # type: ignore
+        except NotImplementedError:
+            return False
+        except Exception:
+            # There will be problems with the bytes we are supplying so ignore
+            pass
+        return True
+
     def fromBytes(self, serializedDataset: bytes,
                   component: Optional[str] = None) -> object:
         """Reads serialized data into a Dataset or its component.
