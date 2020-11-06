@@ -21,8 +21,6 @@
 
 from __future__ import annotations
 
-import os
-import os.path
 import logging
 import tempfile
 
@@ -159,7 +157,7 @@ class ButlerS3URI(ButlerURI):
             self.client.put_object(Bucket=self.netloc, Key=self.relativeToPathRoot)
 
     @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
-    def as_local(self) -> Tuple[str, bool]:
+    def _as_local(self) -> Tuple[str, bool]:
         """Download object from S3 and place in temporary directory.
 
         Returns
@@ -215,15 +213,13 @@ class ButlerS3URI(ButlerURI):
             self.client.copy_object(CopySource=copy_source, Bucket=self.netloc, Key=self.relativeToPathRoot)
         else:
             # Use local file and upload it
-            local_src, is_temporary = src.as_local()
+            with src.as_local() as local_uri:
 
-            # resource.meta.upload_file seems like the right thing
-            # but we have a low level client
-            with open(local_src, "rb") as fh:
-                self.client.put_object(Bucket=self.netloc,
-                                       Key=self.relativeToPathRoot, Body=fh)
-            if is_temporary:
-                os.remove(local_src)
+                # resource.meta.upload_file seems like the right thing
+                # but we have a low level client
+                with open(local_uri.ospath, "rb") as fh:
+                    self.client.put_object(Bucket=self.netloc,
+                                           Key=self.relativeToPathRoot, Body=fh)
 
         # This was an explicit move requested from a remote resource
         # try to remove that resource

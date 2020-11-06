@@ -1485,13 +1485,9 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         hasher = hashlib.new(algorithm)
 
-        filename, is_temp = uri.as_local()
-
-        with open(filename, "rb") as f:
-            for chunk in iter(lambda: f.read(block_size), b""):
-                hasher.update(chunk)
-
-        if is_temp:
-            os.remove(filename)
+        with uri.as_local() as local_uri:
+            with open(local_uri.ospath, "rb") as f:
+                for chunk in iter(lambda: f.read(block_size), b""):
+                    hasher.update(chunk)
 
         return hasher.hexdigest()
