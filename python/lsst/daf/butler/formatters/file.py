@@ -228,11 +228,16 @@ class FileFormatter(Formatter):
                                self.fileDescriptor.storageClass.pytype)
 
         # Assemble the requested dataset and potentially return only its
-        # component coercing it to its appropriate ptype
+        # component coercing it to its appropriate pytype
         data = self._assembleDataset(data, component)
 
-        if data is None:
-            raise ValueError(f"Unable to read data with URI {self.fileDescriptor.location.uri}")
+        # Special case components by allowing a formatter to return None
+        # to indicate that the component was understood but is missing
+        if data is None and component is None:
+            nbytes = len(serializedDataset)
+            s = "s" if nbytes != 1 else ""
+            raise ValueError(f"Unable to unpersist {nbytes} byte{s} from "
+                             f"URI {self.fileDescriptor.location.uri}")
 
         return data
 
