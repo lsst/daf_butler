@@ -1219,7 +1219,9 @@ class Database(ABC):
             if select is not None:
                 if names is None:
                     names = select.columns.keys()
-                self._connection.execute(table.insert().from_select(names, select))
+                rowList = self.query(select).fetchall()
+                insertRows = [dict(zip(names, row)) for row in rowList]
+                self._connection.execute(table.insert(), *insertRows)
             else:
                 self._connection.execute(table.insert(), *rows)
             return None
