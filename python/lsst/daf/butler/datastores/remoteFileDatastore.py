@@ -22,24 +22,16 @@
 from __future__ import annotations
 
 import logging
-import os.path
-import tempfile
-
-from typing import (
-    Any,
-)
+from deprecated.sphinx import deprecated
 
 from .fileLikeDatastore import FileLikeDatastore
-
-from lsst.daf.butler import (
-    DatasetRef,
-    Location,
-    StoredFileInfo,
-)
 
 log = logging.getLogger(__name__)
 
 
+@deprecated(reason="RemoteFileDatastore no longer necessary. Please switch to"
+            " lsst.daf.butler.datastores.fileLikeDatastore.FileLikeDatastore and rename configuration file."
+            " Will soon be removed.")
 class RemoteFileDatastore(FileLikeDatastore):
     """A datastore designed for files at remote locations.
 
@@ -68,47 +60,3 @@ class RemoteFileDatastore(FileLikeDatastore):
     """Path to configuration defaults. Accessed within the ``config`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
-
-    def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
-        location, formatter = self._prepare_for_put(inMemoryDataset, ref)
-
-        if location.uri.exists():
-            # Assume that by this point if registry thinks the file should
-            # not exist then the file should not exist and therefore we can
-            # overwrite it. This can happen if a put was interrupted by
-            # an external interrupt. The only time this could be problematic is
-            # if the file template is incomplete and multiple dataset refs
-            # result in identical filenames.
-            # Eventually we should remove the check completely (it takes
-            # non-zero time for network).
-            log.warning("Object %s exists in datastore for ref %s", location.uri, ref)
-
-        if not location.uri.dirname().exists():
-            log.debug("Folder %s does not exist yet.", location.uri.dirname())
-            location.uri.dirname().mkdir()
-
-        if self._transaction is None:
-            raise RuntimeError("Attempting to write artifact without transaction enabled")
-
-        # upload the file directly from bytes or by using a temporary file if
-        # _toBytes is not implemented
-        try:
-            serializedDataset = formatter.toBytes(inMemoryDataset)
-            log.debug("Writing bytes directly to %s", location.uri)
-            location.uri.write(serializedDataset, overwrite=True)
-            log.debug("Successfully wrote bytes directly to %s", location.uri)
-        except NotImplementedError:
-            with tempfile.NamedTemporaryFile(suffix=location.getExtension()) as tmpFile:
-                tmpLocation = Location(*os.path.split(tmpFile.name))
-                formatter._fileDescriptor.location = tmpLocation
-                log.debug("Writing dataset to temporary directory at %s", tmpLocation.uri)
-                formatter.write(inMemoryDataset)
-                location.uri.transfer_from(tmpLocation.uri, transfer="copy", overwrite=True)
-            log.debug("Successfully wrote dataset to %s via a temporary file.", location.uri)
-
-        # Register a callback to try to delete the uploaded data if
-        # the ingest fails below
-        self._transaction.registerUndo("remoteWrite", location.uri.remove)
-
-        # URI is needed to resolve what ingest case are we dealing with
-        return self._extractIngestInfo(location.uri, ref, formatter=formatter)

@@ -26,7 +26,8 @@ __all__ = ("FileLikeDatastore", )
 
 import hashlib
 import logging
-from abc import abstractmethod
+import os
+import tempfile
 
 from sqlalchemy import BigInteger, String
 
@@ -169,6 +170,11 @@ class FileLikeDatastore(GenericBaseDatastore):
 
     composites: CompositesMap
     """Determines whether a dataset should be disassembled on put."""
+
+    defaultConfigFile = "datastores/fileLikeDatastore.yaml"
+    """Path to configuration defaults. Accessed within the ``config`` resource
+    or relative to a search path. Can be None if no defaults specified.
+    """
 
     @classmethod
     def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
@@ -809,7 +815,6 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location
 
-    @abstractmethod
     def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
         """Write out in memory dataset to datastore.
 
@@ -825,7 +830,69 @@ class FileLikeDatastore(GenericBaseDatastore):
         info : `StoredFileInfo`
             Information describin the artifact written to the datastore.
         """
-        raise NotImplementedError()
+        location, formatter = self._prepare_for_put(inMemoryDataset, ref)
+        uri = location.uri
+
+        if uri.exists():
+            # Assume that by this point if registry thinks the file should
+            # not exist then the file should not exist and therefore we can
+            # overwrite it. This can happen if a put was interrupted by
+            # an external interrupt. The only time this could be problematic is
+            # if the file template is incomplete and multiple dataset refs
+            # result in identical filenames.
+            # Eventually we should remove the check completely (it takes
+            # non-zero time for network).
+            log.warning("Object %s exists in datastore for ref %s", uri, ref)
+
+        if not uri.dirname().exists():
+            log.debug("Folder %s does not exist yet so creating it.", uri.dirname())
+            uri.dirname().mkdir()
+
+        if self._transaction is None:
+            raise RuntimeError("Attempting to write artifact without transaction enabled")
+
+        def _removeFileExists(uri: ButlerURI) -> None:
+            """Remove a file and do not complain if it is not there.
+
+            This is important since a formatter might fail before the file
+            is written and we should not confuse people by writing spurious
+            error messages to the log.
+            """
+            try:
+                uri.remove()
+            except FileNotFoundError:
+                pass
+
+        # Register a callback to try to delete the uploaded data if
+        # something fails below
+        self._transaction.registerUndo("artifactWrite", _removeFileExists, uri)
+
+        # For a local file, simply use the formatter directly
+        if uri.isLocal:
+            path = formatter.write(inMemoryDataset)
+            assert self.root.join(path) == uri
+            log.debug("Successfully wrote python object to local file at %s", uri)
+        else:
+            # This is a remote URI, so first try bytes and write directly else
+            # fallback to a temporary file
+            try:
+                serializedDataset = formatter.toBytes(inMemoryDataset)
+                log.debug("Writing bytes directly to %s", uri)
+                uri.write(serializedDataset, overwrite=True)
+                log.debug("Successfully wrote bytes directly to %s", uri)
+            except NotImplementedError:
+                with tempfile.NamedTemporaryFile(suffix=uri.getExtension()) as tmpFile:
+                    # Need to configure the formatter to write to a different
+                    # location and that needs us to overwrite internals
+                    tmpLocation = Location(*os.path.split(tmpFile.name))
+                    formatter._fileDescriptor.location = tmpLocation
+                    log.debug("Writing dataset to temporary location at %s", tmpLocation.uri)
+                    formatter.write(inMemoryDataset)
+                    uri.transfer_from(tmpLocation.uri, transfer="copy", overwrite=True)
+                log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
+
+        # URI is needed to resolve what ingest case are we dealing with
+        return self._extractIngestInfo(uri, ref, formatter=formatter)
 
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
