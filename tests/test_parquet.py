@@ -44,7 +44,7 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 @unittest.skipUnless(pyarrow is not None, "Cannot test ParquetFormatter without pyarrow.")
 class ParquetFormatterTestCase(unittest.TestCase):
-    """Tests for ParquetFormatter, using PosixDatastore.
+    """Tests for ParquetFormatter, using local file datastore.
     """
 
     def setUp(self):

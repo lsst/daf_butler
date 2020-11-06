@@ -1025,7 +1025,7 @@ class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCa
     fullConfigKey = ".datastore.formatters"
     validationCanFail = True
     datastoreStr = ["/tmp"]
-    datastoreName = [f"PosixDatastore@{BUTLER_ROOT_TAG}"]
+    datastoreName = [f"FileLikeDatastore@{BUTLER_ROOT_TAG}"]
     registryStr = "/gen3.sqlite3"
 
     def testExportTransferCopy(self):
@@ -1074,8 +1074,8 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
-    datastoreStr = ["datastore='InMemory", "/PosixDatastore_1/,", "/PosixDatastore_2/'"]
-    datastoreName = ["InMemoryDatastore@", f"PosixDatastore@{BUTLER_ROOT_TAG}/PosixDatastore_1",
+    datastoreStr = ["datastore='InMemory", "/FileLikeDatastore_1/,", "/FileLikeDatastore_2/'"]
+    datastoreName = ["InMemoryDatastore@", f"FileLikeDatastore@{BUTLER_ROOT_TAG}/FileLikeDatastore_1",
                      "SecondDatastore"]
     registryStr = "/gen3.sqlite3"
 
@@ -1203,7 +1203,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
     returned by Butler stringification.
     """
 
-    datastoreName = ["RemoteFileDatastore@s3://{bucketName}/{root}"]
+    datastoreName = ["FileLikeDatastore@s3://{bucketName}/{root}"]
     """The expected format of the S3 Datastore string."""
 
     registryStr = "/gen3.sqlite3"
@@ -1244,7 +1244,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         s3.create_bucket(Bucket=self.bucketName)
 
         self.datastoreStr = f"datastore={self.root}"
-        self.datastoreName = [f"RemoteFileDatastore@{rooturi}"]
+        self.datastoreName = [f"FileLikeDatastore@{rooturi}"]
         Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
         self.tmpConfigFile = posixpath.join(rooturi, "butler.yaml")
 
@@ -1305,7 +1305,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     returned by Butler stringification.
     """
 
-    datastoreName = ["RemoteFileDatastore@https://{serverName}/{root}"]
+    datastoreName = ["FileLikeDatastore@https://{serverName}/{root}"]
     """The expected format of the WebdavDatastore string."""
 
     registryStr = "/gen3.sqlite3"
@@ -1371,7 +1371,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
 
         self.datastoreStr = f"datastore={self.root}"
-        self.datastoreName = [f"RemoteFileDatastore@{self.rooturi}"]
+        self.datastoreName = [f"FileLikeDatastore@{self.rooturi}"]
 
         if not isWebdavEndpoint(self.rooturi):
             raise OSError("Webdav server not running properly: cannot run tests.")
