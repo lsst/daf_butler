@@ -154,7 +154,8 @@ def refreshToken(session: requests.Session) -> None:
         token_path = os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE']
         if not os.path.isfile(token_path):
             raise FileNotFoundError(f"No token file: {token_path}")
-        bearer_token = open(os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE'], 'r').read().replace('\n', '')
+        with open(os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE'], "r") as fh:
+            bearer_token = fh.read().replace('\n', '')
     except KeyError:
         raise KeyError("Environment variable LSST_BUTLER_WEBDAV_TOKEN_FILE is not set")
 
