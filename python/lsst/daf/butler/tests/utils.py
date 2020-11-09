@@ -55,3 +55,25 @@ class ButlerTestHelper:
             self.assertIsInstance(expected, AstropyTable)
             # Assert that they match:
             self.assertTrue(report_diff_values(table, expected, fileobj=diff), msg="\n" + diff.getvalue())
+
+
+def readTable(textTable):
+    """Read an astropy table from formatted text.
+
+    Contains formatting that causes the astropy table to print an empty string
+    instead of "--" for missing/unpopulated values in the text table.
+
+
+    Parameters
+    ----------
+    textTable : `str`
+        The text version of the table to read.
+
+    Returns
+    -------
+    table : `astropy.table.Table`
+        The table as an astropy table.
+    """
+    return AstropyTable.read(textTable,
+                             format="ascii",
+                             fill_values=[("", 0, "")])

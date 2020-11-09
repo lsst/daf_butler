@@ -46,20 +46,10 @@ from lsst.daf.butler.cli.cmd import query_collections
 from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
 from lsst.daf.butler.script import queryCollections
 from lsst.daf.butler.tests import CliCmdTestBase
-from lsst.daf.butler.tests.utils import ButlerTestHelper
+from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
-
-
-def readTable(textTable):
-    """Read an astropy table from formatted text.
-
-    Contains formatting that causes the astropy table to print an empty string
-    instead of "--" for missing/unpopulated values in the text table.."""
-    return Table.read(textTable,
-                      format="ascii",
-                      fill_values=[("", 0, "")])
 
 
 class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
