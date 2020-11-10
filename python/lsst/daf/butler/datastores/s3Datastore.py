@@ -28,15 +28,15 @@ __all__ = ("S3Datastore", )
 import logging
 from deprecated.sphinx import deprecated
 
-from .remoteFileDatastore import RemoteFileDatastore
+from .fileDatastore import FileDatastore
 
 log = logging.getLogger(__name__)
 
 
 @deprecated(reason="S3Datastore no longer necessary. Please switch to"
-            " lsst.daf.butler.datastores.fileLikeDatastore.FileLikeDatastore and rename configuration file."
+            " lsst.daf.butler.datastores.fileDatastore.FileDatastore and rename configuration file."
             " Will soon be removed.")
-class S3Datastore(RemoteFileDatastore):
+class S3Datastore(FileDatastore):
     """Basic S3 Object Storage backed Datastore.
 
     Parameters

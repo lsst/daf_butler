@@ -24,15 +24,15 @@ from __future__ import annotations
 import logging
 from deprecated.sphinx import deprecated
 
-from .fileLikeDatastore import FileLikeDatastore
+from .fileDatastore import FileDatastore
 
 log = logging.getLogger(__name__)
 
 
 @deprecated(reason="RemoteFileDatastore no longer necessary. Please switch to"
-            " lsst.daf.butler.datastores.fileLikeDatastore.FileLikeDatastore and rename configuration file."
+            " lsst.daf.butler.datastores.fileDatastore.FileDatastore and rename configuration file."
             " Will soon be removed.")
-class RemoteFileDatastore(FileLikeDatastore):
+class RemoteFileDatastore(FileDatastore):
     """A datastore designed for files at remote locations.
 
     Parameters

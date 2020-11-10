@@ -22,7 +22,7 @@ from __future__ import annotations
 
 """Generic file-based datastore code."""
 
-__all__ = ("FileLikeDatastore", )
+__all__ = ("FileDatastore", )
 
 import hashlib
 import logging
@@ -90,7 +90,7 @@ NULLSTR = "__NULL_STRING__"
 
 
 class _IngestPrepData(Datastore.IngestPrepData):
-    """Helper class for FileLikeDatastore ingest implementation.
+    """Helper class for FileDatastore ingest implementation.
 
     Parameters
     ----------
@@ -130,7 +130,7 @@ class DatastoreFileGetInformation:
     """The `StorageClass` of the dataset being read."""
 
 
-class FileLikeDatastore(GenericBaseDatastore):
+class FileDatastore(GenericBaseDatastore):
     """Generic Datastore for file-based implementations.
 
     Should always be sub-classed since key abstract methods are missing.
@@ -171,7 +171,7 @@ class FileLikeDatastore(GenericBaseDatastore):
     composites: CompositesMap
     """Determines whether a dataset should be disassembled on put."""
 
-    defaultConfigFile = "datastores/fileLikeDatastore.yaml"
+    defaultConfigFile = "datastores/fileDatastore.yaml"
     """Path to configuration defaults. Accessed within the ``config`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
@@ -628,7 +628,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         Notes
         -----
-        Subclasses of `FileLikeDatastore` can implement this method instead
+        Subclasses of `FileDatastore` can implement this method instead
         of `_prepIngest`.  It should not modify the data repository or given
         file in any way.
 

@@ -33,15 +33,15 @@ from typing import (
     Optional,
 )
 
-from .fileLikeDatastore import FileLikeDatastore
+from .fileDatastore import FileDatastore
 
 log = logging.getLogger(__name__)
 
 
 @deprecated(reason="PosixDatastore no longer necessary. Please switch to"
-            " lsst.daf.butler.datastores.fileLikeDatastore.FileLikeDatastore and rename configuration file."
+            " lsst.daf.butler.datastores.fileDatastore.FileDatastore and rename configuration file."
             " Will soon be removed.")
-class PosixDatastore(FileLikeDatastore):
+class PosixDatastore(FileDatastore):
     """Basic POSIX filesystem backed Datastore.
 
     Parameters

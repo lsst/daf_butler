@@ -135,7 +135,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
             config = lsst.daf.butler.Config()
             config["datastore", "cls"] = "lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore"
             config["datastore", "datastores"] = [{
-                "cls": "lsst.daf.butler.datastores.fileLikeDatastore.FileLikeDatastore",
+                "cls": "lsst.daf.butler.datastores.fileDatastore.FileDatastore",
             }]
 
             repo = lsst.daf.butler.Butler.makeRepo(temp, config=config)

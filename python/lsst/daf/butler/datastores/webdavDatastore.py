@@ -26,13 +26,13 @@ from __future__ import annotations
 __all__ = ("WebdavDatastore", )
 
 from deprecated.sphinx import deprecated
-from .remoteFileDatastore import RemoteFileDatastore
+from .fileDatastore import FileDatastore
 
 
 @deprecated(reason="S3Datastore no longer necessary. Please switch to"
-            " lsst.daf.butler.datastores.fileLikeDatastore.FileLikeDatastore and rename configuration file."
+            " lsst.daf.butler.datastores.fileDatastore.FileDatastore and rename configuration file."
             " Will soon be removed.")
-class WebdavDatastore(RemoteFileDatastore):
+class WebdavDatastore(FileDatastore):
     """Basic Webdav Storage backed Datastore.
 
     Parameters
