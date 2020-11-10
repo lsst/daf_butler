@@ -261,6 +261,11 @@ class DatasetQueryColumns:
     this dataset.
     """
 
+    ingestDate: Optional[ColumnElement]
+    """Column containing the ingest timestamp, this is not a part of
+    `DatasetRef` but it comes from the same table.
+    """
+
     def __iter__(self) -> Iterator[ColumnElement]:
         yield self.id
         yield self.runKey

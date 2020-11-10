@@ -22,11 +22,13 @@ from __future__ import annotations
 
 __all__ = ()  # all symbols intentionally private; for internal package use.
 
-from typing import Any, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Any, List, Mapping, Optional, Tuple, TYPE_CHECKING, Union
 
 import sqlalchemy
+from sqlalchemy.ext.compiler import compiles
 
 from ...core import DimensionUniverse, Dimension, DimensionElement, NamedKeyDict, NamedValueSet
+from ...core.ddl import AstropyTimeNsecTai
 from .exprParser import Node, TreeVisitor
 from ._structs import QueryColumns
 
@@ -34,7 +36,64 @@ if TYPE_CHECKING:
     import astropy.time
 
 
-def categorizeIdentifier(universe: DimensionUniverse, name: str) -> Tuple[DimensionElement, Optional[str]]:
+class _TimestampColumnElement(sqlalchemy.sql.ColumnElement):
+    """Special ColumnElement type used for TIMESTAMP columns in expressions.
+
+    TIMESTAMP columns in expressions are usually compared to time literals
+    which are `astropy.time.Time` instances that are converted to integer
+    nanoseconds since Epoch. For comparison we need to convert TIMESTAMP
+    column value to the same type. This type is a wrapper for actual column
+    that has special dialect-specific compilation methods defined below
+    transforming column in that common type.
+
+    This mechanism is only used for expressions in WHERE clause, values of the
+    TIMESTAMP columns returned from queries are still handled by standard
+    mechanism and they are converted to `datetime` instances.
+    """
+    def __init__(self, column: sqlalchemy.sql.ColumnElement):
+        super().__init__()
+        self._column = column
+
+
+@compiles(_TimestampColumnElement, "sqlite")
+def compile_timestamp_sqlite(element: Any, compiler: Any, **kw: Mapping[str, Any]) -> str:
+    """Compilation of TIMESTAMP column for SQLite.
+
+    SQLite defines ``strftime`` function that can be used to convert timestamp
+    value to Unix seconds.
+    """
+    return f"STRFTIME('%s', {element._column.name})*1000000000"
+
+
+@compiles(_TimestampColumnElement, "postgresql")
+def compile_timestamp_pg(element: Any, compiler: Any, **kw: Mapping[str, Any]) -> str:
+    """Compilation of TIMESTAMP column for PostgreSQL.
+
+    PostgreSQL can use `EXTRACT(epoch FROM timestamp)` function.
+    """
+    return f"EXTRACT(epoch FROM {element._column.name})*1000000000"
+
+
+def categorizeIngestDateId(name: str) -> bool:
+    """Categorize an identifier in a parsed expression as an ingest_date
+    attribute of a dataset table.
+
+    Parameters
+    ----------
+    name : `str`
+        Identifier to categorize.
+
+    Returns
+    -------
+    isIngestDate : `bool`
+        True is returned if identifier name is ``ingest_date``.
+    """
+    # TODO: this is hardcoded for now, may be better to extract it from schema
+    # but I do not know how to do it yet.
+    return name == "ingest_date"
+
+
+def categorizeElementId(universe: DimensionUniverse, name: str) -> Tuple[DimensionElement, Optional[str]]:
     """Categorize an identifier in a parsed expression as either a `Dimension`
     name (indicating the primary key for that dimension) or a non-primary-key
     column in a `DimensionElement` table.
@@ -115,6 +174,7 @@ class InspectionVisitor(TreeVisitor[None]):
         self.universe = universe
         self.keys: NamedValueSet[Dimension] = NamedValueSet()
         self.metadata: NamedKeyDict[DimensionElement, List[str]] = NamedKeyDict()
+        self.hasIngestDate: bool = False
 
     def visitNumericLiteral(self, value: str, node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
@@ -130,7 +190,10 @@ class InspectionVisitor(TreeVisitor[None]):
 
     def visitIdentifier(self, name: str, node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitIdentifier
-        element, column = categorizeIdentifier(self.universe, name)
+        if categorizeIngestDateId(name):
+            self.hasIngestDate = True
+            return
+        element, column = categorizeElementId(self.universe, name)
         if column is not None:
             self.metadata.setdefault(element, []).append(column)
         else:
@@ -206,6 +269,7 @@ class ClauseVisitor(TreeVisitor[sqlalchemy.sql.ColumnElement]):
         self.universe = universe
         self.columns = columns
         self.elements = elements
+        self.hasIngestDate: bool = False
 
     def visitNumericLiteral(self, value: str, node: Node) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
@@ -223,11 +287,16 @@ class ClauseVisitor(TreeVisitor[sqlalchemy.sql.ColumnElement]):
 
     def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitTimeLiteral
-        return sqlalchemy.sql.literal(value)
+        return sqlalchemy.sql.literal(value, type_=AstropyTimeNsecTai)
 
     def visitIdentifier(self, name: str, node: Node) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitIdentifier
-        element, column = categorizeIdentifier(self.universe, name)
+        if categorizeIngestDateId(name):
+            self.hasIngestDate = True
+            assert self.columns.datasets is not None
+            assert self.columns.datasets.ingestDate is not None, "dataset.ingest_date is not in the query"
+            return _TimestampColumnElement(self.columns.datasets.ingestDate)
+        element, column = categorizeElementId(self.universe, name)
         if column is not None:
             return self.elements[element].columns[column]
         else:

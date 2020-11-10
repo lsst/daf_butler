@@ -370,6 +370,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
+               ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
                ) -> SimpleQuery:
         # Docstring inherited from DatasetRecordStorage.
         assert collection.type is not CollectionType.CHAINED
@@ -378,11 +379,14 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # the id and run fields from that; passing them as kwargs here tells
         # SimpleQuery to handle them whether they're constraints or results.
         # We always constraint the dataset_type_id here as well.
+        static_kwargs = {self._runKeyColumn: run}
+        if ingestDate is not None:
+            static_kwargs["ingest_date"] = SimpleQuery.Select
         query.join(
             self._static.dataset,
             id=id,
             dataset_type_id=self._dataset_type_id,
-            **{self._runKeyColumn: run}
+            **static_kwargs
         )
         # If and only if the collection is a RUN, we constrain it in the static
         # table (and also the tags or calibs table below)
@@ -400,6 +404,16 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # We always constrain (never retrieve) the collection from the tags
         # table.
         kwargs[self._collections.getCollectionForeignKeyName()] = collection.key
+        # constrain ingest time
+        if isinstance(ingestDate, Timespan):
+            # Tmespan is astropy Time (usually in TAI) and ingest_date is
+            # TIMESTAMP, convert values to Python datetime for sqlalchemy.
+            if ingestDate.begin is not None:
+                begin = ingestDate.begin.utc.datetime
+                query.where.append(self._static.dataset.ingest_date >= begin)
+            if ingestDate.end is not None:
+                end = ingestDate.end.utc.datetime
+                query.where.append(self._static.dataset.ingest_date < end)
         # And now we finally join in the tags or calibs table.
         if collection.type is CollectionType.CALIBRATION:
             assert self._calibs is not None, \

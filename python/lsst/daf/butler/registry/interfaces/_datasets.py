@@ -240,6 +240,7 @@ class DatasetRecordStorage(ABC):
                id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
+               ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
                ) -> Optional[SimpleQuery]:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
         this `DatasetType`.
@@ -273,6 +274,12 @@ class DatasetRecordStorage(ABC):
             result columns.  If a `Timespan` instance, constrain the results to
             those whose validity ranges overlap that given timespan.  Ignored
             unless ``collection.type is CollectionType.CALIBRATION``.
+        ingestDate : `None`, `Select`, or `Timespan`
+            If `Select` include the ingest timestamp in the result columns.
+            If a `Timespan` instance, constrain the results to those whose
+            ingest times which are inside given timespan and also include
+            timestamp in the result columns. If `None` (default) then there is
+            no constraint and timestamp is not returned.
 
         Returns
         -------

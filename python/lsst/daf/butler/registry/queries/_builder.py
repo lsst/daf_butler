@@ -158,7 +158,7 @@ class QueryBuilder:
             return False
         subsubqueries = []
         runKeyName = self._managers.collections.getRunForeignKeyName()
-        baseColumnNames = {"id", runKeyName} if isResult else set()
+        baseColumnNames = {"id", runKeyName, "ingest_date"} if isResult else set()
         baseColumnNames.update(datasetType.dimensions.required.names)
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
                                                                  collectionTypes=collectionTypes)):
@@ -175,7 +175,8 @@ class QueryBuilder:
             ssq = datasetRecordStorage.select(collection=collectionRecord,
                                               dataId=SimpleQuery.Select,
                                               id=SimpleQuery.Select if isResult else None,
-                                              run=SimpleQuery.Select if isResult else None)
+                                              run=SimpleQuery.Select if isResult else None,
+                                              ingestDate=SimpleQuery.Select if isResult else None)
             if ssq is None:
                 continue
             assert {c.name for c in ssq.columns} == baseColumnNames
@@ -225,7 +226,8 @@ class QueryBuilder:
                 ]
                 windowSelectCols = [
                     search.columns["id"].label("id"),
-                    search.columns[runKeyName].label(runKeyName)
+                    search.columns[runKeyName].label(runKeyName),
+                    search.columns["ingest_date"].label("ingest_date"),
                 ]
                 windowSelectCols += windowDataIdCols
                 assert {c.name for c in windowSelectCols} == baseColumnNames
@@ -253,6 +255,7 @@ class QueryBuilder:
                 datasetType=datasetType,
                 id=subquery.columns["id"],
                 runKey=subquery.columns[runKeyName],
+                ingestDate=subquery.columns["ingest_date"],
             )
         else:
             subquery = subquery.alias(datasetType.name)

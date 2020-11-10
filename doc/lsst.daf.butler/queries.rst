@@ -148,7 +148,9 @@ dimensions, e.g. ``visit`` identifier is used to represent a value of
 ``visit`` dimension in registry database. Dotted identifiers are mapped to
 tables and columns in registry database, e.g. ``detector.raft`` can be used
 for accessing raft name (obviously dotted names need knowledge of database
-schema and how SQL query is built).
+schema and how SQL query is built). A simple identifier with a name
+``ingest_date`` is used to reference dataset ingest time, which can be used to
+filter query results based on that property of datasets.
 
 Unary arithmetic operators
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -373,3 +375,5 @@ Few examples of valid expressions using some of the constructs:
     exposure.datetime_begin > T'58938.515'
 
     visit.datetime_end < T'mjd/58938.515/tai'
+
+    ingest_date < T'2020-11-06 21:10:00'

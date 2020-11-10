@@ -1640,3 +1640,24 @@ class RegistryTests(ABC):
             else:
                 expected = None
             assertLookup(detector=2, timespan=timespan, expected=expected)
+
+    def testIngestTimeQuery(self):
+
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+
+        datasets = list(registry.queryDatasets(..., collections=...))
+        len0 = len(datasets)
+        self.assertGreater(len0, 0)
+
+        where = "ingest_date > T'2000-01-01'"
+        datasets = list(registry.queryDatasets(..., collections=..., where=where))
+        len1 = len(datasets)
+        self.assertEqual(len0, len1)
+
+        # no one will ever use this piece of software in 30 years
+        where = "ingest_date > T'2050-01-01'"
+        datasets = list(registry.queryDatasets(..., collections=..., where=where))
+        len2 = len(datasets)
+        self.assertEqual(len2, 0)
