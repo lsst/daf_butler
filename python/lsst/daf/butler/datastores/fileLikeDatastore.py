@@ -833,17 +833,6 @@ class FileLikeDatastore(GenericBaseDatastore):
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
         uri = location.uri
 
-        if uri.exists():
-            # Assume that by this point if registry thinks the file should
-            # not exist then the file should not exist and therefore we can
-            # overwrite it. This can happen if a put was interrupted by
-            # an external interrupt. The only time this could be problematic is
-            # if the file template is incomplete and multiple dataset refs
-            # result in identical filenames.
-            # Eventually we should remove the check completely (it takes
-            # non-zero time for network).
-            log.warning("Object %s exists in datastore for ref %s", uri, ref)
-
         if not uri.dirname().exists():
             log.debug("Folder %s does not exist yet so creating it.", uri.dirname())
             uri.dirname().mkdir()
