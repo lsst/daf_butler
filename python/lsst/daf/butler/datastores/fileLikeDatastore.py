@@ -874,9 +874,9 @@ class FileLikeDatastore(GenericBaseDatastore):
                     # Need to configure the formatter to write to a different
                     # location and that needs us to overwrite internals
                     tmpLocation = Location(*os.path.split(tmpFile.name))
-                    formatter._fileDescriptor.location = tmpLocation
                     log.debug("Writing dataset to temporary location at %s", tmpLocation.uri)
-                    formatter.write(inMemoryDataset)
+                    with formatter._updateLocation(tmpLocation):
+                        formatter.write(inMemoryDataset)
                     uri.transfer_from(tmpLocation.uri, transfer="copy", overwrite=True)
                 log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
 
@@ -941,15 +941,17 @@ class FileLikeDatastore(GenericBaseDatastore):
                 # because formatter.read does not allow an override.
                 # This could be improved.
                 msg = ""
+                newLocation = None
                 if uri != local_uri:
-                    formatter._fileDescriptor.location = Location(*local_uri.split())
+                    newLocation = Location(*local_uri.split())
                     msg = "(via download to local file)"
 
                 log.debug("Reading %s from location %s %s with formatter %s",
                           f"component {getInfo.component}" if isComponent else "",
                           uri, msg, formatter.name())
                 try:
-                    result = formatter.read(component=getInfo.component if isComponent else None)
+                    with formatter._updateLocation(newLocation):
+                        result = formatter.read(component=getInfo.component if isComponent else None)
                 except Exception as e:
                     raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
                                      f" ({ref.datasetType.name} from {uri}): {e}") from e
