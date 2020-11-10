@@ -237,7 +237,8 @@ class RepoExportContext:
             for run in datasetsByRun.keys():
                 self._collections[run] = self._registry._collections.find(run)
         for collectionName in self._computeSortedCollections():
-            self._backend.saveCollection(self._collections[collectionName])
+            doc = self._registry.getCollectionDocumentation(collectionName)
+            self._backend.saveCollection(self._collections[collectionName], doc)
         # Sort the dataset types and runs before exporting to ensure
         # reproducible order in export file.
         for datasetType in sorted(self._datasets.keys()):

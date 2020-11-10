@@ -404,7 +404,7 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def register(self, name: str, type: CollectionType) -> CollectionRecord:
+    def register(self, name: str, type: CollectionType, doc: Optional[str] = None) -> CollectionRecord:
         """Ensure that a collection of the given name and type are present
         in the layer this manager is associated with.
 
@@ -414,6 +414,9 @@ class CollectionManager(VersionedExtension):
             Name of the collection.
         type : `CollectionType`
             Enumeration value indicating the type of collection.
+        doc : `str`, optional
+            Documentation string for the collection.  Ignored if the collection
+            already exists.
 
         Returns
         -------
@@ -530,5 +533,34 @@ class CollectionManager(VersionedExtension):
         ------
         record : `CollectionRecord`
             The record for a managed collection.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def getDocumentation(self, key: Any) -> Optional[str]:
+        """Retrieve the documentation string for a collection.
+
+        Parameters
+        ----------
+        key
+            Internal primary key value for the collection.
+
+        Returns
+        -------
+        docs : `str` or `None`
+            Docstring for the collection with the given key.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def setDocumentation(self, key: Any, doc: Optional[str]) -> None:
+        """Set the documentation string for a collection.
+
+        Parameters
+        ----------
+        key
+            Internal primary key value for the collection.
+        docs : `str`, optional
+            Docstring for the collection with the given key.
         """
         raise NotImplementedError()

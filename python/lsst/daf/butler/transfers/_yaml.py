@@ -68,7 +68,7 @@ from ..registry.versions import IncompatibleVersionError
 from ._interfaces import RepoExportBackend, RepoImportBackend
 
 
-EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 0)
+EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 1)
 """Export format version.
 
 Files with a different major version or a newer minor version cannot be read by
@@ -98,13 +98,15 @@ class YamlRepoExportBackend(RepoExportBackend):
             "records": data_dicts,
         })
 
-    def saveCollection(self, record: CollectionRecord) -> None:
+    def saveCollection(self, record: CollectionRecord, doc: Optional[str]) -> None:
         # Docstring inherited from RepoExportBackend.saveCollections.
         data: Dict[str, Any] = {
             "type": "collection",
             "collection_type": record.type.name,
             "name": record.name,
         }
+        if doc is not None:
+            data["doc"] = doc
         if isinstance(record, RunRecord):
             data["host"] = record.host
             data["timespan_begin"] = record.timespan.begin
@@ -219,6 +221,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         self.runs: Dict[str, Tuple[Optional[str], Timespan]] = {}
         self.chains: Dict[str, List[str]] = {}
         self.collections: Dict[str, CollectionType] = {}
+        self.collectionDocs: Dict[str, str] = {}
         self.datasetTypes: NamedValueSet[DatasetType] = NamedValueSet()
         self.dimensions: Mapping[DimensionElement, List[DimensionRecord]] = defaultdict(list)
         self.tagAssociations: Dict[str, List[int]] = defaultdict(list)
@@ -264,6 +267,9 @@ class YamlRepoImportBackend(RepoImportBackend):
                     self.chains[data["name"]] = children
                 else:
                     self.collections[data["name"]] = collectionType
+                doc = data.get("doc")
+                if doc is not None:
+                    self.collectionDocs[data["name"]] = doc
             elif data["type"] == "run":
                 # Also support old form of saving a run with no extra info.
                 self.runs[data["name"]] = (None, Timespan(None, None))
@@ -310,12 +316,12 @@ class YamlRepoImportBackend(RepoImportBackend):
         for datasetType in self.datasetTypes:
             self.registry.registerDatasetType(datasetType)
         for run in self.runs:
-            self.registry.registerRun(run)
+            self.registry.registerRun(run, doc=self.collectionDocs.get(run))
             # No way to add extra run info to registry yet.
         for collection, collection_type in self.collections.items():
-            self.registry.registerCollection(collection, collection_type)
+            self.registry.registerCollection(collection, collection_type, doc=self.collectionDocs.get(run))
         for chain, children in self.chains.items():
-            self.registry.registerCollection(chain, CollectionType.CHAINED)
+            self.registry.registerCollection(chain, CollectionType.CHAINED, doc=self.collectionDocs.get(run))
             self.registry.setCollectionChain(chain, children)
 
     def load(self, datastore: Optional[Datastore], *,
