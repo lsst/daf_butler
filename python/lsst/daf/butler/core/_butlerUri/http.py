@@ -154,7 +154,8 @@ def refreshToken(session: requests.Session) -> None:
         token_path = os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE']
         if not os.path.isfile(token_path):
             raise FileNotFoundError(f"No token file: {token_path}")
-        bearer_token = open(os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE'], 'r').read().replace('\n', '')
+        with open(os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE'], "r") as fh:
+            bearer_token = fh.read().replace('\n', '')
     except KeyError:
         raise KeyError("Environment variable LSST_BUTLER_WEBDAV_TOKEN_FILE is not set")
 
@@ -378,7 +379,7 @@ class ButlerHttpURI(ButlerURI):
         if r.status_code not in [200, 202, 204]:
             raise FileNotFoundError(f"Unable to delete resource {self}; status code: {r.status_code}")
 
-    def as_local(self) -> Tuple[str, bool]:
+    def _as_local(self) -> Tuple[str, bool]:
         """Download object over HTTP and place in temporary directory.
 
         Returns
@@ -474,17 +475,20 @@ class ButlerHttpURI(ButlerURI):
                 log.debug("Running copy via COPY HTTP request.")
         else:
             # Use local file and upload it
-            local_src, is_temporary = src.as_local()
-            f = open(local_src, "rb")
-            dest_url = finalurl(self._emptyPut())
-            r = self.session.put(dest_url, data=f)
-            f.close()
-            if is_temporary:
-                os.remove(local_src)
-            log.debug("Running transfer from a local copy of the file.")
+            with src.as_local() as local_uri:
+                with open(local_uri.ospath, "rb") as f:
+                    dest_url = finalurl(self._emptyPut())
+                    r = self.session.put(dest_url, data=f)
+            log.debug("Uploading URI %s to %s via local file", src, self)
 
         if r.status_code not in [201, 202, 204]:
             raise ValueError(f"Can not transfer file {self}, status code: {r.status_code}")
+
+        # This was an explicit move requested from a remote resource
+        # try to remove that resource
+        if transfer == "move":
+            # Transactions do not work here
+            src.remove()
 
     def _emptyPut(self) -> requests.Response:
         """Send an empty PUT request to current URL. This is used to detect

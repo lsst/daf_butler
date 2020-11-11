@@ -22,12 +22,12 @@ from __future__ import annotations
 
 """Generic file-based datastore code."""
 
-__all__ = ("FileLikeDatastore", )
+__all__ = ("FileDatastore", )
 
 import hashlib
 import logging
 import os
-from abc import abstractmethod
+import tempfile
 
 from sqlalchemy import BigInteger, String
 
@@ -90,7 +90,7 @@ NULLSTR = "__NULL_STRING__"
 
 
 class _IngestPrepData(Datastore.IngestPrepData):
-    """Helper class for FileLikeDatastore ingest implementation.
+    """Helper class for FileDatastore ingest implementation.
 
     Parameters
     ----------
@@ -130,7 +130,7 @@ class DatastoreFileGetInformation:
     """The `StorageClass` of the dataset being read."""
 
 
-class FileLikeDatastore(GenericBaseDatastore):
+class FileDatastore(GenericBaseDatastore):
     """Generic Datastore for file-based implementations.
 
     Should always be sub-classed since key abstract methods are missing.
@@ -170,6 +170,11 @@ class FileLikeDatastore(GenericBaseDatastore):
 
     composites: CompositesMap
     """Determines whether a dataset should be disassembled on put."""
+
+    defaultConfigFile = "datastores/fileDatastore.yaml"
+    """Path to configuration defaults. Accessed within the ``config`` resource
+    or relative to a search path. Can be None if no defaults specified.
+    """
 
     @classmethod
     def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
@@ -276,6 +281,16 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         # Determine whether checksums should be used - default to False
         self.useChecksum = self.config.get("checksum", False)
+
+        # Check existence and create directory structure if necessary
+        if not self.root.exists():
+            if "create" not in self.config or not self.config["create"]:
+                raise ValueError(f"No valid root and not allowed to create one at: {self.root}")
+            try:
+                self.root.mkdir()
+            except Exception as e:
+                raise ValueError(f"Can not create datastore root '{self.root}', check permissions."
+                                 f" Got error: {e}") from e
 
     def __str__(self) -> str:
         return str(self.root)
@@ -613,7 +628,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         Notes
         -----
-        Subclasses of `FileLikeDatastore` can implement this method instead
+        Subclasses of `FileDatastore` can implement this method instead
         of `_prepIngest`.  It should not modify the data repository or given
         file in any way.
 
@@ -800,7 +815,6 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location
 
-    @abstractmethod
     def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
         """Write out in memory dataset to datastore.
 
@@ -816,9 +830,59 @@ class FileLikeDatastore(GenericBaseDatastore):
         info : `StoredFileInfo`
             Information describin the artifact written to the datastore.
         """
-        raise NotImplementedError()
+        location, formatter = self._prepare_for_put(inMemoryDataset, ref)
+        uri = location.uri
 
-    @abstractmethod
+        if not uri.dirname().exists():
+            log.debug("Folder %s does not exist yet so creating it.", uri.dirname())
+            uri.dirname().mkdir()
+
+        if self._transaction is None:
+            raise RuntimeError("Attempting to write artifact without transaction enabled")
+
+        def _removeFileExists(uri: ButlerURI) -> None:
+            """Remove a file and do not complain if it is not there.
+
+            This is important since a formatter might fail before the file
+            is written and we should not confuse people by writing spurious
+            error messages to the log.
+            """
+            try:
+                uri.remove()
+            except FileNotFoundError:
+                pass
+
+        # Register a callback to try to delete the uploaded data if
+        # something fails below
+        self._transaction.registerUndo("artifactWrite", _removeFileExists, uri)
+
+        # For a local file, simply use the formatter directly
+        if uri.isLocal:
+            path = formatter.write(inMemoryDataset)
+            assert self.root.join(path) == uri
+            log.debug("Successfully wrote python object to local file at %s", uri)
+        else:
+            # This is a remote URI, so first try bytes and write directly else
+            # fallback to a temporary file
+            try:
+                serializedDataset = formatter.toBytes(inMemoryDataset)
+                log.debug("Writing bytes directly to %s", uri)
+                uri.write(serializedDataset, overwrite=True)
+                log.debug("Successfully wrote bytes directly to %s", uri)
+            except NotImplementedError:
+                with tempfile.NamedTemporaryFile(suffix=uri.getExtension()) as tmpFile:
+                    # Need to configure the formatter to write to a different
+                    # location and that needs us to overwrite internals
+                    tmpLocation = Location(*os.path.split(tmpFile.name))
+                    log.debug("Writing dataset to temporary location at %s", tmpLocation.uri)
+                    with formatter._updateLocation(tmpLocation):
+                        formatter.write(inMemoryDataset)
+                    uri.transfer_from(tmpLocation.uri, transfer="copy", overwrite=True)
+                log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
+
+        # URI is needed to resolve what ingest case are we dealing with
+        return self._extractIngestInfo(uri, ref, formatter=formatter)
+
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
                                    ref: DatasetRef, isComponent: bool = False) -> Any:
         """Read the artifact from datastore into in memory object.
@@ -837,7 +901,63 @@ class FileLikeDatastore(GenericBaseDatastore):
         inMemoryDataset : `object`
             The artifact as a python object.
         """
-        raise NotImplementedError()
+        location = getInfo.location
+        uri = location.uri
+        log.debug("Accessing data from %s", uri)
+
+        # Cannot recalculate checksum but can compare size as a quick check
+        recorded_size = getInfo.info.file_size
+        resource_size = uri.size()
+        if resource_size != recorded_size:
+            raise RuntimeError("Integrity failure in Datastore. "
+                               f"Size of file {uri} ({resource_size}) "
+                               f"does not match size recorded in registry of {recorded_size}")
+
+        # For the general case we have choices for how to proceed.
+        # 1. Always use a local file (downloading the remote resource to a
+        #    temporary file if needed).
+        # 2. Use a threshold size and read into memory and use bytes.
+        # Use both for now with an arbitrary hand off size.
+        # This allows small datasets to be downloaded from remote object
+        # stores without requiring a temporary file.
+
+        formatter = getInfo.formatter
+        nbytes_max = 10_000_000  # Arbitrary number that we can tune
+        if resource_size <= nbytes_max and formatter.can_read_bytes():
+            serializedDataset = uri.read()
+            log.debug("Deserializing %s from %d bytes from location %s with formatter %s",
+                      f"component {getInfo.component}" if isComponent else "",
+                      len(serializedDataset), uri, formatter.name())
+            try:
+                result = formatter.fromBytes(serializedDataset,
+                                             component=getInfo.component if isComponent else None)
+            except Exception as e:
+                raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
+                                 f" ({ref.datasetType.name} from {uri}): {e}") from e
+        else:
+            # Read from file
+            with uri.as_local() as local_uri:
+                # Have to update the Location associated with the formatter
+                # because formatter.read does not allow an override.
+                # This could be improved.
+                msg = ""
+                newLocation = None
+                if uri != local_uri:
+                    newLocation = Location(*local_uri.split())
+                    msg = "(via download to local file)"
+
+                log.debug("Reading %s from location %s %s with formatter %s",
+                          f"component {getInfo.component}" if isComponent else "",
+                          uri, msg, formatter.name())
+                try:
+                    with formatter._updateLocation(newLocation):
+                        result = formatter.read(component=getInfo.component if isComponent else None)
+                except Exception as e:
+                    raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
+                                     f" ({ref.datasetType.name} from {uri}): {e}") from e
+
+        return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
+                                      isComponent=isComponent)
 
     def exists(self, ref: DatasetRef) -> bool:
         """Check if the dataset exists in the datastore.
@@ -1470,18 +1590,14 @@ class FileLikeDatastore(GenericBaseDatastore):
         if algorithm not in hashlib.algorithms_guaranteed:
             raise NameError("The specified algorithm '{}' is not supported by hashlib".format(algorithm))
 
-        if uri.scheme and uri.scheme != "file":
+        if not uri.isLocal:
             return None
 
         hasher = hashlib.new(algorithm)
 
-        filename, is_temp = uri.as_local()
-
-        with open(filename, "rb") as f:
-            for chunk in iter(lambda: f.read(block_size), b""):
-                hasher.update(chunk)
-
-        if is_temp:
-            os.remove(filename)
+        with uri.as_local() as local_uri:
+            with open(local_uri.ospath, "rb") as f:
+                for chunk in iter(lambda: f.read(block_size), b""):
+                    hasher.update(chunk)
 
         return hasher.hexdigest()

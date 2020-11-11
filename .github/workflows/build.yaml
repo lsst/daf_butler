@@ -30,6 +30,9 @@ jobs:
       - name: Install cryptography package for moto
         run: pip install cryptography
 
+      - name: Install WebDAV packages for testing
+        run: pip install cheroot wsgidav
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 

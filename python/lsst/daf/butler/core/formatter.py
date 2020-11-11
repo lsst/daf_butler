@@ -25,9 +25,22 @@ __all__ = ("Formatter", "FormatterFactory", "FormatterParameter")
 
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
+import contextlib
 import logging
 import copy
-from typing import ClassVar, Set, AbstractSet, Union, Optional, Dict, Any, Tuple, Type, TYPE_CHECKING
+from typing import (
+    AbstractSet,
+    Any,
+    ClassVar,
+    Dict,
+    Iterator,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    TYPE_CHECKING,
+    Union,
+)
 
 from .configSupport import processLookupConfigs, LookupKey
 from .mappingFactory import MappingFactory
@@ -210,6 +223,27 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support writing")
 
+    @classmethod
+    def can_read_bytes(cls) -> bool:
+        """Indicate if this formatter can format from bytes.
+
+        Returns
+        -------
+        can : `bool`
+            `True` if the `fromBytes` method is implemented.
+        """
+        # We have no property to read so instead try to format from a byte
+        # and see what happens
+        try:
+            # We know the arguments are incompatible
+            cls.fromBytes(cls, b"")  # type: ignore
+        except NotImplementedError:
+            return False
+        except Exception:
+            # There will be problems with the bytes we are supplying so ignore
+            pass
+        return True
+
     def fromBytes(self, serializedDataset: bytes,
                   component: Optional[str] = None) -> object:
         """Reads serialized data into a Dataset or its component.
@@ -245,6 +279,40 @@ class Formatter(metaclass=ABCMeta):
             Bytes representing the serialized dataset.
         """
         raise NotImplementedError("Type does not support writing to bytes.")
+
+    @contextlib.contextmanager
+    def _updateLocation(self, location: Optional[Location]) -> Iterator[Location]:
+        """Temporarily replace the location associated with this formatter.
+
+        Parameters
+        ----------
+        location : `Location`
+            New location to use for this formatter. If `None` the
+            formatter will not change but it will still return
+            the old location. This allows it to be used in a code
+            path where the location may not need to be updated
+            but the with block is still convenient.
+
+        Yields
+        ------
+        old : `Location`
+            The old location that will be restored.
+
+        Notes
+        -----
+        This is an internal method that should be used with care.
+        It may change in the future. Should be used as a context
+        manager to restore the location when the temporary is no
+        longer required.
+        """
+        old = self._fileDescriptor.location
+        try:
+            if location is not None:
+                self._fileDescriptor.location = location
+            yield old
+        finally:
+            if location is not None:
+                self._fileDescriptor.location = old
 
     def makeUpdatedLocation(self, location: Location) -> Location:
         """Return a new `Location` instance updated with this formatter's

@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import urllib
 import posixpath
 import copy
@@ -34,6 +35,7 @@ __all__ = ('ButlerURI',)
 from typing import (
     TYPE_CHECKING,
     Any,
+    Iterator,
     Optional,
     Tuple,
     Type,
@@ -77,6 +79,8 @@ class ButlerURI:
     forceDirectory: `bool`, optional
         If `True` forces the URI to end with a separator, otherwise given URI
         is interpreted as is.
+    isTemporary : `bool`, optional
+        If `True` indicates that this URI points to a temporary resource.
     """
 
     _pathLib: Type[PurePath] = PurePosixPath
@@ -104,18 +108,22 @@ class ButlerURI:
     be made whether to quote it to be consistent.
     """
 
+    isLocal = False
+    """If `True` this URI refers to a local file."""
+
     # This is not an ABC with abstract methods because the __new__ being
     # a factory confuses mypy such that it assumes that every constructor
     # returns a ButlerURI and then determines that all the abstract methods
     # are still abstract. If they are not marked abstract but just raise
     # mypy is fine with it.
 
-    # mypy is confused without this
+    # mypy is confused without these
     _uri: urllib.parse.ParseResult
+    isTemporary: bool
 
     def __new__(cls, uri: Union[str, urllib.parse.ParseResult, ButlerURI],
                 root: Optional[Union[str, ButlerURI]] = None, forceAbsolute: bool = True,
-                forceDirectory: bool = False) -> ButlerURI:
+                forceDirectory: bool = False, isTemporary: bool = False) -> ButlerURI:
         parsed: urllib.parse.ParseResult
         dirLike: bool
         subclass: Optional[Type] = None
@@ -185,6 +193,7 @@ class ButlerURI:
         self = object.__new__(subclass)
         self._uri = parsed
         self.dirLike = dirLike
+        self.isTemporary = isTemporary
         return self
 
     @property
@@ -494,9 +503,11 @@ class ButlerURI:
         """
         return True
 
-    def as_local(self) -> Tuple[str, bool]:
+    def _as_local(self) -> Tuple[str, bool]:
         """Return the location of the (possibly remote) resource in the
         local file system.
+
+        This is a helper function for ``as_local`` context manager.
 
         Returns
         -------
@@ -509,6 +520,43 @@ class ButlerURI:
             Indicates if the local path is a temporary file or not.
         """
         raise NotImplementedError()
+
+    @contextlib.contextmanager
+    def as_local(self) -> Iterator[ButlerURI]:
+        """Return the location of the (possibly remote) resource in the
+        local file system.
+
+        Yields
+        ------
+        local : `ButlerURI`
+            If this is a remote resource, it will be a copy of the resource
+            on the local file system, probably in a temporary directory.
+            For a local resource this should be the actual path to the
+            resource.
+
+        Notes
+        -----
+        The context manager will automatically delete any local temporary
+        file.
+
+        Examples
+        --------
+        Should be used as a context manager:
+
+        .. code-block:: py
+
+           with uri.as_local() as local:
+               ospath = local.ospath
+        """
+        local_src, is_temporary = self._as_local()
+        local_uri = ButlerURI(local_src, isTemporary=is_temporary)
+
+        try:
+            yield local_uri
+        finally:
+            # The caller might have relocated the temporary file
+            if is_temporary and local_uri.exists():
+                local_uri.remove()
 
     def read(self, size: int = -1) -> bytes:
         """Open the resource and return the contents in bytes.

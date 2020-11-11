@@ -37,5 +37,5 @@ class ButlerInMemoryURI(ButlerURI):
         """Test for existence and always return False."""
         return True
 
-    def as_local(self) -> Tuple[str, bool]:
+    def _as_local(self) -> Tuple[str, bool]:
         raise RuntimeError(f"Do not know how to retrieve data for URI '{self}'")

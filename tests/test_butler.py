@@ -893,9 +893,9 @@ class ButlerTests(ButlerPutGetTests):
                 self.assertIn(testStr, datastoreName)
 
 
-class FileLikeDatastoreButlerTests(ButlerTests):
+class FileDatastoreButlerTests(ButlerTests):
     """Common tests and specialization of ButlerTests for butlers backed
-    by datastores that inherit from FileLikeDatastore.
+    by datastores that inherit from FileDatastore.
     """
 
     def checkFileExists(self, root, relpath):
@@ -1019,13 +1019,13 @@ class FileLikeDatastoreButlerTests(ButlerTests):
                                  [importButler.registry.dimensions["skymap"].RecordClass(**skymapRecord)])
 
 
-class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
+class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """PosixDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     fullConfigKey = ".datastore.formatters"
     validationCanFail = True
     datastoreStr = ["/tmp"]
-    datastoreName = [f"PosixDatastore@{BUTLER_ROOT_TAG}"]
+    datastoreName = [f"FileDatastore@{BUTLER_ROOT_TAG}"]
     registryStr = "/gen3.sqlite3"
 
     def testExportTransferCopy(self):
@@ -1074,8 +1074,8 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
-    datastoreStr = ["datastore='InMemory", "/PosixDatastore_1/,", "/PosixDatastore_2/'"]
-    datastoreName = ["InMemoryDatastore@", f"PosixDatastore@{BUTLER_ROOT_TAG}/PosixDatastore_1",
+    datastoreStr = ["datastore='InMemory", "/FileDatastore_1/,", "/FileDatastore_2/'"]
+    datastoreName = ["InMemoryDatastore@", f"FileDatastore@{BUTLER_ROOT_TAG}/FileDatastore_1",
                      "SecondDatastore"]
     registryStr = "/gen3.sqlite3"
 
@@ -1179,7 +1179,7 @@ class ButlerMakeRepoOutfileUriTestCase(ButlerMakeRepoOutfileTestCase):
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
-class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
+class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """S3Datastore specialization of a butler; an S3 storage Datastore +
     a local in-memory SqlRegistry.
     """
@@ -1203,8 +1203,8 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
     returned by Butler stringification.
     """
 
-    datastoreName = ["S3Datastore@s3://{bucketName}/{root}"]
-    """The expected format of the S3Datastore string."""
+    datastoreName = ["FileDatastore@s3://{bucketName}/{root}"]
+    """The expected format of the S3 Datastore string."""
 
     registryStr = "/gen3.sqlite3"
     """Expected format of the Registry string."""
@@ -1244,7 +1244,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         s3.create_bucket(Bucket=self.bucketName)
 
         self.datastoreStr = f"datastore={self.root}"
-        self.datastoreName = [f"S3Datastore@{rooturi}"]
+        self.datastoreName = [f"FileDatastore@{rooturi}"]
         Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
         self.tmpConfigFile = posixpath.join(rooturi, "butler.yaml")
 
@@ -1277,7 +1277,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
                                        "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
                                            TESTDIR, "config/testConfigs/webdav/token"),
                                        "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs"})
-class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
+class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
     a local in-memory SqlRegistry.
     """
@@ -1305,7 +1305,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
     returned by Butler stringification.
     """
 
-    datastoreName = ["WebdavDatastore@https://{serverName}/{root}"]
+    datastoreName = ["FileDatastore@https://{serverName}/{root}"]
     """The expected format of the WebdavDatastore string."""
 
     registryStr = "/gen3.sqlite3"
@@ -1371,7 +1371,7 @@ class WebdavDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestC
         config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
 
         self.datastoreStr = f"datastore={self.root}"
-        self.datastoreName = [f"WebdavDatastore@{self.rooturi}"]
+        self.datastoreName = [f"FileDatastore@{self.rooturi}"]
 
         if not isWebdavEndpoint(self.rooturi):
             raise OSError("Webdav server not running properly: cannot run tests.")

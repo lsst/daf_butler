@@ -57,6 +57,9 @@ class ButlerFileURI(ButlerURI):
     transferModes = ("copy", "link", "symlink", "hardlink", "relsymlink", "auto", "move")
     transferDefault: str = "link"
 
+    # By definition refers to a local file
+    isLocal = True
+
     @property
     def ospath(self) -> str:
         """Path component of the URI localized to current OS.
@@ -82,8 +85,10 @@ class ButlerFileURI(ButlerURI):
         """Remove the resource."""
         os.remove(self.ospath)
 
-    def as_local(self) -> Tuple[str, bool]:
+    def _as_local(self) -> Tuple[str, bool]:
         """Return the local path of the file.
+
+        This is an internal helper for ``as_local()``.
 
         Returns
         -------
@@ -217,103 +222,106 @@ class ButlerFileURI(ButlerURI):
 
         # We do not have to special case ButlerFileURI here because
         # as_local handles that.
-        local_src, is_temporary = src.as_local()
+        with src.as_local() as local_uri:
+            is_temporary = local_uri.isTemporary
+            local_src = local_uri.ospath
 
-        # Default transfer mode depends on whether we have a temporary
-        # file or not.
-        if transfer == "auto":
-            transfer = self.transferDefault if not is_temporary else "copy"
+            # Default transfer mode depends on whether we have a temporary
+            # file or not.
+            if transfer == "auto":
+                transfer = self.transferDefault if not is_temporary else "copy"
 
-        # Follow soft links
-        local_src = os.path.realpath(os.path.normpath(local_src))
+            if not os.path.exists(local_src):
+                if is_temporary:
+                    msg = f"Local file {local_uri} downloaded from {src} has gone missing"
+                else:
+                    msg = f"Source URI {src} does not exist"
+                raise FileNotFoundError(msg)
 
-        if not os.path.exists(local_src):
-            raise FileNotFoundError(f"Source URI {src} does not exist")
+            # Follow soft links
+            local_src = os.path.realpath(os.path.normpath(local_src))
 
-        # All the modes involving linking use "link" somewhere
-        if "link" in transfer and is_temporary:
-            raise RuntimeError("Can not use local file system transfer mode"
-                               f" {transfer} for remote resource ({src})")
+            # All the modes involving linking use "link" somewhere
+            if "link" in transfer and is_temporary:
+                raise RuntimeError("Can not use local file system transfer mode"
+                                   f" {transfer} for remote resource ({src})")
 
-        # For temporary files we can own them
-        requested_transfer = transfer
-        if is_temporary and transfer == "copy":
-            transfer = "move"
+            # For temporary files we can own them
+            requested_transfer = transfer
+            if is_temporary and transfer == "copy":
+                transfer = "move"
 
-        # The output location should not exist
-        dest_exists = self.exists()
-        if not overwrite and dest_exists:
-            raise FileExistsError(f"Destination path '{self}' already exists. Transfer "
-                                  f"from {src} cannot be completed.")
+            # The output location should not exist
+            dest_exists = self.exists()
+            if not overwrite and dest_exists:
+                raise FileExistsError(f"Destination path '{self}' already exists. Transfer "
+                                      f"from {src} cannot be completed.")
 
-        # Make the path absolute (but don't follow links since that
-        # would possibly cause us to end up in the wrong place if the
-        # file existed already as a soft link)
-        newFullPath = os.path.abspath(self.ospath)
-        outputDir = os.path.dirname(newFullPath)
-        if not os.path.isdir(outputDir):
-            # Must create the directory -- this can not be rolled back
-            # since another transfer running concurrently may
-            # be relying on this existing.
-            safeMakeDir(outputDir)
+            # Make the path absolute (but don't follow links since that
+            # would possibly cause us to end up in the wrong place if the
+            # file existed already as a soft link)
+            newFullPath = os.path.abspath(self.ospath)
+            outputDir = os.path.dirname(newFullPath)
+            if not os.path.isdir(outputDir):
+                # Must create the directory -- this can not be rolled back
+                # since another transfer running concurrently may
+                # be relying on this existing.
+                safeMakeDir(outputDir)
 
-        if transaction is None:
-            # Use a no-op transaction to reduce code duplication
-            transaction = NoTransaction()
+            if transaction is None:
+                # Use a no-op transaction to reduce code duplication
+                transaction = NoTransaction()
 
-        # For links the OS doesn't let us overwrite so if something does
-        # exist we have to remove it before we do the actual "transfer" below
-        if "link" in transfer and overwrite and dest_exists:
-            try:
-                self.remove()
-            except Exception:
-                # If this fails we ignore it since it's a problem
-                # that will manifest immediately below with a more relevant
-                # error message
-                pass
-
-        if transfer == "move":
-            with transaction.undoWith(f"move from {local_src}", shutil.move, newFullPath, local_src):
-                shutil.move(local_src, newFullPath)
-        elif transfer == "copy":
-            with transaction.undoWith(f"copy from {local_src}", os.remove, newFullPath):
-                shutil.copy(local_src, newFullPath)
-        elif transfer == "link":
-            # Try hard link and if that fails use a symlink
-            with transaction.undoWith(f"link to {local_src}", os.remove, newFullPath):
+            # For links the OS doesn't let us overwrite so if something does
+            # exist we have to remove it before we do the actual "transfer"
+            # below
+            if "link" in transfer and overwrite and dest_exists:
                 try:
+                    self.remove()
+                except Exception:
+                    # If this fails we ignore it since it's a problem
+                    # that will manifest immediately below with a more relevant
+                    # error message
+                    pass
+
+            if transfer == "move":
+                with transaction.undoWith(f"move from {local_src}", shutil.move, newFullPath, local_src):
+                    shutil.move(local_src, newFullPath)
+            elif transfer == "copy":
+                with transaction.undoWith(f"copy from {local_src}", os.remove, newFullPath):
+                    shutil.copy(local_src, newFullPath)
+            elif transfer == "link":
+                # Try hard link and if that fails use a symlink
+                with transaction.undoWith(f"link to {local_src}", os.remove, newFullPath):
+                    try:
+                        os.link(local_src, newFullPath)
+                    except OSError:
+                        # Read through existing symlinks
+                        os.symlink(local_src, newFullPath)
+            elif transfer == "hardlink":
+                with transaction.undoWith(f"hardlink to {local_src}", os.remove, newFullPath):
                     os.link(local_src, newFullPath)
-                except OSError:
-                    # Read through existing symlinks
+            elif transfer == "symlink":
+                # Read through existing symlinks
+                with transaction.undoWith(f"symlink to {local_src}", os.remove, newFullPath):
                     os.symlink(local_src, newFullPath)
-        elif transfer == "hardlink":
-            with transaction.undoWith(f"hardlink to {local_src}", os.remove, newFullPath):
-                os.link(local_src, newFullPath)
-        elif transfer == "symlink":
-            # Read through existing symlinks
-            with transaction.undoWith(f"symlink to {local_src}", os.remove, newFullPath):
-                os.symlink(local_src, newFullPath)
-        elif transfer == "relsymlink":
-            # This is a standard symlink but using a relative path
-            # Need the directory name to give to relative root
-            # A full file path confuses it into an extra ../
-            newFullPathRoot = os.path.dirname(newFullPath)
-            relPath = os.path.relpath(local_src, newFullPathRoot)
-            with transaction.undoWith(f"relsymlink to {local_src}", os.remove, newFullPath):
-                os.symlink(relPath, newFullPath)
-        else:
-            raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
+            elif transfer == "relsymlink":
+                # This is a standard symlink but using a relative path
+                # Need the directory name to give to relative root
+                # A full file path confuses it into an extra ../
+                newFullPathRoot = os.path.dirname(newFullPath)
+                relPath = os.path.relpath(local_src, newFullPathRoot)
+                with transaction.undoWith(f"relsymlink to {local_src}", os.remove, newFullPath):
+                    os.symlink(relPath, newFullPath)
+            else:
+                raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
 
-        # This was an explicit move requested from a remote resource
-        # try to remove that resource. We check is_temporary because
-        # the local file would have been moved by shutil.move already.
-        if requested_transfer == "move" and is_temporary:
-            # Transactions do not work here
-            src.remove()
-
-        if is_temporary and os.path.exists(local_src):
-            # This should never happen since we have moved it above
-            os.remove(local_src)
+            # This was an explicit move requested from a remote resource
+            # try to remove that remote resource. We check is_temporary because
+            # the local file would have been moved by shutil.move already.
+            if requested_transfer == "move" and is_temporary:
+                # Transactions do not work here
+                src.remove()
 
     @staticmethod
     def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,

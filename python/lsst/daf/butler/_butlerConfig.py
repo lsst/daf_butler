@@ -84,7 +84,7 @@ class ButlerConfig(Config):
         if isinstance(other, str):
             # This will only allow supported schemes
             uri = ButlerURI(other)
-            if uri.scheme == "file" or not uri.scheme:
+            if uri.isLocal:
                 # Check explicitly that we have a directory
                 if os.path.isdir(uri.ospath):
                     other = uri.join("butler.yaml")

@@ -1,5 +1,5 @@
 datastore:
-  cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
+  cls: lsst.daf.butler.datastores.fileDatastore.FileDatastore
   root: <butlerRoot>/butler_test_repository
   templates: !include templates.yaml
   formatters: !include formatters.yaml
