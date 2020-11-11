@@ -73,7 +73,7 @@ class RepoExportBackend(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def saveCollection(self, record: CollectionRecord) -> None:
+    def saveCollection(self, record: CollectionRecord, doc: Optional[str]) -> None:
         """Export a collection.
 
         This only exports the collection's own state, not its associations with
@@ -83,6 +83,8 @@ class RepoExportBackend(ABC):
         ----------
         record: `CollectionRecord`
             Object representing the collection to export.
+        doc : `str` or `None`
+            Documentation string for the collection.
         """
         raise NotImplementedError()
 

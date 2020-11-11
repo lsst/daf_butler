@@ -446,6 +446,11 @@ class RegistryTests(ABC):
         self.loadData(registry, "datasets.yaml")
         run1 = "imported_g"
         run2 = "imported_r"
+        # Test setting a collection docstring after it has been created.
+        registry.setCollectionDocumentation(run1, "doc for run1")
+        self.assertEqual(registry.getCollectionDocumentation(run1), "doc for run1")
+        registry.setCollectionDocumentation(run1, None)
+        self.assertIsNone(registry.getCollectionDocumentation(run1))
         datasetType = "bias"
         # Find some datasets via their run's collection.
         dataId1 = {"instrument": "Cam1", "detector": 1}
@@ -456,7 +461,8 @@ class RegistryTests(ABC):
         self.assertIsNotNone(ref2)
         # Associate those into a new collection,then look for them there.
         tag1 = "tag1"
-        registry.registerCollection(tag1, type=CollectionType.TAGGED)
+        registry.registerCollection(tag1, type=CollectionType.TAGGED, doc="doc for tag1")
+        self.assertEqual(registry.getCollectionDocumentation(tag1), "doc for tag1")
         registry.associate(tag1, [ref1, ref2])
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
         self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)

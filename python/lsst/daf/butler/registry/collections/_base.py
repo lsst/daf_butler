@@ -360,7 +360,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         for chain in chains:
             chain.refresh(self)
 
-    def register(self, name: str, type: CollectionType) -> CollectionRecord:
+    def register(self, name: str, type: CollectionType, doc: Optional[str] = None) -> CollectionRecord:
         # Docstring inherited from CollectionManager.
         record = self._getByName(name)
         if record is None:
@@ -368,6 +368,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                 self._tables.collection,
                 keys={"name": name},
                 compared={"type": int(type)},
+                extra={"doc": doc},
                 returning=[self._collectionIdName],
             )
             assert row is not None
@@ -424,6 +425,21 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
 
     def __iter__(self) -> Iterator[CollectionRecord]:
         yield from self._records.values()
+
+    def getDocumentation(self, key: Any) -> Optional[str]:
+        # Docstring inherited from CollectionManager.
+        sql = sqlalchemy.sql.select(
+            [self._tables.collection.columns.doc]
+        ).select_from(
+            self._tables.collection
+        ).where(
+            self._tables.collection.columns[self._collectionIdName] == key
+        )
+        return self._db.query(sql).scalar()
+
+    def setDocumentation(self, key: Any, doc: Optional[str]) -> None:
+        # Docstring inherited from CollectionManager.
+        self._db.update(self._tables.collection, {self._collectionIdName: "key"}, {"key": key, "doc": doc})
 
     def _setRecordCache(self, records: Iterable[CollectionRecord]) -> None:
         """Set internal record cache to contain given records,

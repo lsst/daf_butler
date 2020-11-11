@@ -412,7 +412,8 @@ class Registry:
         """
         self._opaque[tableName].delete(**where)
 
-    def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED) -> None:
+    def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED,
+                           doc: Optional[str] = None) -> None:
         """Add a new collection if one with the given name does not exist.
 
         Parameters
@@ -421,13 +422,15 @@ class Registry:
             The name of the collection to create.
         type : `CollectionType`
             Enum value indicating the type of collection to create.
+        doc : `str`, optional
+            Documentation string for the collection.
 
         Notes
         -----
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        self._collections.register(name, type)
+        self._collections.register(name, type, doc=doc)
 
     def getCollectionType(self, name: str) -> CollectionType:
         """Return an enumeration value indicating the type of the given
@@ -450,20 +453,22 @@ class Registry:
         """
         return self._collections.find(name).type
 
-    def registerRun(self, name: str) -> None:
+    def registerRun(self, name: str, doc: Optional[str] = None) -> None:
         """Add a new run if one with the given name does not exist.
 
         Parameters
         ----------
         name : `str`
             The name of the run to create.
+        doc : `str`, optional
+            Documentation string for the collection.
 
         Notes
         -----
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        self._collections.register(name, CollectionType.RUN)
+        self._collections.register(name, CollectionType.RUN, doc=doc)
 
     @transactional
     def removeCollection(self, name: str) -> None:
@@ -553,6 +558,35 @@ class Registry:
         children = CollectionSearch.fromExpression(children)
         if children != record.children:
             record.update(self._collections, children)
+
+    def getCollectionDocumentation(self, collection: str) -> Optional[str]:
+        """Retrieve the documentation string for a collection.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the collection.
+
+        Returns
+        -------
+        docs : `str` or `None`
+            Docstring for the collection with the given name.
+        """
+        return self._collections.getDocumentation(self._collections.find(collection).key)
+
+    def setCollectionDocumentation(self, collection: str, doc: Optional[str]) -> None:
+        """Set the documentation string for a collection.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the collection.
+        docs : `str` or `None`
+            Docstring for the collection with the given name; will replace any
+            existing docstring.  Passing `None` will remove any existing
+            docstring.
+        """
+        self._collections.setDocumentation(self._collections.find(collection).key, doc)
 
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         """
