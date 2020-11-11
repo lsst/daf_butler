@@ -318,11 +318,17 @@ class _DimensionGraphStorage:
             database.
         """
         key = self._keysByGraph.get(graph)
-        if key is None:
-            # Don't permit this to be done inside some other transaction, so
-            # we don't have to worry about that transaction rolling back and
-            # invalidating our in-memory cache.
-            with self._db.transaction(interrupting=True):
+        if key is not None:
+            return key
+        # Lock tables and then refresh to guard against races where some other
+        # process is trying to register the exact same dimension graph.  This
+        # is probably not the most efficient way to do it, but it should be a
+        # rare operation, especially since the short-circuit above will usually
+        # work in long-lived data repositories.
+        with self._db.transaction(lock=[self._idTable, self._definitionTable]):
+            self.refresh()
+            key = self._keysByGraph.get(graph)
+            if key is None:
                 (key,) = self._db.insert(self._idTable, {}, returnIds=True)  # type: ignore
                 self._db.insert(
                     self._definitionTable,
