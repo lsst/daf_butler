@@ -94,12 +94,6 @@ class SplitKvTestCase(unittest.TestCase):
         self.assertEqual(split_kv("context", "param", "foo", unseparated_okay=True, default_key=...),
                          {...: "foo"})
 
-    def test_duplicateKeys(self):
-        # todo don't we want dulicate keys to aggregate into a list?
-        """Test that values with duplicate keys raise."""
-        with self.assertRaises(click.ClickException):
-            split_kv("context", "param", "first=1,first=2")
-
     def test_dashSeparator(self):
         """Test that specifying a spearator is accepted and converts to a dict.
         """
@@ -243,6 +237,43 @@ class SplitKvCmdTestCase(unittest.TestCase):
         result = self.runner.invoke(cli, ["--value", "foo=bar"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with(dict(foo="bar"))
+
+    def test_addToDefaultValue(self):
+        """Verify that if add_to_default is True that passed-in values are
+        added to the default value set in the option.
+        """
+        mock = MagicMock()
+
+        @click.command()
+        @click.option("--value",
+                      callback=partial(split_kv, add_to_default=True, unseparated_okay=True),
+                      default=["INFO"],
+                      multiple=True)
+        def cli(value):
+            mock(value)
+
+        result = self.runner.invoke(cli, ["--value", "lsst.daf.butler=DEBUG"])
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with({"": "INFO", "lsst.daf.butler": "DEBUG"})
+
+    def test_replaceDefaultValue(self):
+        """Verify that if add_to_default is False (this is the default value),
+        that passed-in values replace any default value, even if keys are
+        different.
+        """
+        mock = MagicMock()
+
+        @click.command()
+        @click.option("--value",
+                      callback=partial(split_kv, unseparated_okay=True),
+                      default=["INFO"],
+                      multiple=True)
+        def cli(value):
+            mock(value)
+
+        result = self.runner.invoke(cli, ["--value", "lsst.daf.butler=DEBUG"])
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with({"lsst.daf.butler": "DEBUG"})
 
 
 if __name__ == "__main__":

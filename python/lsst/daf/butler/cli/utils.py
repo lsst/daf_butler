@@ -24,14 +24,15 @@ import click.testing
 from contextlib import contextmanager
 import copy
 from functools import partial
+import itertools
 import io
+import logging
 import os
 import textwrap
 import traceback
 from unittest.mock import MagicMock, patch
 import uuid
 import yaml
-import logging
 
 from .cliLog import CliLog
 from ..core.utils import iterable
@@ -232,7 +233,8 @@ def split_commas(context, param, values):
 
 
 def split_kv(context, param, values, choice=None, multiple=True, normalize=False, separator="=",
-             unseparated_okay=False, return_type=dict, default_key="", reverse_kv=False):
+             unseparated_okay=False, return_type=dict, default_key="", reverse_kv=False,
+             add_to_default=False):
     """Process a tuple of values that are key-value pairs separated by a given
     separator. Multiple pairs may be comma separated. Return a dictionary of
     all the passed-in values.
@@ -286,6 +288,10 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
         If true then for each item in values, the value to the left of the
         separator is treated as the value and the value to the right of the
         separator is treated as the key. By default False.
+    add_to_default : `bool`, optional
+        If True, then passed-in values will not overwrite the default value
+        unless the ``return_type`` is `dict` and passed-in value(s) have the
+        same key(s) as the default value.
 
     Returns
     -------
@@ -322,8 +328,6 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
         def add(self, key, val):
             if reverse_kv:
                 key, val = val, key
-            if key in self.ret:
-                raise click.ClickException(f"Duplicate entries for '{k}' in '{values}'")
             self.ret[key] = val
 
         def get(self):
@@ -345,6 +349,12 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
     if separator in (",", " "):
         raise RuntimeError(f"'{separator}' is not a supported separator for key-value pairs.")
     vals = values  # preserve the original argument for error reporting below.
+
+    if add_to_default:
+        default = param.get_default(context)
+        if default:
+            vals = itertools.chain(default, vals)
+
     if return_type is dict:
         ret = RetDict()
     elif return_type is tuple:
