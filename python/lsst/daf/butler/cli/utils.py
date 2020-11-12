@@ -574,6 +574,16 @@ class OptionSection(MWOption):
     `click.Option.get_help_record` to return the section label string without
     any prefix so that it stands out as a section label.
 
+    This class overrides the hidden attribute because our documentation build
+    tool, sphinx-click, implements its own `get_help_record` function which
+    builds the record from other option values (e.g. `name`, `opts`), which
+    breaks the hack we use to make `get_help_record` only return the
+    `sectionText`. Fortunately, Click gets the value of `hidden` inside the
+    `Option`'s `get_help_record`, and `sphinx-click` calls `opt.hidden` before
+    entering its `_get_help_record` function. So, making the hidden property
+    return True hides this option from sphinx-click, while allowing the section
+    text to be returned by our `get_help_record` method when using Click.
+
     The intention for this implementation is to do minimally invasive overrides
     of the click classes so as to be robust and easy to fix if the click
     internals change.
@@ -588,6 +598,14 @@ class OptionSection(MWOption):
     sectionText : `str`
         The text to print in the section identifier.
     """
+
+    @property
+    def hidden(self):
+        return True
+
+    @hidden.setter
+    def hidden(self, val):
+        pass
 
     def __init__(self, sectionName, sectionText):
         super().__init__(sectionName, expose_value=False)
