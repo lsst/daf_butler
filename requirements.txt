@@ -14,6 +14,7 @@ pandas >= 1.0
 numpy >= 1.17
 matplotlib >= 3.0.3
 pyarrow >= 0.16
+responses == 0.12.0
 urllib3 == 1.25
 
 # These are required by lsst.utils
