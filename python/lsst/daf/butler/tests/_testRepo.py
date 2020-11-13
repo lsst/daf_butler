@@ -20,10 +20,25 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-__all__ = ["makeTestRepo", "makeTestCollection", "addDatasetType", "expandUniqueId"]
+__all__ = ["makeTestRepo", "makeTestCollection", "addDatasetType", "expandUniqueId", "DatastoreMock"]
 
 import random
-from lsst.daf.butler import Butler, Config, DatasetType
+from typing import (
+    Any,
+    Iterable,
+    Mapping,
+    Optional,
+    Tuple,
+)
+from unittest.mock import MagicMock
+
+from lsst.daf.butler import (
+    Butler,
+    Config,
+    DatasetRef,
+    DatasetType,
+    FileDataset,
+)
 
 
 def makeTestRepo(root, dataIds, *, config=None, **kwargs):
@@ -255,3 +270,47 @@ def addDatasetType(butler, name, dimensions, storageClass):
         return datasetType
     except KeyError as e:
         raise ValueError from e
+
+
+class DatastoreMock:
+    """Mocks a butler datastore.
+
+    Has functions that mock the datastore in a butler. Provides an `apply`
+    function to replace the relevent butler datastore functions with the mock
+    functions.
+    """
+
+    @staticmethod
+    def apply(butler):
+        """Apply datastore mocks to a butler."""
+        butler.datastore.export = DatastoreMock._mock_export
+        butler.datastore.get = DatastoreMock._mock_get
+        butler.datastore.ingest = MagicMock()
+
+    @staticmethod
+    def _mock_export(refs: Iterable[DatasetRef], *,
+                     directory: Optional[str] = None,
+                     transfer: Optional[str] = None) -> Iterable[FileDataset]:
+        """A mock of `Datastore.export` that satisfies the requirement that
+        the refs passed in are included in the `FileDataset` objects
+        returned.
+
+        This can be used to construct a `Datastore` mock that can be used
+        in repository export via::
+
+            datastore = unittest.mock.Mock(spec=Datastore)
+            datastore.export = DatastoreMock._mock_export
+
+        """
+        for ref in refs:
+            yield FileDataset(refs=[ref],
+                              path="mock/path",
+                              formatter="lsst.daf.butler.formatters.json.JsonFormatter")
+
+    @staticmethod
+    def _mock_get(ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None
+                  ) -> Tuple[int, Optional[Mapping[str, Any]]]:
+        """A mock of `Datastore.get` that just returns the integer dataset ID
+        value and parameters it was given.
+        """
+        return (ref.id, parameters)

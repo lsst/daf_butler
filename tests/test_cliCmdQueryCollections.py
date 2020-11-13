@@ -25,27 +25,17 @@
 from astropy.table import Table
 from numpy import array
 import os
-from typing import (
-    Any,
-    Iterable,
-    Mapping,
-    Optional,
-    Tuple,
-)
 import unittest
 
 from lsst.daf.butler import (
     Butler,
     CollectionType,
-    DatasetRef,
-    Datastore,
-    FileDataset,
 )
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_collections
 from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
 from lsst.daf.butler.script import queryCollections
-from lsst.daf.butler.tests import CliCmdTestBase
+from lsst.daf.butler.tests import CliCmdTestBase, DatastoreMock
 from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
 
 
@@ -122,46 +112,20 @@ class QueryCollectionsScriptTest(ButlerTestHelper, unittest.TestCase):
 
 class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
 
-    @staticmethod
-    def _mock_export(refs: Iterable[DatasetRef], *,
-                     directory: Optional[str] = None,
-                     transfer: Optional[str] = None) -> Iterable[FileDataset]:
-        """A mock of `Datastore.export` that satisfies the requirement that
-        the refs passed in are included in the `FileDataset` objects
-        returned.
-
-        This can be used to construct a `Datastore` mock that can be used
-        in repository export via::
-
-            datastore = unittest.mock.Mock(spec=Datastore)
-            datastore.export = _mock_export
-
-        """
-        for ref in refs:
-            yield FileDataset(refs=[ref],
-                              path="mock/path",
-                              formatter="lsst.daf.butler.formatters.json.JsonFormatter")
-
-    @staticmethod
-    def _mock_get(ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None
-                  ) -> Tuple[int, Optional[Mapping[str, Any]]]:
-        """A mock of `Datastore.get` that just returns the integer dataset ID
-        value and parameters it was given.
-        """
-        return (ref.id, parameters)
-
     def setUp(self):
         self.runner = LogCliRunner()
 
     def testChained(self):
         with self.runner.isolated_filesystem():
 
-            # Create a butler and add some chained collections
+            # Create a butler and add some chained collections:
             butlerCfg = Butler.makeRepo("here")
-            with unittest.mock.patch.object(Datastore, "fromConfig", spec=Datastore.fromConfig):
-                butler1 = Butler(butlerCfg, writeable=True)
-                butler1.datastore.export = self._mock_export
-                butler1.datastore.get = self._mock_get
+
+            butler1 = Butler(butlerCfg, writeable=True)
+
+            # Replace datastore functions with mocks:
+            DatastoreMock.apply(butler1)
+
             butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
             butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
             registry1 = butler1.registry

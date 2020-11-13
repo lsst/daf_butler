@@ -24,15 +24,8 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from typing import (
-    Any,
-    Iterable,
-    Mapping,
-    Optional,
-    Tuple,
-)
+from typing import Any
 import unittest
-import unittest.mock
 
 import astropy.time
 
@@ -40,43 +33,14 @@ from lsst.daf.butler import (
     Butler,
     ButlerConfig,
     CollectionType,
-    DatasetRef,
-    Datastore,
-    FileDataset,
     Registry,
     Timespan,
 )
 from lsst.daf.butler.registry import RegistryConfig
+from lsst.daf.butler.tests import DatastoreMock
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
-
-
-def _mock_export(refs: Iterable[DatasetRef], *,
-                 directory: Optional[str] = None,
-                 transfer: Optional[str] = None) -> Iterable[FileDataset]:
-    """A mock of `Datastore.export` that satisifies the requirement that the
-    refs passed in are included in the `FileDataset` objects returned.
-
-    This can be used to construct a `Datastore` mock that can be used in
-    repository export via::
-
-        datastore = unittest.mock.Mock(spec=Datastore)
-        datastore.export = _mock_export
-
-    """
-    for ref in refs:
-        yield FileDataset(refs=[ref],
-                          path="mock/path",
-                          formatter="lsst.daf.butler.formatters.json.JsonFormatter")
-
-
-def _mock_get(ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None
-              ) -> Tuple[int, Optional[Mapping[str, Any]]]:
-    """A mock of `Datastore.get` that just returns the integer dataset ID value
-    and parameters it was given.
-    """
-    return (ref.id, parameters)
 
 
 class SimpleButlerTestCase(unittest.TestCase):
@@ -100,15 +64,14 @@ class SimpleButlerTestCase(unittest.TestCase):
         # make separate temporary directory for registry of this instance
         tmpdir = tempfile.mkdtemp(dir=self.root)
         config["registry", "db"] = f"sqlite:///{tmpdir}/gen3.sqlite3"
+        config["root"] = self.root
 
         # have to make a registry first
         registryConfig = RegistryConfig(config.get("registry"))
         Registry.createFromConfig(registryConfig)
 
-        with unittest.mock.patch.object(Datastore, "fromConfig", spec=Datastore.fromConfig):
-            butler = Butler(config, **kwargs)
-            butler.datastore.export = _mock_export
-            butler.datastore.get = _mock_get
+        butler = Butler(config, **kwargs)
+        DatastoreMock.apply(butler)
         return butler
 
     def testReadBackwardsCompatibility(self):
