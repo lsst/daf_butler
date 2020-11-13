@@ -170,13 +170,13 @@ def categorizeElementId(universe: DimensionUniverse, name: str) -> Tuple[Dimensi
             )
         else:
             if column not in element.RecordClass.fields.standard.names:
-                raise LookupError(f"Column '{column} not found in table for {element}.")
+                raise LookupError(f"Column '{column}' not found in table for {element}.")
             return element, column
     else:
         try:
             dimension = universe[table]
         except KeyError as err:
-            raise LookupError(f"No dimension with name '{table}.") from err
+            raise LookupError(f"No dimension with name '{table}'.") from err
         return dimension, None
 
 
