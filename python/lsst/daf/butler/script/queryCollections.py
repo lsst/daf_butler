@@ -63,7 +63,7 @@ def queryCollections(repo, glob, collection_type, chains):
                                                            **kwargs)
         collectionNames = list(collectionNames)  # Materialize list for multiple use.
         collectionTypes = [butler.registry.getCollectionType(c).name for c in collectionNames]
-        collectionDefinitions = [butler.registry.getCollectionChain(name) if colType == "CHAINED" else ""
+        collectionDefinitions = [str(butler.registry.getCollectionChain(name)) if colType == "CHAINED" else ""
                                  for name, colType in zip(collectionNames, collectionTypes)]
 
         # Only add a definition column if at least one definition row is
