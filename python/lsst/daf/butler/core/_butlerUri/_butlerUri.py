@@ -382,6 +382,34 @@ class ButlerURI:
         self.dirLike = False
         self._uri = self._uri._replace(path=newpath)
 
+    def updateExtension(self, ext: Optional[str]) -> None:
+        """Update the file extension associated with this `ButlerURI` in place.
+
+        All file extensions are replaced.
+
+        Parameters
+        ----------
+        ext : `str` or `None`
+            New extension. If an empty string is given any extension will
+            be removed. If `None` is given there will be no change.
+        """
+        if ext is None:
+            return
+
+        # Get the extension and remove it from the path if one is found
+        # .fits.gz counts as one extension do not use os.path.splitext
+        current = self.getExtension()
+        path = self.path
+        if current:
+            path = path[:-len(current)]
+
+        # Ensure that we have a leading "." on file extension (and we do not
+        # try to modify the empty string)
+        if ext and not ext.startswith("."):
+            ext = "." + ext
+
+        self._uri = self._uri._replace(path=path + ext)
+
     def getExtension(self) -> str:
         """Return the file extension(s) associated with this URI path.
 
