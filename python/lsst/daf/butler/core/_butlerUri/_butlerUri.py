@@ -409,16 +409,19 @@ class ButlerURI:
 
         return ext
 
-    def join(self, path: str) -> ButlerURI:
+    def join(self, path: Union[str, ButlerURI]) -> ButlerURI:
         """Create a new `ButlerURI` with additional path components including
         a file.
 
         Parameters
         ----------
-        path : `str`
+        path : `str`, `ButlerURI`
             Additional file components to append to the current URI. Assumed
             to include a file at the end. Will be quoted depending on the
-            associated URI scheme.
+            associated URI scheme. If the path looks like a URI with a scheme
+            referring to an absolute location, it will be returned
+            directly (matching the behavior of `os.path.join()`). It can
+            also be a `ButlerURI`.
 
         Returns
         -------
@@ -433,6 +436,16 @@ class ButlerURI:
         may be this never becomes a problem but datastore templates assume
         POSIX separator is being used.
         """
+        # If we have a full URI in path we will use it directly
+        # but without forcing to absolute so that we can trap the
+        # expected option of relative path.
+        path_uri = ButlerURI(path, forceAbsolute=False)
+        if path_uri.scheme:
+            return path_uri
+
+        # Force back to string
+        path = path_uri.path
+
         new = self.dirname()  # By definition a directory URI
 
         # new should be asked about quoting, not self, since dirname can
