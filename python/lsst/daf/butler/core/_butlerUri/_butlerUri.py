@@ -613,7 +613,8 @@ class ButlerURI:
 
     def __copy__(self) -> ButlerURI:
         # Implement here because the __new__ method confuses things
-        return type(self)(str(self))
+        # Be careful not to convert a relative schemeless URI to absolute
+        return type(self)(str(self), forceAbsolute=self.isabs())
 
     def __deepcopy__(self, memo: Any) -> ButlerURI:
         # Implement here because the __new__ method confuses things
