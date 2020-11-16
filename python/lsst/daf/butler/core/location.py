@@ -151,19 +151,7 @@ class Location:
         if ext is None:
             return
 
-        # Get the extension and remove it from the path if one is found
-        # .fits.gz counts as one extension do not use os.path.splitext
-        current = self.getExtension()
-        path = self.pathInStore
-        if current:
-            path = path[:-len(current)]
-
-        # Ensure that we have a leading "." on file extension (and we do not
-        # try to modify the empty string)
-        if ext and not ext.startswith("."):
-            ext = "." + ext
-
-        self._path = path + ext
+        self._path.updateExtension(ext)
 
         # Clear the URI cache so it can be recreated with the new path
         self._uri = None
