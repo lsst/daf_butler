@@ -83,8 +83,7 @@ class JsonFormatter(FileFormatter):
         Exception
             The file could not be written.
         """
-        with open(self.fileDescriptor.location.path, "wb") as fd:
-            fd.write(self._toBytes(inMemoryDataset))
+        self.fileDescriptor.location.uri.write(self._toBytes(inMemoryDataset))
 
     def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
         """Read the bytes object as a python object.

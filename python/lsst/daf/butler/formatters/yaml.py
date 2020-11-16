@@ -130,8 +130,7 @@ class YamlFormatter(FileFormatter):
         This will fail for data structures that have complex python classes
         without a registered YAML representer.
         """
-        with open(self.fileDescriptor.location.path, "wb") as fd:
-            fd.write(self._toBytes(inMemoryDataset))
+        self.fileDescriptor.location.uri.write(self._toBytes(inMemoryDataset))
 
     def _toBytes(self, inMemoryDataset: Any) -> bytes:
         """Write the in memory dataset to a bytestring.
