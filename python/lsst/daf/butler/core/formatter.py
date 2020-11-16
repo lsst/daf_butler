@@ -208,18 +208,13 @@ class Formatter(metaclass=ABCMeta):
         raise NotImplementedError("Type does not support reading")
 
     @abstractmethod
-    def write(self, inMemoryDataset: Any) -> str:
+    def write(self, inMemoryDataset: Any) -> None:
         """Write a Dataset.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             The Dataset to store.
-
-        Returns
-        -------
-        path : `str`
-            The path to where the Dataset was stored within the datastore.
         """
         raise NotImplementedError("Type does not support writing")
 

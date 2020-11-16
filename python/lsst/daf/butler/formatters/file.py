@@ -241,7 +241,7 @@ class FileFormatter(Formatter):
 
         return data
 
-    def write(self, inMemoryDataset: Any) -> str:
+    def write(self, inMemoryDataset: Any) -> None:
         """Write a Python object to a file.
 
         Parameters
@@ -259,8 +259,6 @@ class FileFormatter(Formatter):
         fileDescriptor.location.updateExtension(self.extension)
 
         self._writeFile(inMemoryDataset)
-
-        return fileDescriptor.location.pathInStore
 
     def toBytes(self, inMemoryDataset: Any) -> bytes:
         """Serialize the Dataset to bytes based on formatter.
