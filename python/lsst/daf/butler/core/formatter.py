@@ -419,7 +419,7 @@ class Formatter(metaclass=ABCMeta):
             stored in this `Formatter`.
         """
         updated = self.makeUpdatedLocation(self.fileDescriptor.location)
-        return updated.pathInStore
+        return updated.pathInStore.path
 
     def segregateParameters(self, parameters: Optional[Dict[str, Any]] = None) -> Tuple[Dict, Dict]:
         """Segregate the supplied parameters into those understood by the

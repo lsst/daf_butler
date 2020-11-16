@@ -384,7 +384,7 @@ class FileDatastore(GenericBaseDatastore):
         ids : `set` of `int`
             All `DatasetRef` IDs associated with this path.
         """
-        records = list(self._table.fetch(path=pathInStore))
+        records = list(self._table.fetch(path=str(pathInStore)))
         ids = {r["dataset_id"] for r in records}
         return ids
 
