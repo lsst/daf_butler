@@ -8,6 +8,7 @@ version.py
 _build.*
 .cache
 tests/.tests
+tests/tmp*
 .sconf_temp/
 .sconsign.dblite
 config.log
