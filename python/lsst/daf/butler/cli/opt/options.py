@@ -133,7 +133,7 @@ transfer_option = MWOptionDecorator("-t", "--transfer",
                                     default="auto",  # set to `None` if using `required=True`
                                     help="The external data transfer mode.",
                                     type=click.Choice(["auto", "link", "symlink", "hardlink", "copy", "move",
-                                                       "relsymlink"],
+                                                       "relsymlink", "direct"],
                                                       case_sensitive=False))
 
 
