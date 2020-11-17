@@ -1338,6 +1338,7 @@ class Registry:
                       where: Optional[str] = None,
                       findFirst: bool = False,
                       components: Optional[bool] = None,
+                      check: bool = True,
                       **kwargs: Any) -> queries.DatasetQueryResults:
         """Query for and iterate over dataset references matching user-provided
         criteria.
@@ -1385,6 +1386,11 @@ class Registry:
             if their parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+        check : `bool`, optional
+            If `True` (default) check the query for consistency before
+            executing it.  This may reject some valid queries that resemble
+            common mistakes (e.g. queries for visits without specifying an
+            instrument).
         **kwargs
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
@@ -1462,7 +1468,8 @@ class Registry:
                     dimensions=dimensions,
                     dataId=standardizedDataId,
                     where=where,
-                    findFirst=findFirst
+                    findFirst=findFirst,
+                    check=check,
                 )
                 if isinstance(parentResults, queries.ParentDatasetQueryResults):
                     chain.append(
@@ -1486,6 +1493,7 @@ class Registry:
             requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
             dataId=standardizedDataId,
             expression=where,
+            check=check,
         )
         builder = self.makeQueryBuilder(summary)
         # Add the dataset subquery to the query, telling the QueryBuilder to
@@ -1504,6 +1512,7 @@ class Registry:
                      collections: Any = None,
                      where: Optional[str] = None,
                      components: Optional[bool] = None,
+                     check: bool = True,
                      **kwargs: Any) -> queries.DataCoordinateQueryResults:
         """Query for data IDs matching user-provided criteria.
 
@@ -1546,6 +1555,11 @@ class Registry:
             if their parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+        check : `bool`, optional
+            If `True` (default) check the query for consistency before
+            executing it.  This may reject some valid queries that resemble
+            common mistakes (e.g. queries for visits without specifying an
+            instrument).
         **kwargs
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
@@ -1592,6 +1606,7 @@ class Registry:
             requested=DimensionGraph(self.dimensions, names=queryDimensionNames),
             dataId=standardizedDataId,
             expression=where,
+            check=check,
         )
         builder = self.makeQueryBuilder(summary)
         for datasetType in standardizedDatasetTypes:
@@ -1605,6 +1620,7 @@ class Registry:
                               collections: Any = None,
                               where: Optional[str] = None,
                               components: Optional[bool] = None,
+                              check: bool = True,
                               **kwargs: Any) -> Iterator[DimensionRecord]:
         """Query for dimension information matching user-provided criteria.
 
@@ -1630,6 +1646,11 @@ class Registry:
         components : `bool`, optional
             Whether to apply dataset expressions to components as well.
             See `queryDataIds` for more information.
+        check : `bool`, optional
+            If `True` (default) check the query for consistency before
+            executing it.  This may reject some valid queries that resemble
+            common mistakes (e.g. queries for visits without specifying an
+            instrument).
         **kwargs
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
@@ -1644,7 +1665,7 @@ class Registry:
         if not isinstance(element, DimensionElement):
             element = self.dimensions[element]
         dataIds = self.queryDataIds(element.graph, dataId=dataId, datasets=datasets, collections=collections,
-                                    where=where, components=components, **kwargs)
+                                    where=where, components=components, check=check, **kwargs)
         return iter(self._dimensions[element].fetch(dataIds))
 
     def queryDatasetAssociations(

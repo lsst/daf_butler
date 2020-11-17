@@ -115,7 +115,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
     def testWhere(self):
         """Test using the where clause to reduce the number of rows returned.
         """
-        tables = self._queryDatasets(repo=self.root, where="visit=423")
+        tables = self._queryDatasets(repo=self.root, where="instrument='DummyCamComp' AND visit=423")
 
         expectedTables = (
             AstropyTable(array(

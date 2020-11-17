@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import Iterator, List, Optional, Union
+from typing import AbstractSet, Iterator, List, Optional, Union
 
 from sqlalchemy.sql import ColumnElement
 
@@ -37,64 +37,169 @@ from ...core import (
     DimensionGraph,
     DimensionUniverse,
     NamedKeyDict,
+    NamedKeyMapping,
+    NamedValueAbstractSet,
     NamedValueSet,
     SkyPixDimension,
 )
+from ...core.utils import cached_getter, immutable
 from ..interfaces import (
     CollectionManager,
     DatasetRecordStorageManager,
     DimensionRecordStorageManager,
 )
+from ..wildcards import GovernorDimensionRestriction
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
-from .exprParser import Node, ParserYacc  # type: ignore
+from .exprParser import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
 
 
-@dataclass
+@immutable
 class QueryWhereExpression:
     """A struct representing a parsed user-provided WHERE expression.
 
     Parameters
     ----------
-    universe : `DimensionUniverse`
-        All known dimensions.
     expression : `str`, optional
-        The string expression to parse.
+        The string expression to parse.  If `None`, a where expression that
+        always evaluates to `True` is implied.
     """
-    def __init__(self, universe: DimensionUniverse, expression: Optional[str] = None):
+    def __init__(self, expression: Optional[str] = None):
         if expression:
-            from .expressions import InspectionVisitor
             try:
                 parser = ParserYacc()
-                self.tree = parser.parse(expression)
+                self._tree = parser.parse(expression)
             except Exception as exc:
                 raise RuntimeError(f"Failed to parse user expression `{expression}'.") from exc
-            visitor = InspectionVisitor(universe)
-            assert self.tree is not None
-            self.tree.visit(visitor)
-            self.keys = visitor.keys
-            self.metadata = visitor.metadata
+            assert self._tree is not None
         else:
-            self.tree = None
-            self.keys = NamedValueSet()
-            self.metadata = NamedKeyDict()
+            self._tree = None
+
+    def attach(
+        self,
+        graph: DimensionGraph,
+        dataId: Optional[DataCoordinate] = None,
+        region: Optional[Region] = None,
+        check: bool = True,
+    ) -> QueryWhereClause:
+        """Allow this expression to be attached to a `QuerySummary` by
+        transforming it into a `QueryWhereClause`, while checking it for both
+        internal consistency and consistency with the rest of the query.
+
+        Parameters
+        ----------
+        graph : `DimensionGraph`
+            The dimensions the query would include in the absence of this
+            WHERE expression.
+        dataId : `DataCoordinate`, optional
+            A fully-expanded data ID identifying dimensions known in advance.
+            If not provided, will be set to an empty data ID.
+            ``dataId.hasRecords()`` must return `True`.
+        region : `lsst.sphgeom.Region`, optional
+            A spatial region that all rows must overlap.  If `None` and
+            ``dataId`` is not `None`, ``dataId.region`` will be used.
+        check : `bool`
+            If `True` (default) check the query for consistency.  This may
+            reject some valid queries that resemble common mistakes (e.g.
+            queries for visits without specifying an instrument).
+        """
+        if region is None and dataId is not None:
+            region = dataId.region
+        if dataId is None:
+            dataId = DataCoordinate.makeEmpty(graph.universe)
+        restriction = GovernorDimensionRestriction(graph.universe)
+        summary: InspectionSummary
+        if self._tree is not None:
+            if check:
+                # Convert the expression to disjunctive normal form (ORs of
+                # ANDs).  That's potentially super expensive in the general
+                # case (where there's a ton of nesting of ANDs and ORs).  That
+                # won't be the case for the expressions we expect, and we
+                # actually use disjunctive normal instead of conjunctive (i.e.
+                # ANDs of ORs) because I think the worst-case is a long list
+                # of OR'd-together data IDs, which is already in or very close
+                # to disjunctive normal form.
+                expr = NormalFormExpression.fromTree(self._tree, NormalForm.DISJUNCTIVE)
+                from .expressions import CheckVisitor
+                # Check the expression for consistency and completeness.
+                try:
+                    summary = expr.visit(CheckVisitor(dataId, graph))
+                except RuntimeError as err:
+                    exprOriginal = str(self._tree)
+                    exprNormal = str(expr.toTree())
+                    if exprNormal == exprOriginal:
+                        msg = f'Error in query expression "{exprOriginal}": {err}'
+                    else:
+                        msg = (
+                            f'Error in query expression "{exprOriginal}" '
+                            f'(normalized to "{exprNormal}"): {err}'
+                        )
+                    raise RuntimeError(msg) from None
+                restriction = GovernorDimensionRestriction(
+                    graph.universe,
+                    **summary.governors.byName(),
+                )
+            else:
+                from .expressions import InspectionVisitor
+                summary = self._tree.visit(InspectionVisitor(graph.universe))
+        else:
+            from .expressions import InspectionSummary
+            summary = InspectionSummary()
+        return QueryWhereClause(
+            self._tree,
+            dataId,
+            dimensions=summary.dimensions,
+            columns=summary.columns,
+            restriction=restriction,
+            region=region,
+        )
+
+
+@dataclass(frozen=True)
+class QueryWhereClause:
+    """Structure holding various contributions to a query's WHERE clause.
+
+    Instances of this class should only be created by
+    `QueryWhereExpression.attach`, which guarantees the consistency of its
+    attributes.
+    """
 
     tree: Optional[Node]
-    """The parsed user expression tree, if present (`Node` or `None`).
+    """A parsed string expression tree., or `None` if there was no string
+    expression.
     """
 
-    keys: NamedValueSet[Dimension]
-    """All dimensions whose keys are referenced by the expression
-    (`NamedValueSet` of `Dimension`).
+    dataId: DataCoordinate
+    """A data ID identifying dimensions known before query construction
+    (`DataCoordinate`).
+
+    ``dataId.hasRecords()`` is guaranteed to return `True`.
     """
 
-    metadata: NamedKeyDict[DimensionElement, List[str]]
-    """All dimension elements metadata fields referenced by the expression
-    (`NamedKeyDict` mapping `DimensionElement` to a `set` of field names).
+    dimensions: NamedValueAbstractSet[Dimension]
+    """Dimensions whose primary keys or dependencies were referenced anywhere
+    in the string expression (`NamedValueAbstractSet` [ `Dimension` ]).
+    """
+
+    columns: NamedKeyMapping[DimensionElement, AbstractSet[str]]
+    """Dimension element tables whose non-key columns were referenced anywhere
+    in the string expression
+    (`NamedKeyMapping` [ `DimensionElement`, `Set` [ `str` ] ]).
+    """
+
+    region: Optional[Region]
+    """A spatial region that all result rows must overlap
+    (`lsst.sphgeom.Region` or `None`).
+    """
+
+    restriction: GovernorDimensionRestriction
+    """Restrictions on the values governor dimensions can take in this query,
+    imposed by the string expression or data ID
+    (`GovernorDimensionRestriction`).
     """
 
 
-@dataclass
+@immutable
 class QuerySummary:
     """A struct that holds and categorizes the dimensions involved in a query.
 
@@ -116,39 +221,31 @@ class QuerySummary:
     whereRegion : `lsst.sphgeom.Region`, optional
         A spatial region that all rows must overlap.  If `None` and ``dataId``
         is not `None`, ``dataId.region`` will be used.
+    check : `bool`
+        If `True` (default) check the query for consistency.  This may reject
+        some valid queries that resemble common mistakes (e.g. queries for
+        visits without specifying an instrument).
     """
     def __init__(self, requested: DimensionGraph, *,
                  dataId: Optional[DataCoordinate] = None,
                  expression: Optional[Union[str, QueryWhereExpression]] = None,
-                 whereRegion: Optional[Region] = None):
+                 whereRegion: Optional[Region] = None,
+                 check: bool = True):
         self.requested = requested
-        self.dataId = dataId if dataId is not None else DataCoordinate.makeEmpty(requested.universe)
-        self.expression = (expression if isinstance(expression, QueryWhereExpression)
-                           else QueryWhereExpression(requested.universe, expression))
-        if whereRegion is None and self.dataId is not None:
-            whereRegion = self.dataId.region
-        self.whereRegion = whereRegion
+        if expression is None:
+            expression = QueryWhereExpression(None)
+        elif isinstance(expression, str):
+            expression = QueryWhereExpression(expression)
+        self.where = expression.attach(self.requested, dataId=dataId, region=whereRegion, check=check)
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
     the query (`DimensionGraph`).
     """
 
-    dataId: DataCoordinate
-    """A data ID identifying dimensions known before query construction
-    (`DataCoordinate`).
-
-    ``dataId.hasRecords()`` is guaranteed to return `True`.
-    """
-
-    whereRegion: Optional[Region]
-    """A spatial region that all result rows must overlap
-    (`lsst.sphgeom.Region` or `None`).
-    """
-
-    expression: QueryWhereExpression
-    """Information about any parsed user WHERE expression
-    (`QueryWhereExpression`).
+    where: QueryWhereClause
+    """Structure containing objects that contribute to the WHERE clause of the
+    query (`QueryWhereClause`).
     """
 
     @property
@@ -157,7 +254,8 @@ class QuerySummary:
         """
         return self.requested.universe
 
-    @property
+    @property  # type: ignore
+    @cached_getter
     def spatial(self) -> NamedValueSet[DimensionElement]:
         """Dimension elements whose regions and skypix IDs should be included
         in the query (`NamedValueSet` of `DimensionElement`).
@@ -170,12 +268,12 @@ class QuerySummary:
         for family in self.mustHaveKeysJoined.spatial:
             element = family.choose(self.mustHaveKeysJoined.elements)
             assert isinstance(element, DimensionElement)
-            if element not in self.dataId.graph.elements:
+            if element not in self.where.dataId.graph.elements:
                 result.add(element)
         if len(result) == 1:
             # There's no spatial join, but there might be a WHERE filter based
             # on a given region.
-            if self.dataId.graph.spatial:
+            if self.where.dataId.graph.spatial:
                 # We can only perform those filters against SkyPix dimensions,
                 # so if what we have isn't one, add the common SkyPix dimension
                 # to the query; the element we have will be joined to that.
@@ -193,7 +291,8 @@ class QuerySummary:
             result.add(self.universe.commonSkyPix)
         return result
 
-    @property
+    @property  # type: ignore
+    @cached_getter
     def temporal(self) -> NamedValueSet[DimensionElement]:
         """Dimension elements whose timespans should be included in the
         query (`NamedValueSet` of `DimensionElement`).
@@ -206,16 +305,17 @@ class QuerySummary:
         for family in self.mustHaveKeysJoined.temporal:
             element = family.choose(self.mustHaveKeysJoined.elements)
             assert isinstance(element, DimensionElement)
-            if element not in self.dataId.graph.elements:
+            if element not in self.where.dataId.graph.elements:
                 result.add(element)
-        if len(result) == 1 and not self.dataId.graph.temporal:
+        if len(result) == 1 and not self.where.dataId.graph.temporal:
             # No temporal join or filter.  Even if this element might be
             # associated with temporal information, we don't need it for this
             # query.
             return NamedValueSet()
         return result
 
-    @property
+    @property  # type: ignore
+    @cached_getter
     def mustHaveKeysJoined(self) -> DimensionGraph:
         """Dimensions whose primary keys must be used in the JOIN ON clauses
         of the query, even if their tables do not appear (`DimensionGraph`).
@@ -224,19 +324,20 @@ class QuerySummary:
         via a foreign key column in table of a dependent dimension element or
         dataset.
         """
-        names = set(self.requested.names | self.expression.keys.names)
+        names = set(self.requested.names | self.where.dimensions.names)
         return DimensionGraph(self.universe, names=names)
 
-    @property
+    @property  # type: ignore
+    @cached_getter
     def mustHaveTableJoined(self) -> NamedValueSet[DimensionElement]:
         """Dimension elements whose associated tables must appear in the
         query's FROM clause (`NamedValueSet` of `DimensionElement`).
         """
-        result = NamedValueSet(self.spatial | self.temporal | self.expression.metadata.keys())
+        result = NamedValueSet(self.spatial | self.temporal | self.where.columns.keys())
         for dimension in self.mustHaveKeysJoined:
             if dimension.implied:
                 result.add(dimension)
-        for element in self.mustHaveKeysJoined.union(self.dataId.graph).elements:
+        for element in self.mustHaveKeysJoined.union(self.where.dataId.graph).elements:
             if element.alwaysJoin:
                 result.add(element)
         return result

@@ -89,7 +89,8 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
     def testWhere(self):
         """Test getting datasets."""
-        res = self._queryDataIds(self.root, dimensions=("visit",), where="visit=423")
+        res = self._queryDataIds(self.root, dimensions=("visit",),
+                                 where="instrument='DummyCamComp' AND visit=423")
         expected = AstropyTable(
             array((
                 ("R", "DummyCamComp", "d-r", 1, 423),

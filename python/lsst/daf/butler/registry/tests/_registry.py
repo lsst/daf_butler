@@ -766,7 +766,7 @@ class RegistryTests(ABC):
 
         # limit to single visit
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
-                                     where="visit = 10").toSet()
+                                     where="visit = 10", instrument="DummyCam").toSet()
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
@@ -774,7 +774,7 @@ class RegistryTests(ABC):
 
         # more limiting expression, using link names instead of Table.column
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
-                                     where="visit = 10 and detector > 1").toSet()
+                                     where="visit = 10 and detector > 1 and 'DummyCam'=instrument").toSet()
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
@@ -782,13 +782,13 @@ class RegistryTests(ABC):
 
         # expression excludes everything
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
-                                     where="visit > 1000").toSet()
+                                     where="visit > 1000", instrument="DummyCam").toSet()
         self.assertEqual(len(rows), 0)
 
         # Selecting by physical_filter, this is not in the dimensions, but it
         # is a part of the full expression so it should work too.
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
-                                     where="physical_filter = 'dummy_r'").toSet()
+                                     where="physical_filter = 'dummy_r'", instrument="DummyCam").toSet()
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (110, 111))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (11,))
@@ -870,7 +870,7 @@ class RegistryTests(ABC):
         # limit to 2 tracts and 2 patches
         rows = registry.queryDataIds(dimensions,
                                      datasets=[calexpType, mergeType], collections=run,
-                                     where="tract IN (1, 5) AND patch IN (2, 7)").toSet()
+                                     where="tract IN (1, 5) AND patch IN (2, 7)", skymap="DummyMap").toSet()
         self.assertEqual(len(rows), 2*2*2)   # 2 tracts x 2 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 7))
@@ -1126,6 +1126,7 @@ class RegistryTests(ABC):
         dataIds = registry.queryDataIds(
             ["detector", "physical_filter"],
             where="detector.purpose = 'SCIENCE'",  # this rejects detector=4
+            instrument="Cam1",
         )
         self.assertEqual(dataIds.graph, expectedGraph)
         self.assertEqual(dataIds.toSet(), expectedDataIds)
