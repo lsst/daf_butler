@@ -664,9 +664,33 @@ class MWCommand(click.Command):
     """Command subclass that stores a copy of the args list for use by the
     command."""
 
+    extra_epilog = None
+
     def parse_args(self, ctx, args):
         MWCtxObj.getFrom(ctx).args = copy.copy(args)
         super().parse_args(ctx, args)
+
+    @property
+    def epilog(self):
+        """Override the epilog attribute to add extra_epilog (if defined by a
+        subclass) to the end of any epilog provided by a subcommand.
+        """
+        ret = self._epilog if self._epilog else ""
+        if self.extra_epilog:
+            if ret:
+                ret += "\n\n"
+            ret += self.extra_epilog
+        return ret
+
+    @epilog.setter
+    def epilog(self, val):
+        self._epilog = val
+
+
+class ButlerCommand(MWCommand):
+    """Command subclass with butler-command specific overrides."""
+
+    extra_epilog = "See 'butler --help' for more options."
 
 
 class MWCtxObj():

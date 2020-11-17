@@ -38,7 +38,14 @@ from ..opt import (
     where_option,
 )
 
-from ..utils import cli_handle_exception, split_commas, to_upper, typeStrAcceptsMultiple, unwrap
+from ..utils import (
+    cli_handle_exception,
+    ButlerCommand,
+    split_commas,
+    to_upper,
+    typeStrAcceptsMultiple,
+    unwrap,
+)
 from ... import script
 
 
@@ -54,7 +61,7 @@ whereHelp = unwrap("""A string expression similar to a SQL WHERE clause. May inv
 # funcNameToCmdName and cmdNameToFuncName. If name changes are made here they
 # must be reflected in that location. If this becomes a common pattern a better
 # mechanism should be implemented.
-@click.command("import")
+@click.command("import", cls=ButlerCommand)
 @repo_argument(required=True, help=willCreateRepoHelp)
 @directory_argument(required=True)
 @transfer_option()
@@ -73,7 +80,7 @@ def butler_import(*args, **kwargs):
     cli_handle_exception(script.butlerImport, *args, **kwargs)
 
 
-@click.command()
+@click.command(cls=ButlerCommand)
 @repo_argument(required=True, help=willCreateRepoHelp)
 @click.option("--seed-config", help="Path to an existing YAML config file to apply (on top of defaults).")
 @click.option("--dimension-config", help="Path to an existing YAML config file with dimension configuration.")
@@ -89,7 +96,7 @@ def create(*args, **kwargs):
     cli_handle_exception(script.createRepo, *args, **kwargs)
 
 
-@click.command(short_help="Dump butler config to stdout.")
+@click.command(short_help="Dump butler config to stdout.", cls=ButlerCommand)
 @repo_argument(required=True, help=existingRepoHelp)
 @click.option("--subset", "-s", type=str,
               help="Subset of a configuration to report. This can be any key in the hierarchy such as "
@@ -106,7 +113,7 @@ def config_dump(*args, **kwargs):
     cli_handle_exception(script.configDump, *args, **kwargs)
 
 
-@click.command(short_help="Validate the configuration files.")
+@click.command(short_help="Validate the configuration files.", cls=ButlerCommand)
 @repo_argument(required=True, help=existingRepoHelp)
 @click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
 @dataset_type_option(help="Specific DatasetType(s) to validate.", multiple=True)
@@ -121,7 +128,7 @@ def config_validate(*args, **kwargs):
         raise click.exceptions.Exit(1)
 
 
-@click.command()
+@click.command(cls=ButlerCommand)
 @repo_argument(required=True)
 @collection_argument(help=unwrap("""COLLECTION is the Name of the collection to remove. If this is a tagged or
                           chained collection, datasets within the collection are not modified unless --unstore
@@ -141,7 +148,7 @@ def prune_collection(**kwargs):
     cli_handle_exception(script.pruneCollection, **kwargs)
 
 
-@click.command(short_help="Search for collections.")
+@click.command(short_help="Search for collections.", cls=ButlerCommand)
 @repo_argument(required=True)
 @glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
                     "collections to return.")
@@ -167,7 +174,7 @@ def query_collections(*args, **kwargs):
         table.pprint_all(align="<")
 
 
-@click.command()
+@click.command(cls=ButlerCommand)
 @repo_argument(required=True)
 @glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
                     "dataset types to return.")
@@ -185,7 +192,7 @@ def query_dataset_types(*args, **kwargs):
     print(yaml.dump(cli_handle_exception(script.queryDatasetTypes, *args, **kwargs), sort_keys=False))
 
 
-@click.command()
+@click.command(cls=ButlerCommand)
 @repo_argument(required=True)
 @click.argument('dataset-type-name', nargs=1)
 def remove_dataset_type(*args, **kwargs):
@@ -193,7 +200,7 @@ def remove_dataset_type(*args, **kwargs):
     cli_handle_exception(script.removeDatasetType, *args, **kwargs)
 
 
-@click.command()
+@click.command(cls=ButlerCommand)
 @repo_argument(required=True)
 @glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
                     "dataset types to be queried.")
@@ -219,7 +226,7 @@ def query_datasets(**kwargs):
     print("")
 
 
-@click.command()
+@click.command(cls=ButlerCommand)
 @repo_argument(required=True)
 @click.argument('input-collection')
 @click.argument('output-collection')
@@ -239,7 +246,7 @@ def certify_calibrations(*args, **kwargs):
     cli_handle_exception(script.certifyCalibrations, *args, **kwargs)
 
 
-@click.command()
+@click.command(cls=ButlerCommand)
 @repo_argument(required=True)
 @dimensions_argument(help=unwrap("""DIMENSIONS are the keys of the data IDs to yield, such as exposure,
                                  instrument, or tract. Will be expanded to include any dependencies."""))
