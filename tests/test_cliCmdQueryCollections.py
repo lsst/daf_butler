@@ -22,14 +22,24 @@
 """Unit tests for daf_butler CLI query-collections command.
 """
 
+from astropy.table import Table
+from numpy import array
+import os
 import unittest
-import yaml
 
-from lsst.daf.butler import Butler, CollectionType
+from lsst.daf.butler import (
+    Butler,
+    CollectionType,
+)
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_collections
-from lsst.daf.butler.cli.utils import LogCliRunner
-from lsst.daf.butler.tests import CliCmdTestBase
+from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
+from lsst.daf.butler.script import queryCollections
+from lsst.daf.butler.tests import CliCmdTestBase, DatastoreMock
+from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
+
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
@@ -38,9 +48,8 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
     def defaultExpected():
         return dict(repo=None,
                     collection_type=tuple(CollectionType.__members__.values()),
-                    flatten_chains=False,
-                    glob=(),
-                    include_chains=None)
+                    chains="TABLE",
+                    glob=())
 
     @staticmethod
     def command():
@@ -56,41 +65,133 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
         """Test all parameters"""
         self.run_test(["query-collections", "here", "foo*",
                        "--collection-type", "TAGGED",
-                       "--collection-type", "RUN",
-                       "--flatten-chains",
-                       "--include-chains"],
+                       "--collection-type", "RUN"],
                       self.makeExpected(repo="here",
                                         glob=("foo*",),
                                         collection_type=(CollectionType.TAGGED, CollectionType.RUN),
-                                        flatten_chains=True,
-                                        include_chains=True))
+                                        chains="TABLE"))
 
 
-class QueryCollectionsScriptTest(unittest.TestCase):
+class QueryCollectionsScriptTest(ButlerTestHelper, unittest.TestCase):
+
+    def setUp(self):
+        self.runner = LogCliRunner()
 
     def testGetCollections(self):
         run = "ingest/run"
         tag = "tag"
-        runner = LogCliRunner()
-        with runner.isolated_filesystem():
+        with self.runner.isolated_filesystem():
             butlerCfg = Butler.makeRepo("here")
             # the purpose of this call is to create some collections
-            _ = Butler(butlerCfg, run=run, tags=[tag], collections=[tag])
+            Butler(butlerCfg, run=run, tags=[tag], collections=[tag], writeable=True)
 
             # Verify collections that were created are found by
             # query-collections.
-            result = runner.invoke(cli, ["query-collections", "here"])
-            self.assertEqual({"collections": [run, tag]}, yaml.safe_load(result.output))
+            result = self.runner.invoke(cli, ["query-collections", "here"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            expected = Table((("ingest/run", "tag"), ("RUN", "TAGGED")),
+                             names=("Name", "Type"))
+            self.assertAstropyTablesEqual(readTable(result.output), expected)
 
             # Verify that with a glob argument, that only collections whose
             # name matches with the specified pattern are returned.
-            result = runner.invoke(cli, ["query-collections", "here", "t*"])
-            self.assertEqual({"collections": [tag]}, yaml.safe_load(result.output))
+            result = self.runner.invoke(cli, ["query-collections", "here", "t*"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            expected = Table((("tag",), ("TAGGED",)),
+                             names=("Name", "Type"))
+            self.assertAstropyTablesEqual(readTable(result.output), expected)
 
             # Verify that with a collection type argument, only collections of
             # that type are returned.
-            result = runner.invoke(cli, ["query-collections", "here", "--collection-type", "RUN"])
-            self.assertEqual({"collections": [run]}, yaml.safe_load(result.output))
+            result = self.runner.invoke(cli, ["query-collections", "here", "--collection-type", "RUN"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            expected = Table((("ingest/run",), ("RUN",)),
+                             names=("Name", "Type"))
+            self.assertAstropyTablesEqual(readTable(result.output), expected)
+
+
+class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
+
+    def setUp(self):
+        self.runner = LogCliRunner()
+
+    def testChained(self):
+        with self.runner.isolated_filesystem():
+
+            # Create a butler and add some chained collections:
+            butlerCfg = Butler.makeRepo("here")
+
+            butler1 = Butler(butlerCfg, writeable=True)
+
+            # Replace datastore functions with mocks:
+            DatastoreMock.apply(butler1)
+
+            butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+            butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+            registry1 = butler1.registry
+            registry1.registerRun("run1")
+            registry1.registerCollection("tag1", CollectionType.TAGGED)
+            registry1.registerCollection("calibration1", CollectionType.CALIBRATION)
+            registry1.registerCollection("chain1", CollectionType.CHAINED)
+            registry1.registerCollection("chain2", CollectionType.CHAINED)
+            registry1.setCollectionChain("chain1", ["tag1", "run1", "chain2"])
+            registry1.setCollectionChain("chain2", ["calibration1", "run1"])
+
+            # Use the script function to test the query-collections TREE
+            # option, because the astropy.table.Table.read method, which we are
+            # using for verification elsewhere in this file, seems to strip
+            # leading whitespace from columns. This makes it impossible to test
+            # the nested TREE output of the query-collections subcommand from
+            # the command line interface.
+            table = queryCollections("here", glob=(), collection_type=CollectionType.all(), chains="TREE")
+
+            # self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            expected = Table(array((("imported_g", "RUN"),
+                                    ("imported_r", "RUN"),
+                                    ("run1", "RUN"),
+                                    ("tag1", "TAGGED"),
+                                    ("calibration1", "CALIBRATION"),
+                                    ("chain1", "CHAINED"),
+                                    ("  tag1", "TAGGED"),
+                                    ("  run1", "RUN"),
+                                    ("  chain2", "CHAINED"),
+                                    ("    calibration1", "CALIBRATION"),
+                                    ("    run1", "RUN"),
+                                    ("chain2", "CHAINED"),
+                                    ("  calibration1", "CALIBRATION"),
+                                    ("  run1", "RUN"))),
+                             names=("Name", "Type"))
+            self.assertAstropyTablesEqual(table, expected)
+
+            result = self.runner.invoke(cli, ["query-collections", "here"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            expected = Table(array((
+                ("imported_g", "RUN", ""),
+                ("imported_r", "RUN", ""),
+                ("run1", "RUN", ""),
+                ("tag1", "TAGGED", ""),
+                ("calibration1", "CALIBRATION", ""),
+                ("chain1", "CHAINED", "[tag1, run1, chain2]"),
+                ("chain2", "CHAINED", "[calibration1, run1]"))),
+                names=("Name", "Type", "Definition"))
+            table = readTable(result.output)
+            self.assertAstropyTablesEqual(readTable(result.output), expected)
+
+            result = self.runner.invoke(cli, ["query-collections", "here", "--chains", "FLATTEN"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            expected = Table(array((
+                ("imported_g", "RUN"),
+                ("imported_r", "RUN"),
+                ("run1", "RUN"),
+                ("tag1", "TAGGED"),
+                ("calibration1", "CALIBRATION"),
+                ("tag1", "TAGGED"),
+                ("run1", "RUN"),
+                ("calibration1", "CALIBRATION"),
+                ("calibration1", "CALIBRATION"),
+                ("run1", "RUN"))),
+                names=("Name", "Type"))
+            self.assertAstropyTablesEqual(readTable(result.output), expected)
 
 
 if __name__ == "__main__":

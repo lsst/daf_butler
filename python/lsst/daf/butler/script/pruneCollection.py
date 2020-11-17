@@ -20,6 +20,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .. import Butler
+from .. import (
+    PurgeWithoutUnstorePruneCollectionsError,
+    RunWithoutPurgePruneCollectionsError,
+    PurgeUnsupportedPruneCollectionsError,
+)
 
 
 def pruneCollection(repo, collection, purge, unstore):
@@ -37,4 +42,12 @@ def pruneCollection(repo, collection, purge, unstore):
         Same as the ``unstore`` argument to ``Butler.pruneCollection``.
     """
     butler = Butler(repo, writeable=True)
-    butler.pruneCollection(collection, purge, unstore)
+    try:
+        butler.pruneCollection(collection, purge, unstore)
+    except PurgeWithoutUnstorePruneCollectionsError as e:
+        raise TypeError("Cannot pass --purge without --unstore.") from e
+    except RunWithoutPurgePruneCollectionsError as e:
+        raise TypeError(f"Cannot prune RUN collection {e.collectionType.name} without --purge.") from e
+    except PurgeUnsupportedPruneCollectionsError as e:
+        raise TypeError(
+            f"Cannot prune {e.collectionType} collection {e.collectionType.name} with --purge.") from e

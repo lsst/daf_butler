@@ -22,7 +22,6 @@
 """Unit tests for daf_butler CLI query-collections command.
 """
 
-import astropy
 from astropy.table import Table as AstropyTable
 from numpy import array
 import os
@@ -30,31 +29,15 @@ import shutil
 import tempfile
 import unittest
 
-from lsst.daf.butler import (
-    Butler,
-    Config,
-    DatasetRef,
-    StorageClassFactory
-)
+from lsst.daf.butler import Butler
 from lsst.daf.butler import script
-from lsst.daf.butler.tests import addDatasetType, MetricsExample
-from lsst.daf.butler.tests.utils import ButlerTestHelper
+from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
-
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-    storageClassFactory = StorageClassFactory()
-
-    @staticmethod
-    def _makeExampleMetrics():
-        return MetricsExample({"AM1": 5.2, "AM2": 30.6},
-                              {"a": [1, 2, 3],
-                               "b": {"blue": 5, "red": "green"}},
-                              [563, 234, 456.7, 752, 8, 9, 27])
 
     @staticmethod
     def _queryDataIds(repo, dimensions=(), collections=(), datasets=None, where=None):
@@ -68,54 +51,8 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
     def setUp(self):
         self.root = tempfile.mkdtemp(dir=TESTDIR)
-        butlerConfig = Butler.makeRepo(self.root, config=Config(self.configFile))
-        self.storageClassFactory.addFromConfig(self.configFile)
-
-        # New datasets will be added to run and tag, but we will only look in
-        # tag when looking up datasets.
-        run = "ingest/run"
-        tag = "ingest"
-        self.butler = Butler(butlerConfig, run=run, collections=[tag], tags=[tag])
-
-        # There will not be a collection yet
-        collections = set(self.butler.registry.queryCollections())
-        self.assertEqual(collections, set([run, tag]))
-
-        storageClass = self.storageClassFactory.getStorageClass("StructuredCompositeReadComp")
-
-        # Create and register a DatasetType
-        dimensions = self.butler.registry.dimensions.extract(["instrument", "visit"])
-        datasetTypeName = "test_metric_comp"
-        self.datasetType = addDatasetType(self.butler, datasetTypeName, dimensions, storageClass)
-
-        # Add needed Dimensions
-        self.butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        self.butler.registry.insertDimensionData("instrument", {"name": "alt_DummyCamComp"})
-        self.butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
-                                                                     "name": "d-r",
-                                                                     "band": "R"})
-        self.butler.registry.insertDimensionData("visit_system", {"instrument": "DummyCamComp",
-                                                                  "id": 1,
-                                                                  "name": "default"})
-        visit_start = astropy.time.Time("2020-01-01 08:00:00.123456789", scale="tai")
-        visit_end = astropy.time.Time("2020-01-01 08:00:36.66", scale="tai")
-        self.butler.registry.insertDimensionData("visit",
-                                                 {"instrument": "DummyCamComp", "id": 423,
-                                                  "name": "fourtwentythree", "physical_filter": "d-r",
-                                                  "visit_system": 1, "datetime_begin": visit_start,
-                                                  "datetime_end": visit_end})
-        self.butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 424,
-                                                           "name": "fourtwentyfour", "physical_filter": "d-r",
-                                                           "visit_system": 1})
-        metric = self._makeExampleMetrics()
-        dataId = {"instrument": "DummyCamComp", "visit": 423}
-        ref = DatasetRef(self.datasetType, dataId, id=None)
-        self.butler.put(metric, ref)
-
-        metric = self._makeExampleMetrics()
-        dataId = {"instrument": "DummyCamComp", "visit": 424}
-        ref = DatasetRef(self.datasetType, dataId, id=None)
-        self.butler.put(metric, ref)
+        self.repo = MetricTestRepo(root=self.root,
+                                   configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
 
     def tearDown(self):
         if os.path.exists(self.root):
@@ -165,14 +102,13 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         """Test getting datasets using the collections option."""
 
         # Add a dataset in a different collection
-        butler = Butler(self.root, run="foo")
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425,
-                                                      "name": "fourtwentyfive", "physical_filter": "d-r",
-                                                      "visit_system": 1})
-        metric = self._makeExampleMetrics()
-        dataId = {"instrument": "DummyCamComp", "visit": 425}
-        ref = DatasetRef(self.datasetType, dataId, id=None)
-        butler.put(metric, ref)
+        self.butler = Butler(self.root, run="foo")
+        self.repo.butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425,
+                                                                "name": "fourtwentyfive",
+                                                                "physical_filter": "d-r",
+                                                                "visit_system": 1})
+        self.repo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425},
+                             run="foo")
 
         # Verify the new dataset is not found in the "ingest/run" collection.
         res = self._queryDataIds(repo=self.root, dimensions=("visit",), collections=("ingest/run",),

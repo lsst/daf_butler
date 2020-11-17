@@ -24,6 +24,7 @@ import yaml
 
 from ..opt import (
     collection_type_option,
+    collection_argument,
     collections_option,
     dataset_type_option,
     datasets_option,
@@ -37,7 +38,7 @@ from ..opt import (
     where_option,
 )
 
-from ..utils import cli_handle_exception, split_commas, typeStrAcceptsMultiple, unwrap
+from ..utils import cli_handle_exception, split_commas, to_upper, typeStrAcceptsMultiple, unwrap
 from ... import script
 
 
@@ -122,11 +123,10 @@ def config_validate(*args, **kwargs):
 
 @click.command()
 @repo_argument(required=True)
-@click.option("--collection",
-              help=unwrap("""Name of the collection to remove. If this is a TAGGED or CHAINED collection,
-                          datasets within the collection are not modified unless --unstore is passed. If this
-                          is a RUN collection, --purge and --unstore must be passed, and all datasets in it
-                          are fully removed from the data repository. """))
+@collection_argument(help=unwrap("""COLLECTION is the Name of the collection to remove. If this is a tagged or
+                          chained collection, datasets within the collection are not modified unless --unstore
+                          is passed. If this is a run collection, --purge and --unstore must be passed, and
+                          all datasets in it are fully removed from the data repository."""))
 @click.option("--purge",
               help=unwrap("""Permit RUN collections to be removed, fully removing datasets within them.
                           Requires --unstore as an added precaution against accidental deletion. Must not be
@@ -146,19 +146,25 @@ def prune_collection(**kwargs):
 @glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
                     "collections to return.")
 @collection_type_option()
-@click.option("--flatten-chains/--no-flatten-chains",
-              help="Recursively get the child collections of matching CHAINED collections. Default is "
-                   "--no-flatten-chains.")
-@click.option("--include-chains/--no-include-chains",
-              default=None,
-              help="For --include-chains, return records for matching CHAINED collections. For "
-                   "--no-include-chains do not return records for CHAINED collections. Default is the "
-                   "opposite of --flatten-chains: include either CHAINED collections or their children, but "
-                   "not both.")
+@click.option("--chains",
+              default="table",
+              help=unwrap("""Affects how results are presented. TABLE lists each dataset in a row with
+                          chained datasets' children listed in a Definition column. TREE lists children below
+                          their parent in tree form. FLATTEN lists all datasets, including child datasets in
+                          one list.Defaults to TABLE. """),
+              callback=to_upper,
+              type=click.Choice(("TABLE", "TREE", "FLATTEN"), case_sensitive=False))
 @options_file_option()
 def query_collections(*args, **kwargs):
     """Get the collections whose names match an expression."""
-    print(yaml.dump(cli_handle_exception(script.queryCollections, *args, **kwargs)))
+    table = cli_handle_exception(script.queryCollections, *args, **kwargs)
+    # The unit test that mocks script.queryCollections does not return a table
+    # so we need the following `if`.
+    if table:
+        # When chains==TREE, the children of chained datasets are indented
+        # relative to their parents. For this to work properly the table must
+        # be left-aligned.
+        table.pprint_all(align="<")
 
 
 @click.command()

@@ -449,13 +449,14 @@ def cli_handle_exception(func, *args, **kwargs):
     if mockEnvVarKey in os.environ:
         Mocker(*args, **kwargs)
         return
+
     try:
         return func(*args, **kwargs)
-    except Exception:
+    except Exception as e:
         msg = io.StringIO()
-        msg.write("An error occurred during command execution:\n")
         traceback.print_exc(file=msg)
-        raise click.ClickException(msg.getvalue())
+        log.debug(msg.getvalue())
+        raise click.ClickException(e) from e
 
 
 class option_section:  # noqa: N801
