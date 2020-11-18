@@ -145,6 +145,7 @@ class DimensionElementFields:
         # be primary keys in the table for this dimension.
         self.required = NamedValueSet()
         self.dimensions = NamedValueSet()
+        self.facts = NamedValueSet()
         self.standard = NamedValueSet()
         dependencies = []
         for dimension in element.required:
@@ -176,10 +177,12 @@ class DimensionElementFields:
             self._tableSpec.fields.add(fieldSpec)
             self._tableSpec.unique.add(tuple(dependencies) + (fieldSpec.name,))
             self.standard.add(fieldSpec)
+            self.facts.add(fieldSpec)
         # Add other metadata fields.
         for fieldSpec in element.metadata:
             self._tableSpec.fields.add(fieldSpec)
             self.standard.add(fieldSpec)
+            self.facts.add(fieldSpec)
         names = list(self.standard.names)
         # Add fields for regions and/or timespans.
         if element.spatial is not None:
@@ -246,6 +249,14 @@ class DimensionElementFields:
     """The fields of this table that correspond to the element's direct
     required and implied dimensions, in that order, i.e.
     `DimensionElement.dimensions` (`NamedValueSet` [ `ddl.FieldSpec` ]).
+    """
+
+    facts: NamedValueSet[ddl.FieldSpec]
+    """The standard fields of this table that do not correspond to dimensions
+    (`NamedValueSet` [ `ddl.FieldSpec` ]).
+
+    This is equivalent to ``standard - dimensions`` (but possibly in a
+    different order).
     """
 
     standard: NamedValueSet[ddl.FieldSpec]
