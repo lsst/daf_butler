@@ -208,18 +208,13 @@ class Formatter(metaclass=ABCMeta):
         raise NotImplementedError("Type does not support reading")
 
     @abstractmethod
-    def write(self, inMemoryDataset: Any) -> str:
+    def write(self, inMemoryDataset: Any) -> None:
         """Write a Dataset.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             The Dataset to store.
-
-        Returns
-        -------
-        path : `str`
-            The path to where the Dataset was stored within the datastore.
         """
         raise NotImplementedError("Type does not support writing")
 
@@ -419,7 +414,7 @@ class Formatter(metaclass=ABCMeta):
             stored in this `Formatter`.
         """
         updated = self.makeUpdatedLocation(self.fileDescriptor.location)
-        return updated.pathInStore
+        return updated.pathInStore.path
 
     def segregateParameters(self, parameters: Optional[Dict[str, Any]] = None) -> Tuple[Dict, Dict]:
         """Segregate the supplied parameters into those understood by the

@@ -25,8 +25,6 @@ __all__ = ("Location", "LocationFactory")
 
 import os
 import os.path
-import posixpath
-import types
 
 from typing import (
     Optional,
@@ -41,62 +39,73 @@ class Location:
 
     Parameters
     ----------
-    datastoreRootUri : `ButlerURI` or `str`
+    datastoreRootUri : `ButlerURI` or `str` or `None`
         Base URI for this datastore, must include an absolute path.
-    path : `str`
+        If `None` the `path` must correspond to an absolute URI.
+    path : `ButlerURI` or `str`
         Relative path within datastore.  Assumed to be using the local
         path separator if a ``file`` scheme is being used for the URI,
-        else a POSIX separator.
+        else a POSIX separator. Can be a full URI if the root URI is `None`.
+        Can also be a schemeless URI if it refers to a relative path.
     """
 
     __slots__ = ("_datastoreRootUri", "_path", "_uri")
 
-    def __init__(self, datastoreRootUri: Union[ButlerURI, str], path: str):
+    def __init__(self, datastoreRootUri: Union[None, ButlerURI, str],
+                 path: Union[ButlerURI, str]):
+        # Be careful not to force a relative local path to absolute path
+        path_uri = ButlerURI(path, forceAbsolute=False)
+
         if isinstance(datastoreRootUri, str):
             datastoreRootUri = ButlerURI(datastoreRootUri, forceDirectory=True)
+        elif datastoreRootUri is None:
+            if not path_uri.isabs():
+                raise ValueError(f"No datastore root URI given but path '{path}' was not absolute URI.")
         elif not isinstance(datastoreRootUri, ButlerURI):
             raise ValueError("Datastore root must be a ButlerURI instance")
 
-        if not posixpath.isabs(datastoreRootUri.path):
-            raise ValueError(f"Supplied URI must be an absolute path (given {datastoreRootUri}).")
+        if datastoreRootUri is not None and not datastoreRootUri.isabs():
+            raise ValueError(f"Supplied root URI must be an absolute path (given {datastoreRootUri}).")
 
         self._datastoreRootUri = datastoreRootUri
 
-        pathModule: types.ModuleType
-        if not self._datastoreRootUri.scheme:
-            pathModule = os.path
-        else:
-            pathModule = posixpath
+        # if the root URI is not None the path must not be absolute since
+        # it is required to be within the root.
+        if datastoreRootUri is not None:
+            if path_uri.isabs():
+                raise ValueError(f"Path within datastore must be relative not absolute, got {path_uri}")
 
-        # mypy can not work out that these modules support isabs
-        if pathModule.isabs(path):  # type: ignore
-            raise ValueError("Path within datastore must be relative not absolute")
-
-        self._path = path
+        self._path = path_uri
 
         # Internal cache of the full location as a ButlerURI
         self._uri: Optional[ButlerURI] = None
 
         # Check that the resulting URI is inside the datastore
         # This can go wrong if we were given ../dir as path
-        pathInStore = self.uri.relative_to(self._datastoreRootUri)
-        if pathInStore is None:
-            raise ValueError(f"Unexpectedly {path} jumps out of {self._datastoreRootUri}")
+        if self._datastoreRootUri is not None:
+            pathInStore = self.uri.relative_to(self._datastoreRootUri)
+            if pathInStore is None:
+                raise ValueError(f"Unexpectedly {path} jumps out of {self._datastoreRootUri}")
 
     def __str__(self) -> str:
         return str(self.uri)
 
     def __repr__(self) -> str:
-        uri = self._datastoreRootUri.geturl()
+        uri = self._datastoreRootUri
         path = self._path
-        return f"{self.__class__.__name__}({uri!r}, {path!r})"
+        return f"{self.__class__.__name__}({uri!r}, {path.path!r})"
 
     @property
     def uri(self) -> ButlerURI:
         """URI corresponding to fully-specified location in datastore.
         """
         if self._uri is None:
-            self._uri = self._datastoreRootUri.join(self._path)
+            root = self._datastoreRootUri
+            if root is None:
+                uri = self._path
+            else:
+                uri = root.join(self._path)
+            self._uri = uri
         return self._uri
 
     @property
@@ -115,17 +124,18 @@ class Location:
             return full.unquoted_path
 
     @property
-    def pathInStore(self) -> str:
+    def pathInStore(self) -> ButlerURI:
         """Path corresponding to location relative to `Datastore` root.
 
         Uses the same path separator as supplied to the object constructor.
+        Can be an absolute URI if that is how the location was configured.
         """
         return self._path
 
     @property
     def netloc(self) -> str:
         """The URI network location."""
-        return self._datastoreRootUri.netloc
+        return self.uri.netloc
 
     @property
     def relativeToPathRoot(self) -> str:
@@ -151,19 +161,7 @@ class Location:
         if ext is None:
             return
 
-        # Get the extension and remove it from the path if one is found
-        # .fits.gz counts as one extension do not use os.path.splitext
-        current = self.getExtension()
-        path = self.pathInStore
-        if current:
-            path = path[:-len(current)]
-
-        # Ensure that we have a leading "." on file extension (and we do not
-        # try to modify the empty string)
-        if ext and not ext.startswith("."):
-            ext = "." + ext
-
-        self._path = path + ext
+        self._path.updateExtension(ext)
 
         # Clear the URI cache so it can be recreated with the new path
         self._uri = None

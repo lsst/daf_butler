@@ -26,7 +26,7 @@ import posixpath
 import pickle
 import pathlib
 
-from lsst.daf.butler import LocationFactory, ButlerURI
+from lsst.daf.butler import LocationFactory, Location, ButlerURI
 from lsst.daf.butler.core._butlerUri.utils import os2posix, posix2os
 
 
@@ -229,7 +229,7 @@ class LocationTestCase(unittest.TestCase):
         loc1 = factory.fromPath(pathInStore)
 
         self.assertEqual(loc1.path, os.path.join(root, pathInStore))
-        self.assertEqual(loc1.pathInStore, pathInStore)
+        self.assertEqual(loc1.pathInStore.path, pathInStore)
         self.assertTrue(loc1.uri.geturl().startswith("file:///"))
         self.assertTrue(loc1.uri.geturl().endswith("file.ext"))
         loc1.updateExtension("fits")
@@ -250,6 +250,15 @@ class LocationTestCase(unittest.TestCase):
         self.assertTrue(loc1.uri.geturl().endswith("file"), f"Checking no extension in {loc1.uri}")
         self.assertEqual(loc1.getExtension(), "")
 
+    def testAbsoluteLocations(self):
+        """Using a pathInStore that refers to absolute URI."""
+        loc = Location(None, "file:///something.txt")
+        self.assertEqual(loc.pathInStore.path, "/something.txt")
+        self.assertEqual(str(loc.uri), "file:///something.txt")
+
+        with self.assertRaises(ValueError):
+            Location(None, "relative.txt")
+
     def testRelativeRoot(self):
         root = os.path.abspath(os.path.curdir)
         factory = LocationFactory(os.path.curdir)
@@ -258,7 +267,7 @@ class LocationTestCase(unittest.TestCase):
         loc1 = factory.fromPath(pathInStore)
 
         self.assertEqual(loc1.path, os.path.join(root, pathInStore))
-        self.assertEqual(loc1.pathInStore, pathInStore)
+        self.assertEqual(loc1.pathInStore.path, pathInStore)
         self.assertEqual(loc1.uri.scheme, "file")
 
         with self.assertRaises(ValueError):
@@ -276,7 +285,7 @@ class LocationTestCase(unittest.TestCase):
                             "relative/path+3/file#.ext.gz"):
             loc1 = factory.fromPath(pathInStore)
 
-            self.assertEqual(loc1.pathInStore, pathInStore)
+            self.assertEqual(loc1.pathInStore.path, pathInStore)
             self.assertEqual(loc1.path, os.path.join(root, pathInStore))
             self.assertIn("%", str(loc1.uri))
             self.assertEqual(loc1.getExtension(), ".ext.gz")
@@ -290,7 +299,7 @@ class LocationTestCase(unittest.TestCase):
         loc1 = factory.fromPath(pathInStore)
 
         self.assertEqual(loc1.path, posixpath.join("/butler/datastore", pathInStore))
-        self.assertEqual(loc1.pathInStore, pathInStore)
+        self.assertEqual(loc1.pathInStore.path, pathInStore)
         self.assertEqual(loc1.uri.scheme, "https")
         self.assertEqual(loc1.uri.basename(), "file.ext")
         loc1.updateExtension("fits")

@@ -371,12 +371,12 @@ class FileDatastore(GenericBaseDatastore):
 
         return results
 
-    def _registered_refs_per_artifact(self, pathInStore: str) -> Set[int]:
+    def _registered_refs_per_artifact(self, pathInStore: ButlerURI) -> Set[int]:
         """Return all dataset refs associated with the supplied path.
 
         Parameters
         ----------
-        pathInStore : `str`
+        pathInStore : `ButlerURI`
             Path of interest in the data store.
 
         Returns
@@ -384,7 +384,7 @@ class FileDatastore(GenericBaseDatastore):
         ids : `set` of `int`
             All `DatasetRef` IDs associated with this path.
         """
-        records = list(self._table.fetch(path=pathInStore))
+        records = list(self._table.fetch(path=str(pathInStore)))
         ids = {r["dataset_id"] for r in records}
         return ids
 
@@ -410,8 +410,17 @@ class FileDatastore(GenericBaseDatastore):
         # Get the file information (this will fail if no file)
         records = self.getStoredItemsInfo(ref)
 
-        # Use the path to determine the location
-        return [(self.locationFactory.fromPath(r.path), r) for r in records]
+        # Use the path to determine the location -- we need to take
+        # into account absolute URIs in the datastore record
+        locations: List[Tuple[Location, StoredFileInfo]] = []
+        for r in records:
+            uriInStore = ButlerURI(r.path, forceAbsolute=False)
+            if uriInStore.isabs():
+                location = Location(None, uriInStore)
+            else:
+                location = self.locationFactory.fromPath(r.path)
+            locations.append((location, r))
+        return locations
 
     def _can_remove_dataset_artifact(self, ref: DatasetIdRef, location: Location) -> bool:
         """Check that there is only one dataset associated with the
@@ -640,7 +649,7 @@ class FileDatastore(GenericBaseDatastore):
         FileNotFoundError
             Raised if one of the given files does not exist.
         """
-        if transfer not in (None,) + self.root.transferModes:
+        if transfer not in (None, "direct") + self.root.transferModes:
             raise NotImplementedError(f"Transfer mode {transfer} not supported.")
 
         # A relative URI indicates relative to datastore root
@@ -708,6 +717,7 @@ class FileDatastore(GenericBaseDatastore):
         # Track whether we have read the size of the source yet
         have_sized = False
 
+        tgtLocation: Optional[Location]
         if transfer is None:
             # A relative path is assumed to be relative to the datastore
             # in this context
@@ -721,6 +731,12 @@ class FileDatastore(GenericBaseDatastore):
                     raise RuntimeError(f"Unexpectedly learned that {srcUri} is "
                                        f"not within datastore {self.root}")
                 tgtLocation = self.locationFactory.fromPath(pathInStore)
+        elif transfer == "direct":
+            # Want to store the full URI to the resource directly in
+            # datastore. This is useful for referring to permanent archive
+            # storage for raw data.
+            # Trust that people know what they are doing.
+            tgtLocation = None
         else:
             # Work out the name we want this ingested file to have
             # inside the datastore
@@ -740,12 +756,20 @@ class FileDatastore(GenericBaseDatastore):
             # transfer the resource to the destination
             tgtLocation.uri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction)
 
+        if tgtLocation is None:
+            # This means we are using direct mode
+            targetUri = srcUri
+            targetPath = str(srcUri)
+        else:
+            targetUri = tgtLocation.uri
+            targetPath = tgtLocation.pathInStore.path
+
         # the file should exist in the datastore now
         if not have_sized:
-            size = tgtLocation.uri.size()
-            checksum = self.computeChecksum(tgtLocation.uri) if self.useChecksum else None
+            size = targetUri.size()
+            checksum = self.computeChecksum(targetUri) if self.useChecksum else None
 
-        return StoredFileInfo(formatter=formatter, path=tgtLocation.pathInStore,
+        return StoredFileInfo(formatter=formatter, path=targetPath,
                               storageClass=ref.datasetType.storageClass,
                               component=ref.datasetType.component(),
                               file_size=size, checksum=checksum)
@@ -858,8 +882,7 @@ class FileDatastore(GenericBaseDatastore):
 
         # For a local file, simply use the formatter directly
         if uri.isLocal:
-            path = formatter.write(inMemoryDataset)
-            assert self.root.join(path) == uri
+            formatter.write(inMemoryDataset)
             log.debug("Successfully wrote python object to local file at %s", uri)
         else:
             # This is a remote URI, so first try bytes and write directly else
@@ -1551,18 +1574,34 @@ class FileDatastore(GenericBaseDatastore):
             if len(fileLocations) > 1:
                 raise NotImplementedError(f"Can not export disassembled datasets such as {ref}")
             location, storedFileInfo = fileLocations[0]
+
+            pathInStore = location.pathInStore.path
             if transfer is None:
                 # TODO: do we also need to return the readStorageClass somehow?
                 # We will use the path in store directly
                 pass
+            elif transfer == "direct":
+                # Use full URIs to the remote store in the export
+                pathInStore = str(location.uri)
             else:
                 # mypy needs help
                 assert directoryUri is not None, "directoryUri must be defined to get here"
                 storeUri = ButlerURI(location.uri)
-                exportUri = directoryUri.join(location.pathInStore)
+
+                # if the datastore has an absolute URI to a resource, we
+                # have two options:
+                # 1. Keep the absolute URI in the exported YAML
+                # 2. Allocate a new name in the local datastore and transfer
+                #    it.
+                # For now go with option 2
+                if location.pathInStore.isabs():
+                    template = self.templates.getTemplate(ref)
+                    pathInStore = template.format(ref)
+
+                exportUri = directoryUri.join(pathInStore)
                 exportUri.transfer_from(storeUri, transfer=transfer)
 
-            yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)
+            yield FileDataset(refs=[ref], path=pathInStore, formatter=storedFileInfo.formatter)
 
     @staticmethod
     def computeChecksum(uri: ButlerURI, algorithm: str = "blake2b", block_size: int = 8192) -> Optional[str]:

@@ -382,6 +382,34 @@ class ButlerURI:
         self.dirLike = False
         self._uri = self._uri._replace(path=newpath)
 
+    def updateExtension(self, ext: Optional[str]) -> None:
+        """Update the file extension associated with this `ButlerURI` in place.
+
+        All file extensions are replaced.
+
+        Parameters
+        ----------
+        ext : `str` or `None`
+            New extension. If an empty string is given any extension will
+            be removed. If `None` is given there will be no change.
+        """
+        if ext is None:
+            return
+
+        # Get the extension and remove it from the path if one is found
+        # .fits.gz counts as one extension do not use os.path.splitext
+        current = self.getExtension()
+        path = self.path
+        if current:
+            path = path[:-len(current)]
+
+        # Ensure that we have a leading "." on file extension (and we do not
+        # try to modify the empty string)
+        if ext and not ext.startswith("."):
+            ext = "." + ext
+
+        self._uri = self._uri._replace(path=path + ext)
+
     def getExtension(self) -> str:
         """Return the file extension(s) associated with this URI path.
 
@@ -409,16 +437,19 @@ class ButlerURI:
 
         return ext
 
-    def join(self, path: str) -> ButlerURI:
+    def join(self, path: Union[str, ButlerURI]) -> ButlerURI:
         """Create a new `ButlerURI` with additional path components including
         a file.
 
         Parameters
         ----------
-        path : `str`
+        path : `str`, `ButlerURI`
             Additional file components to append to the current URI. Assumed
             to include a file at the end. Will be quoted depending on the
-            associated URI scheme.
+            associated URI scheme. If the path looks like a URI with a scheme
+            referring to an absolute location, it will be returned
+            directly (matching the behavior of `os.path.join()`). It can
+            also be a `ButlerURI`.
 
         Returns
         -------
@@ -433,6 +464,16 @@ class ButlerURI:
         may be this never becomes a problem but datastore templates assume
         POSIX separator is being used.
         """
+        # If we have a full URI in path we will use it directly
+        # but without forcing to absolute so that we can trap the
+        # expected option of relative path.
+        path_uri = ButlerURI(path, forceAbsolute=False)
+        if path_uri.scheme:
+            return path_uri
+
+        # Force back to string
+        path = path_uri.path
+
         new = self.dirname()  # By definition a directory URI
 
         # new should be asked about quoting, not self, since dirname can
@@ -613,7 +654,8 @@ class ButlerURI:
 
     def __copy__(self) -> ButlerURI:
         # Implement here because the __new__ method confuses things
-        return type(self)(str(self))
+        # Be careful not to convert a relative schemeless URI to absolute
+        return type(self)(str(self), forceAbsolute=self.isabs())
 
     def __deepcopy__(self, memo: Any) -> ButlerURI:
         # Implement here because the __new__ method confuses things
