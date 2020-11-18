@@ -38,6 +38,7 @@ from ...core import (
     DatasetRef,
     DatasetType,
     ddl,
+    LogicalTable,
     SimpleQuery,
     Timespan,
 )
@@ -289,6 +290,11 @@ class DatasetRecordStorage(ABC):
             simple ``SELECT`` query, or `None` if it is known that there are
             no datasets of this `DatasetType` that match the given constraints.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def makeLogicalTable(self, collection: CollectionRecord) -> LogicalTable:
+        # TODO: docstring
         raise NotImplementedError()
 
     datasetType: DatasetType

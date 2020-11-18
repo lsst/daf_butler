@@ -30,11 +30,16 @@ from ...core import (
     DatabaseDimension,
     DatabaseDimensionElement,
     DataCoordinateIterable,
+    Dimension,
     DimensionElement,
     DimensionRecord,
     GovernorDimension,
+    LogicalColumnKey,
+    LogicalTable,
     NamedKeyDict,
     NamedKeyMapping,
+    NamedValueAbstractSet,
+    SelectAdapter,
     SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
@@ -175,3 +180,42 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return []
+
+    def makeLogicalTable(self) -> LogicalTable:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
+        targetTable = self._db.getExistingTable(self._target.name, self._targetSpec)
+        return _DimensionSummaryQueryLogicalTable(self._element, targetTable)
+
+
+class _DimensionSummaryQueryLogicalTable(LogicalTable):
+
+    def __init__(self, element: DatabaseDimension, table: sqlalchemy.schema.Table):
+        self._element = element
+        self._table = table
+
+    @property
+    def name(self) -> str:
+        return self._element.name
+
+    @property
+    def dimensions(self) -> NamedValueAbstractSet[Dimension]:
+        return self._element.dimensions
+
+    def select(
+        self,
+        columns: Optional[Iterable[LogicalColumnKey]] = None,
+        adapter: Optional[SelectAdapter] = None,
+    ) -> sqlalchemy.sql.Select:
+        # There is actually only one column we can provide (the dimension key),
+        # and caller guarantees that any requested columns in `select` or
+        # `adapter.needed` are in `self.columns`, so we don't actually need to
+        # look at what columns are requested.
+        column = self._table.columns[self._element.name]
+        sql = sqlalchemy.sql.select(
+            [column.label(self._element.name)]
+        ).select_from(
+            self._table
+        ).distinct()
+        if adapter is not None:
+            sql = adapter.apply(sql, {self._element: column})
+        return sql

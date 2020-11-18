@@ -38,6 +38,10 @@ from ...core import (
     addDimensionForeignKey,
     DatabaseDimensionElement,
     ddl,
+    Dimension,
+    DirectLogicalTable,
+    LogicalTable,
+    NamedValueSet,
 )
 from ..interfaces import (
     Database,
@@ -130,6 +134,16 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DatabaseDimensionOverlapStorage.
         return [self._summaryTable, self._overlapTable]
+
+    def makeLogicalTable(self) -> LogicalTable:
+        # Docstring inherited from DatabaseDimensionOverlapStorage.
+        dimensions = NamedValueSet[Dimension]()
+        for elementStorage in self._elementStorage:
+            dimensions.update(elementStorage.element.required)
+        return DirectLogicalTable(
+            self._overlapTable,
+            dimensions=dimensions.freeze(),
+        )
 
     _SUMMARY_TABLE_NAME_SPEC = "{0.name}_{1.name}_overlap_summary"
 

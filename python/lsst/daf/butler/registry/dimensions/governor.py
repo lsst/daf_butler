@@ -30,7 +30,9 @@ from ...core import (
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
+    DirectLogicalTable,
     GovernorDimension,
+    LogicalTable,
     NamedKeyDict,
     TimespanDatabaseRepresentation,
 )
@@ -166,3 +168,13 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return [self._table]
+
+    def makeLogicalTable(self) -> LogicalTable:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
+        return DirectLogicalTable(
+            self._table,
+            dimensions=self.element.dimensions,
+            facts=self.element.RecordClass.fields.facts.names,
+            name=self.element.name,
+            column_names={self.element: self.element.primaryKey.name},
+        )

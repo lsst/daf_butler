@@ -36,6 +36,7 @@ from ...core import (
     DimensionElement,
     DimensionRecord,
     GovernorDimension,
+    LogicalTable,
     NamedKeyDict,
     NamedKeyMapping,
     SpatialRegionDatabaseRepresentation,
@@ -136,3 +137,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return self._nested.digestTables()
+
+    def makeLogicalTable(self) -> LogicalTable:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
+        return self._nested.makeLogicalTable()

@@ -46,9 +46,13 @@ from ...core import (
     DataCoordinate,
     DataCoordinateIterable,
     ddl,
+    Dimension,
     DimensionElement,
     DimensionRecord,
+    DirectLogicalTable,
     GovernorDimension,
+    LogicalColumnKey,
+    LogicalTable,
     NamedKeyDict,
     NamedKeyMapping,
     NamedValueSet,
@@ -253,6 +257,26 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def connect(self, overlaps: DatabaseDimensionOverlapStorage) -> None:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         self._otherOverlaps.append(overlaps)
+
+    def makeLogicalTable(self) -> LogicalTable:
+        # Docstring inherited from DatabaseDimensionRecordStorage.
+        column_names: Dict[LogicalColumnKey, str] = {}
+        if isinstance(self.element, Dimension):
+            column_names[self.element] = self.element.primaryKey.name
+        topological_extents = set()
+        if self.element.temporal is not None:
+            topological_extents.add(self._db.getTimespanRepresentation())
+        facts = set(self.element.RecordClass.fields.facts.names)
+        if self.element.spatial is not None:
+            facts.add("region")
+        return DirectLogicalTable(
+            self._table,
+            dimensions=self.element.dimensions,
+            facts=facts,
+            topological_extents=topological_extents,
+            name=self.element.name,
+            column_names=column_names,
+        )
 
 
 class _SkyPixOverlapStorage:

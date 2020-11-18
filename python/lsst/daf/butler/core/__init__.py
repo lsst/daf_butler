@@ -17,6 +17,7 @@ from .fileDescriptor import *
 from .fileTemplates import *
 from .formatter import *
 from .location import *
+from ._logicalTable import *
 from .mappingFactory import *
 from .named import *
 from .quantum import *

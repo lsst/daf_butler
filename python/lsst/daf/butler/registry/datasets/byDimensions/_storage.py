@@ -3,12 +3,14 @@ from __future__ import annotations
 __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 from typing import (
+    AbstractSet,
     Any,
     Dict,
     Iterable,
     Iterator,
     Optional,
     Set,
+    Type,
     TYPE_CHECKING,
 )
 
@@ -20,9 +22,18 @@ from lsst.daf.butler import (
     DataCoordinateSet,
     DatasetRef,
     DatasetType,
+    Dimension,
+    LogicalColumnKey,
+    LogicalColumnFactKey,
+    LogicalColumnTopologicalExtentKey,
+    LogicalTable,
+    NamedValueAbstractSet,
+    SelectAdapter,
     SimpleQuery,
     Timespan,
+    TimespanDatabaseRepresentation,
 )
+from lsst.daf.butler.core.utils import cached_getter
 from lsst.daf.butler.registry import ConflictingDefinitionError
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
 
@@ -430,3 +441,99 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             {dimension.name: row[dimension.name] for dimension in self.datasetType.dimensions.required},
             graph=self.datasetType.dimensions
         )
+
+    def makeLogicalTable(self, collection: CollectionRecord) -> LogicalTable:
+        # Docstring inherited from DatasetRecordStorage.
+        return _DatasetQueryLogicalTable(
+            self.datasetType,
+            self._dataset_type_id,
+            collection,
+            static=self._static.dataset,
+            dynamic=self._tags if collection.type is not CollectionType.CALIBRATION else self._calibs,
+            tsRepr=self._db.getTimespanRepresentation(),
+            collectionKeyColumn=self._collections.getCollectionForeignKeyName(),
+            runKeyColumn=self._collections.getRunForeignKeyName(),
+        )
+
+
+class _DatasetQueryLogicalTable(LogicalTable):
+    def __init__(
+        self,
+        datasetType: DatasetType,
+        dataset_type_id: int,
+        collection: CollectionRecord,
+        static: sqlalchemy.schema.Table,
+        dynamic: sqlalchemy.schema.Table,
+        tsRepr: Type[TimespanDatabaseRepresentation],
+        collectionKeyColumn: str,
+        runKeyColumn: str
+    ):
+        self._datasetType = datasetType
+        self._dataset_type_id = dataset_type_id
+        self._collection = collection
+        self._static = static
+        self._dynamic = dynamic
+        self._tsRepr = tsRepr
+        self._collectionKeyColumn = collectionKeyColumn
+        self._runKeyColumn = runKeyColumn
+
+    @property
+    def name(self) -> str:
+        return self._datasetType.name
+
+    @property
+    def dimensions(self) -> NamedValueAbstractSet[Dimension]:
+        return self._datasetType.dimensions.required
+
+    @property  # type: ignore
+    @cached_getter
+    def facts(self) -> AbstractSet[LogicalColumnFactKey]:
+        return frozenset(
+            LogicalColumnFactKey(table=self.name, column=c)
+            for c in ("id", "run", "rank", "ingest_date")
+        )
+
+    @property  # type: ignore
+    @cached_getter
+    def topological_extents(self) -> AbstractSet[LogicalColumnTopologicalExtentKey]:
+        if self._collection.type is CollectionType.CALIBRATION:
+            return frozenset([LogicalColumnTopologicalExtentKey(table=self.name, column=self._tsRepr)])
+        return frozenset()
+
+    def select(
+        self,
+        columns: Optional[Iterable[LogicalColumnKey]] = None,
+        adapter: Optional[SelectAdapter] = None,
+    ) -> sqlalchemy.sql.Select:
+        if columns is None:
+            columns = self.columns
+        from_clause = self._static.join(
+            self._dynamic,
+            joinon=(self._static.columns.id == self._dynamic.columns.dataset_id),
+        )
+        where_terms = [
+            self._static.columns.dataset_type_id == self._dataset_type_id,
+            self._dynamic.columns.dataset_type_id == self._dataset_type_id,
+            self._dynamic.columns[self._collectionKeyColumn] == self._collection.key,
+        ]
+        if self._collection.type is CollectionType.RUN:
+            where_terms.append(self._static.columns[self._runKeyColumn] == self._collection.key)
+        sql = sqlalchemy.sql.select(
+            self._flatten_select_expressions((self._extract_with_name(key)) for key in columns)
+        ).select_from(
+            from_clause
+        ).where(
+            where_terms
+        )
+        if adapter:
+            sql = adapter.apply(sql, {key: self.extract(key) for key in adapter.needed})
+        return sql
+
+    def _get_column_source(self, column_key: LogicalColumnKey) -> sqlalchemy.sql.FromClause:
+        if column_key in self.facts:
+            # It just happens that all of the fact columns are in the static
+            # dataset table while the dimensions and possible timespan are
+            # in the dynamic (i.e. tags or calibs) table.
+            return self._static
+        else:
+            return self._dynamic

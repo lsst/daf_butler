@@ -42,7 +42,13 @@ from typing import (
 
 import sqlalchemy
 
-from ...core import DatabaseDimensionElement, DimensionGraph, GovernorDimension, SkyPixDimension
+from ...core import (
+    DatabaseDimensionElement,
+    DimensionGraph,
+    GovernorDimension,
+    LogicalTable,
+    SkyPixDimension,
+)
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -303,6 +309,11 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def makeLogicalTable(self) -> LogicalTable:
+        # TODO: docs
+        raise NotImplementedError()
+
 
 class SkyPixDimensionRecordStorage(DimensionRecordStorage):
     """Intermediate interface for `DimensionRecordStorage` objects that provide
@@ -375,6 +386,11 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         """
         raise NotImplementedError(f"{type(self).__name__} does not support spatial elements.")
 
+    @abstractmethod
+    def makeLogicalTable(self) -> LogicalTable:
+        # TODO: docs
+        raise NotImplementedError()
+
 
 class DatabaseDimensionOverlapStorage(ABC):
     """A base class for objects that manage overlaps between a pair of
@@ -431,6 +447,11 @@ class DatabaseDimensionOverlapStorage(ABC):
         tables : `Iterable` [ `sqlalchemy.schema.Table` ]
             Possibly empty set of tables for schema digest calculations.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def makeLogicalTable(self) -> LogicalTable:
+        # TODO: docs
         raise NotImplementedError()
 
 
