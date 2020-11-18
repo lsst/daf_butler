@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from .butlerImport import butlerImport
+from .certifyCalibrations import certifyCalibrations
 from .createRepo import createRepo
 from .configDump import configDump
 from .configValidate import configValidate
@@ -29,4 +30,3 @@ from .queryDataIds import queryDataIds
 from .queryDatasets import queryDatasets
 from .queryDatasetTypes import queryDatasetTypes
 from .removeDatasetType import removeDatasetType
-from .certifyCalibrations import certifyCalibrations
