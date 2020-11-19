@@ -222,7 +222,7 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
     """
 
     NAME: ClassVar[str] = "timespan"
-    """Base name for all timespan fields in the database (`str`).
+    """Default base name for all timespan fields in the database (`str`).
 
     Actual field names may be derived from this, rather than exactly this.
     """
@@ -240,7 +240,8 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
 
     @classmethod
     @abstractmethod
-    def makeFieldSpecs(cls, nullable: bool, **kwargs: Any) -> Tuple[ddl.FieldSpec, ...]:
+    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+                       ) -> Tuple[ddl.FieldSpec, ...]:
         """Make one or more `ddl.FieldSpec` objects that reflect the fields
         that must be added to a table for this representation.
 
@@ -251,6 +252,9 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
             (mapped to `None` in Python), though the correspoding value(s) in
             the database are implementation-defined.  Nullable timespan fields
             default to NULL, while others default to (-∞, ∞).
+        name : `str`, optional
+            Base logical name for the timespan field(s).  Defaults to
+            `TimespanDatabaseRepresentation.NAME`.
         **kwargs
             Keyword arguments are forwarded to the `ddl.FieldSpec` constructor
             for all fields; implementations only provide the ``name``,
@@ -267,8 +271,14 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
 
     @classmethod
     @abstractmethod
-    def getFieldNames(cls) -> Tuple[str, ...]:
+    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
         """Return the actual field names used by this representation.
+
+        Parameters
+        ----------
+        name : `str`, optional
+            Base logical name for the timespan field(s).  Defaults to
+            `TimespanDatabaseRepresentation.NAME`.
 
         Returns
         -------
@@ -280,7 +290,7 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
 
     @classmethod
     @abstractmethod
-    def update(cls, timespan: Optional[Timespan], *,
+    def update(cls, timespan: Optional[Timespan], *, name: Optional[str] = None,
                result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Add a `Timespan` to a dictionary that represents a database row
         in this representation.
@@ -289,6 +299,9 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
         ----------
         timespan : `Timespan`, optional
             A concrete timespan.
+        name : `str`, optional
+            Base logical name for the timespan field(s).  Defaults to
+            `TimespanDatabaseRepresentation.NAME`.
         result : `dict` [ `str`, `Any` ], optional
             A dictionary representing a database row that fields should be
             added to, or `None` to create and return a new one.
@@ -303,7 +316,7 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
 
     @classmethod
     @abstractmethod
-    def extract(cls, mapping: Mapping[str, Any]) -> Optional[Timespan]:
+    def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Optional[Timespan]:
         """Extract a `Timespan` instance from a dictionary that represents a
         database row in this representation.
 
@@ -313,6 +326,9 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
             A dictionary representing a database row containing a `Timespan`
             in this representation.  Should have key(s) equal to the return
             value of `getFieldNames`.
+        name : `str`, optional
+            Base logical name for the timespan field(s).  Defaults to
+            `TimespanDatabaseRepresentation.NAME`.
 
         Returns
         -------
@@ -390,37 +406,43 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
     are set to fields mapped to the minimum and maximum value constants used
     by our integer-time mapping.
     """
-    def __init__(self, begin: sqlalchemy.sql.ColumnElement, end: sqlalchemy.sql.ColumnElement):
+    def __init__(self, begin: sqlalchemy.sql.ColumnElement, end: sqlalchemy.sql.ColumnElement, name: str):
         self.begin = begin
         self.end = end
+        self._name = name
 
-    __slots__ = ("begin", "end")
+    __slots__ = ("begin", "end", "_name")
 
     @classmethod
-    def makeFieldSpecs(cls, nullable: bool, **kwargs: Any) -> Tuple[ddl.FieldSpec, ...]:
+    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+                       ) -> Tuple[ddl.FieldSpec, ...]:
         # Docstring inherited.
+        if name is None:
+            name = cls.NAME
         return (
             ddl.FieldSpec(
-                f"{cls.NAME}_begin", dtype=ddl.AstropyTimeNsecTai, nullable=nullable,
+                f"{name}_begin", dtype=ddl.AstropyTimeNsecTai, nullable=nullable,
                 default=(None if nullable else sqlalchemy.sql.text(str(astropy_to_nsec(EPOCH)))),
                 **kwargs,
             ),
             ddl.FieldSpec(
-                f"{cls.NAME}_end", dtype=ddl.AstropyTimeNsecTai, nullable=nullable,
+                f"{name}_end", dtype=ddl.AstropyTimeNsecTai, nullable=nullable,
                 default=(None if nullable else sqlalchemy.sql.text(str(astropy_to_nsec(MAX_TIME)))),
                 **kwargs,
             ),
         )
 
     @classmethod
-    def getFieldNames(cls) -> Tuple[str, ...]:
+    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
         # Docstring inherited.
         return (f"{cls.NAME}_begin", f"{cls.NAME}_end")
 
     @classmethod
-    def update(cls, timespan: Optional[Timespan], *,
+    def update(cls, timespan: Optional[Timespan], *, name: Optional[str] = None,
                result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         # Docstring inherited.
+        if name is None:
+            name = cls.NAME
         if result is None:
             result = {}
         if timespan is None:
@@ -445,15 +467,17 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
                     end = MAX_TIME
                 else:
                     end = timespan.end
-        result[f"{cls.NAME}_begin"] = begin
-        result[f"{cls.NAME}_end"] = end
+        result[f"{name}_begin"] = begin
+        result[f"{name}_end"] = end
         return result
 
     @classmethod
-    def extract(cls, mapping: Mapping[str, Any]) -> Optional[Timespan]:
+    def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Optional[Timespan]:
         # Docstring inherited.
-        begin = mapping[f"{cls.NAME}_begin"]
-        end = mapping[f"{cls.NAME}_end"]
+        if name is None:
+            name = cls.NAME
+        begin = mapping[f"{name}_begin"]
+        end = mapping[f"{name}_end"]
         if begin is None:
             if end is not None:
                 raise RuntimeError(
@@ -479,10 +503,19 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return Timespan(begin=begin, end=end)
 
     @classmethod
-    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause) -> _CompoundTimespanDatabaseRepresentation:
+    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause,
+                       name: Optional[str] = None) -> _CompoundTimespanDatabaseRepresentation:
         # Docstring inherited.
-        return cls(begin=selectable.columns[f"{cls.NAME}_begin"],
-                   end=selectable.columns[f"{cls.NAME}_end"])
+        if name is None:
+            name = cls.NAME
+        return cls(begin=selectable.columns[f"{name}_begin"],
+                   end=selectable.columns[f"{name}_end"],
+                   name=name)
+
+    @property
+    def name(self) -> str:
+        # Docstring inherited.
+        return self._name
 
     def isNull(self) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
@@ -500,6 +533,15 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         else:
             raise TypeError(f"Unexpected argument to overlaps: {other!r}.")
         return sqlalchemy.sql.and_(self.end > begin, end > self.begin)
+
+    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
+        # Docstring inherited.
+        if name is None:
+            yield self.begin
+            yield self.end
+        else:
+            yield self.begin.label(f"{name}_begin")
+            yield self.end.label(f"{name}_end")
 
 
 TimespanDatabaseRepresentation.Compound = _CompoundTimespanDatabaseRepresentation

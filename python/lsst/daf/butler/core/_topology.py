@@ -32,6 +32,8 @@ from abc import ABC, abstractmethod
 import enum
 from typing import (
     Any,
+    ClassVar,
+    Iterator,
     Mapping,
     Optional,
     Type,
@@ -180,9 +182,14 @@ class TopologicalExtentDatabaseRepresentation(ABC):
     SQLAlchemy-based column expression.
     """
 
+    NAME: ClassVar[str]
+    """Default name for this type of logical column (`str`).
+    """
+
     @classmethod
     @abstractmethod
-    def fromSelectable(cls: Type[_S], selectable: sqlalchemy.sql.FromClause) -> _S:
+    def fromSelectable(cls: Type[_S], selectable: sqlalchemy.sql.FromClause,
+                       name: Optional[str] = None) -> _S:
         """Construct an instance that represents a logical column (which may
         actually be backed by multiple columns) in the given table or subquery.
 
@@ -190,11 +197,24 @@ class TopologicalExtentDatabaseRepresentation(ABC):
         ----------
         selectable : `sqlalchemy.sql.FromClause`
             SQLAlchemy object representing a table or subquery.
+        name : `str`, optional
+            Logical name for this possibly-compound field.
 
         Returns
         -------
         representation : `TopologicalExtentDatabaseRepresentation`
             Object representing a logical column.
+        """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Base logical name for the topological extent (`str`).
+
+        If the representation uses only one actual column, this should be the
+        full name of the column.  In other cases it is an unspecified subset of
+        the column names.
         """
         raise NotImplementedError()
 
@@ -212,5 +232,24 @@ class TopologicalExtentDatabaseRepresentation(ABC):
         -------
         expression : `sqlalchemy.sql.ColumnElement`
             A boolean SQLAlchemy expression.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def flatten(self, name: Optional[str]) -> Iterator[sqlalchemy.sql.ColumnElement]:
+        """Return the actual column or columns that comprise this logical
+        column.
+
+        Parameters
+        ----------
+        name : `str`, optional
+            If provided, a name for the logical column that should be used to
+            label the columns.  If not provided, the columns' native names will
+            be used.
+
+        Returns
+        -------
+        columns : `Iterator` [ `sqlalchemy.sql.ColumnElement` ]
+            The true column or columns that back this object.
         """
         raise NotImplementedError()

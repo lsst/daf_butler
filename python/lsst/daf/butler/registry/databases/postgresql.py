@@ -259,40 +259,50 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
     column : `sqlalchemy.sql.ColumnElement`
         SQLAlchemy object representing the column.
     """
-    def __init__(self, column: sqlalchemy.sql.ColumnElement):
+    def __init__(self, column: sqlalchemy.sql.ColumnElement, name: str):
         self.column = column
+        self._name = name
 
-    __slots__ = ("column",)
+    __slots__ = ("column", "_name")
 
     @classmethod
-    def makeFieldSpecs(cls, nullable: bool, **kwargs: Any) -> Tuple[ddl.FieldSpec, ...]:
+    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+                       ) -> Tuple[ddl.FieldSpec, ...]:
         # Docstring inherited.
+        if name is None:
+            name = cls.NAME
         return (
             ddl.FieldSpec(
-                cls.NAME, dtype=_RangeTimespanType, nullable=nullable,
+                name, dtype=_RangeTimespanType, nullable=nullable,
                 default=(None if nullable else sqlalchemy.sql.text("'(,)'::int8range")),
                 **kwargs
             ),
         )
 
     @classmethod
-    def getFieldNames(cls) -> Tuple[str, ...]:
+    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
         # Docstring inherited.
-        return (cls.NAME,)
+        if name is None:
+            name = cls.NAME
+        return (name,)
 
     @classmethod
-    def update(cls, timespan: Optional[Timespan], *,
+    def update(cls, timespan: Optional[Timespan], *, name: Optional[str] = None,
                result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         # Docstring inherited.
+        if name is None:
+            name = cls.NAME
         if result is None:
             result = {}
-        result[cls.NAME] = timespan
+        result[name] = timespan
         return result
 
     @classmethod
-    def extract(cls, mapping: Mapping[str, Any]) -> Optional[Timespan]:
+    def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Optional[Timespan]:
         # Docstring inherited.
-        return mapping[cls.NAME]
+        if name is None:
+            name = cls.NAME
+        return mapping[name]
 
     @classmethod
     def hasExclusionConstraint(cls) -> bool:
@@ -300,9 +310,17 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         return True
 
     @classmethod
-    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause) -> _RangeTimespanRepresentation:
+    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
+                       ) -> _RangeTimespanRepresentation:
         # Docstring inherited.
-        return cls(selectable.columns[cls.NAME])
+        if name is None:
+            name = cls.NAME
+        return cls(selectable.columns[name], name)
+
+    @property
+    def name(self) -> str:
+        # Docstring inherited.
+        return self._name
 
     def isNull(self) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
@@ -314,3 +332,10 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
             return self.column.overlaps(other)
         else:
             return self.column.overlaps(other.column)
+
+    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
+        # Docstring inherited.
+        if name is None:
+            yield self.column
+        else:
+            yield self.column.label(name)
