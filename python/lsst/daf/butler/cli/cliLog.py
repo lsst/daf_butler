@@ -105,7 +105,7 @@ class CliLog:
             # calling this function multiple times in one program execution,
             # so do log a debug but don't log an error or fail, just make the
             # re-initialization a no-op.
-            log = logging.getLogger(__name__.partition(".")[2])
+            log = logging.getLogger(__name__)
             log.debug("Log is already initialized, returning without re-initializing.")
             return
         cls._initialized = True
@@ -297,7 +297,7 @@ class CliLog:
         """
         if cls._initialized or cls.configState:
             # Already initialized, do not touch anything.
-            log = logging.getLogger(__name__.partition(".")[2])
+            log = logging.getLogger(__name__)
             log.warning("Log is already initialized, will not replay configuration.")
             return
 
