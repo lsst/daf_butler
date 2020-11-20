@@ -58,7 +58,7 @@ from typing import (
 from lsst.utils import doImport
 
 
-_LOG = logging.getLogger(__name__.partition(".")[2])
+_LOG = logging.getLogger(__name__)
 
 
 def safeMakeDir(directory: str) -> None:

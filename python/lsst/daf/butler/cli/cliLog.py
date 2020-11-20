@@ -78,6 +78,11 @@ class CliLog:
     """The log format used when the lsst.log package is not importable and the
     log is initialized with longlog=False."""
 
+    configState = []
+    """Configuration state. Contains tuples where first item in a tuple is
+    a method and remaining items are arguments for the method.
+    """
+
     _initialized = False
     _lsstLogHandler = None
     _componentSettings = []
@@ -100,7 +105,7 @@ class CliLog:
             # calling this function multiple times in one program execution,
             # so do log a debug but don't log an error or fail, just make the
             # re-initialization a no-op.
-            log = logging.getLogger(__name__.partition(".")[2])
+            log = logging.getLogger(__name__)
             log.debug("Log is already initialized, returning without re-initializing.")
             return
         cls._initialized = True
@@ -129,6 +134,9 @@ class CliLog:
 
         # also capture warnings and send them to logging
         logging.captureWarnings(True)
+
+        # remember this call
+        cls.configState.append((cls.initLog, longlog))
 
     @classmethod
     def getHandlerId(cls):
@@ -167,6 +175,7 @@ class CliLog:
             logger.setLevel(componentSetting.pythonLogLevel)
         cls._setLogLevel(None, "INFO")
         cls._initialized = False
+        cls.configState = []
 
     @classmethod
     def setLogLevels(cls, logLevels):
@@ -186,6 +195,8 @@ class CliLog:
         # configure individual loggers
         for component, level in logLevels:
             cls._setLogLevel(component, level)
+            # remember this call
+            cls.configState.append((cls._setLogLevel, component, level))
 
     @classmethod
     def _setLogLevel(cls, component, level):
@@ -273,3 +284,24 @@ class CliLog:
         component levels."""
         componentSettings = cls.ComponentSettings(component)
         cls._componentSettings.append(componentSettings)
+
+    @classmethod
+    def replayConfigState(cls, configState):
+        """Re-create configuration using configuration state recorded earlier.
+
+        Parameters
+        ----------
+        configState : `list` of `tuple`
+            Tuples contain a method as first item and arguments for the method,
+            in the same format as ``cls.configState``.
+        """
+        if cls._initialized or cls.configState:
+            # Already initialized, do not touch anything.
+            log = logging.getLogger(__name__)
+            log.warning("Log is already initialized, will not replay configuration.")
+            return
+
+        # execute each one in order
+        for call in configState:
+            method, *args = call
+            method(*args)
