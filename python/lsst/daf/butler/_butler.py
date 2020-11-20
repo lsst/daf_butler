@@ -616,6 +616,35 @@ class Butler:
                 else:
                     newDataId[k] = v
 
+        # Go through the updated dataId and check the type in case someone is
+        # using an alternate key.  We have already filtered out the compound
+        # keys dimensions.record format.
+        # Will have to include kwds in this check
+        not_dimensions = {}
+        # Use a list so we can adjust the dict safely in the loop
+        for dimensionName in list(newDataId):
+            value = newDataId[dimensionName]
+            try:
+                dimension = self.registry.dimensions[dimensionName]
+            except KeyError:
+                # This is not a real dimension
+                not_dimensions[dimensionName] = value
+                del newDataId[dimensionName]
+                continue
+
+            if not isinstance(value, dimension.primaryKey.getPythonType()):
+                for alternate in dimension.alternateKeys:
+                    if isinstance(value, alternate.getPythonType()):
+                        byRecord[dimensionName][alternate.name] = value
+                        del newDataId[dimensionName]
+                        log.debug("Converting dimension %s to %s.%s=%s",
+                                  dimensionName, dimensionName, alternate.name, value)
+                        break
+                else:
+                    log.warning("Type mismatch found for value '%r' provided for dimension %s. "
+                                "Could not find matching alternative (primary key has type %s).",
+                                value, dimensionName, dimension.primaryKey.getPythonType())
+
         if byRecord:
             # Some record specifiers were found so we need to convert
             # them to the Id form
