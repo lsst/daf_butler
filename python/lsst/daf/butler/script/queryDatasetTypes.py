@@ -22,6 +22,9 @@ from __future__ import annotations
 
 from typing import Any, List
 
+from astropy.table import Table
+from numpy import array
+
 from .. import Butler
 from ..core.utils import globToRegex
 
@@ -63,10 +66,11 @@ def queryDatasetTypes(repo, verbose, glob, components):
     datasetTypes = butler.registry.queryDatasetTypes(components=components, **kwargs)
     info: List[Any]
     if verbose:
-        info = [dict(name=datasetType.name,
-                     dimensions=list(datasetType.dimensions.names),
-                     storageClass=datasetType.storageClass.name)
-                for datasetType in datasetTypes]
+        table = Table(array([(d.name, str(list(d.dimensions.names)) or "None", d.storageClass.name)
+                             for d in datasetTypes]),
+                      names=("name", "dimensions", "storage class"))
     else:
-        info = [datasetType.name for datasetType in datasetTypes]
-    return {"datasetTypes": info}
+        rows = ([d.name for d in datasetTypes],)
+        table = Table(rows, names=("name",))
+    table.sort("name")
+    return table

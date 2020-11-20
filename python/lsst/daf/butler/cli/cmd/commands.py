@@ -20,7 +20,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import click
-import yaml
 
 from ..opt import (
     collection_type_option,
@@ -189,7 +188,11 @@ def query_collections(*args, **kwargs):
 @options_file_option()
 def query_dataset_types(*args, **kwargs):
     """Get the dataset types in a repository."""
-    print(yaml.dump(cli_handle_exception(script.queryDatasetTypes, *args, **kwargs), sort_keys=False))
+    table = cli_handle_exception(script.queryDatasetTypes, *args, **kwargs)
+    if table:
+        table.pprint_all()
+    else:
+        print("No results. Try --help for more information.")
 
 
 @click.command(cls=ButlerCommand)
