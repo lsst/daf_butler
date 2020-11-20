@@ -27,7 +27,7 @@ import unittest
 
 from lsst.daf.butler.core.utils import findFileResources, getFullTypeName, globToRegex, iterable, Singleton
 from lsst.daf.butler import Formatter, Registry
-from lsst.daf.butler import NamedKeyDict, StorageClass
+from lsst.daf.butler import NamedKeyDict, NamedValueSet, StorageClass
 
 
 TESTDIR = os.path.dirname(__file__)
@@ -153,6 +153,54 @@ class NamedKeyDictTest(unittest.TestCase):
         nkd = NamedKeyDict(self.dictionary)
         self.assertEqual(nkd, self.dictionary)
         self.assertEqual(self.dictionary, nkd)
+
+
+class NamedValueSetTest(unittest.TestCase):
+
+    def setUp(self):
+        self.TestTuple = namedtuple("TestTuple", ("name", "id"))
+        self.a = self.TestTuple(name="a", id=1)
+        self.b = self.TestTuple(name="b", id=2)
+        self.c = self.TestTuple(name="c", id=3)
+
+    def testConstruction(self):
+        for arg in ({self.a, self.b}, (self.a, self.b)):
+            for nvs in (NamedValueSet(arg), NamedValueSet(arg).freeze()):
+                self.assertEqual(len(nvs), 2)
+                self.assertEqual(nvs.names, {"a", "b"})
+                self.assertCountEqual(nvs, {self.a, self.b})
+                self.assertCountEqual(nvs.asMapping().items(), [(self.a.name, self.a), (self.b.name, self.b)])
+
+    def testNoNameConstruction(self):
+        with self.assertRaises(AttributeError):
+            NamedValueSet([self.a, "a"])
+
+    def testGetItem(self):
+        nvs = NamedValueSet({self.a, self.b, self.c})
+        self.assertEqual(nvs["a"], self.a)
+        self.assertEqual(nvs[self.a], self.a)
+        self.assertEqual(nvs["b"], self.b)
+        self.assertEqual(nvs[self.b], self.b)
+        self.assertIn("a", nvs)
+        self.assertIn(self.b, nvs)
+
+    def testEquality(self):
+        s = {self.a, self.b, self.c}
+        nvs = NamedValueSet(s)
+        self.assertEqual(nvs, s)
+        self.assertEqual(s, nvs)
+
+    def checkOperator(self, result, expected):
+        self.assertIsInstance(result, NamedValueSet)
+        self.assertEqual(result, expected)
+
+    def testOperators(self):
+        ab = NamedValueSet({self.a, self.b})
+        bc = NamedValueSet({self.b, self.c})
+        self.checkOperator(ab & bc, {self.b})
+        self.checkOperator(ab | bc, {self.a, self.b, self.c})
+        self.checkOperator(ab ^ bc, {self.a, self.c})
+        self.checkOperator(ab - bc, {self.a})
 
 
 class TestButlerUtils(unittest.TestCase):

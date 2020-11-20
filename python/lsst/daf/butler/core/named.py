@@ -301,6 +301,17 @@ class NamedValueAbstractSet(AbstractSet[K_co]):
         except KeyError:
             return default
 
+    @classmethod
+    def _from_iterable(cls, iterable: Iterable[K_co]) -> NamedValueSet[K_co]:
+        """Hook to ensure that inherited `collections.abc.Set` operators return
+        `NamedValueSet` instances, not something else (see `collections.abc`
+        documentation for more information).
+
+        Note that this behavior can only be guaranteed when both operands are
+        `NamedValueAbstractSet` instances.
+        """
+        return NamedValueSet(iterable)
+
 
 class NameMappingSetView(NamedValueAbstractSet[K_co]):
     """A lightweight implementation of `NamedValueAbstractSet` backed by a
@@ -488,6 +499,10 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
         """
         self._mapping[element.name] = element
 
+    def clear(self) -> None:
+        # Docstring inherited.
+        self._mapping.clear()
+
     def remove(self, element: Union[str, K]) -> Any:
         # Docstring inherited.
         del self._mapping[getattr(element, "name", element)]
@@ -507,7 +522,7 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
             return self._mapping.pop(*args)
 
     def update(self, elements: Iterable[K]) -> None:
-        """Add multple new elements to the set.
+        """Add multiple new elements to the set.
 
         Parameters
         ----------
