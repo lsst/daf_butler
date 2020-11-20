@@ -29,4 +29,5 @@ from .queryCollections import queryCollections
 from .queryDataIds import queryDataIds
 from .queryDatasets import queryDatasets
 from .queryDatasetTypes import queryDatasetTypes
+from .queryDimensionRecords import queryDimensionRecords
 from .removeDatasetType import removeDatasetType

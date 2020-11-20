@@ -30,6 +30,7 @@ from ..opt import (
     datasets_option,
     dimensions_argument,
     directory_argument,
+    element_argument,
     glob_argument,
     options_file_option,
     repo_argument,
@@ -267,3 +268,24 @@ def query_data_ids(**kwargs):
             print("No results. Try requesting some dimensions or datasets, see --help for more information.")
         else:
             print("No results. Try --help for more information.")
+
+
+@click.command(cls=ButlerCommand)
+@repo_argument(required=True)
+@element_argument(required=True)
+@datasets_option(help=unwrap("""An expression that fully or partially identifies dataset types that should
+                             constrain the yielded records. Only affects results when used with
+                             --collections."""))
+@collections_option(help=collections_option.help + " Only affects results when used with --datasets.")
+@where_option(help=whereHelp)
+@click.option("--no-check", is_flag=True,
+              help=unwrap("""Don't check the query before execution. By default the query is checked before it
+                          executed, this may reject some valid queries that resemble common mistakes."""))
+@options_file_option()
+def query_dimension_records(**kwargs):
+    """Query for dimension information."""
+    table = cli_handle_exception(script.queryDimensionRecords, **kwargs)
+    if table:
+        table.pprint_all()
+    else:
+        print("No results. Try --help for more information.")

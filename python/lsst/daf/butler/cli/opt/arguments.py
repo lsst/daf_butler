@@ -31,6 +31,11 @@ dimensions_argument = MWArgumentDecorator("dimensions",
 directory_argument = MWArgumentDecorator("directory",
                                          help="DIRECTORY is the folder containing dataset files.")
 
+
+element_argument = MWArgumentDecorator("element",
+                                       help="ELEMENT is the dimension element to obtain.")
+
+
 glob_argument = MWArgumentDecorator("glob",
                                     callback=split_commas,
                                     help="GLOB is one or more strings to apply to the search.",

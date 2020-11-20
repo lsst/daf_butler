@@ -638,6 +638,12 @@ class MWOptionDecorator:
         line."""
         return self._opts
 
+    @property
+    def help(self):
+        """Get the help text for this option. Returns an empty string if no
+        help was defined."""
+        return self.partialOpt.keywords.get("help", "")
+
     def __call__(self, *args, **kwargs):
         return self.partialOpt(*args, **kwargs)
 

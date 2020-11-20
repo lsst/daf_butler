@@ -29,6 +29,7 @@ __all__ = ("butler_import",
            "query_data_ids",
            "query_dataset_types",
            "query_datasets",
+           "query_dimension_records",
            "remove_dataset_type",
            )
 
@@ -43,5 +44,6 @@ from .commands import (butler_import,
                        query_data_ids,
                        query_dataset_types,
                        query_datasets,
+                       query_dimension_records,
                        remove_dataset_type,
                        )
