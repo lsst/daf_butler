@@ -290,6 +290,13 @@ class SimpleButlerTestCase(unittest.TestCase):
                                   collections="calibs", instrument="Cam1")
         self.assertEqual(bias3b_id, bias3b.id)
 
+        # And again but this time using the alternate value rather than
+        # the primary and do it in the keyword arguments.
+        bias3b_id, _ = butler.get("bias",
+                                  exposure="four", detector="Ba",
+                                  collections="calibs", instrument="Cam1")
+        self.assertEqual(bias3b_id, bias3b.id)
+
 
 if __name__ == "__main__":
     unittest.main()
