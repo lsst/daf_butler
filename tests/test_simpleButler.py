@@ -250,6 +250,8 @@ class SimpleButlerTestCase(unittest.TestCase):
                 "obs_id": "three",
                 "timespan": Timespan(t1, t2),
                 "physical_filter": "Cam1-G",
+                "day_obs": 20201114,
+                "seq_num": 55,
             },
             {
                 "instrument": "Cam1",
@@ -257,6 +259,8 @@ class SimpleButlerTestCase(unittest.TestCase):
                 "obs_id": "four",
                 "timespan": Timespan(t2, t3),
                 "physical_filter": "Cam1-G",
+                "day_obs": 20211114,
+                "seq_num": 42,
             },
         )
         # Get some biases from raw-like data IDs.
@@ -294,6 +298,12 @@ class SimpleButlerTestCase(unittest.TestCase):
         # the primary and do it in the keyword arguments.
         bias3b_id, _ = butler.get("bias",
                                   exposure="four", detector="Ba",
+                                  collections="calibs", instrument="Cam1")
+        self.assertEqual(bias3b_id, bias3b.id)
+
+        # Now with implied record columns
+        bias3b_id, _ = butler.get("bias", day_obs=20211114, seq_num=42,
+                                  raft="B", name_in_raft="a",
                                   collections="calibs", instrument="Cam1")
         self.assertEqual(bias3b_id, bias3b.id)
 
