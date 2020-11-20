@@ -62,7 +62,7 @@ collection_type_option = MWOptionDecorator("--collection-type",
 
 collections_option = MWOptionDecorator("--collections",
                                        help=unwrap("""One or more expressions that fully or partially identify
-                                                   the collections to search for datasets.If not provided all
+                                                   the collections to search for datasets. If not provided all
                                                    datasets are returned."""),
                                        multiple=True,
                                        callback=split_commas)
