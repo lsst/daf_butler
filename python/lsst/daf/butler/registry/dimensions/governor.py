@@ -68,7 +68,10 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
                    context: Optional[StaticTablesContext] = None,
                    config: Mapping[str, Any]) -> GovernorDimensionRecordStorage:
         # Docstring inherited from GovernorDimensionRecordStorage.
-        spec = element.RecordClass.fields.makeTableSpec(tsRepr=db.getTimespanRepresentation())
+        spec = element.RecordClass.fields.makeTableSpec(
+            regRepr=db.getSpatialRegionRepresentation(),
+            tsRepr=db.getTimespanRepresentation(),
+        )
         if context is not None:
             table = context.addTable(element.name, spec)
         else:

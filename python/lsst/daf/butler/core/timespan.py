@@ -42,7 +42,7 @@ except ImportError:
 
 from . import ddl
 from .time_utils import astropy_to_nsec, EPOCH, MAX_TIME, times_equal
-from ._topology import TopologicalExtentDatabaseRepresentation
+from ._topology import TopologicalExtentDatabaseRepresentation, TopologicalSpace
 
 
 class Timespan(NamedTuple):
@@ -212,7 +212,7 @@ class Timespan(NamedTuple):
 _S = TypeVar("_S", bound="TimespanDatabaseRepresentation")
 
 
-class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
+class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Timespan]):
     """An interface that encapsulates how timespans are represented in a
     database engine.
 
@@ -222,144 +222,18 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation):
     """
 
     NAME: ClassVar[str] = "timespan"
-    """Default base name for all timespan fields in the database (`str`).
-
-    Actual field names may be derived from this, rather than exactly this.
-    """
+    SPACE: ClassVar[TopologicalSpace] = TopologicalSpace.TEMPORAL
 
     Compound: ClassVar[Type[TimespanDatabaseRepresentation]]
     """A concrete subclass of `TimespanDatabaseRepresentation` that simply
     uses two separate fields for the begin (inclusive) and end (excusive)
     endpoints.
 
-    This implementation should be compatibly with any SQL database, and should
+    This implementation should be compatible with any SQL database, and should
     generally be used when a database-specific implementation is not available.
     """
 
     __slots__ = ()
-
-    @classmethod
-    @abstractmethod
-    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
-                       ) -> Tuple[ddl.FieldSpec, ...]:
-        """Make one or more `ddl.FieldSpec` objects that reflect the fields
-        that must be added to a table for this representation.
-
-        Parameters
-        ----------
-        nullable : `bool`
-            If `True`, the timespan is permitted to be logically ``NULL``
-            (mapped to `None` in Python), though the correspoding value(s) in
-            the database are implementation-defined.  Nullable timespan fields
-            default to NULL, while others default to (-∞, ∞).
-        name : `str`, optional
-            Base logical name for the timespan field(s).  Defaults to
-            `TimespanDatabaseRepresentation.NAME`.
-        **kwargs
-            Keyword arguments are forwarded to the `ddl.FieldSpec` constructor
-            for all fields; implementations only provide the ``name``,
-            ``dtype``, and ``default`` arguments themselves.
-
-        Returns
-        -------
-        specs : `tuple` [ `ddl.FieldSpec` ]
-            Field specification objects; length of the tuple is
-            subclass-dependent, but is guaranteed to match the length of the
-            return values of `getFieldNames` and `update`.
-        """
-        raise NotImplementedError()
-
-    @classmethod
-    @abstractmethod
-    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
-        """Return the actual field names used by this representation.
-
-        Parameters
-        ----------
-        name : `str`, optional
-            Base logical name for the timespan field(s).  Defaults to
-            `TimespanDatabaseRepresentation.NAME`.
-
-        Returns
-        -------
-        names : `tuple` [ `str` ]
-            Field name(s).  Guaranteed to be the same as the names of the field
-            specifications returned by `makeFieldSpecs`.
-        """
-        raise NotImplementedError()
-
-    @classmethod
-    @abstractmethod
-    def update(cls, timespan: Optional[Timespan], *, name: Optional[str] = None,
-               result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Add a `Timespan` to a dictionary that represents a database row
-        in this representation.
-
-        Parameters
-        ----------
-        timespan : `Timespan`, optional
-            A concrete timespan.
-        name : `str`, optional
-            Base logical name for the timespan field(s).  Defaults to
-            `TimespanDatabaseRepresentation.NAME`.
-        result : `dict` [ `str`, `Any` ], optional
-            A dictionary representing a database row that fields should be
-            added to, or `None` to create and return a new one.
-
-        Returns
-        -------
-        result : `dict` [ `str`, `Any` ]
-            A dictionary containing this representation of a timespan.  Exactly
-            the `dict` passed as ``result`` if that is not `None`.
-        """
-        raise NotImplementedError()
-
-    @classmethod
-    @abstractmethod
-    def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Optional[Timespan]:
-        """Extract a `Timespan` instance from a dictionary that represents a
-        database row in this representation.
-
-        Parameters
-        ----------
-        mapping : `Mapping` [ `str`, `Any` ]
-            A dictionary representing a database row containing a `Timespan`
-            in this representation.  Should have key(s) equal to the return
-            value of `getFieldNames`.
-        name : `str`, optional
-            Base logical name for the timespan field(s).  Defaults to
-            `TimespanDatabaseRepresentation.NAME`.
-
-        Returns
-        -------
-        timespan : `Timespan` or `None`
-            Python representation of the timespan.
-        """
-        raise NotImplementedError()
-
-    @classmethod
-    def hasExclusionConstraint(cls) -> bool:
-        """Return `True` if this representation supports exclusion constraints.
-
-        Returns
-        -------
-        supported : `bool`
-            If `True`, defining a constraint via `ddl.TableSpec.exclusion` that
-            includes the fields of this representation is allowed.
-        """
-        return False
-
-    @abstractmethod
-    def isNull(self) -> sqlalchemy.sql.ColumnElement:
-        """Return a SQLAlchemy expression that tests whether this timespan is
-        logically ``NULL``.
-
-        Returns
-        -------
-        isnull : `sqlalchemy.sql.ColumnElement`
-            A boolean SQLAlchemy expression object.
-        """
-        raise NotImplementedError()
 
     @abstractmethod
     def overlaps(self: _S, other: Union[Timespan, _S]) -> sqlalchemy.sql.ColumnElement:
@@ -438,14 +312,14 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return (f"{cls.NAME}_begin", f"{cls.NAME}_end")
 
     @classmethod
-    def update(cls, timespan: Optional[Timespan], *, name: Optional[str] = None,
+    def update(cls, extent: Optional[Timespan], name: Optional[str] = None,
                result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
         if result is None:
             result = {}
-        if timespan is None:
+        if extent is None:
             begin = None
             end = None
         else:
@@ -455,18 +329,18 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
                 warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
                 if erfa is not None:
                     warnings.simplefilter("ignore", category=erfa.ErfaWarning)
-                if timespan.begin is None or timespan.begin < EPOCH:
+                if extent.begin is None or extent.begin < EPOCH:
                     begin = EPOCH
                 else:
-                    begin = timespan.begin
+                    begin = extent.begin
                 # MAX_TIME is first in comparison to force a conversion
                 # from the supplied time scale to TAI rather than
                 # forcing MAX_TIME to be continually converted to
                 # the target time scale (which triggers warnings to UTC)
-                if timespan.end is None or MAX_TIME <= timespan.end:
+                if extent.end is None or MAX_TIME <= extent.end:
                     end = MAX_TIME
                 else:
-                    end = timespan.end
+                    end = extent.end
         result[f"{name}_begin"] = begin
         result[f"{name}_end"] = end
         return result

@@ -52,10 +52,10 @@ from ...core import (
     NamedKeyDict,
     NamedKeyMapping,
     NamedValueSet,
-    REGION_FIELD_SPEC,
     SimpleQuery,
     SkyPixDimension,
     SkyPixSystem,
+    SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import (
@@ -122,7 +122,10 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
-        spec = element.RecordClass.fields.makeTableSpec(tsRepr=db.getTimespanRepresentation())
+        spec = element.RecordClass.fields.makeTableSpec(
+            regRepr=db.getSpatialRegionRepresentation(),
+            tsRepr=db.getTimespanRepresentation(),
+        )
         if context is not None:
             table = context.addTable(element.name, spec)
         else:
@@ -165,7 +168,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def join(
         self,
         builder: QueryBuilder, *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
+        regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
@@ -177,7 +180,8 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 self._skyPixOverlap.select(self.element.universe.commonSkyPix, Ellipsis),
                 dimensions,
             )
-            regions[self.element] = self._table.columns[REGION_FIELD_SPEC.name]
+            regionsInTable = self._db.getSpatialRegionRepresentation().fromSelectable(self._table)
+            regions[self.element] = regionsInTable
         joinOn = builder.startJoin(self._table, self.element.dimensions,
                                    self.element.RecordClass.fields.dimensions.names)
         if timespans is not None:

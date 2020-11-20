@@ -29,7 +29,6 @@ from sqlalchemy.sql import ColumnElement
 
 from lsst.sphgeom import Region
 from ...core import (
-    TimespanDatabaseRepresentation,
     DataCoordinate,
     DatasetType,
     Dimension,
@@ -41,6 +40,8 @@ from ...core import (
     NamedValueAbstractSet,
     NamedValueSet,
     SkyPixDimension,
+    SpatialRegionDatabaseRepresentation,
+    TimespanDatabaseRepresentation,
 )
 from ...core.utils import cached_getter, immutable
 from ..interfaces import (
@@ -407,10 +408,10 @@ class QueryColumns:
     in `QuerySummary.temporal`.
     """
 
-    regions: NamedKeyDict[DimensionElement, ColumnElement]
+    regions: NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]
     """Columns that correspond to regions for elements that participate in a
     spatial join or filter in the query (`NamedKeyDict` mapping
-    `DimensionElement` to `ColumnElement`).
+    `DimensionElement` to `SpatialRegionDatabaseRepresentation`).
 
     In a `Query`, the keys of this dictionary must be exactly the elements
     in `QuerySummary.spatial`.

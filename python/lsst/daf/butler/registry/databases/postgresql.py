@@ -287,14 +287,14 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         return (name,)
 
     @classmethod
-    def update(cls, timespan: Optional[Timespan], *, name: Optional[str] = None,
+    def update(cls, extent: Optional[Timespan], name: Optional[str] = None,
                result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
         if result is None:
             result = {}
-        result[name] = timespan
+        result[name] = extent
         return result
 
     @classmethod
@@ -303,11 +303,6 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         if name is None:
             name = cls.NAME
         return mapping[name]
-
-    @classmethod
-    def hasExclusionConstraint(cls) -> bool:
-        # Docstring inherited.
-        return True
 
     @classmethod
     def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None

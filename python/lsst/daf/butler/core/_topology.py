@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 __all__ = (
+    "SpatialRegionDatabaseRepresentation",
     "TopologicalSpace",
     "TopologicalFamily",
     "TopologicalRelationshipEndpoint",
@@ -33,15 +34,20 @@ import enum
 from typing import (
     Any,
     ClassVar,
+    Dict,
+    Generic,
     Iterator,
     Mapping,
     Optional,
+    Tuple,
     Type,
     TypeVar,
 )
 
 import sqlalchemy
 
+import lsst.sphgeom
+from . import ddl
 from .named import NamedValueAbstractSet
 from .utils import immutable
 
@@ -173,9 +179,10 @@ class TopologicalRelationshipEndpoint(ABC):
 
 
 _S = TypeVar("_S", bound="TopologicalExtentDatabaseRepresentation")
+_R = TypeVar("_R")
 
 
-class TopologicalExtentDatabaseRepresentation(ABC):
+class TopologicalExtentDatabaseRepresentation(Generic[_R]):
     """An abstract base class whose subclasses provide a mapping from the
     in-memory representation of a `TopologicalSpace` region to a
     database-storage representation, and whose instances act like a
@@ -183,8 +190,130 @@ class TopologicalExtentDatabaseRepresentation(ABC):
     """
 
     NAME: ClassVar[str]
-    """Default name for this type of logical column (`str`).
+    """Name to use for this logical column in tables (`str`).
+
+    If the representation actually uses multiple columns, this will just be
+    part of the names of those columns.  Queries (and tables that represent
+    materialized queries) may use a different name (via the ``name`` parameters
+    to various methods) in order to disambiguate between the regions associated
+    with different tables.
     """
+
+    SPACE: ClassVar[TopologicalSpace]
+    """Topological space in which the regions represented by this class exist.
+    """
+
+    @classmethod
+    @abstractmethod
+    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+                       ) -> Tuple[ddl.FieldSpec, ...]:
+        """Make one or more `ddl.FieldSpec` objects that reflect the fields
+        that must be added to a table for this representation.
+
+        Parameters
+        ----------
+        nullable : `bool`
+            If `True`, the region is permitted to be logically ``NULL``
+            (mapped to `None` in Python), though the correspoding value(s) in
+            the database are implementation-defined.  Nullable region fields
+            default to NULL, while others default to (-∞, ∞).
+        name : `str`, optional
+            Name for the logical column; a part of the name for multi-column
+            representations.  Defaults to ``cls.NAME``.
+        **kwargs
+            Keyword arguments are forwarded to the `ddl.FieldSpec` constructor
+            for all fields; implementations only provide the ``name``,
+            ``dtype``, and ``default`` arguments themselves.
+
+        Returns
+        -------
+        specs : `tuple` [ `ddl.FieldSpec` ]
+            Field specification objects; length of the tuple is
+            subclass-dependent, but is guaranteed to match the length of the
+            return values of `getFieldNames` and `update`.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    @abstractmethod
+    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
+        """Return the actual field names used by this representation.
+
+        Parameters
+        ----------
+        name : `str`, optional
+            Name for the logical column; a part of the name for multi-column
+            representations.  Defaults to ``cls.NAME``.
+
+        Returns
+        -------
+        names : `tuple` [ `str` ]
+            Field name(s).  Guaranteed to be the same as the names of the field
+            specifications returned by `makeFieldSpecs`.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    @abstractmethod
+    def update(cls, extent: Optional[_R], name: Optional[str] = None,
+               result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Add a region to a dictionary that represents a database row
+        in this representation.
+
+        Parameters
+        ----------
+        extent
+            An instance of the region type this class provides a database
+            representation for, or `None` for ``NULL``.
+        name : `str`, optional
+            Name for the logical column; a part of the name for multi-column
+            representations.  Defaults to ``cls.NAME``.
+        result : `dict` [ `str`, `Any` ], optional
+            A dictionary representing a database row that fields should be
+            added to, or `None` to create and return a new one.
+
+        Returns
+        -------
+        result : `dict` [ `str`, `Any` ]
+            A dictionary containing this representation of a region.  Exactly
+            the `dict` passed as ``result`` if that is not `None`.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    @abstractmethod
+    def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Optional[_R]:
+        """Extract a region from a dictionary that represents a
+        database row in this representation.
+
+        Parameters
+        ----------
+        mapping : `Mapping` [ `str`, `Any` ]
+            A dictionary representing a database row containing a `Timespan`
+            in this representation.  Should have key(s) equal to the return
+            value of `getFieldNames`.
+        name : `str`, optional
+            Name for the logical column; a part of the name for multi-column
+            representations.  Defaults to ``cls.NAME``.
+
+        Returns
+        -------
+        region
+            Python representation of the region.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def hasExclusionConstraint(cls) -> bool:
+        """Return `True` if this representation supports exclusion constraints.
+
+        Returns
+        -------
+        supported : `bool`
+            If `True`, defining a constraint via `ddl.TableSpec.exclusion` that
+            includes the fields of this representation is allowed.
+        """
+        return False
 
     @classmethod
     @abstractmethod
@@ -198,7 +327,8 @@ class TopologicalExtentDatabaseRepresentation(ABC):
         selectable : `sqlalchemy.sql.FromClause`
             SQLAlchemy object representing a table or subquery.
         name : `str`, optional
-            Logical name for this possibly-compound field.
+            Name for the logical column; a part of the name for multi-column
+            representations.  Defaults to ``cls.NAME``.
 
         Returns
         -------
@@ -219,19 +349,14 @@ class TopologicalExtentDatabaseRepresentation(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def overlaps(self: _S, other: _S) -> sqlalchemy.sql.ColumnElement:
-        """Return a boolean SQLAlchemy column expression representing an
-        overlap test between this logical column and another of the same type.
-
-        Parameters
-        ----------
-        other : ``type(self)``
-            Another instance of the exact same type as ``self``.
+    def isNull(self) -> sqlalchemy.sql.ColumnElement:
+        """Return a SQLAlchemy expression that tests whether this region is
+        logically ``NULL``.
 
         Returns
         -------
-        expression : `sqlalchemy.sql.ColumnElement`
-            A boolean SQLAlchemy expression.
+        isnull : `sqlalchemy.sql.ColumnElement`
+            A boolean SQLAlchemy expression object.
         """
         raise NotImplementedError()
 
@@ -253,3 +378,99 @@ class TopologicalExtentDatabaseRepresentation(ABC):
             The true column or columns that back this object.
         """
         raise NotImplementedError()
+
+
+class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[lsst.sphgeom.Region]):
+    """An object that encapsulates how spatial regions on the sky are
+    represented in a database engine.
+
+    Instances should be constructed via `fromSelectable`, not by calling the
+    constructor directly.
+
+    Parameters
+    ----------
+    column : `sqlalchemy.sql.ColumnElement`
+        Column containing the opaque byte-string, with automatic conversion to
+        `lsst.sphgeom.Region` implemented via SQLAlchemy hooks.
+    name : `str`
+        Name of the column.
+
+    Notes
+    -----
+    Unlike `TimespanDatabaseRepresentation`, this is a concrete class, because
+    we currently do not support any database-native spatial regions, and
+    instead rely on precomputed overlaps and opaque (to the database) byte
+    string columns.  As a result, it also does not support any in-database
+    topological predicates.
+
+    If we add support for database-native regions in the future, this class may
+    become an ABC with multiple concrete implementations.
+    """
+    def __init__(self, column: sqlalchemy.sql.ColumnElement, name: str):
+        self.column = column
+        self._name = name
+
+    NAME: ClassVar[str] = "region"
+    SPACE: ClassVar[TopologicalSpace] = TopologicalSpace.SPATIAL
+
+    @classmethod
+    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+                       ) -> Tuple[ddl.FieldSpec, ...]:
+        # Docstring inherited.
+        if name is None:
+            name = cls.NAME
+        # Most regions are small (they're quadrilaterals), but visit ones can
+        # be quite large because they have a complicated boundary.  For HSC,
+        # that's about ~1400 bytes, and I've just rounded up to the nearest
+        # power of two.  Given what we now know about variable-length TEXT
+        # having no performance penalties in PostgreSQL and SQLite vs.
+        # fixed-length strings, there's probably a variable-length bytes type
+        # we should be using instead, but that's a schema change and hence
+        # something we won't be doing anytime soon.
+        return (ddl.FieldSpec(name, nbytes=2048, dtype=ddl.Base64Region),)
+
+    @classmethod
+    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
+        # Docstring inherited.
+        if name is None:
+            name = cls.NAME
+        return (name,)
+
+    @classmethod
+    def update(cls, extent: Optional[lsst.sphgeom.Region], name: Optional[str] = None,
+               result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        # Docstring inherited.
+        if name is None:
+            name = cls.NAME
+        if result is None:
+            result = {}
+        result[name] = extent
+        return result
+
+    @classmethod
+    def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Optional[lsst.sphgeom.Region]:
+        # Docstring inherited.
+        if name is None:
+            name = cls.NAME
+        return mapping[name]
+
+    @classmethod
+    def fromSelectable(cls: Type[SpatialRegionDatabaseRepresentation], selectable: sqlalchemy.sql.FromClause,
+                       name: Optional[str] = None) -> SpatialRegionDatabaseRepresentation:
+        # Docstring inherited
+        if name is None:
+            name = cls.NAME
+        return cls(selectable.columns[name], name)
+
+    @property
+    def name(self) -> str:
+        # Docstring inherited
+        return self._name
+
+    def isNull(self) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited
+        return self.column.is_(None)
+
+    def flatten(self, name: Optional[str]) -> Iterator[sqlalchemy.sql.ColumnElement]:
+        # Docstring inherited
+        yield self.column
