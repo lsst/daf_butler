@@ -68,6 +68,17 @@ collections_option = MWOptionDecorator("--collections",
                                        callback=split_commas)
 
 
+components_option = MWOptionDecorator("--components/--no-components",
+                                      default=None,
+                                      help=unwrap("""For --components, apply all expression patterns to
+                                                  component dataset type names as well. For --no-components,
+                                                  never apply patterns to components. Default (where neither
+                                                  is specified) is to apply patterns to components only if
+                                                  their parent datasets were not matched by the expression.
+                                                  Fully-specified component datasets (`str` or `DatasetType`
+                                                  instances) are always included."""))
+
+
 config_option = MWOptionDecorator("-c", "--config",
                                   callback=split_kv,
                                   help="Config override, as a key-value pair.",

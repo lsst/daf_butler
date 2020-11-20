@@ -25,6 +25,7 @@ from ..opt import (
     collection_type_option,
     collection_argument,
     collections_option,
+    components_option,
     dataset_type_option,
     datasets_option,
     dimensions_argument,
@@ -178,13 +179,7 @@ def query_collections(*args, **kwargs):
 @glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
                     "dataset types to return.")
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
-@click.option("--components/--no-components",
-              default=None,
-              help="For --components, apply all expression patterns to component dataset type names as well. "
-                   "For --no-components, never apply patterns to components. Default (where neither is "
-                   "specified) is to apply patterns to components only if their parent datasets were not "
-                   "matched by the expression. Fully-specified component datasets (`str` or `DatasetType` "
-                   "instances) are always included.")
+@components_option()
 @options_file_option()
 def query_dataset_types(*args, **kwargs):
     """Get the dataset types in a repository."""
