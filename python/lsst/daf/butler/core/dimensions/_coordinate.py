@@ -300,9 +300,10 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         # So we print something that mostly looks like a dict, but doesn't
         # quote its keys: that's both more compact and something that can't
         # be mistaken for an actual dict or something that could be exec'd.
-        return "{{{}}}".format(
-            ', '.join(f"{d}: {self.get(d, '?')}" for d in self.graph.dimensions.names)
-        )
+        terms = [f"{d}: {self[d]!r}" for d in self.graph.required.names]
+        if self.hasFull():
+            terms.append("...")
+        return "{{{}}}".format(', '.join(terms))
 
     def __lt__(self, other: Any) -> bool:
         # Allow DataCoordinate to be sorted
@@ -589,6 +590,10 @@ class _DataCoordinateFullView(NamedKeyMapping[Dimension, DataIdValue]):
 
     __slots__ = ("_target",)
 
+    def __repr__(self) -> str:
+        terms = [f"{d}: {self[d]!r}" for d in self._target.graph.dimensions.names]
+        return "{{{}}}".format(', '.join(terms))
+
     def __getitem__(self, key: DataIdKey) -> DataIdValue:
         return self._target[key]
 
@@ -620,6 +625,13 @@ class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, Optional[Dime
         self._target = target
 
     __slots__ = ("_target",)
+
+    def __repr__(self) -> str:
+        terms = [f"{d}: {self[d]!r}" for d in self._target.graph.elements.names]
+        return "{{{}}}".format(', '.join(terms))
+
+    def __str__(self) -> str:
+        return "\n".join(str(v) for v in self.values())
 
     def __getitem__(self, key: Union[DimensionElement, str]) -> Optional[DimensionRecord]:
         if isinstance(key, DimensionElement):
