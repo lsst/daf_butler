@@ -29,7 +29,9 @@ __all__ = ("ButlerConfig",)
 import copy
 import os.path
 from typing import (
-    Optional
+    Optional,
+    Sequence,
+    Union,
 )
 
 from .core import (
@@ -55,7 +57,7 @@ class ButlerConfig(Config):
 
     Parameters
     ----------
-    other : `str`, `Config`, optional
+    other : `str`, `Config`, `ButlerConfig`, optional
         Path to butler configuration YAML file or a directory containing a
         "butler.yaml" file. If `None` the butler will
         be configured based entirely on defaults read from the environment
@@ -69,7 +71,8 @@ class ButlerConfig(Config):
         refers to a configuration file or directory.
     """
 
-    def __init__(self, other=None, searchPaths=None):
+    def __init__(self, other: Optional[Union[str, ButlerURI, Config]] = None,
+                 searchPaths: Sequence[Union[str, ButlerURI]] = None):
 
         self.configDir: Optional[ButlerURI] = None
 

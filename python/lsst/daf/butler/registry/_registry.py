@@ -74,7 +74,7 @@ from .interfaces import ChainedCollectionRecord, RunRecord
 from .versions import ButlerVersionsManager, DigestMismatchError
 
 if TYPE_CHECKING:
-    from ..butlerConfig import ButlerConfig
+    from .._butlerConfig import ButlerConfig
     from .interfaces import (
         ButlerAttributeManager,
         CollectionManager,

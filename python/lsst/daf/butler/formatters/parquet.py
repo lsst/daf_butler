@@ -34,7 +34,7 @@ from typing import (
     Iterator,
     List,
     Optional,
-    Tuple,
+    Sequence,
     Union,
 )
 
@@ -69,7 +69,7 @@ class _ParquetLoader:
         self.indexLevelNames = tuple(self.columns.names)
 
     @staticmethod
-    def _splitColumnnNames(n: int, names: Iterable[str]) -> Iterator[Tuple[str, ...]]:
+    def _splitColumnnNames(n: int, names: Iterable[str]) -> Iterator[Sequence[str]]:
         """Split a string that represents a multi-index column.
 
         PyArrow maps Pandas' multi-index column names (which are tuples in
@@ -143,6 +143,7 @@ class _ParquetLoader:
         if columns is None:
             return self.file.read(use_pandas_metadata=True).to_pandas()
         elif isinstance(self.columns, pd.MultiIndex):
+            assert isinstance(columns, dict)
             columns = list(self._standardizeColumnParameter(columns))
         else:
             for column in columns:
@@ -178,8 +179,7 @@ class ParquetFormatter(Formatter):
 
         return loader.read(**self.fileDescriptor.parameters)
 
-    def write(self, inMemoryDataset: Any) -> str:
+    def write(self, inMemoryDataset: Any) -> None:
         # Docstring inherited from Formatter.write.
         location = self.makeUpdatedLocation(self.fileDescriptor.location)
         _writeParquet(location.path, inMemoryDataset)
-        return location.pathInStore
