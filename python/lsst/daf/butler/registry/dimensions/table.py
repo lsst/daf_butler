@@ -563,12 +563,12 @@ class _SkyPixOverlapStorage:
         governorDataId = DataCoordinate.standardize({self._governor.element.name: governorValue},
                                                     graph=self._governor.element.graph)
         for record in storage.fetch(DataCoordinateIterable.fromScalar(governorDataId)):
-            if record.region is None:  # type: ignore
+            if record.region is None:
                 continue
             baseOverlapRecord = record.dataId.byName()
             baseOverlapRecord["skypix_system"] = skypix.system.name
             baseOverlapRecord["skypix_level"] = skypix.level
-            for begin, end in skypix.pixelization.envelope(record.region):  # type: ignore
+            for begin, end in skypix.pixelization.envelope(record.region):
                 overlapRecords.extend(
                     dict(baseOverlapRecord, skypix_index=index) for index in range(begin, end)
                 )
@@ -673,7 +673,7 @@ class _SkyPixOverlapStorage:
         # Process input records one at time, computing all skypix indices for
         # each.
         for record in records:
-            if record.region is None:  # type: ignore
+            if record.region is None:
                 continue
             assert getattr(record, self._governor.element.name) == governorValue
             for system, levels in skypix.items():
@@ -685,7 +685,7 @@ class _SkyPixOverlapStorage:
                 # Start with the first level, which is the finest-grained one.
                 # Compute skypix envelope indices directly for that.
                 indices: Dict[int, Set[int]] = {levels[0]: set()}
-                for begin, end in system[levels[0]].pixelization.envelope(record.region):  # type: ignore
+                for begin, end in system[levels[0]].pixelization.envelope(record.region):
                     indices[levels[0]].update(range(begin, end))
                 # Divide those indices by powers of 4 (and remove duplicates)
                 # work our way up to the last (coarsest) level.

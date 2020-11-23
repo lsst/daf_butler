@@ -131,7 +131,7 @@ class DimensionRecord:
         for name in self.__slots__:
             object.__setattr__(self, name, kwargs.get(name))
         if self.definition.temporal is not None:
-            if self.timespan is None:  # type: ignore
+            if self.timespan is None:
                 object.__setattr__(
                     self,
                     "timespan",
@@ -191,6 +191,13 @@ class DimensionRecord:
                 results["datetime_begin"] = timespan.begin
                 results["datetime_end"] = timespan.end
         return results
+
+    # DimensionRecord subclasses are dynamically created, so static type
+    # checkers can't know about them or their attributes.  To avoid having to
+    # put "type: ignore", everywhere, add a dummy __getattr__ that tells type
+    # checkers not to worry about missing attributes.
+    def __getattr__(self, name: str) -> Any:
+        raise AttributeError(name)
 
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
