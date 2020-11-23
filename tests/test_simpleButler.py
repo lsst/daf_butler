@@ -27,6 +27,11 @@ import tempfile
 from typing import Any
 import unittest
 
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
 import astropy.time
 
 from lsst.daf.butler import (
@@ -218,6 +223,51 @@ class SimpleButlerTestCase(unittest.TestCase):
             [(assoc.ref.unresolved(), assoc.timespan)
              for assoc in registry2.queryDatasetAssociations("bias", collections="calibration1")],
         )
+
+    def testButlerGet(self):
+        """Test that butler.get can work with different variants."""
+
+        # Import data to play with.
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+
+        # Find the DatasetRef for a flat
+        coll = "imported_g"
+        flat2g = butler.registry.findDataset("flat", instrument="Cam1", detector=2, physical_filter="Cam1-G",
+                                             collections=coll)
+
+        # Create a numpy integer to check that works fine
+        detector_np = np.int64(2) if np else 2
+        print(type(detector_np))
+
+        # Try to get it using different variations of dataId + keyword
+        # arguments
+        # Note that instrument.class_name does not work
+        variants = (
+            (None, {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}),
+            (None, {"instrument": "Cam1", "detector": detector_np, "physical_filter": "Cam1-G"}),
+            ({"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}, {}),
+            ({"instrument": "Cam1", "detector": detector_np, "physical_filter": "Cam1-G"}, {}),
+            ({"instrument": "Cam1", "detector": 2}, {"physical_filter": "Cam1-G"}),
+            ({"detector.full_name": "Ab"}, {"instrument": "Cam1", "physical_filter": "Cam1-G"}),
+            ({"full_name": "Ab"}, {"instrument": "Cam1", "physical_filter": "Cam1-G"}),
+            (None, {"full_name": "Ab", "instrument": "Cam1", "physical_filter": "Cam1-G"}),
+            ({"name_in_raft": "b", "raft": "A"}, {"instrument": "Cam1", "physical_filter": "Cam1-G"}),
+            ({"name_in_raft": "b"}, {"raft": "A", "instrument": "Cam1", "physical_filter": "Cam1-G"}),
+            (None, {"name_in_raft": "b", "raft": "A", "instrument": "Cam1", "physical_filter": "Cam1-G"}),
+            ({"detector.name_in_raft": "b", "detector.raft": "A"},
+             {"instrument": "Cam1", "physical_filter": "Cam1-G"}),
+            ({"detector.name_in_raft": "b", "detector.raft": "A",
+              "instrument": "Cam1", "physical_filter": "Cam1-G"}, {}),
+        )
+
+        for dataId, kwds in variants:
+            try:
+                flat_id, _ = butler.get("flat", dataId=dataId, collections=coll, **kwds)
+            except Exception as e:
+                raise type(e)(f"{str(e)}: dataId={dataId}, kwds={kwds}") from e
+            self.assertEqual(flat_id, flat2g.id, msg=f"DataId: {dataId}, kwds: {kwds}")
 
     def testGetCalibration(self):
         """Test that `Butler.get` can be used to fetch from
