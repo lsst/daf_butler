@@ -37,6 +37,7 @@ __all__ = (
 from collections import defaultdict, Counter
 import contextlib
 import logging
+import numbers
 import os
 from typing import (
     Any,
@@ -635,6 +636,11 @@ class Butler:
                     del dataIdDict[dimensionName]
                     continue
 
+                # Convert an integral type to an explicit int to simplify
+                # comparisons here
+                if isinstance(value, numbers.Integral):
+                    value = int(value)
+
                 if not isinstance(value, dimension.primaryKey.getPythonType()):
                     for alternate in dimension.alternateKeys:
                         if isinstance(value, alternate.getPythonType()):
@@ -645,7 +651,8 @@ class Butler:
                             break
                     else:
                         log.warning("Type mismatch found for value '%r' provided for dimension %s. "
-                                    "Could not find matching alternative (primary key has type %s).",
+                                    "Could not find matching alternative (primary key has type %s) "
+                                    "so attempting to use as-is.",
                                     value, dimensionName, dimension.primaryKey.getPythonType())
 
         # If we have some unrecognized dimensions we have to try to connect
