@@ -24,24 +24,21 @@ from __future__ import annotations
 __all__ = ("Quantum",)
 
 from typing import (
+    Any,
     Iterable,
     List,
     Mapping,
     Optional,
-    Type,
-    TYPE_CHECKING,
-    Union,
     Tuple,
-    Any
+    Type,
+    Union,
 )
 
 from lsst.utils import doImport
 
+from .datasets import DatasetRef, DatasetType
+from .dimensions import DataCoordinate
 from .named import NamedKeyDict, NamedKeyMapping
-
-if TYPE_CHECKING:
-    from .dimensions import DataCoordinate
-    from .datasets import DatasetRef, DatasetType
 
 
 class Quantum:
@@ -98,9 +95,9 @@ class Quantum:
             inputs = {}
         if outputs is None:
             outputs = {}
-        self._initInputs: NamedKeyMapping[DatasetType, DatasetRef] = NamedKeyDict(initInputs).freeze()
-        self._inputs: NamedKeyMapping[DatasetType, List[DatasetRef]] = NamedKeyDict(inputs).freeze()
-        self._outputs: NamedKeyMapping[DatasetType, List[DatasetRef]] = NamedKeyDict(outputs).freeze()
+        self._initInputs = NamedKeyDict[DatasetType, DatasetRef](initInputs).freeze()
+        self._inputs = NamedKeyDict[DatasetType, List[DatasetRef]](inputs).freeze()
+        self._outputs = NamedKeyDict[DatasetType, List[DatasetRef]](outputs).freeze()
 
     @property
     def taskClass(self) -> Optional[Type]:

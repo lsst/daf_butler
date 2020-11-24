@@ -22,12 +22,11 @@ from __future__ import annotations
 
 __all__ = ["BasicGovernorDimensionRecordStorage"]
 
-from typing import AbstractSet, Callable, Dict, Iterable, List, Optional
+from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Optional
 
 import sqlalchemy
 
 from ...core import (
-    Config,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
@@ -67,7 +66,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
     @classmethod
     def initialize(cls, db: Database, element: GovernorDimension, *,
                    context: Optional[StaticTablesContext] = None,
-                   config: Config) -> GovernorDimensionRecordStorage:
+                   config: Mapping[str, Any]) -> GovernorDimensionRecordStorage:
         # Docstring inherited from GovernorDimensionRecordStorage.
         spec = element.RecordClass.fields.makeTableSpec(tsRepr=db.getTimespanRepresentation())
         if context is not None:

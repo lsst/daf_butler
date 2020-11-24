@@ -54,7 +54,7 @@ class SimpleQuery:
         a SELECT query.
         """
 
-        Or: ClassVar
+        Or: ClassVar[Any]
 
     Select.Or = Union[T, Type[Select]]
     """A type annotation for arguments that can take the `Select` type or some

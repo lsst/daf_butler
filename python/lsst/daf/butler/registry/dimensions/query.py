@@ -22,12 +22,11 @@ from __future__ import annotations
 
 __all__ = ["QueryDimensionRecordStorage"]
 
-from typing import Iterable, Optional
+from typing import Any, Iterable, Mapping, Optional
 
 import sqlalchemy
 
 from ...core import (
-    Config,
     DatabaseDimension,
     DatabaseDimensionElement,
     DataCoordinateIterable,
@@ -93,7 +92,7 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         db: Database,
         element: DatabaseDimensionElement, *,
         context: Optional[StaticTablesContext] = None,
-        config: Config,
+        config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.

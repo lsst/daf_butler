@@ -23,7 +23,7 @@
 from __future__ import annotations
 
 import os
-import urllib
+import urllib.parse
 import os.path
 import logging
 

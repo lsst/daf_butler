@@ -25,7 +25,7 @@ from __future__ import annotations
 
 __all__ = ("DatasetComponent", "StorageClassDelegate")
 
-import collections
+import collections.abc
 from dataclasses import dataclass
 import logging
 from typing import (

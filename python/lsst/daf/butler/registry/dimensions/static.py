@@ -126,10 +126,8 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             for elementStoragePair in itertools.product(storages1, storages2):
                 governorStoragePair = (governors[family1.governor], governors[family2.governor])
                 if elementStoragePair[0].element > elementStoragePair[1].element:
-                    # mypy doesn't realize that tuple(reversed(...)) preserves
-                    # the number of elements.
-                    elementStoragePair = tuple(reversed(elementStoragePair))  # type: ignore
-                    governorStoragePair = tuple(reversed(governorStoragePair))  # type: ignore
+                    elementStoragePair = (elementStoragePair[1], elementStoragePair[0])
+                    governorStoragePair = (governorStoragePair[1], governorStoragePair[1])
                 overlapStorage = CrossFamilyDimensionOverlapStorage.initialize(
                     db,
                     elementStoragePair,

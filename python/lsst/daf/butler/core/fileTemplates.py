@@ -629,7 +629,7 @@ class FileTemplate:
             maximal = set(entity.dimensions.names)
         except AttributeError:
             try:
-                minimal = set(entity.dataId.keys())  # type: ignore
+                minimal = set(entity.dataId.keys().names)  # type: ignore
                 maximal = minimal
             except AttributeError:
                 return

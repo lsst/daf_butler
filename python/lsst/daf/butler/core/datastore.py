@@ -232,7 +232,9 @@ class Datastore(metaclass=ABCMeta):
     constraints: Constraints
     """Constraints to apply when putting datasets into the datastore."""
 
-    IngestPrepData: ClassVar = IngestPrepData
+    # MyPy does not like for this to be annotated as any kind of type, because
+    # it can't do static checking on type variables that can change at runtime.
+    IngestPrepData: ClassVar[Any] = IngestPrepData
     """Helper base class for ingest implementations.
     """
 
@@ -272,7 +274,7 @@ class Datastore(metaclass=ABCMeta):
 
     @staticmethod
     def fromConfig(config: Config, bridgeManager: DatastoreRegistryBridgeManager,
-                   butlerRoot: Optional[str] = None) -> 'Datastore':
+                   butlerRoot: Optional[Union[str, ButlerURI]] = None) -> 'Datastore':
         """Create datastore from type specified in config file.
 
         Parameters

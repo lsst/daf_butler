@@ -31,9 +31,9 @@ __all__ = (
 
 from abc import ABC, abstractmethod
 from typing import (
-    AbstractSet,
+    AbstractSet, Any,
     Callable,
-    Iterable,
+    Iterable, Mapping,
     Optional,
     Tuple,
     TYPE_CHECKING,
@@ -47,7 +47,6 @@ from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import (
-        Config,
         DataCoordinateIterable,
         DimensionElement,
         DimensionRecord,
@@ -234,7 +233,7 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
     @abstractmethod
     def initialize(cls, db: Database, dimension: GovernorDimension, *,
                    context: Optional[StaticTablesContext] = None,
-                   config: Config,
+                   config: Mapping[str, Any],
                    ) -> GovernorDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
@@ -247,7 +246,7 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         context : `StaticTablesContext`, optional
             If provided, an object to use to create any new tables.  If not
             provided, ``db.ensureTableExists`` should be used instead.
-        config : `Config`
+        config : `Mapping`
             Extra configuration options specific to the implementation.
 
         Returns
@@ -326,7 +325,7 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
     @abstractmethod
     def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
                    context: Optional[StaticTablesContext] = None,
-                   config: Config,
+                   config: Mapping[str, Any],
                    governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
                    ) -> DatabaseDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
@@ -340,7 +339,7 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         context : `StaticTablesContext`, optional
             If provided, an object to use to create any new tables.  If not
             provided, ``db.ensureTableExists`` should be used instead.
-        config : `Config`
+        config : `Mapping`
             Extra configuration options specific to the implementation.
         governors : `NamedKeyMapping`
             Mapping containing all governor dimension storage implementations.

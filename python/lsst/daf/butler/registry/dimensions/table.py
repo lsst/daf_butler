@@ -26,10 +26,12 @@ from collections import defaultdict
 import logging
 from typing import (
     AbstractSet,
+    Any,
     Dict,
     Iterable,
     Iterator,
     List,
+    Mapping,
     Optional,
     Sequence,
     Set,
@@ -40,7 +42,6 @@ import sqlalchemy
 
 from ...core import (
     addDimensionForeignKey,
-    Config,
     DatabaseDimensionElement,
     DataCoordinate,
     DataCoordinateIterable,
@@ -117,7 +118,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         db: Database,
         element: DatabaseDimensionElement, *,
         context: Optional[StaticTablesContext] = None,
-        config: Config,
+        config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.

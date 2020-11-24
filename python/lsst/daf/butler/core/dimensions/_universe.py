@@ -129,7 +129,9 @@ class DimensionUniverse:
         self._elements = builder.elements
         self._topology = builder.topology
         self._packers = builder.packers
-        self.commonSkyPix = self._dimensions[builder.commonSkyPixName]
+        commonSkyPix = self._dimensions[builder.commonSkyPixName]
+        assert isinstance(commonSkyPix, SkyPixDimension)
+        self.commonSkyPix = commonSkyPix
 
         # Attach self to all elements.
         for element in self._elements:

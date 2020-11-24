@@ -116,6 +116,7 @@ class _ParquetLoader:
         if not set(self.indexLevelNames).issuperset(columns.keys()):
             raise ValueError(f"Cannot use dict with keys {set(columns.keys())} "
                              f"to select columns from {self.indexLevelNames}.")
+        assert isinstance(self.columns, pd.MultiIndex)
         factors = [iterable(columns.get(level, self.columns.levels[i]))
                    for i, level in enumerate(self.indexLevelNames)]
         for requested in itertools.product(*factors):

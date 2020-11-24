@@ -137,6 +137,11 @@ class CompositesMap:
                 matchName = key
                 break
 
+        if not isinstance(disassemble, bool):
+            raise TypeError(
+                f"Got disassemble value {disassemble!r} for config entry {matchName!r}; expected bool."
+            )
+
         log.debug("%s will%s be disassembled", matchName, "" if disassemble else " not")
         return disassemble
 
