@@ -40,7 +40,7 @@ from typing import (
 )
 
 from ..named import NamedValueAbstractSet, NamedValueSet
-from ..utils import immutable
+from ..utils import cached_getter, immutable
 from .._topology import TopologicalSpace, TopologicalFamily
 
 
@@ -315,7 +315,8 @@ class DimensionGraph:
         """
         return self.intersection(other)
 
-    @property
+    @property  # type: ignore
+    @cached_getter
     def primaryKeyTraversalOrder(self) -> Tuple[DimensionElement, ...]:
         """Return a tuple of all elements in an order allows records to be
         found given their primary keys, starting from only the primary keys of
@@ -325,31 +326,27 @@ class DimensionGraph:
         DimensionUniverse.sorted gives you), when dimension A implies
         dimension B, dimension A appears first.
         """
-        order = getattr(self, "_primaryKeyTraversalOrder", None)
-        if order is None:
-            done: Set[str] = set()
-            order = []
+        done: Set[str] = set()
+        order = []
 
-            def addToOrder(element: DimensionElement) -> None:
-                if element.name in done:
-                    return
-                predecessors = set(element.required.names)
-                predecessors.discard(element.name)
-                if not done.issuperset(predecessors):
-                    return
-                order.append(element)
-                done.add(element.name)
-                for other in element.implied:
-                    addToOrder(other)
+        def addToOrder(element: DimensionElement) -> None:
+            if element.name in done:
+                return
+            predecessors = set(element.required.names)
+            predecessors.discard(element.name)
+            if not done.issuperset(predecessors):
+                return
+            order.append(element)
+            done.add(element.name)
+            for other in element.implied:
+                addToOrder(other)
 
-            while not done.issuperset(self.required):
-                for dimension in self.required:
-                    addToOrder(dimension)
+        while not done.issuperset(self.required):
+            for dimension in self.required:
+                addToOrder(dimension)
 
-            order.extend(element for element in self.elements if element.name not in done)
-            order = tuple(order)
-            self._primaryKeyTraversalOrder = order
-        return order
+        order.extend(element for element in self.elements if element.name not in done)
+        return tuple(order)
 
     @property
     def spatial(self) -> NamedValueAbstractSet[TopologicalFamily]:
