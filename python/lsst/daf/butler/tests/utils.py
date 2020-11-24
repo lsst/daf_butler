@@ -87,6 +87,7 @@ def readTable(textTable):
     """
     return AstropyTable.read(textTable,
                              format="ascii",
+                             data_start=2,  # skip the header row and the header row underlines.
                              fill_values=[("", 0, "")])
 
 

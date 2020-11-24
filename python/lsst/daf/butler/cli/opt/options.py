@@ -62,10 +62,21 @@ collection_type_option = MWOptionDecorator("--collection-type",
 
 collections_option = MWOptionDecorator("--collections",
                                        help=unwrap("""One or more expressions that fully or partially identify
-                                                   the collections to search for datasets.If not provided all
+                                                   the collections to search for datasets. If not provided all
                                                    datasets are returned."""),
                                        multiple=True,
                                        callback=split_commas)
+
+
+components_option = MWOptionDecorator("--components/--no-components",
+                                      default=None,
+                                      help=unwrap("""For --components, apply all expression patterns to
+                                                  component dataset type names as well. For --no-components,
+                                                  never apply patterns to components. Default (where neither
+                                                  is specified) is to apply patterns to components only if
+                                                  their parent datasets were not matched by the expression.
+                                                  Fully-specified component datasets (`str` or `DatasetType`
+                                                  instances) are always included."""))
 
 
 config_option = MWOptionDecorator("-c", "--config",

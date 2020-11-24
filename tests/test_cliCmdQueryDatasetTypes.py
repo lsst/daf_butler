@@ -22,14 +22,16 @@
 """Unit tests for daf_butler CLI query-collections command.
 """
 
+from astropy.table import Table as AstropyTable
+from numpy import array
 import unittest
-import yaml
 
 from lsst.daf.butler import Butler, DatasetType, StorageClass
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_dataset_types
 from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
 from lsst.daf.butler.tests import CliCmdTestBase
+from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
 
 
 class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
@@ -63,7 +65,7 @@ class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
                       self.makeExpected(repo="here", verbose=True, glob=("foo*", ), components=False))
 
 
-class QueryDatasetTypesScriptTest(unittest.TestCase):
+class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
 
     def testQueryDatasetTypes(self):
         self.maxDiff = None
@@ -71,7 +73,7 @@ class QueryDatasetTypesScriptTest(unittest.TestCase):
         instrumentDimension = "instrument"
         visitDimension = "visit"
         storageClassName = "testDatasetType"
-        expectedNotVerbose = {"datasetTypes": [datasetName]}
+        expectedNotVerbose = AstropyTable((("test",),), names=("name",))
         runner = LogCliRunner()
         with runner.isolated_filesystem():
             butlerCfg = Butler.makeRepo("here")
@@ -84,22 +86,20 @@ class QueryDatasetTypesScriptTest(unittest.TestCase):
             # check not-verbose output:
             result = runner.invoke(cli, ["query-dataset-types", "here"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            self.assertEqual(expectedNotVerbose, yaml.safe_load(result.output))
+            self.assertAstropyTablesEqual(readTable(result.output), expectedNotVerbose)
             # check glob output:
             result = runner.invoke(cli, ["query-dataset-types", "here", "t*"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            self.assertEqual(expectedNotVerbose, yaml.safe_load(result.output))
+            self.assertAstropyTablesEqual(readTable(result.output), expectedNotVerbose)
             # check verbose output:
             result = runner.invoke(cli, ["query-dataset-types", "here", "--verbose"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            response = yaml.safe_load(result.output)
-            # output dimension names contain all required dimensions, more than
-            # the registered dimensions, so verify the expected components
-            # individually.
-            self.assertEqual(response["datasetTypes"][0]["name"], datasetName)
-            self.assertEqual(response["datasetTypes"][0]["storageClass"], storageClassName)
-            self.assertIn(instrumentDimension, response["datasetTypes"][0]["dimensions"])
-            self.assertIn(visitDimension, response["datasetTypes"][0]["dimensions"])
+            expected = AstropyTable(array((
+                "test",
+                "['band', 'instrument', 'physical_filter', 'visit_system', 'visit']",
+                "testDatasetType")),
+                names=("name", "dimensions", "storage class"))
+            self.assertAstropyTablesEqual(readTable(result.output), expected)
 
             # Now remove and check that it was removed
             # First a non-existent one
@@ -113,7 +113,7 @@ class QueryDatasetTypesScriptTest(unittest.TestCase):
             # and check that it has gone
             result = runner.invoke(cli, ["query-dataset-types", "here"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            self.assertEqual({"datasetTypes": []}, yaml.safe_load(result.output))
+            self.assertIn("No results", result.output)
 
 
 if __name__ == "__main__":
