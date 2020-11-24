@@ -22,14 +22,13 @@ from __future__ import annotations
 
 __all__ = ["CachingDimensionRecordStorage"]
 
-from typing import Dict, Iterable, Optional, Set
+from typing import Any, Dict, Iterable, Mapping, Optional, Set
 
 import sqlalchemy
 
 from lsst.utils import doImport
 
 from ...core import (
-    Config,
     DatabaseDimensionElement,
     DataCoordinate,
     DataCoordinateIterable,
@@ -70,7 +69,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         db: Database,
         element: DatabaseDimensionElement, *,
         context: Optional[StaticTablesContext] = None,
-        config: Config,
+        config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.

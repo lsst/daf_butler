@@ -21,7 +21,7 @@
 
 __all__ = ["ObservationDimensionPacker"]
 
-from lsst.daf.butler import DataCoordinate, DimensionPacker
+from lsst.daf.butler import DataCoordinate, DimensionGraph, DimensionPacker
 
 
 class ObservationDimensionPacker(DimensionPacker):
@@ -29,30 +29,32 @@ class ObservationDimensionPacker(DimensionPacker):
     instrument.
     """
 
-    def __init__(self, fixed, dimensions):
+    def __init__(self, fixed: DataCoordinate, dimensions: DimensionGraph):
         super().__init__(fixed, dimensions)
         self._instrumentName = fixed["instrument"]
+        record = fixed.records["instrument"]
+        assert record is not None
         if self.dimensions.required.names == set(["instrument", "visit", "detector"]):
             self._observationName = "visit"
-            obsMax = fixed.records["instrument"].visit_max
+            obsMax = record.visit_max
         elif dimensions.required.names == set(["instrument", "exposure", "detector"]):
             self._observationName = "exposure"
-            obsMax = fixed.records["instrument"].exposure_max
+            obsMax = record.exposure_max
         else:
             raise ValueError(f"Invalid dimensions for ObservationDimensionPacker: {dimensions.required}")
-        self._detectorMax = fixed.records["instrument"].detector_max
+        self._detectorMax = record.detector_max
         self._maxBits = (obsMax*self._detectorMax).bit_length()
 
     @property
-    def maxBits(self):
+    def maxBits(self) -> int:
         # Docstring inherited from DimensionPacker.maxBits
         return self._maxBits
 
-    def _pack(self, dataId):
+    def _pack(self, dataId: DataCoordinate) -> int:
         # Docstring inherited from DimensionPacker._pack
         return dataId["detector"] + self._detectorMax*dataId[self._observationName]
 
-    def unpack(self, packedId):
+    def unpack(self, packedId: int) -> DataCoordinate:
         # Docstring inherited from DimensionPacker.unpack
         observation, detector = divmod(packedId, self._detectorMax)
         return DataCoordinate.standardize(

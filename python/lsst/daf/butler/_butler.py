@@ -34,7 +34,7 @@ __all__ = (
 )
 
 
-from collections import defaultdict, Counter
+from collections import defaultdict
 import contextlib
 import logging
 import numbers
@@ -42,9 +42,10 @@ import os
 from typing import (
     Any,
     ClassVar,
-    ContextManager,
+    Counter,
     Dict,
     Iterable,
+    Iterator,
     List,
     Mapping,
     MutableMapping,
@@ -52,6 +53,7 @@ from typing import (
     Set,
     TextIO,
     Tuple,
+    Type,
     Union,
 )
 
@@ -68,9 +70,11 @@ from .core import (
     ConfigSubset,
     DataCoordinate,
     DataId,
+    DataIdValue,
     DatasetRef,
     DatasetType,
     Datastore,
+    Dimension,
     DimensionConfig,
     FileDataset,
     StorageClassFactory,
@@ -105,14 +109,14 @@ class PurgeWithoutUnstorePruneCollectionsError(PruneCollectionsArgsError):
     purge is True but unstore is False.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("Cannot pass purge=True without unstore=True.")
 
 
 class RunWithoutPurgePruneCollectionsError(PruneCollectionsArgsError):
     """Raised when pruning a RUN collection but purge is False."""
 
-    def __init__(self, collectionType):
+    def __init__(self, collectionType: CollectionType):
         self.collectionType = collectionType
         super().__init__(f"Cannot prune RUN collection {self.collectionType.name} without purge=True.")
 
@@ -121,7 +125,7 @@ class PurgeUnsupportedPruneCollectionsError(PruneCollectionsArgsError):
     """Raised when purge is True but is not supported for the given
     collection."""
 
-    def __init__(self, collectionType):
+    def __init__(self, collectionType: CollectionType):
         self.collectionType = collectionType
         super().__init__(
             f"Cannot prune {self.collectionType} collection {self.collectionType.name} with purge=True.")
@@ -252,7 +256,7 @@ class Butler:
             self.registry = butler.registry
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
-            self._config = butler._config
+            self._config: ButlerConfig = butler._config
         else:
             self._config = ButlerConfig(config, searchPaths=searchPaths)
             if "root" in self._config:
@@ -260,7 +264,7 @@ class Butler:
             else:
                 butlerRoot = self._config.configDir
             if writeable is None:
-                writeable = run is not None or chains is not None or self.tags
+                writeable = run is not None or chains is not None or bool(self.tags)
             self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot, writeable=writeable)
             self.datastore = Datastore.fromConfig(self._config, self.registry.getDatastoreBridgeManager(),
                                                   butlerRoot=butlerRoot)
@@ -385,7 +389,7 @@ class Butler:
             del config["root"]
 
         full = ButlerConfig(config, searchPaths=searchPaths)  # this applies defaults
-        datastoreClass = doImport(full["datastore", "cls"])
+        datastoreClass: Type[Datastore] = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
         # if key exists in given config, parse it, otherwise parse the defaults
@@ -412,6 +416,7 @@ class Butler:
             # branch, _everything_ in the config is expanded, so there's no
             # need to special case this.
             Config.updateParameters(RegistryConfig, config, full, toCopy=("managers",), overwrite=False)
+        configURI: Union[str, ButlerURI]
         if outfile is not None:
             # When writing to a separate location we must include
             # the root of the butler repo in the config else it won't know
@@ -460,13 +465,13 @@ class Butler:
         """
         return cls(config=config, collections=collections, run=run, tags=tags, writeable=writeable)
 
-    def __reduce__(self):
+    def __reduce__(self) -> tuple:
         """Support pickling.
         """
         return (Butler._unpickle, (self._config, self.collections, self.run, self.tags,
                                    self.registry.isWriteable()))
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "Butler(collections={}, run={}, tags={}, datastore='{}', registry='{}')".format(
             self.collections, self.run, self.tags, self.datastore, self.registry)
 
@@ -476,7 +481,7 @@ class Butler:
         return self.registry.isWriteable()
 
     @contextlib.contextmanager
-    def transaction(self):
+    def transaction(self) -> Iterator[None]:
         """Context manager supporting `Butler` transactions.
 
         Transactions can be nested.
@@ -486,7 +491,8 @@ class Butler:
                 yield
 
     def _standardizeArgs(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
-                         dataId: Optional[DataId] = None, **kwds: Any) -> Tuple[DatasetType, DataId]:
+                         dataId: Optional[DataId] = None, **kwds: Any
+                         ) -> Tuple[DatasetType, Optional[DataId]]:
         """Standardize the arguments passed to several Butler APIs.
 
         Parameters
@@ -523,8 +529,8 @@ class Butler:
         returned ``dataId`` (and ``kwds``) to `Registry` APIs, which are
         generally similarly flexible.
         """
-        externalDatasetType = None
-        internalDatasetType = None
+        externalDatasetType: Optional[DatasetType] = None
+        internalDatasetType: Optional[DatasetType] = None
         if isinstance(datasetRefOrType, DatasetRef):
             if dataId is not None or kwds:
                 raise ValueError("DatasetRef given, cannot use dataId as well")
@@ -545,6 +551,7 @@ class Butler:
                 raise ValueError(f"Supplied dataset type ({externalDatasetType}) inconsistent with "
                                  f"registry definition ({internalDatasetType})")
 
+        assert internalDatasetType is not None
         return internalDatasetType, dataId
 
     def _findDatasetRef(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
@@ -600,8 +607,8 @@ class Butler:
 
         # Process dimension records that are using record information
         # rather than ids
-        newDataId: dict[Any, Any] = {}
-        byRecord: dict[Any, dict[str, Any]] = defaultdict(dict)
+        newDataId: Dict[str, DataIdValue] = {}
+        byRecord: Dict[str, Dict[str, Any]] = defaultdict(dict)
 
         # if all the dataId comes from keyword parameters we do not need
         # to do anything here because they can't be of the form
@@ -612,8 +619,10 @@ class Butler:
                 # because it cannot be a compound key.
                 if isinstance(k, str) and "." in k:
                     # Someone is using a more human-readable dataId
-                    dimension, record = k.split(".", 1)
-                    byRecord[dimension][record] = v
+                    dimensionName, record = k.split(".", 1)
+                    byRecord[dimensionName][record] = v
+                elif isinstance(k, Dimension):
+                    newDataId[k.name] = v
                 else:
                     newDataId[k] = v
 
@@ -629,7 +638,7 @@ class Butler:
             for dimensionName in list(dataIdDict):
                 value = dataIdDict[dimensionName]
                 try:
-                    dimension = self.registry.dimensions[dimensionName]
+                    dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
                 except KeyError:
                     # This is not a real dimension
                     not_dimensions[dimensionName] = value
@@ -674,7 +683,7 @@ class Butler:
             # If we are not searching calibration collections things may
             # fail but they are going to fail anyway because of the
             # ambiguousness of the dataId...
-            candidateDimensions = set()
+            candidateDimensions: Set[str] = set()
             candidateDimensions.update(missingDimensions)
             if datasetType.isCalibration():
                 for dim in self.registry.dimensions.getStaticDimensions():
@@ -682,18 +691,18 @@ class Butler:
                         candidateDimensions.add(str(dim))
 
             # Look up table for the first association with a dimension
-            guessedAssociation: dict[Any, dict[str, Any]] = defaultdict(dict)
+            guessedAssociation: Dict[str, Dict[str, Any]] = defaultdict(dict)
 
             # Keep track of whether an item is associated with multiple
             # dimensions.
-            counter = Counter()
-            assigned: dict[Any, Set[str]] = defaultdict(set)
+            counter: Counter[str] = Counter()
+            assigned: Dict[str, Set[str]] = defaultdict(set)
 
             # Go through the missing dimensions and associate the
             # given names with records within those dimensions
             for dimensionName in candidateDimensions:
-                dimension = self.registry.dimensions[dimensionName]
-                fields = dimension.metadata | dimension.uniqueKeys
+                dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
+                fields = dimension.metadata.names | dimension.uniqueKeys.names
                 for field in not_dimensions:
                     if field in fields:
                         guessedAssociation[dimensionName][field] = not_dimensions[field]
@@ -719,7 +728,7 @@ class Butler:
                     # Select the relevant items and get a new restricted
                     # counter.
                     theseCounts = {k: v for k, v in counter.items() if k in candidateDimensions}
-                    duplicatesCounter = Counter()
+                    duplicatesCounter: Counter[str] = Counter()
                     duplicatesCounter.update(theseCounts)
 
                     # Choose the most common. If they are equally common
@@ -753,7 +762,7 @@ class Butler:
                     continue
 
                 # Build up a WHERE expression -- use single quotes
-                def quote(s):
+                def quote(s: Any) -> str:
                     if isinstance(s, str):
                         return f"'{s}'"
                     else:
@@ -778,7 +787,11 @@ class Butler:
                                        f" records when constrained by {values}")
 
                 # Get the primary key from the real dimension object
-                dimension = self.registry.dimensions[dimensionName]
+                dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
+                if not isinstance(dimension, Dimension):
+                    raise RuntimeError(
+                        f"{dimension.name} is not a true dimension, and cannot be used in data IDs."
+                    )
                 newDataId[dimensionName] = getattr(records.pop(), dimension.primaryKey.name)
 
             # We have modified the dataId so need to switch to it
@@ -900,7 +913,7 @@ class Butler:
 
         return ref
 
-    def getDirect(self, ref: DatasetRef, *, parameters: Optional[Dict[str, Any]] = None):
+    def getDirect(self, ref: DatasetRef, *, parameters: Optional[Dict[str, Any]] = None) -> Any:
         """Retrieve a stored dataset.
 
         Unlike `Butler.get`, this method allows datasets outside the Butler's
@@ -1209,7 +1222,7 @@ class Butler:
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         return self.datastore.exists(ref)
 
-    def pruneCollection(self, name: str, purge: bool = False, unstore: bool = False):
+    def pruneCollection(self, name: str, purge: bool = False, unstore: bool = False) -> None:
         """Remove a collection and possibly prune datasets within it.
 
         Parameters
@@ -1266,7 +1279,7 @@ class Butler:
                       unstore: bool = False,
                       tags: Optional[Iterable[str]] = None,
                       purge: bool = False,
-                      run: Optional[str] = None):
+                      run: Optional[str] = None) -> None:
         """Remove one or more datasets from a collection and/or storage.
 
         Parameters
@@ -1367,6 +1380,7 @@ class Butler:
             if purge:
                 self.registry.removeDatasets(refs)
             elif disassociate:
+                assert tags, "Guaranteed by earlier logic in this function."
                 for tag in tags:
                     self.registry.disassociate(tag, refs)
         # We've exited the Registry transaction, and apparently committed.
@@ -1384,7 +1398,7 @@ class Butler:
 
     @transactional
     def ingest(self, *datasets: FileDataset, transfer: Optional[str] = "auto", run: Optional[str] = None,
-               tags: Optional[Iterable[str]] = None,):
+               tags: Optional[Iterable[str]] = None,) -> None:
         """Store and register one or more datasets that already exist on disk.
 
         Parameters
@@ -1472,12 +1486,12 @@ class Butler:
         for dataset in datasets:
             # This list intentionally shared across the inner loop, since it's
             # associated with `dataset`.
-            resolvedRefs = []
+            resolvedRefs: List[DatasetRef] = []
             for ref in dataset.refs:
                 groupedData[ref.datasetType][ref.dataId] = (dataset, resolvedRefs)
 
         # Now we can bulk-insert into Registry for each DatasetType.
-        allResolvedRefs = []
+        allResolvedRefs: List[DatasetRef] = []
         for datasetType, groupForType in groupedData.items():
             refs = self.registry.insertDatasets(datasetType,
                                                 dataIds=groupForType.keys(),
@@ -1506,7 +1520,7 @@ class Butler:
     def export(self, *, directory: Optional[str] = None,
                filename: Optional[str] = None,
                format: Optional[str] = None,
-               transfer: Optional[str] = None) -> ContextManager[RepoExportContext]:
+               transfer: Optional[str] = None) -> Iterator[RepoExportContext]:
         """Export datasets from the repository represented by this `Butler`.
 
         This method is a context manager that returns a helper object
@@ -1579,7 +1593,7 @@ class Butler:
                 filename: Union[str, TextIO, None] = None,
                 format: Optional[str] = None,
                 transfer: Optional[str] = None,
-                skip_dimensions: Optional[Set] = None):
+                skip_dimensions: Optional[Set] = None) -> None:
         """Import datasets exported from a different butler repository.
 
         Parameters
@@ -1613,14 +1627,14 @@ class Butler:
             if filename is None:
                 raise TypeError("At least one of 'filename' or 'format' must be provided.")
             else:
-                _, format = os.path.splitext(filename)
+                _, format = os.path.splitext(filename)  # type: ignore
         elif filename is None:
             filename = f"export.{format}"
         if isinstance(filename, str) and directory is not None and not os.path.exists(filename):
             filename = os.path.join(directory, filename)
         BackendClass = getClassOf(self._config["repo_transfer_formats"][format]["import"])
 
-        def doImport(importStream):
+        def doImport(importStream: TextIO) -> None:
             backend = BackendClass(importStream, self.registry)
             backend.register()
             with self.transaction():
@@ -1635,7 +1649,7 @@ class Butler:
 
     def validateConfiguration(self, logFailures: bool = False,
                               datasetTypeNames: Optional[Iterable[str]] = None,
-                              ignore: Iterable[str] = None):
+                              ignore: Iterable[str] = None) -> None:
         """Validate butler configuration.
 
         Checks that each `DatasetType` can be stored in the `Datastore`.
@@ -1661,14 +1675,15 @@ class Butler:
             is configured.
         """
         if datasetTypeNames:
-            entities = [self.registry.getDatasetType(name) for name in datasetTypeNames]
+            datasetTypes = [self.registry.getDatasetType(name) for name in datasetTypeNames]
         else:
-            entities = list(self.registry.queryDatasetTypes())
+            datasetTypes = list(self.registry.queryDatasetTypes())
 
         # filter out anything from the ignore list
         if ignore:
             ignore = set(ignore)
-            entities = [e for e in entities if e.name not in ignore and e.nameAndComponent()[0] not in ignore]
+            datasetTypes = [e for e in datasetTypes
+                            if e.name not in ignore and e.nameAndComponent()[0] not in ignore]
         else:
             ignore = set()
 
@@ -1681,12 +1696,15 @@ class Butler:
         # a DatasetRef for each defined instrument
         datasetRefs = []
 
-        for datasetType in entities:
+        for datasetType in datasetTypes:
             if "instrument" in datasetType.dimensions:
                 for instrument in instruments:
-                    datasetRef = DatasetRef(datasetType, {"instrument": instrument}, conform=False)
+                    datasetRef = DatasetRef(datasetType, {"instrument": instrument},  # type: ignore
+                                            conform=False)
                     datasetRefs.append(datasetRef)
 
+        entities: List[Union[DatasetType, DatasetRef]] = []
+        entities.extend(datasetTypes)
         entities.extend(datasetRefs)
 
         datastoreErrorStr = None
@@ -1702,7 +1720,6 @@ class Butler:
         failedNames = set()
         failedDataId = set()
         for key in keys:
-            datasetType = None
             if key.name is not None:
                 if key.name in ignore:
                     continue

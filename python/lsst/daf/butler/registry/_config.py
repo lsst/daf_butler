@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("RegistryConfig",)
 
-from typing import Optional, Type, TYPE_CHECKING
+from typing import Optional, Type, TYPE_CHECKING, Union
 
 import sqlalchemy
 
@@ -34,6 +34,7 @@ from ..core.repoRelocation import replaceRoot
 from .connectionString import ConnectionStringFactory
 
 if TYPE_CHECKING:
+    from ..core import ButlerURI
     from .interfaces import Database
 
 
@@ -83,13 +84,13 @@ class RegistryConfig(ConfigSubset):
         DatabaseClass = self.getDatabaseClass()
         return DatabaseClass.makeDefaultUri(root)
 
-    def replaceRoot(self, root: Optional[str]) -> None:
+    def replaceRoot(self, root: Optional[Union[str, ButlerURI]]) -> None:
         """Replace any occurrences of `BUTLER_ROOT_TAG` in the connection
         with the given root directory.
 
         Parameters
         ----------
-        root : `str` or `None`
+        root : `str`, `ButlerURI`, or `None`
             String to substitute for `BUTLER_ROOT_TAG`.  Passing `None` here is
             allowed only as a convenient way to raise an exception
             (`ValueError`).

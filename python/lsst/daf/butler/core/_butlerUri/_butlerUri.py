@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 import contextlib
-import urllib
+import urllib.parse
 import posixpath
 import copy
 import logging
@@ -125,7 +125,7 @@ class ButlerURI:
                 root: Optional[Union[str, ButlerURI]] = None, forceAbsolute: bool = True,
                 forceDirectory: bool = False, isTemporary: bool = False) -> ButlerURI:
         parsed: urllib.parse.ParseResult
-        dirLike: bool
+        dirLike: bool = False
         subclass: Optional[Type] = None
 
         # Record if we need to post process the URI components

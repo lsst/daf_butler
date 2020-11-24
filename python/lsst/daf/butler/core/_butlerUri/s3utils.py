@@ -128,6 +128,8 @@ def s3CheckFileExists(path: Union[Location, ButlerURI, str], bucket: Optional[st
     elif isinstance(path, (ButlerURI, Location)):
         bucket = path.netloc
         filepath = path.relativeToPathRoot
+    else:
+        raise TypeError(f"Unsupported path type: {path!r}.")
 
     try:
         obj = client.head_object(Bucket=bucket, Key=filepath)

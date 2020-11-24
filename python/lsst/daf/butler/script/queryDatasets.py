@@ -18,9 +18,11 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 from astropy.table import Table as AstropyTable
 from collections import defaultdict, namedtuple
+from typing import Any, Dict
 import numpy as np
 
 from .. import Butler
@@ -136,7 +138,7 @@ def queryDatasets(repo, glob, collections, where, find_first, show_uri):
     """
     butler = Butler(repo)
 
-    dataset = globToRegex(glob)
+    dataset: Any = globToRegex(glob)
     if not dataset:
         dataset = ...
 
@@ -150,7 +152,7 @@ def queryDatasets(repo, glob, collections, where, find_first, show_uri):
                                              where=where,
                                              findFirst=find_first)
 
-    tables = defaultdict(_Table)
+    tables: Dict[str, _Table] = defaultdict(_Table)
 
     for datasetRef in datasets:
         if not show_uri:

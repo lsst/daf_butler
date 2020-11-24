@@ -44,7 +44,9 @@ from typing import (
 
 import sqlalchemy
 
+from lsst.utils import doImport
 from ..core import (
+    ButlerURI,
     Config,
     DataCoordinate,
     DataCoordinateIterable,
@@ -65,7 +67,7 @@ from ..core import (
     Timespan,
 )
 from . import queries
-from ..core.utils import doImport, iterable, transactional
+from ..core.utils import iterable, transactional
 from ._config import RegistryConfig
 from ._collectionType import CollectionType
 from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
@@ -74,7 +76,7 @@ from .interfaces import ChainedCollectionRecord, RunRecord
 from .versions import ButlerVersionsManager, DigestMismatchError
 
 if TYPE_CHECKING:
-    from ..butlerConfig import ButlerConfig
+    from .._butlerConfig import ButlerConfig
     from .interfaces import (
         ButlerAttributeManager,
         CollectionManager,
@@ -181,7 +183,7 @@ class Registry:
 
     @classmethod
     def fromConfig(cls, config: Union[ButlerConfig, RegistryConfig, Config, str],
-                   butlerRoot: Optional[str] = None, writeable: bool = True) -> Registry:
+                   butlerRoot: Optional[Union[str, ButlerURI]] = None, writeable: bool = True) -> Registry:
         """Create `Registry` subclass instance from `config`.
 
         Registry database must be inbitialized prior to calling this method.
@@ -190,7 +192,7 @@ class Registry:
         ----------
         config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
             Registry configuration
-        butlerRoot : `str`, optional
+        butlerRoot : `str` or `ButlerURI`, optional
             Path to the repository root this `Registry` will manage.
         writeable : `bool`, optional
             If `True` (default) create a read-write connection to the database.

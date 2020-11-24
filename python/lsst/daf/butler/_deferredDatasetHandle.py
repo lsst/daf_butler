@@ -31,7 +31,7 @@ from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .core import DatasetRef, DataCoordinate
-    from .butler import Butler
+    from ._butler import Butler
 
 
 @dataclasses.dataclass(frozen=True)

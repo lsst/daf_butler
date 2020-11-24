@@ -19,7 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 from astropy.table import Table
+from typing import Any, Dict
 import itertools
 from numpy import array
 
@@ -54,14 +57,13 @@ def queryCollections(repo, glob, collection_type, chains):
     expression = globToRegex(glob)
     # Only pass expression to queryCollections if there is an expression to
     # apply; otherwise let queryCollections use its default value.
-    kwargs = {}
+    kwargs: Dict[str, Any] = {}
     if expression:
         kwargs["expression"] = expression
 
     if chains == "TABLE":
-        collectionNames = butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
-                                                           **kwargs)
-        collectionNames = list(collectionNames)  # Materialize list for multiple use.
+        collectionNames = list(butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
+                                                                **kwargs))
         collectionTypes = [butler.registry.getCollectionType(c).name for c in collectionNames]
         collectionDefinitions = [str(butler.registry.getCollectionChain(name)) if colType == "CHAINED" else ""
                                  for name, colType in zip(collectionNames, collectionTypes)]
@@ -112,10 +114,10 @@ def queryCollections(repo, glob, collection_type, chains):
             else:
                 return [(nested(collectionName), collectionType)]
 
-        collectionNames = butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
-                                                           **kwargs)
-        collections = itertools.chain(*[getCollections(name) for name in collectionNames])
-        return Table(array(list(collections)), names=("Name", "Type"))
+        collectionNameIter = butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
+                                                              **kwargs)
+        collections = list(itertools.chain(*[getCollections(name) for name in collectionNameIter]))
+        return Table(array(collections), names=("Name", "Type"))
     elif chains == "FLATTEN":
         collectionNames = list(butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
                                                                 flattenChains=True,

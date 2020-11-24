@@ -319,9 +319,11 @@ class YamlRepoImportBackend(RepoImportBackend):
             self.registry.registerRun(run, doc=self.collectionDocs.get(run))
             # No way to add extra run info to registry yet.
         for collection, collection_type in self.collections.items():
-            self.registry.registerCollection(collection, collection_type, doc=self.collectionDocs.get(run))
+            self.registry.registerCollection(collection, collection_type,
+                                             doc=self.collectionDocs.get(collection))
         for chain, children in self.chains.items():
-            self.registry.registerCollection(chain, CollectionType.CHAINED, doc=self.collectionDocs.get(run))
+            self.registry.registerCollection(chain, CollectionType.CHAINED,
+                                             doc=self.collectionDocs.get(chain))
             self.registry.setCollectionChain(chain, children)
 
     def load(self, datastore: Optional[Datastore], *,

@@ -35,7 +35,7 @@ import yaml
 import sys
 from yaml.representer import Representer
 import io
-from typing import Sequence, Optional, ClassVar, IO, Union
+from typing import Any, Dict, List, Sequence, Optional, ClassVar, IO, Tuple, Union
 
 from lsst.utils import doImport
 from ._butlerUri import ButlerURI
@@ -53,7 +53,8 @@ try:
     yamlLoader = yaml.CSafeLoader
 except AttributeError:
     # Not all installations have the C library
-    yamlLoader = yaml.SafeLoader
+    # (but assume for mypy's sake that they're the same)
+    yamlLoader = yaml.SafeLoader  # type: ignore
 
 
 class Loader(yamlLoader):
@@ -86,6 +87,7 @@ class Loader(yamlLoader):
         Loader.add_constructor("!include", Loader.include)
 
     def include(self, node):
+        result: Union[List[Any], Dict[str, Any]]
         if isinstance(node, yaml.ScalarNode):
             return self.extractFile(self.construct_scalar(node))
 
@@ -184,7 +186,7 @@ class Config(collections.abc.MutableMapping):
         If `None` is provided an empty `Config` will be created.
     """
 
-    _D: ClassVar[str] = "→"
+    _D: str = "→"
     """Default internal delimiter to use for components in the hierarchy when
     constructing keys for external use (see `Config.names()`)."""
 
@@ -197,7 +199,7 @@ class Config(collections.abc.MutableMapping):
     themselves will be within a ``configs`` resource hierarchy."""
 
     def __init__(self, other=None):
-        self._data = {}
+        self._data: Dict[str, Any] = {}
         self.configFile = None
 
         if other is None:
@@ -286,7 +288,7 @@ class Config(collections.abc.MutableMapping):
         """
         return cls.fromString(string, format="yaml")
 
-    def __initFromUri(self, path: str) -> None:
+    def __initFromUri(self, path: Union[str, ButlerURI]) -> None:
         """Load a file from a path or an URI.
 
         Parameters
@@ -642,7 +644,7 @@ class Config(collections.abc.MutableMapping):
         """
         def doUpdate(d, u):
             if not isinstance(u, collections.abc.Mapping) or \
-                    not isinstance(d, collections.abc.Mapping):
+                    not isinstance(d, collections.abc.MutableMapping):
                 raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
             for k, v in u.items():
                 if isinstance(v, collections.abc.Mapping):
@@ -700,7 +702,7 @@ class Config(collections.abc.MutableMapping):
                 if isinstance(val, (collections.abc.Mapping, collections.abc.Sequence)) \
                         and not isinstance(val, str):
                     getKeysAsTuples(val, keys, levelKey)
-        keys = []
+        keys: List[Tuple[str, ...]] = []
         getKeysAsTuples(self._data, keys, None)
         return keys
 
@@ -837,7 +839,7 @@ class Config(collections.abc.MutableMapping):
         elif format == "json":
             if output is not None:
                 json.dump(self._data, output, ensure_ascii=False)
-                return
+                return None
             else:
                 return json.dumps(self._data, ensure_ascii=False)
         raise ValueError(f"Unsupported format for Config serialization: {format}")
@@ -873,7 +875,9 @@ class Config(collections.abc.MutableMapping):
         ext = uri.getExtension()
         format = ext[1:].lower()
 
-        uri.write(self.dump(format=format).encode(), overwrite=overwrite)
+        output = self.dump(format=format)
+        assert output is not None, "Config.dump guarantees not-None return when output arg is None"
+        uri.write(output.encode(), overwrite=overwrite)
         self.configFile = uri
 
     @staticmethod
@@ -1145,7 +1149,7 @@ class ConfigSubset(Config):
         # We can pick up defaults from multiple search paths
         # We fill defaults by using the butler config path and then
         # the config path environment variable in reverse order.
-        defaultsPaths = []
+        defaultsPaths: List[Union[str, ButlerURI]] = []
 
         if CONFIG_PATH in os.environ:
             externalPaths = os.environ[CONFIG_PATH].split(os.pathsep)
