@@ -34,9 +34,10 @@ __all__ = (
 )
 
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 import contextlib
 import logging
+import numbers
 import os
 from typing import (
     Any,
@@ -615,6 +616,131 @@ class Butler:
                     byRecord[dimension][record] = v
                 else:
                     newDataId[k] = v
+
+        # Go through the updated dataId and check the type in case someone is
+        # using an alternate key.  We have already filtered out the compound
+        # keys dimensions.record format.
+        not_dimensions = {}
+
+        # Will need to look in the dataId and the keyword arguments
+        # and will remove them if they need to be fixed or are unrecognized.
+        for dataIdDict in (newDataId, kwds):
+            # Use a list so we can adjust the dict safely in the loop
+            for dimensionName in list(dataIdDict):
+                value = dataIdDict[dimensionName]
+                try:
+                    dimension = self.registry.dimensions[dimensionName]
+                except KeyError:
+                    # This is not a real dimension
+                    not_dimensions[dimensionName] = value
+                    del dataIdDict[dimensionName]
+                    continue
+
+                # Convert an integral type to an explicit int to simplify
+                # comparisons here
+                if isinstance(value, numbers.Integral):
+                    value = int(value)
+
+                if not isinstance(value, dimension.primaryKey.getPythonType()):
+                    for alternate in dimension.alternateKeys:
+                        if isinstance(value, alternate.getPythonType()):
+                            byRecord[dimensionName][alternate.name] = value
+                            del dataIdDict[dimensionName]
+                            log.debug("Converting dimension %s to %s.%s=%s",
+                                      dimensionName, dimensionName, alternate.name, value)
+                            break
+                    else:
+                        log.warning("Type mismatch found for value '%r' provided for dimension %s. "
+                                    "Could not find matching alternative (primary key has type %s) "
+                                    "so attempting to use as-is.",
+                                    value, dimensionName, dimension.primaryKey.getPythonType())
+
+        # If we have some unrecognized dimensions we have to try to connect
+        # them to records in other dimensions.  This is made more complicated
+        # by some dimensions having records with clashing names.  A mitigation
+        # is that we can tell by this point which dimensions are missing
+        # for the DatasetType but this does not work for calibrations
+        # where additional dimensions can be used to constrain the temporal
+        # axis.
+        if not_dimensions:
+            # Calculate missing dimensions
+            provided = set(newDataId) | set(kwds) | set(byRecord)
+            missingDimensions = datasetType.dimensions.names - provided
+
+            # For calibrations we may well be needing temporal dimensions
+            # so rather than always including all dimensions in the scan
+            # restrict things a little. It is still possible for there
+            # to be confusion over day_obs in visit vs exposure for example.
+            # If we are not searching calibration collections things may
+            # fail but they are going to fail anyway because of the
+            # ambiguousness of the dataId...
+            candidateDimensions = set()
+            candidateDimensions.update(missingDimensions)
+            if datasetType.isCalibration():
+                for dim in self.registry.dimensions.getStaticDimensions():
+                    if dim.temporal:
+                        candidateDimensions.add(str(dim))
+
+            # Look up table for the first association with a dimension
+            guessedAssociation: dict[Any, dict[str, Any]] = defaultdict(dict)
+
+            # Keep track of whether an item is associated with multiple
+            # dimensions.
+            counter = Counter()
+            assigned: dict[Any, Set[str]] = defaultdict(set)
+
+            # Go through the missing dimensions and associate the
+            # given names with records within those dimensions
+            for dimensionName in candidateDimensions:
+                dimension = self.registry.dimensions[dimensionName]
+                fields = dimension.metadata | dimension.uniqueKeys
+                for field in not_dimensions:
+                    if field in fields:
+                        guessedAssociation[dimensionName][field] = not_dimensions[field]
+                        counter[dimensionName] += 1
+                        assigned[field].add(dimensionName)
+
+            # There is a chance we have allocated a single dataId item
+            # to multiple dimensions. Need to decide which should be retained.
+            # For now assume that the most popular alternative wins.
+            # This means that day_obs with seq_num will result in
+            # exposure.day_obs and not visit.day_obs
+            # Also prefer an explicitly missing dimension over an inferred
+            # temporal dimension.
+            for fieldName, assignedDimensions in assigned.items():
+                if len(assignedDimensions) > 1:
+                    # Pick the most popular (preferring mandatory dimensions)
+                    requiredButMissing = assignedDimensions.intersection(missingDimensions)
+                    if requiredButMissing:
+                        candidateDimensions = requiredButMissing
+                    else:
+                        candidateDimensions = assignedDimensions
+
+                    # Select the relevant items and get a new restricted
+                    # counter.
+                    theseCounts = {k: v for k, v in counter.items() if k in candidateDimensions}
+                    duplicatesCounter = Counter()
+                    duplicatesCounter.update(theseCounts)
+
+                    # Choose the most common. If they are equally common
+                    # we will pick the one that was found first.
+                    # Returns a list of tuples
+                    selected = duplicatesCounter.most_common(1)[0][0]
+
+                    log.debug("Ambiguous dataId entry '%s' associated with multiple dimensions: %s."
+                              " Removed ambiguity by choosing dimension %s.",
+                              fieldName, ", ".join(assignedDimensions), selected)
+
+                    for candidateDimension in assignedDimensions:
+                        if candidateDimension != selected:
+                            del guessedAssociation[candidateDimension][fieldName]
+
+            # Update the record look up dict with the new associations
+            for dimensionName, values in guessedAssociation.items():
+                if values:  # A dict might now be empty
+                    log.debug("Assigned non-dimension dataId keys to dimension %s: %s",
+                              dimensionName, values)
+                    byRecord[dimensionName].update(values)
 
         if byRecord:
             # Some record specifiers were found so we need to convert
