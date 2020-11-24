@@ -101,6 +101,19 @@ class FileURITestCase(unittest.TestCase):
         child = ButlerURI("../c/e/f/g.txt", forceAbsolute=False)
         self.assertEqual(child.relative_to(parent), "e/f/g.txt")
 
+    def testEnvVar(self):
+        """Test that environment variables are expanded."""
+
+        with unittest.mock.patch.dict(os.environ, {"MY_TEST_DIR": "/a/b/c"}):
+            uri = ButlerURI("${MY_TEST_DIR}/d.txt")
+        self.assertEqual(uri.path, "/a/b/c/d.txt")
+        self.assertEqual(uri.scheme, "file")
+
+        # This will not expand
+        uri = ButlerURI("${MY_TEST_DIR}/d.txt", forceAbsolute=False)
+        self.assertEqual(uri.path, "${MY_TEST_DIR}/d.txt")
+        self.assertFalse(uri.scheme)
+
     def testMkdir(self):
         tmpdir = ButlerURI(self.tmpdir)
         newdir = tmpdir.join("newdir/seconddir")

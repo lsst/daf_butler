@@ -129,7 +129,8 @@ class ButlerSchemelessURI(ButlerFileURI):
         to be turned into absolute paths before they can be used.  This is
         always done regardless of the ``forceAbsolute`` parameter.
 
-        Scheme-less paths are normalized.
+        Scheme-less paths are normalized and environment variables are
+        expanded.
         """
         # assume we are not dealing with a directory URI
         dirLike = False
@@ -147,6 +148,10 @@ class ButlerSchemelessURI(ButlerFileURI):
         # this is a local OS file path which can support tilde expansion.
         # we quoted it in the constructor so unquote here
         expandedPath = os.path.expanduser(urllib.parse.unquote(parsed.path))
+
+        # We might also be receiving a path containing environment variables
+        # so expand those here
+        expandedPath = os.path.expandvars(expandedPath)
 
         # Ensure that this becomes a file URI if it is already absolute
         if os.path.isabs(expandedPath):
