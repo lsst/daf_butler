@@ -33,6 +33,13 @@ import astropy.utils.exceptions
 import sqlalchemy
 import warnings
 
+# As of astropy 4.2, the erfa interface is shipped independently and
+# ErfaWarning is no longer an AstropyWarning
+try:
+    import erfa
+except ImportError:
+    erfa = None
+
 from . import ddl
 from .time_utils import astropy_to_nsec, EPOCH, MAX_TIME, times_equal
 from ._topology import TopologicalExtentDatabaseRepresentation
@@ -68,6 +75,8 @@ class Timespan(NamedTuple):
         # simulated data in the future
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+            if erfa is not None:
+                warnings.simplefilter("ignore", category=erfa.ErfaWarning)
             if self.begin is None:
                 head = "(-∞, "
             else:
@@ -422,6 +431,8 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
             # can result in warnings for simulated data from the future
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+                if erfa is not None:
+                    warnings.simplefilter("ignore", category=erfa.ErfaWarning)
                 if timespan.begin is None or timespan.begin < EPOCH:
                     begin = EPOCH
                 else:

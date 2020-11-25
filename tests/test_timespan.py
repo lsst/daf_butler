@@ -26,6 +26,13 @@ import warnings
 import astropy.time
 import astropy.utils.exceptions
 
+# As of astropy 4.2, the erfa interface is shipped independently and
+# ErfaWarning is no longer an AstropyWarning
+try:
+    import erfa
+except ImportError:
+    erfa = None
+
 from lsst.daf.butler import Timespan
 
 
@@ -134,6 +141,8 @@ class TimespanTestCase(unittest.TestCase):
         # so hide these expected warnings from the test output
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+            if erfa is not None:
+                warnings.simplefilter("ignore", category=erfa.ErfaWarning)
             ts1 = Timespan(begin=astropy.time.Time('2213-06-17 13:34:45.775000', scale='utc', format='iso'),
                            end=astropy.time.Time('2213-06-17 13:35:17.947000', scale='utc', format='iso'))
             ts2 = Timespan(begin=astropy.time.Time('2213-06-17 13:34:45.775000', scale='utc', format='iso'),
