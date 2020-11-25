@@ -30,6 +30,12 @@ import astropy.time
 import astropy.utils.exceptions
 import yaml
 
+# As of astropy 4.2, the erfa interface is shipped independently and
+# ErfaWarning is no longer an AstropyWarning
+try:
+    import erfa
+except ImportError:
+    erfa = None
 
 # These constants can be used by client code.
 # EPOCH is used to construct times as read from database, its precision is
@@ -81,6 +87,8 @@ def astropy_to_nsec(astropy_time: astropy.time.Time) -> int:
     # warnings in case we are dealing with simulated data from the future
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+        if erfa is not None:
+            warnings.simplefilter("ignore", category=erfa.ErfaWarning)
         value = astropy_time.tai
     # anything before epoch or after MAX_TIME is truncated
     if value < EPOCH:
@@ -146,6 +154,8 @@ def times_equal(time1: astropy.time.Time,
     # to the equality
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+        if erfa is not None:
+            warnings.simplefilter("ignore", category=erfa.ErfaWarning)
         time1 = time1.tai
         time2 = time2.tai
     delta = (time2.jd1 - time1.jd1) + (time2.jd2 - time1.jd2)
