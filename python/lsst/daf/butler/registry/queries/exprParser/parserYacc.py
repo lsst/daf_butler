@@ -30,11 +30,20 @@ __all__ = ["ParserYacc", "ParserYaccError", "ParseError", "ParserEOFError"]
 #  Imports of standard modules --
 # -------------------------------
 import re
+import warnings
 
 # -----------------------------
 #  Imports for other modules --
 # -----------------------------
 import astropy.time
+
+# As of astropy 4.2, the erfa interface is shipped independently and
+# ErfaWarning is no longer an AstropyWarning
+try:
+    import erfa
+except ImportError:
+    erfa = None
+
 from .exprTree import (BinaryOp, function_call, Identifier, IsIn, NumericLiteral, Parens,
                        RangeLiteral, StringLiteral, TimeLiteral, TupleNode, UnaryOp)
 from .ply import yacc
@@ -122,7 +131,12 @@ def _parseTimeString(time_str):
             scale = "tai"
 
     try:
-        value = astropy.time.Time(value, format=fmt, scale=scale)
+        # Hide warnings about future dates
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+            if erfa is not None:
+                warnings.simplefilter("ignore", category=erfa.ErfaWarning)
+            value = astropy.time.Time(value, format=fmt, scale=scale)
     except ValueError:
         # astropy makes very verbose exception that is not super-useful in
         # many context, just say we don't like it.
