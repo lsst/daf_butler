@@ -100,6 +100,12 @@ class PostgresqlDatabase(Database):
             if not self.isWriteable():
                 with closing(self._connection.connection.cursor()) as cursor:
                     cursor.execute("SET TRANSACTION READ ONLY")
+            else:
+                with closing(self._connection.connection.cursor()) as cursor:
+                    # Make timestamps UTC, because we didn't use TIMESTAMPZ for
+                    # the column type.  When we can tolerate a schema change,
+                    # we should change that type and remove this line.
+                    cursor.execute("SET TIME ZONE 0")
             yield
 
     def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:

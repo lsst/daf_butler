@@ -182,7 +182,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
     def associate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if collection.type is not CollectionType.TAGGED:
-            raise TypeError(f"Cannot associate into collection '{collection}' "
+            raise TypeError(f"Cannot associate into collection '{collection.name}' "
                             f"of type {collection.type.name}; must be TAGGED.")
         protoRow = {
             self._collections.getCollectionForeignKeyName(): collection.key,
@@ -209,7 +209,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
     def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if collection.type is not CollectionType.TAGGED:
-            raise TypeError(f"Cannot disassociate from collection '{collection}' "
+            raise TypeError(f"Cannot disassociate from collection '{collection.name}' "
                             f"of type {collection.type.name}; must be TAGGED.")
         rows = [
             {
@@ -252,7 +252,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             raise TypeError(f"Cannot certify datasets of type {self.datasetType.name}, for which "
                             f"DatasetType.isCalibration() is False.")
         if collection.type is not CollectionType.CALIBRATION:
-            raise TypeError(f"Cannot certify into collection '{collection}' "
+            raise TypeError(f"Cannot certify into collection '{collection.name}' "
                             f"of type {collection.type.name}; must be CALIBRATION.")
         tsRepr = self._db.getTimespanRepresentation()
         protoRow = {
@@ -323,7 +323,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             raise TypeError(f"Cannot decertify datasets of type {self.datasetType.name}, for which "
                             f"DatasetType.isCalibration() is False.")
         if collection.type is not CollectionType.CALIBRATION:
-            raise TypeError(f"Cannot decertify from collection '{collection}' "
+            raise TypeError(f"Cannot decertify from collection '{collection.name}' "
                             f"of type {collection.type.name}; must be CALIBRATION.")
         tsRepr = self._db.getTimespanRepresentation()
         # Construct a SELECT query to find all rows that overlap our inputs.

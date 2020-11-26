@@ -76,8 +76,19 @@ Membership in a ``TAGGED`` collection is implemented in the `Registry` database 
 Tags are thus both extremely lightweight relative to copies or re-ingests of files or other `Datastore` content, and *slightly* more expensive to store and possibly query than the ``RUN`` or ``CHAINED`` collection representations (which have no per-dataset costs).
 The latter is rarely important, but higher-level code should avoid  automatically creating ``TAGGED`` collections that may not ever be used.
 
-Chained Collection
-^^^^^^^^^^^^^^^^^^
+Calibration Collections
+^^^^^^^^^^^^^^^^^^^^^^^
+
+`CollectionType.CALIBRATION` collections associate each dataset they contain with a temporal validity range.
+The usual constraint on dataset type and data ID uniqueness is enforced as a function of time, not collection-wide - so for any particular dataset type and data ID combination, the validity range timespans may not overlap (but may be - and usually are - adjacent).
+
+In other respects, ``CALIBRATION`` collections closely resemble ``TAGGED`` collections: they are also backed by a many-to-many join table (where each row has a timespan as well as a collection identifier and a dataset identifier), and datasets can be associated or disassociated from them similarly freely.
+We use slightly different nomenclature for these operations, reflecting the high-level actions they represent: `certifying <Registry.certify>` a dataset adds it to a ``CALIBRATION`` collection with a particular validity range, and `decertifying <Registry.decertify>` a dataset removes some or all of that validity range.
+
+The same dataset can be present in a ``CALIBRATION`` collection multiple times with different validity ranges.
+
+Chained Collections
+^^^^^^^^^^^^^^^^^^^
 
 A `CollectionType.CHAINED` collection is essentially a multi-collection search path that has been saved in the `Registry` database and associated with a name of its own.
 Querying a ``CHAINED`` collection simply queries its child collections in order, and a ``CHAINED`` collection is always (and only) updated when its child collections are.
@@ -85,3 +96,4 @@ Querying a ``CHAINED`` collection simply queries its child collections in order,
 ``CHAINED`` collections may contain other chained collections, as long as they do not contain cycles, and they can also include restrictions on the dataset types to search for within each child collection (see :ref:`daf_butler_collection_expressions`).
 
 The usual constraint on dataset type and data ID uniqueness within a collection is only lazily enforced for chained collections: operations that query them either deduplicate results themselves or terminate single-dataset searches after the first match in a child collection is found.
+In some methods, like `Registry.queryDatasets`, this behavior is optional: passing ``findFirst=True`` will enforce the constraint, while ``findFirst=False`` will not.
