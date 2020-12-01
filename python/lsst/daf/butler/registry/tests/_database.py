@@ -728,6 +728,8 @@ class DatabaseTests(ABC):
         aTimespans = [Timespan(begin=None, end=None)]
         aTimespans.extend(Timespan(begin=None, end=t) for t in timestamps)
         aTimespans.extend(Timespan(begin=t, end=None) for t in timestamps)
+        aTimespans.extend(Timespan.fromInstant(t) for t in timestamps)
+        aTimespans.append(Timespan.makeEmpty())
         aTimespans.extend(Timespan(begin=t1, end=t2) for t1, t2 in itertools.combinations(timestamps, 2))
         # Make another list of timespans that span the full range but don't
         # overlap.  This is a subset of the previous list.
@@ -748,6 +750,7 @@ class DatabaseTests(ABC):
             aSpec.fields.add(fieldSpec)
         with db.declareStaticTables(create=True) as context:
             aTable = context.addTable("a", aSpec)
+        self.maxDiff = None
 
         def convertRowForInsert(row: dict) -> dict:
             """Convert a row containing a Timespan instance into one suitable
@@ -862,36 +865,94 @@ class DatabaseTests(ABC):
                 ).fetchall()
             ]
         )
-        # Test overlap expressions that relate in-database A timespans to
-        # Python-literal B timespans; check that this is consistent with
-        # Python-only overlap tests.
-        for bRow in bRows:
-            with self.subTest(bRow=bRow):
+        # Test relationships expressions that relate in-database timespans to
+        # Python-literal timespans, all from the more complete 'a' set; check
+        # that this is consistent with Python-only relationship tests.
+        for rhsRow in aRows:
+            if rhsRow[tsRepr.NAME] is None:
+                continue
+            with self.subTest(rhsRow=rhsRow):
                 expected = {}
-                for aRow in aRows:
-                    if aRow[tsRepr.NAME] is None:
-                        expected[aRow["id"]] = None
+                for lhsRow in aRows:
+                    if lhsRow[tsRepr.NAME] is None:
+                        expected[lhsRow["id"]] = (None, None, None, None)
                     else:
-                        expected[aRow["id"]] = aRow[tsRepr.NAME].overlaps(bRow[tsRepr.NAME])
-                sql = sqlalchemy.sql.select(
-                    [aTable.columns.id.label("a"), aRepr.overlaps(bRow[tsRepr.NAME]).label("f")]
-                ).select_from(aTable)
-                queried = {row["a"]: row["f"] for row in db.query(sql).fetchall()}
+                        expected[lhsRow["id"]] = (
+                            lhsRow[tsRepr.NAME].overlaps(rhsRow[tsRepr.NAME]),
+                            lhsRow[tsRepr.NAME].contains(rhsRow[tsRepr.NAME]),
+                            lhsRow[tsRepr.NAME] < rhsRow[tsRepr.NAME],
+                            lhsRow[tsRepr.NAME] > rhsRow[tsRepr.NAME],
+                        )
+                rhsRepr = tsRepr.fromLiteral(rhsRow[tsRepr.NAME])
+                sql = sqlalchemy.sql.select([
+                    aTable.columns.id.label("lhs"),
+                    aRepr.overlaps(rhsRepr).label("overlaps"),
+                    aRepr.contains(rhsRepr).label("contains"),
+                    (aRepr < rhsRepr).label("less_than"),
+                    (aRepr > rhsRepr).label("greater_than"),
+                ]).select_from(aTable)
+                queried = {
+                    row["lhs"]: (row["overlaps"], row["contains"], row["less_than"], row["greater_than"])
+                    for row in db.query(sql).fetchall()
+                }
                 self.assertEqual(expected, queried)
-        # Test overlap expressions that relate in-database A timespans to
-        # in-database B timespans; check that this is consistent with
-        # Python-only overlap tests.
+        # Test relationship expressions that relate in-database timespans to
+        # each other, all from the more complete 'a' set; check that this is
+        # consistent with Python-only relationship tests.
         expected = {
-            (aRow["id"], bRow["id"]): (aRow[tsRepr.NAME].overlaps(bRow[tsRepr.NAME])
-                                       if aRow[tsRepr.NAME] is not None else None)
-            for aRow, bRow in itertools.product(aRows, bRows)
+            (lhs["id"], rhs["id"]): (
+                lhs[tsRepr.NAME].overlaps(rhs[tsRepr.NAME]),
+                lhs[tsRepr.NAME].contains(rhs[tsRepr.NAME]),
+                lhs[tsRepr.NAME] < rhs[tsRepr.NAME],
+                lhs[tsRepr.NAME] > rhs[tsRepr.NAME],
+            )
+            if lhs[tsRepr.NAME] is not None and rhs[tsRepr.NAME] is not None else (None, None, None, None)
+            for lhs, rhs in itertools.product(aRows, aRows)
         }
+        lhsSubquery = aTable.alias("lhs")
+        rhsSubquery = aTable.alias("rhs")
+        lhsRepr = tsRepr.fromSelectable(lhsSubquery)
+        rhsRepr = tsRepr.fromSelectable(rhsSubquery)
         sql = sqlalchemy.sql.select(
             [
-                aTable.columns.id.label("a"),
-                bTable.columns.id.label("b"),
-                aRepr.overlaps(bRepr).label("f")
+                lhsSubquery.columns.id.label("lhs"),
+                rhsSubquery.columns.id.label("rhs"),
+                lhsRepr.overlaps(rhsRepr).label("overlaps"),
+                lhsRepr.contains(rhsRepr).label("contains"),
+                (lhsRepr < rhsRepr).label("less_than"),
+                (lhsRepr > rhsRepr).label("greater_than"),
             ]
-        ).select_from(aTable.join(bTable, onclause=sqlalchemy.sql.literal(True)))
-        queried = {(row["a"], row["b"]): row["f"] for row in db.query(sql).fetchall()}
+        ).select_from(
+            lhsSubquery.join(rhsSubquery, onclause=sqlalchemy.sql.literal(True))
+        )
+        queried = {
+            (row["lhs"], row["rhs"]): (row["overlaps"], row["contains"],
+                                       row["less_than"], row["greater_than"])
+            for row in db.query(sql).fetchall()}
         self.assertEqual(expected, queried)
+        # Test relationship expressions between in-database timespans and
+        # Python-literal instantaneous times.
+        for t in timestamps:
+            with self.subTest(t=t):
+                expected = {}
+                for lhsRow in aRows:
+                    if lhsRow[tsRepr.NAME] is None:
+                        expected[lhsRow["id"]] = (None, None, None)
+                    else:
+                        expected[lhsRow["id"]] = (
+                            lhsRow[tsRepr.NAME].contains(t),
+                            lhsRow[tsRepr.NAME] < t,
+                            lhsRow[tsRepr.NAME] > t,
+                        )
+                rhs = sqlalchemy.sql.literal(t, type_=ddl.AstropyTimeNsecTai)
+                sql = sqlalchemy.sql.select([
+                    aTable.columns.id.label("lhs"),
+                    aRepr.contains(rhs).label("contains"),
+                    (aRepr < rhs).label("less_than"),
+                    (aRepr > rhs).label("greater_than"),
+                ]).select_from(aTable)
+                queried = {
+                    row["lhs"]: (row["contains"], row["less_than"], row["greater_than"])
+                    for row in db.query(sql).fetchall()
+                }
+                self.assertEqual(expected, queried)

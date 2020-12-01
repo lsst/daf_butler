@@ -108,6 +108,11 @@ def astropy_to_nsec(astropy_time: astropy.time.Time) -> int:
     return value
 
 
+# Two more constants: the integer nanoseconds equivalents to EPOCH and MAX_TIME
+MIN_NSEC = 0
+MAX_NSEC = astropy_to_nsec(MAX_TIME)
+
+
 def nsec_to_astropy(time_nsec: int) -> astropy.time.Time:
     """Convert nanoseconds since epoch to astropy time.
 

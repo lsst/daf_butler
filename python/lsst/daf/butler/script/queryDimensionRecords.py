@@ -22,6 +22,7 @@
 from astropy.table import Table
 
 from .. import Butler
+from ..core import Timespan
 from ..core.utils import globToRegex
 
 
@@ -48,4 +49,9 @@ def queryDimensionRecords(repo, element, datasets, collections, where, no_check)
     records.sort(key=lambda r: r.dataId)  # use the dataId to sort the rows
     keys = records[0].fields.names  # order the columns the same as the record's `field.names`
 
-    return Table([[getattr(record, key, None) for record in records] for key in keys], names=keys)
+    def conform(v):
+        if isinstance(v, Timespan):
+            v = (v.begin, v.end)
+        return v
+
+    return Table([[conform(getattr(record, key, None)) for record in records] for key in keys], names=keys)

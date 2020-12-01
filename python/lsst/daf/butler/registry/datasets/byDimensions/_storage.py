@@ -242,7 +242,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             )
         # Add WHERE clause for timespan overlaps.
         tsRepr = self._db.getTimespanRepresentation()
-        query.where.append(tsRepr.fromSelectable(self._calibs).overlaps(timespan))
+        query.where.append(tsRepr.fromSelectable(self._calibs).overlaps(tsRepr.fromLiteral(timespan)))
         return query
 
     def certify(self, collection: CollectionRecord, datasets: Iterable[DatasetRef],
@@ -408,11 +408,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         if isinstance(ingestDate, Timespan):
             # Tmespan is astropy Time (usually in TAI) and ingest_date is
             # TIMESTAMP, convert values to Python datetime for sqlalchemy.
+            if ingestDate.isEmpty():
+                raise RuntimeError("Empty timespan constraint provided for ingest_date.")
             if ingestDate.begin is not None:
-                begin = ingestDate.begin.utc.datetime
+                begin = ingestDate.begin.utc.datetime  # type: ignore
                 query.where.append(self._static.dataset.ingest_date >= begin)
             if ingestDate.end is not None:
-                end = ingestDate.end.utc.datetime
+                end = ingestDate.end.utc.datetime  # type: ignore
                 query.where.append(self._static.dataset.ingest_date < end)
         # And now we finally join in the tags or calibs table.
         if collection.type is CollectionType.CALIBRATION:
@@ -424,7 +426,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             if timespan is SimpleQuery.Select:
                 kwargs.update({k: SimpleQuery.Select for k in tsRepr.getFieldNames()})
             elif timespan is not None:
-                query.where.append(tsRepr.fromSelectable(self._calibs).overlaps(timespan))
+                query.where.append(
+                    tsRepr.fromSelectable(self._calibs).overlaps(tsRepr.fromLiteral(timespan))
+                )
             query.join(
                 self._calibs,
                 onclause=(self._static.dataset.columns.id == self._calibs.columns.dataset_id),

@@ -349,6 +349,11 @@ def cached_getter(func: Callable[[_S], _R]) -> Callable[[_S], _R]:
     This is intended primarily as a stopgap for Python 3.8's more sophisticated
     ``functools.cached_property``, but it is also explicitly compatible with
     the `immutable` decorator, which may not be true of ``cached_property``.
+
+    `cached_getter` guarantees that the cached value will be stored in
+    an attribute named ``_cached_{name-of-decorated-function}``.  Classes that
+    use `cached_getter` are responsible for guaranteeing that this name is not
+    otherwise used, and is included if ``__slots__`` is defined.
     """
     attribute = f"_cached_{func.__name__}"
 
