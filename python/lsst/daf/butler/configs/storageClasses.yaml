@@ -171,3 +171,7 @@ storageClasses:
     pytype: lsst.verify.Measurement
   Stamps:
     pytype: lsst.meas.algorithms.Stamps
+  AstropyTable:
+    pytype: astropy.table.Table
+  AstropyQTable:
+    pytype: astropy.table.QTable
