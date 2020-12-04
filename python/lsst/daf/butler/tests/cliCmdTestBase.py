@@ -24,7 +24,7 @@ import copy
 import os
 from unittest.mock import call, DEFAULT, patch
 
-from ..cli.utils import clickResultMsg, mockEnvVar, LogCliRunner, Mocker
+from ..cli.utils import clickResultMsg, LogCliRunner
 from ..cli import butler
 
 
@@ -64,12 +64,7 @@ class CliCmdTestBase(abc.ABC):
         return None
 
     def setUp(self):
-        self.useMocker = self.mockFunc is None
-        if self.useMocker:
-            Mocker.reset()
-            self.runner = LogCliRunner(env=mockEnvVar)
-        else:
-            self.runner = LogCliRunner()
+        self.runner = LogCliRunner()
 
     @classmethod
     def makeExpected(cls, **kwargs):
@@ -130,12 +125,8 @@ class CliCmdTestBase(abc.ABC):
                 with open(withTempFile, "w") as _:
                     # just need to make the file, don't need to keep it open.
                     pass
-            if self.useMocker:
+            with patch(self.mockFunc, self.mock) as mock:
                 result = self.run_command(inputs)
-                mock = Mocker.mock
-            else:
-                with patch(self.mockFunc, self.mock) as mock:
-                    result = self.run_command(inputs)
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             if isinstance(expectedKwargs, (list, tuple)):
                 calls = (call(**e) for e in expectedKwargs)
