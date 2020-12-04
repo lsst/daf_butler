@@ -401,28 +401,6 @@ def unwrap(val):
     return "\n\n".join([splitSection(s) for s in val.split("\n\n")])
 
 
-def cli_handle_exception(func, *args, **kwargs):
-    """Wrap a function call in an exception handler that raises a
-    ClickException if there is an Exception.
-
-    Parameters
-    ----------
-    func : function
-        A function to be called and exceptions handled. Will pass args & kwargs
-        to the function.
-
-    Returns
-    -------
-    The result of calling func.
-
-    Raises
-    ------
-    click.ClickException
-        An exception to be handled by the Click CLI tool.
-    """
-    return func(*args, **kwargs)
-
-
 class option_section:  # noqa: N801
     """Decorator to add a section label between options in the help text of a
     command.
