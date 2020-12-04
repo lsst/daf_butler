@@ -36,7 +36,10 @@ class AstropyTableFormatter(FileFormatter):
     in either ECSV or FITS format
     """
     supportedWriteParameters = frozenset({"format"})
-    supportedExtensions = frozenset({".ecsv", ".fits", ".fit"})
+    # Ideally we'd also support fits, but that doesn't
+    # round trip string columns correctly, so things
+    # need to be fixed up on read.
+    supportedExtensions = frozenset({".ecsv", })
 
     @property
     def extension(self) -> str:  # type: ignore
@@ -47,8 +50,7 @@ class AstropyTableFormatter(FileFormatter):
         format = self.writeParameters.get("format", "ecsv")
         if format == "ecsv":
             return ".ecsv"
-        elif format == "fits":
-            return ".fits"
+        # Other supported formats can be added here
         raise RuntimeError(f"Requested file format '{format}' is not supported for Table")
 
     def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
@@ -85,8 +87,4 @@ class AstropyTableFormatter(FileFormatter):
         Exception
             The file could not be written.
         """
-        format_str = self.writeParameters.get('format', None)
-        if format_str:
-            inMemoryDataset.write(self.fileDescriptor.location.path, format=format_str)
-        else:
-            inMemoryDataset.write(self.fileDescriptor.location.path)
+        inMemoryDataset.write(self.fileDescriptor.location.path)
