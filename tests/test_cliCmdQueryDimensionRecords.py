@@ -41,6 +41,8 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
 
+    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.queryDimensionRecords"
+
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory = StorageClassFactory()
 

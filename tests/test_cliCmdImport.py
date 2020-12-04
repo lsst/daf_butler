@@ -28,10 +28,11 @@ import unittest.mock
 
 from lsst.daf.butler.tests import CliCmdTestBase
 from lsst.daf.butler.cli.cmd import butler_import
-from lsst.daf.butler.cli.utils import Mocker
 
 
 class ImportTestCase(CliCmdTestBase, unittest.TestCase):
+
+    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
 
     @staticmethod
     def defaultExpected():
@@ -69,6 +70,12 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
 class ExportFileCase(CliCmdTestBase, unittest.TestCase):
 
+    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
+
+    @property
+    def mock(self):
+        return unittest.mock.MagicMock(side_effect=self.read_test)
+
     didRead = None
 
     @staticmethod
@@ -82,23 +89,12 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
     def command():
         return butler_import
 
-    def setUp(self):
-        # add a side effect to Mocker so that it will call our method when it
-        # is called.
-        Mocker.mock.side_effect = self.read_test
-        super().setUp()
-
-    def tearDown(self):
-        # reset the Mocker's side effect on our way out!
-        Mocker.mock.side_effect = None
-        super().tearDown()
-
     @staticmethod
     def read_test(*args, **kwargs):
-        """This gets called by the Mocker's side effect when the Mocker is
-        called. Our export_file argument is a File so Click will open it before
-        calling the Mocker, and thus before it gets here. A little bit is
-        written into the file here and that is verified later.
+        """This gets called by the MagicMock's side effect when the MagicMock
+        is called. Our export_file argument is a File so Click will open it
+        before calling the MagicMock, and thus before it gets here. A little
+        bit is written into the file here and that is verified later.
         """
         print("in read_test")
         ExportFileCase.didRead = kwargs["export_file"].read()
@@ -111,7 +107,7 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
         # TestIOWrapper. It doesn't work to test it with
         # MagicMock.assert_called_with because if a TextIOWrapper is created
         # here it will be a different instance and not compare equal. We test
-        # that variable via the mocker.side_effect used in self.read_test.
+        # that variable via the MagicMock.side_effect used in self.read_test.
         with self.runner.isolated_filesystem():
             with open("output.yaml", "w") as f:
                 f.write("foobarbaz")

@@ -37,6 +37,8 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 class ConfigDumpTest(CliCmdTestBase, unittest.TestCase):
 
+    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.configDump"
+
     @staticmethod
     def defaultExpected():
         return dict()

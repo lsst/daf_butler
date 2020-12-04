@@ -33,6 +33,8 @@ from lsst.daf.butler.tests import CliCmdTestBase
 
 class ValidateTest(CliCmdTestBase, unittest.TestCase):
 
+    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.configValidate"
+
     @staticmethod
     def defaultExpected():
         return dict()
