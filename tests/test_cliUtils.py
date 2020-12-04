@@ -27,22 +27,17 @@ import unittest
 from unittest.mock import MagicMock
 
 
-from lsst.daf.butler.cli import butler
-from lsst.daf.butler.cli.utils import (clickResultMsg, LogCliRunner, Mocker, mockEnvVar, MWArgumentDecorator,
-                                       MWOption, MWOptionDecorator, MWPath, option_section, unwrap)
+from lsst.daf.butler.cli.utils import (
+    clickResultMsg,
+    LogCliRunner,
+    MWArgumentDecorator,
+    MWOption,
+    MWOptionDecorator,
+    MWPath,
+    option_section,
+    unwrap
+)
 from lsst.daf.butler.cli.opt import directory_argument, repo_argument
-
-
-class MockerTestCase(unittest.TestCase):
-
-    def test_callMock(self):
-        """Test that a mocked subcommand calls the Mocker and can be verified.
-        """
-        runner = LogCliRunner(env=mockEnvVar)
-        result = runner.invoke(butler.cli, ["create", "repo"])
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        Mocker.mock.assert_called_with(repo="repo", seed_config=None, dimension_config=None,
-                                       standalone=False, override=False, outfile=None)
 
 
 class ArgumentHelpGeneratorTestCase(unittest.TestCase):

@@ -25,7 +25,6 @@ from contextlib import contextmanager
 import copy
 from functools import partial
 import itertools
-import io
 import logging
 import os
 import textwrap
@@ -460,13 +459,7 @@ def cli_handle_exception(func, *args, **kwargs):
         Mocker(*args, **kwargs)
         return
 
-    try:
-        return func(*args, **kwargs)
-    except Exception as e:
-        msg = io.StringIO()
-        traceback.print_exc(file=msg)
-        log.debug(msg.getvalue())
-        raise click.ClickException(e) from e
+    return func(*args, **kwargs)
 
 
 class option_section:  # noqa: N801
