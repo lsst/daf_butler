@@ -108,7 +108,7 @@ class ConfigDumpUseTest(unittest.TestCase):
             # test dumping to stdout:
             result = self.runner.invoke(butler.cli, ["config-dump", "here", "--subset", "foo"])
             self.assertEqual(result.exit_code, 1)
-            self.assertIn("Error: 'foo not found in config at here'", result.output)
+            self.assertEqual(result.exception.args, KeyError('foo not found in config at here').args)
 
     def test_presets(self):
         """Test that file overrides can set command line options in bulk.
