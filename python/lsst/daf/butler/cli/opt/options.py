@@ -82,6 +82,7 @@ components_option = MWOptionDecorator("--components/--no-components",
 config_option = MWOptionDecorator("-c", "--config",
                                   callback=split_kv,
                                   help="Config override, as a key-value pair.",
+                                  metavar="TEXT=TEXT",
                                   multiple=True)
 
 
