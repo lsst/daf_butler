@@ -22,7 +22,7 @@
 import abc
 import copy
 import os
-from unittest.mock import call
+from unittest.mock import call, DEFAULT, patch
 
 from ..cli.utils import clickResultMsg, mockEnvVar, LogCliRunner, Mocker
 from ..cli import butler
@@ -30,7 +30,7 @@ from ..cli import butler
 
 class CliCmdTestBase(abc.ABC):
     """A test case base that is used to verify click command functions import
-    and call their respective script fucntions correctly.
+    and call their respective script functions correctly.
     """
 
     @staticmethod
@@ -50,9 +50,26 @@ class CliCmdTestBase(abc.ABC):
         overridden to test CLIs other than butler."""
         return butler.cli
 
+    @property
+    def mock(self):
+        """Get the mock object to use in place of `mockFunc`. If not provided
+        will use the default provided by `unittest.patch`, this is usually a
+        `unittest.patch.MagicMock`."""
+        return DEFAULT
+
+    @property
+    def mockFunc(self):
+        """The qualified name of the function to mock, will be passed to
+        unittest.mock.patch, see python docs for details. """
+        return None
+
     def setUp(self):
-        Mocker.reset()
-        self.runner = LogCliRunner(env=mockEnvVar)
+        self.useMocker = self.mockFunc is None
+        if self.useMocker:
+            Mocker.reset()
+            self.runner = LogCliRunner(env=mockEnvVar)
+        else:
+            self.runner = LogCliRunner()
 
     @classmethod
     def makeExpected(cls, **kwargs):
@@ -113,13 +130,18 @@ class CliCmdTestBase(abc.ABC):
                 with open(withTempFile, "w") as _:
                     # just need to make the file, don't need to keep it open.
                     pass
-            result = self.run_command(inputs)
+            if self.useMocker:
+                result = self.run_command(inputs)
+                mock = Mocker.mock
+            else:
+                with patch(self.mockFunc, self.mock) as mock:
+                    result = self.run_command(inputs)
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             if isinstance(expectedKwargs, (list, tuple)):
                 calls = (call(**e) for e in expectedKwargs)
             else:
                 calls = (call(**expectedKwargs),)
-            Mocker.mock.assert_has_calls(list(calls))
+            mock.assert_has_calls(list(calls))
         return result
 
     def run_missing(self, inputs, expectedMsg):

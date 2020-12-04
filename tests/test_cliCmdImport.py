@@ -33,6 +33,8 @@ from lsst.daf.butler.cli.utils import Mocker
 
 class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
+    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
+
     @staticmethod
     def defaultExpected():
         return dict(repo=None,
@@ -68,6 +70,12 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
 
 class ExportFileCase(CliCmdTestBase, unittest.TestCase):
+
+    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
+
+    @property
+    def mock(self):
+        return unittest.mock.MagicMock(side_effect=self.read_test)
 
     didRead = None
 
