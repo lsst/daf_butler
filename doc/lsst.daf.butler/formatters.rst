@@ -171,12 +171,16 @@ Additionally, if the storage class refers to a composite, the datastore can be c
 Since derived components are computed and are not persisted themselves, the datastore needs to be told which component should be used to calculate this derived quantity.
 To enable this the delegate must implement `StorageClassDelegate.selectResponsibleComponent()`.
 This method is given the name of the derived component and a list of all available persisted components and must return one and only one relevant component.
-The datastore will then make a component request to the formatter associated with that component.
+The datastore will then make a component request to the `~lsst.daf.butler.Formatter` associated with that component.
 
 .. note::
 
   All delegates must support read/write components and derived components in the `StorageClassDelegate.getComponent()` implementation method.
   As a corollary, all storage classes using components must specify a delegate.
+
+.. note::
+
+   A component returned by `~StorageClassDelegate.selectResponsibleComponent()` may require a custom formatter, to support the derived component, even if it otherwise would not.
 
 Read Parameters
 ^^^^^^^^^^^^^^^
