@@ -58,10 +58,11 @@ class CliCmdTestBase(abc.ABC):
         return DEFAULT
 
     @property
+    @abc.abstractmethod
     def mockFunc(self):
         """The qualified name of the function to mock, will be passed to
         unittest.mock.patch, see python docs for details. """
-        return None
+        pass
 
     def setUp(self):
         self.runner = LogCliRunner()
