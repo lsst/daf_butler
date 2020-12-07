@@ -27,6 +27,7 @@ import tempfile
 import os
 import shutil
 import numpy
+
 from astropy.table import Table
 
 from lsst.daf.butler import Butler, DatasetType
