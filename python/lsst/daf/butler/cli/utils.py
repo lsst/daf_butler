@@ -161,6 +161,11 @@ def addArgumentHelp(doc, helpText):
             doc = doc.split("\f")[0]
 
         doclines = doc.splitlines()
+        # The function's docstring may span multiple lines, so combine the
+        # docstring from all the first lines until a blank line is encountered.
+        # (Lines after the first blank line will be argument help.)
+        while len(doclines) > 1 and doclines[1]:
+            doclines[0] = " ".join((doclines[0], doclines.pop(1).strip()))
         doclines.insert(1, helpText)
         doclines.insert(1, "\n")
         doc = "\n".join(doclines)

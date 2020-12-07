@@ -42,23 +42,36 @@ from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 
 class ArgumentHelpGeneratorTestCase(unittest.TestCase):
 
-    @staticmethod
-    @click.command()
-    # Use custom help in the arguments so that any changes to default help text
-    # do not break this test unnecessarily.
-    @repo_argument(help="repo help text")
-    @directory_argument(help="directory help text")
-    def cli():
-        """The cli help message."""
-        pass
+    def testHelp(self):
+        @click.command()
+        # Use custom help in the arguments so that any changes to default help
+        # text do not break this test unnecessarily.
+        @repo_argument(help="repo help text")
+        @directory_argument(help="directory help text")
+        def cli():
+            """The cli help message."""
+            pass
 
-    def test_help(self):
+        self.runTest(cli)
+
+    def testHelpWrapped(self):
+        @click.command()
+        # Use custom help in the arguments so that any changes to default help
+        # text do not break this test unnecessarily.
+        @repo_argument(help="repo help text")
+        @directory_argument(help="directory help text")
+        def cli():
+            """The cli
+            help
+            message."""
+            pass
+        self.runTest(cli)
+
+    def runTest(self, cli):
         """Tests `utils.addArgumentHelp` and its use in repo_argument and
         directory_argument; verifies that the argument help gets added to the
         command fucntion help, and that it's added in the correct order. See
         addArgumentHelp for more details."""
-        runner = LogCliRunner()
-        result = runner.invoke(ArgumentHelpGeneratorTestCase.cli, ["--help"])
         expected = """Usage: cli [OPTIONS] REPO DIRECTORY
 
   The cli help message.
@@ -70,6 +83,8 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
 Options:
   --help  Show this message and exit.
 """
+        runner = LogCliRunner()
+        result = runner.invoke(cli, ["--help"])
         self.assertIn(expected, result.output)
 
 
