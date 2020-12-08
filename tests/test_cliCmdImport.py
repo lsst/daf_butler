@@ -32,7 +32,7 @@ from lsst.daf.butler.cli.cmd import butler_import
 
 class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
-    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
+    mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
 
     @staticmethod
     def defaultExpected():
@@ -70,7 +70,7 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
 class ExportFileCase(CliCmdTestBase, unittest.TestCase):
 
-    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
+    mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.butlerImport"
 
     @property
     def mock(self):

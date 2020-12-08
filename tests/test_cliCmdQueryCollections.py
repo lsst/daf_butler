@@ -44,7 +44,7 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
 
-    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.queryCollections"
+    mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryCollections"
 
     @staticmethod
     def defaultExpected():

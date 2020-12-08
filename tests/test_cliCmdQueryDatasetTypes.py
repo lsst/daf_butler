@@ -36,7 +36,7 @@ from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
 
 class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
 
-    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.queryDatasetTypes"
+    mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryDatasetTypes"
 
     @staticmethod
     def defaultExpected():

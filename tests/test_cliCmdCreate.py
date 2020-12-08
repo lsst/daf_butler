@@ -27,7 +27,7 @@ from lsst.daf.butler.cli.cmd import create
 
 class CreateTest(CliCmdTestBase, unittest.TestCase):
 
-    mockFunc = "lsst.daf.butler.cli.cmd.commands.script.createRepo"
+    mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.createRepo"
 
     @staticmethod
     def defaultExpected():

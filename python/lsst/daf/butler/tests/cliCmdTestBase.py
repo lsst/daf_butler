@@ -52,14 +52,14 @@ class CliCmdTestBase(abc.ABC):
 
     @property
     def mock(self):
-        """Get the mock object to use in place of `mockFunc`. If not provided
-        will use the default provided by `unittest.patch`, this is usually a
-        `unittest.patch.MagicMock`."""
+        """Get the mock object to use in place of `mockFuncName`. If not
+        provided will use the default provided by `unittest.patch`, this is
+        usually a `unittest.patch.MagicMock`."""
         return DEFAULT
 
     @property
     @abc.abstractmethod
-    def mockFunc(self):
+    def mockFuncName(self):
         """The qualified name of the function to mock, will be passed to
         unittest.mock.patch, see python docs for details. """
         pass
@@ -126,7 +126,7 @@ class CliCmdTestBase(abc.ABC):
                 with open(withTempFile, "w") as _:
                     # just need to make the file, don't need to keep it open.
                     pass
-            with patch(self.mockFunc, self.mock) as mock:
+            with patch(self.mockFuncName, self.mock) as mock:
                 result = self.run_command(inputs)
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             if isinstance(expectedKwargs, (list, tuple)):
