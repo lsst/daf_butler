@@ -1329,8 +1329,9 @@ class Registry:
             queries.RegistryManagers(
                 collections=self._collections,
                 dimensions=self._dimensions,
-                datasets=self._datasets
-            )
+                datasets=self._datasets,
+                tsRepr=self._db.getTimespanRepresentation(),
+            ),
         )
 
     def queryDatasets(self, datasetType: Any, *,

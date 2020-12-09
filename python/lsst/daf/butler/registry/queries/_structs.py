@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import AbstractSet, Iterator, List, Optional, Union
+from typing import AbstractSet, Iterator, List, Optional, Type, Union
 
 from sqlalchemy.sql import ColumnElement
 
@@ -470,4 +470,9 @@ class RegistryManagers:
 
     dimensions: DimensionRecordStorageManager
     """Manager for dimensions (`DimensionRecordStorageManager`).
+    """
+
+    tsRepr: Type[TimespanDatabaseRepresentation]
+    """Type that encapsulates how timespans are represented in this database
+    (`type`; subclass of `TimespanDatabaseRepresentation`).
     """
