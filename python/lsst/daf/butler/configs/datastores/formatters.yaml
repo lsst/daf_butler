@@ -13,6 +13,7 @@ CoaddInputs: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 VisitInfo: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 ApCorr: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 PhotoCalib: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
+FilterLabel: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 TransmissionCurve: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Camera: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Detector: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
@@ -60,6 +61,7 @@ MetricValue:
     unsafe_dump: true
 BrighterFatterKernel: lsst.daf.butler.formatters.pickle.PickleFormatter
 StructuredDataDict: lsst.daf.butler.formatters.yaml.YamlFormatter
+# TODO: remove Filter in DM-27177
 Filter: lsst.obs.base.formatters.filter.FilterFormatter
 Stamps: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 AstropyTable: lsst.daf.butler.formatters.astropyTable.AstropyTableFormatter
