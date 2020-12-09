@@ -38,7 +38,7 @@ from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 
 from .._collectionType import CollectionType
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns, RegistryManagers
-from .expressions import ClauseVisitor
+from ._whereClauseConverter import convertExpressionToSql
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, Query
 from ..wildcards import CollectionSearch, CollectionQuery
 
@@ -387,8 +387,16 @@ class QueryBuilder:
         only by called) by `finish`.
         """
         if self.summary.where.tree is not None:
-            visitor = ClauseVisitor(self.summary.universe, self._columns, self._elements)
-            self._simpleQuery.where.append(self.summary.where.tree.visit(visitor))
+            self._simpleQuery.where.append(
+                convertExpressionToSql(
+                    self.summary.where.tree,
+                    self.summary.universe,
+                    columns=self._columns,
+                    elements=self._elements,
+                    bind={},
+                    tsRepr=self._managers.tsRepr,
+                )
+            )
         for dimension, columnsInQuery in self._columns.keys.items():
             if dimension in self.summary.where.dataId.graph:
                 givenKey = self.summary.where.dataId[dimension]
