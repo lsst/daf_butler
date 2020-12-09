@@ -40,6 +40,8 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
+    mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryDatasets"
+
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory = StorageClassFactory()
 

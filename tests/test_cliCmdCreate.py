@@ -27,6 +27,8 @@ from lsst.daf.butler.cli.cmd import create
 
 class CreateTest(CliCmdTestBase, unittest.TestCase):
 
+    mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.createRepo"
+
     @staticmethod
     def defaultExpected():
         return dict(repo=None,
@@ -52,6 +54,7 @@ class CreateTest(CliCmdTestBase, unittest.TestCase):
 
     def test_all(self):
         """Test all parameters."""
+
         self.run_test(["create", "here",
                        "--seed-config", "foo",
                        "--dimension-config", "/bar/dim.yaml",

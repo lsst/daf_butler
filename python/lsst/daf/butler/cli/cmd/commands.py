@@ -40,13 +40,13 @@ from ..opt import (
 )
 
 from ..utils import (
-    cli_handle_exception,
     ButlerCommand,
     split_commas,
     to_upper,
     typeStrAcceptsMultiple,
     unwrap,
 )
+
 from ... import script
 
 
@@ -78,7 +78,7 @@ whereHelp = unwrap("""A string expression similar to a SQL WHERE clause. May inv
 @options_file_option()
 def butler_import(*args, **kwargs):
     """Import data into a butler repository."""
-    cli_handle_exception(script.butlerImport, *args, **kwargs)
+    script.butlerImport(*args, **kwargs)
 
 
 @click.command(cls=ButlerCommand)
@@ -94,7 +94,7 @@ def butler_import(*args, **kwargs):
 @options_file_option()
 def create(*args, **kwargs):
     """Create an empty Gen3 Butler repository."""
-    cli_handle_exception(script.createRepo, *args, **kwargs)
+    script.createRepo(*args, **kwargs)
 
 
 @click.command(short_help="Dump butler config to stdout.", cls=ButlerCommand)
@@ -111,7 +111,7 @@ def create(*args, **kwargs):
 @options_file_option()
 def config_dump(*args, **kwargs):
     """Dump either a subset or full Butler configuration to standard output."""
-    cli_handle_exception(script.configDump, *args, **kwargs)
+    script.configDump(*args, **kwargs)
 
 
 @click.command(short_help="Validate the configuration files.", cls=ButlerCommand)
@@ -124,7 +124,7 @@ def config_dump(*args, **kwargs):
 @options_file_option()
 def config_validate(*args, **kwargs):
     """Validate the configuration files for a Gen3 Butler repository."""
-    is_good = cli_handle_exception(script.configValidate, *args, **kwargs)
+    is_good = script.configValidate(*args, **kwargs)
     if not is_good:
         raise click.exceptions.Exit(1)
 
@@ -146,7 +146,7 @@ def config_validate(*args, **kwargs):
 @options_file_option()
 def prune_collection(**kwargs):
     """Remove a collection and possibly prune datasets within it."""
-    cli_handle_exception(script.pruneCollection, **kwargs)
+    script.pruneCollection(**kwargs)
 
 
 @click.command(short_help="Search for collections.", cls=ButlerCommand)
@@ -165,7 +165,7 @@ def prune_collection(**kwargs):
 @options_file_option()
 def query_collections(*args, **kwargs):
     """Get the collections whose names match an expression."""
-    table = cli_handle_exception(script.queryCollections, *args, **kwargs)
+    table = script.queryCollections(*args, **kwargs)
     # The unit test that mocks script.queryCollections does not return a table
     # so we need the following `if`.
     if table:
@@ -184,7 +184,7 @@ def query_collections(*args, **kwargs):
 @options_file_option()
 def query_dataset_types(*args, **kwargs):
     """Get the dataset types in a repository."""
-    table = cli_handle_exception(script.queryDatasetTypes, *args, **kwargs)
+    table = script.queryDatasetTypes(*args, **kwargs)
     if table:
         table.pprint_all()
     else:
@@ -196,7 +196,7 @@ def query_dataset_types(*args, **kwargs):
 @click.argument('dataset-type-name', nargs=1)
 def remove_dataset_type(*args, **kwargs):
     """Remove a dataset type definition from a repository."""
-    cli_handle_exception(script.removeDatasetType, *args, **kwargs)
+    script.removeDatasetType(*args, **kwargs)
 
 
 @click.command(cls=ButlerCommand)
@@ -217,7 +217,7 @@ def remove_dataset_type(*args, **kwargs):
 @options_file_option()
 def query_datasets(**kwargs):
     """List the datasets in a repository."""
-    tables = cli_handle_exception(script.queryDatasets, **kwargs)
+    tables = script.queryDatasets(**kwargs)
 
     for table in tables:
         print("")
@@ -242,7 +242,7 @@ def query_datasets(**kwargs):
 def certify_calibrations(*args, **kwargs):
     """Certify calibrations in a repository.
     """
-    cli_handle_exception(script.certifyCalibrations, *args, **kwargs)
+    script.certifyCalibrations(*args, **kwargs)
 
 
 @click.command(cls=ButlerCommand)
@@ -260,7 +260,7 @@ def certify_calibrations(*args, **kwargs):
 def query_data_ids(**kwargs):
     """List the data IDs in a repository.
     """
-    table = cli_handle_exception(script.queryDataIds, **kwargs)
+    table = script.queryDataIds(**kwargs)
     if table:
         table.pprint_all()
     else:
@@ -284,7 +284,7 @@ def query_data_ids(**kwargs):
 @options_file_option()
 def query_dimension_records(**kwargs):
     """Query for dimension information."""
-    table = cli_handle_exception(script.queryDimensionRecords, **kwargs)
+    table = script.queryDimensionRecords(**kwargs)
     if table:
         table.pprint_all()
     else:

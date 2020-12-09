@@ -89,6 +89,8 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
     verify collections can be pruned.
     """
 
+    mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.pruneCollection"
+
     def setUp(self):
         self.runner = LogCliRunner()
 

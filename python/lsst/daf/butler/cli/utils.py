@@ -25,12 +25,11 @@ from contextlib import contextmanager
 import copy
 from functools import partial
 import itertools
-import io
 import logging
 import os
 import textwrap
 import traceback
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import uuid
 import yaml
 
@@ -39,13 +38,6 @@ from ..core.utils import iterable
 from ..core.config import Config
 
 log = logging.getLogger(__name__)
-
-# CLI_MOCK_ENV is set by some tests as an environment variable, it
-# indicates to the cli_handle_exception function that instead of executing the
-# command implementation function it should use the Mocker class for unit test
-# verification.
-mockEnvVarKey = "CLI_MOCK_ENV"
-mockEnvVar = {mockEnvVarKey: "1"}
 
 # This is used as the metavar argument to Options that accept multiple string
 # inputs, which may be comma-separarated. For example:
@@ -75,30 +67,6 @@ def textTypeStr(multiple):
         The type string to use.
     """
     return typeStrAcceptsMultiple if multiple else typeStrAcceptsSingle
-
-
-class Mocker:
-
-    mock = MagicMock()
-
-    def __init__(self, *args, **kwargs):
-        """Mocker is a helper class for unit tests. It can be imported and
-        called and later imported again and call can be verified.
-
-        For convenience, constructor arguments are forwarded to the call
-        function.
-        """
-        self.__call__(*args, **kwargs)
-
-    def __call__(self, *args, **kwargs):
-        """Creates a MagicMock and stores it in a static variable that can
-        later be verified.
-        """
-        Mocker.mock(*args, **kwargs)
-
-    @classmethod
-    def reset(cls):
-        cls.mock.reset_mock()
 
 
 class LogCliRunner(click.testing.CliRunner):
@@ -431,42 +399,6 @@ def unwrap(val):
         return (firstLine + textwrap.dedent(val).replace("\n", " ")).strip()
 
     return "\n\n".join([splitSection(s) for s in val.split("\n\n")])
-
-
-def cli_handle_exception(func, *args, **kwargs):
-    """Wrap a function call in an exception handler that raises a
-    ClickException if there is an Exception.
-
-    Also provides support for unit testing by testing for an environment
-    variable, and if it is present prints the function name, args, and kwargs
-    to stdout so they can be read and verified by the unit test code.
-
-    Parameters
-    ----------
-    func : function
-        A function to be called and exceptions handled. Will pass args & kwargs
-        to the function.
-
-    Returns
-    -------
-    The result of calling func.
-
-    Raises
-    ------
-    click.ClickException
-        An exception to be handled by the Click CLI tool.
-    """
-    if mockEnvVarKey in os.environ:
-        Mocker(*args, **kwargs)
-        return
-
-    try:
-        return func(*args, **kwargs)
-    except Exception as e:
-        msg = io.StringIO()
-        traceback.print_exc(file=msg)
-        log.debug(msg.getvalue())
-        raise click.ClickException(e) from e
 
 
 class option_section:  # noqa: N801
