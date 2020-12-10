@@ -55,6 +55,9 @@ from ..wildcards import GovernorDimensionRestriction
 from .expressions import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
 
 
+BIND_CONSTANTS = {"None": None, "NULL": None}
+
+
 @immutable
 class QueryWhereExpression:
     """A struct representing a parsed user-provided WHERE expression.
@@ -79,7 +82,10 @@ class QueryWhereExpression:
         else:
             self._tree = None
         if bind is None:
-            bind = {}
+            bind = BIND_CONSTANTS
+        else:
+            bind = dict(bind)
+            bind.update(BIND_CONSTANTS)
         self._bind = bind
 
     def attach(
