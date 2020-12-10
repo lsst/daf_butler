@@ -222,6 +222,16 @@ class QueryWhereClause:
     (`GovernorDimensionRestriction`).
     """
 
+    @property  # type: ignore
+    @cached_getter
+    def temporal(self) -> NamedValueAbstractSet[DimensionElement]:
+        """Dimension elements whose timespans are referenced by this
+        expression (`NamedValueAbstractSet` [ `DimensionElement` ])
+        """
+        return NamedValueSet(
+            e for e, c in self.columns.items() if TimespanDatabaseRepresentation.NAME in c
+        ).freeze()
+
 
 @immutable
 class QuerySummary:
@@ -327,22 +337,11 @@ class QuerySummary:
         """Dimension elements whose timespans should be included in the
         query (`NamedValueSet` of `DimensionElement`).
         """
-        # An element may participate temporally in the query if:
-        # - it's the most precise temporal element for its system in the
-        #   requested dimensions (i.e. in `self.requested.temporal`);
-        # - it isn't also given at query construction time.
-        result: NamedValueSet[DimensionElement] = NamedValueSet()
-        for family in self.mustHaveKeysJoined.temporal:
-            element = family.choose(self.mustHaveKeysJoined.elements)
-            assert isinstance(element, DimensionElement)
-            if element not in self.where.dataId.graph.elements:
-                result.add(element)
-        if len(result) == 1 and not self.where.dataId.graph.temporal:
-            # No temporal join or filter.  Even if this element might be
-            # associated with temporal information, we don't need it for this
-            # query.
-            return NamedValueSet().freeze()
-        return result.freeze()
+        if len(self.mustHaveKeysJoined.temporal) > 1:
+            # We don't actually have multiple temporal families in our current
+            # dimension configuration, so this limitation should be harmless.
+            raise NotImplementedError("Queries that should involve temporal joins are not yet supported.")
+        return self.where.temporal
 
     @property  # type: ignore
     @cached_getter

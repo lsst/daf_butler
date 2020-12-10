@@ -413,6 +413,7 @@ BINARY_OPERATOR_PRECEDENCE = {
     "<=": PrecedenceTier.COMPARISON,
     ">": PrecedenceTier.COMPARISON,
     ">=": PrecedenceTier.COMPARISON,
+    "OVERLAPS": PrecedenceTier.COMPARISON,
     "+": PrecedenceTier.VALUE_BINARY_OP,
     "-": PrecedenceTier.VALUE_BINARY_OP,
     "*": PrecedenceTier.VALUE_BINARY_OP,
