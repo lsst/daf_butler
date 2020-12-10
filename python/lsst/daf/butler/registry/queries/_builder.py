@@ -393,7 +393,7 @@ class QueryBuilder:
                     self.summary.universe,
                     columns=self._columns,
                     elements=self._elements,
-                    bind={},
+                    bind=self.summary.where.bind,
                     tsRepr=self._managers.tsRepr,
                 )
             )

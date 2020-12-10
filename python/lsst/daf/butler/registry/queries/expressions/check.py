@@ -28,6 +28,7 @@ __all__ = (
 
 import dataclasses
 from typing import (
+    AbstractSet,
     List,
     Optional,
     Sequence,
@@ -169,10 +170,13 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
     ----------
     universe : `DimensionUniverse`
         All known dimensions.
+    bindKeys : `collections.abc.Set` [ `str` ]
+        Identifiers that represent bound parameter values, and hence need not
+        represent in-database entities.
     """
-
-    def __init__(self, universe: DimensionUniverse):
+    def __init__(self, universe: DimensionUniverse, bindKeys: AbstractSet[str]):
         self.universe = universe
+        self.bindKeys = bindKeys
 
     def visitNumericLiteral(self, value: str, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
@@ -188,6 +192,8 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
 
     def visitIdentifier(self, name: str, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitIdentifier
+        if name in self.bindKeys:
+            return TreeSummary()
         if categorizeIngestDateId(name):
             return TreeSummary(
                 hasIngestDate=True,
@@ -285,11 +291,15 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
     graph : `DimensionGraph`
         The dimensions the query would include in the absence of this
         expression.
+    bindKeys : `collections.abc.Set` [ `str` ]
+        Identifiers that represent bound parameter values, and hence need not
+        represent in-database entities.
     """
-    def __init__(self, dataId: DataCoordinate, graph: DimensionGraph):
+    def __init__(self, dataId: DataCoordinate, graph: DimensionGraph, bindKeys: AbstractSet[str]):
         self.dataId = dataId
         self.graph = graph
-        self._branchVisitor = InspectionVisitor(dataId.universe)
+        self.bindKeys = bindKeys
+        self._branchVisitor = InspectionVisitor(dataId.universe, bindKeys)
 
     def visitBranch(self, node: Node) -> TreeSummary:
         # Docstring inherited from NormalFormVisitor.
