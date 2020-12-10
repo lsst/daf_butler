@@ -286,9 +286,9 @@ class QuerySummary:
 
     @property  # type: ignore
     @cached_getter
-    def spatial(self) -> NamedValueSet[DimensionElement]:
+    def spatial(self) -> NamedValueAbstractSet[DimensionElement]:
         """Dimension elements whose regions and skypix IDs should be included
-        in the query (`NamedValueSet` of `DimensionElement`).
+        in the query (`NamedValueAbstractSet` of `DimensionElement`).
         """
         # An element may participate spatially in the query if:
         # - it's the most precise spatial element for its system in the
@@ -314,16 +314,16 @@ class QuerySummary:
                 # There is no spatial join or filter in this query.  Even
                 # if this element might be associated with spatial
                 # information, we don't need it for this query.
-                return NamedValueSet()
+                return NamedValueSet().freeze()
         elif len(result) > 1:
             # There's a spatial join.  Those require the common SkyPix
             # system to be included in the query in order to connect them.
             result.add(self.universe.commonSkyPix)
-        return result
+        return result.freeze()
 
     @property  # type: ignore
     @cached_getter
-    def temporal(self) -> NamedValueSet[DimensionElement]:
+    def temporal(self) -> NamedValueAbstractSet[DimensionElement]:
         """Dimension elements whose timespans should be included in the
         query (`NamedValueSet` of `DimensionElement`).
         """
@@ -341,8 +341,8 @@ class QuerySummary:
             # No temporal join or filter.  Even if this element might be
             # associated with temporal information, we don't need it for this
             # query.
-            return NamedValueSet()
-        return result
+            return NamedValueSet().freeze()
+        return result.freeze()
 
     @property  # type: ignore
     @cached_getter
@@ -359,7 +359,7 @@ class QuerySummary:
 
     @property  # type: ignore
     @cached_getter
-    def mustHaveTableJoined(self) -> NamedValueSet[DimensionElement]:
+    def mustHaveTableJoined(self) -> NamedValueAbstractSet[DimensionElement]:
         """Dimension elements whose associated tables must appear in the
         query's FROM clause (`NamedValueSet` of `DimensionElement`).
         """
@@ -370,7 +370,7 @@ class QuerySummary:
         for element in self.mustHaveKeysJoined.union(self.where.dataId.graph).elements:
             if element.alwaysJoin:
                 result.add(element)
-        return result
+        return result.freeze()
 
 
 @dataclass
