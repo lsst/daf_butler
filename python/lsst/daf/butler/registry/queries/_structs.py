@@ -52,7 +52,7 @@ from ..interfaces import (
 from ..wildcards import GovernorDimensionRestriction
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
-from .exprParser import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
+from .expressions import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
 
 
 @immutable

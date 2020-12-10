@@ -42,8 +42,7 @@ from typing import (
 
 import astropy.time
 
-from .treeVisitor import TreeVisitor
-from .exprTree import BinaryOp, Node, Parens, UnaryOp
+from .parser import BinaryOp, Node, Parens, TreeVisitor, UnaryOp
 
 
 class LogicalBinaryOperator(enum.Enum):

@@ -26,7 +26,7 @@ import unittest
 
 import astropy.time
 
-from lsst.daf.butler.registry.queries.exprParser import (
+from lsst.daf.butler.registry.queries.expressions import (
     Node,
     NormalForm,
     NormalFormExpression,
@@ -34,7 +34,7 @@ from lsst.daf.butler.registry.queries.exprParser import (
     TreeVisitor,
 )
 
-from lsst.daf.butler.registry.queries.exprParser.normalForm import TransformationVisitor
+from lsst.daf.butler.registry.queries.expressions.normalForm import TransformationVisitor
 
 
 class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):

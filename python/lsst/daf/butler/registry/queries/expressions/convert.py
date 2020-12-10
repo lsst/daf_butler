@@ -45,8 +45,9 @@ from typing import (
 
 from astropy.time import Time
 import sqlalchemy
+from sqlalchemy.ext.compiler import compiles
 
-from ...core import (
+from ....core import (
     ddl,
     Dimension,
     DimensionElement,
@@ -55,12 +56,12 @@ from ...core import (
     Timespan,
     TimespanDatabaseRepresentation,
 )
-from ...core.utils import iterable
-from .exprParser import Node, TreeVisitor
-from .expressions import categorizeElementId, categorizeIngestDateId, _TimestampColumnElement
+from ....core.utils import iterable
+from .parser import Node, TreeVisitor
+from .categorize import categorizeElementId, categorizeIngestDateId
 
 if TYPE_CHECKING:
-    from ._structs import QueryColumns
+    from .._structs import QueryColumns
 
 
 def convertExpressionToSql(
@@ -111,6 +112,44 @@ class ExpressionTypeError(TypeError):
     """Exception raised when the types in a query expression are not
     compatible with the operators or other syntax.
     """
+
+
+class _TimestampColumnElement(sqlalchemy.sql.ColumnElement):
+    """Special ColumnElement type used for TIMESTAMP columns in expressions.
+
+    TIMESTAMP columns in expressions are usually compared to time literals
+    which are `astropy.time.Time` instances that are converted to integer
+    nanoseconds since Epoch. For comparison we need to convert TIMESTAMP
+    column value to the same type. This type is a wrapper for actual column
+    that has special dialect-specific compilation methods defined below
+    transforming column in that common type.
+
+    This mechanism is only used for expressions in WHERE clause, values of the
+    TIMESTAMP columns returned from queries are still handled by standard
+    mechanism and they are converted to `datetime` instances.
+    """
+    def __init__(self, column: sqlalchemy.sql.ColumnElement):
+        super().__init__()
+        self._column = column
+
+
+@compiles(_TimestampColumnElement, "sqlite")
+def compile_timestamp_sqlite(element: Any, compiler: Any, **kw: Mapping[str, Any]) -> str:
+    """Compilation of TIMESTAMP column for SQLite.
+
+    SQLite defines ``strftime`` function that can be used to convert timestamp
+    value to Unix seconds.
+    """
+    return f"STRFTIME('%s', {element._column.name})*1000000000"
+
+
+@compiles(_TimestampColumnElement, "postgresql")
+def compile_timestamp_pg(element: Any, compiler: Any, **kw: Mapping[str, Any]) -> str:
+    """Compilation of TIMESTAMP column for PostgreSQL.
+
+    PostgreSQL can use `EXTRACT(epoch FROM timestamp)` function.
+    """
+    return f"EXTRACT(epoch FROM {element._column.name})*1000000000"
 
 
 class WhereClauseConverter(ABC):

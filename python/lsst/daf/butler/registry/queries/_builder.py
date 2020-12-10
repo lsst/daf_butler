@@ -38,7 +38,7 @@ from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 
 from .._collectionType import CollectionType
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns, RegistryManagers
-from ._whereClauseConverter import convertExpressionToSql
+from .expressions import convertExpressionToSql
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, Query
 from ..wildcards import CollectionSearch, CollectionQuery
 
