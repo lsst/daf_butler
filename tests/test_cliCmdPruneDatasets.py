@@ -1,0 +1,390 @@
+# This file is part of daf_butler.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (http://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Unit tests for daf_butler CLI prune-datasets subcommand.
+"""
+
+from astropy.table import Table
+import unittest
+from unittest.mock import patch
+
+from lsst.daf.butler import Butler
+from lsst.daf.butler.cli.butler import cli as butlerCli
+from lsst.daf.butler.cli.cmd.commands import (
+    pruneDatasets_wouldRemoveMsg,
+    pruneDatasets_willRemoveMsg,
+    pruneDatasets_askContinueMsg,
+    pruneDatasets_didRemoveAforementioned,
+    pruneDatasets_didNotRemoveAforementioned,
+    pruneDatasets_didRemoveMsg,
+    pruneDatasets_noDatasetsFound,
+    pruneDatasets_errPurgeAndDisassociate,
+    pruneDatasets_errQuietWithDryRun,
+    pruneDatasets_errFindAllWithoutCollections,
+)
+from lsst.daf.butler.cli.utils import astropyTablesToStr, clickResultMsg, LogCliRunner
+import lsst.daf.butler.script
+from lsst.daf.butler.script import QueryDatasets
+
+
+doFindTables = True
+
+
+def getTables():
+    if doFindTables:
+        return (Table(((1, 2, 3),), names=("foo",)),)
+    return tuple()
+
+
+def getDatasets():
+    return "datasets"
+
+
+def makeQueryDatasets(*args, **kwargs):
+    return QueryDatasets(*args, **kwargs)
+
+
+class PruneDatasetsTestCase(unittest.TestCase):
+    """Tests the ``prune_datasets`` "command" function (in
+    ``cli/cmd/commands.py``) and the ``pruneDatasets`` "script" function (in
+    ``scripts/_pruneDatasets.py``).
+
+    ``Butler.pruneDatasets`` and a few other functions that get called before
+    it are mocked, and tests check for expected arguments to those mocks.
+    """
+
+    def setUp(self):
+        self.repo = "here"
+
+    @staticmethod
+    def makeQueryDatasetsArgs(*, repo, **kwargs):
+        expectedArgs = dict(repo=repo, collections=(), where=None,
+                            find_first=False, show_uri=False, glob=tuple())
+        expectedArgs.update(kwargs)
+        return expectedArgs
+
+    # Mock the QueryDatasets.getTables function to return a set of Astropy
+    # tables, similar to what would be returned by a call to
+    # QueryDatasets.getTables on a repo with real data.
+    @patch.object(lsst.daf.butler.script._pruneDatasets.QueryDatasets, "getTables", side_effect=getTables)
+    # Mock the QueryDatasets.getDatasets function. Normally it would return a
+    # list of queries.DatasetQueryResults, but all we need to do is verify that
+    # the output of this function is passed into our pruneDatasets magicMock,
+    # so we can return something arbitrary that we can test is equal."""
+    @patch.object(lsst.daf.butler.script._pruneDatasets.QueryDatasets, "getDatasets", side_effect=getDatasets)
+    # Mock the actual QueryDatasets class, so we can inspect calls to its init
+    # function. Note that the side_effect returns an instance of QueryDatasets,
+    # so this mock records and then is a pass-through.
+    @patch.object(lsst.daf.butler.script._pruneDatasets, "QueryDatasets", side_effect=makeQueryDatasets)
+    # Mock the pruneDatasets butler command so we can test for expected calls
+    # to it, without dealing with setting up a full repo with data for it.
+    @patch.object(Butler, "pruneDatasets")
+    def run_test(self,
+                 mockPruneDatasets,
+                 mockQueryDatasets_init,
+                 mockQueryDatasets_getDatasets,
+                 mockQueryDatasets_getTables,
+                 cliArgs,
+                 exMsgs,
+                 exPruneDatasetsCallArgs,
+                 exGetTablesCalled,
+                 exQueryDatasetsCallArgs,
+                 invokeInput=None,
+                 exPruneDatasetsExitCode=0):
+        """Execute the test.
+
+        Makes a temporary repo, invokes ``prune-datasets``. Verifies expected
+        output, exit codes, and mock calls.
+
+        Parameters
+        ----------
+        mockPruneDatasets : `MagicMock`
+            The MagicMock for the ``Butler.pruneDatasets`` function.
+        mockQueryDatasets_init : `MagicMock`
+            The MagicMock for the ``QueryDatasets.__init__`` function.
+        mockQueryDatasets_getDatasets : `MagicMock`
+            The MagicMock for the ``QueryDatasets.getDatasets`` function.
+        mockQueryDatasets_getTables : `MagicMock`
+            The MagicMock for the ``QueryDatasets.getTables`` function.
+        cliArgs : `list` [`str`]
+            The arguments to pass to the command line. Do not include the
+            subcommand name or the repo.
+        exMsgs : `list` [`str`] or None
+            A list of text fragments that should appear in the text output
+            after calling the CLI command, or None if no output should be
+            produced.
+        exPruneDatasetsCallArgs : `dict` [`str`, `Any`]
+            The arguments that ``Butler.pruneDatasets`` should have been called
+            with, or None if that function should not have been called.
+        exGetTablesCalled : bool
+            `True` if ``QueryDatasets.getTables`` should have been called, else
+            `False`.
+        exQueryDatasetsCallArgs : `dict` [`str`, `Any`]
+            The arguments that ``QueryDatasets.__init__`` should have bene
+            called with, or `None` if the function should not have been called.
+        invokeInput : `str`, optional.
+            As string to pass to the ``CliRunner.invoke`` `input` argument. By
+            default None.
+        exPruneDatasetsExitCode : `int`
+            The expected exit code returned from invoking ``prune-datasets``.
+        """
+        runner = LogCliRunner()
+        with runner.isolated_filesystem():
+            # Make a repo so a butler can be created
+            result = runner.invoke(butlerCli, ["create", self.repo])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+            # Run the prune-datasets CLI command, this will call all of our
+            # mocks:
+            cliArgs = ["prune-datasets", self.repo] + cliArgs
+            result = runner.invoke(butlerCli, cliArgs, input=invokeInput)
+            self.assertEqual(result.exit_code, exPruneDatasetsExitCode, clickResultMsg(result))
+
+            # Verify the Butler.pruneDatasets was called exactly once with
+            # expected arguments. The datasets argument is the value returned
+            # by QueryDatasets, which we've mocked with side effect
+            # ``getDatasets()``.
+            if exPruneDatasetsCallArgs:
+                mockPruneDatasets.assert_called_once_with(**exPruneDatasetsCallArgs)
+            else:
+                mockPruneDatasets.assert_not_called()
+
+            # Less critical, but do a quick verification that the QueryDataset
+            # member function mocks were called, in this case we expect one
+            # time each.
+            if exQueryDatasetsCallArgs:
+                mockQueryDatasets_init.assert_called_once_with(**exQueryDatasetsCallArgs)
+            else:
+                mockQueryDatasets_init.assert_not_called()
+            # If Butler.pruneDatasets was not called, then
+            # QueryDatasets.getDatasets also does not get called.
+            if exPruneDatasetsCallArgs:
+                mockQueryDatasets_getDatasets.assert_called_once()
+            else:
+                mockQueryDatasets_getDatasets.assert_not_called()
+            if exGetTablesCalled:
+                mockQueryDatasets_getTables.assert_called_once()
+            else:
+                mockQueryDatasets_getTables.assert_not_called()
+
+            if exMsgs is None:
+                self.assertEqual("", result.output)
+            else:
+                for expectedMsg in exMsgs:
+                    self.assertIn(expectedMsg, result.output)
+
+    def test_defaults_doContinue(self):
+        """Test running with the default values.
+
+        Verify that with the default flags that the subcommand says what it
+        will do, prompts for input, and says that it's done."""
+        self.run_test(cliArgs=["globVal"],
+                      exPruneDatasetsCallArgs=dict(refs=getDatasets()),
+                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
+                                                                         glob=("globVal",)),
+                      exGetTablesCalled=True,
+                      exMsgs=(pruneDatasets_willRemoveMsg,
+                              pruneDatasets_askContinueMsg,
+                              astropyTablesToStr(getTables()),
+                              pruneDatasets_didRemoveAforementioned),
+                      invokeInput="yes")
+
+    def test_defaults_doNotContinue(self):
+        """Test running with the default values but not continuing.
+
+        Verify that with the default flags that the subcommand says what it
+        will do, prompts for input, and aborts when told not to continue."""
+        self.run_test(cliArgs=["globVal"],
+                      exPruneDatasetsCallArgs=None,
+                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
+                          repo=self.repo, glob=("globVal",)),
+                      exGetTablesCalled=True,
+                      exMsgs=(pruneDatasets_willRemoveMsg,
+                              pruneDatasets_askContinueMsg,
+                              pruneDatasets_didNotRemoveAforementioned),
+                      invokeInput="no")
+
+    def test_dryRun(self):
+        """Test the --dry-run flag.
+
+        Verify that with the dry-run flag the subcommand says what it would
+        remove, but does not remove the datasets."""
+        self.run_test(cliArgs=["globVal", "--dry-run"],
+                      exPruneDatasetsCallArgs=None,
+                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, glob=("globVal",)),
+                      exGetTablesCalled=True,
+                      exMsgs=(pruneDatasets_wouldRemoveMsg,
+                              astropyTablesToStr(getTables())))
+
+    def test_noConfirm(self):
+        """Test the --no-confirm flag.
+
+        Verify that with the no-confirm flag the subcommand does not ask for
+        a confirmation, prints the did remove message and the tables that were
+        passed for removal."""
+        self.run_test(cliArgs=["globVal", "--no-confirm"],
+                      exPruneDatasetsCallArgs=dict(refs=getDatasets()),
+                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, glob=("globVal",)),
+                      exGetTablesCalled=True,
+                      exMsgs=(pruneDatasets_didRemoveMsg,
+                              astropyTablesToStr(getTables())))
+
+    def test_quiet(self):
+        """Test the --quiet flag.
+
+        Verify that with the quiet flag and the no-confirm flags set that no
+        output is produced by the subcommand."""
+        self.run_test(cliArgs=["globVal", "--quiet"],
+                      exPruneDatasetsCallArgs=dict(refs=getDatasets()),
+                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, glob=("globVal",)),
+                      exGetTablesCalled=True,
+                      exMsgs=None)
+
+    def test_quietWithDryRun(self):
+        """Test for an error using the --quiet flag with --dry-run.
+        """
+        self.run_test(cliArgs=["--quiet", "--dry-run"],
+                      exPruneDatasetsCallArgs=None,
+                      exQueryDatasetsCallArgs=None,
+                      exGetTablesCalled=False,
+                      exMsgs=(pruneDatasets_errQuietWithDryRun,),
+                      exPruneDatasetsExitCode=1)
+
+    def test_findAllWithoutCollections(self):
+        """Test for an error using the --find-all flag without specifying
+        --collections.
+        """
+        self.run_test(cliArgs=["--find-all"],
+                      exPruneDatasetsCallArgs=None,
+                      exQueryDatasetsCallArgs=None,
+                      exGetTablesCalled=False,
+                      exMsgs=(pruneDatasets_errFindAllWithoutCollections,),
+                      exPruneDatasetsExitCode=1)
+
+    def test_noDatasets(self):
+        """Test for expected outputs when no datasets are found."""
+        global doFindTables
+        reset = doFindTables
+        try:
+            doFindTables = False
+            self.run_test(cliArgs=[],
+                          exPruneDatasetsCallArgs=None,
+                          exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo),
+                          exGetTablesCalled=True,
+                          exMsgs=(pruneDatasets_noDatasetsFound,))
+        finally:
+            doFindTables = reset
+
+    def test_purgeWithDisassociate(self):
+        """Verify there is an error when --purge and --disassociate are both
+        passed in. """
+        self.run_test(
+            cliArgs=["--purge", "run", "--disassociate", "tag1", "tag2"],
+            exPruneDatasetsCallArgs=None,
+            exQueryDatasetsCallArgs=None,  # should not make it far enough to call this.
+            exGetTablesCalled=False,       # ...or this.
+            exMsgs=(pruneDatasets_errPurgeAndDisassociate,),
+            exPruneDatasetsExitCode=1
+        )
+
+    def test_purgeImpliedArgs(self):
+        """Verify the arguments implied by --purge.
+
+        --purge <run> implies the following arguments to butler.pruneDatasets:
+        purge=True, run=<run>, disassociate=True, unstore=True
+        And for QueryDatasets, if --collections is not passed then <run> gets
+        used as the value of --collections (and when there is a --collections
+        value then find_first gets set to True)
+        """
+        # TODO do we need a --no-find-first to force it to false?
+        self.run_test(
+            cliArgs=["--purge", "run"],
+            invokeInput="yes",
+            exPruneDatasetsCallArgs=dict(purge=True, run="run", refs=getDatasets(), disassociate=True,
+                                         unstore=True),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
+                                                               collections=("run",),
+                                                               find_first=True),
+            exGetTablesCalled=True,
+            exMsgs=(pruneDatasets_willRemoveMsg,
+                    pruneDatasets_askContinueMsg,
+                    astropyTablesToStr(getTables()),
+                    pruneDatasets_didRemoveAforementioned)
+        )
+
+    def test_purgeImpliedArgsWithCollections(self):
+        """Verify the arguments implied by --purge, with a --collection
+        argument."""
+        self.run_test(
+            cliArgs=["--purge", "run", "--collections", "coll"],
+            invokeInput="yes",
+            exPruneDatasetsCallArgs=dict(purge=True, run="run", disassociate=True, unstore=True,
+                                         refs=getDatasets()),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("coll",),
+                                                               find_first=True),
+            exGetTablesCalled=True,
+            exMsgs=(pruneDatasets_willRemoveMsg,
+                    pruneDatasets_askContinueMsg,
+                    astropyTablesToStr(getTables()),
+                    pruneDatasets_didRemoveAforementioned)
+        )
+
+    def test_disassociateImpliedArgs(self):
+        """Verify the arguments implied by --disassociate.
+
+        --disassociate <tags> implies the following arguments to
+        butler.pruneDatasets:
+        disassociate=True, tags=<tags>
+        and if --collections is not passed then <tags> gets used as the value
+        of --collections.
+
+        Use the --no-confirm flag instead of invokeInput="yes", and check for
+        the associated output.
+        """
+        self.run_test(
+            cliArgs=["--disassociate", "tag1", "--disassociate", "tag2", "--no-confirm"],
+            exPruneDatasetsCallArgs=dict(tags=("tag1", "tag2"), disassociate=True, refs=getDatasets()),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
+                                                               collections=("tag1", "tag2"),
+                                                               find_first=True),
+            exGetTablesCalled=True,
+            exMsgs=(pruneDatasets_didRemoveMsg,
+                    astropyTablesToStr(getTables()))
+        )
+
+    def test_disassociateImpliedArgsWithCollections(self):
+        """Verify the arguments implied by --disassociate, with a --collection
+        flag."""
+        self.run_test(
+            cliArgs=["--disassociate", "tag1", "--disassociate", "tag2", "--no-confirm",
+                     "--collections", "coll"],
+            exPruneDatasetsCallArgs=dict(tags=("tag1", "tag2"), disassociate=True, refs=getDatasets()),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
+                                                               collections=("coll",),
+                                                               find_first=True),
+            exGetTablesCalled=True,
+            exMsgs=(pruneDatasets_didRemoveMsg,
+                    astropyTablesToStr(getTables()))
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

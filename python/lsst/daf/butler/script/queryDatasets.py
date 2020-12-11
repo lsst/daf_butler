@@ -105,7 +105,7 @@ class _Table:
         return sortAstropyTable(dataset_table, dimensions, ["type", "run"])
 
 
-def queryDatasets(repo, glob, collections, where, find_first, show_uri):
+class QueryDatasets:
     """Get dataset refs from a repository.
 
     Parameters
@@ -131,37 +131,55 @@ def queryDatasets(repo, glob, collections, where, find_first, show_uri):
         wildcards.
     show_uri : `bool`
         If True, include the dataset URI in the output.
-    Returns
-    -------
-    datasetTables : `list` [``astropy.table._Table``]
-        A list of astropy tables, one for each dataset type.
     """
-    butler = Butler(repo)
 
-    dataset: Any = globToRegex(glob)
-    if not dataset:
-        dataset = ...
+    def __init__(self, repo, glob, collections, where, find_first, show_uri):
+        self.butler = Butler(repo)
+        self._getDatasets(glob, collections, where, find_first)
+        self.showUri = show_uri
 
-    if collections and not find_first:
-        collections = globToRegex(collections)
-    elif not collections:
-        collections = ...
+    def _getDatasets(self, glob, collections, where, find_first):
+        dataset: Any = globToRegex(glob)
+        if not dataset:
+            dataset = ...
 
-    datasets = butler.registry.queryDatasets(datasetType=dataset,
-                                             collections=collections,
-                                             where=where,
-                                             findFirst=find_first)
+        if collections and not find_first:
+            collections = globToRegex(collections)
+        elif not collections:
+            collections = ...
 
-    tables: Dict[str, _Table] = defaultdict(_Table)
+        self.datasets = self.butler.registry.queryDatasets(datasetType=dataset,
+                                                           collections=collections,
+                                                           where=where,
+                                                           findFirst=find_first)
 
-    for datasetRef in datasets:
-        if not show_uri:
-            tables[datasetRef.datasetType.name].add(datasetRef)
-        else:
-            primaryURI, componentURIs = butler.getURIs(datasetRef, collections=datasetRef.run)
-            if primaryURI:
-                tables[datasetRef.datasetType.name].add(datasetRef, primaryURI)
-            for name, uri in componentURIs.items():
-                tables[datasetRef.datasetType.componentTypeName(name)].add(datasetRef, uri)
+    def getTables(self):
+        """Get the datasets as a list of astropy tables.
 
-    return [table.getAstropyTable(datasetTypeName) for datasetTypeName, table in tables.items()]
+        Returns
+        -------
+        datasetTables : `list` [``astropy.table._Table``]
+            A list of astropy tables, one for each dataset type.
+        """
+        tables: Dict[str, _Table] = defaultdict(_Table)
+        for datasetRef in self.datasets:
+            if not self.showUri:
+                tables[datasetRef.datasetType.name].add(datasetRef)
+            else:
+                primaryURI, componentURIs = self.butler.getURIs(datasetRef, collections=datasetRef.run)
+                if primaryURI:
+                    tables[datasetRef.datasetType.name].add(datasetRef, primaryURI)
+                for name, uri in componentURIs.items():
+                    tables[datasetRef.datasetType.componentTypeName(name)].add(datasetRef, uri)
+
+        return [table.getAstropyTable(datasetTypeName) for datasetTypeName, table in tables.items()]
+
+    def getDatasets(self):
+        """Get the datasets as a list of ``DatasetQueryResults``.
+
+        Returns
+        -------
+        refs : ``queries.DatasetQueryResults``
+            Dataset references matching the given query criteria.
+        """
+        return self.datasets

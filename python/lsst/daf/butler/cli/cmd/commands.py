@@ -41,6 +41,9 @@ from ..opt import (
 
 from ..utils import (
     ButlerCommand,
+    MWOptionDecorator,
+    option_section,
+    printAstropyTables,
     split_commas,
     to_upper,
     typeStrAcceptsMultiple,
@@ -149,6 +152,143 @@ def prune_collection(**kwargs):
     script.pruneCollection(**kwargs)
 
 
+pruneDatasets_wouldRemoveMsg = "The following datasets would be removed:"
+pruneDatasets_willRemoveMsg = "The following datasets will be removed:"
+pruneDatasets_askContinueMsg = "Continue?"
+pruneDatasets_didRemoveAforementioned = "The datasets were removed."
+pruneDatasets_didNotRemoveAforementioned = "Did not remove the datasets."
+pruneDatasets_didRemoveMsg = "Removed the following datasets:"
+pruneDatasets_noDatasetsFound = "Did not find any datasets."
+pruneDatasets_errPurgeAndDisassociate = unwrap(
+    """"--disassociate and --purge may not be used together: --disassociate purges from just the passed TAGged
+    collections, but --purge forces disassociation from all of them. """
+)
+pruneDatasets_errQuietWithDryRun = "Can not use --quiet and --dry-run together."
+pruneDatasets_errFindAllWithoutCollections = \
+    "When using --find-all, collections to search in must be provided using --collections."
+
+
+disassociate_option = MWOptionDecorator(
+    "--disassociate", "disassociate_tags",
+    help=unwrap("""Disassociate pruned datasets from the given tagged collections. May not be used with
+                --purge."""),
+    multiple=True,
+    callback=split_commas,
+    metavar="TAG"
+)
+
+
+purge_option = MWOptionDecorator(
+    "--purge", "purge_run",
+    help=unwrap("""Completely remove the dataset from the given RUN in the Registry. May not be used with
+                --disassociate. Note, this may remove provenance information from datasets other than those
+                provided, and should be used with extreme care."""),
+    metavar="RUN"
+)
+
+
+find_all_option = MWOptionDecorator(
+    "--find-all", is_flag=True,
+    help=unwrap("""For each result dataset, only purge the first found dataset of each DatasetType, from the
+                first collection in which a dataset of that dataset type appears (according to the order of
+                --collections passed in).  Collections must be provided and may not glob expressions.""")
+)
+
+
+unstore_option = MWOptionDecorator(
+    "--unstore",
+    is_flag=True,
+    # TODO "known to this butler", on the next line, reads funny on the CLI.
+    # Can we say "related to this repo?" or similar?
+    help=unwrap("""Remove these datasets from all datastores known to this butler. Note that this will make
+                it impossible to retrieve these datasets even via other collections. Datasets that are already
+                not stored are ignored by this option.""")
+)
+
+
+dry_run_option = MWOptionDecorator(
+    "--dry-run",
+    is_flag=True,
+    help=unwrap("""Display the datasets that would be removed but do not remove them.
+
+                Note that a dataset can be in collections other than its RUN-type collection, and removing it
+                will remove it from all of them, even though the only one this will show is its RUN
+                collection.""")
+)
+
+
+confirm_option = MWOptionDecorator(
+    "--confirm/--no-confirm",
+    default=True,
+    help="Print expected action and a confirmation prompt before executing. Default is --confirm."
+)
+
+
+quiet_option = MWOptionDecorator(
+    "--quiet",
+    is_flag=True,
+    help=unwrap("""Makes output quiet. Implies --no-confirm. Requires --dry-run not be passed.""")
+)
+
+
+@click.command(cls=ButlerCommand, short_help="Remove datasets.")
+@repo_argument(required=True)
+@option_section("Query Datasets Options:")
+@glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
+                    "dataset types to be pruned.")
+@collections_option()
+@find_all_option()
+@where_option(help=whereHelp)
+@option_section("Prune Options:")
+@disassociate_option()
+@purge_option()
+@unstore_option()
+@option_section("Execution Options:")
+@dry_run_option()
+@confirm_option()
+@quiet_option()
+@option_section("Other Options:")
+@options_file_option()
+def prune_datasets(**kwargs):
+    """Query for and remove one or more datasets from a collection and/or
+    storage.
+    """
+    quiet = kwargs.pop("quiet", False)
+    if quiet:
+        if kwargs["dry_run"]:
+            raise click.ClickException(pruneDatasets_errQuietWithDryRun)
+        kwargs["confirm"] = False
+    result = script.pruneDatasets(**kwargs)
+
+    if result.errPurgeAndDisassociate:
+        raise click.ClickException(pruneDatasets_errPurgeAndDisassociate)
+        return
+    if result.errFindAllWithoutCollections:
+        raise click.ClickException(pruneDatasets_errFindAllWithoutCollections)
+    if result.dryRun:
+        print(pruneDatasets_wouldRemoveMsg)
+        printAstropyTables(result.tables)
+        return
+    if result.confirm:
+        if not result.tables:
+            print(pruneDatasets_noDatasetsFound)
+            return
+        print(pruneDatasets_willRemoveMsg)
+        printAstropyTables(result.tables)
+        doContinue = click.confirm(pruneDatasets_askContinueMsg, default=False)
+        if doContinue:
+            result.onConfirmation()
+            print(pruneDatasets_didRemoveAforementioned)
+        else:
+            print(pruneDatasets_didNotRemoveAforementioned)
+        return
+    if result.finished:
+        if not quiet:
+            print(pruneDatasets_didRemoveMsg)
+            printAstropyTables(result.tables)
+        return
+
+
 @click.command(short_help="Search for collections.", cls=ButlerCommand)
 @repo_argument(required=True)
 @glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
@@ -217,9 +357,7 @@ def remove_dataset_type(*args, **kwargs):
 @options_file_option()
 def query_datasets(**kwargs):
     """List the datasets in a repository."""
-    tables = script.queryDatasets(**kwargs)
-
-    for table in tables:
+    for table in script.QueryDatasets(**kwargs).getTables():
         print("")
         table.pprint_all()
     print("")
