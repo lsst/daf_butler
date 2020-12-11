@@ -24,6 +24,7 @@ import click
 from ..opt import (
     collection_type_option,
     collection_argument,
+    collections_argument,
     collections_option,
     components_option,
     dataset_type_option,
@@ -41,6 +42,9 @@ from ..opt import (
 
 from ..utils import (
     ButlerCommand,
+    MWOptionDecorator,
+    option_section,
+    printAstropyTables,
     split_commas,
     to_upper,
     typeStrAcceptsMultiple,
@@ -149,6 +153,153 @@ def prune_collection(**kwargs):
     script.pruneCollection(**kwargs)
 
 
+pruneDatasets_wouldRemoveMsg = "The following datasets would be removed:"
+pruneDatasets_willRemoveMsg = "The following datasets will be removed:"
+pruneDatasets_askContinueMsg = "Continue?"
+pruneDatasets_didRemoveAforementioned = "The datasets were removed."
+pruneDatasets_didNotRemoveAforementioned = "Did not remove the datasets."
+pruneDatasets_didRemoveMsg = "Removed the following datasets:"
+pruneDatasets_noDatasetsFound = "Did not find any datasets."
+pruneDatasets_errPurgeAndDisassociate = unwrap(
+    """"--disassociate and --purge may not be used together: --disassociate purges from just the passed TAGged
+    collections, but --purge forces disassociation from all of them. """
+)
+pruneDatasets_errQuietWithDryRun = "Can not use --quiet and --dry-run together."
+pruneDatasets_errNoCollectionRestriction = unwrap(
+    """Must indicate collections from which to prune datasets by passing COLLETION arguments (select all
+    collections by passing '*', or consider using 'butler prune-collections'), by using --purge to pass a run
+    collection, or by using --disassociate to select a tagged collection.""")
+pruneDatasets_errPruneOnNotRun = "Can not prune a collection that is not a RUN collection: {collection}"
+pruneDatasets_errNoOp = "No operation: one of --purge, --unstore, or --disassociate must be provided."
+
+disassociate_option = MWOptionDecorator(
+    "--disassociate", "disassociate_tags",
+    help=unwrap("""Disassociate pruned datasets from the given tagged collections. May not be used with
+                --purge."""),
+    multiple=True,
+    callback=split_commas,
+    metavar="TAG"
+)
+
+
+purge_option = MWOptionDecorator(
+    "--purge", "purge_run",
+    help=unwrap("""Completely remove the dataset from the given RUN in the Registry. May not be used with
+                --disassociate. Note, this may remove provenance information from datasets other than those
+                provided, and should be used with extreme care."""),
+    metavar="RUN"
+)
+
+
+find_all_option = MWOptionDecorator(
+    "--find-all", is_flag=True,
+    help=unwrap("""Purge the dataset results from all of the collections in which a dataset of that dataset
+                type + data id combination appear. (By default only the first found dataset type + data id is
+                purged, according to the order of COLLECTIONS passed in).""")
+)
+
+
+unstore_option = MWOptionDecorator(
+    "--unstore",
+    is_flag=True,
+    help=unwrap("""Remove these datasets from all datastores configured with this data repository. If
+                --disassociate and --purge are not used then --unstore will be used by default. Note that
+                --unstore will make it impossible to retrieve these datasets even via other collections.
+                Datasets that are already not stored are ignored by this option.""")
+)
+
+
+dry_run_option = MWOptionDecorator(
+    "--dry-run",
+    is_flag=True,
+    help=unwrap("""Display the datasets that would be removed but do not remove them.
+
+                Note that a dataset can be in collections other than its RUN-type collection, and removing it
+                will remove it from all of them, even though the only one this will show is its RUN
+                collection.""")
+)
+
+
+confirm_option = MWOptionDecorator(
+    "--confirm/--no-confirm",
+    default=True,
+    help="Print expected action and a confirmation prompt before executing. Default is --confirm."
+)
+
+
+quiet_option = MWOptionDecorator(
+    "--quiet",
+    is_flag=True,
+    help=unwrap("""Makes output quiet. Implies --no-confirm. Requires --dry-run not be passed.""")
+)
+
+
+@click.command(cls=ButlerCommand, short_help="Remove datasets.")
+@repo_argument(required=True)
+@collections_argument(help=unwrap("""COLLECTIONS is or more expressions that identify the collections to
+                                  search for datasets. Glob-style expressions may be used but only if the
+                                  --find-all flag is also passed."""))
+@option_section("Query Datasets Options:")
+@datasets_option(help="One or more glob-style expressions that identify the dataset types to be pruned.",
+                 multiple=True,
+                 callback=split_commas)
+@find_all_option()
+@where_option(help=whereHelp)
+@option_section("Prune Options:")
+@disassociate_option()
+@purge_option()
+@unstore_option()
+@option_section("Execution Options:")
+@dry_run_option()
+@confirm_option()
+@quiet_option()
+@option_section("Other Options:")
+@options_file_option()
+def prune_datasets(**kwargs):
+    """Query for and remove one or more datasets from a collection and/or
+    storage.
+    """
+    quiet = kwargs.pop("quiet", False)
+    if quiet:
+        if kwargs["dry_run"]:
+            raise click.ClickException(pruneDatasets_errQuietWithDryRun)
+        kwargs["confirm"] = False
+
+    result = script.pruneDatasets(**kwargs)
+
+    if result.errPurgeAndDisassociate:
+        raise click.ClickException(pruneDatasets_errPurgeAndDisassociate)
+        return
+    if result.errNoCollectionRestriction:
+        raise click.ClickException(pruneDatasets_errNoCollectionRestriction)
+    if result.errPruneOnNotRun:
+        raise click.ClickException(pruneDatasets_errPruneOnNotRun.format(**result.errDict))
+    if result.errNoOp:
+        raise click.ClickException(pruneDatasets_errNoOp)
+    if result.dryRun:
+        print(pruneDatasets_wouldRemoveMsg)
+        printAstropyTables(result.tables)
+        return
+    if result.confirm:
+        if not result.tables:
+            print(pruneDatasets_noDatasetsFound)
+            return
+        print(pruneDatasets_willRemoveMsg)
+        printAstropyTables(result.tables)
+        doContinue = click.confirm(pruneDatasets_askContinueMsg, default=False)
+        if doContinue:
+            result.onConfirmation()
+            print(pruneDatasets_didRemoveAforementioned)
+        else:
+            print(pruneDatasets_didNotRemoveAforementioned)
+        return
+    if result.finished:
+        if not quiet:
+            print(pruneDatasets_didRemoveMsg)
+            printAstropyTables(result.tables)
+        return
+
+
 @click.command(short_help="Search for collections.", cls=ButlerCommand)
 @repo_argument(required=True)
 @glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
@@ -217,9 +368,7 @@ def remove_dataset_type(*args, **kwargs):
 @options_file_option()
 def query_datasets(**kwargs):
     """List the datasets in a repository."""
-    tables = script.queryDatasets(**kwargs)
-
-    for table in tables:
+    for table in script.QueryDatasets(**kwargs).getTables():
         print("")
         table.pprint_all()
     print("")

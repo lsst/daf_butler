@@ -27,7 +27,8 @@ from .configValidate import configValidate
 from .pruneCollection import pruneCollection
 from .queryCollections import queryCollections
 from .queryDataIds import queryDataIds
-from .queryDatasets import queryDatasets
+from .queryDatasets import QueryDatasets
+from ._pruneDatasets import pruneDatasets # depends on QueryDatasets
 from .queryDatasetTypes import queryDatasetTypes
 from .queryDimensionRecords import queryDimensionRecords
 from .removeDatasetType import removeDatasetType
