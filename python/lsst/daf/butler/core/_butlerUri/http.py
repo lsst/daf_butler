@@ -114,12 +114,27 @@ def getHttpSession() -> requests.Session:
 
     return session
 
+
 def _defaultTimeout() -> float:
+    """Returns the value of the default timeout to use (in seconds).
+
+    Returns
+    -------
+    timeout : `float`
+        Number of seconds to wait before timing out the requests.
+    """
     timeout = 20
     return timeout
 
 
 def expect100() -> bool:
+    """Returns the status of the "Expect-100" header.
+
+    Returns
+    -------
+    expect100 : `bool`
+        True if LSST_BUTLER_WEBDAV_EXPECT100 is set, False otherwise.
+    """
     # This header is required for request redirection, in dCache for example
     if "LSST_BUTLER_WEBDAV_EXPECT100" in os.environ:
         log.debug("Expect: 100-Continue header enabled.")
@@ -476,10 +491,14 @@ class ButlerHttpURI(ButlerURI):
 
         if isinstance(src, type(self)):
             if transfer == "move":
-                r = self.session.request("MOVE", src.geturl(), headers={"Destination": self.geturl()}, timeout=_defaultTimeout())
+                r = self.session.request("MOVE", src.geturl(),
+                                         headers={"Destination": self.geturl()},
+                                         timeout=_defaultTimeout())
                 log.debug("Running move via MOVE HTTP request.")
             else:
-                r = self.session.request("COPY", src.geturl(), headers={"Destination": self.geturl()}, timeout=_defaultTimeout())
+                r = self.session.request("COPY", src.geturl(),
+                                         headers={"Destination": self.geturl()},
+                                         timeout=_defaultTimeout())
                 log.debug("Running copy via COPY HTTP request.")
         else:
             # Use local file and upload it
@@ -512,4 +531,5 @@ class ButlerHttpURI(ButlerURI):
                                     headers={"Expect": "100-continue", "Content-Length": "0"},
                                     allow_redirects=False, timeout=_defaultTimeout())
         return self.session.put(self.geturl(), data=None,
-                                headers={"Content-Length": "0"}, allow_redirects=False, timeout=_defaultTimeout())
+                                headers={"Content-Length": "0"},
+                                allow_redirects=False, timeout=_defaultTimeout())
