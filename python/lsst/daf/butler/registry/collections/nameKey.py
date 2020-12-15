@@ -52,7 +52,7 @@ _KEY_FIELD_SPEC = ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, prim
 _VERSION = VersionTuple(2, 0, 0)
 
 
-def _makeTableSpecs(tsRepr: Type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
+def _makeTableSpecs(TimespanReprClass: Type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
     return CollectionTablesTuple(
         collection=ddl.TableSpec(
             fields=[
@@ -61,7 +61,7 @@ def _makeTableSpecs(tsRepr: Type[TimespanDatabaseRepresentation]) -> CollectionT
                 ddl.FieldSpec("doc", dtype=sqlalchemy.Text, nullable=True),
             ],
         ),
-        run=makeRunTableSpec("name", sqlalchemy.String, tsRepr),
+        run=makeRunTableSpec("name", sqlalchemy.String, TimespanReprClass),
         collection_chain=makeCollectionChainTableSpec("name", sqlalchemy.String),
     )
 

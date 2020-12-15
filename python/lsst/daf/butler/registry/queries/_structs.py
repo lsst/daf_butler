@@ -506,7 +506,7 @@ class RegistryManagers:
     """Manager for dimensions (`DimensionRecordStorageManager`).
     """
 
-    tsRepr: Type[TimespanDatabaseRepresentation]
+    TimespanReprClass: Type[TimespanDatabaseRepresentation]
     """Type that encapsulates how timespans are represented in this database
     (`type`; subclass of `TimespanDatabaseRepresentation`).
     """

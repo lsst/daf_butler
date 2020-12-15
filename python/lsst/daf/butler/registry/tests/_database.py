@@ -740,13 +740,13 @@ class DatabaseTests(ABC):
         # representation.  This one will have no exclusion constraint and
         # a nullable timespan.
         db = self.makeEmptyDatabase(origin=1)
-        tsRepr = db.getTimespanRepresentation()
+        TimespanReprClass = db.getTimespanRepresentation()
         aSpec = ddl.TableSpec(
             fields=[
                 ddl.FieldSpec(name="id", dtype=sqlalchemy.Integer, primaryKey=True),
             ],
         )
-        for fieldSpec in tsRepr.makeFieldSpecs(nullable=True):
+        for fieldSpec in TimespanReprClass.makeFieldSpecs(nullable=True):
             aSpec.fields.add(fieldSpec)
         with db.declareStaticTables(create=True) as context:
             aTable = context.addTable("a", aSpec)
@@ -757,23 +757,23 @@ class DatabaseTests(ABC):
             for insertion into the database.
             """
             result = row.copy()
-            ts = result.pop(tsRepr.NAME)
-            return tsRepr.update(ts, result=result)
+            ts = result.pop(TimespanReprClass.NAME)
+            return TimespanReprClass.update(ts, result=result)
 
         def convertRowFromSelect(row: dict) -> dict:
             """Convert a row from the database into one containing a Timespan.
             """
             result = row.copy()
-            timespan = tsRepr.extract(result)
-            for name in tsRepr.getFieldNames():
+            timespan = TimespanReprClass.extract(result)
+            for name in TimespanReprClass.getFieldNames():
                 del result[name]
-            result[tsRepr.NAME] = timespan
+            result[TimespanReprClass.NAME] = timespan
             return result
 
         # Insert rows into table A, in chunks just to make things interesting.
         # Include one with a NULL timespan.
-        aRows = [{"id": n, tsRepr.NAME: t} for n, t in enumerate(aTimespans)]
-        aRows.append({"id": len(aRows), tsRepr.NAME: None})
+        aRows = [{"id": n, TimespanReprClass.NAME: t} for n, t in enumerate(aTimespans)]
+        aRows.append({"id": len(aRows), TimespanReprClass.NAME: None})
         db.insert(aTable, convertRowForInsert(aRows[0]))
         db.insert(aTable, *[convertRowForInsert(r) for r in aRows[1:3]])
         db.insert(aTable, *[convertRowForInsert(r) for r in aRows[3:]])
@@ -781,7 +781,7 @@ class DatabaseTests(ABC):
         # the server-side default.
         aRows.append({"id": len(aRows)})
         db.insert(aTable, aRows[-1])
-        aRows[-1][tsRepr.NAME] = None
+        aRows[-1][TimespanReprClass.NAME] = None
         # Test basic round-trip through database.
         self.assertEqual(
             aRows,
@@ -797,17 +797,18 @@ class DatabaseTests(ABC):
                 ddl.FieldSpec(name="key", dtype=sqlalchemy.Integer, nullable=False),
             ],
         )
-        for fieldSpec in tsRepr.makeFieldSpecs(nullable=False):
+        for fieldSpec in TimespanReprClass.makeFieldSpecs(nullable=False):
             bSpec.fields.add(fieldSpec)
-        if tsRepr.hasExclusionConstraint():
-            bSpec.exclusion.add(("key", tsRepr))
+        if TimespanReprClass.hasExclusionConstraint():
+            bSpec.exclusion.add(("key", TimespanReprClass))
         bTable = db.ensureTableExists("b", bSpec)
         # Insert rows into table B, again in chunks.  Each Timespan appears
         # twice, but with different values for the 'key' field (which should
         # still be okay for any exclusion constraint we may have defined).
-        bRows = [{"id": n, "key": 1, tsRepr.NAME: t} for n, t in enumerate(bTimespans)]
+        bRows = [{"id": n, "key": 1, TimespanReprClass.NAME: t} for n, t in enumerate(bTimespans)]
         offset = len(bRows)
-        bRows.extend({"id": n + offset, "key": 2, tsRepr.NAME: t} for n, t in enumerate(bTimespans))
+        bRows.extend({"id": n + offset, "key": 2, TimespanReprClass.NAME: t}
+                     for n, t in enumerate(bTimespans))
         db.insert(bTable, *[convertRowForInsert(r) for r in bRows[:2]])
         db.insert(bTable, convertRowForInsert(bRows[2]))
         db.insert(bTable, *[convertRowForInsert(r) for r in bRows[3:]])
@@ -816,7 +817,7 @@ class DatabaseTests(ABC):
         # key=3 to avoid upsetting an exclusion constraint that might exist.
         bRows.append({"id": len(bRows), "key": 3})
         db.insert(bTable, bRows[-1])
-        bRows[-1][tsRepr.NAME] = Timespan(None, None)
+        bRows[-1][TimespanReprClass.NAME] = Timespan(None, None)
         # Test basic round-trip through database.
         self.assertEqual(
             bRows,
@@ -825,23 +826,41 @@ class DatabaseTests(ABC):
         )
         # Test that we can't insert timespan=None into this table.
         with self.assertRaises(sqlalchemy.exc.IntegrityError):
-            db.insert(bTable, convertRowForInsert({"id": len(bRows), "key": 4, tsRepr.NAME: None}))
+            db.insert(
+                bTable,
+                convertRowForInsert({"id": len(bRows), "key": 4, TimespanReprClass.NAME: None})
+            )
         # IFF this database supports exclusion constraints, test that they
         # also prevent inserts.
-        if tsRepr.hasExclusionConstraint():
+        if TimespanReprClass.hasExclusionConstraint():
             with self.assertRaises(sqlalchemy.exc.IntegrityError):
-                db.insert(bTable, convertRowForInsert({"id": len(bRows), "key": 1,
-                                                       tsRepr.NAME: Timespan(None, timestamps[1])}))
+                db.insert(
+                    bTable,
+                    convertRowForInsert({
+                        "id": len(bRows), "key": 1,
+                        TimespanReprClass.NAME: Timespan(None, timestamps[1])
+                    })
+                )
             with self.assertRaises(sqlalchemy.exc.IntegrityError):
-                db.insert(bTable, convertRowForInsert({"id": len(bRows), "key": 1,
-                                                       tsRepr.NAME: Timespan(timestamps[0], timestamps[2])}))
+                db.insert(
+                    bTable,
+                    convertRowForInsert({
+                        "id": len(bRows), "key": 1,
+                        TimespanReprClass.NAME: Timespan(timestamps[0], timestamps[2])
+                    })
+                )
             with self.assertRaises(sqlalchemy.exc.IntegrityError):
-                db.insert(bTable, convertRowForInsert({"id": len(bRows), "key": 1,
-                                                       tsRepr.NAME: Timespan(timestamps[2], None)}))
+                db.insert(
+                    bTable,
+                    convertRowForInsert({
+                        "id": len(bRows), "key": 1,
+                        TimespanReprClass.NAME: Timespan(timestamps[2], None)
+                    })
+                )
         # Test NULL checks in SELECT queries, on both tables.
-        aRepr = tsRepr.fromSelectable(aTable)
+        aRepr = TimespanReprClass.fromSelectable(aTable)
         self.assertEqual(
-            [row[tsRepr.NAME] is None for row in aRows],
+            [row[TimespanReprClass.NAME] is None for row in aRows],
             [
                 row["f"] for row in db.query(
                     sqlalchemy.sql.select(
@@ -852,7 +871,7 @@ class DatabaseTests(ABC):
                 ).fetchall()
             ]
         )
-        bRepr = tsRepr.fromSelectable(bTable)
+        bRepr = TimespanReprClass.fromSelectable(bTable)
         self.assertEqual(
             [False for row in bRows],
             [
@@ -869,21 +888,21 @@ class DatabaseTests(ABC):
         # Python-literal timespans, all from the more complete 'a' set; check
         # that this is consistent with Python-only relationship tests.
         for rhsRow in aRows:
-            if rhsRow[tsRepr.NAME] is None:
+            if rhsRow[TimespanReprClass.NAME] is None:
                 continue
             with self.subTest(rhsRow=rhsRow):
                 expected = {}
                 for lhsRow in aRows:
-                    if lhsRow[tsRepr.NAME] is None:
+                    if lhsRow[TimespanReprClass.NAME] is None:
                         expected[lhsRow["id"]] = (None, None, None, None)
                     else:
                         expected[lhsRow["id"]] = (
-                            lhsRow[tsRepr.NAME].overlaps(rhsRow[tsRepr.NAME]),
-                            lhsRow[tsRepr.NAME].contains(rhsRow[tsRepr.NAME]),
-                            lhsRow[tsRepr.NAME] < rhsRow[tsRepr.NAME],
-                            lhsRow[tsRepr.NAME] > rhsRow[tsRepr.NAME],
+                            lhsRow[TimespanReprClass.NAME].overlaps(rhsRow[TimespanReprClass.NAME]),
+                            lhsRow[TimespanReprClass.NAME].contains(rhsRow[TimespanReprClass.NAME]),
+                            lhsRow[TimespanReprClass.NAME] < rhsRow[TimespanReprClass.NAME],
+                            lhsRow[TimespanReprClass.NAME] > rhsRow[TimespanReprClass.NAME],
                         )
-                rhsRepr = tsRepr.fromLiteral(rhsRow[tsRepr.NAME])
+                rhsRepr = TimespanReprClass.fromLiteral(rhsRow[TimespanReprClass.NAME])
                 sql = sqlalchemy.sql.select([
                     aTable.columns.id.label("lhs"),
                     aRepr.overlaps(rhsRepr).label("overlaps"),
@@ -899,20 +918,23 @@ class DatabaseTests(ABC):
         # Test relationship expressions that relate in-database timespans to
         # each other, all from the more complete 'a' set; check that this is
         # consistent with Python-only relationship tests.
-        expected = {
-            (lhs["id"], rhs["id"]): (
-                lhs[tsRepr.NAME].overlaps(rhs[tsRepr.NAME]),
-                lhs[tsRepr.NAME].contains(rhs[tsRepr.NAME]),
-                lhs[tsRepr.NAME] < rhs[tsRepr.NAME],
-                lhs[tsRepr.NAME] > rhs[tsRepr.NAME],
-            )
-            if lhs[tsRepr.NAME] is not None and rhs[tsRepr.NAME] is not None else (None, None, None, None)
-            for lhs, rhs in itertools.product(aRows, aRows)
-        }
+        expected = {}
+        for lhs, rhs in itertools.product(aRows, aRows):
+            lhsT = lhs[TimespanReprClass.NAME]
+            rhsT = rhs[TimespanReprClass.NAME]
+            if lhsT is not None and rhsT is not None:
+                expected[lhs["id"], rhs["id"]] = (
+                    lhsT.overlaps(rhsT),
+                    lhsT.contains(rhsT),
+                    lhsT < rhsT,
+                    lhsT > rhsT
+                )
+            else:
+                expected[lhs["id"], rhs["id"]] = (None, None, None, None)
         lhsSubquery = aTable.alias("lhs")
         rhsSubquery = aTable.alias("rhs")
-        lhsRepr = tsRepr.fromSelectable(lhsSubquery)
-        rhsRepr = tsRepr.fromSelectable(rhsSubquery)
+        lhsRepr = TimespanReprClass.fromSelectable(lhsSubquery)
+        rhsRepr = TimespanReprClass.fromSelectable(rhsSubquery)
         sql = sqlalchemy.sql.select(
             [
                 lhsSubquery.columns.id.label("lhs"),
@@ -936,13 +958,13 @@ class DatabaseTests(ABC):
             with self.subTest(t=t):
                 expected = {}
                 for lhsRow in aRows:
-                    if lhsRow[tsRepr.NAME] is None:
+                    if lhsRow[TimespanReprClass.NAME] is None:
                         expected[lhsRow["id"]] = (None, None, None)
                     else:
                         expected[lhsRow["id"]] = (
-                            lhsRow[tsRepr.NAME].contains(t),
-                            lhsRow[tsRepr.NAME] < t,
-                            lhsRow[tsRepr.NAME] > t,
+                            lhsRow[TimespanReprClass.NAME].contains(t),
+                            lhsRow[TimespanReprClass.NAME] < t,
+                            lhsRow[TimespanReprClass.NAME] > t,
                         )
                 rhs = sqlalchemy.sql.literal(t, type_=ddl.AstropyTimeNsecTai)
                 sql = sqlalchemy.sql.select([

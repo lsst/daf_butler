@@ -191,8 +191,8 @@ class DimensionTestCase(unittest.TestCase):
         for element in self.universe.getStaticElements():
             if element.hasTable and element.viewOf is None:
                 tableSpecs[element] = element.RecordClass.fields.makeTableSpec(
-                    regRepr=SpatialRegionDatabaseRepresentation,
-                    tsRepr=TimespanDatabaseRepresentation.Compound
+                    RegionReprClass=SpatialRegionDatabaseRepresentation,
+                    TimespanReprClass=TimespanDatabaseRepresentation.Compound
                 )
         for element, tableSpec in tableSpecs.items():
             for dep in element.required:

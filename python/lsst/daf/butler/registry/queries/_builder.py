@@ -394,7 +394,7 @@ class QueryBuilder:
                     columns=self._columns,
                     elements=self._elements,
                     bind=self.summary.where.bind,
-                    tsRepr=self._managers.tsRepr,
+                    TimespanReprClass=self._managers.TimespanReprClass,
                 )
             )
         for dimension, columnsInQuery in self._columns.keys.items():
@@ -426,7 +426,7 @@ class QueryBuilder:
             for element, intervalInQuery in self._columns.timespans.items():
                 assert element not in self.summary.where.dataId.graph.elements
                 self._simpleQuery.where.append(
-                    intervalInQuery.overlaps(self._managers.tsRepr.fromLiteral(givenInterval))
+                    intervalInQuery.overlaps(self._managers.TimespanReprClass.fromLiteral(givenInterval))
                 )
 
     def finish(self, joinMissing: bool = True) -> Query:

@@ -70,8 +70,8 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         self._element = element
         self._target = element.universe[viewOf]
         self._targetSpec = self._target.RecordClass.fields.makeTableSpec(
-            regRepr=self._db.getSpatialRegionRepresentation(),
-            tsRepr=self._db.getTimespanRepresentation(),
+            RegionReprClass=self._db.getSpatialRegionRepresentation(),
+            TimespanReprClass=self._db.getTimespanRepresentation(),
         )
         self._viewOf = viewOf
         self._query = None  # Constructed on first use.

@@ -1330,7 +1330,7 @@ class Registry:
                 collections=self._collections,
                 dimensions=self._dimensions,
                 datasets=self._datasets,
-                tsRepr=self._db.getTimespanRepresentation(),
+                TimespanReprClass=self._db.getTimespanRepresentation(),
             ),
         )
 
@@ -1724,7 +1724,7 @@ class Registry:
             a single collection.
         """
         collections = CollectionQuery.fromExpression(collections)
-        tsRepr = self._db.getTimespanRepresentation()
+        TimespanReprClass = self._db.getTimespanRepresentation()
         if isinstance(datasetType, str):
             storage = self._datasets[datasetType]
         else:
@@ -1744,7 +1744,7 @@ class Registry:
                 ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name,
                                  conform=False)
                 if collectionRecord.type is CollectionType.CALIBRATION:
-                    timespan = tsRepr.extract(row)
+                    timespan = TimespanReprClass.extract(row)
                 else:
                     timespan = None
                 yield DatasetAssociation(ref=ref, collection=collectionRecord.name, timespan=timespan)

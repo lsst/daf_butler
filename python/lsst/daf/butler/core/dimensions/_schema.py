@@ -188,19 +188,18 @@ class DimensionElementFields:
 
     def makeTableSpec(
         self,
-        regRepr: Type[SpatialRegionDatabaseRepresentation],
-        tsRepr: Type[TimespanDatabaseRepresentation],
+        RegionReprClass: Type[SpatialRegionDatabaseRepresentation],
+        TimespanReprClass: Type[TimespanDatabaseRepresentation],
     ) -> ddl.TableSpec:
         """Construct a complete specification for a table that could hold the
         records of this element.
 
         Parameters
         ----------
-        regRepr : `type` (`SpatialRegionDatabaseRepresentation` subclass)
+        RegionReprClass : `type` [ `SpatialRegionDatabaseRepresentation` ]
             Class object that specifies how spatial regions are represented in
             the database.
-
-        tsRepr : `type` (`TimespanDatabaseRepresentation` subclass)
+        TimespanReprClass : `type` [ `TimespanDatabaseRepresentation` ]
             Class object that specifies how timespans are represented in the
             database.
 
@@ -217,9 +216,9 @@ class DimensionElementFields:
                 foreignKeys=self._tableSpec.foreignKeys,
             )
             if self.element.spatial is not None:
-                spec.fields.update(regRepr.makeFieldSpecs(nullable=True))
+                spec.fields.update(RegionReprClass.makeFieldSpecs(nullable=True))
             if self.element.temporal is not None:
-                spec.fields.update(tsRepr.makeFieldSpecs(nullable=True))
+                spec.fields.update(TimespanReprClass.makeFieldSpecs(nullable=True))
         else:
             spec = self._tableSpec
         return spec

@@ -70,7 +70,7 @@ def convertExpressionToSql(
     columns: QueryColumns,
     elements: NamedKeyMapping[DimensionElement, sqlalchemy.sql.FromClause],
     bind: Mapping[str, Any],
-    tsRepr: Type[TimespanDatabaseRepresentation],
+    TimespanReprClass: Type[TimespanDatabaseRepresentation],
 ) -> sqlalchemy.sql.ColumnElement:
     """Convert a query expression tree into a SQLAlchemy expression object.
 
@@ -88,7 +88,7 @@ def convertExpressionToSql(
     bind : `Mapping`
         Mapping from string names to literal values that should be subsituted
         for those names when they appear (as identifiers) in the expression.
-    tsRepr : `type`; subclass of `TimespanDatabaseRepresentation`
+    TimespanReprClass : `type`; subclass of `TimespanDatabaseRepresentation`
         Class that encapsulates the representation of `Timespan` objects in
         the database.
 
@@ -103,7 +103,7 @@ def convertExpressionToSql(
         Raised if the operands in a query expression operation are incompatible
         with the operator, or if the expression does not evaluate to a boolean.
     """
-    visitor = WhereClauseConverterVisitor(universe, columns, elements, bind, tsRepr)
+    visitor = WhereClauseConverterVisitor(universe, columns, elements, bind, TimespanReprClass)
     converter = tree.visit(visitor)
     return converter.finish(tree)
 
@@ -345,7 +345,7 @@ class TimespanWhereClauseConverter(WhereClauseConverter):
         cls,
         begin: ScalarWhereClauseConverter,
         end: ScalarWhereClauseConverter,
-        tsRepr: Type[TimespanDatabaseRepresentation],
+        TimespanReprClass: Type[TimespanDatabaseRepresentation],
     ) -> TimespanWhereClauseConverter:
         """Construct from a pair of literal expressions.
 
@@ -359,7 +359,7 @@ class TimespanWhereClauseConverter(WhereClauseConverter):
             Converter object associated with an expression of type
             `astropy.time.Time` or `None` (for a timespan that is unbounded
             from above).
-        tsRepr : `type`; subclass of `TimespanDatabaseRepresentation`
+        TimespanReprClass : `type`; `TimespanDatabaseRepresentation` subclass
             Class that encapsulates the representation of `Timespan` objects in
             the database.
 
@@ -378,7 +378,7 @@ class TimespanWhereClauseConverter(WhereClauseConverter):
         assert end.dtype in (Time, type(None)), "Guaranteed by dispatch table rules."
         if (begin.value is None and begin.dtype is Time) or (end.value is None and end.dtype is Time):
             raise ExpressionTypeError("Time pairs in expressions must be literals or bind values.")
-        return cls(tsRepr.fromLiteral(Timespan(begin.value, end.value)))
+        return cls(TimespanReprClass.fromLiteral(Timespan(begin.value, end.value)))
 
     @property
     def dtype(self) -> type:
@@ -410,7 +410,7 @@ class TimespanWhereClauseConverter(WhereClauseConverter):
         ----------
         other : `ScalarWhereClauseConverter`
             RHS operand for the overlap operation.
-        tsRepr : `type`; subclass of `TimespanDatabaseRepresentation`
+        TimespanReprClass : `type`; `TimespanDatabaseRepresentation` subclass
             Ignored; provided for signature compatibility with `DispatchTable`.
 
         Returns
@@ -712,7 +712,7 @@ class DispatchTable:
         return self._binary[operator, lhs.dtype, rhs.dtype](lhs, rhs)
 
     @classmethod
-    def build(cls, tsRepr: Type[TimespanDatabaseRepresentation]) -> DispatchTable:
+    def build(cls, TimespanReprClass: Type[TimespanDatabaseRepresentation]) -> DispatchTable:
         table = DispatchTable()
         # Standard scalar unary and binary operators: just delegate to
         # SQLAlchemy operators.
@@ -738,7 +738,7 @@ class DispatchTable:
             "PAIR",
             lhs=(Time, type(None)),
             rhs=(Time, type(None)),
-            func=lambda lhs, rhs: TimespanWhereClauseConverter.fromPair(lhs, rhs, tsRepr),
+            func=lambda lhs, rhs: TimespanWhereClauseConverter.fromPair(lhs, rhs, TimespanReprClass),
             adapt=False,
         )
         # Less-than and greater-than between Timespans.
@@ -829,7 +829,7 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
     bind: `Mapping`
         Mapping from string names to literal values that should be subsituted
         for those names when they appear (as identifiers) in the expression.
-    tsRepr: `type`; subclass of `TimespanDatabaseRepresentation`
+    TimespanReprClass: `type`; subclass of `TimespanDatabaseRepresentation`
         Class that encapsulates the representation of `Timespan` objects in
         the database.
     """
@@ -839,14 +839,14 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
         columns: QueryColumns,
         elements: NamedKeyMapping[DimensionElement, sqlalchemy.sql.FromClause],
         bind: Mapping[str, Any],
-        tsRepr: Type[TimespanDatabaseRepresentation],
+        TimespanReprClass: Type[TimespanDatabaseRepresentation],
     ):
         self.universe = universe
         self.columns = columns
         self.elements = elements
         self.bind = bind
-        self._tsRepr = tsRepr
-        self._dispatch = DispatchTable.build(tsRepr)
+        self._TimespanReprClass = TimespanReprClass
+        self._dispatch = DispatchTable.build(TimespanReprClass)
 
     def visitNumericLiteral(self, value: str, node: Node) -> WhereClauseConverter:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
@@ -871,7 +871,7 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
         if name in self.bind:
             value = self.bind[name]
             if isinstance(value, Timespan):
-                return TimespanWhereClauseConverter(self._tsRepr.fromLiteral(value))
+                return TimespanWhereClauseConverter(self._TimespanReprClass.fromLiteral(value))
             return ScalarWhereClauseConverter.fromLiteral(value)
         if categorizeIngestDateId(name):
             assert self.columns.datasets is not None

@@ -970,7 +970,7 @@ class Database(ABC):
 
         Returns
         -------
-        tsRepr : `type` (`TimespanDatabaseRepresention` subclass)
+        TimespanReprClass : `type` (`TimespanDatabaseRepresention` subclass)
             A type that encapsulates the way `Timespan` objects should be
             stored in this database.
 
@@ -1006,7 +1006,7 @@ class Database(ABC):
 
         Returns
         -------
-        regRepr : `type` (`SpatialRegionDatabaseRepresention` subclass)
+        RegionReprClass : `type` (`SpatialRegionDatabaseRepresention` subclass)
             A type that encapsulates the way `lsst.sphgeom.Region` objects
             should be stored in this database.
 
