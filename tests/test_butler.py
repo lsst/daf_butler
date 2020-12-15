@@ -71,6 +71,7 @@ from lsst.daf.butler.core._butlerUri.s3utils import (setAwsEnvCredentials,
 from lsst.daf.butler.core._butlerUri.http import isWebdavEndpoint
 
 from lsst.daf.butler.tests import MultiDetectorFormatter, MetricsExample
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -142,8 +143,7 @@ class ButlerPutGetTests:
             self.assertEqual(result_deferred, result)
 
     def tearDown(self):
-        if self.root is not None and os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
+        removeTestTempDir(self.root)
 
     def runPutGetTest(self, storageClass, datasetTypeName):
         # New datasets will be added to run and tag, but we will only look in
@@ -413,7 +413,7 @@ class ButlerTests(ButlerPutGetTests):
 
     def setUp(self):
         """Create a new butler root for each test."""
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
         Butler.makeRepo(self.root, config=Config(self.configFile))
         self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
 
@@ -984,7 +984,7 @@ class FileDatastoreButlerTests(ButlerTests):
         skymapRecord = {"name": "example_skymap", "hash": (50).to_bytes(8, byteorder="little")}
         exportButler.registry.insertDimensionData("skymap", skymapRecord)
         # Export and then import datasets.
-        with tempfile.TemporaryDirectory() as exportDir:
+        with safeTestTempDir(TESTDIR) as exportDir:
             exportFile = os.path.join(exportDir, "exports.yaml")
             with exportButler.export(filename=exportFile, directory=exportDir, transfer="auto") as export:
                 export.saveDatasets(datasets)
@@ -999,7 +999,7 @@ class FileDatastoreButlerTests(ButlerTests):
                 # Save some dimension records directly.
                 export.saveDimensionData("skymap", [skymapRecord])
             self.assertTrue(os.path.exists(exportFile))
-            with tempfile.TemporaryDirectory() as importDir:
+            with safeTestTempDir(TESTDIR) as importDir:
                 # We always want this to be a local posix butler
                 Butler.makeRepo(importDir, config=Config(os.path.join(TESTDIR, "config/basic/butler.yaml")))
                 # Calling script.butlerImport tests the implementation of the
@@ -1046,7 +1046,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
                             f"Checking path {path}")
 
         for transfer in ("copy", "link", "symlink", "relsymlink"):
-            with tempfile.TemporaryDirectory(dir=TESTDIR) as exportDir:
+            with safeTestTempDir(TESTDIR) as exportDir:
                 with exportButler.export(directory=exportDir, format="yaml",
                                          transfer=transfer) as export:
                     export.saveDatasets(datasets)
@@ -1089,7 +1089,7 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
     fullConfigKey = None
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
 
         # Make a new repository in one place
         self.dir1 = os.path.join(self.root, "dir1")
@@ -1119,8 +1119,8 @@ class ButlerMakeRepoOutfileTestCase(ButlerPutGetTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
-        self.root2 = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
+        self.root2 = makeTestTempDir(TESTDIR)
 
         self.tmpConfigFile = os.path.join(self.root2, "different.yaml")
         Butler.makeRepo(self.root, config=Config(self.configFile),
@@ -1149,8 +1149,8 @@ class ButlerMakeRepoOutfileDirTestCase(ButlerMakeRepoOutfileTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
-        self.root2 = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
+        self.root2 = makeTestTempDir(TESTDIR)
 
         self.tmpConfigFile = self.root2
         Butler.makeRepo(self.root, config=Config(self.configFile),
@@ -1169,8 +1169,8 @@ class ButlerMakeRepoOutfileUriTestCase(ButlerMakeRepoOutfileTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
-        self.root2 = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
+        self.root2 = makeTestTempDir(TESTDIR)
 
         self.tmpConfigFile = ButlerURI(os.path.join(self.root2, "something.yaml")).geturl()
         Butler.makeRepo(self.root, config=Config(self.configFile),
@@ -1235,7 +1235,7 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         config.update({"datastore": {"datastore": {"root": rooturi}}})
 
         # need local folder to store registry database
-        self.reg_dir = tempfile.mkdtemp(dir=TESTDIR)
+        self.reg_dir = makeTestTempDir(TESTDIR)
         config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
 
         # MOTO needs to know that we expect Bucket bucketname to exist
@@ -1367,7 +1367,7 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         config.update({"datastore": {"datastore": {"root": self.rooturi}}})
 
         # need local folder to store registry database
-        self.reg_dir = tempfile.mkdtemp(dir=TESTDIR)
+        self.reg_dir = makeTestTempDir(TESTDIR)
         config["registry", "db"] = f"sqlite:///{self.reg_dir}/gen3.sqlite3"
 
         self.datastoreStr = f"datastore={self.root}"

@@ -23,14 +23,13 @@
 """
 
 import unittest
-import tempfile
 import os
-import shutil
 import numpy
 
 from astropy.table import Table
 
 from lsst.daf.butler import Butler, DatasetType
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -40,7 +39,7 @@ class AstropyTableFormatterTestCase(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
         Butler.makeRepo(self.root)
         ints = [1, 2, 3]
         names = ['one', 'two', 'three']
@@ -49,8 +48,7 @@ class AstropyTableFormatterTestCase(unittest.TestCase):
                            names=['ints', 'names', 'transcendentals'])
 
     def tearDown(self):
-        if os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
+        removeTestTempDir(self.root)
         del self.table
 
     def testAstropyTableFormatter(self):

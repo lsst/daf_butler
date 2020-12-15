@@ -23,10 +23,9 @@
 """
 
 import unittest
-import tempfile
 import os
-import shutil
 from random import Random
+import tempfile
 
 try:
     import matplotlib
@@ -36,6 +35,7 @@ except ImportError:
     pyplot = None
 
 from lsst.daf.butler import Butler, DatasetType
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 import filecmp
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -49,14 +49,13 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
     RANDOM_SEED = 10
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
         Butler.makeRepo(self.root)
         # Create a random image for testing
         self.rng = Random(self.RANDOM_SEED)
 
     def tearDown(self):
-        if os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
+        removeTestTempDir(self.root)
 
     def testMatplotlibFormatter(self):
         butler = Butler(self.root, run="testrun")

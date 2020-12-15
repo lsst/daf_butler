@@ -24,10 +24,11 @@ import os
 import contextlib
 import collections
 import itertools
-import shutil
-import tempfile
 
 from lsst.daf.butler import ConfigSubset, Config
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 @contextlib.contextmanager
@@ -634,11 +635,10 @@ resource:
 class FileWriteConfigTestCase(unittest.TestCase):
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        self.tmpdir = makeTestTempDir(TESTDIR)
 
     def tearDown(self):
-        if os.path.exists(self.tmpdir):
-            shutil.rmtree(self.tmpdir, ignore_errors=True)
+        removeTestTempDir(self.tmpdir)
 
     def testDump(self):
         """Test that we can write and read a configuration."""

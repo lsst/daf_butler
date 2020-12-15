@@ -42,13 +42,16 @@ from lsst.daf.butler import ddl, Timespan
 from lsst.daf.butler.registry import Registry
 from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase, _RangeTimespanType
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-def _startServer():
+def _startServer(root):
     """Start a PostgreSQL server and create a database within it, returning
     an object encapsulating both.
     """
-    server = testing.postgresql.Postgresql()
+    server = testing.postgresql.Postgresql(base_dir=root)
     engine = sqlalchemy.engine.create_engine(server.url())
     engine.execute("CREATE EXTENSION btree_gist;")
     return server
@@ -59,7 +62,8 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
     @classmethod
     def setUpClass(cls):
-        cls.server = _startServer()
+        cls.root = makeTestTempDir(TESTDIR)
+        cls.server = _startServer(cls.root)
 
     @classmethod
     def tearDownClass(cls):
@@ -67,6 +71,7 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
         # so they're closed before we shut down the server.
         gc.collect()
         cls.server.stop()
+        removeTestTempDir(cls.root)
 
     def makeEmptyDatabase(self, origin: int = 0) -> PostgresqlDatabase:
         namespace = f"namespace_{secrets.token_hex(8).lower()}"
@@ -205,11 +210,16 @@ class PostgresqlRegistryTests(RegistryTests):
 
     @classmethod
     def setUpClass(cls):
-        cls.server = _startServer()
+        cls.root = makeTestTempDir(TESTDIR)
+        cls.server = _startServer(cls.root)
 
     @classmethod
     def tearDownClass(cls):
+        # Clean up any lingering SQLAlchemy engines/connections
+        # so they're closed before we shut down the server.
+        gc.collect()
         cls.server.stop()
+        removeTestTempDir(cls.root)
 
     @classmethod
     def getDataDir(cls) -> str:

@@ -19,13 +19,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
+__all__ = ()
+
+from contextlib import contextmanager
+import io
+import os
+import shutil
+import tempfile
+from typing import Optional
 
 import astropy
 from astropy.table import Table as AstropyTable
 from astropy.utils.diff import report_diff_values
-import io
-import os
-
 
 from .. import (
     Butler,
@@ -34,6 +41,67 @@ from .. import (
 )
 from ..tests import addDatasetType, MetricsExample
 from ..registry import CollectionType
+
+
+def makeTestTempDir(default_base: str) -> str:
+    """Create a temporary directory for test usage.
+
+    The directory will be created within ``DAF_BUTLER_TEST_TMP`` if that
+    environment variable is set, falling back to ``default_base`` if it is
+    not.
+
+    Parameters
+    ----------
+    default_base : `str`
+        Default parent directory.
+
+    Returns
+    -------
+    dir : `str`
+        Name of the new temporary directory.
+    """
+    base = os.environ.get("DAF_BUTLER_TEST_TMP", default_base)
+    return tempfile.mkdtemp(dir=base)
+
+
+def removeTestTempDir(root: Optional[str]) -> None:
+    """Attempt to remove a temporary test directory, but do not raise if
+    unable to.
+
+    Unlike `tempfile.TemporaryDirectory`, this passes ``ignore_errors=True``
+    to ``shutil.rmtree`` at close, making it safe to use on NFS.
+
+    Parameters
+    ----------
+    root : `str`, optional
+        Name of the directory to be removed.  If `None`, nothing will be done.
+    """
+    if root is not None and os.path.exists(root):
+        shutil.rmtree(root, ignore_errors=True)
+
+
+@contextmanager
+def safeTestTempDir(default_base: str) -> str:
+    """Return a context manager that creates a temporary directory and then
+    attempts to remove it.
+
+    Parameters
+    ----------
+    default_base : `str`
+        Default parent directory, forwarded to `makeTestTempDir`.
+
+    Returns
+    -------
+    context : `contextlib.ContextManager`
+        A context manager that returns the new directory name on ``__enter__``
+        and removes the temporary directory (via `removeTestTempDir`) on
+        ``__exit__``.
+    """
+    root = makeTestTempDir(default_base)
+    try:
+        yield root
+    finally:
+        removeTestTempDir(root)
 
 
 class ButlerTestHelper:

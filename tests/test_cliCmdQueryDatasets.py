@@ -25,14 +25,12 @@
 from astropy.table import Table as AstropyTable
 from numpy import array
 import os
-import shutil
-import tempfile
 import unittest
 
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import script
 from lsst.daf.butler.tests import addDatasetType
-from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo
+from lsst.daf.butler.tests.utils import ButlerTestHelper, makeTestTempDir, MetricTestRepo, removeTestTempDir
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -50,13 +48,12 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         return script.queryDatasets(repo, glob, collections, where, find_first, show_uri)
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
         self.testRepo = MetricTestRepo(self.root,
                                        configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
 
     def tearDown(self):
-        if os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
+        removeTestTempDir(self.root)
 
     def testShowURI(self):
         """Test for expected output with show_uri=True."""
