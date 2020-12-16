@@ -1112,7 +1112,7 @@ class Database(ABC):
 
                 def safeNotEqual(a: Any, b: Any) -> bool:
                     if isinstance(a, astropy.time.Time):
-                        return not time_utils.times_equal(a, b)
+                        return not time_utils.TimeConverter().times_equal(a, b)
                     return a != b
 
                 inconsistencies = [f"{k}: {existing[k]!r} != {v!r}"

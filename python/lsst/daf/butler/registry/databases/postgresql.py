@@ -199,10 +199,11 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
         if value.isEmpty():
             return psycopg2.extras.NumericRange(empty=True)
         else:
-            assert value._nsec[0] >= time_utils.MIN_NSEC, "Guaranteed by Timespan.__init__."
-            assert value._nsec[1] <= time_utils.MAX_NSEC, "Guaranteed by Timespan.__init__."
-            lower = None if value._nsec[0] == time_utils.MIN_NSEC else value._nsec[0]
-            upper = None if value._nsec[1] == time_utils.MAX_NSEC else value._nsec[1]
+            converter = time_utils.TimeConverter()
+            assert value._nsec[0] >= converter.min_nsec, "Guaranteed by Timespan.__init__."
+            assert value._nsec[1] <= converter.max_nsec, "Guaranteed by Timespan.__init__."
+            lower = None if value._nsec[0] == converter.min_nsec else value._nsec[0]
+            upper = None if value._nsec[1] == converter.max_nsec else value._nsec[1]
             return psycopg2.extras.NumericRange(lower=lower, upper=upper)
 
     def process_result_value(self, value: Optional[psycopg2.extras.NumericRange],
@@ -212,8 +213,9 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
             return None
         if value.isempty:
             return Timespan.makeEmpty()
-        begin_nsec = time_utils.MIN_NSEC if value.lower is None else value.lower
-        end_nsec = time_utils.MAX_NSEC if value.upper is None else value.upper
+        converter = time_utils.TimeConverter()
+        begin_nsec = converter.min_nsec if value.lower is None else value.lower
+        end_nsec = converter.max_nsec if value.upper is None else value.upper
         return Timespan(begin=None, end=None, _nsec=(begin_nsec, end_nsec))
 
     class comparator_factory(sqlalchemy.types.Concatenable.Comparator):  # noqa: N801

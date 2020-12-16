@@ -34,7 +34,7 @@ except ImportError:
     erfa = None
 
 from lsst.daf.butler import Timespan
-from lsst.daf.butler.core.time_utils import EPOCH, MAX_TIME, MAX_NSEC, nsec_to_astropy
+from lsst.daf.butler.core.time_utils import TimeConverter
 
 
 class TimespanTestCase(unittest.TestCase):
@@ -108,14 +108,14 @@ class TimespanTestCase(unittest.TestCase):
         """Test that we reject timespans that should not exist.
         """
         with self.assertRaises(ValueError):
-            Timespan(MAX_TIME, None)
+            Timespan(TimeConverter().max_time, None)
         with self.assertRaises(ValueError):
-            Timespan(MAX_TIME, MAX_TIME)
+            Timespan(TimeConverter().max_time, TimeConverter().max_time)
         with self.assertRaises(ValueError):
-            Timespan(None, EPOCH)
+            Timespan(None, TimeConverter().epoch)
         with self.assertRaises(ValueError):
-            Timespan(EPOCH, EPOCH)
-        t = nsec_to_astropy(MAX_NSEC - 1)
+            Timespan(TimeConverter().epoch, TimeConverter().epoch)
+        t = TimeConverter().nsec_to_astropy(TimeConverter().max_nsec - 1)
         with self.assertRaises(ValueError):
             Timespan(t, t)
         with self.assertRaises(ValueError):

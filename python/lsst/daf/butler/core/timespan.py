@@ -54,7 +54,7 @@ except ImportError:
     erfa = None
 
 from . import ddl
-from .time_utils import astropy_to_nsec, nsec_to_astropy, EPOCH, MIN_NSEC, MAX_NSEC, MAX_TIME
+from .time_utils import TimeConverter
 from ._topology import TopologicalExtentDatabaseRepresentation, TopologicalSpace
 from .utils import cached_getter
 
@@ -137,43 +137,44 @@ class Timespan:
     """
     def __init__(self, begin: TimespanBound, end: TimespanBound, padInstantaneous: bool = True,
                  _nsec: Optional[Tuple[int, int]] = None):
+        converter = TimeConverter()
         if _nsec is None:
             begin_nsec: int
             if begin is None:
-                begin_nsec = MIN_NSEC
+                begin_nsec = converter.min_nsec
             elif begin is self.EMPTY:
-                begin_nsec = MAX_NSEC
+                begin_nsec = converter.max_nsec
             elif isinstance(begin, astropy.time.Time):
-                begin_nsec = astropy_to_nsec(begin)
+                begin_nsec = converter.astropy_to_nsec(begin)
             else:
                 raise TypeError(
                     f"Unexpected value of type {type(begin).__name__} for Timespan.begin: {begin!r}."
                 )
             end_nsec: int
             if end is None:
-                end_nsec = MAX_NSEC
+                end_nsec = converter.max_nsec
             elif end is self.EMPTY:
-                end_nsec = MIN_NSEC
+                end_nsec = converter.min_nsec
             elif isinstance(end, astropy.time.Time):
-                end_nsec = astropy_to_nsec(end)
+                end_nsec = converter.astropy_to_nsec(end)
             else:
                 raise TypeError(
                     f"Unexpected value of type {type(end).__name__} for Timespan.end: {end!r}."
                 )
             if begin_nsec == end_nsec:
-                if begin_nsec == MAX_NSEC or end_nsec == MIN_NSEC:
+                if begin_nsec == converter.max_nsec or end_nsec == converter.min_nsec:
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
                         if erfa is not None:
                             warnings.simplefilter("ignore", category=erfa.ErfaWarning)
-                        if begin is not None and begin < EPOCH:
-                            raise ValueError(f"Timespan.begin may not be earlier than {EPOCH}.")
-                        if end is not None and end > MAX_TIME:
-                            raise ValueError(f"Timespan.end may not be later than {MAX_TIME}.")
+                        if begin is not None and begin < converter.epoch:
+                            raise ValueError(f"Timespan.begin may not be earlier than {converter.epoch}.")
+                        if end is not None and end > converter.max_time:
+                            raise ValueError(f"Timespan.end may not be later than {converter.max_time}.")
                     raise ValueError("Infinite instantaneous timespans are not supported.")
                 elif padInstantaneous:
                     end_nsec += 1
-                    if end_nsec == MAX_NSEC:
+                    if end_nsec == converter.max_nsec:
                         raise ValueError(
                             f"Cannot construct near-instantaneous timespan at {end}; "
                             "within one ns of maximum time."
@@ -183,7 +184,7 @@ class Timespan:
             # Standardizing all empty timespans to the same underlying values
             # here simplifies all other operations (including interactions
             # with TimespanDatabaseRepresentation implementations).
-            _nsec = (MAX_NSEC, MIN_NSEC)
+            _nsec = (converter.max_nsec, converter.min_nsec)
         self._nsec = _nsec
 
     __slots__ = ("_nsec", "_cached_begin", "_cached_end")
@@ -200,7 +201,8 @@ class Timespan:
             A timespan that is contained by all timespans (including itself)
             and overlaps no other timespans (including itself).
         """
-        return Timespan(None, None, _nsec=(MAX_NSEC, MIN_NSEC))
+        converter = TimeConverter()
+        return Timespan(None, None, _nsec=(converter.max_nsec, converter.min_nsec))
 
     @classmethod
     def fromInstant(cls, time: astropy.time.Time) -> Timespan:
@@ -220,8 +222,9 @@ class Timespan:
         instant : `Timespan`
             A ``[time, time + 1ns)`` timespan.
         """
-        nsec = astropy_to_nsec(time)
-        if nsec == MAX_NSEC - 1:
+        converter = TimeConverter()
+        nsec = converter.astropy_to_nsec(time)
+        if nsec == converter.max_nsec - 1:
             raise ValueError(
                 f"Cannot construct near-instantaneous timespan at {time}; "
                 "within one ns of maximum time."
@@ -239,10 +242,10 @@ class Timespan:
         """
         if self.isEmpty():
             return self.EMPTY
-        elif self._nsec[0] == MIN_NSEC:
+        elif self._nsec[0] == TimeConverter().min_nsec:
             return None
         else:
-            return nsec_to_astropy(self._nsec[0])
+            return TimeConverter().nsec_to_astropy(self._nsec[0])
 
     @property  # type: ignore
     @cached_getter
@@ -255,10 +258,10 @@ class Timespan:
         """
         if self.isEmpty():
             return self.EMPTY
-        elif self._nsec[1] == MAX_NSEC:
+        elif self._nsec[1] == TimeConverter().max_nsec:
             return None
         else:
-            return nsec_to_astropy(self._nsec[1])
+            return TimeConverter().nsec_to_astropy(self._nsec[1])
 
     def isEmpty(self) -> bool:
         """Test whether ``self`` is the empty timespan (`bool`).
@@ -335,7 +338,7 @@ class Timespan:
         # the second term is never false for non-empty timespans unless the
         # first term is also false.
         if isinstance(other, astropy.time.Time):
-            nsec = astropy_to_nsec(other)
+            nsec = TimeConverter().astropy_to_nsec(other)
             return self._nsec[1] <= nsec and self._nsec[0] < nsec
         else:
             return self._nsec[1] <= other._nsec[0] and self._nsec[0] < other._nsec[1]
@@ -364,7 +367,7 @@ class Timespan:
         # the second term is never false for non-empty timespans unless the
         # first term is also false.
         if isinstance(other, astropy.time.Time):
-            nsec = astropy_to_nsec(other)
+            nsec = TimeConverter().astropy_to_nsec(other)
             return self._nsec[0] > nsec and self._nsec[1] > nsec
         else:
             return self._nsec[0] >= other._nsec[1] and self._nsec[1] > other._nsec[0]
@@ -419,7 +422,7 @@ class Timespan:
         by `Timespan.fromInstant(b)``.
         """
         if isinstance(other, astropy.time.Time):
-            nsec = astropy_to_nsec(other)
+            nsec = TimeConverter().astropy_to_nsec(other)
             return self._nsec[0] <= nsec and self._nsec[1] > nsec
         else:
             return self._nsec[0] <= other._nsec[0] and self._nsec[1] >= other._nsec[1]
@@ -675,12 +678,12 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return (
             ddl.FieldSpec(
                 f"{name}_begin", dtype=sqlalchemy.BigInteger, nullable=nullable,
-                default=(None if nullable else sqlalchemy.sql.text(str(MIN_NSEC))),
+                default=(None if nullable else sqlalchemy.sql.text(str(TimeConverter().min_nsec))),
                 **kwargs,
             ),
             ddl.FieldSpec(
                 f"{name}_end", dtype=sqlalchemy.BigInteger, nullable=nullable,
-                default=(None if nullable else sqlalchemy.sql.text(str(MAX_NSEC))),
+                default=(None if nullable else sqlalchemy.sql.text(str(TimeConverter().max_nsec))),
                 **kwargs,
             ),
         )
@@ -721,13 +724,13 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
             if end_nsec is not None:
                 raise RuntimeError(
                     f"Corrupted timespan extracted: begin is NULL, but end is {end_nsec}ns -> "
-                    f"{nsec_to_astropy(end_nsec).tai.isot}."
+                    f"{TimeConverter().nsec_to_astropy(end_nsec).tai.isot}."
                 )
             return None
         elif end_nsec is None:
             raise RuntimeError(
                 f"Corrupted timespan extracted: end is NULL, but begin is {begin_nsec}ns -> "
-                f"{nsec_to_astropy(begin_nsec).tai.isot}."
+                f"{TimeConverter().nsec_to_astropy(begin_nsec).tai.isot}."
             )
         return Timespan(None, None, _nsec=(begin_nsec, end_nsec))
 

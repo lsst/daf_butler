@@ -54,7 +54,7 @@ class AstropyTimeNsecTaiTestCase(unittest.TestCase):
         self.assertEqual(value, 0)
 
         value = self.decor.process_result_value(value, self.dialect)
-        self.assertEqual(value, time_utils.EPOCH)
+        self.assertEqual(value, time_utils.TimeConverter().epoch)
 
     def test_max_time(self):
         """Tests for converting None in bound parameters.
@@ -63,7 +63,7 @@ class AstropyTimeNsecTaiTestCase(unittest.TestCase):
         time = Time("2101-01-01T00:00:00", format="isot", scale="tai")
         value = self.decor.process_bind_param(time, self.dialect)
 
-        value_max = self.decor.process_bind_param(time_utils.MAX_TIME, self.dialect)
+        value_max = self.decor.process_bind_param(time_utils.TimeConverter().max_time, self.dialect)
         self.assertEqual(value, value_max)
 
     def test_round_trip(self):
@@ -82,7 +82,7 @@ class AstropyTimeNsecTaiTestCase(unittest.TestCase):
             atime = Time(time, format="isot", scale="tai")
             value = self.decor.process_bind_param(atime, self.dialect)
             value = self.decor.process_result_value(value, self.dialect)
-            self.assertTrue(time_utils.times_equal(atime, value))
+            self.assertTrue(time_utils.TimeConverter().times_equal(atime, value))
 
 
 if __name__ == "__main__":

@@ -27,8 +27,7 @@ import warnings
 
 import astropy.utils.exceptions
 from astropy.time import Time, TimeDelta
-from lsst.daf.butler import time_utils
-from lsst.daf.butler.core.time_utils import astropy_to_nsec
+from lsst.daf.butler.core.time_utils import TimeConverter
 
 
 class TimeTestCase(unittest.TestCase):
@@ -39,20 +38,20 @@ class TimeTestCase(unittest.TestCase):
         """Tests for before-the-epoch time.
         """
         time = Time("1950-01-01T00:00:00", format="isot", scale="tai")
-        value = time_utils.astropy_to_nsec(time)
+        value = TimeConverter().astropy_to_nsec(time)
         self.assertEqual(value, 0)
 
-        value = time_utils.nsec_to_astropy(value)
-        self.assertEqual(value, time_utils.EPOCH)
+        value = TimeConverter().nsec_to_astropy(value)
+        self.assertEqual(value, TimeConverter().epoch)
 
     def test_max_time(self):
         """Tests for after-the-end-of-astronomy time.
         """
         # there are rounding issues, need more complex comparison
         time = Time("2101-01-01T00:00:00", format="isot", scale="tai")
-        value = time_utils.astropy_to_nsec(time)
+        value = TimeConverter().astropy_to_nsec(time)
 
-        value_max = time_utils.astropy_to_nsec(time_utils.MAX_TIME)
+        value_max = TimeConverter().astropy_to_nsec(TimeConverter().max_time)
         self.assertEqual(value, value_max)
 
         # Astropy will give "dubious year" for UTC five years in the future
@@ -64,7 +63,7 @@ class TimeTestCase(unittest.TestCase):
         # unittest can't test for no warnings so we run the test and
         # trigger our own warning and count all the warnings
         with self.assertWarns(Warning) as cm:
-            time_utils.astropy_to_nsec(time)
+            TimeConverter().astropy_to_nsec(time)
             warnings.warn("deliberate")
         self.assertEqual(str(cm.warning), "deliberate")
 
@@ -89,8 +88,8 @@ class TimeTestCase(unittest.TestCase):
                     delta = sec + 0.3e-9 * i
                     in_time = atime + TimeDelta(delta, format="sec")
                     # do round-trip conversion to nsec and back
-                    value = time_utils.astropy_to_nsec(in_time)
-                    value = time_utils.nsec_to_astropy(value)
+                    value = TimeConverter().astropy_to_nsec(in_time)
+                    value = TimeConverter().nsec_to_astropy(value)
                     delta2 = value - in_time
                     delta2_sec = delta2.to_value("sec")
                     # absolute precision should be better than half
@@ -102,45 +101,45 @@ class TimeTestCase(unittest.TestCase):
         """
         # time == time should always work
         time1 = Time("2000-01-01T00:00:00.123456789", format="isot", scale="tai")
-        self.assertTrue(time_utils.times_equal(time1, time1))
+        self.assertTrue(TimeConverter().times_equal(time1, time1))
 
         # one nsec difference
         time1 = Time("2000-01-01T00:00:00.123456789", format="isot", scale="tai")
         time2 = Time("2000-01-01T00:00:00.123456788", format="isot", scale="tai")
-        self.assertTrue(time_utils.times_equal(time1, time2, 2.))
-        self.assertTrue(time_utils.times_equal(time2, time1, 2.))
-        self.assertFalse(time_utils.times_equal(time1, time2, .5))
-        self.assertFalse(time_utils.times_equal(time2, time1, .5))
+        self.assertTrue(TimeConverter().times_equal(time1, time2, 2.))
+        self.assertTrue(TimeConverter().times_equal(time2, time1, 2.))
+        self.assertFalse(TimeConverter().times_equal(time1, time2, .5))
+        self.assertFalse(TimeConverter().times_equal(time2, time1, .5))
 
         # one nsec difference, times in UTC
         time1 = Time("2000-01-01T00:00:00.123456789", format="isot", scale="utc")
         time2 = Time("2000-01-01T00:00:00.123456788", format="isot", scale="utc")
-        self.assertTrue(time_utils.times_equal(time1, time2, 2.))
-        self.assertTrue(time_utils.times_equal(time2, time1, 2.))
-        self.assertFalse(time_utils.times_equal(time1, time2, .5))
-        self.assertFalse(time_utils.times_equal(time2, time1, .5))
+        self.assertTrue(TimeConverter().times_equal(time1, time2, 2.))
+        self.assertTrue(TimeConverter().times_equal(time2, time1, 2.))
+        self.assertFalse(TimeConverter().times_equal(time1, time2, .5))
+        self.assertFalse(TimeConverter().times_equal(time2, time1, .5))
 
         # 1/2 nsec difference
         time1 = Time("2000-01-01T00:00:00.123456789", format="isot", scale="tai")
         time2 = time1 + TimeDelta(0.5e-9, format="sec")
-        self.assertTrue(time_utils.times_equal(time1, time2))
-        self.assertTrue(time_utils.times_equal(time2, time1))
-        self.assertFalse(time_utils.times_equal(time1, time2, .25))
-        self.assertFalse(time_utils.times_equal(time2, time1, .25))
+        self.assertTrue(TimeConverter().times_equal(time1, time2))
+        self.assertTrue(TimeConverter().times_equal(time2, time1))
+        self.assertFalse(TimeConverter().times_equal(time1, time2, .25))
+        self.assertFalse(TimeConverter().times_equal(time2, time1, .25))
 
         # 1/2 microsec difference
         time1 = Time("2000-01-01T00:00:00.123456789", format="isot", scale="tai")
         time2 = time1 + TimeDelta(0.5e-6, format="sec")
-        self.assertTrue(time_utils.times_equal(time1, time2, 501))
-        self.assertTrue(time_utils.times_equal(time2, time1, 501))
-        self.assertFalse(time_utils.times_equal(time1, time2, 499))
-        self.assertFalse(time_utils.times_equal(time2, time1, 499))
+        self.assertTrue(TimeConverter().times_equal(time1, time2, 501))
+        self.assertTrue(TimeConverter().times_equal(time2, time1, 501))
+        self.assertFalse(TimeConverter().times_equal(time1, time2, 499))
+        self.assertFalse(TimeConverter().times_equal(time2, time1, 499))
 
         # UTC vs TAI
         time1 = Time('2013-06-17 13:34:45.775000', scale='tai', format='iso')
         time2 = Time('2013-06-17T13:34:10.775', scale='utc', format='isot')
-        self.assertTrue(time_utils.times_equal(time1, time2))
-        self.assertEqual(astropy_to_nsec(time1), astropy_to_nsec(time2))
+        self.assertTrue(TimeConverter().times_equal(time1, time2))
+        self.assertEqual(TimeConverter().astropy_to_nsec(time1), TimeConverter().astropy_to_nsec(time2))
 
 
 if __name__ == "__main__":

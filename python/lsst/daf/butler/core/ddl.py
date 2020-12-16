@@ -153,7 +153,7 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
             return None
         if not isinstance(value, astropy.time.Time):
             raise TypeError(f"Unsupported type: {type(value)}, expected astropy.time.Time")
-        value = time_utils.astropy_to_nsec(value)
+        value = time_utils.TimeConverter().astropy_to_nsec(value)
         return value
 
     def process_result_value(self, value: Optional[int], dialect: sqlalchemy.engine.Dialect
@@ -161,7 +161,7 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
         # value is nanoseconds since epoch, or None
         if value is None:
             return None
-        value = time_utils.nsec_to_astropy(value)
+        value = time_utils.TimeConverter().nsec_to_astropy(value)
         return value
 
 
