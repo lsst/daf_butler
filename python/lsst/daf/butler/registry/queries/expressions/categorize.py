@@ -22,6 +22,7 @@ from __future__ import annotations
 
 __all__ = ()  # all symbols intentionally private; for internal package use.
 
+import enum
 from typing import (
     Optional,
     Tuple,
@@ -34,23 +35,32 @@ from ....core import (
 )
 
 
-def categorizeIngestDateId(name: str) -> bool:
-    """Categorize an identifier in a parsed expression as an ingest_date
-    attribute of a dataset table.
+class ExpressionConstant(enum.Enum):
+    """Enumeration for constants recognized in all expressions.
+    """
+    NULL = "null"
+    INGEST_DATE = "ingest_date"
+
+
+def categorizeConstant(name: str) -> Optional[ExpressionConstant]:
+    """Categorize an identifier in a parsed expression as one of a few global
+    constants.
 
     Parameters
     ----------
     name : `str`
-        Identifier to categorize.
+        Identifier to categorize.  Case-insensitive.
 
     Returns
     -------
-    isIngestDate : `bool`
-        True is returned if identifier name is ``ingest_date``.
+    categorized : `ExpressionConstant` or `None`
+        Enumeration value if the string represents a constant, `None`
+        otherwise.
     """
-    # TODO: this is hardcoded for now, may be better to extract it from schema
-    # but I do not know how to do it yet.
-    return name == "ingest_date"
+    try:
+        return ExpressionConstant(name.lower())
+    except ValueError:
+        return None
 
 
 def categorizeElementId(universe: DimensionUniverse, name: str) -> Tuple[DimensionElement, Optional[str]]:

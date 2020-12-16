@@ -51,7 +51,7 @@ from ....core import (
 from ...wildcards import EllipsisType, Ellipsis
 from .parser import Node, TreeVisitor
 from .normalForm import NormalForm, NormalFormVisitor
-from .categorize import categorizeElementId, categorizeIngestDateId
+from .categorize import categorizeElementId, categorizeConstant, ExpressionConstant
 
 if TYPE_CHECKING:
     import astropy.time
@@ -194,10 +194,12 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         # Docstring inherited from TreeVisitor.visitIdentifier
         if name in self.bindKeys:
             return TreeSummary()
-        if categorizeIngestDateId(name):
-            return TreeSummary(
-                hasIngestDate=True,
-            )
+        constant = categorizeConstant(name)
+        if constant is ExpressionConstant.INGEST_DATE:
+            return TreeSummary(hasIngestDate=True)
+        elif constant is ExpressionConstant.NULL:
+            return TreeSummary()
+        assert constant is None, "Enum variant conditionals should be exhaustive."
         element, column = categorizeElementId(self.universe, name)
         if column is None:
             assert isinstance(element, Dimension)

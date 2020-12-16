@@ -58,7 +58,7 @@ from ....core import (
 )
 from ....core.utils import iterable
 from .parser import Node, TreeVisitor
-from .categorize import categorizeElementId, categorizeIngestDateId
+from .categorize import categorizeElementId, categorizeConstant, ExpressionConstant
 
 if TYPE_CHECKING:
     from .._structs import QueryColumns
@@ -873,13 +873,17 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
             if isinstance(value, Timespan):
                 return TimespanWhereClauseConverter(self._TimespanReprClass.fromLiteral(value))
             return ScalarWhereClauseConverter.fromLiteral(value)
-        if categorizeIngestDateId(name):
+        constant = categorizeConstant(name)
+        if constant is ExpressionConstant.INGEST_DATE:
             assert self.columns.datasets is not None
             assert self.columns.datasets.ingestDate is not None, "dataset.ingest_date is not in the query"
             return ScalarWhereClauseConverter.fromExpression(
                 _TimestampColumnElement(self.columns.datasets.ingestDate),
                 Time,
             )
+        elif constant is ExpressionConstant.NULL:
+            return ScalarWhereClauseConverter.fromLiteral(None)
+        assert constant is None, "Check for enum values should be exhaustive."
         element, column = categorizeElementId(self.universe, name)
         if column is not None:
             if column == TimespanDatabaseRepresentation.NAME:

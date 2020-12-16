@@ -1722,7 +1722,7 @@ class RegistryTests(ABC):
         # the expression.
 
         # t1 is before the start of i1, so this should not include i1.
-        self.assertEqual(ids[:i1], query("visit.timespan OVERLAPS (None, t1)"))
+        self.assertEqual(ids[:i1], query("visit.timespan OVERLAPS (null, t1)"))
         # t2 is exactly at the start of i2, but ends are exclusive, so these
         # should not include i2.
         self.assertEqual(ids[i1:i2], query("(t1, t2) OVERLAPS visit.timespan"))
@@ -1734,7 +1734,7 @@ class RegistryTests(ABC):
         # t4 is exactly at the end of i4, so this should include i4.
         self.assertEqual(ids[i3:i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}', t4)"))
         # i4's upper bound of t4 is exclusive so this should not include t4.
-        self.assertEqual(ids[i4 + 1:], query("visit.timespan OVERLAPS (t4, None)"))
+        self.assertEqual(ids[i4 + 1:], query("visit.timespan OVERLAPS (t4, NULL)"))
 
         # Now some timespan vs. time scalar queries.
         self.assertEqual(ids[:i2], query("visit.timespan < t2"))
