@@ -25,6 +25,7 @@ __all__ = ["RegistryTests"]
 from abc import ABC, abstractmethod
 from collections import defaultdict
 import itertools
+import logging
 import os
 import re
 import unittest
@@ -390,6 +391,41 @@ class RegistryTests(ABC):
             {"bias.wcs"},
             NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=True)).names
         )
+        # Add a dataset type using a StorageClass that we'll then remove; check
+        # that this does not affect our ability to query for dataset types
+        # (though it will warn).
+        tempStorageClass = StorageClass(
+            name="TempStorageClass",
+            components={"data", registry.storageClasses.getStorageClass("StructuredDataDict")}
+        )
+        registry.storageClasses.registerStorageClass(tempStorageClass)
+        datasetType = DatasetType("temporary", dimensions=["instrument"], storageClass=tempStorageClass,
+                                  universe=registry.dimensions)
+        registry.registerDatasetType(datasetType)
+        registry.storageClasses._unregisterStorageClass(tempStorageClass.name)
+        datasetType._storageClass = None
+        del tempStorageClass
+        # Querying for all dataset types, including components, should include
+        # at least all non-component dataset types (and I don't want to
+        # enumerate all of the Exposure components for bias and flat here).
+        with self.assertLogs("lsst.daf.butler.registry._registry", logging.WARN) as cm:
+            everything = NamedValueSet(registry.queryDatasetTypes(components=True))
+        self.assertIn("TempStorageClass", cm.output[0])
+        self.assertLess({"bias", "flat", "temporary"}, everything.names)
+        # It should not include "temporary.columns", because we tried to remove
+        # the storage class that would tell it about that.  So if the next line
+        # fails (i.e. "temporary.columns" _is_ in everything.names), it means
+        # this part of the test isn't doing anything, because the _unregister
+        # call about isn't simulating the real-life case we want it to
+        # simulate, in which different versions of daf_butler in entirely
+        # different Python processes interact with the same repo.
+        self.assertNotIn("temporary.data", everything.names)
+        # Query for dataset types that start with "temp".  This should again
+        # not include the component, and also not fail.
+        with self.assertLogs("lsst.daf.butler.registry._registry", logging.WARN) as cm:
+            startsWithTemp = NamedValueSet(registry.queryDatasetTypes(re.compile("temp.*")))
+        self.assertIn("TempStorageClass", cm.output[0])
+        self.assertEqual({"temporary"}, startsWithTemp.names)
 
     def testComponentLookups(self):
         """Test searching for component datasets via their parents.
