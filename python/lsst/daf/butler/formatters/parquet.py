@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("ParquetFormatter", )
+__all__ = ("ParquetFormatter",)
 
 import json
 import re
@@ -55,14 +55,14 @@ class _ParquetLoader:
     path : `str`
         Full path to the file to be loaded.
     """
-
     def __init__(self, path: str):
         self.file = pq.ParquetFile(path)
         self.md = json.loads(self.file.metadata.metadata[b"pandas"])
         indexes = self.md["column_indexes"]
         if len(indexes) == 1:
-            self.columns = pd.Index(name for name in self.file.metadata.schema.names
-                                    if not name.startswith("__"))
+            self.columns = pd.Index(
+                name for name in self.file.metadata.schema.names if not name.startswith("__")
+            )
         else:
             raw_columns = list(self._splitColumnnNames(len(indexes), self.file.metadata.schema.names))
             self.columns = pd.MultiIndex.from_tuples(raw_columns, names=[f["name"] for f in indexes])
@@ -89,13 +89,15 @@ class _ParquetLoader:
         tuple : `tuple` of `str`
             A multi-index column name tuple.
         """
-        pattern = re.compile(r"\({}\)".format(', '.join(["'(.*)'"] * n)))
+        pattern = re.compile(r"\({}\)".format(", ".join(["'(.*)'"] * n)))
         for name in names:
             m = re.search(pattern, name)
             if m is not None:
                 yield m.groups()
 
-    def _standardizeColumnParameter(self, columns: Dict[str, Union[str, List[str]]]) -> Iterator[str]:
+    def _standardizeColumnParameter(
+        self, columns: Union[List[str], List[tuple], Dict[str, Union[str, List[str]]]]
+    ) -> Iterator[str]:
         """Transform a dictionary index into a multi-index column into a
         string directly understandable by PyArrow.
 
@@ -111,22 +113,30 @@ class _ParquetLoader:
         name : `str`
             Stringified tuple representing a multi-index column name.
         """
-        if not isinstance(columns, collections.abc.Mapping):
-            raise ValueError("columns parameter for multi-index data frame must be a dictionary.")
-        if not set(self.indexLevelNames).issuperset(columns.keys()):
-            raise ValueError(f"Cannot use dict with keys {set(columns.keys())} "
-                             f"to select columns from {self.indexLevelNames}.")
-        assert isinstance(self.columns, pd.MultiIndex)
-        factors = [iterable(columns.get(level, self.columns.levels[i]))
-                   for i, level in enumerate(self.indexLevelNames)]
-        for requested in itertools.product(*factors):
-            for i, value in enumerate(requested):
-                if value not in self.columns.levels[i]:
-                    raise ValueError(f"Unrecognized value {value!r} for index {self.indexLevelNames[i]!r}.")
-            yield str(requested)
+        if isinstance(columns, list):
+            for requested in columns:
+                if not isinstance(requested, tuple):
+                    raise ValueError("columns parameter for multi-index data frame"
+                                     "must be either a dictionary or list of tuples.")
+                yield str(requested)
+        else:
+            if not isinstance(columns, collections.abc.Mapping):
+                raise ValueError("columns parameter for multi-index data frame"
+                                 "must be either a dictionary or list of tuples.")
+            if not set(self.indexLevelNames).issuperset(columns.keys()):
+                raise ValueError(f"Cannot use dict with keys {set(columns.keys())} "
+                                 f"to select columns from {self.indexLevelNames}.")
+            factors = [iterable(columns.get(level, self.columns.levels[i]))
+                       for i, level in enumerate(self.indexLevelNames)]
+            for requested in itertools.product(*factors):
+                for i, value in enumerate(requested):
+                    if value not in self.columns.levels[i]:
+                        raise ValueError(f"Unrecognized value {value!r}"
+                                         f"for index {self.indexLevelNames[i]!r}.")
+                yield str(requested)
 
-    def read(self, columns: Union[str, List[str], Dict[str, Union[str, List[str]]]] = None
-             ) -> pd.DataFrame:
+    def read(self, columns: Union[str, List[str], List[tuple],
+                                  Dict[str, Union[str, List[str]]]] = None) -> pd.DataFrame:
         """Read some or all of the Parquet file into a `pandas.DataFrame`
         instance.
 
@@ -144,7 +154,7 @@ class _ParquetLoader:
         if columns is None:
             return self.file.read(use_pandas_metadata=True).to_pandas()
         elif isinstance(self.columns, pd.MultiIndex):
-            assert isinstance(columns, dict)
+            assert isinstance(columns, dict) or isinstance(columns, list)
             columns = list(self._standardizeColumnParameter(columns))
         else:
             for column in columns:
@@ -157,7 +167,7 @@ def _writeParquet(path: str, inMemoryDataset: pd.DataFrame) -> None:
     """Write a `pandas.DataFrame` instance as a Parquet file.
     """
     table = pa.Table.from_pandas(inMemoryDataset)
-    pq.write_table(table, path, compression='none')
+    pq.write_table(table, path, compression="none")
 
 
 class ParquetFormatter(Formatter):
@@ -167,12 +177,13 @@ class ParquetFormatter(Formatter):
     This formatter is for the
     :ref:`lsst.daf.butler-concrete_storage_classes_dataframe` StorageClass.
     """
+
     extension = ".parq"
 
     def read(self, component: Optional[str] = None) -> Any:
         # Docstring inherited from Formatter.read.
         loader = _ParquetLoader(self.fileDescriptor.location.path)
-        if component == 'columns':
+        if component == "columns":
             return loader.columns
 
         if not self.fileDescriptor.parameters:
