@@ -26,8 +26,8 @@ import unittest
 
 import astropy.time
 
-from lsst.daf.butler.registry.queries.exprParser import exprTree, TreeVisitor, ParserYacc, ParseError
-from lsst.daf.butler.registry.queries.exprParser.parserYacc import _parseTimeString
+from lsst.daf.butler.registry.queries.expressions import exprTree, TreeVisitor, ParserYacc, ParseError
+from lsst.daf.butler.registry.queries.expressions.parser.parserYacc import _parseTimeString
 
 
 class _Visitor(TreeVisitor):

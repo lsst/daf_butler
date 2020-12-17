@@ -50,7 +50,7 @@ import warnings
 import astropy.time
 import sqlalchemy
 
-from ...core import TimespanDatabaseRepresentation, ddl, time_utils
+from ...core import SpatialRegionDatabaseRepresentation, TimespanDatabaseRepresentation, ddl, time_utils
 from .._exceptions import ConflictingDefinitionError
 
 _IN_SAVEPOINT_TRANSACTION = "IN_SAVEPOINT_TRANSACTION"
@@ -962,7 +962,7 @@ class Database(ABC):
     @classmethod
     def getTimespanRepresentation(cls) -> Type[TimespanDatabaseRepresentation]:
         """Return a `type` that encapsulates the way `Timespan` objects are
-        recommended to be stored in this database.
+        stored in this database.
 
         `Database` does not automatically use the return type of this method
         anywhere else; calling code is responsible for making sure that DDL
@@ -970,8 +970,8 @@ class Database(ABC):
 
         Returns
         -------
-        tsRepr : `type` (`DatabaseTimespanRepresention` subclass)
-            A type that encapsultes the way `Timespan` objects should be
+        TimespanReprClass : `type` (`TimespanDatabaseRepresention` subclass)
+            A type that encapsulates the way `Timespan` objects should be
             stored in this database.
 
         Notes
@@ -994,6 +994,28 @@ class Database(ABC):
            representations there.
         """
         return TimespanDatabaseRepresentation.Compound
+
+    @classmethod
+    def getSpatialRegionRepresentation(cls) -> Type[SpatialRegionDatabaseRepresentation]:
+        """Return a `type` that encapsulates the way `lsst.sphgeom.Region`
+        objects are stored in this database.
+
+        `Database` does not automatically use the return type of this method
+        anywhere else; calling code is responsible for making sure that DDL
+        and queries are consistent with it.
+
+        Returns
+        -------
+        RegionReprClass : `type` (`SpatialRegionDatabaseRepresention` subclass)
+            A type that encapsulates the way `lsst.sphgeom.Region` objects
+            should be stored in this database.
+
+        Notes
+        -----
+        See `getTimespanRepresentation` for comments on why this method is not
+        more tightly integrated with the rest of the `Database` interface.
+        """
+        return SpatialRegionDatabaseRepresentation
 
     def sync(self, table: sqlalchemy.schema.Table, *,
              keys: Dict[str, Any],
@@ -1090,7 +1112,7 @@ class Database(ABC):
 
                 def safeNotEqual(a: Any, b: Any) -> bool:
                     if isinstance(a, astropy.time.Time):
-                        return not time_utils.times_equal(a, b)
+                        return not time_utils.TimeConverter().times_equal(a, b)
                     return a != b
 
                 inconsistencies = [f"{k}: {existing[k]!r} != {v!r}"

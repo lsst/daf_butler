@@ -24,7 +24,6 @@ __all__ = ("Query",)
 
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-import copy
 import enum
 import itertools
 from typing import (
@@ -52,7 +51,7 @@ from ...core import (
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
-    REGION_FIELD_SPEC,
+    SpatialRegionDatabaseRepresentation,
     SimpleQuery,
 )
 from ..interfaces import Database
@@ -387,9 +386,12 @@ class Query(ABC):
         for dimension in self.graph:
             addDimensionForeignKey(spec, dimension, primaryKey=unique, constraint=constraints)
         for element in self.spatial:
-            field = copy.copy(REGION_FIELD_SPEC)
-            field.name = f"{element.name}_region"
-            spec.fields.add(field)
+            spec.fields.update(
+                SpatialRegionDatabaseRepresentation.makeFieldSpecs(
+                    nullable=True,
+                    name=f"{element.name}_region",
+                )
+            )
         datasetColumns = self.getDatasetColumns()
         if datasetColumns is not None:
             self.managers.datasets.addDatasetForeignKey(spec, primaryKey=unique, constraint=constraints)
@@ -645,7 +647,7 @@ class DirectQuery(Query):
 
     def getRegionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from Query.
-        return self._columns.regions[name].label(f"{name}_region")
+        return self._columns.regions[name].column.label(f"{name}_region")
 
     def getDatasetColumns(self) -> Optional[DatasetQueryColumns]:
         # Docstring inherited from Query.

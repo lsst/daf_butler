@@ -455,7 +455,7 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
 
 
 def makeCalibTableSpec(datasetType: DatasetType, collections: Type[CollectionManager],
-                       tsRepr: Type[TimespanDatabaseRepresentation]) -> ddl.TableSpec:
+                       TimespanReprClass: Type[TimespanDatabaseRepresentation]) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag +
     validity range table used by the classes in this package.
 
@@ -525,15 +525,15 @@ def makeCalibTableSpec(datasetType: DatasetType, collections: Type[CollectionMan
             )
     # Add validity-range field(s) (part of the temporal lookup
     # index/constraint).
-    tsFieldSpecs = tsRepr.makeFieldSpecs(nullable=False)
+    tsFieldSpecs = TimespanReprClass.makeFieldSpecs(nullable=False)
     for fieldSpec in tsFieldSpecs:
         tableSpec.fields.add(fieldSpec)
-    if tsRepr.hasExclusionConstraint():
+    if TimespanReprClass.hasExclusionConstraint():
         # This database's timespan representation can define a database-level
         # constraint that prevents overlapping validity ranges for entries with
         # the same DatasetType, collection, and data ID.
         # This also creates an index.
-        index.append(tsRepr)
+        index.append(TimespanReprClass)
         tableSpec.exclusion.add(tuple(index))
     else:
         # No database-level constraint possible.  We'll have to simulate that

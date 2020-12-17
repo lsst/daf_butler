@@ -35,6 +35,7 @@ from ...core import (
     GovernorDimension,
     NamedKeyDict,
     NamedKeyMapping,
+    SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import (
@@ -69,7 +70,8 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         self._element = element
         self._target = element.universe[viewOf]
         self._targetSpec = self._target.RecordClass.fields.makeTableSpec(
-            tsRepr=self._db.getTimespanRepresentation(),
+            RegionReprClass=self._db.getSpatialRegionRepresentation(),
+            TimespanReprClass=self._db.getTimespanRepresentation(),
         )
         self._viewOf = viewOf
         self._query = None  # Constructed on first use.
@@ -136,7 +138,7 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def join(
         self,
         builder: QueryBuilder, *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
+        regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.

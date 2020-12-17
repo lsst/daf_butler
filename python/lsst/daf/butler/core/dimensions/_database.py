@@ -69,7 +69,7 @@ class DatabaseTopologicalFamily(TopologicalFamily):
     name : `str`
         Name of the family.
     space : `TopologicalSpace`
-        Space in which this families regions live.
+        Space in which this family's regions live.
     members : `NamedValueAbstractSet` [ `DimensionElement` ]
         The members of this family, ordered according to the priority used
         in `choose` (first-choice member first).

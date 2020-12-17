@@ -38,6 +38,7 @@ from ...core import (
     GovernorDimension,
     NamedKeyDict,
     NamedKeyMapping,
+    SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import (
@@ -91,7 +92,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def join(
         self,
         builder: QueryBuilder, *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
+        regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.

@@ -22,7 +22,6 @@ from __future__ import annotations
 
 __all__ = (
     "addDimensionForeignKey",
-    "REGION_FIELD_SPEC",
 )
 
 import copy
@@ -31,15 +30,11 @@ from typing import Tuple, Type, TYPE_CHECKING
 
 from .. import ddl
 from ..named import NamedValueSet
+from .._topology import SpatialRegionDatabaseRepresentation
 from ..timespan import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._elements import DimensionElement, Dimension
-
-
-# Most regions are small (they're quadrilaterals), but visit ones can be quite
-# large because they have a complicated boundary.  For HSC, about ~1400 bytes.
-REGION_FIELD_SPEC = ddl.FieldSpec(name="region", nbytes=2048, dtype=ddl.Base64Region)
 
 
 def _makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
@@ -145,6 +140,7 @@ class DimensionElementFields:
         # be primary keys in the table for this dimension.
         self.required = NamedValueSet()
         self.dimensions = NamedValueSet()
+        self.facts = NamedValueSet()
         self.standard = NamedValueSet()
         dependencies = []
         for dimension in element.required:
@@ -176,26 +172,34 @@ class DimensionElementFields:
             self._tableSpec.fields.add(fieldSpec)
             self._tableSpec.unique.add(tuple(dependencies) + (fieldSpec.name,))
             self.standard.add(fieldSpec)
+            self.facts.add(fieldSpec)
         # Add other metadata fields.
         for fieldSpec in element.metadata:
             self._tableSpec.fields.add(fieldSpec)
             self.standard.add(fieldSpec)
+            self.facts.add(fieldSpec)
         names = list(self.standard.names)
         # Add fields for regions and/or timespans.
         if element.spatial is not None:
-            self._tableSpec.fields.add(REGION_FIELD_SPEC)
-            names.append(REGION_FIELD_SPEC.name)
+            names.append(SpatialRegionDatabaseRepresentation.NAME)
         if element.temporal is not None:
             names.append(TimespanDatabaseRepresentation.NAME)
         self.names = tuple(names)
 
-    def makeTableSpec(self, tsRepr: Type[TimespanDatabaseRepresentation]) -> ddl.TableSpec:
+    def makeTableSpec(
+        self,
+        RegionReprClass: Type[SpatialRegionDatabaseRepresentation],
+        TimespanReprClass: Type[TimespanDatabaseRepresentation],
+    ) -> ddl.TableSpec:
         """Construct a complete specification for a table that could hold the
         records of this element.
 
         Parameters
         ----------
-        tsRepr : `type` (`TimespanDatabaseRepresentation` subclass)
+        RegionReprClass : `type` [ `SpatialRegionDatabaseRepresentation` ]
+            Class object that specifies how spatial regions are represented in
+            the database.
+        TimespanReprClass : `type` [ `TimespanDatabaseRepresentation` ]
             Class object that specifies how timespans are represented in the
             database.
 
@@ -204,15 +208,17 @@ class DimensionElementFields:
         spec : `ddl.TableSpec`
             Specification for a table.
         """
-        if self.element.temporal is not None:
+        if self.element.temporal is not None or self.element.spatial is not None:
             spec = ddl.TableSpec(
                 fields=NamedValueSet(self._tableSpec.fields),
                 unique=self._tableSpec.unique,
                 indexes=self._tableSpec.indexes,
                 foreignKeys=self._tableSpec.foreignKeys,
             )
-            for fieldSpec in tsRepr.makeFieldSpecs(nullable=True):
-                spec.fields.add(fieldSpec)
+            if self.element.spatial is not None:
+                spec.fields.update(RegionReprClass.makeFieldSpecs(nullable=True))
+            if self.element.temporal is not None:
+                spec.fields.update(TimespanReprClass.makeFieldSpecs(nullable=True))
         else:
             spec = self._tableSpec
         return spec
@@ -221,7 +227,7 @@ class DimensionElementFields:
         lines = [f"{self.element.name}: "]
         lines.extend(f"  {field.name}: {field.getPythonType().__name__}" for field in self.standard)
         if self.element.spatial is not None:
-            lines.append("  region: lsst.sphgeom.ConvexPolygon")
+            lines.append("  region: lsst.sphgeom.Region")
         if self.element.temporal is not None:
             lines.append("  timespan: lsst.daf.butler.Timespan")
         return "\n".join(lines)
@@ -246,6 +252,14 @@ class DimensionElementFields:
     """The fields of this table that correspond to the element's direct
     required and implied dimensions, in that order, i.e.
     `DimensionElement.dimensions` (`NamedValueSet` [ `ddl.FieldSpec` ]).
+    """
+
+    facts: NamedValueSet[ddl.FieldSpec]
+    """The standard fields of this table that do not correspond to dimensions
+    (`NamedValueSet` [ `ddl.FieldSpec` ]).
+
+    This is equivalent to ``standard - dimensions`` (but possibly in a
+    different order).
     """
 
     standard: NamedValueSet[ddl.FieldSpec]

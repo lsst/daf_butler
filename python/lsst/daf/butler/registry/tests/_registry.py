@@ -1668,3 +1668,81 @@ class RegistryTests(ABC):
         datasets = list(registry.queryDatasets(..., collections=..., where=where))
         len2 = len(datasets)
         self.assertEqual(len2, 0)
+
+    def testTimespanQueries(self):
+        """Test query expressions involving timespans.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "hsc-rc2-subset.yaml")
+        # All exposures in the database; mapping from ID to timespan.
+        visits = {record.id: record.timespan for record in registry.queryDimensionRecords("visit")}
+        # Just those IDs, sorted (which is also temporal sorting, because HSC
+        # exposure IDs are monotonically increasing).
+        ids = sorted(visits.keys())
+        self.assertGreater(len(ids), 20)
+        # Pick some quasi-random indexes into `ids` to play with.
+        i1 = int(len(ids)*0.1)
+        i2 = int(len(ids)*0.3)
+        i3 = int(len(ids)*0.6)
+        i4 = int(len(ids)*0.8)
+        # Extract some times from those: just before the beginning of i1 (which
+        # should be after the end of the exposure before), exactly the
+        # beginning of i2, just after the beginning of i3 (and before its end),
+        # and the exact end of i4.
+        t1 = visits[ids[i1]].begin - astropy.time.TimeDelta(1.0, format="sec")
+        self.assertGreater(t1, visits[ids[i1 - 1]].end)
+        t2 = visits[ids[i2]].begin
+        t3 = visits[ids[i3]].begin + astropy.time.TimeDelta(1.0, format="sec")
+        self.assertLess(t3, visits[ids[i3]].end)
+        t4 = visits[ids[i4]].end
+        # Make sure those are actually in order.
+        self.assertEqual([t1, t2, t3, t4], sorted([t4, t3, t2, t1]))
+
+        bind = {
+            "t1": t1,
+            "t2": t2,
+            "t3": t3,
+            "t4": t4,
+            "ts23": Timespan(t2, t3),
+        }
+
+        def query(where):
+            """Helper function that queries for visit data IDs and returns
+            results as a sorted, deduplicated list of visit IDs.
+            """
+            return sorted(
+                {dataId["visit"] for dataId in registry.queryDataIds("visit",
+                                                                     instrument="HSC",
+                                                                     bind=bind,
+                                                                     where=where)}
+            )
+
+        # Try a bunch of timespan queries, mixing up the bounds themselves,
+        # where they appear in the expression, and how we get the timespan into
+        # the expression.
+
+        # t1 is before the start of i1, so this should not include i1.
+        self.assertEqual(ids[:i1], query("visit.timespan OVERLAPS (null, t1)"))
+        # t2 is exactly at the start of i2, but ends are exclusive, so these
+        # should not include i2.
+        self.assertEqual(ids[i1:i2], query("(t1, t2) OVERLAPS visit.timespan"))
+        self.assertEqual(ids[:i2], query("visit.timespan < (t2, t4)"))
+        # t3 is in the middle of i3, so this should include i3.
+        self.assertEqual(ids[i2:i3 + 1], query("visit.timespan OVERLAPS ts23"))
+        # This one should not include t3 by the same reasoning.
+        self.assertEqual(ids[i3 + 1:], query("visit.timespan > (t1, t3)"))
+        # t4 is exactly at the end of i4, so this should include i4.
+        self.assertEqual(ids[i3:i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}', t4)"))
+        # i4's upper bound of t4 is exclusive so this should not include t4.
+        self.assertEqual(ids[i4 + 1:], query("visit.timespan OVERLAPS (t4, NULL)"))
+
+        # Now some timespan vs. time scalar queries.
+        self.assertEqual(ids[:i2], query("visit.timespan < t2"))
+        self.assertEqual(ids[:i2], query("t2 > visit.timespan"))
+        self.assertEqual(ids[i3 + 1:], query("visit.timespan > t3"))
+        self.assertEqual(ids[i3 + 1:], query("t3 < visit.timespan"))
+        self.assertEqual(ids[i3:i3+1], query("visit.timespan OVERLAPS t3"))
+        self.assertEqual(ids[i3:i3+1], query(f"T'{t3.tai.isot}' OVERLAPS visit.timespan"))
+
+        # Empty timespans should not overlap anything.
+        self.assertEqual([], query("visit.timespan OVERLAPS (t3, t2)"))

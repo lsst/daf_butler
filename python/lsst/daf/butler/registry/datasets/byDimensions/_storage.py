@@ -241,8 +241,10 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 lambda name: self._calibs.columns[name],  # type: ignore
             )
         # Add WHERE clause for timespan overlaps.
-        tsRepr = self._db.getTimespanRepresentation()
-        query.where.append(tsRepr.fromSelectable(self._calibs).overlaps(timespan))
+        TimespanReprClass = self._db.getTimespanRepresentation()
+        query.where.append(
+            TimespanReprClass.fromSelectable(self._calibs).overlaps(TimespanReprClass.fromLiteral(timespan))
+        )
         return query
 
     def certify(self, collection: CollectionRecord, datasets: Iterable[DatasetRef],
@@ -254,7 +256,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         if collection.type is not CollectionType.CALIBRATION:
             raise TypeError(f"Cannot certify into collection '{collection.name}' "
                             f"of type {collection.type.name}; must be CALIBRATION.")
-        tsRepr = self._db.getTimespanRepresentation()
+        TimespanReprClass = self._db.getTimespanRepresentation()
         protoRow = {
             self._collections.getCollectionForeignKeyName(): collection.key,
             "dataset_type_id": self._dataset_type_id,
@@ -263,12 +265,14 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         governorValues: Dict[str, Set[str]] = {
             name: set() for name in self.datasetType.dimensions.governors.names
         }
-        dataIds: Optional[Set[DataCoordinate]] = set() if not tsRepr.hasExclusionConstraint() else None
+        dataIds: Optional[Set[DataCoordinate]] = (
+            set() if not TimespanReprClass.hasExclusionConstraint() else None
+        )
         for dataset in datasets:
             row = dict(protoRow, dataset_id=dataset.getCheckedId())
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
-            tsRepr.update(timespan, result=row)
+            TimespanReprClass.update(timespan, result=row)
             for governorName, values in governorValues.items():
                 values.add(dataset.dataId[governorName])  # type: ignore
             rows.append(row)
@@ -279,7 +283,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # inserted there.
         self._ensureSummaries(collection, governorValues)
         # Update the association table itself.
-        if tsRepr.hasExclusionConstraint():
+        if TimespanReprClass.hasExclusionConstraint():
             # Rely on database constraint to enforce invariants; we just
             # reraise the exception for consistency across DB engines.
             try:
@@ -325,7 +329,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         if collection.type is not CollectionType.CALIBRATION:
             raise TypeError(f"Cannot decertify from collection '{collection.name}' "
                             f"of type {collection.type.name}; must be CALIBRATION.")
-        tsRepr = self._db.getTimespanRepresentation()
+        TimespanReprClass = self._db.getTimespanRepresentation()
         # Construct a SELECT query to find all rows that overlap our inputs.
         dataIdSet: Optional[DataCoordinateSet]
         if dataIds is not None:
@@ -357,10 +361,10 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 newInsertRow["dataset_id"] = row["dataset_id"]
                 for name in self.datasetType.dimensions.required.names:
                     newInsertRow[name] = row[name]
-                rowTimespan = tsRepr.extract(row)
+                rowTimespan = TimespanReprClass.extract(row)
                 assert rowTimespan is not None, "Field should have a NOT NULL constraint."
                 for diffTimespan in rowTimespan.difference(timespan):
-                    rowsToInsert.append(tsRepr.update(diffTimespan, result=newInsertRow.copy()))
+                    rowsToInsert.append(TimespanReprClass.update(diffTimespan, result=newInsertRow.copy()))
             # Run the DELETE and INSERT queries.
             self._db.delete(self._calibs, ["id"], *rowsToDelete)
             self._db.insert(self._calibs, *rowsToInsert)
@@ -408,23 +412,29 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         if isinstance(ingestDate, Timespan):
             # Tmespan is astropy Time (usually in TAI) and ingest_date is
             # TIMESTAMP, convert values to Python datetime for sqlalchemy.
+            if ingestDate.isEmpty():
+                raise RuntimeError("Empty timespan constraint provided for ingest_date.")
             if ingestDate.begin is not None:
-                begin = ingestDate.begin.utc.datetime
+                begin = ingestDate.begin.utc.datetime  # type: ignore
                 query.where.append(self._static.dataset.ingest_date >= begin)
             if ingestDate.end is not None:
-                end = ingestDate.end.utc.datetime
+                end = ingestDate.end.utc.datetime  # type: ignore
                 query.where.append(self._static.dataset.ingest_date < end)
         # And now we finally join in the tags or calibs table.
         if collection.type is CollectionType.CALIBRATION:
             assert self._calibs is not None, \
                 "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
-            tsRepr = self._db.getTimespanRepresentation()
+            TimespanReprClass = self._db.getTimespanRepresentation()
             # Add the timespan column(s) to the result columns, or constrain
             # the timespan via an overlap condition.
             if timespan is SimpleQuery.Select:
-                kwargs.update({k: SimpleQuery.Select for k in tsRepr.getFieldNames()})
+                kwargs.update({k: SimpleQuery.Select for k in TimespanReprClass.getFieldNames()})
             elif timespan is not None:
-                query.where.append(tsRepr.fromSelectable(self._calibs).overlaps(timespan))
+                query.where.append(
+                    TimespanReprClass.fromSelectable(self._calibs).overlaps(
+                        TimespanReprClass.fromLiteral(timespan)
+                    )
+                )
             query.join(
                 self._calibs,
                 onclause=(self._static.dataset.columns.id == self._calibs.columns.dataset_id),

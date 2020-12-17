@@ -23,13 +23,12 @@ from __future__ import annotations
 __all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import AbstractSet, Iterator, List, Optional, Union
+from typing import AbstractSet, Any, Iterator, List, Mapping, Optional, Type, Union
 
 from sqlalchemy.sql import ColumnElement
 
 from lsst.sphgeom import Region
 from ...core import (
-    TimespanDatabaseRepresentation,
     DataCoordinate,
     DatasetType,
     Dimension,
@@ -41,6 +40,8 @@ from ...core import (
     NamedValueAbstractSet,
     NamedValueSet,
     SkyPixDimension,
+    SpatialRegionDatabaseRepresentation,
+    TimespanDatabaseRepresentation,
 )
 from ...core.utils import cached_getter, immutable
 from ..interfaces import (
@@ -51,7 +52,7 @@ from ..interfaces import (
 from ..wildcards import GovernorDimensionRestriction
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
-from .exprParser import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
+from .expressions import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
 
 
 @immutable
@@ -63,8 +64,11 @@ class QueryWhereExpression:
     expression : `str`, optional
         The string expression to parse.  If `None`, a where expression that
         always evaluates to `True` is implied.
+    bind : `Mapping` [ `str`, `object` ], optional
+        Mapping containing literal values that should be injected into the
+        query expression, keyed by the identifiers they replace.
     """
-    def __init__(self, expression: Optional[str] = None):
+    def __init__(self, expression: Optional[str] = None, bind: Optional[Mapping[str, Any]] = None):
         if expression:
             try:
                 parser = ParserYacc()
@@ -74,6 +78,9 @@ class QueryWhereExpression:
             assert self._tree is not None
         else:
             self._tree = None
+        if bind is None:
+            bind = {}
+        self._bind = bind
 
     def attach(
         self,
@@ -107,6 +114,17 @@ class QueryWhereExpression:
             region = dataId.region
         if dataId is None:
             dataId = DataCoordinate.makeEmpty(graph.universe)
+        if self._bind and check:
+            for identifier in self._bind:
+                if identifier in graph.universe.getStaticElements().names:
+                    raise RuntimeError(
+                        f"Bind parameter key {identifier!r} conflicts with a dimension element."
+                    )
+                table, sep, column = identifier.partition('.')
+                if column and table in graph.universe.getStaticElements().names:
+                    raise RuntimeError(
+                        f"Bind parameter key {identifier!r} looks like a dimension column."
+                    )
         restriction = GovernorDimensionRestriction(graph.universe)
         summary: InspectionSummary
         if self._tree is not None:
@@ -123,7 +141,7 @@ class QueryWhereExpression:
                 from .expressions import CheckVisitor
                 # Check the expression for consistency and completeness.
                 try:
-                    summary = expr.visit(CheckVisitor(dataId, graph))
+                    summary = expr.visit(CheckVisitor(dataId, graph, self._bind.keys()))
                 except RuntimeError as err:
                     exprOriginal = str(self._tree)
                     exprNormal = str(expr.toTree())
@@ -141,7 +159,7 @@ class QueryWhereExpression:
                 )
             else:
                 from .expressions import InspectionVisitor
-                summary = self._tree.visit(InspectionVisitor(graph.universe))
+                summary = self._tree.visit(InspectionVisitor(graph.universe, self._bind.keys()))
         else:
             from .expressions import InspectionSummary
             summary = InspectionSummary()
@@ -150,6 +168,7 @@ class QueryWhereExpression:
             dataId,
             dimensions=summary.dimensions,
             columns=summary.columns,
+            bind=self._bind,
             restriction=restriction,
             region=region,
         )
@@ -187,6 +206,11 @@ class QueryWhereClause:
     (`NamedKeyMapping` [ `DimensionElement`, `Set` [ `str` ] ]).
     """
 
+    bind: Mapping[str, Any]
+    """Mapping containing literal values that should be injected into the
+    query expression, keyed by the identifiers they replace (`Mapping`).
+    """
+
     region: Optional[Region]
     """A spatial region that all result rows must overlap
     (`lsst.sphgeom.Region` or `None`).
@@ -197,6 +221,16 @@ class QueryWhereClause:
     imposed by the string expression or data ID
     (`GovernorDimensionRestriction`).
     """
+
+    @property  # type: ignore
+    @cached_getter
+    def temporal(self) -> NamedValueAbstractSet[DimensionElement]:
+        """Dimension elements whose timespans are referenced by this
+        expression (`NamedValueAbstractSet` [ `DimensionElement` ])
+        """
+        return NamedValueSet(
+            e for e, c in self.columns.items() if TimespanDatabaseRepresentation.NAME in c
+        ).freeze()
 
 
 @immutable
@@ -221,6 +255,9 @@ class QuerySummary:
     whereRegion : `lsst.sphgeom.Region`, optional
         A spatial region that all rows must overlap.  If `None` and ``dataId``
         is not `None`, ``dataId.region`` will be used.
+    bind : `Mapping` [ `str`, `object` ], optional
+        Mapping containing literal values that should be injected into the
+        query expression, keyed by the identifiers they replace.
     check : `bool`
         If `True` (default) check the query for consistency.  This may reject
         some valid queries that resemble common mistakes (e.g. queries for
@@ -230,12 +267,15 @@ class QuerySummary:
                  dataId: Optional[DataCoordinate] = None,
                  expression: Optional[Union[str, QueryWhereExpression]] = None,
                  whereRegion: Optional[Region] = None,
+                 bind: Optional[Mapping[str, Any]] = None,
                  check: bool = True):
         self.requested = requested
         if expression is None:
-            expression = QueryWhereExpression(None)
+            expression = QueryWhereExpression(None, bind)
         elif isinstance(expression, str):
-            expression = QueryWhereExpression(expression)
+            expression = QueryWhereExpression(expression, bind)
+        elif bind is not None:
+            raise TypeError("New bind parameters passed, but expression is already a QueryWhereExpression.")
         self.where = expression.attach(self.requested, dataId=dataId, region=whereRegion, check=check)
 
     requested: DimensionGraph
@@ -256,9 +296,9 @@ class QuerySummary:
 
     @property  # type: ignore
     @cached_getter
-    def spatial(self) -> NamedValueSet[DimensionElement]:
+    def spatial(self) -> NamedValueAbstractSet[DimensionElement]:
         """Dimension elements whose regions and skypix IDs should be included
-        in the query (`NamedValueSet` of `DimensionElement`).
+        in the query (`NamedValueAbstractSet` of `DimensionElement`).
         """
         # An element may participate spatially in the query if:
         # - it's the most precise spatial element for its system in the
@@ -284,35 +324,24 @@ class QuerySummary:
                 # There is no spatial join or filter in this query.  Even
                 # if this element might be associated with spatial
                 # information, we don't need it for this query.
-                return NamedValueSet()
+                return NamedValueSet().freeze()
         elif len(result) > 1:
             # There's a spatial join.  Those require the common SkyPix
             # system to be included in the query in order to connect them.
             result.add(self.universe.commonSkyPix)
-        return result
+        return result.freeze()
 
     @property  # type: ignore
     @cached_getter
-    def temporal(self) -> NamedValueSet[DimensionElement]:
+    def temporal(self) -> NamedValueAbstractSet[DimensionElement]:
         """Dimension elements whose timespans should be included in the
         query (`NamedValueSet` of `DimensionElement`).
         """
-        # An element may participate temporally in the query if:
-        # - it's the most precise temporal element for its system in the
-        #   requested dimensions (i.e. in `self.requested.temporal`);
-        # - it isn't also given at query construction time.
-        result: NamedValueSet[DimensionElement] = NamedValueSet()
-        for family in self.mustHaveKeysJoined.temporal:
-            element = family.choose(self.mustHaveKeysJoined.elements)
-            assert isinstance(element, DimensionElement)
-            if element not in self.where.dataId.graph.elements:
-                result.add(element)
-        if len(result) == 1 and not self.where.dataId.graph.temporal:
-            # No temporal join or filter.  Even if this element might be
-            # associated with temporal information, we don't need it for this
-            # query.
-            return NamedValueSet()
-        return result
+        if len(self.mustHaveKeysJoined.temporal) > 1:
+            # We don't actually have multiple temporal families in our current
+            # dimension configuration, so this limitation should be harmless.
+            raise NotImplementedError("Queries that should involve temporal joins are not yet supported.")
+        return self.where.temporal
 
     @property  # type: ignore
     @cached_getter
@@ -329,7 +358,7 @@ class QuerySummary:
 
     @property  # type: ignore
     @cached_getter
-    def mustHaveTableJoined(self) -> NamedValueSet[DimensionElement]:
+    def mustHaveTableJoined(self) -> NamedValueAbstractSet[DimensionElement]:
         """Dimension elements whose associated tables must appear in the
         query's FROM clause (`NamedValueSet` of `DimensionElement`).
         """
@@ -340,7 +369,7 @@ class QuerySummary:
         for element in self.mustHaveKeysJoined.union(self.where.dataId.graph).elements:
             if element.alwaysJoin:
                 result.add(element)
-        return result
+        return result.freeze()
 
 
 @dataclass
@@ -407,10 +436,10 @@ class QueryColumns:
     in `QuerySummary.temporal`.
     """
 
-    regions: NamedKeyDict[DimensionElement, ColumnElement]
+    regions: NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]
     """Columns that correspond to regions for elements that participate in a
     spatial join or filter in the query (`NamedKeyDict` mapping
-    `DimensionElement` to `ColumnElement`).
+    `DimensionElement` to `SpatialRegionDatabaseRepresentation`).
 
     In a `Query`, the keys of this dictionary must be exactly the elements
     in `QuerySummary.spatial`.
@@ -469,4 +498,9 @@ class RegistryManagers:
 
     dimensions: DimensionRecordStorageManager
     """Manager for dimensions (`DimensionRecordStorageManager`).
+    """
+
+    TimespanReprClass: Type[TimespanDatabaseRepresentation]
+    """Type that encapsulates how timespans are represented in this database
+    (`type`; subclass of `TimespanDatabaseRepresentation`).
     """

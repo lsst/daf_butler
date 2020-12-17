@@ -42,8 +42,7 @@ from typing import (
 
 import astropy.time
 
-from .treeVisitor import TreeVisitor
-from .exprTree import BinaryOp, Node, Parens, UnaryOp
+from .parser import BinaryOp, Node, Parens, TreeVisitor, UnaryOp
 
 
 class LogicalBinaryOperator(enum.Enum):
@@ -414,6 +413,7 @@ BINARY_OPERATOR_PRECEDENCE = {
     "<=": PrecedenceTier.COMPARISON,
     ">": PrecedenceTier.COMPARISON,
     ">=": PrecedenceTier.COMPARISON,
+    "OVERLAPS": PrecedenceTier.COMPARISON,
     "+": PrecedenceTier.VALUE_BINARY_OP,
     "-": PrecedenceTier.VALUE_BINARY_OP,
     "*": PrecedenceTier.VALUE_BINARY_OP,

@@ -52,10 +52,10 @@ from ...core import (
     NamedKeyDict,
     NamedKeyMapping,
     NamedValueSet,
-    REGION_FIELD_SPEC,
     SimpleQuery,
     SkyPixDimension,
     SkyPixSystem,
+    SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import (
@@ -122,7 +122,10 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
-        spec = element.RecordClass.fields.makeTableSpec(tsRepr=db.getTimespanRepresentation())
+        spec = element.RecordClass.fields.makeTableSpec(
+            RegionReprClass=db.getSpatialRegionRepresentation(),
+            TimespanReprClass=db.getTimespanRepresentation(),
+        )
         if context is not None:
             table = context.addTable(element.name, spec)
         else:
@@ -165,7 +168,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def join(
         self,
         builder: QueryBuilder, *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
+        regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
@@ -177,7 +180,8 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 self._skyPixOverlap.select(self.element.universe.commonSkyPix, Ellipsis),
                 dimensions,
             )
-            regions[self.element] = self._table.columns[REGION_FIELD_SPEC.name]
+            regionsInTable = self._db.getSpatialRegionRepresentation().fromSelectable(self._table)
+            regions[self.element] = regionsInTable
         joinOn = builder.startJoin(self._table, self.element.dimensions,
                                    self.element.RecordClass.fields.dimensions.names)
         if timespans is not None:
@@ -196,24 +200,24 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         if self.element.spatial is not None:
             query.columns.append(self._table.columns["region"])
         if self.element.temporal is not None:
-            tsRepr = self._db.getTimespanRepresentation()
-            query.columns.extend(self._table.columns[name] for name in tsRepr.getFieldNames())
+            TimespanReprClass = self._db.getTimespanRepresentation()
+            query.columns.extend(self._table.columns[name] for name in TimespanReprClass.getFieldNames())
         query.join(self._table)
         dataIds.constrain(query, lambda name: self._fetchColumns[name])
         for row in self._db.query(query.combine()):
             values = dict(row)
             if self.element.temporal is not None:
-                values[TimespanDatabaseRepresentation.NAME] = tsRepr.extract(values)
+                values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
             yield RecordClass(**values)
 
     def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         elementRows = [record.toDict() for record in records]
         if self.element.temporal is not None:
-            tsRepr = self._db.getTimespanRepresentation()
+            TimespanReprClass = self._db.getTimespanRepresentation()
             for row in elementRows:
                 timespan = row.pop(TimespanDatabaseRepresentation.NAME)
-                tsRepr.update(timespan, result=row)
+                TimespanReprClass.update(timespan, result=row)
         with self._db.transaction():
             self._db.insert(self._table, *elementRows)
             if self._skyPixOverlap is not None:
@@ -226,9 +230,9 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         for name in record.fields.required.names:
             keys[name] = compared.pop(name)
         if self.element.temporal is not None:
-            tsRepr = self._db.getTimespanRepresentation()
+            TimespanReprClass = self._db.getTimespanRepresentation()
             timespan = compared.pop(TimespanDatabaseRepresentation.NAME)
-            tsRepr.update(timespan, result=compared)
+            TimespanReprClass.update(timespan, result=compared)
         with self._db.transaction():
             _, inserted = self._db.sync(
                 self._table,

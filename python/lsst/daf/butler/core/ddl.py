@@ -43,7 +43,7 @@ from typing import Any, Callable, Iterable, List, Optional, Set, Tuple, Type, TY
 import sqlalchemy
 import astropy.time
 
-from lsst.sphgeom import ConvexPolygon
+from lsst.sphgeom import Region
 from .config import Config
 from .exceptions import ValidationError
 from . import time_utils
@@ -123,21 +123,21 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
 
 
 class Base64Region(Base64Bytes):
-    """A SQLAlchemy custom type that maps Python `sphgeom.ConvexPolygon` to a
+    """A SQLAlchemy custom type that maps Python `sphgeom.Region` to a
     base64-encoded `sqlalchemy.String`.
     """
 
-    def process_bind_param(self, value: Optional[ConvexPolygon], dialect: sqlalchemy.engine.Dialect
+    def process_bind_param(self, value: Optional[Region], dialect: sqlalchemy.engine.Dialect
                            ) -> Optional[str]:
         if value is None:
             return None
         return super().process_bind_param(value.encode(), dialect)
 
     def process_result_value(self, value: Optional[str], dialect: sqlalchemy.engine.Dialect
-                             ) -> Optional[ConvexPolygon]:
+                             ) -> Optional[Region]:
         if value is None:
             return None
-        return ConvexPolygon.decode(super().process_result_value(value, dialect))
+        return Region.decode(super().process_result_value(value, dialect))
 
 
 class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
@@ -153,7 +153,7 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
             return None
         if not isinstance(value, astropy.time.Time):
             raise TypeError(f"Unsupported type: {type(value)}, expected astropy.time.Time")
-        value = time_utils.astropy_to_nsec(value)
+        value = time_utils.TimeConverter().astropy_to_nsec(value)
         return value
 
     def process_result_value(self, value: Optional[int], dialect: sqlalchemy.engine.Dialect
@@ -161,7 +161,7 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
         # value is nanoseconds since epoch, or None
         if value is None:
             return None
-        value = time_utils.nsec_to_astropy(value)
+        value = time_utils.TimeConverter().nsec_to_astropy(value)
         return value
 
 

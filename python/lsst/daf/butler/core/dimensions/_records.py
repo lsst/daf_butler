@@ -31,6 +31,7 @@ from typing import (
     Type,
 )
 
+from .._topology import SpatialRegionDatabaseRepresentation
 from ..timespan import Timespan, TimespanDatabaseRepresentation
 from ..utils import immutable
 from ._elements import Dimension, DimensionElement
@@ -54,11 +55,11 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
 
     For internal use by `DimensionRecord`.
     """
-    from ._schema import DimensionElementFields, REGION_FIELD_SPEC
+    from ._schema import DimensionElementFields
     fields = DimensionElementFields(definition)
     slots = list(fields.standard.names)
     if definition.spatial:
-        slots.append(REGION_FIELD_SPEC.name)
+        slots.append(SpatialRegionDatabaseRepresentation.NAME)
     if definition.temporal:
         slots.append(TimespanDatabaseRepresentation.NAME)
     d = {
@@ -167,7 +168,7 @@ class DimensionRecord:
     def __repr__(self) -> str:
         return "{}.RecordClass({})".format(
             self.definition.name,
-            ", ".join(repr(getattr(self, name)) for name in self.__slots__)
+            ", ".join(f"name={getattr(self, name)!r}" for name in self.__slots__)
         )
 
     def __reduce__(self) -> tuple:

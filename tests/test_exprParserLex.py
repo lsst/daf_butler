@@ -25,7 +25,7 @@
 import re
 import unittest
 
-from lsst.daf.butler.registry.queries.exprParser import ParserLex, ParserLexError
+from lsst.daf.butler.registry.queries.expressions import ParserLex, ParserLexError
 
 
 class ParserLexTestCase(unittest.TestCase):

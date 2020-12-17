@@ -30,7 +30,7 @@ import sqlalchemy.dialects.postgresql
 
 from ..interfaces import Database
 from ..nameShrinker import NameShrinker
-from ...core import TimespanDatabaseRepresentation, ddl, Timespan, time_utils
+from ...core import ddl, time_utils, Timespan, TimespanDatabaseRepresentation
 
 
 class PostgresqlDatabase(Database):
@@ -196,18 +196,27 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
             return None
         if not isinstance(value, Timespan):
             raise TypeError(f"Unsupported type: {type(value)}, expected Timespan.")
-        lower = None if value.begin is None else time_utils.astropy_to_nsec(value.begin)
-        upper = None if value.end is None else time_utils.astropy_to_nsec(value.end)
-        return psycopg2.extras.NumericRange(lower=lower, upper=upper)
+        if value.isEmpty():
+            return psycopg2.extras.NumericRange(empty=True)
+        else:
+            converter = time_utils.TimeConverter()
+            assert value._nsec[0] >= converter.min_nsec, "Guaranteed by Timespan.__init__."
+            assert value._nsec[1] <= converter.max_nsec, "Guaranteed by Timespan.__init__."
+            lower = None if value._nsec[0] == converter.min_nsec else value._nsec[0]
+            upper = None if value._nsec[1] == converter.max_nsec else value._nsec[1]
+            return psycopg2.extras.NumericRange(lower=lower, upper=upper)
 
     def process_result_value(self, value: Optional[psycopg2.extras.NumericRange],
                              dialect: sqlalchemy.engine.Dialect
                              ) -> Optional[Timespan]:
-        if value is None or value.isempty:
+        if value is None:
             return None
-        begin = None if value.lower is None else time_utils.nsec_to_astropy(value.lower)
-        end = None if value.upper is None else time_utils.nsec_to_astropy(value.upper)
-        return Timespan(begin=begin, end=end)
+        if value.isempty:
+            return Timespan.makeEmpty()
+        converter = time_utils.TimeConverter()
+        begin_nsec = converter.min_nsec if value.lower is None else value.lower
+        end_nsec = converter.max_nsec if value.upper is None else value.upper
+        return Timespan(begin=None, end=None, _nsec=(begin_nsec, end_nsec))
 
     class comparator_factory(sqlalchemy.types.Concatenable.Comparator):  # noqa: N801
         """Comparison operators for TimespanColumnRanges.
@@ -216,7 +225,8 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
         -----
         The existence of this nested class is a workaround for a bug
         submitted upstream as
-        https://github.com/sqlalchemy/sqlalchemy/issues/5476.  The code is
+        https://github.com/sqlalchemy/sqlalchemy/issues/5476 (now fixed on
+        master, but not in the releases we currently use).  The code is
         a limited copy of the operators in
         ``sqlalchemy.dialects.postgresql.ranges.RangeOperators``, but with
         ``is_comparison=True`` added to all calls.
@@ -248,6 +258,22 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
             """
             return self.expr.op("&&", is_comparison=True)(other)
 
+        def strictly_left_of(self, other: Any) -> Any:
+            """Boolean expression. Returns true if the column is strictly
+            left of the right hand operand.
+            """
+            return self.expr.op("<<", is_comparison=True)(other)
+
+        __lshift__ = strictly_left_of
+
+        def strictly_right_of(self, other: Any) -> Any:
+            """Boolean expression. Returns true if the column is strictly
+            right of the right hand operand.
+            """
+            return self.expr.op(">>", is_comparison=True)(other)
+
+        __rshift__ = strictly_right_of
+
 
 class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
     """An implementation of `TimespanDatabaseRepresentation` that uses
@@ -259,58 +285,123 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
     column : `sqlalchemy.sql.ColumnElement`
         SQLAlchemy object representing the column.
     """
-    def __init__(self, column: sqlalchemy.sql.ColumnElement):
+    def __init__(self, column: sqlalchemy.sql.ColumnElement, name: str):
         self.column = column
+        self._name = name
 
-    __slots__ = ("column",)
+    __slots__ = ("column", "_name")
 
     @classmethod
-    def makeFieldSpecs(cls, nullable: bool, **kwargs: Any) -> Tuple[ddl.FieldSpec, ...]:
+    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+                       ) -> Tuple[ddl.FieldSpec, ...]:
         # Docstring inherited.
+        if name is None:
+            name = cls.NAME
         return (
             ddl.FieldSpec(
-                cls.NAME, dtype=_RangeTimespanType, nullable=nullable,
+                name, dtype=_RangeTimespanType, nullable=nullable,
                 default=(None if nullable else sqlalchemy.sql.text("'(,)'::int8range")),
                 **kwargs
             ),
         )
 
     @classmethod
-    def getFieldNames(cls) -> Tuple[str, ...]:
+    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
         # Docstring inherited.
-        return (cls.NAME,)
+        if name is None:
+            name = cls.NAME
+        return (name,)
 
     @classmethod
-    def update(cls, timespan: Optional[Timespan], *,
+    def update(cls, extent: Optional[Timespan], name: Optional[str] = None,
                result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         # Docstring inherited.
+        if name is None:
+            name = cls.NAME
         if result is None:
             result = {}
-        result[cls.NAME] = timespan
+        result[name] = extent
         return result
 
     @classmethod
-    def extract(cls, mapping: Mapping[str, Any]) -> Optional[Timespan]:
+    def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Optional[Timespan]:
         # Docstring inherited.
-        return mapping[cls.NAME]
+        if name is None:
+            name = cls.NAME
+        return mapping[name]
 
     @classmethod
-    def hasExclusionConstraint(cls) -> bool:
+    def fromLiteral(cls, timespan: Timespan) -> _RangeTimespanRepresentation:
         # Docstring inherited.
-        return True
+        return cls(
+            column=sqlalchemy.sql.literal(timespan, type_=_RangeTimespanType),
+            name=cls.NAME,
+        )
 
     @classmethod
-    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause) -> _RangeTimespanRepresentation:
+    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
+                       ) -> _RangeTimespanRepresentation:
         # Docstring inherited.
-        return cls(selectable.columns[cls.NAME])
+        if name is None:
+            name = cls.NAME
+        return cls(selectable.columns[name], name)
+
+    @property
+    def name(self) -> str:
+        # Docstring inherited.
+        return self._name
 
     def isNull(self) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         return self.column.is_(None)
 
-    def overlaps(self, other: Union[Timespan, _RangeTimespanRepresentation]) -> sqlalchemy.sql.ColumnElement:
+    def isEmpty(self) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited
+        return sqlalchemy.sql.func.isempty(self.column)
+
+    def __lt__(
+        self,
+        other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
+    ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
-        if isinstance(other, Timespan):
-            return self.column.overlaps(other)
+        if isinstance(other, sqlalchemy.sql.ColumnElement):
+            return sqlalchemy.sql.and_(
+                sqlalchemy.sql.not_(sqlalchemy.sql.func.upper_inf(self.column)),
+                sqlalchemy.sql.not_(sqlalchemy.sql.func.isempty(self.column)),
+                sqlalchemy.sql.func.upper(self.column) <= other,
+            )
         else:
-            return self.column.overlaps(other.column)
+            return self.column << other.column
+
+    def __gt__(
+        self,
+        other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
+    ) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited.
+        if isinstance(other, sqlalchemy.sql.ColumnElement):
+            return sqlalchemy.sql.and_(
+                sqlalchemy.sql.not_(sqlalchemy.sql.func.lower_inf(self.column)),
+                sqlalchemy.sql.not_(sqlalchemy.sql.func.isempty(self.column)),
+                sqlalchemy.sql.func.lower(self.column) > other,
+            )
+        else:
+            return self.column >> other.column
+
+    def overlaps(self, other: _RangeTimespanRepresentation) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited.
+        return self.column.overlaps(other.column)
+
+    def contains(self, other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
+                 ) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited
+        if isinstance(other, _RangeTimespanRepresentation):
+            return self.column.contains(other.column)
+        else:
+            return self.column.contains(other)
+
+    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
+        # Docstring inherited.
+        if name is None:
+            yield self.column
+        else:
+            yield self.column.label(name)

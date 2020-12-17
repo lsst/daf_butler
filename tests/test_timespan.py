@@ -34,6 +34,7 @@ except ImportError:
     erfa = None
 
 from lsst.daf.butler import Timespan
+from lsst.daf.butler.core.time_utils import TimeConverter
 
 
 class TimespanTestCase(unittest.TestCase):
@@ -50,7 +51,75 @@ class TimespanTestCase(unittest.TestCase):
         self.timespans = [Timespan(begin=None, end=None)]
         self.timespans.extend(Timespan(begin=None, end=t) for t in self.timestamps)
         self.timespans.extend(Timespan(begin=t, end=None) for t in self.timestamps)
-        self.timespans.extend(Timespan(begin=a, end=b) for a, b in itertools.combinations(self.timestamps, 2))
+        self.timespans.extend(Timespan(begin=t, end=t) for t in self.timestamps)
+        self.timespans.extend(Timespan(begin=a, end=b)
+                              for a, b in itertools.combinations(self.timestamps, 2))
+
+    def testEmpty(self):
+        """Test various ways to construct an empty timespan, and that
+        operations on empty timespans yield the expected behavior.
+        """
+        self.assertEqual(
+            Timespan.makeEmpty(),
+            Timespan(Timespan.EMPTY, Timespan.EMPTY),
+        )
+        self.assertEqual(
+            Timespan.makeEmpty(),
+            Timespan(self.timestamps[1], self.timestamps[0]),
+        )
+        self.assertEqual(
+            Timespan.makeEmpty(),
+            Timespan(Timespan.EMPTY, self.timestamps[0]),
+        )
+        self.assertEqual(
+            Timespan.makeEmpty(),
+            Timespan(self.timestamps[0], Timespan.EMPTY),
+        )
+        self.assertEqual(
+            Timespan.makeEmpty(),
+            Timespan(self.timestamps[0], self.timestamps[0], padInstantaneous=False)
+        )
+        empty = Timespan.makeEmpty()
+        for t in self.timestamps:
+            with self.subTest(t=str(t)):
+                self.assertFalse(empty < t)
+                self.assertFalse(empty > t)
+                self.assertFalse(t < empty)
+                self.assertFalse(t > empty)
+                self.assertFalse(empty.contains(t))
+        for t in self.timespans:
+            with self.subTest(t=str(t)):
+                self.assertTrue(t.contains(empty))
+                self.assertFalse(t.overlaps(empty))
+                self.assertFalse(empty.overlaps(t))
+                self.assertEqual(empty.contains(t), t.isEmpty())
+                self.assertFalse(empty < t)
+                self.assertFalse(t < empty)
+                self.assertFalse(empty > t)
+                self.assertFalse(t > empty)
+
+    def testFromInstant(self):
+        """Test construction of instantaneous timespans.
+        """
+        self.assertEqual(Timespan.fromInstant(self.timestamps[0]),
+                         Timespan(self.timestamps[0], self.timestamps[0]))
+
+    def testInvalid(self):
+        """Test that we reject timespans that should not exist.
+        """
+        with self.assertRaises(ValueError):
+            Timespan(TimeConverter().max_time, None)
+        with self.assertRaises(ValueError):
+            Timespan(TimeConverter().max_time, TimeConverter().max_time)
+        with self.assertRaises(ValueError):
+            Timespan(None, TimeConverter().epoch)
+        with self.assertRaises(ValueError):
+            Timespan(TimeConverter().epoch, TimeConverter().epoch)
+        t = TimeConverter().nsec_to_astropy(TimeConverter().max_nsec - 1)
+        with self.assertRaises(ValueError):
+            Timespan(t, t)
+        with self.assertRaises(ValueError):
+            Timespan.fromInstant(t)
 
     def testStrings(self):
         """Test __str__ against expected values and __repr__ with eval
@@ -60,20 +129,23 @@ class TimespanTestCase(unittest.TestCase):
             # Uncomment the next line and run this test directly for the most
             # important test: human inspection.
             #    print(str(ts), repr(ts))
-            self.assertIn(", ", str(ts))
-            self.assertTrue(str(ts).endswith(")"))
-            if ts.begin is None:
-                self.assertTrue(str(ts).startswith("(-∞, "))
+            if ts.isEmpty():
+                self.assertEqual("(empty)", str(ts))
             else:
-                self.assertTrue(str(ts).startswith(f"[{ts.begin}, "))
-            if ts.end is None:
-                self.assertTrue(str(ts).endswith(", ∞)"))
-            else:
-                self.assertTrue(str(ts).endswith(f", {ts.end})"))
-            self.assertEqual(eval(repr(ts)), ts)
+                self.assertIn(", ", str(ts))
+                if ts.begin is None:
+                    self.assertTrue(str(ts).startswith("(-∞, "))
+                else:
+                    self.assertTrue(str(ts).startswith(f"[{ts.begin.tai.isot}, "))
+                if ts.end is None:
+                    self.assertTrue(str(ts).endswith(", ∞)"))
+                else:
+                    self.assertTrue(str(ts).endswith(f", {ts.end.tai.isot})"))
+                self.assertEqual(eval(repr(ts)), ts)
 
     def testOperationConsistency(self):
-        """Test that overlaps, intersection, and difference are consistent.
+        """Test that overlaps, contains, intersection, and difference are
+        consistent.
         """
         for a, b in itertools.combinations_with_replacement(self.timespans, 2):
             with self.subTest(a=str(a), b=str(b)):
@@ -84,22 +156,34 @@ class TimespanTestCase(unittest.TestCase):
                 if a == b:
                     self.assertFalse(diffs1)
                     self.assertFalse(diffs2)
-                else:
+                    self.assertTrue(a.contains(b))
+                    self.assertTrue(b.contains(a))
+                if a.contains(b):
+                    self.assertTrue(a.overlaps(b) or b.isEmpty())
+                    self.assertFalse(diffs2)
+                if b.contains(a):
+                    self.assertTrue(b.overlaps(a) or a.isEmpty())
+                    self.assertFalse(diffs1)
+                if diffs1 is not None:
                     for t in diffs1:
                         self.assertTrue(a.overlaps(t))
                         self.assertFalse(b.overlaps(t))
+                if diffs2 is not None:
                     for t in diffs2:
                         self.assertTrue(b.overlaps(t))
                         self.assertFalse(a.overlaps(t))
                 self.assertEqual(c1, c2)
                 if a.overlaps(b):
                     self.assertTrue(b.overlaps(a))
-                    self.assertIsNotNone(c1)
+                    self.assertFalse(c1.isEmpty())
                 else:
+                    self.assertTrue(a < b or a > b or a.isEmpty() or b.isEmpty())
                     self.assertFalse(b.overlaps(a))
-                    self.assertIsNone(c1)
-                    self.assertEqual(diffs1, (a,))
-                    self.assertEqual(diffs2, (b,))
+                    self.assertTrue(c1.isEmpty())
+                    if diffs1 is not None:
+                        self.assertEqual(diffs1, (a,))
+                    if diffs2 is not None:
+                        self.assertEqual(diffs2, (b,))
 
     def testPrecision(self):
         """Test that we only use nanosecond precision for equality."""
@@ -143,10 +227,10 @@ class TimespanTestCase(unittest.TestCase):
             warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
             if erfa is not None:
                 warnings.simplefilter("ignore", category=erfa.ErfaWarning)
-            ts1 = Timespan(begin=astropy.time.Time('2213-06-17 13:34:45.775000', scale='utc', format='iso'),
-                           end=astropy.time.Time('2213-06-17 13:35:17.947000', scale='utc', format='iso'))
-            ts2 = Timespan(begin=astropy.time.Time('2213-06-17 13:34:45.775000', scale='utc', format='iso'),
-                           end=astropy.time.Time('2213-06-17 13:35:17.947000', scale='utc', format='iso'))
+            ts1 = Timespan(begin=astropy.time.Time(self.timestamps[0], scale='utc', format='iso'),
+                           end=astropy.time.Time('2099-06-17 13:35:17.947000', scale='utc', format='iso'))
+            ts2 = Timespan(begin=astropy.time.Time(self.timestamps[0], scale='utc', format='iso'),
+                           end=astropy.time.Time('2099-06-17 13:35:17.947000', scale='utc', format='iso'))
 
         # unittest can't test for no warnings so we run the test and
         # trigger our own warning and count all the warnings

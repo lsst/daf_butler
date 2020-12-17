@@ -54,7 +54,7 @@ _KEY_FIELD_SPEC = ddl.FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, pr
 _VERSION = VersionTuple(2, 0, 0)
 
 
-def _makeTableSpecs(tsRepr: Type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
+def _makeTableSpecs(TimespanReprClass: Type[TimespanDatabaseRepresentation]) -> CollectionTablesTuple:
     return CollectionTablesTuple(
         collection=ddl.TableSpec(
             fields=[
@@ -65,7 +65,7 @@ def _makeTableSpecs(tsRepr: Type[TimespanDatabaseRepresentation]) -> CollectionT
             ],
             unique=[("name",)],
         ),
-        run=makeRunTableSpec("collection_id", sqlalchemy.BigInteger, tsRepr),
+        run=makeRunTableSpec("collection_id", sqlalchemy.BigInteger, TimespanReprClass),
         collection_chain=makeCollectionChainTableSpec("collection_id", sqlalchemy.BigInteger),
     )
 
