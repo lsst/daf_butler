@@ -26,8 +26,6 @@ Tests in this module are disabled unless pandas and pyarrow are importable.
 
 import os
 import unittest
-import tempfile
-import shutil
 
 try:
     import numpy as np
@@ -37,6 +35,7 @@ except ImportError:
     pyarrow = None
 
 from lsst.daf.butler import Butler, DatasetType
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -49,7 +48,7 @@ class ParquetFormatterTestCase(unittest.TestCase):
 
     def setUp(self):
         """Create a new butler root for each test."""
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
         Butler.makeRepo(self.root)
         self.butler = Butler(self.root, run="test_run")
         # No dimensions in dataset type so we don't have to worry about
@@ -59,8 +58,7 @@ class ParquetFormatterTestCase(unittest.TestCase):
         self.butler.registry.registerDatasetType(self.datasetType)
 
     def tearDown(self):
-        if os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
+        removeTestTempDir(self.root)
 
     def testSingleIndexDataFrame(self):
         columns1 = pd.Index(["a", "b", "c"])

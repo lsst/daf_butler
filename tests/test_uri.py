@@ -21,7 +21,6 @@
 
 import os
 import shutil
-import tempfile
 import unittest
 import urllib.parse
 import responses
@@ -41,6 +40,7 @@ except ImportError:
 from lsst.daf.butler import ButlerURI
 from lsst.daf.butler.core._butlerUri.s3utils import (setAwsEnvCredentials,
                                                      unsetAwsEnvCredentials)
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -51,10 +51,10 @@ class FileURITestCase(unittest.TestCase):
     def setUp(self):
         # Use a local tempdir because on macOS the temp dirs use symlinks
         # so relsymlink gets quite confused.
-        self.tmpdir = tempfile.mkdtemp(dir=TESTDIR)
+        self.tmpdir = makeTestTempDir(TESTDIR)
 
     def tearDown(self):
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
+        removeTestTempDir(self.tmpdir)
 
     def testFile(self):
         file = os.path.join(self.tmpdir, "test.txt")
@@ -267,7 +267,7 @@ class S3URITestCase(unittest.TestCase):
 
     def setUp(self):
         # Local test directory
-        self.tmpdir = tempfile.mkdtemp()
+        self.tmpdir = makeTestTempDir(TESTDIR)
 
         # set up some fake credentials if they do not exist
         self.usingDummyCredentials = setAwsEnvCredentials()

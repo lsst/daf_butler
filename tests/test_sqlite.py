@@ -22,9 +22,8 @@
 from contextlib import contextmanager
 import os
 import os.path
-import shutil
-import stat
 import tempfile
+import stat
 import unittest
 
 import sqlalchemy
@@ -34,6 +33,7 @@ from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
 from lsst.daf.butler.registry.attributes import MissingAttributesTableError
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.registry import Registry
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -73,11 +73,10 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
     """
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
 
     def tearDown(self):
-        if self.root is not None and os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
+        removeTestTempDir(self.root)
 
     def makeEmptyDatabase(self, origin: int = 0) -> SqliteDatabase:
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
@@ -193,11 +192,10 @@ class SqliteFileRegistryTests(RegistryTests):
     """
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
 
     def tearDown(self):
-        if self.root is not None and os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
+        removeTestTempDir(self.root)
 
     @classmethod
     def getDataDir(cls) -> str:

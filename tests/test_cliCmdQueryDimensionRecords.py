@@ -25,15 +25,19 @@
 from astropy.table import Table as AstropyTable
 from numpy import array
 import os
-import shutil
-import tempfile
 import unittest
 
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import Butler
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
-from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, readTable
+from lsst.daf.butler.tests.utils import (
+    ButlerTestHelper,
+    makeTestTempDir,
+    MetricTestRepo,
+    readTable,
+    removeTestTempDir,
+)
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -51,14 +55,13 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
                            "zenith_angle", "region", "timespan [2]")
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root = makeTestTempDir(TESTDIR)
         self.testRepo = MetricTestRepo(self.root,
                                        configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
         self.runner = LogCliRunner()
 
     def tearDown(self):
-        if os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
+        removeTestTempDir(self.root)
 
     def testBasic(self):
         result = self.runner.invoke(butlerCli, ["query-dimension-records",

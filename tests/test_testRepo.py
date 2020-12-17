@@ -25,12 +25,12 @@ test repositories or butlers.
 
 import os
 import shutil
-import tempfile
 import unittest
 
 import lsst.daf.butler
 from lsst.daf.butler.tests import (makeTestRepo, makeTestCollection, addDatasetType, expandUniqueId,
                                    MetricsExample, registerMetricsExample)
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -41,7 +41,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
     def setUpClass(cls):
         # Repository should be re-created for each test case, but
         # this has a prohibitive run-time cost at present
-        cls.root = tempfile.mkdtemp(dir=TESTDIR)
+        cls.root = makeTestTempDir(TESTDIR)
 
         dataIds = {
             "instrument": ["notACam", "dummyCam"],
@@ -59,7 +59,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
     def tearDownClass(cls):
         # TODO: use addClassCleanup rather than tearDownClass in Python 3.8
         # to keep the addition and removal together and make it more robust
-        shutil.rmtree(cls.root, ignore_errors=True)
+        removeTestTempDir(cls.root)
 
     def setUp(self):
         self.butler = makeTestCollection(self.creatorButler)
@@ -69,13 +69,10 @@ class ButlerUtilsTestSuite(unittest.TestCase):
 
     def testButlerKwargs(self):
         # outfile has the most obvious effects of any Butler.makeRepo keyword
-        temp = tempfile.mkdtemp(dir=TESTDIR)
-        try:
+        with safeTestTempDir(TESTDIR) as temp:
             path = os.path.join(temp, 'oddConfig.json')
             makeTestRepo(temp, {}, outfile=path)
             self.assertTrue(os.path.isfile(path))
-        finally:
-            shutil.rmtree(temp, ignore_errors=True)
 
     def _checkButlerDimension(self, dimensions, query, expected):
         result = list(self.butler.registry.queryDataIds(dimensions, where=query, check=False))
@@ -130,7 +127,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         """Regression test for registerMetricsExample having no effect
         on ChainedDatastore.
         """
-        temp = tempfile.mkdtemp(dir=TESTDIR)
+        temp = makeTestTempDir(TESTDIR)
         try:
             config = lsst.daf.butler.Config()
             config["datastore", "cls"] = "lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore"

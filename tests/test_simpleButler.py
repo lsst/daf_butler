@@ -22,7 +22,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import tempfile
 from typing import Any
 import unittest
@@ -43,6 +42,7 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler.registry import RegistryConfig
 from lsst.daf.butler.tests import DatastoreMock
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -55,11 +55,10 @@ class SimpleButlerTestCase(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = tempfile.mkdtemp()
+        self.root = makeTestTempDir(TESTDIR)
 
     def tearDown(self):
-        if self.root is not None and os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
+        removeTestTempDir(self.root)
 
     def makeButler(self, **kwargs: Any) -> Butler:
         """Return new Butler instance on each call.
