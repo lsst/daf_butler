@@ -1225,10 +1225,15 @@ class Registry:
             for datasetType in self._datasets:
                 # The dataset type can no longer be a component
                 yield datasetType
-                if components and datasetType.isComposite():
+                if components:
                     # Automatically create the component dataset types
-                    for component in datasetType.makeAllComponentDatasetTypes():
-                        yield component
+                    try:
+                        componentsForDatasetType = datasetType.makeAllComponentDatasetTypes()
+                    except KeyError as err:
+                        _LOG.warning(f"Could not load storage class {err} for {datasetType.name}; "
+                                     "if it has components they will not be included in query results.")
+                    else:
+                        yield from componentsForDatasetType
             return
         done: Set[str] = set()
         for name in wildcard.strings:
@@ -1243,8 +1248,12 @@ class Registry:
             componentsForLater = []
             for registeredDatasetType in self._datasets:
                 # Components are not stored in registry so expand them here
-                allDatasetTypes = [registeredDatasetType] \
-                    + registeredDatasetType.makeAllComponentDatasetTypes()
+                allDatasetTypes = [registeredDatasetType]
+                try:
+                    allDatasetTypes.extend(registeredDatasetType.makeAllComponentDatasetTypes())
+                except KeyError as err:
+                    _LOG.warning(f"Could not load storage class {err} for {registeredDatasetType.name}; "
+                                 "if it has components they will not be included in query results.")
                 for datasetType in allDatasetTypes:
                     if datasetType.name in done:
                         continue
