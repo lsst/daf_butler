@@ -70,6 +70,7 @@ from . import queries
 from ..core.utils import iterable, transactional
 from ._config import RegistryConfig
 from ._collectionType import CollectionType
+from ._defaults import RegistryDefaults
 from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
 from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch, Ellipsis
 from .interfaces import ChainedCollectionRecord, RunRecord
@@ -101,6 +102,9 @@ class Registry:
     ----------
     database : `Database`
         Database instance to store Registry.
+    defaults : `RegistryDefaults`, optional
+        Default collection search path and/or output `~CollectionType.RUN`
+        collection.
     attributes : `type`
         Manager class implementing `ButlerAttributeManager`.
     opaque : `type`
@@ -177,13 +181,14 @@ class Registry:
         datasets = doImport(config["managers", "datasets"])
         datastoreBridges = doImport(config["managers", "datastores"])
 
-        return cls(database, dimensions=dimensions, attributes=attributes, opaque=opaque,
+        return cls(database, RegistryDefaults(), dimensions=dimensions, attributes=attributes, opaque=opaque,
                    collections=collections, datasets=datasets, datastoreBridges=datastoreBridges,
                    dimensionConfig=dimensionConfig, create=True)
 
     @classmethod
     def fromConfig(cls, config: Union[ButlerConfig, RegistryConfig, Config, str],
-                   butlerRoot: Optional[Union[str, ButlerURI]] = None, writeable: bool = True) -> Registry:
+                   butlerRoot: Optional[Union[str, ButlerURI]] = None, writeable: bool = True,
+                   defaults: Optional[RegistryDefaults] = None) -> Registry:
         """Create `Registry` subclass instance from `config`.
 
         Registry database must be inbitialized prior to calling this method.
@@ -196,6 +201,9 @@ class Registry:
             Path to the repository root this `Registry` will manage.
         writeable : `bool`, optional
             If `True` (default) create a read-write connection to the database.
+        defaults : `RegistryDefaults`, optional
+            Default collection search path and/or output `~CollectionType.RUN`
+            collection.
 
         Returns
         -------
@@ -218,11 +226,13 @@ class Registry:
         datasets = doImport(config["managers", "datasets"])
         datastoreBridges = doImport(config["managers", "datastores"])
 
-        return cls(database, dimensions=dimensions, attributes=attributes, opaque=opaque,
+        if defaults is None:
+            defaults = RegistryDefaults()
+        return cls(database, defaults, dimensions=dimensions, attributes=attributes, opaque=opaque,
                    collections=collections, datasets=datasets, datastoreBridges=datastoreBridges,
                    dimensionConfig=None, writeable=writeable)
 
-    def __init__(self, database: Database, *,
+    def __init__(self, database: Database, defaults: RegistryDefaults, *,
                  attributes: Type[ButlerAttributeManager],
                  opaque: Type[OpaqueTableStorageManager],
                  dimensions: Type[DimensionRecordStorageManager],
@@ -313,6 +323,11 @@ class Registry:
         self._collections.refresh()
         self._datasets.refresh()
 
+        # Intentionally invoke property setter to initialize defaults.  This
+        # can only be done after most of the rest of Registry has already been
+        # initialized, and must be done before the property getter is used.
+        self.defaults = defaults
+
     def __str__(self) -> str:
         return str(self._db)
 
@@ -330,6 +345,23 @@ class Registry:
         """All dimensions recognized by this `Registry` (`DimensionUniverse`).
         """
         return self._dimensions.universe
+
+    @property
+    def defaults(self) -> RegistryDefaults:
+        """Default collection search path and/or output `~CollectionType.RUN`
+        collection (`RegistryDefaults`).
+
+        This is an immutable struct whose components may not be set
+        individually, but the entire struct can be set by assigning to this
+        property.
+        """
+        return self._defaults
+
+    @defaults.setter
+    def defaults(self, value: RegistryDefaults) -> None:
+        self._defaults = value
+        if self._defaults.run is not None:
+            self.registerRun(self._defaults.run)
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
@@ -674,7 +706,7 @@ class Registry:
         return self._datasets[name].datasetType
 
     def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
-                    collections: Any, timespan: Optional[Timespan] = None,
+                    collections: Any = None, timespan: Optional[Timespan] = None,
                     **kwargs: Any) -> Optional[DatasetRef]:
         """Find a dataset given its `DatasetType` and data ID.
 
@@ -690,10 +722,11 @@ class Registry:
         dataId : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
-        collections
+        collections, optional.
             An expression that fully or partially identifies the collections to
             search for the dataset; see
             :ref:`daf_butler_collection_expressions` for more information.
+            Defaults to ``self.defaults.collections``.
         timespan : `Timespan`, optional
             A timespan that the validity range of the dataset must overlap.
             If not provided, any `~CollectionType.CALIBRATION` collections
@@ -711,6 +744,9 @@ class Registry:
 
         Raises
         ------
+        TypeError
+            Raised if ``collections`` is `None` and
+            ``self.defaults.collections`` is `None`.
         LookupError
             Raised if one or more data ID keys are missing.
         KeyError
@@ -736,7 +772,13 @@ class Registry:
             storage = self._datasets[datasetType]
         dataId = DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions,
                                             universe=self.dimensions, **kwargs)
-        collections = CollectionSearch.fromExpression(collections)
+        if collections is None:
+            if not self.defaults.collections:
+                raise TypeError("No collections provided to findDataset, "
+                                "and no defaults from registry construction.")
+            collections = self.defaults.collections
+        else:
+            collections = CollectionSearch.fromExpression(collections)
         for collectionRecord in collections.iter(self._collections):
             if (collectionRecord.type is CollectionType.CALIBRATION
                     and (not storage.datasetType.isCalibration() or timespan is None)):
@@ -749,7 +791,7 @@ class Registry:
 
     @transactional
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
-                       run: str) -> List[DatasetRef]:
+                       run: Optional[str] = None) -> List[DatasetRef]:
         """Insert one or more datasets into the `Registry`
 
         This always adds new datasets; to associate existing datasets with
@@ -761,8 +803,9 @@ class Registry:
             A `DatasetType` or the name of one.
         dataIds :  `~collections.abc.Iterable` of `dict` or `DataCoordinate`
             Dimension-based identifiers for the new datasets.
-        run : `str`
-            The name of the run that produced the datasets.
+        run : `str`, optional
+            The name of the run that produced the datasets.  Defaults to
+            ``self.defaults.run``.
 
         Returns
         -------
@@ -772,6 +815,8 @@ class Registry:
 
         Raises
         ------
+        TypeError
+            Raised if ``run`` is `None` and ``self.defaults.run`` is `None`.
         ConflictingDefinitionError
             If a dataset with the same dataset type and data ID as one of those
             given already exists in ``run``.
@@ -786,6 +831,11 @@ class Registry:
             storage = self._datasets.find(datasetType)
             if storage is None:
                 raise LookupError(f"DatasetType with name '{datasetType}' has not been registered.")
+        if run is None:
+            if self.defaults.run is None:
+                raise TypeError("No run provided to insertDatasets, "
+                                "and no default from registry construction.")
+            run = self.defaults.run
         runRecord = self._collections.find(run)
         if runRecord.type is not CollectionType.RUN:
             raise TypeError(f"Given collection is of type {runRecord.type.name}; RUN collection required.")
@@ -1344,7 +1394,7 @@ class Registry:
         )
 
     def queryDatasets(self, datasetType: Any, *,
-                      collections: Any,
+                      collections: Any = None,
                       dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
                       dataId: Optional[DataId] = None,
                       where: Optional[str] = None,
@@ -1364,13 +1414,14 @@ class Registry:
             `re.Pattern`, and iterables thereof.  The special value `...` can
             be used to query all dataset types.  See
             :ref:`daf_butler_dataset_type_expressions` for more information.
-        collections
+        collections: optional
             An expression that fully or partially identifies the collections
             to search for datasets, such as a `str`, `re.Pattern`, or iterable
             thereof.  `...` can be used to find datasets from all
             `~CollectionType.RUN` collections (no other collections are
             necessary, because all datasets are in a ``RUN`` collection).  See
             :ref:`daf_butler_collection_expressions` for more information.
+            If not provided, ``self.default.collections`` is used.
         dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
             Dimensions to include in the query (in addition to those used
             to identify the queried dataset type(s)), either to constrain
@@ -1422,7 +1473,9 @@ class Registry:
         ------
         TypeError
             Raised when the arguments are incompatible, such as when a
-            collection wildcard is passed when ``findFirst`` is `True`.
+            collection wildcard is passed when ``findFirst`` is `True`, or
+            when ``collections`` is `None` and``self.defaults.collections`` is
+            also `None`.
 
         Notes
         -----
@@ -1437,7 +1490,12 @@ class Registry:
         `queryDatasets` with the returned data IDs passed as constraints.
         """
         # Standardize the collections expression.
-        if findFirst:
+        if collections is None:
+            if not self.defaults.collections:
+                raise TypeError("No collections provided to findDataset, "
+                                "and no defaults from registry construction.")
+            collections = self.defaults.collections
+        elif findFirst:
             collections = CollectionSearch.fromExpression(collections)
         else:
             collections = CollectionQuery.fromExpression(collections)
@@ -1561,6 +1619,7 @@ class Registry:
             thereof.  `...` can be used to return all collections.  Must be
             provided if ``datasets`` is, and is ignored if it is not.  See
             :ref:`daf_butler_collection_expressions` for more information.
+            If not provided, ``self.default.collections`` is used.
         where : `str`, optional
             A string expression similar to a SQL WHERE clause.  May involve
             any column of a dimension table or (as a shortcut for the primary
@@ -1599,6 +1658,12 @@ class Registry:
             `DataCoordinateQueryResults.materialize` on the returned object
             first if the expected number of rows is very large).  See
             documentation for those methods for additional information.
+
+        Raises
+        ------
+        TypeError
+            Raised if ``collections`` is `None`, ``self.defaults.collections``
+            is `None`, and ``datasets`` is not `None`.
         """
         dimensions = iterable(dimensions)
         standardizedDataId = self.expandDataId(dataId, **kwargs)
@@ -1607,7 +1672,14 @@ class Registry:
         queryDimensionNames = set(requestedDimensions.names)
         if datasets is not None:
             if collections is None:
-                raise TypeError("Cannot pass 'datasets' without 'collections'.")
+                if not self.defaults.collections:
+                    raise TypeError("Cannot pass 'datasets' without 'collections'.")
+                collections = self.defaults.collections
+            else:
+                # Preprocess collections expression in case the original
+                # included single-pass iterators (we'll want to use it multiple
+                # times below).
+                collections = CollectionQuery.fromExpression(collections)
             for datasetType in self.queryDatasetTypes(datasets, components=components):
                 queryDimensionNames.update(datasetType.dimensions.names)
                 # If any matched dataset type is a component, just operate on
@@ -1618,10 +1690,6 @@ class Registry:
                 if componentName is not None:
                     datasetType = self.getDatasetType(parentDatasetTypeName)
                 standardizedDatasetTypes.add(datasetType)
-            # Preprocess collections expression in case the original included
-            # single-pass iterators (we'll want to use it multiple times
-            # below).
-            collections = CollectionQuery.fromExpression(collections)
 
         summary = queries.QuerySummary(
             requested=DimensionGraph(self.dimensions, names=queryDimensionNames),
@@ -1718,6 +1786,7 @@ class Registry:
             An expression that fully or partially identifies the collections
             to search for datasets.  See `queryCollections` and
             :ref:`daf_butler_collection_expressions` for more information.
+            If not provided, ``self.default.collections`` is used.
         collectionTypes : `AbstractSet` [ `CollectionType` ], optional
             If provided, only yield associations from collections of these
             types.
@@ -1731,8 +1800,20 @@ class Registry:
         association : `DatasetAssociation`
             Object representing the relationship beween a single dataset and
             a single collection.
+
+        Raises
+        ------
+        TypeError
+            Raised if ``collections`` is `None` and
+            ``self.defaults.collections`` is `None`.
         """
-        collections = CollectionQuery.fromExpression(collections)
+        if collections is None:
+            if not self.defaults.collections:
+                raise TypeError("No collections provided to findDataset, "
+                                "and no defaults from registry construction.")
+            collections = self.defaults.collections
+        else:
+            collections = CollectionQuery.fromExpression(collections)
         TimespanReprClass = self._db.getTimespanRepresentation()
         if isinstance(datasetType, str):
             storage = self._datasets[datasetType]

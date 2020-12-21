@@ -84,7 +84,7 @@ from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional, getClassOf
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
-from .registry import Registry, RegistryConfig, CollectionType
+from .registry import Registry, RegistryConfig, RegistryDefaults, CollectionType
 from .registry.wildcards import CollectionSearch
 from .transfers import RepoExportContext
 
@@ -145,24 +145,20 @@ class Butler:
         datastore as the given one, but with the given collection and run.
         Incompatible with the ``config``, ``searchPaths``, and ``writeable``
         arguments.
-    collections : `Any`, optional
+    collections : `str` or `Iterable` [ `str` ], optional
         An expression specifying the collections to be searched (in order) when
-        reading datasets, and optionally dataset type restrictions on them.
-        This may be:
-        - a `str` collection name;
-        - a tuple of (collection name, *dataset type restriction*);
-        - an iterable of either of the above;
-        - a mapping from `str` to *dataset type restriction*.
-
-        See :ref:`daf_butler_collection_expressions` for more information,
-        including the definition of a *dataset type restriction*.  All
-        collections must either already exist or be specified to be created
-        by other arguments.
+        reading datasets.
+        This may be a `str` collection name or an iterable thereof.
+        See :ref:`daf_butler_collection_expressions` for more information.
+        These collections are not registered automatically and must be
+        manually registered before they are used by any method, but they may be
+        manually registered after the `Butler` is initialized.
     run : `str`, optional
-        Name of the run datasets should be output to.  If the run
-        does not exist, it will be created.  If ``collections`` is `None`, it
-        will be set to ``[run]``.  If this is not set (and ``writeable`` is
-        not set either), a read-only butler will be created.
+        Name of the `~CollectionType.RUN` collection new datasets should be
+        inserted into.  If ``collections`` is `None` and ``run`` is not `None`,
+        ``collections`` will be set to ``[run]``.  If not `None`, this
+        collection will automatically be registered.  If this is not set (and
+        ``writeable`` is not set either), a read-only butler will be created.
     searchPaths : `list` of `str`, optional
         Directory paths to search when calculating the full Butler
         configuration.  Not used if the supplied config is already a
@@ -218,6 +214,7 @@ class Butler:
                  searchPaths: Optional[List[str]] = None,
                  writeable: Optional[bool] = None,
                  ):
+        defaults = RegistryDefaults(collections=collections, run=run)
         # Load registry, datastore, etc. from config or existing butler.
         if butler is not None:
             if config is not None or searchPaths is not None or writeable is not None:
@@ -227,6 +224,8 @@ class Butler:
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
+            # These intentially invoke property setters.
+            self.registry.defaults = defaults
         else:
             self._config = ButlerConfig(config, searchPaths=searchPaths)
             if "root" in self._config:
@@ -235,24 +234,14 @@ class Butler:
                 butlerRoot = self._config.configDir
             if writeable is None:
                 writeable = run is not None
-            self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot, writeable=writeable)
+            self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot, writeable=writeable,
+                                                defaults=defaults)
             self.datastore = Datastore.fromConfig(self._config, self.registry.getDatastoreBridgeManager(),
                                                   butlerRoot=butlerRoot)
             self.storageClasses = StorageClassFactory()
             self.storageClasses.addFromConfig(self._config)
-        # Check the many collection arguments for consistency and create any
-        # needed collections that don't exist.
-        if collections is None:
-            if run is not None:
-                collections = (run,)
-            else:
-                collections = ()
-        self.collections = CollectionSearch.fromExpression(collections)
-        self.run = run
         if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
-        if self.run is not None:
-            self.registry.registerCollection(self.run, type=CollectionType.RUN)
 
     GENERATION: ClassVar[int] = 3
     """This is a Generation 3 Butler.
@@ -773,12 +762,6 @@ class Butler:
             # type instead of letting registry.findDataset do it, so we get the
             # result even if no dataset is found.
             dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions, **kwds)
-        if collections is None:
-            collections = self.collections
-            if not collections:
-                raise TypeError("No input collections provided.")
-        else:
-            collections = CollectionSearch.fromExpression(collections)
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
         ref = self.registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)
@@ -836,13 +819,6 @@ class Butler:
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
         if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
             raise ValueError("DatasetRef must not be in registry, must have None id")
-
-        if run is None:
-            if self.run is None:
-                raise TypeError("No run provided.")
-            run = self.run
-            # No need to check type for run; first thing we do is
-            # insertDatasets, and that will check for us.
 
         # Add Registry Dataset entry.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
@@ -1377,12 +1353,6 @@ class Butler:
         """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        if run is None:
-            if self.run is None:
-                raise TypeError("No run provided.")
-            run = self.run
-            # No need to check run type, since insertDatasets will do that
-            # (safely) for us.
         # Reorganize the inputs so they're grouped by DatasetType and then
         # data ID.  We also include a list of DatasetRefs for each FileDataset
         # to hold the resolved DatasetRefs returned by the Registry, before
@@ -1680,6 +1650,29 @@ class Butler:
         if messages:
             raise ValidationError(";\n".join(messages))
 
+    @property
+    def collections(self) -> CollectionSearch:
+        """The collections to search by default, in order (`CollectionSearch`).
+
+        This is an alias for ``self.registry.defaults.collections``.  It cannot
+        be set directly in isolation, but all defaults may be changed together
+        by assigning a new `RegistryDefaults` instance to
+        ``self.registry.defaults``.
+        """
+        return self.registry.defaults.collections
+
+    @property
+    def run(self) -> Optional[str]:
+        """Name of the run this butler writes outputs to by default (`str` or
+        `None`).
+
+        This is an alias for ``self.registry.defaults.run``.  It cannot be set
+        directly in isolation, but all defaults may be changed together by
+        assigning a new `RegistryDefaults` instance to
+        ``self.registry.defaults``.
+        """
+        return self.registry.defaults.run
+
     registry: Registry
     """The object that manages dataset metadata and relationships (`Registry`).
 
@@ -1698,13 +1691,4 @@ class Butler:
     storageClasses: StorageClassFactory
     """An object that maps known storage class names to objects that fully
     describe them (`StorageClassFactory`).
-    """
-
-    collections: Optional[CollectionSearch]
-    """The collections to search and any restrictions on the dataset types to
-    search for within them, in order (`CollectionSearch`).
-    """
-
-    run: Optional[str]
-    """Name of the run this butler writes outputs to (`str` or `None`).
     """
