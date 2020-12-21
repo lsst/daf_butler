@@ -52,7 +52,8 @@ import sqlalchemy
 
 from .dimensions import Dimension
 from .named import NamedValueAbstractSet, NamedValueSet
-from ._topology import TopologicalExtentDatabaseRepresentation
+from ._topology import SpatialRegionDatabaseRepresentation, TopologicalExtentDatabaseRepresentation
+from .timespan import TimespanDatabaseRepresentation
 from .utils import cached_getter
 
 
@@ -102,8 +103,29 @@ class LogicalTable(ABC):
         return frozenset()
 
     @property
-    def topological_extents(self) -> AbstractSet[LogicalColumnTopologicalExtentKey]:
+    def regions(self) -> AbstractSet[str]:
         return frozenset()
+
+    @property
+    def timespans(self) -> AbstractSet[str]:
+        return frozenset()
+
+    @abstractmethod
+    def getTimespanRepresentation(self) -> Type[TimespanDatabaseRepresentation]:
+        raise NotImplementedError()
+
+    def getSpatialRegionRepresentation(self) -> Type[SpatialRegionDatabaseRepresentation]:
+        return SpatialRegionDatabaseRepresentation
+
+    @property  # type: ignore
+    @cached_getter
+    def topological_extents(self) -> AbstractSet[LogicalColumnTopologicalExtentKey]:
+        result: Set[LogicalColumnTopologicalExtentKey] = set()
+        result.update(LogicalColumnTopologicalExtentKey(k, self.getSpatialRegionRepresentation())
+                      for k in self.regions)
+        result.update(LogicalColumnTopologicalExtentKey(k, self.getTimespanRepresentation())
+                      for k in self.timespans)
+        return frozenset(result)
 
     @property  # type: ignore
     @cached_getter
@@ -212,8 +234,10 @@ class DirectLogicalTable(LogicalTable):
         table: sqlalchemy.schema.Table,
         *,
         dimensions: NamedValueAbstractSet[Dimension],
+        TimespanReprClass: Type[TimespanDatabaseRepresentation],
         facts: Iterable[str] = (),
-        topological_extents: Iterable[Type[TopologicalExtentDatabaseRepresentation]] = (),
+        is_spatial: bool = False,
+        is_temporal: bool = False,
         name: Optional[str] = None,
         column_names: Optional[Mapping[LogicalColumnKey, str]] = None,
     ):
@@ -225,10 +249,10 @@ class DirectLogicalTable(LogicalTable):
         self._name = name
         self._dimensions = dimensions
         self._facts = frozenset(LogicalColumnFactKey(table=name, column=s) for s in facts)
-        self._topological_extents = frozenset(
-            LogicalColumnTopologicalExtentKey(table=name, column=t) for t in topological_extents
-        )
+        self._regions = frozenset({name}) if is_spatial else frozenset()
+        self._timespans = frozenset({name}) if is_temporal else frozenset()
         self._column_names = column_names
+        self._TimespanReprClass = TimespanReprClass
 
     @property
     def name(self) -> str:
@@ -243,8 +267,15 @@ class DirectLogicalTable(LogicalTable):
         return self._facts
 
     @property
-    def topological_extents(self) -> AbstractSet[LogicalColumnTopologicalExtentKey]:
-        return self._topological_extents
+    def regions(self) -> AbstractSet[str]:
+        return self._regions
+
+    @property
+    def timespans(self) -> AbstractSet[str]:
+        return self._timespans
+
+    def getTimespanRepresentation(self) -> Type[TimespanDatabaseRepresentation]:
+        return self._TimespanReprClass
 
     def select(
         self,
@@ -306,11 +337,22 @@ class _JoinLogicalTable(LogicalTable):
 
     @property  # type: ignore
     @cached_getter
-    def topological_extents(self) -> AbstractSet[LogicalColumnTopologicalExtentKey]:
-        result: Set[LogicalColumnTopologicalExtentKey] = set()
+    def regions(self) -> AbstractSet[str]:
+        result: Set[str] = set()
         for table in self._nested:
-            result.update(table.topological_extents)
-        return frozenset(result)
+            result.update(table.regions)
+        return result
+
+    @property  # type: ignore
+    @cached_getter
+    def timespans(self) -> AbstractSet[str]:
+        result: Set[str] = set()
+        for table in self._nested:
+            result.update(table.timespans)
+        return result
+
+    def getTimespanRepresentation(self) -> Type[TimespanDatabaseRepresentation]:
+        return self._nested[0].getTimespanRepresentation()
 
     def select(
         self,
@@ -390,29 +432,37 @@ class _UnionAllLogicalTable(LogicalTable):
     @property  # type: ignore
     @cached_getter
     def dimensions(self) -> NamedValueAbstractSet[Dimension]:
-        # TODO: apparently NamedValueSet's in-place operators are broken,
-        # because the inherited magic that implements the non-in-place ones
-        # doesn't return NamedValueSet objects.
-        result: Set[Dimension] = set()
-        for table in self._nested:
+        result: Set[Dimension] = set(self._nested[0].dimensions)
+        for table in self._nested[1:]:
             result.intersection_update(table.dimensions)
         return NamedValueSet(result).freeze()
 
     @property  # type: ignore
     @cached_getter
     def facts(self) -> AbstractSet[LogicalColumnFactKey]:
-        result: Set[LogicalColumnFactKey] = set()
-        for table in self._nested:
+        result: Set[LogicalColumnFactKey] = set(self._nested[0].facts)
+        for table in self._nested[1:]:
             result.intersection_update(table.facts)
         return frozenset(result)
 
     @property  # type: ignore
     @cached_getter
-    def topological_extents(self) -> AbstractSet[LogicalColumnTopologicalExtentKey]:
-        result: Set[LogicalColumnTopologicalExtentKey] = set()
-        for table in self._nested:
-            result.intersection_update(table.topological_extents)
-        return frozenset(result)
+    def regions(self) -> AbstractSet[str]:
+        result = set(self._nested[0].regions)
+        for table in self._nested[1:]:
+            result.intersection_update(table.regions)
+        return result
+
+    @property  # type: ignore
+    @cached_getter
+    def timespans(self) -> AbstractSet[str]:
+        result = set(self._nested[0].timespans)
+        for table in self._nested[1:]:
+            result.intersection_update(table.timespans)
+        return result
+
+    def getTimespanRepresentation(self) -> Type[TimespanDatabaseRepresentation]:
+        return self._nested[0].getTimespanRepresentation()
 
     def select(
         self,

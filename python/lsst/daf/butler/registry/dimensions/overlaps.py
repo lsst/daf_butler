@@ -143,6 +143,7 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
         return DirectLogicalTable(
             self._overlapTable,
             dimensions=dimensions.freeze(),
+            TimespanReprClass=self._db.getTimespanRepresentation(),
         )
 
     _SUMMARY_TABLE_NAME_SPEC = "{0.name}_{1.name}_overlap_summary"

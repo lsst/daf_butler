@@ -263,17 +263,14 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         column_names: Dict[LogicalColumnKey, str] = {}
         if isinstance(self.element, Dimension):
             column_names[self.element] = self.element.primaryKey.name
-        topological_extents = set()
-        if self.element.temporal is not None:
-            topological_extents.add(self._db.getTimespanRepresentation())
         facts = set(self.element.RecordClass.fields.facts.names)
-        if self.element.spatial is not None:
-            facts.add("region")
         return DirectLogicalTable(
             self._table,
             dimensions=self.element.dimensions,
             facts=facts,
-            topological_extents=topological_extents,
+            TimespanReprClass=self._db.getTimespanRepresentation(),
+            is_spatial=(self.element.spatial is not None),
+            is_temporal=(self.element.temporal is not None),
             name=self.element.name,
             column_names=column_names,
         )

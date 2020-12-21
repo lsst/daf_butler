@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["QueryDimensionRecordStorage"]
 
-from typing import Any, Iterable, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional, Type
 
 import sqlalchemy
 
@@ -184,14 +184,17 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def makeLogicalTable(self) -> LogicalTable:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         targetTable = self._db.getExistingTable(self._target.name, self._targetSpec)
-        return _DimensionSummaryQueryLogicalTable(self._element, targetTable)
+        return _DimensionSummaryQueryLogicalTable(self._element, targetTable,
+                                                  self._db.getTimespanRepresentation())
 
 
 class _DimensionSummaryQueryLogicalTable(LogicalTable):
 
-    def __init__(self, element: DatabaseDimension, table: sqlalchemy.schema.Table):
+    def __init__(self, element: DatabaseDimension, table: sqlalchemy.schema.Table,
+                 TimespanReprClass: Type[TimespanDatabaseRepresentation]):
         self._element = element
         self._table = table
+        self._TimespanReprClass = TimespanReprClass
 
     @property
     def name(self) -> str:
@@ -200,6 +203,9 @@ class _DimensionSummaryQueryLogicalTable(LogicalTable):
     @property
     def dimensions(self) -> NamedValueAbstractSet[Dimension]:
         return self._element.dimensions
+
+    def getTimespanRepresentation(self) -> Type[TimespanDatabaseRepresentation]:
+        return self._TimespanReprClass
 
     def select(
         self,

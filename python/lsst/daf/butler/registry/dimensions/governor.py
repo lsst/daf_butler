@@ -175,6 +175,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
             self._table,
             dimensions=self.element.dimensions,
             facts=self.element.RecordClass.fields.facts.names,
+            TimespanReprClass=self._db.getTimespanRepresentation(),
             name=self.element.name,
             column_names={self.element: self.element.primaryKey.name},
         )
