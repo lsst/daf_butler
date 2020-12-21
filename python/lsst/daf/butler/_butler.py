@@ -1250,9 +1250,6 @@ class Butler:
 
             This mode may remove provenance information from datasets other
             than those provided, and should be used with extreme care.
-        run : `str`, optional
-            `~CollectionType.RUN` collection to purge from, overriding
-            ``self.run``.  Ignored unless ``purge`` is `True`.
 
         Raises
         ------
@@ -1267,14 +1264,6 @@ class Butler:
                 raise TypeError("Cannot pass purge=True without disassociate=True.")
             if not unstore:
                 raise TypeError("Cannot pass purge=True without unstore=True.")
-            if run is None:
-                run = self.run
-                if run is None:
-                    raise TypeError("No run provided but purge=True.")
-            collectionType = self.registry.getCollectionType(run)
-            if collectionType is not CollectionType.RUN:
-                raise TypeError(f"Cannot purge from collection '{run}' "
-                                f"of non-RUN type {collectionType.name}.")
         elif disassociate:
             tags = tuple(tags)
             if not tags:
