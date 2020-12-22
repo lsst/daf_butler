@@ -364,6 +364,17 @@ class Registry:
         value.finish(self)
         self._defaults = value
 
+    def refresh(self) -> None:
+        """Refresh all in-memory state by querying the database.
+
+        This may be necessary to enable querying for entities added by other
+        `Registry` instances after this one was constructed.
+        """
+        self._dimensions.clearCaches()
+        self._dimensions.refresh()
+        self._collections.refresh()
+        self._datasets.refresh()
+
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
         """Return a context manager that represents a transaction.
