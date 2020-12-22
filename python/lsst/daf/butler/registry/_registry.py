@@ -1580,6 +1580,7 @@ class Registry:
             dataId=standardizedDataId,
             expression=where,
             bind=bind,
+            defaults=self.defaults.dataId,
             check=check,
         )
         builder = self.makeQueryBuilder(summary)
@@ -1708,6 +1709,7 @@ class Registry:
             dataId=standardizedDataId,
             expression=where,
             bind=bind,
+            defaults=self.defaults.dataId,
             check=check,
         )
         builder = self.makeQueryBuilder(summary)

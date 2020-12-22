@@ -379,9 +379,13 @@ class SimpleButlerTestCase(unittest.TestCase):
         # it works at all.
         dataset_id, _ = butler.get("flat", detector=2, physical_filter="Cam1-G")
         self.assertEqual(ref.id, dataset_id)
-        # Query for datasets.
-        queried_refs = set(butler.registry.queryDatasets("flat", detector=2, physical_filter="Cam1-G"))
-        self.assertEqual({ref}, queried_refs)
+        # Query for datasets.  Test defaulting the data ID in both kwargs and
+        # in the WHERE expression.
+        queried_refs_1 = set(butler.registry.queryDatasets("flat", detector=2, physical_filter="Cam1-G"))
+        self.assertEqual({ref}, queried_refs_1)
+        queried_refs_2 = set(butler.registry.queryDatasets("flat",
+                                                           where="detector=2 AND physical_filter='Cam1-G'"))
+        self.assertEqual({ref}, queried_refs_2)
         # Query for data IDs with a dataset constraint.
         queried_data_ids = set(butler.registry.queryDataIds({"instrument", "detector", "physical_filter"},
                                                             datasets={"flat"},

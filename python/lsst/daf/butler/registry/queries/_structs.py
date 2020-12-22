@@ -87,6 +87,7 @@ class QueryWhereExpression:
         graph: DimensionGraph,
         dataId: Optional[DataCoordinate] = None,
         region: Optional[Region] = None,
+        defaults: Optional[DataCoordinate] = None,
         check: bool = True,
     ) -> QueryWhereClause:
         """Allow this expression to be attached to a `QuerySummary` by
@@ -105,8 +106,12 @@ class QueryWhereExpression:
         region : `lsst.sphgeom.Region`, optional
             A spatial region that all rows must overlap.  If `None` and
             ``dataId`` is not `None`, ``dataId.region`` will be used.
+        defaults : `DataCoordinate`, optional
+            A data ID containing default for governor dimensions.  Ignored
+            unless ``check=True``.
         check : `bool`
-            If `True` (default) check the query for consistency.  This may
+            If `True` (default) check the query for consistency and inject
+            default values into the data ID when needed.  This may
             reject some valid queries that resemble common mistakes (e.g.
             queries for visits without specifying an instrument).
         """
@@ -114,6 +119,8 @@ class QueryWhereExpression:
             region = dataId.region
         if dataId is None:
             dataId = DataCoordinate.makeEmpty(graph.universe)
+        if defaults is None:
+            defaults = DataCoordinate.makeEmpty(graph.universe)
         if self._bind and check:
             for identifier in self._bind:
                 if identifier in graph.universe.getStaticElements().names:
@@ -140,8 +147,9 @@ class QueryWhereExpression:
                 expr = NormalFormExpression.fromTree(self._tree, NormalForm.DISJUNCTIVE)
                 from .expressions import CheckVisitor
                 # Check the expression for consistency and completeness.
+                visitor = CheckVisitor(dataId, graph, self._bind.keys(), defaults)
                 try:
-                    summary = expr.visit(CheckVisitor(dataId, graph, self._bind.keys()))
+                    summary = expr.visit(visitor)
                 except RuntimeError as err:
                     exprOriginal = str(self._tree)
                     exprNormal = str(expr.toTree())
@@ -157,6 +165,7 @@ class QueryWhereExpression:
                     graph.universe,
                     **summary.governors.byName(),
                 )
+                dataId = visitor.dataId
             else:
                 from .expressions import InspectionVisitor
                 summary = self._tree.visit(InspectionVisitor(graph.universe, self._bind.keys()))
@@ -258,6 +267,8 @@ class QuerySummary:
     bind : `Mapping` [ `str`, `object` ], optional
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.
+    defaults : `DataCoordinate`, optional
+        A data ID containing default for governor dimensions.
     check : `bool`
         If `True` (default) check the query for consistency.  This may reject
         some valid queries that resemble common mistakes (e.g. queries for
@@ -268,6 +279,7 @@ class QuerySummary:
                  expression: Optional[Union[str, QueryWhereExpression]] = None,
                  whereRegion: Optional[Region] = None,
                  bind: Optional[Mapping[str, Any]] = None,
+                 defaults: Optional[DataCoordinate] = None,
                  check: bool = True):
         self.requested = requested
         if expression is None:
@@ -276,7 +288,8 @@ class QuerySummary:
             expression = QueryWhereExpression(expression, bind)
         elif bind is not None:
             raise TypeError("New bind parameters passed, but expression is already a QueryWhereExpression.")
-        self.where = expression.attach(self.requested, dataId=dataId, region=whereRegion, check=check)
+        self.where = expression.attach(self.requested, dataId=dataId, region=whereRegion, defaults=defaults,
+                                       check=check)
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
