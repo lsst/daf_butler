@@ -43,7 +43,7 @@ from typing import (
 )
 
 from lsst.sphgeom import Region
-from ..named import NamedKeyMapping, NameLookupMapping, NamedValueAbstractSet
+from ..named import NamedKeyDict, NamedKeyMapping, NameLookupMapping, NamedValueAbstractSet
 from ..timespan import Timespan
 from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph
@@ -385,6 +385,31 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         raise NotImplementedError()
 
     @abstractmethod
+    def union(self, other: DataCoordinate) -> DataCoordinate:
+        """Combine two data IDs, yielding a new one that identifies all
+        dimensions that either of them identify.
+
+        Parameters
+        ----------
+        other : `DataCoordinate`
+            Data ID to combine with ``self``.
+
+        Returns
+        -------
+        unioned : `DataCoordinate`
+            A `DataCoordinate` instance that satisfies
+            ``unioned.graph == self.graph.union(other.graph)``.  Will preserve
+            ``hasFull`` and ``hasRecords`` whenever possible.
+
+        Notes
+        -----
+        No checking for consistency is performed on values for keys that
+        ``self`` and ``other`` have in common, and which value is included in
+        the returned data ID is not specified.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def expanded(self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
                  ) -> DataCoordinate:
         """Return a `DataCoordinate` that holds the given records and
@@ -719,6 +744,36 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         else:
             return _BasicTupleDataCoordinate(graph, tuple(self[k] for k in graph.required.names))
 
+    def union(self, other: DataCoordinate) -> DataCoordinate:
+        # Docstring inherited from DataCoordinate.
+        graph = self.graph.union(other.graph)
+        # See if one or both input data IDs is already what we want to return;
+        # if so, return the most complete one we have.
+        if other.graph == graph:
+            if self.graph == graph:
+                # Input data IDs have the same graph (which is also the result
+                # graph), but may not have the same content.
+                # other might have records; self does not, so try other first.
+                # If it at least has full values, it's no worse than self.
+                if other.hasFull():
+                    return other
+                else:
+                    return self
+            elif other.hasFull():
+                return other
+            # There's some chance that neither self nor other has full values,
+            # but together provide enough to the union to.  Let the general
+            # case below handle that.
+        elif self.graph == graph:
+            # No chance at returning records.  If self has full values, it's
+            # the best we can do.
+            if self.hasFull():
+                return self
+        # General case with actual merging of dictionaries.
+        values = self.full.byName() if self.hasFull() else self.byName()
+        values.update(other.full.byName() if other.hasFull() else other.byName())
+        return DataCoordinate.standardize(values, graph=graph)
+
     def expanded(self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
                  ) -> DataCoordinate:
         # Docstring inherited from DataCoordinate
@@ -788,6 +843,43 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
                  ) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
         return self
+
+    def union(self, other: DataCoordinate) -> DataCoordinate:
+        # Docstring inherited from DataCoordinate.
+        graph = self.graph.union(other.graph)
+        # See if one or both input data IDs is already what we want to return;
+        # if so, return the most complete one we have.
+        if self.graph == graph:
+            # self has records, so even if other is also a valid result, it's
+            # no better.
+            return self
+        if other.graph == graph:
+            # If other has full values, and self does not identify some of
+            # those, it's the base we can do.  It may have records, too.
+            if other.hasFull():
+                return other
+            # If other does not have full values, there's a chance self may
+            # provide the values needed to complete it.  For example, self
+            # could be {band} while other could be
+            # {instrument, physical_filter, band}, with band unknown.
+        # General case with actual merging of dictionaries.
+        values = self.full.byName()
+        values.update(other.full.byName() if other.hasFull() else other.byName())
+        basic = DataCoordinate.standardize(values, graph=graph)
+        # See if we can add records.
+        if self.hasRecords() and other.hasRecords():
+            # Sometimes the elements of a union of graphs can contain elements
+            # that weren't in either input graph (because graph unions are only
+            # on dimensions).  e.g. {visit} | {detector} brings along
+            # visit_detector_region.
+            elements = set(graph.elements.names)
+            elements -= self.graph.elements.names
+            elements -= other.graph.elements.names
+            if not elements:
+                records = NamedKeyDict[DimensionElement, Optional[DimensionRecord]](self.records)
+                records.update(other.records)
+                return basic.expanded(records.freeze())
+        return basic
 
     def hasFull(self) -> bool:
         # Docstring inherited from DataCoordinate.
