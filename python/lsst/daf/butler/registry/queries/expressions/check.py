@@ -35,7 +35,6 @@ from typing import (
     Set,
     Tuple,
     TYPE_CHECKING,
-    Union,
 )
 
 from ....core import (
@@ -48,7 +47,7 @@ from ....core import (
     NamedKeyDict,
     NamedValueSet,
 )
-from ...wildcards import EllipsisType, Ellipsis
+from ...summaries import GovernorDimensionRestriction
 from .parser import Node, TreeVisitor
 from .normalForm import NormalForm, NormalFormVisitor
 from .categorize import categorizeElementId, categorizeConstant, ExpressionConstant
@@ -278,14 +277,14 @@ class OuterSummary(InspectionSummary):
     tables, and governor dimension values from the entire expression.
     """
 
-    governors: NamedKeyDict[GovernorDimension, Union[Set[str], EllipsisType]] \
-        = dataclasses.field(default_factory=NamedKeyDict)
-    """Mapping containing all values that appear in this expression for any
+    governors: GovernorDimensionRestriction = dataclasses.field(
+        default_factory=GovernorDimensionRestriction.makeFull
+    )
+    """Mapping containing all values that appear in this expression for
     governor dimension relevant to the query.
 
-    Mapping values may be a `set` of `str` to indicate that only these values
-    are permitted for a dimension, or ``...`` indicate that the values for
-    that governor are not fully constrained by this expression.
+    Governor dimensions that are absent from this dict are not constrained by
+    this expression.
     """
 
     defaultsNeeded: NamedValueSet[GovernorDimension] = dataclasses.field(default_factory=NamedValueSet)
@@ -418,6 +417,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         summary = OuterSummary()
         for branch in branches:
             summary.update(branch)
+            summary.governors.update(branch.governors)
             summary.defaultsNeeded.update(branch.defaultsNeeded)
         # See if we've referenced any dimensions that weren't in the original
         # query graph; if so, we update that to include them.  This is what
@@ -429,8 +429,21 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
                 self.graph.universe,
                 dimensions=(summary.dimensions | self.graph.dimensions),
             )
+        for governor, values in branch.governors.items():
+            if governor in summary.defaultsNeeded:
+                # One branch contained an explicit value for this dimension
+                # while another needed to refer to the default data ID.
+                # Even if these refer to the same value, that inconsistency
+                # probably indicates user error.
+                raise RuntimeError(
+                    f"Governor dimension {governor.name} is explicitly "
+                    f"constrained to {values} in one or more branches of "
+                    "this query where expression, but is left to default "
+                    f"to {self.defaults[governor]!r} in another branch.  "
+                    "Defaults and explicit constraints cannot be mixed."
+                )
         # If any default data ID values were needed, update self.dataId with
-        # them.
+        # them, and then update the governor restriction with them.
         if summary.defaultsNeeded:
             defaultsNeededGraph = DimensionGraph(self.graph.universe, summary.defaultsNeeded)
             self.dataId = self.dataId.union(self.defaults.subset(defaultsNeededGraph))
@@ -438,44 +451,10 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
                 "Should be a union of two data IDs with records, "
                 "in which one only adds governor dimension values."
             )
-        # Set up a dict of empty sets, with all of the governors this query
-        # involves as keys.
-        summary.governors.update((k, set()) for k in self.graph.governors)
-        # Iterate over branches again to see if there are any branches that
-        # don't constraint a particular governor (because these branches are
-        # OR'd together, that means there is no constraint on that governor at
-        # all); if that's the case, we set the dict value to Ellipsis.  If a
-        # governor is constrained by all branches, we update the set with the
-        # values that governor can have.
-        for branch in branches:
-            for governor in summary.governors:
-                branchValue = branch.governors.get(governor)
-                if branchValue is not None and governor in summary.defaultsNeeded:
-                    # One branch contained an explicit value for this dimension
-                    # while another needed to refer to the default data ID.
-                    # Even if these refer to the same value, that inconsistency
-                    # probably indicates user error.
-                    raise RuntimeError(
-                        f"Governor dimension {governor.name} is explicitly "
-                        f"constrained to {branchValue!r} in one branch of "
-                        "this query where expression, but is left to default "
-                        f"to {self.defaults[governor]!r} in another branch.  "
-                        "Defaults and explicit constraints cannot be mixed."
-                    )
-                currentValues = summary.governors[governor]
-                if currentValues is not Ellipsis:
-                    if branchValue is None:
-                        # This governor is unconstrained in this branch, so
-                        # no other branch can constrain it.
-                        summary.governors[governor] = Ellipsis
-                    else:
-                        currentValues.add(branchValue)
-        # Any defaults for governor values that this query used still provide
-        # a constraint on the governor dimension values that could appear in
-        # the query results; add those now.  The check in the loops above
-        # should already ensure these are consistent with any explicit values.
-        for governor in summary.defaultsNeeded:
-            # We know the value for a governor dimension is always a str, and
-            # that's all self.defaults should contain, but MyPy can't tell.
-            summary.governors[governor] = {self.defaults[governor]}  # type: ignore
+            summary.governors.intersection_update(
+                # We know the value for a governor dimension is always a str,
+                # and that's all self.defaults should contain, but MyPy doesn't
+                # know that.
+                {dimension: self.defaults[dimension] for dimension in summary.defaultsNeeded}  # type: ignore
+            )
         return summary

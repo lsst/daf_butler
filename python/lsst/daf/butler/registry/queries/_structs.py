@@ -49,7 +49,7 @@ from ..interfaces import (
     DatasetRecordStorageManager,
     DimensionRecordStorageManager,
 )
-from ..wildcards import GovernorDimensionRestriction
+from ..summaries import GovernorDimensionRestriction
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
 from .expressions import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
@@ -132,7 +132,7 @@ class QueryWhereExpression:
                     raise RuntimeError(
                         f"Bind parameter key {identifier!r} looks like a dimension column."
                     )
-        restriction = GovernorDimensionRestriction(graph.universe)
+        restriction = GovernorDimensionRestriction(NamedKeyDict())
         summary: InspectionSummary
         if self._tree is not None:
             if check:
@@ -161,10 +161,7 @@ class QueryWhereExpression:
                             f'(normalized to "{exprNormal}"): {err}'
                         )
                     raise RuntimeError(msg) from None
-                restriction = GovernorDimensionRestriction(
-                    graph.universe,
-                    **summary.governors.byName(),
-                )
+                restriction = summary.governors
                 dataId = visitor.dataId
             else:
                 from .expressions import InspectionVisitor
