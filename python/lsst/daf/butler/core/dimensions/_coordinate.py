@@ -315,7 +315,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         # quote its keys: that's both more compact and something that can't
         # be mistaken for an actual dict or something that could be exec'd.
         terms = [f"{d}: {self[d]!r}" for d in self.graph.required.names]
-        if self.hasFull():
+        if self.hasFull() and self.graph.required != self.graph.dimensions:
             terms.append("...")
         return "{{{}}}".format(', '.join(terms))
 
@@ -705,7 +705,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         except IndexError:
             # Caller asked for an implied dimension, but this object only has
             # values for the required ones.
-            raise KeyError(key)
+            raise KeyError(key) from None
 
     def subset(self, graph: DimensionGraph) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
