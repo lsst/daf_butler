@@ -167,6 +167,9 @@ class Butler:
         Explicitly sets whether the butler supports write operations.  If not
         provided, a read-write butler is created if any of ``run``, ``tags``,
         or ``chains`` is non-empty.
+    **kwargs : `str`
+        Default data ID key-value pairs.  These may only identify "governor"
+        dimensions like ``instrument`` and ``skymap``.
 
     Examples
     --------
@@ -213,8 +216,9 @@ class Butler:
                  run: Optional[str] = None,
                  searchPaths: Optional[List[str]] = None,
                  writeable: Optional[bool] = None,
+                 **kwargs: str,
                  ):
-        defaults = RegistryDefaults(collections=collections, run=run)
+        defaults = RegistryDefaults(collections=collections, run=run, **kwargs)
         # Load registry, datastore, etc. from config or existing butler.
         if butler is not None:
             if config is not None or searchPaths is not None or writeable is not None:
@@ -388,7 +392,7 @@ class Butler:
 
     @classmethod
     def _unpickle(cls, config: ButlerConfig, collections: Optional[CollectionSearch], run: Optional[str],
-                  writeable: bool) -> Butler:
+                  defaultDataId: Dict[str, str], writeable: bool) -> Butler:
         """Callable used to unpickle a Butler.
 
         We prefer not to use ``Butler.__init__`` directly so we can force some
@@ -402,9 +406,11 @@ class Butler:
             instance (and hence after any search paths for overrides have been
             utilized).
         collections : `CollectionSearch`
-            Names of collections to read from.
+            Names of the default collections to read from.
         run : `str`, optional
-            Name of `~CollectionType.RUN` collection to write to.
+            Name of the default `~CollectionType.RUN` collection to write to.
+        defaultDataId : `dict` [ `str`, `str` ]
+            Default data ID values.
         writeable : `bool`
             Whether the Butler should support write operations.
 
@@ -413,12 +419,16 @@ class Butler:
         butler : `Butler`
             A new `Butler` instance.
         """
-        return cls(config=config, collections=collections, run=run, writeable=writeable)
+        # MyPy doesn't recognize that the kwargs below are totally valid; it
+        # seems to think '**defaultDataId* is a _positional_ argument!
+        return cls(config=config, collections=collections, run=run, writeable=writeable,
+                   **defaultDataId)  # type: ignore
 
     def __reduce__(self) -> tuple:
         """Support pickling.
         """
         return (Butler._unpickle, (self._config, self.collections, self.run,
+                                   self.registry.defaults.dataId.byName(),
                                    self.registry.isWriteable()))
 
     def __str__(self) -> str:
@@ -753,7 +763,8 @@ class Butler:
             # those of the dataset type requested, because there may be extra
             # dimensions that provide temporal information for a validity-range
             # lookup.
-            dataId = DataCoordinate.standardize(dataId, universe=self.registry.dimensions, **kwds)
+            dataId = DataCoordinate.standardize(dataId, universe=self.registry.dimensions,
+                                                defaults=self.registry.defaults.dataId, **kwds)
             if dataId.graph.temporal:
                 dataId = self.registry.expandDataId(dataId)
                 timespan = dataId.timespan
@@ -761,7 +772,8 @@ class Butler:
             # Standardize the data ID to just the dimensions of the dataset
             # type instead of letting registry.findDataset do it, so we get the
             # result even if no dataset is found.
-            dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions, **kwds)
+            dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions,
+                                                defaults=self.registry.defaults.dataId, **kwds)
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
         ref = self.registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)

@@ -40,7 +40,7 @@ from lsst.daf.butler import (
     Registry,
     Timespan,
 )
-from lsst.daf.butler.registry import RegistryConfig
+from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
@@ -355,6 +355,38 @@ class SimpleButlerTestCase(unittest.TestCase):
                                   raft="B", name_in_raft="a",
                                   collections="calibs", instrument="Cam1")
         self.assertEqual(bias3b_id, bias3b.id)
+
+    def testRegistryDefaults(self):
+        """Test that we can default the collections and some data ID keys when
+        constructing a butler.
+
+        Many tests that use default run already exist in ``test_butler.py``, so
+        that isn't tested here.  And while most of this functionality is
+        implemented in `Registry`, we test it here instead of
+        ``daf/butler/tests/registry.py`` because it shouldn't depend on the
+        database backend at all.
+        """
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        # Need to actually set defaults later, not at construction, because
+        # we need to import the instrument before we can use it as a default.
+        butler.registry.defaults = RegistryDefaults(collections=["imported_g"], instrument="Cam1")
+        # Use findDataset without collections or instrument.
+        ref = butler.registry.findDataset("flat", detector=2, physical_filter="Cam1-G")
+        # Do the same with Butler.get; this should ultimately invoke a lot of
+        # the same code, so it's a bit circular, but mostly we're checking that
+        # it works at all.
+        dataset_id, _ = butler.get("flat", detector=2, physical_filter="Cam1-G")
+        self.assertEqual(ref.id, dataset_id)
+        # Query for datasets.
+        queried_refs = set(butler.registry.queryDatasets("flat", detector=2, physical_filter="Cam1-G"))
+        self.assertEqual({ref}, queried_refs)
+        # Query for data IDs with a dataset constraint.
+        queried_data_ids = set(butler.registry.queryDataIds({"instrument", "detector", "physical_filter"},
+                                                            datasets={"flat"},
+                                                            detector=2, physical_filter="Cam1-G"))
+        self.assertEqual({ref.dataId}, queried_data_ids)
 
 
 if __name__ == "__main__":

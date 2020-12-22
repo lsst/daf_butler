@@ -359,9 +359,10 @@ class Registry:
 
     @defaults.setter
     def defaults(self, value: RegistryDefaults) -> None:
+        if value.run is not None:
+            self.registerRun(value.run)
+        value.finish(self)
         self._defaults = value
-        if self._defaults.run is not None:
-            self.registerRun(self._defaults.run)
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
@@ -771,7 +772,8 @@ class Registry:
         else:
             storage = self._datasets[datasetType]
         dataId = DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions,
-                                            universe=self.dimensions, **kwargs)
+                                            universe=self.dimensions, defaults=self.defaults.dataId,
+                                            **kwargs)
         if collections is None:
             if not self.defaults.collections:
                 raise TypeError("No collections provided to findDataset, "
@@ -1092,6 +1094,7 @@ class Registry:
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
                      records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
+                     withDefaults: bool = True,
                      **kwargs: Any) -> DataCoordinate:
         """Expand a dimension-based data ID to include additional information.
 
@@ -1108,6 +1111,10 @@ class Registry:
         records : `Mapping` [`str`, `DimensionRecord`], optional
             Dimension record data to use before querying the database for that
             data, keyed by element name.
+        withDefaults : `bool`, optional
+            Utilize ``self.defaults.dataId`` to fill in missing governor
+            dimension key-value pairs.  Defaults to `True` (i.e. defaults are
+            used).
         **kwargs
             Additional keywords are treated like additional key-value pairs for
             ``dataId``, extending and overriding
@@ -1119,7 +1126,12 @@ class Registry:
             identifieds, i.e. guarantees that ``expanded.hasRecords()`` and
             ``expanded.hasFull()`` both return `True`.
         """
-        standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions, **kwargs)
+        if not withDefaults:
+            defaults = None
+        else:
+            defaults = self.defaults.dataId
+        standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions,
+                                                  defaults=defaults, **kwargs)
         if standardized.hasRecords():
             return standardized
         if records is None:

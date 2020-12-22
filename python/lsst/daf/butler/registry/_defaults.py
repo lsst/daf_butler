@@ -23,10 +23,14 @@ from __future__ import annotations
 
 __all__ = ("RegistryDefaults",)
 
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
+from ..core import DataCoordinate
 from ..core.utils import immutable
 from .wildcards import CollectionSearch
+
+if TYPE_CHECKING:
+    from ._registry import Registry
 
 
 @immutable
@@ -51,8 +55,12 @@ class RegistryDefaults:
         ``collections`` will be set to ``[run]``.  If not `None`, this
         collection will automatically be registered when the default struct is
         attached to a `Registry` instance.
+    **kwargs : `str`
+        Default data ID key-value pairs.  These may only identify "governor"
+        dimensions like ``instrument`` and ``skymap``, though this is only
+        checked when the defaults struct is actually attached to a `Registry`.
     """
-    def __init__(self, collections: Any = None, run: Optional[str] = None):
+    def __init__(self, collections: Any = None, run: Optional[str] = None, **kwargs: str):
         if collections is None:
             if run is not None:
                 collections = (run,)
@@ -60,6 +68,33 @@ class RegistryDefaults:
                 collections = ()
         self.collections = CollectionSearch.fromExpression(collections)
         self.run = run
+        self._kwargs = kwargs
+
+    def finish(self, registry: Registry) -> None:
+        """Validate the defaults struct and standardize its data ID.
+
+        This should be called only by a `Registry` instance when the defaults
+        struct is first associated with it.
+
+        Parameters
+        ----------
+        registry : `Registry`
+            Registry instance these defaults are being attached to.
+
+        Raises
+        ------
+        TypeError
+            Raised if a non-governor dimension was included in ``**kwargs``
+            at construction.
+        """
+        if not self._kwargs.keys() <= registry.dimensions.getGovernorDimensions().names:
+            raise TypeError(
+                "Only governor dimensions may be identified by a default data "
+                f"ID, not {self._kwargs.keys() - registry.dimensions.getGovernorDimensions().names}.  "
+                "(These may just be unrecognized keyword arguments passed at "
+                "Butler construction.)"
+            )
+        self.dataId = registry.expandDataId(self._kwargs, withDefaults=False)
 
     collections: CollectionSearch
     """The collections to search by default, in order (`CollectionSearch`).
@@ -68,4 +103,15 @@ class RegistryDefaults:
     run: Optional[str]
     """Name of the run this butler writes outputs to by default (`str` or
     `None`).
+    """
+
+    dataId: DataCoordinate
+    """The default data ID (`DataCoordinate`).
+
+    Dimensions without defaults are simply not included.  Only governor
+    dimensions are ever included in defaults.
+
+    This attribute may not be accessed before the defaults struct is
+    attached to a `Registry` instance.  It always satisfies both ``hasFull``
+    and ``hasRecords``.
     """

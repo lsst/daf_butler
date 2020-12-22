@@ -133,6 +133,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         *,
         graph: Optional[DimensionGraph] = None,
         universe: Optional[DimensionUniverse] = None,
+        defaults: Optional[DataCoordinate] = None,
         **kwargs: Any
     ) -> DataCoordinate:
         """Adapt an arbitrary mapping and/or additional arguments into a true
@@ -145,12 +146,16 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             their primary key values (may also be a true `DataCoordinate`).
         graph : `DimensionGraph`
             The dimensions to be identified by the new `DataCoordinate`.
-            If not provided, will be inferred from the keys of ``mapping``,
-            and ``universe`` must be provided unless ``mapping`` is already a
-            `DataCoordinate`.
+            If not provided, will be inferred from the keys of ``mapping`` and
+            ``**kwargs``, and ``universe`` must be provided unless ``mapping``
+            is already a `DataCoordinate`.
         universe : `DimensionUniverse`
             All known dimensions and their relationships; used to expand
             and validate dependencies when ``graph`` is not provided.
+        defaults : `DataCoordinate`, optional
+            Default dimension key-value pairs to use when needed.  These are
+            never used to infer ``graph``, and are ignored if a different value
+            is provided for the same key in ``mapping`` or `**kwargs``.
         **kwargs
             Additional keyword arguments are treated like additional key-value
             pairs in ``mapping``.
@@ -191,11 +196,20 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             d.update(mapping)
         d.update(kwargs)
         if graph is None:
-            if universe is None:
+            if defaults is not None:
+                universe = defaults.universe
+            elif universe is None:
                 raise TypeError("universe must be provided if graph is not.")
             graph = DimensionGraph(universe, names=d.keys())
         if not graph.dimensions:
             return DataCoordinate.makeEmpty(graph.universe)
+        if defaults is not None:
+            if defaults.hasFull():
+                for k, v in defaults.full.items():
+                    d.setdefault(k.name, v)
+            else:
+                for k, v in defaults.items():
+                    d.setdefault(k.name, v)
         if d.keys() >= graph.dimensions.names:
             values = tuple(d[name] for name in graph._dataCoordinateIndices.keys())
         else:
