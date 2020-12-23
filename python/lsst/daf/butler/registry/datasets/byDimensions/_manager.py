@@ -28,13 +28,13 @@ from lsst.daf.butler.registry.interfaces import (
 
 from .tables import (
     addDatasetForeignKey,
-    CollectionSummaryTables,
     makeCalibTableName,
     makeCalibTableSpec,
     makeStaticTableSpecs,
     makeTagTableName,
     makeTagTableSpec,
 )
+from .summaries import CollectionSummaryTables
 from ._storage import ByDimensionsDatasetRecordStorage
 
 if TYPE_CHECKING:

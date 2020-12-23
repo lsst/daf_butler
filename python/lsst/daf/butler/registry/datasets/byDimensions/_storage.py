@@ -29,7 +29,8 @@ from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
 
 if TYPE_CHECKING:
     from ...interfaces import CollectionManager, CollectionRecord, Database, RunRecord
-    from .tables import CollectionSummaryTables, StaticDatasetTablesTuple
+    from .tables import StaticDatasetTablesTuple
+    from .summaries import CollectionSummaryTables
 
 
 class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
