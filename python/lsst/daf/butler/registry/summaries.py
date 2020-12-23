@@ -81,7 +81,7 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
             Restriction instance that maps all governor dimensions to an empty
             set.
         """
-        return cls(NamedKeyDict((k, frozenset()) for k in universe.getGovernorDimensions()))
+        return cls(NamedKeyDict((k, set()) for k in universe.getGovernorDimensions()))
 
     @classmethod
     def makeFull(cls) -> GovernorDimensionRestriction:

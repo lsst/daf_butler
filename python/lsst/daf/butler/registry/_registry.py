@@ -73,6 +73,7 @@ from ._collectionType import CollectionType
 from ._defaults import RegistryDefaults
 from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
 from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch, Ellipsis
+from .summaries import CollectionSummary
 from .interfaces import ChainedCollectionRecord, RunRecord
 from .versions import ButlerVersionsManager, DigestMismatchError
 
@@ -633,6 +634,23 @@ class Registry:
             docstring.
         """
         self._collections.setDocumentation(self._collections.find(collection).key, doc)
+
+    def getCollectionSummary(self, collection: str) -> CollectionSummary:
+        """Return a summary for the given collection.
+
+        Parameters
+        ----------
+        collection : `str`
+            Name of the collection for which a summary is to be retrieved.
+
+        Returns
+        -------
+        summary : `CollectionSummary`
+            Summary of the dataset types and governor dimension values in
+            this collection.
+        """
+        record = self._collections.find(collection)
+        return self._datasets.getCollectionSummary(record)
 
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         """

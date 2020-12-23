@@ -26,11 +26,12 @@ from lsst.daf.butler import (
 from lsst.daf.butler.registry import ConflictingDefinitionError
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
 
+from ...summaries import GovernorDimensionRestriction
 
 if TYPE_CHECKING:
     from ...interfaces import CollectionManager, CollectionRecord, Database, RunRecord
     from .tables import StaticDatasetTablesTuple
-    from .summaries import CollectionSummaryManager, GovernorDimensionRestriction
+    from .summaries import CollectionSummaryManager
 
 
 class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
@@ -81,7 +82,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # Update the summary tables for this collection in case this is the
             # first time this dataset type or these governor values will be
             # inserted there.
-            self._summaries.update(run, self._dataset_type_id, governorValues)
+            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
             # Combine the generated dataset_id values and data ID fields to
             # form rows to be inserted into the tags table.
             protoTagsRow = {
@@ -169,7 +170,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # Update the summary tables for this collection in case this is the
         # first time this dataset type or these governor values will be
         # inserted there.
-        self._summaries.update(collection, self._dataset_type_id, governorValues)
+        self._summaries.update(collection, self.datasetType, self._dataset_type_id, governorValues)
         # Update the tag table itself.
         self._db.replace(self._tags, *rows)
 
@@ -245,7 +246,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # Update the summary tables for this collection in case this is the
         # first time this dataset type or these governor values will be
         # inserted there.
-        self._summaries.update(collection, self._dataset_type_id, governorValues)
+        self._summaries.update(collection, self.datasetType, self._dataset_type_id, governorValues)
         # Update the association table itself.
         if TimespanReprClass.hasExclusionConstraint():
             # Rely on database constraint to enforce invariants; we just

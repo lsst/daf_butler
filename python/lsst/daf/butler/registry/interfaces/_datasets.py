@@ -44,6 +44,7 @@ from ...core import (
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
+    from ..summaries import CollectionSummary
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
     from ._collections import CollectionManager, CollectionRecord, RunRecord
@@ -488,5 +489,23 @@ class DatasetRecordStorageManager(VersionedExtension):
         ref : `DatasetRef` or `None`
             Object representing the dataset, or `None` if no dataset with the
             given primary key values exists in this layer.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def getCollectionSummary(self, collection: CollectionRecord) -> CollectionSummary:
+        """Return a summary for the given collection.
+
+        Parameters
+        ----------
+        collection : `CollectionRecord`
+            Record describing the collection for which a summary is to be
+            retrieved.
+
+        Returns
+        -------
+        summary : `CollectionSummary`
+            Summary of the dataset types and governor dimension values in
+            this collection.
         """
         raise NotImplementedError()
