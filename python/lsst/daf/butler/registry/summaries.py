@@ -40,6 +40,7 @@ from typing import (
 )
 
 from ..core import (
+    DataCoordinate,
     DatasetType,
     DimensionUniverse,
     GovernorDimension,
@@ -234,6 +235,21 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
         for other in others:
             result.intersection_update(other)
         return result
+
+    def update_extract(self, data_id: DataCoordinate) -> None:
+        """Update ``self`` to include all governor dimension values in the
+        given data ID (in addition to those already in ``self``).
+
+        Parameters
+        ----------
+        data_id : `DataCoordinate`
+            Data ID from which governor dimension values should be extracted.
+            Values for non-governor dimensions are ignored.
+        """
+        for dimension in data_id.graph.governors:
+            current = self._mapping.get(dimension)
+            if current is not None:
+                current.add(data_id[dimension])
 
 
 @dataclass

@@ -34,7 +34,7 @@ from .tables import (
     makeTagTableName,
     makeTagTableSpec,
 )
-from .summaries import CollectionSummaryTables
+from .summaries import CollectionSummaryManager
 from ._storage import ByDimensionsDatasetRecordStorage
 
 if TYPE_CHECKING:
@@ -81,7 +81,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
     static : `StaticDatasetTablesTuple`
         Named tuple of `sqlalchemy.schema.Table` instances for all static
         tables used by this class.
-    summaries : `CollectionSummaryTables`
+    summaries : `CollectionSummaryManager`
         Structure containing tables that summarize the contents of collections.
     """
     def __init__(
@@ -90,7 +90,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
-        summaries: CollectionSummaryTables,
+        summaries: CollectionSummaryManager,
     ):
         self._db = db
         self._collections = collections
@@ -111,7 +111,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         specs = makeStaticTableSpecs(type(collections), universe=dimensions.universe)
         static: StaticDatasetTablesTuple = context.addTableTuple(specs)  # type: ignore
-        summaries = CollectionSummaryTables.initialize(
+        summaries = CollectionSummaryManager.initialize(
             db,
             context,
             collections=collections,

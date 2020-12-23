@@ -22,11 +22,13 @@
 from __future__ import annotations
 
 __all__ = (
-    "CollectionSummaryTables",
+    "CollectionSummaryManager",
 )
 
 from typing import (
+    Dict,
     Generic,
+    Set,
     TypeVar,
 )
 
@@ -41,11 +43,12 @@ from lsst.daf.butler import (
 from lsst.daf.butler import addDimensionForeignKey
 from lsst.daf.butler.registry.interfaces import (
     CollectionManager,
+    CollectionRecord,
     Database,
     DimensionRecordStorageManager,
     StaticTablesContext,
 )
-
+from ...summaries import CollectionSummary, GovernorDimensionRestriction
 
 _T = TypeVar("_T")
 
@@ -70,42 +73,6 @@ class CollectionSummaryTables(Generic[_T]):
     ):
         self.datasetType = datasetType
         self.dimensions = dimensions
-
-    @classmethod
-    def initialize(
-        cls,
-        db: Database,
-        context: StaticTablesContext, *,
-        collections: CollectionManager,
-        dimensions: DimensionRecordStorageManager,
-    ) -> CollectionSummaryTables[sqlalchemy.schema.Table]:
-        """Create all summary tables (or check that they have been created).
-
-        Parameters
-        ----------
-        db : `Database`
-            Interface to the underlying database engine and namespace.
-        context : `StaticTablesContext`
-            Context object obtained from `Database.declareStaticTables`; used
-            to declare any tables that should always be present.
-        collections: `CollectionManager`
-            Manager object for the collections in this `Registry`.
-        dimensions : `DimensionRecordStorageManager`
-            Manager object for the dimensions in this `Registry`.
-
-        Returns
-        -------
-        tables : `CollectionSummaryTables` [ `sqlalchemy.schema.Table` ]
-            Structure containing table objects.
-        """
-        specs = cls.makeTableSpecs(collections, dimensions)
-        return CollectionSummaryTables(
-            datasetType=context.addTable("collection_summary_dataset_type", specs.datasetType),
-            dimensions=NamedKeyDict({
-                dimension: context.addTable(f"collection_summary_{dimension.name}", spec)
-                for dimension, spec in specs.dimensions.items()
-            }).freeze(),
-        )
 
     @classmethod
     def makeTableSpecs(
@@ -148,3 +115,117 @@ class CollectionSummaryTables(Generic[_T]):
             datasetType=datasetTypeTableSpec,
             dimensions=dimensionTableSpecs.freeze(),
         )
+
+
+class CollectionSummaryManager:
+    """Object manages the summaries of what dataset types and governor
+    dimension values are present in a collection.
+
+    Parameters
+    ----------
+    db : `Database`
+        Interface to the underlying database engine and namespace.
+    collectionKeyName: `str
+        Field name for collection foreign keys.
+    dimensions : `DimensionRecordStorageManager`
+        Manager object for the dimensions in this `Registry`.
+    tables : `CollectionSummaryTables`
+        Struct containing the tables that hold collection summaries.
+    """
+    def __init__(
+        self,
+        db: Database, *,
+        collectionKeyName: str,
+        dimensions: DimensionRecordStorageManager,
+        tables: CollectionSummaryTables[sqlalchemy.sql.Table],
+    ):
+        self._db = db
+        self._collectionKeyName = collectionKeyName
+        self._dimensions = dimensions
+        self._tables = tables
+
+    @classmethod
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext, *,
+        collections: CollectionManager,
+        dimensions: DimensionRecordStorageManager,
+    ) -> CollectionSummaryManager:
+        """Create all summary tables (or check that they have been created),
+        returning an object to manage them.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        context : `StaticTablesContext`
+            Context object obtained from `Database.declareStaticTables`; used
+            to declare any tables that should always be present.
+        collections: `CollectionManager`
+            Manager object for the collections in this `Registry`.
+        dimensions : `DimensionRecordStorageManager`
+            Manager object for the dimensions in this `Registry`.
+
+        Returns
+        -------
+        manager : `CollectionSummaryManager`
+            New manager object for collection summaries.
+        """
+        specs = CollectionSummaryTables.makeTableSpecs(collections, dimensions)
+        tables = CollectionSummaryTables(
+            datasetType=context.addTable("collection_summary_dataset_type", specs.datasetType),
+            dimensions=NamedKeyDict({
+                dimension: context.addTable(f"collection_summary_{dimension.name}", spec)
+                for dimension, spec in specs.dimensions.items()
+            }).freeze(),
+        )
+        return cls(
+            db=db,
+            collectionKeyName=collections.getCollectionForeignKeyName(),
+            dimensions=dimensions,
+            tables=tables,
+        )
+
+    def update(
+        self,
+        collection: CollectionRecord,
+        dataset_type_id: int,
+        governors: GovernorDimensionRestriction,
+    ) -> None:
+        """Update the summary tables to associate the given collection with
+        a dataset type and governor dimension values.
+
+        Parameters
+        ----------
+        collection : `CollectionRecord`
+            Collection whose summary should be updated.
+        dataset_type_id : `int`
+            Integer ID for the dataset type to associate with this collection.
+        governors : `GovernorDimensionRestriction`
+            Mapping from `GovernorDimensionRestriction` to sets of values they
+            may be associated with in the data IDs of the datasets in this
+            collection.
+
+        Notes
+        -----
+        This method should only be called inside the transaction context of
+        another operation that inserts or associates datasets.
+        """
+        self._db.ensure(
+            self._tables.datasetType,
+            {
+                "dataset_type_id": dataset_type_id,
+                self._collectionKeyName: collection.key,
+            }
+        )
+        for dimension, values in governors.items():
+            if values:
+                self._db.ensure(
+                    self._tables.dimensions[dimension.name],
+                    *[{
+                        self._collectionKeyName: collection.key,
+                        dimension.name: v
+                    } for v in values],
+                )
+            )
