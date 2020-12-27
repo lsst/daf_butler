@@ -29,7 +29,6 @@ from ._collectionType import *
 from . import wildcards
 from .wildcards import CollectionSearch
 from . import interfaces
-from .interfaces import MissingCollectionError
 from . import queries
 from . import summaries
 
