@@ -60,7 +60,8 @@ from .._registry import (
     Registry,
     RegistryConfig,
 )
-from ..interfaces import MissingCollectionError, ButlerAttributeExistsError
+from .._exceptions import MissingCollectionError
+from ..interfaces import ButlerAttributeExistsError
 
 
 class RegistryTests(ABC):

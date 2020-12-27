@@ -167,6 +167,13 @@ class Butler:
         Explicitly sets whether the butler supports write operations.  If not
         provided, a read-write butler is created if any of ``run``, ``tags``,
         or ``chains`` is non-empty.
+    inferDefaults : `bool`, optional
+        If `True` (default) infer default data ID values from the values
+        present in the datasets in ``collections``: if all collections have the
+        same value (or no value) for a governor dimension, that value will be
+        the default for that dimension.  Nonexistent collections are ignored.
+        If a default value is provided explicitly for a governor dimension via
+        ``**kwargs``, no default will be inferred for that dimension.
     **kwargs : `str`
         Default data ID key-value pairs.  These may only identify "governor"
         dimensions like ``instrument`` and ``skymap``.
@@ -216,9 +223,10 @@ class Butler:
                  run: Optional[str] = None,
                  searchPaths: Optional[List[str]] = None,
                  writeable: Optional[bool] = None,
+                 inferDefaults: bool = True,
                  **kwargs: str,
                  ):
-        defaults = RegistryDefaults(collections=collections, run=run, **kwargs)
+        defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
         # Load registry, datastore, etc. from config or existing butler.
         if butler is not None:
             if config is not None or searchPaths is not None or writeable is not None:

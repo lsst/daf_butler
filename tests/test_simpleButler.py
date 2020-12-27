@@ -371,7 +371,10 @@ class SimpleButlerTestCase(unittest.TestCase):
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
         # Need to actually set defaults later, not at construction, because
         # we need to import the instrument before we can use it as a default.
-        butler.registry.defaults = RegistryDefaults(collections=["imported_g"], instrument="Cam1")
+        # Don't set a default instrument value for data IDs, because 'Cam1'
+        # should be inferred by virtue of that being the only value in the
+        # input collections.
+        butler.registry.defaults = RegistryDefaults(collections=["imported_g"])
         # Use findDataset without collections or instrument.
         ref = butler.registry.findDataset("flat", detector=2, physical_filter="Cam1-G")
         # Do the same with Butler.get; this should ultimately invoke a lot of

@@ -27,6 +27,8 @@ from typing import Any, Optional, TYPE_CHECKING
 
 from ..core import DataCoordinate
 from ..core.utils import immutable
+from ._exceptions import MissingCollectionError
+from .summaries import CollectionSummary
 from .wildcards import CollectionSearch
 
 if TYPE_CHECKING:
@@ -42,7 +44,10 @@ class RegistryDefaults:
     ----------
     collections : `str` or `Iterable` [ `str` ], optional
         An expression specifying the collections to be searched (in order) when
-        reading datasets.
+        reading datasets.  If a default value for a governor dimension is not
+        given via ``**kwargs``, and exactly one value for that dimension
+        appears in the datasets in ``collections``, that value is also used as
+        the default for that dimension.
         This may be a `str` collection name or an iterable thereof.
         See :ref:`daf_butler_collection_expressions` for more information.
         These collections are not registered automatically and must be
@@ -55,12 +60,19 @@ class RegistryDefaults:
         ``collections`` will be set to ``[run]``.  If not `None`, this
         collection will automatically be registered when the default struct is
         attached to a `Registry` instance.
+    infer : `bool`, optional
+        If `True` (default) infer default data ID values from the values
+        present in the datasets in ``collections``: if all collections have the
+        same value (or no value) for a governor dimension, that value will be
+        the default for that dimension.  Nonexistent collections are ignored.
+        If a default value is provided explicitly for a governor dimension via
+        ``**kwargs``, no default will be inferred for that dimension.
     **kwargs : `str`
         Default data ID key-value pairs.  These may only identify "governor"
         dimensions like ``instrument`` and ``skymap``, though this is only
         checked when the defaults struct is actually attached to a `Registry`.
     """
-    def __init__(self, collections: Any = None, run: Optional[str] = None, **kwargs: str):
+    def __init__(self, collections: Any = None, run: Optional[str] = None, infer: bool = True, **kwargs: str):
         if collections is None:
             if run is not None:
                 collections = (run,)
@@ -68,6 +80,7 @@ class RegistryDefaults:
                 collections = ()
         self.collections = CollectionSearch.fromExpression(collections)
         self.run = run
+        self._infer = infer
         self._kwargs = kwargs
 
     def finish(self, registry: Registry) -> None:
@@ -87,13 +100,28 @@ class RegistryDefaults:
             Raised if a non-governor dimension was included in ``**kwargs``
             at construction.
         """
-        if not self._kwargs.keys() <= registry.dimensions.getGovernorDimensions().names:
+        allGovernorDimensions = registry.dimensions.getGovernorDimensions()
+        if not self._kwargs.keys() <= allGovernorDimensions.names:
             raise TypeError(
                 "Only governor dimensions may be identified by a default data "
-                f"ID, not {self._kwargs.keys() - registry.dimensions.getGovernorDimensions().names}.  "
+                f"ID, not {self._kwargs.keys() - allGovernorDimensions.names}.  "
                 "(These may just be unrecognized keyword arguments passed at "
                 "Butler construction.)"
             )
+        if self._infer and not self._kwargs.keys() == allGovernorDimensions.names:
+            summaries = []
+            for collection in self.collections:
+                try:
+                    summaries.append(registry.getCollectionSummary(collection))
+                except MissingCollectionError:
+                    pass
+            if summaries:
+                summary = CollectionSummary.union(*summaries)
+                for dimensionName in (allGovernorDimensions.names - self._kwargs.keys()):
+                    values = summary.dimensions[dimensionName]
+                    if len(values) == 1:
+                        (value,) = values
+                        self._kwargs[dimensionName] = value
         self.dataId = registry.expandDataId(self._kwargs, withDefaults=False)
 
     collections: CollectionSearch
