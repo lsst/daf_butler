@@ -232,12 +232,10 @@ class Butler:
             if config is not None or searchPaths is not None or writeable is not None:
                 raise TypeError("Cannot pass 'config', 'searchPaths', or 'writeable' "
                                 "arguments with 'butler' argument.")
-            self.registry = butler.registry
+            self.registry = butler.registry.copy(defaults)
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
-            # These intentially invoke property setters.
-            self.registry.defaults = defaults
         else:
             self._config = ButlerConfig(config, searchPaths=searchPaths)
             if "root" in self._config:

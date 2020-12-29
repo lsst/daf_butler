@@ -402,7 +402,6 @@ class ButlerTests(ButlerPutGetTests):
             CollectionSearch.fromExpression(["other"])
         )
         self.assertIsNone(butler2.run)
-        self.assertIs(butler.registry, butler2.registry)
         self.assertIs(butler.datastore, butler2.datastore)
 
     def testBasicPutGet(self):

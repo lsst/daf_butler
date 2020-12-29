@@ -233,6 +233,35 @@ class Registry:
         """
         return self._db.isWriteable()
 
+    def copy(self, defaults: Optional[RegistryDefaults] = None) -> Registry:
+        """Create a new `Registry` backed by the same data repository and
+        connection as this one, but independent defaults.
+
+        Parameters
+        ----------
+        defaults : `RegistryDefaults`, optional
+            Default collections and data ID values for the new registry.  If
+            not provided, ``self.defaults`` will be used (but future changes
+            to either registry's defaults will not affect the other).
+
+        Returns
+        -------
+        copy : `Registry`
+            A new `Registry` instance with its own defaults.
+
+        Notes
+        -----
+        Because the new registry shares a connection with the original, they
+        also share transaction state (despite the fact that their `transaction`
+        context manager methods do not reflect this), and must be used with
+        care.
+        """
+        if defaults is None:
+            # No need to copy, because `RegistryDefaults` is immutable; we
+            # effectively copy on write.
+            defaults = self.defaults
+        return Registry(self._db, defaults, self._managers)
+
     @property
     def dimensions(self) -> DimensionUniverse:
         """All dimensions recognized by this `Registry` (`DimensionUniverse`).
