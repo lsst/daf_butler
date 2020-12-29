@@ -1020,7 +1020,7 @@ class RegistryTests(ABC):
         VERSION_COUNT = 6 * 3 + 1
 
         registry = self.makeRegistry()
-        attributes = registry._attributes
+        attributes = registry._managers.attributes
 
         # check what get() returns for non-existing key
         self.assertIsNone(attributes.get("attr"))
