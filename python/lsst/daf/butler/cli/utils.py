@@ -637,15 +637,24 @@ class MWArgumentDecorator:
         return decorator
 
 
-class MWCommand(click.Command):
-    """Command subclass that stores a copy of the args list for use by the
-    command."""
-
-    extra_epilog = None
+class SaveArgs:
+    """A mixin for click.Command subclasses that saves the command line
+    arguments in the context."""
 
     def parse_args(self, ctx, args):
         MWCtxObj.getFrom(ctx).args = copy.copy(args)
         super().parse_args(ctx, args)
+
+
+class ExtraEpilog:
+    """A mixin for click.Command subclasses that inserts additional epilog.
+
+    Classes that inherit from ExtraEpilog should also define their own
+    extra_epilog parameter. Its value is inserted in the bottom of the
+    command's epilog.
+    """
+
+    extra_epilog = None
 
     @property
     def epilog(self):
@@ -664,10 +673,28 @@ class MWCommand(click.Command):
         self._epilog = val
 
 
-class ButlerCommand(MWCommand):
-    """Command subclass with butler-command specific overrides."""
+butler_epilog = "See 'butler --help' for more options."
 
-    extra_epilog = "See 'butler --help' for more options."
+
+class MWCommand(SaveArgs, ExtraEpilog, click.Command):
+    """Command subclass for middleware subcommands.
+
+    This class saves the CLI arguments and adds epilog to the command output.
+    """
+    pass
+
+
+class ButlerCommand(MWCommand):
+    """Middleware command that defines the epilog for butler subcommands."""
+
+    extra_epilog = butler_epilog
+
+
+class ButlerGroup(SaveArgs, ExtraEpilog, click.Group):
+    """Group command subclass that defines the epilog for butler group
+    subcommands and saves the CLI arguments in the context."""
+
+    extra_epilog = butler_epilog
 
 
 class MWCtxObj():

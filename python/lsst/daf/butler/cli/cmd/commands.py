@@ -41,6 +41,7 @@ from ..opt import (
 
 from ..utils import (
     ButlerCommand,
+    ButlerGroup,
     MWOptionDecorator,
     option_section,
     printAstropyTables,
@@ -130,6 +131,46 @@ def config_validate(*args, **kwargs):
     is_good = script.configValidate(*args, **kwargs)
     if not is_good:
         raise click.exceptions.Exit(1)
+
+
+@click.group(cls=ButlerGroup)
+def export():
+    """Export data from a repository."""
+    pass
+
+
+@export.command("datasets",
+                short_help="Export one or more datasets.",
+                cls=ButlerCommand)
+@repo_argument(required=True)
+def exportDatasets(kwargs):
+    """Export any DatasetType, RUN collections, and dimension records
+    associated with the datasets.
+    """
+    print("export datasets " + kwargs["repo"])
+
+
+@export.command("data-ids", cls=ButlerCommand)
+@repo_argument(required=True)
+def exportDataIds(kwargs):
+    """Export dimension records associated with data IDs."""
+    print("export data-ids " + kwargs["repo"])
+
+
+@export.command("dimension-data", cls=ButlerCommand)
+@repo_argument(required=True)
+def exportDimensionData(kwargs):
+    """Export dimension records associated with data IDs.
+    """
+    print("export dimension-data " + kwargs["repo"])
+
+
+@export.command("collection", cls=ButlerCommand)
+@repo_argument(required=True)
+def exportCollection(kwargs):
+    """Export a collection.
+    """
+    print("export collection " + kwargs["repo"])
 
 
 @click.command(cls=ButlerCommand)
