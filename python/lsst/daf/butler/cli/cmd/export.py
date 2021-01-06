@@ -27,26 +27,13 @@ from ..opt import (
     directory_option,
     format_option,
     query_data_ids_options,
+    query_datasets_options,
     repo_argument
 )
 from ..utils import ButlerCommand, ButlerGroup, unwrap
 from ... import Butler
 from ... import script
 from ...script import export as exportScript
-
-
-def processor(f):
-    """Helper decorator to rewrite a function so that it returns another
-    function from it.
-    """
-
-    def new_func(*args, **kwargs):
-        def processor(stream):
-            return f(stream, *args, **kwargs)
-
-        return processor
-
-    return update_wrapper(new_func, f)
 
 
 @click.group(cls=ButlerGroup, chain=True)
@@ -62,13 +49,7 @@ def export(*args, **kwargs):
 @export.resultcallback()
 @click.pass_context
 def process_commands(ctx, processors, repo, directory, format_):
-    # import pdb; pdb.set_trace()
     butler = Butler(repo)
-
-# TODO NEXT: export is probably going to need some of its options filled in.
-# then, work on seeing if query_data_ids works inside of exportDataIds, and
-# pass the results into context.saveDataIds
-
     with butler.export(directory=directory, format=format_) as repoExportContext:
         for processor in processors:
             processor(butler, repoExportContext)
@@ -76,12 +57,12 @@ def process_commands(ctx, processors, repo, directory, format_):
 
 @export.command(short_help="Export one or more datasets.",
                 cls=ButlerCommand)
-@processor
-def datasets(repoExportContext, **kwargs):
+@query_datasets_options(repo=False, showUri=False)
+def datasets(**kwargs):
     """Export any DatasetType, RUN collections, and dimension records
     associated with the datasets.
     """
-    print("export datasets " + kwargs["repo"])
+    return partial(exportScript.exportDatasets, **kwargs)
 
 
 @export.command(cls=ButlerCommand)

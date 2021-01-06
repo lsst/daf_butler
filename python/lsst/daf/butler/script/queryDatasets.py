@@ -110,9 +110,10 @@ class QueryDatasets:
 
     Parameters
     ----------
-    repo : `str`
+    repo : `str` or `None`
         URI to the location of the repo or URI to a config file describing the
-        repo and its location.
+        repo and its location. One of `repo` and `butler` must be `None` and
+        the other must not be `None`.
     glob : iterable [`str`]
         A list of glob-style search string that fully or partially identify
         the dataset type names to search for.
@@ -131,10 +132,15 @@ class QueryDatasets:
         wildcards.
     show_uri : `bool`
         If True, include the dataset URI in the output.
+    butler : ``lsst.daf.butler.Butler``
+        The butler to use to query. One of `repo` and `butler` must be `None`
+        and the other must not be `None`.
     """
 
-    def __init__(self, repo, glob, collections, where, find_first, show_uri):
-        self.butler = Butler(repo)
+    def __init__(self, repo, glob, collections, where, find_first, show_uri, butler=None):
+        if repo and butler or not repo and not butler:
+            raise RuntimeError("One of repo and butler must be provided and the other must be None.")
+        self.butler = butler or Butler(repo)
         self._getDatasets(glob, collections, where, find_first)
         self.showUri = show_uri
 

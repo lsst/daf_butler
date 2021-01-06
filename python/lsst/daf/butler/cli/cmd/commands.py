@@ -33,6 +33,7 @@ from ..opt import (
     element_argument,
     glob_argument,
     options_file_option,
+    query_datasets_options,
     query_data_ids_options,
     repo_argument,
     transfer_option,
@@ -340,20 +341,7 @@ def remove_dataset_type(*args, **kwargs):
 
 
 @click.command(cls=ButlerCommand)
-@repo_argument(required=True)
-@glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
-                    "dataset types to be queried.")
-@collections_option()
-@where_option(help=where_help)
-@click.option("--find-first",
-              is_flag=True,
-              help=unwrap("""For each result data ID, only yield one DatasetRef of each DatasetType, from the
-                          first collection in which a dataset of that dataset type appears (according to the
-                          order of 'collections' passed in).  If used, 'collections' must specify at least one
-                          expression and must not contain wildcards."""))
-@click.option("--show-uri",
-              is_flag=True,
-              help="Show the dataset URI in results.")
+@query_datasets_options()
 @options_file_option()
 def query_datasets(**kwargs):
     """List the datasets in a repository."""

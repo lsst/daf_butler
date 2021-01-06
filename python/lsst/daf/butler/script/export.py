@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from . import QueryDatasets
 from .. import Butler
 
 
@@ -31,8 +32,8 @@ def exportDataIds(butler, repoExportContext, dimensions, collections, datasets, 
         The butler that datasets are being exported from.
     repoExportContext : ``lsst.daf.butler.transfers.RepoExportContext``
         The current export context.
-    dimensions, collections, datasets, where
-        Same as Butler.Registry.queryDataIds
+
+    Other parameters are the same as ``Butler.Registry.queryDataIds``.
     """
 
     dataIds = butler.registry.queryDataIds(dimensions,
@@ -40,3 +41,20 @@ def exportDataIds(butler, repoExportContext, dimensions, collections, datasets, 
                                             datasets=datasets,
                                             where=where)
     repoExportContext.saveDataIds(dataIds)
+
+
+def exportDatasets(butler, repoExportContext, glob, collections, where, find_first):
+    """Add datasets to a butler export context.
+
+    Parameters
+    ----------
+    butler : ``lsst.daf.butler.Butler``
+        The butler that datasets are being exported from.
+    repoExportContext : ``lsst.daf.butler.transfers.RepoExportContext``
+        The current export context.
+
+    Other parameters are the same as ``lsst.daf.butler.cli.script.QueryDatasets``.
+    """
+    query = QueryDatasets(butler=butler, glob=glob, collections=collections, where=where,
+                          find_first=find_first, show_uri=False, repo=None)
+    repoExportContext.saveDatasets(query.getDatasets())
