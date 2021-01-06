@@ -28,9 +28,16 @@ from ..opt import (
     format_option,
     query_data_ids_options,
     query_datasets_options,
-    repo_argument
+    repo_argument,
+    transfer_option,
 )
-from ..utils import ButlerCommand, ButlerGroup, unwrap
+from ..utils import (
+    ButlerCommand,
+    ButlerGroup,
+    MWOptionDecorator,
+    split_commas,
+    unwrap,
+)
 from ... import Butler
 from ... import script
 from ...script import export as exportScript
@@ -41,6 +48,7 @@ from ...script import export as exportScript
 @directory_option(help="Directory dataset files should be written to if --transfer is used.")
 @format_option(help=unwrap("""File format for the database information file. If not provided, the extension of
                            --filename will be used."""))
+@transfer_option()
 def export(*args, **kwargs):
     """Export data from a repository."""
     pass  # all implementation is in process_commands
@@ -48,9 +56,9 @@ def export(*args, **kwargs):
 
 @export.resultcallback()
 @click.pass_context
-def process_commands(ctx, processors, repo, directory, format_):
+def process_commands(ctx, processors, repo, directory, format_, transfer):
     butler = Butler(repo)
-    with butler.export(directory=directory, format=format_) as repoExportContext:
+    with butler.export(directory=directory, format=format_, transfer="copy") as repoExportContext:
         for processor in processors:
             processor(butler, repoExportContext)
 
@@ -80,9 +88,16 @@ def dimension_data(repoExportContext, **kwargs):
     print("export dimension-data " + kwargs["repo"])
 
 
+names_option = MWOptionDecorator("--name", "names",
+                                 help="The name of one or more collections to export.",
+                                 callback=split_commas,
+                                 multiple=True,
+                                 required=True)
+
+
 @export.command(cls=ButlerCommand)
-@repo_argument(required=True)
-def collection(repoExportContext, **kwargs):
+@names_option()
+def collection(**kwargs):
     """Export a collection.
     """
-    print("export collection " + kwargs["repo"])
+    return partial(exportScript.exportCollection, **kwargs)

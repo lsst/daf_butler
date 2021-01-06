@@ -23,6 +23,21 @@ from . import QueryDatasets
 from .. import Butler
 
 
+def exportCollection(butler, repoExportContext, names):
+    """Add collection names to a butler export context.
+    Parameters
+    ----------
+    butler : ``lsst.daf.butler.Butler``
+        The butler that datasets are being exported from.
+    repoExportContext : ``lsst.daf.butler.transfers.RepoExportContext``
+        The current export context.
+    names : `list` [`str`]
+        A list of collection names to add to the export context.
+    """
+    for name in names:
+        repoExportContext.saveCollection(name)
+
+
 def exportDataIds(butler, repoExportContext, dimensions, collections, datasets, where):
     """Add data ids to a butler export context.
 
