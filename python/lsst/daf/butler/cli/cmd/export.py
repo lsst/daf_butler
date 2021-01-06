@@ -85,7 +85,8 @@ def data_ids(**kwargs):
 def dimension_data(repoExportContext, **kwargs):
     """Export dimension records associated with data IDs.
     """
-    print("export dimension-data " + kwargs["repo"])
+    # I haven't yet found any uses of this in scripts (in the lsst github org)
+    raise NotImplementedError()
 
 
 names_option = MWOptionDecorator("--name", "names",
