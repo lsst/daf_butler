@@ -32,7 +32,8 @@ from ..opt import (
     transfer_option,
 )
 from ..utils import (
-    ButlerCommand,
+    butler_epilog,
+    MWCommand,
     ButlerGroup,
     MWOptionDecorator,
     split_commas,
@@ -43,8 +44,13 @@ from ... import script
 from ...script import export as exportScript
 
 
-@click.group(cls=ButlerGroup, chain=True)
-@repo_argument(required=True)
+class ExportGroup(ButlerGroup):
+
+    extra_epilog = "See 'butler export <command> --help' or 'butler --help' for more information."
+
+
+@click.group(cls=ExportGroup, chain=True)
+@repo_argument()
 @directory_option(help="Directory dataset files should be written to if --transfer is used.")
 @format_option(help=unwrap("""File format for the database information file. If not provided, the extension of
                            --filename will be used."""))
@@ -63,9 +69,14 @@ def process_commands(ctx, processors, repo, directory, format_, transfer):
             processor(butler, repoExportContext)
 
 
+class ExportCommand(MWCommand):
+
+    extra_epilog = f"See 'butler export --help' or 'butler --help' for more options."
+
+
 @export.command(short_help="Export one or more datasets.",
-                cls=ButlerCommand)
-@query_datasets_options(repo=False, showUri=False)
+                cls=ExportCommand)
+@query_datasets_options(repo=False, showUri=False, useArguments=False)
 def datasets(**kwargs):
     """Export any DatasetType, RUN collections, and dimension records
     associated with the datasets.
@@ -73,14 +84,14 @@ def datasets(**kwargs):
     return partial(exportScript.exportDatasets, **kwargs)
 
 
-@export.command(cls=ButlerCommand)
+@export.command(cls=ExportCommand)
 @query_data_ids_options(repo=False)
 def data_ids(**kwargs):
     """Export dimension records associated with data IDs."""
     return partial(exportScript.exportDataIds, **kwargs)
 
 
-@export.command(cls=ButlerCommand)
+@export.command(cls=ExportCommand)
 @repo_argument(required=True)
 def dimension_data(repoExportContext, **kwargs):
     """Export dimension records associated with data IDs.
@@ -96,7 +107,7 @@ names_option = MWOptionDecorator("--name", "names",
                                  required=True)
 
 
-@export.command(cls=ButlerCommand)
+@export.command(cls=ExportCommand)
 @names_option()
 def collection(**kwargs):
     """Export a collection.

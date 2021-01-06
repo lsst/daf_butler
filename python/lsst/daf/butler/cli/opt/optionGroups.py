@@ -26,6 +26,7 @@ from . import (
     datasets_option,
     dimensions_argument,
     glob_argument,
+    glob_option,
     repo_argument,
     where_option,
 )
@@ -34,13 +35,16 @@ from ..utils import OptionGroup, unwrap, where_help
 
 class query_datasets_options(OptionGroup):  # noqa: N801
 
-    def __init__(self, repo=True, showUri=True):
+    def __init__(self, repo=True, showUri=True, useArguments=True):
         self.decorators = []
         if repo:
+            if not useArguments:
+                raise RuntimeError("repo as an option is not currently supported.")
             self.decorators.append(repo_argument(required=True))
+        globHelp = unwrap("""GLOB is one or more glob-style expressions that fully or partially identify the
+                          dataset types to be queried.""")
         self.decorators.extend([
-            glob_argument(help=unwrap("""GLOB is one or more glob-style expressions that fully or partially
-                                      identify the dataset types to be queried.""")),
+            glob_argument(help=globHelp) if useArguments else glob_option(help=globHelp),
             collections_option(),
             where_option(help=where_help),
             click.option("--find-first",

@@ -107,6 +107,10 @@ directory_option = MWOptionDecorator("--directory")
 # mask python's built-in `format` function.
 format_option = MWOptionDecorator("--format", "format_")
 
+glob_option = MWOptionDecorator("--glob",
+                                callback=split_commas,
+                                help="One or more strings to apply to the search.",
+                                multiple=True)
 
 logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
 log_level_option = MWOptionDecorator("--log-level",
