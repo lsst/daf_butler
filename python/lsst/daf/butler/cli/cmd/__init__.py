@@ -41,7 +41,6 @@ from .commands import (butler_import,
                        create,
                        config_dump,
                        config_validate,
-                       export,
                        prune_collection,
                        prune_datasets,
                        query_collections,
@@ -51,3 +50,5 @@ from .commands import (butler_import,
                        query_dimension_records,
                        remove_dataset_type,
                        )
+
+from .export import export

@@ -51,6 +51,11 @@ typeStrAcceptsSingle = "TEXT"
 # for those inputs.
 split_kv_separator = "="
 
+# The standard help string for the --where option when it takes a WHERE clause.
+where_help = "A string expression similar to a SQL WHERE clause. May involve any column of a " \
+             "dimension table or a dimension name as a shortcut for the primary key column of a " \
+             "dimension table."
+
 
 def astropyTablesToStr(tables):
     """Render astropy tables to string as they are displayed in the CLI.
@@ -695,6 +700,18 @@ class ButlerGroup(SaveArgs, ExtraEpilog, click.Group):
     subcommands and saves the CLI arguments in the context."""
 
     extra_epilog = butler_epilog
+
+
+# TODO this is copied from ctrl_mpexec; remove it from there and import it from
+# here.
+class OptionGroup:
+    """Base class for an option group decorator. Requires the option group
+    subclass to have a property called `decorator`."""
+
+    def __call__(self, f):
+        for decorator in reversed(self.decorators):
+            f = decorator(f)
+        return f
 
 
 class MWCtxObj():

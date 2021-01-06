@@ -33,6 +33,7 @@ from ..opt import (
     element_argument,
     glob_argument,
     options_file_option,
+    query_data_ids_options,
     repo_argument,
     transfer_option,
     verbose_option,
@@ -49,6 +50,7 @@ from ..utils import (
     to_upper,
     typeStrAcceptsMultiple,
     unwrap,
+    where_help,
 )
 
 from ... import script
@@ -56,9 +58,6 @@ from ... import script
 
 willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
 existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."
-whereHelp = unwrap("""A string expression similar to a SQL WHERE clause. May involve any column of a dimension
-                   table or a dimension name as a shortcut for the primary key column of a dimension
-                   table.""")
 
 
 # The conversion from the import command name to the butler_import function
@@ -131,46 +130,6 @@ def config_validate(*args, **kwargs):
     is_good = script.configValidate(*args, **kwargs)
     if not is_good:
         raise click.exceptions.Exit(1)
-
-
-@click.group(cls=ButlerGroup)
-def export():
-    """Export data from a repository."""
-    pass
-
-
-@export.command("datasets",
-                short_help="Export one or more datasets.",
-                cls=ButlerCommand)
-@repo_argument(required=True)
-def exportDatasets(kwargs):
-    """Export any DatasetType, RUN collections, and dimension records
-    associated with the datasets.
-    """
-    print("export datasets " + kwargs["repo"])
-
-
-@export.command("data-ids", cls=ButlerCommand)
-@repo_argument(required=True)
-def exportDataIds(kwargs):
-    """Export dimension records associated with data IDs."""
-    print("export data-ids " + kwargs["repo"])
-
-
-@export.command("dimension-data", cls=ButlerCommand)
-@repo_argument(required=True)
-def exportDimensionData(kwargs):
-    """Export dimension records associated with data IDs.
-    """
-    print("export dimension-data " + kwargs["repo"])
-
-
-@export.command("collection", cls=ButlerCommand)
-@repo_argument(required=True)
-def exportCollection(kwargs):
-    """Export a collection.
-    """
-    print("export collection " + kwargs["repo"])
 
 
 @click.command(cls=ButlerCommand)
@@ -279,7 +238,7 @@ quiet_option = MWOptionDecorator(
                     "dataset types to be pruned.")
 @collections_option()
 @find_all_option()
-@where_option(help=whereHelp)
+@where_option(help=where_help)
 @option_section("Prune Options:")
 @disassociate_option()
 @purge_option()
@@ -385,7 +344,7 @@ def remove_dataset_type(*args, **kwargs):
 @glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
                     "dataset types to be queried.")
 @collections_option()
-@where_option(help=whereHelp)
+@where_option(help=where_help)
 @click.option("--find-first",
               is_flag=True,
               help=unwrap("""For each result data ID, only yield one DatasetRef of each DatasetType, from the
@@ -425,16 +384,7 @@ def certify_calibrations(*args, **kwargs):
 
 
 @click.command(cls=ButlerCommand)
-@repo_argument(required=True)
-@dimensions_argument(help=unwrap("""DIMENSIONS are the keys of the data IDs to yield, such as exposure,
-                                 instrument, or tract. Will be expanded to include any dependencies."""))
-@collections_option()
-@datasets_option(help=unwrap("""An expression that fully or partially identifies dataset types that should
-                             constrain the yielded data IDs.  For example, including "raw" here would
-                             constrain the yielded "instrument", "exposure", "detector", and
-                             "physical_filter" values to only those for which at least one "raw" dataset
-                             exists in "collections"."""))
-@where_option(help=whereHelp)
+@query_data_ids_options()
 @options_file_option()
 def query_data_ids(**kwargs):
     """List the data IDs in a repository.
@@ -456,7 +406,7 @@ def query_data_ids(**kwargs):
                              constrain the yielded records. Only affects results when used with
                              --collections."""))
 @collections_option(help=collections_option.help + " Only affects results when used with --datasets.")
-@where_option(help=whereHelp)
+@where_option(help=where_help)
 @click.option("--no-check", is_flag=True,
               help=unwrap("""Don't check the query before execution. By default the query is checked before it
                           executed, this may reject some valid queries that resemble common mistakes."""))

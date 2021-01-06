@@ -22,19 +22,21 @@
 from .. import Butler
 
 
-def export(repo, datasetTypes):
-    """Export datasets from a repository.
+def exportDataIds(butler, repoExportContext, dimensions, collections, datasets, where):
+    """Add data ids to a butler export context.
 
     Parameters
     ----------
-    repo : `str`
-        Same as the ``config`` argument to ``Butler.__init__``
-    datasetTypes : `list` [`str`]
-        A list whose items are the same as the ``datasetType`` argument to
-        ``Butler.queryDatasets``.
+    butler : ``lsst.daf.butler.Butler``
+        The butler that datasets are being exported from.
+    repoExportContext : ``lsst.daf.butler.transfers.RepoExportContext``
+        The current export context.
+    dimensions, collections, datasets, where
+        Same as Butler.Registry.queryDataIds
     """
-    butler = Butler(repo)
 
-    # with butler.export(directory, filename) as export:
-    #     # (export is a RepoExportContext)
-    #     ...
+    dataIds = butler.registry.queryDataIds(dimensions,
+                                            collections=collections,
+                                            datasets=datasets,
+                                            where=where)
+    repoExportContext.saveDataIds(dataIds)

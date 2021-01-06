@@ -100,6 +100,14 @@ dataset_type_option = MWOptionDecorator("-d", "--dataset-type",
 datasets_option = MWOptionDecorator("--datasets")
 
 
+directory_option = MWOptionDecorator("--directory")
+
+
+# The format option argument name includes an underscore so that it will not
+# mask python's built-in `format` function.
+format_option = MWOptionDecorator("--format", "format_")
+
+
 logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
 log_level_option = MWOptionDecorator("--log-level",
                                      callback=partial(split_kv,
