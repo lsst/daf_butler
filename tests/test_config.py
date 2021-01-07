@@ -24,6 +24,7 @@ import os
 import contextlib
 import collections
 import itertools
+from pathlib import Path
 
 from lsst.daf.butler import ConfigSubset, Config
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
@@ -69,6 +70,10 @@ class ConfigTest(ConfigSubset):
     component = "comp"
     requiredKeys = ("item1", "item2")
     defaultConfigFile = "testconfig.yaml"
+
+
+class ConfigTestPathlib(ConfigTest):
+    defaultConfigFile = Path("testconfig.yaml")
 
 
 class ConfigTestEmpty(ConfigTest):
@@ -425,6 +430,11 @@ class ConfigSubsetTestCase(unittest.TestCase):
     def testEmpty(self):
         """Ensure that we can read an empty file."""
         c = ConfigTestEmpty(searchPaths=(self.configDir,))
+        self.assertIsInstance(c, ConfigSubset)
+
+    def testPathlib(self):
+        """Ensure that we can read an empty file."""
+        c = ConfigTestPathlib(searchPaths=(self.configDir,))
         self.assertIsInstance(c, ConfigSubset)
 
     def testDefaults(self):
