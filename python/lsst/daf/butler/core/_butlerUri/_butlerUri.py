@@ -28,7 +28,7 @@ import copy
 import logging
 import re
 
-from pathlib import PurePath, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
 
 __all__ = ('ButlerURI',)
 
@@ -121,12 +121,15 @@ class ButlerURI:
     _uri: urllib.parse.ParseResult
     isTemporary: bool
 
-    def __new__(cls, uri: Union[str, urllib.parse.ParseResult, ButlerURI],
+    def __new__(cls, uri: Union[str, urllib.parse.ParseResult, ButlerURI, Path],
                 root: Optional[Union[str, ButlerURI]] = None, forceAbsolute: bool = True,
                 forceDirectory: bool = False, isTemporary: bool = False) -> ButlerURI:
         parsed: urllib.parse.ParseResult
         dirLike: bool = False
         subclass: Optional[Type] = None
+
+        if isinstance(uri, Path):
+            uri = str(uri)
 
         # Record if we need to post process the URI components
         # or if the instance is already fully configured
@@ -150,7 +153,8 @@ class ButlerURI:
             # No further parsing required and we know the subclass
             subclass = type(uri)
         else:
-            raise ValueError(f"Supplied URI must be string, ButlerURI, or ParseResult but got '{uri!r}'")
+            raise ValueError("Supplied URI must be string, Path, "
+                             f"ButlerURI, or ParseResult but got '{uri!r}'")
 
         if subclass is None:
             # Work out the subclass from the URI scheme

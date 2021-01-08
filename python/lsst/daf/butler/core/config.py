@@ -33,6 +33,7 @@ import pprint
 import os
 import yaml
 import sys
+from pathlib import Path
 from yaml.representer import Representer
 import io
 from typing import Any, Dict, List, Sequence, Optional, ClassVar, IO, Tuple, Union
@@ -175,7 +176,7 @@ class Config(collections.abc.MutableMapping):
 
     Parameters
     ----------
-    other : `str` or `Config` or `dict` or `ButlerURI`
+    other : `str` or `Config` or `dict` or `ButlerURI` or `pathlib.Path`
         Other source of configuration, can be:
 
         - (`str` or `ButlerURI`) Treated as a URI to a config file. Must end
@@ -210,7 +211,7 @@ class Config(collections.abc.MutableMapping):
             self.configFile = other.configFile
         elif isinstance(other, collections.abc.Mapping):
             self.update(other)
-        elif isinstance(other, (str, ButlerURI)):
+        elif isinstance(other, (str, ButlerURI, Path)):
             # if other is a string, assume it is a file path/URI
             self.__initFromUri(other)
             self._processExplicitIncludes()
