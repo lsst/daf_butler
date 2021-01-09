@@ -37,6 +37,7 @@ from lsst.daf.butler import (
     Butler,
     ButlerConfig,
     CollectionType,
+    DatasetType,
     Registry,
     Timespan,
 )
@@ -394,6 +395,29 @@ class SimpleButlerTestCase(unittest.TestCase):
                                                             datasets={"flat"},
                                                             detector=2, physical_filter="Cam1-G"))
         self.assertEqual({ref.dataId}, queried_data_ids)
+        # Add another instrument to the repo, and a dataset that uses it to
+        # the `imported_g` collection.
+        butler.registry.insertDimensionData("instrument", {"name": "Cam2"})
+        camera = DatasetType(
+            "camera",
+            dimensions=butler.registry.dimensions["instrument"].graph,
+            storageClass="Camera",
+        )
+        butler.registry.registerDatasetType(camera)
+        butler.registry.insertDatasets(camera, [{"instrument": "Cam2"}], run="imported_g")
+        # Initialize a new butler with `imported_g` as its default run.
+        # This should not have a default instrument, because there are two.
+        # Pass run instead of collections; this should set both.
+        butler2 = Butler(butler=butler, run="imported_g")
+        self.assertEqual(list(butler2.registry.defaults.collections), ["imported_g"])
+        self.assertEqual(butler2.registry.defaults.run, "imported_g")
+        self.assertFalse(butler2.registry.defaults.dataId)
+        # Initialize a new butler with an instrument default explicitly given.
+        # Set collections instead of run, which should then be None.
+        butler3 = Butler(butler=butler, collections=["imported_g"], instrument="Cam2")
+        self.assertEqual(list(butler3.registry.defaults.collections), ["imported_g"])
+        self.assertIsNone(butler3.registry.defaults.run, None)
+        self.assertEqual(butler3.registry.defaults.dataId.byName(), {"instrument": "Cam2"})
 
 
 if __name__ == "__main__":
