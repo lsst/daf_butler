@@ -1679,7 +1679,7 @@ class Registry:
         Parameters
         ----------
         element : `DimensionElement` or `str`
-            The dimension element to obtain r
+            The dimension element to obtain records for.
         dataId : `dict` or `DataCoordinate`, optional
             A data ID whose key-value pairs are used as equality constraints
             in the query.
