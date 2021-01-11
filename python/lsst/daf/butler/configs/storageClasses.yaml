@@ -19,6 +19,8 @@ storageClasses:
     pytype: lsst.afw.image.PhotoCalib
   TransmissionCurve:
     pytype: lsst.afw.image.TransmissionCurve
+  ExposureSummaryStats:
+    pytype: lsst.afw.image.ExposureSummaryStats
   Camera:
     pytype: lsst.afw.cameraGeom.Camera
   Detector:
@@ -134,6 +136,7 @@ storageClasses:
       filterLabel: FilterLabel
       detector: Detector
       validPolygon: Polygon
+      summaryStats: ExposureSummaryStats
     derivedComponents:
       bbox: Box2I
       dimensions: Extent2I
