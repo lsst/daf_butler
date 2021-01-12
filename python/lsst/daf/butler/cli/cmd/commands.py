@@ -60,6 +60,18 @@ willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be cre
 existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."
 
 
+@click.command(cls=ButlerCommand, short_help="Add existing datasets to a tagged collection.")
+@repo_argument(required=True)
+@collection_argument(help="COLLECTION is the collection the datasets should be associated with.")
+@query_datasets_options(repo=False, showUri=False, useArguments=False)
+@options_file_option()
+def associate(**kwargs):
+    """Add existing datasets to a tagged collection; searches for datasets with
+    the options and adds them to the named COLLECTION.
+    """
+    script.associate(**kwargs)
+
+
 # The conversion from the import command name to the butler_import function
 # name for subcommand lookup is implemented in the cli/butler.py, in
 # funcNameToCmdName and cmdNameToFuncName. If name changes are made here they

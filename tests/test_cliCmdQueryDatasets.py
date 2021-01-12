@@ -43,7 +43,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
     @staticmethod
     def _queryDatasets(repo, glob=(), collections=(), where="", find_first=False, show_uri=False):
-        return script.QueryDatasets(repo, glob, collections, where, find_first, show_uri).getTables()
+        return script.QueryDatasets(glob, collections, where, find_first, show_uri, repo=repo).getTables()
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
