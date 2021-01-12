@@ -24,7 +24,6 @@ __all__ = [
     "ChainedCollectionRecord",
     "CollectionManager",
     "CollectionRecord",
-    "MissingCollectionError",
     "RunRecord",
 ]
 
@@ -44,12 +43,6 @@ from ._versioning import VersionedExtension
 if TYPE_CHECKING:
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
-
-
-class MissingCollectionError(Exception):
-    """Exception raised when an operation attempts to use a collection that
-    does not exist.
-    """
 
 
 class CollectionRecord:

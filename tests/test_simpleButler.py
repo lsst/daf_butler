@@ -37,10 +37,11 @@ from lsst.daf.butler import (
     Butler,
     ButlerConfig,
     CollectionType,
+    DatasetType,
     Registry,
     Timespan,
 )
-from lsst.daf.butler.registry import RegistryConfig
+from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
@@ -355,6 +356,68 @@ class SimpleButlerTestCase(unittest.TestCase):
                                   raft="B", name_in_raft="a",
                                   collections="calibs", instrument="Cam1")
         self.assertEqual(bias3b_id, bias3b.id)
+
+    def testRegistryDefaults(self):
+        """Test that we can default the collections and some data ID keys when
+        constructing a butler.
+
+        Many tests that use default run already exist in ``test_butler.py``, so
+        that isn't tested here.  And while most of this functionality is
+        implemented in `Registry`, we test it here instead of
+        ``daf/butler/tests/registry.py`` because it shouldn't depend on the
+        database backend at all.
+        """
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        # Need to actually set defaults later, not at construction, because
+        # we need to import the instrument before we can use it as a default.
+        # Don't set a default instrument value for data IDs, because 'Cam1'
+        # should be inferred by virtue of that being the only value in the
+        # input collections.
+        butler.registry.defaults = RegistryDefaults(collections=["imported_g"])
+        # Use findDataset without collections or instrument.
+        ref = butler.registry.findDataset("flat", detector=2, physical_filter="Cam1-G")
+        # Do the same with Butler.get; this should ultimately invoke a lot of
+        # the same code, so it's a bit circular, but mostly we're checking that
+        # it works at all.
+        dataset_id, _ = butler.get("flat", detector=2, physical_filter="Cam1-G")
+        self.assertEqual(ref.id, dataset_id)
+        # Query for datasets.  Test defaulting the data ID in both kwargs and
+        # in the WHERE expression.
+        queried_refs_1 = set(butler.registry.queryDatasets("flat", detector=2, physical_filter="Cam1-G"))
+        self.assertEqual({ref}, queried_refs_1)
+        queried_refs_2 = set(butler.registry.queryDatasets("flat",
+                                                           where="detector=2 AND physical_filter='Cam1-G'"))
+        self.assertEqual({ref}, queried_refs_2)
+        # Query for data IDs with a dataset constraint.
+        queried_data_ids = set(butler.registry.queryDataIds({"instrument", "detector", "physical_filter"},
+                                                            datasets={"flat"},
+                                                            detector=2, physical_filter="Cam1-G"))
+        self.assertEqual({ref.dataId}, queried_data_ids)
+        # Add another instrument to the repo, and a dataset that uses it to
+        # the `imported_g` collection.
+        butler.registry.insertDimensionData("instrument", {"name": "Cam2"})
+        camera = DatasetType(
+            "camera",
+            dimensions=butler.registry.dimensions["instrument"].graph,
+            storageClass="Camera",
+        )
+        butler.registry.registerDatasetType(camera)
+        butler.registry.insertDatasets(camera, [{"instrument": "Cam2"}], run="imported_g")
+        # Initialize a new butler with `imported_g` as its default run.
+        # This should not have a default instrument, because there are two.
+        # Pass run instead of collections; this should set both.
+        butler2 = Butler(butler=butler, run="imported_g")
+        self.assertEqual(list(butler2.registry.defaults.collections), ["imported_g"])
+        self.assertEqual(butler2.registry.defaults.run, "imported_g")
+        self.assertFalse(butler2.registry.defaults.dataId)
+        # Initialize a new butler with an instrument default explicitly given.
+        # Set collections instead of run, which should then be None.
+        butler3 = Butler(butler=butler, collections=["imported_g"], instrument="Cam2")
+        self.assertEqual(list(butler3.registry.defaults.collections), ["imported_g"])
+        self.assertIsNone(butler3.registry.defaults.run, None)
+        self.assertEqual(butler3.registry.defaults.dataId.byName(), {"instrument": "Cam2"})
 
 
 if __name__ == "__main__":

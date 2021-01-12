@@ -27,7 +27,7 @@ from numpy import array
 import os
 import unittest
 
-from lsst.daf.butler import Butler
+from lsst.daf.butler import Butler, CollectionType
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
 from lsst.daf.butler.tests.utils import (
@@ -58,9 +58,10 @@ class PruneCollectionsTest(unittest.TestCase):
             # Add the run and the tagged collection to the repo:
             result = self.runner.invoke(butlerCli, ["create", repoName])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            # Use the butler initalizer to create the run and tagged
+            # Use the butler initalizer to create the run, then create a tagged
             # collection.
-            Butler(repoName, run=runName, tags=[taggedName])
+            butler = Butler(repoName, run=runName)
+            butler.registry.registerCollection(taggedName, CollectionType.TAGGED)
 
             # Verify the run and tag show up in query-collections:
             result = self.runner.invoke(butlerCli, ["query-collections", repoName])

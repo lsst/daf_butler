@@ -20,16 +20,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from ._config import *
+from ._defaults import *
 from ._exceptions import *
 from ._registry import *
 from ._dbAuth import *
 from ._collectionType import *
 
 from . import wildcards
-from .wildcards import CollectionSearch, DatasetTypeRestriction
+from .wildcards import CollectionSearch
 from . import interfaces
-from .interfaces import MissingCollectionError
+from . import managers
 from . import queries
+from . import summaries
 
 # Some modules intentionally not imported, either because they are purely
 # internal (e.g. nameShrinker.py) or they contain implementations that are

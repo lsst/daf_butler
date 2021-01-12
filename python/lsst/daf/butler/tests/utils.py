@@ -206,7 +206,8 @@ class MetricTestRepo:
         # tag when looking up datasets.
         run = "ingest/run"
         tag = "ingest"
-        self.butler = Butler(butlerConfigFile, run=run, collections=[tag], tags=[tag])
+        self.butler = Butler(butlerConfigFile, run=run, collections=[tag])
+        self.butler.registry.registerCollection(tag, CollectionType.TAGGED)
 
         # Create and register a DatasetType
         self.datasetType = addDatasetType(self.butler, "test_metric_comp", ("instrument", "visit"),

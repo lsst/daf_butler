@@ -538,6 +538,46 @@ class DataCoordinateTestCase(unittest.TestCase):
                         self.assertEqual(dataId, newDataId)
                         self.assertTrue(newDataId.hasFull())
 
+    def testUnion(self):
+        """Test `DataCoordinate.union`.
+        """
+        # Make test graphs to combine; mostly random, but with a few explicit
+        # cases to make sure certain edge cases are covered.
+        graphs = [self.randomDimensionSubset(n=2) for i in range(2)]
+        graphs.append(self.allDataIds.universe["visit"].graph)
+        graphs.append(self.allDataIds.universe["detector"].graph)
+        graphs.append(self.allDataIds.universe["physical_filter"].graph)
+        graphs.append(self.allDataIds.universe["band"].graph)
+        # Iterate over all combinations, including the same graph with itself.
+        for graph1, graph2 in itertools.product(graphs, repeat=2):
+            parentDataIds = self.randomDataIds(n=1)
+            split1 = self.splitByStateFlags(parentDataIds.subset(graph1))
+            split2 = self.splitByStateFlags(parentDataIds.subset(graph2))
+            parentDataId, = parentDataIds
+            for lhs, rhs in itertools.product(split1.chain(), split2.chain()):
+                unioned = lhs.union(rhs)
+                with self.subTest(lhs=lhs, rhs=rhs, unioned=unioned):
+                    self.assertEqual(unioned.graph, graph1.union(graph2))
+                    self.assertEqual(unioned, parentDataId.subset(unioned.graph))
+                    if unioned.hasFull():
+                        self.assertEqual(unioned.subset(lhs.graph), lhs)
+                        self.assertEqual(unioned.subset(rhs.graph), rhs)
+                    if lhs.hasFull() and rhs.hasFull():
+                        self.assertTrue(unioned.hasFull())
+                    if lhs.graph >= unioned.graph and lhs.hasFull():
+                        self.assertTrue(unioned.hasFull())
+                        if lhs.hasRecords():
+                            self.assertTrue(unioned.hasRecords())
+                    if rhs.graph >= unioned.graph and rhs.hasFull():
+                        self.assertTrue(unioned.hasFull())
+                        if rhs.hasRecords():
+                            self.assertTrue(unioned.hasRecords())
+                    if lhs.graph.required | rhs.graph.required >= unioned.graph.dimensions:
+                        self.assertTrue(unioned.hasFull())
+                    if lhs.hasRecords() and rhs.hasRecords():
+                        if lhs.graph.elements | rhs.graph.elements >= unioned.graph.elements:
+                            self.assertTrue(unioned.hasRecords())
+
     def testRegions(self):
         """Test that data IDs for a few known dimensions have the expected
         regions.

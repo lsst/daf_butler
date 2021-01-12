@@ -20,7 +20,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-__all__ = ("InconsistentDataIdError", "ConflictingDefinitionError", "OrphanedRecordError")
+__all__ = (
+    "ConflictingDefinitionError",
+    "InconsistentDataIdError",
+    "MissingCollectionError",
+    "OrphanedRecordError",
+)
 
 
 class InconsistentDataIdError(ValueError):
@@ -38,4 +43,10 @@ class ConflictingDefinitionError(Exception):
 class OrphanedRecordError(Exception):
     """Exception raised when trying to remove or modify a database record
     that is still being used in some other table.
+    """
+
+
+class MissingCollectionError(Exception):
+    """Exception raised when an operation attempts to use a collection that
+    does not exist.
     """

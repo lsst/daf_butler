@@ -41,11 +41,11 @@ import sqlalchemy
 
 from ...core import DimensionUniverse, TimespanDatabaseRepresentation, ddl, Timespan
 from .._collectionType import CollectionType
+from .._exceptions import MissingCollectionError
 from ..interfaces import (
     ChainedCollectionRecord,
     CollectionManager,
     CollectionRecord,
-    MissingCollectionError,
     RunRecord,
 )
 from ..wildcards import CollectionSearch

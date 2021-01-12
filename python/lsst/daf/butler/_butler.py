@@ -47,7 +47,6 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    Mapping,
     MutableMapping,
     Optional,
     Set,
@@ -85,7 +84,7 @@ from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional, getClassOf
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
-from .registry import Registry, RegistryConfig, CollectionType
+from .registry import Registry, RegistryConfig, RegistryDefaults, CollectionType
 from .registry.wildcards import CollectionSearch
 from .transfers import RepoExportContext
 
@@ -146,34 +145,20 @@ class Butler:
         datastore as the given one, but with the given collection and run.
         Incompatible with the ``config``, ``searchPaths``, and ``writeable``
         arguments.
-    collections : `Any`, optional
+    collections : `str` or `Iterable` [ `str` ], optional
         An expression specifying the collections to be searched (in order) when
-        reading datasets, and optionally dataset type restrictions on them.
-        This may be:
-        - a `str` collection name;
-        - a tuple of (collection name, *dataset type restriction*);
-        - an iterable of either of the above;
-        - a mapping from `str` to *dataset type restriction*.
-
-        See :ref:`daf_butler_collection_expressions` for more information,
-        including the definition of a *dataset type restriction*.  All
-        collections must either already exist or be specified to be created
-        by other arguments.
+        reading datasets.
+        This may be a `str` collection name or an iterable thereof.
+        See :ref:`daf_butler_collection_expressions` for more information.
+        These collections are not registered automatically and must be
+        manually registered before they are used by any method, but they may be
+        manually registered after the `Butler` is initialized.
     run : `str`, optional
-        Name of the run datasets should be output to.  If the run
-        does not exist, it will be created.  If ``collections`` is `None`, it
-        will be set to ``[run]``.  If this is not set (and ``writeable`` is
-        not set either), a read-only butler will be created.
-    tags : `Iterable` [ `str` ], optional
-        A list of `~CollectionType.TAGGED` collections that datasets should be
-        associated with in `put` or `ingest` and disassociated from in
-        `pruneDatasets`.  If any of these collections does not exist, it will
-        be created.
-    chains : `Mapping` [ `str`, `Iterable` [ `str` ] ], optional
-        A mapping from the names of new `~CollectionType.CHAINED` collections
-        to an expression identifying their child collections (which takes the
-        same form as the ``collections`` argument.  Chains may be nested only
-        if children precede their parents in this mapping.
+        Name of the `~CollectionType.RUN` collection new datasets should be
+        inserted into.  If ``collections`` is `None` and ``run`` is not `None`,
+        ``collections`` will be set to ``[run]``.  If not `None`, this
+        collection will automatically be registered.  If this is not set (and
+        ``writeable`` is not set either), a read-only butler will be created.
     searchPaths : `list` of `str`, optional
         Directory paths to search when calculating the full Butler
         configuration.  Not used if the supplied config is already a
@@ -182,6 +167,16 @@ class Butler:
         Explicitly sets whether the butler supports write operations.  If not
         provided, a read-write butler is created if any of ``run``, ``tags``,
         or ``chains`` is non-empty.
+    inferDefaults : `bool`, optional
+        If `True` (default) infer default data ID values from the values
+        present in the datasets in ``collections``: if all collections have the
+        same value (or no value) for a governor dimension, that value will be
+        the default for that dimension.  Nonexistent collections are ignored.
+        If a default value is provided explicitly for a governor dimension via
+        ``**kwargs``, no default will be inferred for that dimension.
+    **kwargs : `str`
+        Default data ID key-value pairs.  These may only identify "governor"
+        dimensions like ``instrument`` and ``skymap``.
 
     Examples
     --------
@@ -199,30 +194,16 @@ class Butler:
 
     The `Butler` passed to a ``PipelineTask`` is often much more complex,
     because we want to write to one `~CollectionType.RUN` collection but read
-    from several others (as well), while defining a new
-    `~CollectionType.CHAINED` collection that combines them all::
-
-        butler = Butler("/path/to/repo", run="u/alice/DM-50000/a",
-                        collections=["u/alice/DM-50000"],
-                        chains={
-                            "u/alice/DM-50000": ["u/alice/DM-50000/a",
-                                                 "u/bob/DM-49998",
-                                                 "raw/hsc"]
-                        })
-
-    This butler will `put` new datasets to the run ``u/alice/DM-50000/a``, but
-    they'll also be available from the chained collection ``u/alice/DM-50000``.
-    Datasets will be read first from that run (since it appears first in the
-    chain), and then from ``u/bob/DM-49998`` and finally ``raw/hsc``.
-    If ``u/alice/DM-50000`` had already been defined, the ``chain`` argument
-    would be unnecessary.  We could also construct a butler that performs
-    exactly the same `put` and `get` operations without actually creating a
-    chained collection, just by passing multiple items is ``collections``::
+    from several others (as well)::
 
         butler = Butler("/path/to/repo", run="u/alice/DM-50000/a",
                         collections=["u/alice/DM-50000/a",
                                      "u/bob/DM-49998",
-                                     "raw/hsc"])
+                                     "HSC/defaults"])
+
+    This butler will `put` new datasets to the run ``u/alice/DM-50000/a``.
+    Datasets will be read first from that run (since it appears first in the
+    chain), and then from ``u/bob/DM-49998`` and finally ``HSC/defaults``.
 
     Finally, one can always create a `Butler` with no collections::
 
@@ -232,28 +213,26 @@ class Butler:
     e.g. for inserting dimension data or managing collections, or when the
     collections you want to use with the butler are not consistent.
     Passing ``writeable`` explicitly here is only necessary if you want to be
-    able to make changes to the repo - usually the value for ``writeable`` is
-    can be guessed from the collection arguments provided, but it defaults to
+    able to make changes to the repo - usually the value for ``writeable`` can
+    be guessed from the collection arguments provided, but it defaults to
     `False` when there are not collection arguments.
     """
     def __init__(self, config: Union[Config, str, None] = None, *,
                  butler: Optional[Butler] = None,
                  collections: Any = None,
                  run: Optional[str] = None,
-                 tags: Iterable[str] = (),
-                 chains: Optional[Mapping[str, Any]] = None,
                  searchPaths: Optional[List[str]] = None,
                  writeable: Optional[bool] = None,
+                 inferDefaults: bool = True,
+                 **kwargs: str,
                  ):
-        # Transform any single-pass iterator into an actual sequence so we
-        # can see if its empty
-        self.tags = tuple(tags)
+        defaults = RegistryDefaults(collections=collections, run=run, infer=inferDefaults, **kwargs)
         # Load registry, datastore, etc. from config or existing butler.
         if butler is not None:
             if config is not None or searchPaths is not None or writeable is not None:
                 raise TypeError("Cannot pass 'config', 'searchPaths', or 'writeable' "
                                 "arguments with 'butler' argument.")
-            self.registry = butler.registry
+            self.registry = butler.registry.copy(defaults)
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
@@ -264,32 +243,15 @@ class Butler:
             else:
                 butlerRoot = self._config.configDir
             if writeable is None:
-                writeable = run is not None or chains is not None or bool(self.tags)
-            self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot, writeable=writeable)
+                writeable = run is not None
+            self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot, writeable=writeable,
+                                                defaults=defaults)
             self.datastore = Datastore.fromConfig(self._config, self.registry.getDatastoreBridgeManager(),
                                                   butlerRoot=butlerRoot)
             self.storageClasses = StorageClassFactory()
             self.storageClasses.addFromConfig(self._config)
-        # Check the many collection arguments for consistency and create any
-        # needed collections that don't exist.
-        if collections is None:
-            if run is not None:
-                collections = (run,)
-            else:
-                collections = ()
-        self.collections = CollectionSearch.fromExpression(collections)
-        if chains is None:
-            chains = {}
-        self.run = run
         if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
-        if self.run is not None:
-            self.registry.registerCollection(self.run, type=CollectionType.RUN)
-        for tag in self.tags:
-            self.registry.registerCollection(tag, type=CollectionType.TAGGED)
-        for parent, children in chains.items():
-            self.registry.registerCollection(parent, type=CollectionType.CHAINED)
-            self.registry.setCollectionChain(parent, children)
 
     GENERATION: ClassVar[int] = 3
     """This is a Generation 3 Butler.
@@ -436,7 +398,7 @@ class Butler:
 
     @classmethod
     def _unpickle(cls, config: ButlerConfig, collections: Optional[CollectionSearch], run: Optional[str],
-                  tags: Tuple[str, ...], writeable: bool) -> Butler:
+                  defaultDataId: Dict[str, str], writeable: bool) -> Butler:
         """Callable used to unpickle a Butler.
 
         We prefer not to use ``Butler.__init__`` directly so we can force some
@@ -450,11 +412,11 @@ class Butler:
             instance (and hence after any search paths for overrides have been
             utilized).
         collections : `CollectionSearch`
-            Names of collections to read from.
+            Names of the default collections to read from.
         run : `str`, optional
-            Name of `~CollectionType.RUN` collection to write to.
-        tags : `tuple` [`str`]
-            Names of `~CollectionType.TAGGED` collections to associate with.
+            Name of the default `~CollectionType.RUN` collection to write to.
+        defaultDataId : `dict` [ `str`, `str` ]
+            Default data ID values.
         writeable : `bool`
             Whether the Butler should support write operations.
 
@@ -463,17 +425,21 @@ class Butler:
         butler : `Butler`
             A new `Butler` instance.
         """
-        return cls(config=config, collections=collections, run=run, tags=tags, writeable=writeable)
+        # MyPy doesn't recognize that the kwargs below are totally valid; it
+        # seems to think '**defaultDataId* is a _positional_ argument!
+        return cls(config=config, collections=collections, run=run, writeable=writeable,
+                   **defaultDataId)  # type: ignore
 
     def __reduce__(self) -> tuple:
         """Support pickling.
         """
-        return (Butler._unpickle, (self._config, self.collections, self.run, self.tags,
+        return (Butler._unpickle, (self._config, self.collections, self.run,
+                                   self.registry.defaults.dataId.byName(),
                                    self.registry.isWriteable()))
 
     def __str__(self) -> str:
-        return "Butler(collections={}, run={}, tags={}, datastore='{}', registry='{}')".format(
-            self.collections, self.run, self.tags, self.datastore, self.registry)
+        return "Butler(collections={}, run={}, datastore='{}', registry='{}')".format(
+            self.collections, self.run, self.datastore, self.registry)
 
     def isWriteable(self) -> bool:
         """Return `True` if this `Butler` supports write operations.
@@ -803,7 +769,8 @@ class Butler:
             # those of the dataset type requested, because there may be extra
             # dimensions that provide temporal information for a validity-range
             # lookup.
-            dataId = DataCoordinate.standardize(dataId, universe=self.registry.dimensions, **kwds)
+            dataId = DataCoordinate.standardize(dataId, universe=self.registry.dimensions,
+                                                defaults=self.registry.defaults.dataId, **kwds)
             if dataId.graph.temporal:
                 dataId = self.registry.expandDataId(dataId)
                 timespan = dataId.timespan
@@ -811,13 +778,8 @@ class Butler:
             # Standardize the data ID to just the dimensions of the dataset
             # type instead of letting registry.findDataset do it, so we get the
             # result even if no dataset is found.
-            dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions, **kwds)
-        if collections is None:
-            collections = self.collections
-            if not collections:
-                raise TypeError("No input collections provided.")
-        else:
-            collections = CollectionSearch.fromExpression(collections)
+            dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions,
+                                                defaults=self.registry.defaults.dataId, **kwds)
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
         ref = self.registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)
@@ -836,7 +798,6 @@ class Butler:
     def put(self, obj: Any, datasetRefOrType: Union[DatasetRef, DatasetType, str],
             dataId: Optional[DataId] = None, *,
             run: Optional[str] = None,
-            tags: Optional[Iterable[str]] = None,
             **kwds: Any) -> DatasetRef:
         """Store and register a dataset.
 
@@ -854,10 +815,6 @@ class Butler:
         run : `str`, optional
             The name of the run the dataset should be added to, overriding
             ``self.run``.
-        tags : `Iterable` [ `str` ], optional
-            The names of a `~CollectionType.TAGGED` collections to associate
-            the dataset with, overriding ``self.tags``.  These collections
-            must have already been added to the `Registry`.
         kwds
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
@@ -881,35 +838,12 @@ class Butler:
         if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
             raise ValueError("DatasetRef must not be in registry, must have None id")
 
-        if run is None:
-            if self.run is None:
-                raise TypeError("No run provided.")
-            run = self.run
-            # No need to check type for run; first thing we do is
-            # insertDatasets, and that will check for us.
-
-        if tags is None:
-            tags = self.tags
-        else:
-            tags = tuple(tags)
-        for tag in tags:
-            # Check that these are tagged collections up front, because we want
-            # to avoid relying on Datastore transactionality to avoid modifying
-            # the repo if there's an error later.
-            collectionType = self.registry.getCollectionType(tag)
-            if collectionType is not CollectionType.TAGGED:
-                raise TypeError(f"Cannot associate into collection '{tag}' of non-TAGGED type "
-                                f"{collectionType.name}.")
-
         # Add Registry Dataset entry.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
         ref, = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
 
         # Add Datastore entry.
         self.datastore.put(obj, ref)
-
-        for tag in tags:
-            self.registry.associate(tag, [ref])
 
         return ref
 
@@ -1277,7 +1211,7 @@ class Butler:
     def pruneDatasets(self, refs: Iterable[DatasetRef], *,
                       disassociate: bool = True,
                       unstore: bool = False,
-                      tags: Optional[Iterable[str]] = None,
+                      tags: Iterable[str] = (),
                       purge: bool = False,
                       run: Optional[str] = None) -> None:
         """Remove one or more datasets from a collection and/or storage.
@@ -1288,8 +1222,8 @@ class Butler:
             Datasets to prune.  These must be "resolved" references (not just
             a `DatasetType` and data ID).
         disassociate : `bool`, optional
-            Disassociate pruned datasets from ``self.tags`` (or the collections
-            given via the ``tags`` argument).
+            Disassociate pruned datasets from ``tags``, or from all collections
+            if ``purge=True``.
         unstore : `bool`, optional
             If `True` (`False` is default) remove these datasets from all
             datastores known to this butler.  Note that this will make it
@@ -1297,8 +1231,8 @@ class Butler:
             Datasets that are already not stored are ignored by this option.
         tags : `Iterable` [ `str` ], optional
             `~CollectionType.TAGGED` collections to disassociate the datasets
-            from, overriding ``self.tags``.  Ignored if ``disassociate`` is
-            `False` or ``purge`` is `True`.
+            from.  Ignored if ``disassociate`` is `False` or ``purge`` is
+            `True`.
         purge : `bool`, optional
             If `True` (`False` is default), completely remove the dataset from
             the `Registry`.  To prevent accidental deletions, ``purge`` may
@@ -1310,9 +1244,6 @@ class Butler:
 
             This mode may remove provenance information from datasets other
             than those provided, and should be used with extreme care.
-        run : `str`, optional
-            `~CollectionType.RUN` collection to purge from, overriding
-            ``self.run``.  Ignored unless ``purge`` is `True`.
 
         Raises
         ------
@@ -1327,19 +1258,8 @@ class Butler:
                 raise TypeError("Cannot pass purge=True without disassociate=True.")
             if not unstore:
                 raise TypeError("Cannot pass purge=True without unstore=True.")
-            if run is None:
-                run = self.run
-                if run is None:
-                    raise TypeError("No run provided but purge=True.")
-            collectionType = self.registry.getCollectionType(run)
-            if collectionType is not CollectionType.RUN:
-                raise TypeError(f"Cannot purge from collection '{run}' "
-                                f"of non-RUN type {collectionType.name}.")
         elif disassociate:
-            if tags is None:
-                tags = self.tags
-            else:
-                tags = tuple(tags)
+            tags = tuple(tags)
             if not tags:
                 raise TypeError("No tags provided but disassociate=True.")
             for tag in tags:
@@ -1398,7 +1318,7 @@ class Butler:
 
     @transactional
     def ingest(self, *datasets: FileDataset, transfer: Optional[str] = "auto", run: Optional[str] = None,
-               tags: Optional[Iterable[str]] = None,) -> None:
+               ) -> None:
         """Store and register one or more datasets that already exist on disk.
 
         Parameters
@@ -1422,10 +1342,6 @@ class Butler:
         run : `str`, optional
             The name of the run ingested datasets should be added to,
             overriding ``self.run``.
-        tags : `Iterable` [ `str` ], optional
-            The names of a `~CollectionType.TAGGED` collections to associate
-            the dataset with, overriding ``self.tags``.  These collections
-            must have already been added to the `Registry`.
 
         Raises
         ------
@@ -1455,24 +1371,6 @@ class Butler:
         """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        if run is None:
-            if self.run is None:
-                raise TypeError("No run provided.")
-            run = self.run
-            # No need to check run type, since insertDatasets will do that
-            # (safely) for us.
-        if tags is None:
-            tags = self.tags
-        else:
-            tags = tuple(tags)
-        for tag in tags:
-            # Check that these are tagged collections up front, because we want
-            # to avoid relying on Datastore transactionality to avoid modifying
-            # the repo if there's an error later.
-            collectionType = self.registry.getCollectionType(tag)
-            if collectionType is not CollectionType.TAGGED:
-                raise TypeError(f"Cannot associate into collection '{tag}' of non-TAGGED type "
-                                f"{collectionType.name}.")
         # Reorganize the inputs so they're grouped by DatasetType and then
         # data ID.  We also include a list of DatasetRefs for each FileDataset
         # to hold the resolved DatasetRefs returned by the Registry, before
@@ -1508,10 +1406,6 @@ class Butler:
             for dataset, resolvedRefs in groupForType.values():
                 dataset.refs = resolvedRefs
                 allResolvedRefs.extend(resolvedRefs)
-
-        # Bulk-associate everything with any tagged collections.
-        for tag in tags:
-            self.registry.associate(tag, allResolvedRefs)
 
         # Bulk-insert everything into Datastore.
         self.datastore.ingest(*datasets, transfer=transfer)
@@ -1774,6 +1668,29 @@ class Butler:
         if messages:
             raise ValidationError(";\n".join(messages))
 
+    @property
+    def collections(self) -> CollectionSearch:
+        """The collections to search by default, in order (`CollectionSearch`).
+
+        This is an alias for ``self.registry.defaults.collections``.  It cannot
+        be set directly in isolation, but all defaults may be changed together
+        by assigning a new `RegistryDefaults` instance to
+        ``self.registry.defaults``.
+        """
+        return self.registry.defaults.collections
+
+    @property
+    def run(self) -> Optional[str]:
+        """Name of the run this butler writes outputs to by default (`str` or
+        `None`).
+
+        This is an alias for ``self.registry.defaults.run``.  It cannot be set
+        directly in isolation, but all defaults may be changed together by
+        assigning a new `RegistryDefaults` instance to
+        ``self.registry.defaults``.
+        """
+        return self.registry.defaults.run
+
     registry: Registry
     """The object that manages dataset metadata and relationships (`Registry`).
 
@@ -1792,19 +1709,4 @@ class Butler:
     storageClasses: StorageClassFactory
     """An object that maps known storage class names to objects that fully
     describe them (`StorageClassFactory`).
-    """
-
-    collections: Optional[CollectionSearch]
-    """The collections to search and any restrictions on the dataset types to
-    search for within them, in order (`CollectionSearch`).
-    """
-
-    run: Optional[str]
-    """Name of the run this butler writes outputs to (`str` or `None`).
-    """
-
-    tags: Tuple[str, ...]
-    """Names of `~CollectionType.TAGGED` collections this butler associates
-    with in `put` and `ingest`, and disassociates from in `pruneDatasets`
-    (`tuple` [ `str` ]).
     """

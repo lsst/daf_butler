@@ -53,13 +53,15 @@ from ...core import (
     Timespan,
 )
 from .._registry import (
+    CollectionSummary,
     CollectionType,
     ConflictingDefinitionError,
     InconsistentDataIdError,
     Registry,
     RegistryConfig,
 )
-from ..interfaces import MissingCollectionError, ButlerAttributeExistsError
+from .._exceptions import MissingCollectionError
+from ..interfaces import ButlerAttributeExistsError
 
 
 class RegistryTests(ABC):
@@ -1018,7 +1020,7 @@ class RegistryTests(ABC):
         VERSION_COUNT = 6 * 3 + 1
 
         registry = self.makeRegistry()
-        attributes = registry._attributes
+        attributes = registry._managers.attributes
 
         # check what get() returns for non-existing key
         self.assertIsNone(attributes.get("attr"))
@@ -1782,3 +1784,48 @@ class RegistryTests(ABC):
 
         # Empty timespans should not overlap anything.
         self.assertEqual([], query("visit.timespan OVERLAPS (t3, t2)"))
+
+    def testCollectionSummaries(self):
+        """Test recording and retrieval of collection summaries.
+        """
+        self.maxDiff = None
+        registry = self.makeRegistry()
+        # Importing datasets from yaml should go through the code path where
+        # we update collection summaries as we insert datasets.
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        flat = registry.getDatasetType("flat")
+        expected1 = CollectionSummary.makeEmpty(registry.dimensions)
+        expected1.datasetTypes.add(registry.getDatasetType("bias"))
+        expected1.datasetTypes.add(flat)
+        expected1.dimensions.update_extract(
+            DataCoordinate.standardize(instrument="Cam1", universe=registry.dimensions)
+        )
+        self.assertEqual(registry.getCollectionSummary("imported_g"), expected1)
+        self.assertEqual(registry.getCollectionSummary("imported_r"), expected1)
+        # Create a chained collection with both of the imported runs; the
+        # summary should be the same, because it's a union with itself.
+        chain = "chain"
+        registry.registerCollection(chain, CollectionType.CHAINED)
+        registry.setCollectionChain(chain, ["imported_r", "imported_g"])
+        self.assertEqual(registry.getCollectionSummary(chain), expected1)
+        # Associate flats only into a tagged collection and a calibration
+        # collection to check summaries of those.
+        tag = "tag"
+        registry.registerCollection(tag, CollectionType.TAGGED)
+        registry.associate(tag, registry.queryDatasets(flat, collections="imported_g"))
+        calibs = "calibs"
+        registry.registerCollection(calibs, CollectionType.CALIBRATION)
+        registry.certify(calibs, registry.queryDatasets(flat, collections="imported_g"),
+                         timespan=Timespan(None, None))
+        expected2 = expected1.copy()
+        expected2.datasetTypes.discard("bias")
+        self.assertEqual(registry.getCollectionSummary(tag), expected2)
+        self.assertEqual(registry.getCollectionSummary(calibs), expected2)
+        # Explicitly calling Registry.refresh() should load those same
+        # summaries, via a totally different code path.
+        registry.refresh()
+        self.assertEqual(registry.getCollectionSummary("imported_g"), expected1)
+        self.assertEqual(registry.getCollectionSummary("imported_r"), expected1)
+        self.assertEqual(registry.getCollectionSummary(tag), expected2)
+        self.assertEqual(registry.getCollectionSummary(calibs), expected2)

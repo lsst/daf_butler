@@ -85,7 +85,8 @@ class QueryCollectionsScriptTest(ButlerTestHelper, unittest.TestCase):
         with self.runner.isolated_filesystem():
             butlerCfg = Butler.makeRepo("here")
             # the purpose of this call is to create some collections
-            Butler(butlerCfg, run=run, tags=[tag], collections=[tag], writeable=True)
+            butler = Butler(butlerCfg, run=run, collections=[tag], writeable=True)
+            butler.registry.registerCollection(tag, CollectionType.TAGGED)
 
             # Verify collections that were created are found by
             # query-collections.

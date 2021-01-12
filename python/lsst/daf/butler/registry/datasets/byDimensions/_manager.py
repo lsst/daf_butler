@@ -28,18 +28,21 @@ from lsst.daf.butler.registry.interfaces import (
 
 from .tables import (
     addDatasetForeignKey,
-    CollectionSummaryTables,
     makeCalibTableName,
     makeCalibTableSpec,
     makeStaticTableSpecs,
     makeTagTableName,
     makeTagTableSpec,
 )
+from .summaries import CollectionSummaryManager
 from ._storage import ByDimensionsDatasetRecordStorage
+from ...summaries import CollectionSummary
+
 
 if TYPE_CHECKING:
     from lsst.daf.butler.registry.interfaces import (
         CollectionManager,
+        CollectionRecord,
         Database,
         DimensionRecordStorageManager,
         StaticTablesContext,
@@ -81,7 +84,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
     static : `StaticDatasetTablesTuple`
         Named tuple of `sqlalchemy.schema.Table` instances for all static
         tables used by this class.
-    summaries : `CollectionSummaryTables`
+    summaries : `CollectionSummaryManager`
         Structure containing tables that summarize the contents of collections.
     """
     def __init__(
@@ -90,7 +93,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
-        summaries: CollectionSummaryTables,
+        summaries: CollectionSummaryManager,
     ):
         self._db = db
         self._collections = collections
@@ -111,7 +114,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         specs = makeStaticTableSpecs(type(collections), universe=dimensions.universe)
         static: StaticDatasetTablesTuple = context.addTableTuple(specs)  # type: ignore
-        summaries = CollectionSummaryTables.initialize(
+        summaries = CollectionSummaryManager.initialize(
             db,
             context,
             collections=collections,
@@ -154,6 +157,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             byId[storage._dataset_type_id] = storage
         self._byName = byName
         self._byId = byId
+        self._summaries.refresh(lambda dataset_type_id: self._byId[dataset_type_id].datasetType)
 
     def remove(self, name: str) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -264,6 +268,10 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             id=id,
             run=self._collections[row[self._collections.getRunForeignKeyName()]].name
         )
+
+    def getCollectionSummary(self, collection: CollectionRecord) -> CollectionSummary:
+        # Docstring inherited from DatasetRecordStorageManager.
+        return self._summaries.get(collection)
 
     @classmethod
     def currentVersion(cls) -> Optional[VersionTuple]:
