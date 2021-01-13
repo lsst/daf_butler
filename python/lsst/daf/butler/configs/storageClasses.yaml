@@ -103,8 +103,6 @@ storageClasses:
     pytype: lsst.meas.algorithms.Curve
   CrosstalkCalib:
     pytype: lsst.ip.isr.CrosstalkCalib
-  PhotonTransferCurveDataset:
-    pytype: lsst.ip.isr.PhotonTransferCurveDataset
   # TODO: remove Filter in DM-27177
   Filter:
     pytype: lsst.afw.image.Filter
