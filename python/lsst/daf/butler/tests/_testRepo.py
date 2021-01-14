@@ -151,21 +151,7 @@ def _makeRecords(dataIds, universe):
         expandedIds[name] = []
         dimension = universe[name]
         for value in values:
-            expandedValue = {}
-            for key in dimension.uniqueKeys:
-                if key.nbytes:
-                    castType = bytes
-                else:
-                    castType = key.dtype().python_type
-                try:
-                    castValue = castType(value)
-                except TypeError:
-                    castValue = castType()
-                expandedValue[key.name] = castValue
-            for key in dimension.metadata:
-                if not key.nullable:
-                    expandedValue[key.name] = key.dtype().python_type(value)
-            expandedIds[name].append(expandedValue)
+            expandedIds[name].append(_fillAllKeys(dimension, value))
 
     # Pick cross-relationships arbitrarily
     for name, values in expandedIds.items():
@@ -184,6 +170,41 @@ def _makeRecords(dataIds, universe):
 
     return {dimension: [universe[dimension].RecordClass(**value) for value in values]
             for dimension, values in expandedIds.items()}
+
+
+def _fillAllKeys(dimension, value):
+    """Create an arbitrary mapping of all required keys for a given dimension
+    that do not refer to other dimensions.
+
+    Parameters
+    ----------
+    dimension : `Dimension`
+        The dimension for which to generate a set of keys (e.g., detector).
+    value
+        The value assigned to ``dimension`` (e.g., detector ID).
+
+    Returns
+    -------
+    expandedValue : `dict` [`str`]
+        A mapping of dimension keys to values. ``dimension's`` primary key
+        maps to ``value``, but all other mappings (e.g., detector name)
+        are arbitrary.
+    """
+    expandedValue = {}
+    for key in dimension.uniqueKeys:
+        if key.nbytes:
+            castType = bytes
+        else:
+            castType = key.dtype().python_type
+        try:
+            castValue = castType(value)
+        except TypeError:
+            castValue = castType()
+        expandedValue[key.name] = castValue
+    for key in dimension.metadata:
+        if not key.nullable:
+            expandedValue[key.name] = key.dtype().python_type(value)
+    return expandedValue
 
 
 def expandUniqueId(butler, partialId):
