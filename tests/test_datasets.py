@@ -438,6 +438,11 @@ class DatasetRefTestCase(unittest.TestCase):
         s = pickle.dumps(ref)
         self.assertEqual(pickle.loads(s), ref)
 
+    def testJson(self):
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
+        s = ref.to_json()
+        self.assertEqual(DatasetRef.from_json(s, universe=self.universe), ref)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -608,6 +608,76 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         assert self.hasRecords(), "pack() may only be called if hasRecords() returns True."
         return self.universe.makePacker(name, self).pack(self, returnMaxBits=returnMaxBits)
 
+    def to_json(self) -> str:
+        """Convert this class to JSON form.
+
+        The class type is not recorded in the JSON so the JSON decoder
+        must know which class is represented.
+
+        Returns
+        -------
+        json : `str`
+            The class in JSON string format.
+        """
+        # For now use the core json library to convert a dict to JSON
+        # for us.
+        import json
+        return json.dumps(self.to_simple())
+
+    def to_simple(self) -> Dict:
+        """Convert this class to a simple python type suitable for
+        serialization.
+
+        Returns
+        -------
+        as_dict : `dict`
+            The object converted to a dictionary.
+        """
+        # Convert to a dict form
+        return self.byName()
+
+    @classmethod
+    def from_simple(cls, as_dict: Dict[str, Any],
+                    universe: DimensionUniverse) -> DataCoordinate:
+        """Construct a new object from the data returned from the `to_simple`
+        method.
+
+        Parameters
+        ----------
+        as_dict : `dict` of [`str`, `Any`]
+            The `dict` returned by `to_simple()`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions.
+
+        Returns
+        -------
+        dataId : `DataCoordinate`
+            Newly-constructed object.
+        """
+        return cls.standardize(as_dict, universe=universe)
+
+    @classmethod
+    def from_json(cls, json_str: str, universe: DimensionUniverse) -> DataCoordinate:
+        """Convert a JSON string created by `to_json` and return a
+        `DataCoordinate`.
+
+        Parameters
+        ----------
+        json_str : `str`
+            Representation of the dimensions in JSON format as created
+            by `to_json()`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions.
+
+        Returns
+        -------
+        dataId : `DataCoordinate`
+            Newly-constructed object.
+        """
+        import json
+        as_dict = json.loads(json_str)
+        return cls.from_simple(as_dict, universe=universe)
+
 
 DataId = Union[DataCoordinate, Mapping[str, Any]]
 """A type-annotation alias for signatures that accept both informal data ID

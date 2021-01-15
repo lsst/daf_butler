@@ -24,13 +24,14 @@ __all__ = ["AmbiguousDatasetError", "DatasetRef"]
 
 from typing import (
     Any,
+    Dict,
     Iterable,
     List,
     Optional,
     Tuple,
 )
 
-from ..dimensions import DataCoordinate, DimensionGraph
+from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse
 from ..configSupport import LookupKey
 from ..utils import immutable
 from ..named import NamedKeyDict
@@ -151,6 +152,85 @@ class DatasetRef:
 
         # Compare tuples in the priority order
         return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
+
+    def to_json(self) -> str:
+        """Convert this class to JSON form.
+
+        The class type is not recorded in the JSON so the JSON decoder
+        must know which class is represented.
+
+        Returns
+        -------
+        json : `str`
+            The class in JSON string format.
+        """
+        # For now use the core json library to convert a dict to JSON
+        # for us.
+        import json
+        return json.dumps(self.to_simple())
+
+    def to_simple(self) -> Dict:
+        """Convert this class to a simple python type suitable for
+        serialization.
+
+        Returns
+        -------
+        as_dict : `dict`
+            The object converted to a dictionary.
+        """
+        # Convert to a dict form
+        as_dict = {"datasetType": self.datasetType.to_simple(),
+                   "dataId": self.dataId.to_simple(),
+                   "id": self.id,
+                   "run": self.run,
+                   "hasParentId": self.hasParentId
+                   }
+        return as_dict
+
+    @classmethod
+    def from_simple(cls, as_dict: Dict,
+                    universe: DimensionUniverse) -> DatasetRef:
+        """Construct a new object from the data returned from the `to_simple`
+        method.
+
+        Parameters
+        ----------
+        as_dict : `dict` of [`str`, `Any`]
+            The `dict` returned by `to_simple()`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            Newly-constructed object.
+        """
+        datasetType = DatasetType.from_simple(as_dict["datasetType"], universe=universe)
+        dataId = DataCoordinate.from_simple(as_dict["dataId"], universe=universe)
+        return cls(datasetType, dataId,
+                   id=as_dict["id"], run=as_dict["run"], hasParentId=as_dict["hasParentId"])
+
+    @classmethod
+    def from_json(cls, json_str: str, universe: DimensionUniverse) -> DatasetRef:
+        """Convert a JSON string created by `to_json` and return a
+        `DatsetRef`.
+
+        Parameters
+        ----------
+        json_str : `str`
+            Representation of the dimensions in JSON format as created
+            by `to_json()`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions.
+
+        Returns
+        -------
+        datasetType : `DatasetRef`
+            Newly-constructed object.
+        """
+        import json
+        as_dict = json.loads(json_str)
+        return cls.from_simple(as_dict, universe=universe)
 
     @classmethod
     def _unpickle(
