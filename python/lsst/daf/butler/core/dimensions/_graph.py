@@ -31,6 +31,7 @@ from typing import (
     Dict,
     Iterable,
     Iterator,
+    List,
     Mapping,
     Optional,
     Set,
@@ -186,6 +187,77 @@ class DimensionGraph:
         """A set of the names of all dimensions in the graph (`KeysView`).
         """
         return self.dimensions.names
+
+    def to_json(self) -> str:
+        """Convert this class to JSON form.
+
+        The class type is not recorded in the JSON so the JSON decoder
+        must know which class is represented.
+
+        Returns
+        -------
+        json : `str`
+            The class in JSON string format.
+        """
+        # For now use the core json library to convert a dict to JSON
+        # for us.
+        import json
+        return json.dumps(self.to_simple())
+
+    def to_simple(self) -> List[str]:
+        """Convert this class to a simple python type suitable for
+        serialization.
+
+        Returns
+        -------
+        names : `list`
+            The names of the dimensions.
+        """
+        # Names are all we can serialize.
+        return list(self.names)
+
+    @classmethod
+    def from_simple(cls, names: List[str], universe: DimensionUniverse) -> DimensionGraph:
+        """Construct a new object from the data returned from the `to_simple`
+        method.
+
+        Parameters
+        ----------
+        names : `list` of `str`
+            The names of the dimensions.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions of which this graph will
+            be a subset.
+
+        Returns
+        -------
+        graph : `DimensionGraph`
+            Newly-constructed object.
+        """
+        return cls(names=names, universe=universe)
+
+    @classmethod
+    def from_json(cls, json_str: str, universe: DimensionUniverse) -> DimensionGraph:
+        """Convert a JSON string created by `to_json` and return a
+        `DimensionGraph`.
+
+        Parameters
+        ----------
+        json_str : `str`
+            Representation of the dimensions in JSON format as created
+            by `to_json()`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions of which this graph will
+            be a subset.
+
+        Returns
+        -------
+        graph : `DimensionGraph`
+            Newly-constructed object.
+        """
+        import json
+        names = json.loads(json_str)
+        return cls.from_simple(names, universe)
 
     def __iter__(self) -> Iterator[Dimension]:
         """Iterate over all dimensions in the graph (and true `Dimension`

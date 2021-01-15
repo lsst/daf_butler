@@ -472,6 +472,89 @@ class DatasetType:
 
         return lookups + self.storageClass._lookupNames()
 
+    def to_json(self) -> str:
+        """Convert this class to JSON form.
+
+        The class type is not recorded in the JSON so the JSON decoder
+        must know which class is represented.
+
+        Returns
+        -------
+        json : `str`
+            The class in JSON string format.
+        """
+        # For now use the core json library to convert a dict to JSON
+        # for us.
+        import json
+        return json.dumps(self.to_simple())
+
+    def to_simple(self) -> Dict:
+        """Convert this class to a simple python type suitable for
+        serialization.
+
+        Returns
+        -------
+        as_dict : `dict`
+            The object converted to a dictionary.
+        """
+        # Convert to a dict form
+        as_dict = {"name": self.name,
+                   "storageClass": self._storageClassName,
+                   "isCalibration": self._isCalibration,
+                   "dimensions": self.dimensions.to_simple(),
+                   }
+
+        if self._parentStorageClassName is not None:
+            as_dict["parentStorageClass"] = self._parentStorageClassName
+        return as_dict
+
+    @classmethod
+    def from_simple(cls, as_dict: Dict,
+                    universe: DimensionUniverse) -> DatasetType:
+        """Construct a new object from the data returned from the `to_simple`
+        method.
+
+        Parameters
+        ----------
+        as_dict : `dict` of [`str`, `Any`]
+            The `dict` returned by `to_simple()`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions of which this graph will
+            be a subset.
+
+        Returns
+        -------
+        datasetType : `DatasetType`
+            Newly-constructed object.
+        """
+        return cls(name=as_dict["name"],
+                   dimensions=DimensionGraph.from_simple(as_dict["dimensions"], universe=universe),
+                   storageClass=as_dict["storageClass"],
+                   parentStorageClass=as_dict.get("parentStorageClass"),
+                   universe=universe)
+
+    @classmethod
+    def from_json(cls, json_str: str, universe: DimensionUniverse) -> DatasetType:
+        """Convert a JSON string created by `to_json` and return a
+        `DatsetType`.
+
+        Parameters
+        ----------
+        json_str : `str`
+            Representation of the dimensions in JSON format as created
+            by `to_json()`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions.
+
+        Returns
+        -------
+        datasetType : `DatasetType`
+            Newly-constructed object.
+        """
+        import json
+        as_dict = json.loads(json_str)
+        return cls.from_simple(as_dict, universe=universe)
+
     def __reduce__(self) -> Tuple[Callable, Tuple[Type[DatasetType],
                                                   Tuple[str, DimensionGraph, str, Optional[str]],
                                                   Dict[str, bool]]]:

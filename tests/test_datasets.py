@@ -141,6 +141,17 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertNotEqual(DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageA"),
                             DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageB"))
 
+    def testJson(self):
+        storageA = StorageClass("test_a")
+        dimensionsA = self.universe.extract(["instrument"])
+        self.assertEqual(DatasetType("a", dimensionsA, storageA,),
+                         DatasetType.from_json(DatasetType("a", dimensionsA, storageA,).to_json(),
+                                               self.universe))
+        self.assertEqual(DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent"),
+                         DatasetType.from_json(DatasetType("a.b", dimensionsA, "test_b",
+                                                           parentStorageClass="parent").to_json(),
+                                               self.universe))
+
     def testSorting(self):
         """Can we sort a DatasetType"""
         storage = StorageClass("test_a")
