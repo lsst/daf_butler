@@ -626,7 +626,7 @@ class ChainedDatastore(Datastore):
                 datastore.validateConfiguration(entities, logFailures=logFailures)
             except DatastoreValidationError as e:
                 if logFailures:
-                    log.fatal("Datastore %s failed validation", datastore.name)
+                    log.critical("Datastore %s failed validation", datastore.name)
                 failures.append(f"Datastore {self.name}: {e}")
 
         if failures:
