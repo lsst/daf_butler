@@ -48,6 +48,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Default timeout for all HTTP requests, in seconds
+TIMEOUT = 20
+
 
 def getHttpSession() -> requests.Session:
     """Create a requests.Session pre-configured with environment variable data
@@ -115,24 +118,12 @@ def getHttpSession() -> requests.Session:
     return session
 
 
-def _defaultTimeout() -> float:
-    """Returns the value of the default timeout to use (in seconds).
-
-    Returns
-    -------
-    timeout : `float`
-        Number of seconds to wait before timing out the requests.
-    """
-    timeout = 20
-    return timeout
-
-
-def expect100() -> bool:
+def useExpect100() -> bool:
     """Returns the status of the "Expect-100" header.
 
     Returns
     -------
-    expect100 : `bool`
+    useExpect100 : `bool`
         True if LSST_BUTLER_WEBDAV_EXPECT100 is set, False otherwise.
     """
     # This header is required for request redirection, in dCache for example
@@ -208,7 +199,7 @@ def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
 
     log.debug("Checking if file exists: %s", filepath)
 
-    r = session.head(filepath, timeout=_defaultTimeout())
+    r = session.head(filepath, timeout=TIMEOUT)
     return (True, int(r.headers['Content-Length'])) if r.status_code == 200 else (False, -1)
 
 
@@ -230,7 +221,7 @@ def webdavDeleteFile(path: Union[Location, ButlerURI, str],
     filepath = _getFileURL(path)
 
     log.debug("Removing file: %s", filepath)
-    r = session.delete(filepath, timeout=_defaultTimeout())
+    r = session.delete(filepath, timeout=TIMEOUT)
     if r.status_code not in [200, 202, 204]:
         raise FileNotFoundError(f"Unable to delete resource {filepath}; status code: {r.status_code}")
 
@@ -257,7 +248,7 @@ def folderExists(path: Union[Location, ButlerURI, str],
     filepath = _getFileURL(path)
 
     log.debug("Checking if folder exists: %s", filepath)
-    r = session.head(filepath, timeout=_defaultTimeout())
+    r = session.head(filepath, timeout=TIMEOUT)
     return True if r.status_code == 200 else False
 
 
@@ -360,14 +351,14 @@ class ButlerHttpURI(ButlerURI):
     def exists(self) -> bool:
         """Check that a remote HTTP resource exists."""
         log.debug("Checking if resource exists: %s", self.geturl())
-        r = self.session.head(self.geturl(), timeout=_defaultTimeout())
+        r = self.session.head(self.geturl(), timeout=TIMEOUT)
 
         return True if r.status_code == 200 else False
 
     def size(self) -> int:
         if self.dirLike:
             return 0
-        r = self.session.head(self.geturl(), timeout=_defaultTimeout())
+        r = self.session.head(self.geturl(), timeout=TIMEOUT)
         if r.status_code == 200:
             return int(r.headers['Content-Length'])
         else:
@@ -388,7 +379,7 @@ class ButlerHttpURI(ButlerURI):
             if not self.parent().exists() and self.parent().geturl() != self.geturl():
                 self.parent().mkdir()
             log.debug("Creating new directory: %s", self.geturl())
-            r = self.session.request("MKCOL", self.geturl(), timeout=_defaultTimeout())
+            r = self.session.request("MKCOL", self.geturl(), timeout=TIMEOUT)
             if r.status_code != 201:
                 if r.status_code == 405:
                     log.debug("Can not create directory: %s may already exist: skipping.", self.geturl())
@@ -398,7 +389,7 @@ class ButlerHttpURI(ButlerURI):
     def remove(self) -> None:
         """Remove the resource."""
         log.debug("Removing resource: %s", self.geturl())
-        r = self.session.delete(self.geturl(), timeout=_defaultTimeout())
+        r = self.session.delete(self.geturl(), timeout=TIMEOUT)
         if r.status_code not in [200, 202, 204]:
             raise FileNotFoundError(f"Unable to delete resource {self}; status code: {r.status_code}")
 
@@ -413,7 +404,7 @@ class ButlerHttpURI(ButlerURI):
             Always returns `True`. This is always a temporary file.
         """
         log.debug("Downloading remote resource as local file: %s", self.geturl())
-        r = self.session.get(self.geturl(), stream=True, timeout=_defaultTimeout())
+        r = self.session.get(self.geturl(), stream=True, timeout=TIMEOUT)
         if r.status_code != 200:
             raise FileNotFoundError(f"Unable to download resource {self}; status code: {r.status_code}")
         with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
@@ -432,7 +423,7 @@ class ButlerHttpURI(ButlerURI):
         """
         log.debug("Reading from remote resource: %s", self.geturl())
         stream = True if size > 0 else False
-        r = self.session.get(self.geturl(), stream=stream, timeout=_defaultTimeout())
+        r = self.session.get(self.geturl(), stream=stream, timeout=TIMEOUT)
         if r.status_code != 200:
             raise FileNotFoundError(f"Unable to read resource {self}; status code: {r.status_code}")
         if not stream:
@@ -457,7 +448,7 @@ class ButlerHttpURI(ButlerURI):
             if self.exists():
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
         dest_url = finalurl(self._emptyPut())
-        r = self.session.put(dest_url, data=data, timeout=_defaultTimeout())
+        r = self.session.put(dest_url, data=data, timeout=TIMEOUT)
         if r.status_code not in [201, 202, 204]:
             raise ValueError(f"Can not write file {self}, status code: {r.status_code}")
 
@@ -493,19 +484,19 @@ class ButlerHttpURI(ButlerURI):
             if transfer == "move":
                 r = self.session.request("MOVE", src.geturl(),
                                          headers={"Destination": self.geturl()},
-                                         timeout=_defaultTimeout())
+                                         timeout=TIMEOUT)
                 log.debug("Running move via MOVE HTTP request.")
             else:
                 r = self.session.request("COPY", src.geturl(),
                                          headers={"Destination": self.geturl()},
-                                         timeout=_defaultTimeout())
+                                         timeout=TIMEOUT)
                 log.debug("Running copy via COPY HTTP request.")
         else:
             # Use local file and upload it
             with src.as_local() as local_uri:
                 with open(local_uri.ospath, "rb") as f:
                     dest_url = finalurl(self._emptyPut())
-                    r = self.session.put(dest_url, data=f, timeout=_defaultTimeout())
+                    r = self.session.put(dest_url, data=f, timeout=TIMEOUT)
             log.debug("Uploading URI %s to %s via local file", src, self)
 
         if r.status_code not in [201, 202, 204]:
@@ -526,10 +517,8 @@ class ButlerHttpURI(ButlerURI):
         response : `requests.Response`
             HTTP Response from the endpoint.
         """
-        if expect100():
-            return self.session.put(self.geturl(), data=None,
-                                    headers={"Expect": "100-continue", "Content-Length": "0"},
-                                    allow_redirects=False, timeout=_defaultTimeout())
-        return self.session.put(self.geturl(), data=None,
-                                headers={"Content-Length": "0"},
-                                allow_redirects=False, timeout=_defaultTimeout())
+        headers = {"Content-Length": "0"}
+        if useExpect100():
+            headers["Expect"] = "100-continue"
+        return self.session.put(self.geturl(), data=None, headers=headers,
+                                allow_redirects=False, timeout=TIMEOUT)
