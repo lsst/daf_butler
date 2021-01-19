@@ -207,6 +207,50 @@ def _fillAllKeys(dimension, value):
     return expandedValue
 
 
+def _fillRelationships(dimension, dimensionInfo, existing):
+    """Create arbitrary mappings from one dimension to all dimensions it
+    depends on.
+
+    Parameters
+    ----------
+    dimension : `Dimension`
+        The dimension for which to generate relationships.
+    dimensionInfo : `dict` [`str`]
+        A mapping of dimension keys to values.
+    existing : `Registry`
+        The registry with all previously registered dimensions.
+
+    Returns
+    -------
+    filledInfo : `dict` [`str`]
+        A version of ``dimensionInfo`` with extra mappings for any
+        relationships required by ``dimension``. Any relationships already
+        defined in ``dimensionInfo`` are preserved.
+
+    Raises
+    ------
+    ValueError
+        Raised if ``dimension`` depends on a dimension for which no values
+        exist yet.
+    """
+    filledInfo = dimensionInfo.copy()
+    for other in dimension.required:
+        if other != dimension and other.name not in filledInfo:
+            relation = list(existing.queryDimensionRecords(other.name))[0]
+            filledInfo[other.name] = relation.dataID[other.primaryKey.name]
+    knownDimensions = existing.dimensions.getStaticDimensions()
+    # Do not recurse, to keep the user from having to provide
+    # irrelevant dimensions.
+    for other in dimension.implied:
+        toUpdate = other != dimension and other.name not in filledInfo
+        updatable = other.viewOf is None
+        known = other.name in knownDimensions
+        if toUpdate and updatable and known:
+            relation = list(existing.queryDimensionRecords(other.name))[0]
+            filledInfo[other.name] = relation.dataID[other.primaryKey.name]
+    return filledInfo
+
+
 def expandUniqueId(butler, partialId):
     """Return a complete data ID matching some criterion.
 
