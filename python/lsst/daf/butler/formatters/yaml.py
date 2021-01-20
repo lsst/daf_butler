@@ -25,6 +25,7 @@ __all__ = ("YamlFormatter", )
 
 import builtins
 import yaml
+import dataclasses
 
 from typing import (
     TYPE_CHECKING,
@@ -160,7 +161,9 @@ class YamlFormatter(FileFormatter):
         This will fail for data structures that have complex python classes
         without a registered YAML representer.
         """
-        if hasattr(inMemoryDataset, "_asdict"):
+        if dataclasses.is_dataclass(inMemoryDataset):
+            inMemoryDataset = dataclasses.asdict(inMemoryDataset)
+        elif hasattr(inMemoryDataset, "_asdict"):
             inMemoryDataset = inMemoryDataset._asdict()
         unsafe_dump = self.writeParameters.get("unsafe_dump", False)
         if unsafe_dump:
@@ -191,6 +194,10 @@ class YamlFormatter(FileFormatter):
             if storageClass.isComposite():
                 inMemoryDataset = storageClass.delegate().assemble(inMemoryDataset, pytype=pytype)
             elif not isinstance(inMemoryDataset, pytype):
-                # Hope that we can pass the arguments in directly
-                inMemoryDataset = pytype(inMemoryDataset)
+                if dataclasses.is_dataclass(pytype):
+                    # dataclasses accept key/value parameters
+                    inMemoryDataset = pytype(**inMemoryDataset)
+                else:
+                    # Hope that we can pass the arguments in directly
+                    inMemoryDataset = pytype(inMemoryDataset)
         return inMemoryDataset
