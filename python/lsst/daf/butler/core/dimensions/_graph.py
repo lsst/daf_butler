@@ -43,7 +43,7 @@ from typing import (
 from ..named import NamedValueAbstractSet, NamedValueSet
 from ..utils import cached_getter, immutable
 from .._topology import TopologicalSpace, TopologicalFamily
-
+from ..json import from_json_generic, to_json_generic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
@@ -189,22 +189,6 @@ class DimensionGraph:
         """
         return self.dimensions.names
 
-    def to_json(self) -> str:
-        """Convert this class to JSON form.
-
-        The class type is not recorded in the JSON so the JSON decoder
-        must know which class is represented.
-
-        Returns
-        -------
-        json : `str`
-            The class in JSON string format.
-        """
-        # For now use the core json library to convert a dict to JSON
-        # for us.
-        import json
-        return json.dumps(self.to_simple())
-
     def to_simple(self, minimal: bool = False) -> List[str]:
         """Convert this class to a simple python type suitable for
         serialization.
@@ -255,28 +239,8 @@ class DimensionGraph:
 
         return cls(names=names, universe=universe)
 
-    @classmethod
-    def from_json(cls, json_str: str, universe: DimensionUniverse) -> DimensionGraph:
-        """Convert a JSON string created by `to_json` and return a
-        `DimensionGraph`.
-
-        Parameters
-        ----------
-        json_str : `str`
-            Representation of the dimensions in JSON format as created
-            by `to_json()`.
-        universe : `DimensionUniverse`
-            The special graph of all known dimensions of which this graph will
-            be a subset.
-
-        Returns
-        -------
-        graph : `DimensionGraph`
-            Newly-constructed object.
-        """
-        import json
-        names = json.loads(json_str)
-        return cls.from_simple(names, universe)
+    to_json = to_json_generic
+    from_json = classmethod(from_json_generic)
 
     def __iter__(self) -> Iterator[Dimension]:
         """Iterate over all dimensions in the graph (and true `Dimension`

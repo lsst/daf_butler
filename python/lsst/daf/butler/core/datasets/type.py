@@ -46,6 +46,7 @@ from typing import (
 from ..storageClass import StorageClass, StorageClassFactory
 from ..dimensions import DimensionGraph
 from ..configSupport import LookupKey
+from ..json import from_json_generic, to_json_generic
 
 if TYPE_CHECKING:
     from ..dimensions import Dimension, DimensionUniverse
@@ -473,28 +474,6 @@ class DatasetType:
 
         return lookups + self.storageClass._lookupNames()
 
-    def to_json(self, minimal: bool = False) -> str:
-        """Convert this class to JSON form.
-
-        The class type is not recorded in the JSON so the JSON decoder
-        must know which class is represented.
-
-        Parameters
-        ----------
-        minimal : `bool`, optional
-            Use minimal serialization. Requires Registry to convert
-            back to a full type.
-
-        Returns
-        -------
-        json : `str`
-            The class in JSON string format.
-        """
-        # For now use the core json library to convert a dict to JSON
-        # for us.
-        import json
-        return json.dumps(self.to_simple(minimal=minimal))
-
     def to_simple(self, minimal: bool = False) -> Union[Dict, str]:
         """Convert this class to a simple python type suitable for
         serialization.
@@ -580,33 +559,8 @@ class DatasetType:
                    parentStorageClass=simple.get("parentStorageClass"),
                    universe=universe)
 
-    @classmethod
-    def from_json(cls, json_str: str,
-                  universe: Optional[DimensionUniverse] = None,
-                  registry: Optional[Registry] = None) -> DatasetType:
-        """Convert a JSON string created by `to_json` and return a
-        `DatsetType`.
-
-        Parameters
-        ----------
-        json_str : `str`
-            Representation of the dimensions in JSON format as created
-            by `to_json()`.
-        universe : `DimensionUniverse`, optional
-            The special graph of all known dimensions. Passed directly
-            to `from_simple()`.
-        registry : `lsst.daf.butler.Registry`, optional
-            Registry to use to convert simple name of a DatasetType to
-            a full `DatasetType`. Passed directly to `from_simple()`.
-
-        Returns
-        -------
-        datasetType : `DatasetType`
-            Newly-constructed object.
-        """
-        import json
-        as_dict = json.loads(json_str)
-        return cls.from_simple(as_dict, universe=universe, registry=registry)
+    to_json = to_json_generic
+    from_json = classmethod(from_json_generic)
 
     def __reduce__(self) -> Tuple[Callable, Tuple[Type[DatasetType],
                                                   Tuple[str, DimensionGraph, str, Optional[str]],

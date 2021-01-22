@@ -38,6 +38,7 @@ from ..configSupport import LookupKey
 from ..utils import immutable
 from ..named import NamedKeyDict
 from .type import DatasetType
+from ..json import from_json_generic, to_json_generic
 
 if TYPE_CHECKING:
     from ...registry import Registry
@@ -158,28 +159,6 @@ class DatasetRef:
         # Compare tuples in the priority order
         return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
 
-    def to_json(self, minimal: bool = False) -> str:
-        """Convert this class to JSON form.
-
-        The class type is not recorded in the JSON so the JSON decoder
-        must know which class is represented.
-
-        Parameters
-        ----------
-        minimal : `bool`, optional
-            Use minimal serialization. Requires Registry to convert
-            back to a full type.
-
-        Returns
-        -------
-        json : `str`
-            The class in JSON string format.
-        """
-        # For now use the core json library to convert a dict to JSON
-        # for us.
-        import json
-        return json.dumps(self.to_simple(minimal=minimal))
-
     def to_simple(self, minimal: bool = False) -> Union[int, Dict]:
         """Convert this class to a simple python type suitable for
         serialization.
@@ -192,7 +171,7 @@ class DatasetRef:
 
         Returns
         -------
-        as_dict : `dict`
+        simple : `dict` or `int`
             The object converted to a dictionary.
         """
         if minimal and self.id is not None:
@@ -235,8 +214,8 @@ class DatasetRef:
             The special graph of all known dimensions.
             Can be `None` if a registry is provided.
         registry : `lsst.daf.butler.Registry`, optional
-            Registry to use to convert simple name of a DatasetType to
-            a full `DatasetType`. Can be `None` if a full description of
+            Registry to use to convert simple form of a DatasetRef to
+            a full `DatasetRef`. Can be `None` if a full description of
             the type is provided along with a universe.
 
         Returns
@@ -279,33 +258,8 @@ class DatasetRef:
         return cls(datasetType, dataId,
                    id=simple["id"], run=simple["run"], hasParentId=simple["hasParentId"])
 
-    @classmethod
-    def from_json(cls, json_str: str,
-                  universe: Optional[DimensionUniverse] = None,
-                  registry: Optional[Registry] = None) -> DatasetRef:
-        """Convert a JSON string created by `to_json` and return a
-        `DatsetRef`.
-
-        Parameters
-        ----------
-        json_str : `str`
-            Representation of the dimensions in JSON format as created
-            by `to_json()`.
-        universe : `DimensionUniverse`
-            The special graph of all known dimensions. Passed directly
-            to `from_simple()`.
-        registry : `lsst.daf.butler.Registry`, optional
-            Registry to use to convert simple name of a DatasetType to
-            a full `DatasetType`. Passed directly to `from_simple()`.
-
-        Returns
-        -------
-        datasetType : `DatasetRef`
-            Newly-constructed object.
-        """
-        import json
-        as_dict = json.loads(json_str)
-        return cls.from_simple(as_dict, universe=universe, registry=registry)
+    to_json = to_json_generic
+    from_json = classmethod(from_json_generic)
 
     @classmethod
     def _unpickle(

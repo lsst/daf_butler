@@ -48,6 +48,7 @@ from ..timespan import Timespan
 from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph
 from ._records import DimensionRecord
+from ..json import from_json_generic, to_json_generic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
@@ -609,22 +610,6 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         assert self.hasRecords(), "pack() may only be called if hasRecords() returns True."
         return self.universe.makePacker(name, self).pack(self, returnMaxBits=returnMaxBits)
 
-    def to_json(self) -> str:
-        """Convert this class to JSON form.
-
-        The class type is not recorded in the JSON so the JSON decoder
-        must know which class is represented.
-
-        Returns
-        -------
-        json : `str`
-            The class in JSON string format.
-        """
-        # For now use the core json library to convert a dict to JSON
-        # for us.
-        import json
-        return json.dumps(self.to_simple())
-
     def to_simple(self, minimal: bool = False) -> Dict:
         """Convert this class to a simple python type suitable for
         serialization.
@@ -671,27 +656,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
         return cls.standardize(simple, universe=universe)
 
-    @classmethod
-    def from_json(cls, json_str: str, universe: DimensionUniverse) -> DataCoordinate:
-        """Convert a JSON string created by `to_json` and return a
-        `DataCoordinate`.
-
-        Parameters
-        ----------
-        json_str : `str`
-            Representation of the dimensions in JSON format as created
-            by `to_json()`.
-        universe : `DimensionUniverse`
-            The special graph of all known dimensions.
-
-        Returns
-        -------
-        dataId : `DataCoordinate`
-            Newly-constructed object.
-        """
-        import json
-        as_dict = json.loads(json_str)
-        return cls.from_simple(as_dict, universe=universe)
+    to_json = to_json_generic
+    from_json = classmethod(from_json_generic)
 
 
 DataId = Union[DataCoordinate, Mapping[str, Any]]
