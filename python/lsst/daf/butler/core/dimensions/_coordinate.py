@@ -640,6 +640,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             The `dict` returned by `to_simple()`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions.
+        registry : `lsst.daf.butler.Registry`, optional
+            Registry from which a universe can be extracted. Can be `None`
+            if universe is provided explicitly.
 
         Returns
         -------
