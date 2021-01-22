@@ -49,6 +49,7 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
     from ._elements import DimensionElement, Dimension
     from ._governor import GovernorDimension
+    from ...registry import Registry
 
 
 @immutable
@@ -204,9 +205,14 @@ class DimensionGraph:
         import json
         return json.dumps(self.to_simple())
 
-    def to_simple(self) -> List[str]:
+    def to_simple(self, minimal: bool = False) -> List[str]:
         """Convert this class to a simple python type suitable for
         serialization.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Has no effect on for this class.
 
         Returns
         -------
@@ -217,7 +223,9 @@ class DimensionGraph:
         return list(self.names)
 
     @classmethod
-    def from_simple(cls, names: List[str], universe: DimensionUniverse) -> DimensionGraph:
+    def from_simple(cls, names: List[str],
+                    universe: Optional[DimensionUniverse] = None,
+                    registry: Optional[Registry] = None) -> DimensionGraph:
         """Construct a new object from the data returned from the `to_simple`
         method.
 
@@ -227,13 +235,24 @@ class DimensionGraph:
             The names of the dimensions.
         universe : `DimensionUniverse`
             The special graph of all known dimensions of which this graph will
-            be a subset.
+            be a subset. Can be `None` if `Registry` is provided.
+        registry : `lsst.daf.butler.Registry`, optional
+            Registry from which a universe can be extracted. Can be `None`
+            if universe is provided explicitly.
 
         Returns
         -------
         graph : `DimensionGraph`
             Newly-constructed object.
         """
+        if universe is None and registry is None:
+            raise ValueError("One of universe or registry is required to convert names to a DimensionGraph")
+        if universe is None and registry is not None:
+            universe = registry.dimensions
+        if universe is None:
+            # this is for mypy
+            raise ValueError("Unable to determine a usable universe")
+
         return cls(names=names, universe=universe)
 
     @classmethod

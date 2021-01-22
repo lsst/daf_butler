@@ -51,6 +51,7 @@ from ._records import DimensionRecord
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
+    from ...registry import Registry
 
 DataIdKey = Union[str, Dimension]
 """Type annotation alias for the keys that can be used to index a
@@ -624,9 +625,14 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         import json
         return json.dumps(self.to_simple())
 
-    def to_simple(self) -> Dict:
+    def to_simple(self, minimal: bool = False) -> Dict:
         """Convert this class to a simple python type suitable for
         serialization.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Has no effect on for this class.
 
         Returns
         -------
@@ -637,14 +643,15 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return self.byName()
 
     @classmethod
-    def from_simple(cls, as_dict: Dict[str, Any],
-                    universe: DimensionUniverse) -> DataCoordinate:
+    def from_simple(cls, simple: Dict[str, Any],
+                    universe: Optional[DimensionUniverse] = None,
+                    registry: Optional[Registry] = None) -> DataCoordinate:
         """Construct a new object from the data returned from the `to_simple`
         method.
 
         Parameters
         ----------
-        as_dict : `dict` of [`str`, `Any`]
+        simple : `dict` of [`str`, `Any`]
             The `dict` returned by `to_simple()`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions.
@@ -654,7 +661,15 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         dataId : `DataCoordinate`
             Newly-constructed object.
         """
-        return cls.standardize(as_dict, universe=universe)
+        if universe is None and registry is None:
+            raise ValueError("One of universe or registry is required to convert a dict to a DataCoordinate")
+        if universe is None and registry is not None:
+            universe = registry.dimensions
+        if universe is None:
+            # this is for mypy
+            raise ValueError("Unable to determine a usable universe")
+
+        return cls.standardize(simple, universe=universe)
 
     @classmethod
     def from_json(cls, json_str: str, universe: DimensionUniverse) -> DataCoordinate:
