@@ -20,7 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-__all__ = ["makeTestRepo", "makeTestCollection", "addDatasetType", "expandUniqueId", "DatastoreMock"]
+__all__ = ["makeTestRepo", "makeTestCollection", "addDatasetType", "expandUniqueId", "DatastoreMock",
+           "addDataIdValue",
+           ]
 
 import random
 from typing import (
@@ -178,7 +180,7 @@ def _fillAllKeys(dimension, value):
 
     Parameters
     ----------
-    dimension : `Dimension`
+    dimension : `lsst.daf.butler.Dimension`
         The dimension for which to generate a set of keys (e.g., detector).
     value
         The value assigned to ``dimension`` (e.g., detector ID).
@@ -207,17 +209,42 @@ def _fillAllKeys(dimension, value):
     return expandedValue
 
 
+def _matchAnyDataId(record, registry, dimension):
+    """Matches a partial dimension record to an existing record along a
+    specific dimension.
+
+    Parameters
+    ----------
+    record : `dict` [`str`]
+        A mapping representing the record to be matched.
+    registry : `lsst.daf.butler.Registry`
+        The registry with all known dimension records.
+    dimension : `lsst.daf.butler.Dimension`
+        The dimension on which to find a match for ``record``.
+
+    Raises
+    ------
+    RuntimeError
+        Raised if there are no existing records for ``dimension``.
+    """
+    matches = list(registry.queryDimensionRecords(dimension.name))
+    if matches:
+        record[dimension.name] = matches[0].dataId[dimension.name]
+    else:
+        raise RuntimeError(f"No matching values for {dimension.name} found.")
+
+
 def _fillRelationships(dimension, dimensionInfo, existing):
     """Create arbitrary mappings from one dimension to all dimensions it
     depends on.
 
     Parameters
     ----------
-    dimension : `Dimension`
+    dimension : `lsst.daf.butler.Dimension`
         The dimension for which to generate relationships.
     dimensionInfo : `dict` [`str`]
         A mapping of dimension keys to values.
-    existing : `Registry`
+    existing : `lsst.daf.butler.Registry`
         The registry with all previously registered dimensions.
 
     Returns
@@ -236,18 +263,15 @@ def _fillRelationships(dimension, dimensionInfo, existing):
     filledInfo = dimensionInfo.copy()
     for other in dimension.required:
         if other != dimension and other.name not in filledInfo:
-            relation = list(existing.queryDimensionRecords(other.name))[0]
-            filledInfo[other.name] = relation.dataID[other.primaryKey.name]
-    knownDimensions = existing.dimensions.getStaticDimensions()
+            _matchAnyDataId(filledInfo, existing, other)
     # Do not recurse, to keep the user from having to provide
     # irrelevant dimensions.
     for other in dimension.implied:
         toUpdate = other != dimension and other.name not in filledInfo
         updatable = other.viewOf is None
-        known = other.name in knownDimensions
+        known = bool(list(existing.queryDimensionRecords(other)))
         if toUpdate and updatable and known:
-            relation = list(existing.queryDimensionRecords(other.name))[0]
-            filledInfo[other.name] = relation.dataID[other.primaryKey.name]
+            _matchAnyDataId(filledInfo, existing, other)
     return filledInfo
 
 
@@ -300,6 +324,34 @@ def expandUniqueId(butler, partialId):
         return dataId[0]
     else:
         raise ValueError(f"Found {len(dataId)} matches for {partialId}, expected 1.")
+
+
+def addDataIdValue(butler, dimension, value):
+    """Add a new data ID to a repository.
+
+    Related dimensions (e.g., the instrument associated with a detector) may
+    be specified using ``related``. Any unspecified dimensions will be
+    linked arbitrarily.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        The repository to update.
+    dimension : `str`
+        The name of the dimension to gain a new value.
+    value
+        The value to register for the dimension.
+    """
+    try:
+        fullDimension = butler.registry.dimensions[dimension]
+    except KeyError as e:
+        raise ValueError from e
+    # Define secondary keys (e.g., detector name given detector id)
+    expandedValue = _fillAllKeys(fullDimension, value)
+    completeValue = _fillRelationships(fullDimension, expandedValue, butler.registry)
+
+    dimensionRecord = fullDimension.RecordClass(**completeValue)
+    butler.registry.syncDimensionData(dimension, dimensionRecord)
 
 
 def addDatasetType(butler, name, dimensions, storageClass):
