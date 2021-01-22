@@ -169,11 +169,11 @@ class DbAuth:
         """
         # Check inputs, squashing MyPy warnings that they're unnecessary
         # (since they're only unnecessary if everyone else runs MyPy).
-        if dialectname is None or dialectname == "":  # type: ignore
+        if dialectname is None or dialectname == "":
             raise DbAuthError("Missing dialectname parameter")
         if host is None or host == "":
             raise DbAuthError("Missing host parameter")
-        if database is None or database == "":  # type: ignore
+        if database is None or database == "":
             raise DbAuthError("Missing database parameter")
 
         for authDict in self.authList:
