@@ -419,6 +419,38 @@ class SimpleButlerTestCase(unittest.TestCase):
         self.assertIsNone(butler3.registry.defaults.run, None)
         self.assertEqual(butler3.registry.defaults.dataId.byName(), {"instrument": "Cam2"})
 
+    def testJson(self):
+        """Test JSON serialization mediated by registry.
+        """
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        # Need to actually set defaults later, not at construction, because
+        # we need to import the instrument before we can use it as a default.
+        # Don't set a default instrument value for data IDs, because 'Cam1'
+        # should be inferred by virtue of that being the only value in the
+        # input collections.
+        butler.registry.defaults = RegistryDefaults(collections=["imported_g"])
+        # Use findDataset without collections or instrument.
+        ref = butler.registry.findDataset("flat", detector=2, physical_filter="Cam1-G")
+
+        # Transform the ref and dataset type to and from JSON
+        # and check that it can be reconstructed properly
+
+        # Do it with the ref and a component ref in minimal and standard form
+        compRef = ref.makeComponentRef("wcs")
+
+        for test_item in (ref, ref.datasetType, compRef, compRef.datasetType):
+            for minimal in (False, True):
+                json_str = test_item.to_json(minimal=minimal)
+                from_json = type(test_item).from_json(json_str, registry=butler.registry)
+                self.assertEqual(from_json, test_item, msg=f"From JSON '{json_str}' using registry")
+
+                # for minimal=False case also do a test without registry
+                if not minimal:
+                    from_json = type(test_item).from_json(json_str, universe=butler.registry.dimensions)
+                    self.assertEqual(from_json, test_item, msg=f"From JSON '{json_str}' using universe")
+
 
 if __name__ == "__main__":
     unittest.main()

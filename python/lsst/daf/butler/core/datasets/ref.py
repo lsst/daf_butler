@@ -23,12 +23,14 @@ from __future__ import annotations
 __all__ = ["AmbiguousDatasetError", "DatasetRef"]
 
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     Iterable,
     List,
     Optional,
     Tuple,
+    Union,
 )
 
 from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse
@@ -36,6 +38,9 @@ from ..configSupport import LookupKey
 from ..utils import immutable
 from ..named import NamedKeyDict
 from .type import DatasetType
+
+if TYPE_CHECKING:
+    from ...registry import Registry
 
 
 class AmbiguousDatasetError(Exception):
@@ -153,11 +158,17 @@ class DatasetRef:
         # Compare tuples in the priority order
         return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
 
-    def to_json(self) -> str:
+    def to_json(self, minimal: bool = False) -> str:
         """Convert this class to JSON form.
 
         The class type is not recorded in the JSON so the JSON decoder
         must know which class is represented.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Requires Registry to convert
+            back to a full type.
 
         Returns
         -------
@@ -167,51 +178,111 @@ class DatasetRef:
         # For now use the core json library to convert a dict to JSON
         # for us.
         import json
-        return json.dumps(self.to_simple())
+        return json.dumps(self.to_simple(minimal=minimal))
 
-    def to_simple(self) -> Dict:
+    def to_simple(self, minimal: bool = False) -> Union[int, Dict]:
         """Convert this class to a simple python type suitable for
         serialization.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Requires Registry to convert
+            back to a full type.
 
         Returns
         -------
         as_dict : `dict`
             The object converted to a dictionary.
         """
+        if minimal and self.id is not None:
+            # The only thing needed to uniquely define a DatasetRef
+            # is the integer id so that can be used directly if it is
+            # resolved and if it is not a component DatasetRef
+            if not self.isComponent():
+                return self.id
+
+            # We can still be a little minimalist with a component
+            # but we will also need to record the datasetType component
+            return {"id": self.id,
+                    "component": self.datasetType.component()}
+
         # Convert to a dict form
-        as_dict = {"datasetType": self.datasetType.to_simple(),
-                   "dataId": self.dataId.to_simple(),
-                   "id": self.id,
-                   "run": self.run,
-                   "hasParentId": self.hasParentId
-                   }
+        as_dict: Dict[str, Any] = {"datasetType": self.datasetType.to_simple(minimal=minimal),
+                                   "dataId": self.dataId.to_simple(),
+                                   "hasParentId": self.hasParentId
+                                   }
+
+        # Only include the id entry if it is defined
+        if self.id is not None:
+            as_dict["run"] = self.run
+            as_dict["id"] = self.id
+
         return as_dict
 
     @classmethod
-    def from_simple(cls, as_dict: Dict,
-                    universe: DimensionUniverse) -> DatasetRef:
+    def from_simple(cls, simple: Union[int, Dict],
+                    universe: Optional[DimensionUniverse] = None,
+                    registry: Optional[Registry] = None) -> DatasetRef:
         """Construct a new object from the data returned from the `to_simple`
         method.
 
         Parameters
         ----------
-        as_dict : `dict` of [`str`, `Any`]
-            The `dict` returned by `to_simple()`.
+        simple : `dict` of [`str`, `Any`] or `int`
+            The value returned by `to_simple()`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions.
+            Can be `None` if a registry is provided.
+        registry : `lsst.daf.butler.Registry`, optional
+            Registry to use to convert simple name of a DatasetType to
+            a full `DatasetType`. Can be `None` if a full description of
+            the type is provided along with a universe.
 
         Returns
         -------
         ref : `DatasetRef`
             Newly-constructed object.
         """
-        datasetType = DatasetType.from_simple(as_dict["datasetType"], universe=universe)
-        dataId = DataCoordinate.from_simple(as_dict["dataId"], universe=universe)
+
+        if isinstance(simple, int):
+            if registry is None:
+                raise ValueError("Registry is required to construct DatasetRef from integer id")
+
+            ref = registry.getDataset(simple)
+            if ref is None:
+                raise RuntimeError(f"No matching dataset found in registry for id {simple}")
+            return ref
+
+        # Minimalist component will just specify component and id and
+        # require registry to reconstruct
+        if set(simple) == {"id", "component"}:
+            if registry is None:
+                raise ValueError("Registry is required to construct component DatasetRef from integer id")
+            parent_ref = registry.getDataset(simple["id"])
+            if parent_ref is None:
+                raise RuntimeError(f"No matching dataset found in registry for id {simple['id']}")
+            return parent_ref.makeComponentRef(simple["component"])
+
+        if universe is None and registry is None:
+            raise ValueError("One of universe or registry must be provided.")
+
+        if universe is None and registry is not None:
+            universe = registry.dimensions
+
+        if universe is None:
+            # this is for mypy
+            raise ValueError("Unable to determine a usable universe")
+
+        datasetType = DatasetType.from_simple(simple["datasetType"], universe=universe, registry=registry)
+        dataId = DataCoordinate.from_simple(simple["dataId"], universe=universe)
         return cls(datasetType, dataId,
-                   id=as_dict["id"], run=as_dict["run"], hasParentId=as_dict["hasParentId"])
+                   id=simple["id"], run=simple["run"], hasParentId=simple["hasParentId"])
 
     @classmethod
-    def from_json(cls, json_str: str, universe: DimensionUniverse) -> DatasetRef:
+    def from_json(cls, json_str: str,
+                  universe: Optional[DimensionUniverse] = None,
+                  registry: Optional[Registry] = None) -> DatasetRef:
         """Convert a JSON string created by `to_json` and return a
         `DatsetRef`.
 
@@ -221,7 +292,11 @@ class DatasetRef:
             Representation of the dimensions in JSON format as created
             by `to_json()`.
         universe : `DimensionUniverse`
-            The special graph of all known dimensions.
+            The special graph of all known dimensions. Passed directly
+            to `from_simple()`.
+        registry : `lsst.daf.butler.Registry`, optional
+            Registry to use to convert simple name of a DatasetType to
+            a full `DatasetType`. Passed directly to `from_simple()`.
 
         Returns
         -------
@@ -230,7 +305,7 @@ class DatasetRef:
         """
         import json
         as_dict = json.loads(json_str)
-        return cls.from_simple(as_dict, universe=universe)
+        return cls.from_simple(as_dict, universe=universe, registry=registry)
 
     @classmethod
     def _unpickle(

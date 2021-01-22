@@ -49,6 +49,7 @@ from ..configSupport import LookupKey
 
 if TYPE_CHECKING:
     from ..dimensions import Dimension, DimensionUniverse
+    from ...registry import Registry
 
 
 def _safeMakeMappingProxyType(data: Optional[Mapping]) -> Mapping:
@@ -472,11 +473,17 @@ class DatasetType:
 
         return lookups + self.storageClass._lookupNames()
 
-    def to_json(self) -> str:
+    def to_json(self, minimal: bool = False) -> str:
         """Convert this class to JSON form.
 
         The class type is not recorded in the JSON so the JSON decoder
         must know which class is represented.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Requires Registry to convert
+            back to a full type.
 
         Returns
         -------
@@ -486,17 +493,27 @@ class DatasetType:
         # For now use the core json library to convert a dict to JSON
         # for us.
         import json
-        return json.dumps(self.to_simple())
+        return json.dumps(self.to_simple(minimal=minimal))
 
-    def to_simple(self) -> Dict:
+    def to_simple(self, minimal: bool = False) -> Union[Dict, str]:
         """Convert this class to a simple python type suitable for
         serialization.
 
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Requires Registry to convert
+            back to a full type.
+
         Returns
         -------
-        as_dict : `dict`
-            The object converted to a dictionary.
+        simple : `dict` or `str`
+            The object converted to a dictionary or a simple string.
         """
+        if minimal:
+            # Only needs the name.
+            return self.name
+
         # Convert to a dict form
         as_dict = {"name": self.name,
                    "storageClass": self._storageClassName,
@@ -509,32 +526,64 @@ class DatasetType:
         return as_dict
 
     @classmethod
-    def from_simple(cls, as_dict: Dict,
-                    universe: DimensionUniverse) -> DatasetType:
+    def from_simple(cls, simple: Union[Dict, str],
+                    universe: Optional[DimensionUniverse] = None,
+                    registry: Optional[Registry] = None) -> DatasetType:
         """Construct a new object from the data returned from the `to_simple`
         method.
 
         Parameters
         ----------
-        as_dict : `dict` of [`str`, `Any`]
-            The `dict` returned by `to_simple()`.
+        simple : `dict` of [`str`, `Any`] or `str`
+            The value returned by `to_simple()`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions of which this graph will
-            be a subset.
+            be a subset. Can be `None` if a registry is provided.
+        registry : `lsst.daf.butler.Registry`, optional
+            Registry to use to convert simple name of a DatasetType to
+            a full `DatasetType`. Can be `None` if a full description of
+            the type is provided along with a universe.
 
         Returns
         -------
         datasetType : `DatasetType`
             Newly-constructed object.
         """
-        return cls(name=as_dict["name"],
-                   dimensions=DimensionGraph.from_simple(as_dict["dimensions"], universe=universe),
-                   storageClass=as_dict["storageClass"],
-                   parentStorageClass=as_dict.get("parentStorageClass"),
+        if isinstance(simple, str):
+            if registry is None:
+                raise ValueError(f"Unable to convert a DatasetType name '{simple}' to DatasetType"
+                                 " without a Registry")
+            datasetTypes = list(registry.queryDatasetTypes(simple))
+            if len(datasetTypes) != 1:
+                if not datasetTypes:
+                    raise RuntimeError(f"No DatasetType found in Registry with name '{simple}'")
+                else:
+                    raise RuntimeError(f"Unexpectedly got multiple DatasetTypes matching '{simple}': "
+                                       f"{datasetTypes}")
+            return datasetTypes[0]
+
+        if universe is None and registry is None:
+            raise ValueError("One of universe or registry must be provided.")
+
+        if universe is None and registry is not None:
+            # registry should not be none by now but test helps mypy
+            universe = registry.dimensions
+
+        if universe is None:
+            # this is for mypy
+            raise ValueError("Unable to determine a usable universe")
+
+        return cls(name=simple["name"],
+                   dimensions=DimensionGraph.from_simple(simple["dimensions"], universe=universe),
+                   storageClass=simple["storageClass"],
+                   isCalibration=simple.get("isCalibration", False),
+                   parentStorageClass=simple.get("parentStorageClass"),
                    universe=universe)
 
     @classmethod
-    def from_json(cls, json_str: str, universe: DimensionUniverse) -> DatasetType:
+    def from_json(cls, json_str: str,
+                  universe: Optional[DimensionUniverse] = None,
+                  registry: Optional[Registry] = None) -> DatasetType:
         """Convert a JSON string created by `to_json` and return a
         `DatsetType`.
 
@@ -543,8 +592,12 @@ class DatasetType:
         json_str : `str`
             Representation of the dimensions in JSON format as created
             by `to_json()`.
-        universe : `DimensionUniverse`
-            The special graph of all known dimensions.
+        universe : `DimensionUniverse`, optional
+            The special graph of all known dimensions. Passed directly
+            to `from_simple()`.
+        registry : `lsst.daf.butler.Registry`, optional
+            Registry to use to convert simple name of a DatasetType to
+            a full `DatasetType`. Passed directly to `from_simple()`.
 
         Returns
         -------
@@ -553,7 +606,7 @@ class DatasetType:
         """
         import json
         as_dict = json.loads(json_str)
-        return cls.from_simple(as_dict, universe=universe)
+        return cls.from_simple(as_dict, universe=universe, registry=registry)
 
     def __reduce__(self) -> Tuple[Callable, Tuple[Type[DatasetType],
                                                   Tuple[str, DimensionGraph, str, Optional[str]],
