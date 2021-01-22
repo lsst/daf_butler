@@ -25,6 +25,13 @@
 import unittest
 import warnings
 
+# As of astropy 4.2, the erfa interface is shipped independently and
+# ErfaWarning is no longer an AstropyWarning
+try:
+    import erfa
+except ImportError:
+    erfa = None
+
 import astropy.utils.exceptions
 from astropy.time import Time, TimeDelta
 from lsst.daf.butler.core.time_utils import TimeConverter
@@ -58,6 +65,8 @@ class TimeTestCase(unittest.TestCase):
         # so hide these expected warnings from the test output
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+            if erfa is not None:
+                warnings.simplefilter("ignore", category=erfa.ErfaWarning)
             time = Time("2101-01-01T00:00:00", format="isot", scale="utc")
 
         # unittest can't test for no warnings so we run the test and
