@@ -27,18 +27,24 @@ from typing import (
     Any,
     ClassVar,
     Dict,
+    Optional,
     TYPE_CHECKING,
     Type,
 )
+
+import lsst.sphgeom
 
 from .._topology import SpatialRegionDatabaseRepresentation
 from ..timespan import Timespan, TimespanDatabaseRepresentation
 from ..utils import immutable
 from ._elements import Dimension, DimensionElement
+from ..json import from_json_generic, to_json_generic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._coordinate import DataCoordinate
     from ._schema import DimensionElementFields
+    from ._graph import DimensionUniverse
+    from ...registry import Registry
 
 
 def _reconstructDimensionRecord(definition: DimensionElement, mapping: Dict[str, Any]) -> DimensionRecord:
@@ -174,6 +180,102 @@ class DimensionRecord:
     def __reduce__(self) -> tuple:
         mapping = {name: getattr(self, name) for name in self.__slots__}
         return (_reconstructDimensionRecord, (self.definition, mapping))
+
+    def to_simple(self, minimal: bool = False) -> Dict[str, Any]:
+        """Convert this class to a simple python type suitable for
+        serialization.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Has no effect on for this class.
+
+        Returns
+        -------
+        names : `list`
+            The names of the dimensions.
+        """
+        if minimal:
+            # The DataId is sufficient if you are willing to do a deferred
+            # query. This may not be overly useful since to reconstruct
+            # a collection of records will require repeated registry queries.
+            simple = self.dataId.to_simple()
+            # Need some means of indicating this is not a full record
+            simple["element"] = self.definition.name
+            return simple
+
+        mapping = {name: getattr(self, name) for name in self.__slots__}
+        # If the item in mapping supports simplification update it
+        for k, v in mapping.items():
+            try:
+                mapping[k] = v.to_simple(minimal=minimal)
+            except AttributeError:
+                if isinstance(v, lsst.sphgeom.Region):
+                    # Match YAML serialization
+                    mapping[k] = {"cls": f"lsst.sphgeom.{type(v).__name__}",
+                                  "encoded": v.encode().hex()}
+
+        definition = self.definition.to_simple(minimal=minimal)
+
+        return {"definition": definition,
+                "record": mapping}
+
+    @classmethod
+    def from_simple(cls, simple: Dict[str, Any],
+                    universe: Optional[DimensionUniverse] = None,
+                    registry: Optional[Registry] = None) -> DimensionRecord:
+        """Construct a new object from the data returned from the `to_simple`
+        method.
+
+        Parameters
+        ----------
+        simple : `dict` of `str`
+            Value return from `to_simple`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions of which this graph will
+            be a subset. Can be `None` if `Registry` is provided.
+        registry : `lsst.daf.butler.Registry`, optional
+            Registry from which a universe can be extracted. Can be `None`
+            if universe is provided explicitly.
+
+        Returns
+        -------
+        graph : `DimensionGraph`
+            Newly-constructed object.
+        """
+        # Minimal representation requires a registry
+        if "element" in simple:
+            if registry is None:
+                raise ValueError("Registry is required to decode minimalist form of dimensions record")
+            element = simple.pop("element")
+            records = list(registry.queryDimensionRecords(element, dataId=simple))
+            if (n := len(records)) != 1:
+                raise RuntimeError(f"Unexpectedly got {n} records for element {element} dataId {simple}")
+            return records[0]
+
+        if universe is None and registry is None:
+            raise ValueError("One of universe or registry is required to convert names to a DimensionGraph")
+        if universe is None and registry is not None:
+            universe = registry.dimensions
+        if universe is None:
+            # this is for mypy
+            raise ValueError("Unable to determine a usable universe")
+
+        definition = DimensionElement.from_simple(simple["definition"], universe=universe)
+
+        # Timespan and region have to be converted to native form
+        # for now assume that those keys are special
+        rec = simple["record"]
+        if (ts := "timespan") in rec:
+            rec[ts] = Timespan.from_simple(rec[ts], universe=universe, registry=registry)
+        if (reg := "region") in rec:
+            encoded = bytes.fromhex(rec[reg]["encoded"])
+            rec[reg] = lsst.sphgeom.Region.decode(encoded)
+
+        return _reconstructDimensionRecord(definition, simple["record"])
+
+    to_json = to_json_generic
+    from_json = classmethod(from_json_generic)
 
     def toDict(self, splitTimespan: bool = False) -> Dict[str, Any]:
         """Return a vanilla `dict` representation of this record.

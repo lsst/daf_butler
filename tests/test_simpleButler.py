@@ -451,6 +451,21 @@ class SimpleButlerTestCase(unittest.TestCase):
                     from_json = type(test_item).from_json(json_str, universe=butler.registry.dimensions)
                     self.assertEqual(from_json, test_item, msg=f"From JSON '{json_str}' using universe")
 
+    def testJsonDimensionRecords(self):
+        # Dimension Records
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
+
+        for dimension in ("detector", "visit"):
+            records = butler.registry.queryDimensionRecords(dimension, instrument="HSC")
+            for r in records:
+                for minimal in (True, False):
+                    json_str = r.to_json(minimal=minimal)
+                    r_json = type(r).from_json(json_str, registry=butler.registry)
+                    self.assertEqual(r_json, r)
+                    # Also check equality of each of the components as dicts
+                    self.assertEqual(r_json.toDict(), r.toDict())
+
 
 if __name__ == "__main__":
     unittest.main()
