@@ -34,6 +34,8 @@ from typing import (
 )
 from unittest.mock import MagicMock
 
+import sqlalchemy
+
 from lsst.daf.butler import (
     Butler,
     Config,
@@ -269,8 +271,8 @@ def _fillRelationships(dimension, dimensionInfo, existing):
     for other in dimension.implied:
         toUpdate = other != dimension and other.name not in filledInfo
         updatable = other.viewOf is None
-        known = bool(list(existing.queryDimensionRecords(other)))
-        if toUpdate and updatable and known:
+        # Do not run query if either toUpdate or updatable is false
+        if toUpdate and updatable and list(existing.queryDimensionRecords(other)):
             _matchAnyDataId(filledInfo, existing, other)
     return filledInfo
 
@@ -326,11 +328,13 @@ def expandUniqueId(butler, partialId):
         raise ValueError(f"Found {len(dataId)} matches for {partialId}, expected 1.")
 
 
-def addDataIdValue(butler, dimension, value):
+def addDataIdValue(butler, dimension, value, **related):
     """Add a new data ID to a repository.
 
     Related dimensions (e.g., the instrument associated with a detector) may
-    be specified using ``related``. Any unspecified dimensions will be
+    be specified using ``related``. While these keywords are sometimes needed
+    to get self-consistent repositories, you do not need to define
+    relationships you do not use. Any unspecified dimensions will be
     linked arbitrarily.
 
     Parameters
@@ -341,17 +345,38 @@ def addDataIdValue(butler, dimension, value):
         The name of the dimension to gain a new value.
     value
         The value to register for the dimension.
+    **related
+        Any existing dimensions to be linked to ``value``.
+
+    Examples
+    --------
+
+    See the guide on :ref:`using-butler-in-tests-make-repo` for usage examples.
     """
+    # Example is not doctest, because it's probably unsafe to create even an
+    # in-memory butler in that environment.
     try:
         fullDimension = butler.registry.dimensions[dimension]
     except KeyError as e:
         raise ValueError from e
+    # Bad keys ignored by registry code
+    extraKeys = related.keys() - (fullDimension.required | fullDimension.implied)
+    if extraKeys:
+        raise ValueError(f"Unexpected keywords {extraKeys} not found "
+                         f"in {fullDimension.required | fullDimension.implied}")
+
     # Define secondary keys (e.g., detector name given detector id)
     expandedValue = _fillAllKeys(fullDimension, value)
+    expandedValue.update(**related)
     completeValue = _fillRelationships(fullDimension, expandedValue, butler.registry)
 
     dimensionRecord = fullDimension.RecordClass(**completeValue)
-    butler.registry.syncDimensionData(dimension, dimensionRecord)
+    try:
+        butler.registry.syncDimensionData(dimension, dimensionRecord)
+    except sqlalchemy.exc.IntegrityError as e:
+        raise RuntimeError("Could not create data ID value. Automatic relationship generation "
+                           "may have failed; try adding keywords to assign a specific instrument, "
+                           "physical_filter, etc. based on the nested exception message.") from e
 
 
 def addDatasetType(butler, name, dimensions, storageClass):
