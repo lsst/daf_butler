@@ -45,18 +45,20 @@ from lsst.daf.butler import (
 )
 
 
-def makeTestRepo(root, dataIds, *, config=None, **kwargs):
-    """Create an empty repository with dummy data IDs.
+def makeTestRepo(root, dataIds=None, *, config=None, **kwargs):
+    """Create an empty test repository.
 
     Parameters
     ----------
     root : `str`
         The location of the root directory for the repository.
-    dataIds : `~collections.abc.Mapping` [`str`, `iterable`]
+    dataIds : `~collections.abc.Mapping` [`str`, `iterable`], optional
         A mapping keyed by the dimensions used in the test. Each value
         is an iterable of names for that dimension (e.g., detector IDs for
         `"detector"`). Related dimensions (e.g., instruments and detectors)
-        are linked arbitrarily.
+        are linked arbitrarily. This parameter is provided for compatibility
+        with old code; newer code should make the repository, then call
+        `~lsst.daf.butler.tests.addDataIdValue`.
     config : `lsst.daf.butler.Config`, optional
         A configuration for the repository (for details, see
         `lsst.daf.butler.Butler.makeRepo`). If omitted, creates a repository
@@ -79,15 +81,9 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
     Notes
     -----
     This function provides a "quick and dirty" repository for simple unit
-    tests that don't depend on complex data relationships. Because it assigns
-    dimension relationships and other metadata abitrarily, it is ill-suited
+    tests that don't depend on complex data relationships. It is ill-suited
     for tests where the structure of the data matters. If you need such a
     dataset, create it directly or use a saved test dataset.
-
-    Since the values in ``dataIds`` uniquely determine the repository's
-    data IDs, the fully linked IDs can be recovered by calling
-    `expandUniqueId`, so long as no other code has inserted dimensions into
-    the repository registry.
     """
     defaults = Config()
     defaults["datastore", "cls"] = "lsst.daf.butler.datastores.inMemoryDatastore.InMemoryDatastore"
@@ -96,6 +92,9 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
 
     if config:
         defaults.update(config)
+
+    if not dataIds:
+        dataIds = {}
 
     # Disable config root by default so that our registry override will
     # not be ignored.

@@ -43,7 +43,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         # this has a prohibitive run-time cost at present
         cls.root = makeTestTempDir(TESTDIR)
 
-        cls.creatorButler = makeTestRepo(cls.root, {})
+        cls.creatorButler = makeTestRepo(cls.root)
         addDataIdValue(cls.creatorButler, "instrument", "notACam")
         addDataIdValue(cls.creatorButler, "instrument", "dummyCam")
         addDataIdValue(cls.creatorButler, "physical_filter", "k2020", band="k", instrument="notACam")
