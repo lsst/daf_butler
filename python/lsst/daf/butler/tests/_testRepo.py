@@ -30,6 +30,7 @@ from typing import (
     Iterable,
     Mapping,
     Optional,
+    Set,
     Tuple,
 )
 from unittest.mock import MagicMock
@@ -39,13 +40,20 @@ import sqlalchemy
 from lsst.daf.butler import (
     Butler,
     Config,
+    DataCoordinate,
     DatasetRef,
     DatasetType,
+    Dimension,
+    DimensionUniverse,
     FileDataset,
+    Registry,
 )
 
 
-def makeTestRepo(root, dataIds=None, *, config=None, **kwargs):
+def makeTestRepo(root: str,
+                 dataIds: Optional[Mapping[str, Iterable]] = None, *,
+                 config: Config = None,
+                 **kwargs) -> Butler:
     """Create an empty test repository.
 
     Parameters
@@ -107,7 +115,7 @@ def makeTestRepo(root, dataIds=None, *, config=None, **kwargs):
     return butler
 
 
-def makeTestCollection(repo):
+def makeTestCollection(repo: Butler) -> Butler:
     """Create a read/write Butler to a fresh collection.
 
     Parameters
@@ -128,7 +136,8 @@ def makeTestCollection(repo):
     return Butler(butler=repo, run=collection)
 
 
-def _makeRecords(dataIds, universe):
+def _makeRecords(dataIds: Mapping[str, Iterable],
+                 universe: DimensionUniverse) -> Mapping[str, Iterable]:
     """Create cross-linked dimension records from a collection of
     data ID values.
 
@@ -175,7 +184,7 @@ def _makeRecords(dataIds, universe):
             for dimension, values in expandedIds.items()}
 
 
-def _fillAllKeys(dimension, value):
+def _fillAllKeys(dimension: Dimension, value: Any) -> Mapping[str, Any]:
     """Create an arbitrary mapping of all required keys for a given dimension
     that do not refer to other dimensions.
 
@@ -210,7 +219,7 @@ def _fillAllKeys(dimension, value):
     return expandedValue
 
 
-def _matchAnyDataId(record, registry, dimension):
+def _matchAnyDataId(record: Mapping[str, Any], registry: Registry, dimension: Dimension):
     """Matches a partial dimension record to an existing record along a
     specific dimension.
 
@@ -235,7 +244,9 @@ def _matchAnyDataId(record, registry, dimension):
         raise RuntimeError(f"No matching values for {dimension.name} found.")
 
 
-def _fillRelationships(dimension, dimensionInfo, existing):
+def _fillRelationships(dimension: Dimension,
+                       dimensionInfo: Mapping[str, Any],
+                       existing: Registry) -> Mapping[str, Any]:
     """Create arbitrary mappings from one dimension to all dimensions it
     depends on.
 
@@ -276,14 +287,14 @@ def _fillRelationships(dimension, dimensionInfo, existing):
     return filledInfo
 
 
-def expandUniqueId(butler, partialId):
+def expandUniqueId(butler: Butler, partialId: Mapping[str, Any]) -> DataCoordinate:
     """Return a complete data ID matching some criterion.
 
     Parameters
     ----------
     butler : `lsst.daf.butler.Butler`
         The repository to query.
-    partialId : `~collections.abc.Mapping` [`str`, any]
+    partialId : `~collections.abc.Mapping` [`str`]
         A mapping of known dimensions and values.
 
     Returns
@@ -327,7 +338,7 @@ def expandUniqueId(butler, partialId):
         raise ValueError(f"Found {len(dataId)} matches for {partialId}, expected 1.")
 
 
-def addDataIdValue(butler, dimension, value, **related):
+def addDataIdValue(butler: Butler, dimension: str, value: Any, **related: Any):
     """Add a new data ID to a repository.
 
     Related dimensions (e.g., the instrument associated with a detector) may
@@ -378,7 +389,7 @@ def addDataIdValue(butler, dimension, value, **related):
                            "physical_filter, etc. based on the nested exception message.") from e
 
 
-def addDatasetType(butler, name, dimensions, storageClass):
+def addDatasetType(butler: Butler, name: str, dimensions: Set[str], storageClass: str) -> DatasetType:
     """Add a new dataset type to a repository.
 
     Parameters
