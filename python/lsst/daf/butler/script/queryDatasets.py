@@ -30,7 +30,7 @@ from ..core.utils import globToRegex
 from ..cli.utils import sortAstropyTable
 
 
-_RefInfo = namedtuple("RefInfo", "datasetRef uri")
+_RefInfo = namedtuple("_RefInfo", ["datasetRef", "uri"])
 
 
 class _Table:

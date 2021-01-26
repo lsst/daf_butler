@@ -181,7 +181,7 @@ class FileTemplates:
                 errMsg = str(e).strip('"\'')
                 failed.append(errMsg)
                 if logFailures:
-                    log.fatal("%s", errMsg)
+                    log.critical("%s", errMsg)
                 continue
 
             if matchKey in unmatchedKeys:
@@ -192,7 +192,7 @@ class FileTemplates:
             except FileTemplateValidationError as e:
                 failed.append(f"{e} (via key '{matchKey}')")
                 if logFailures:
-                    log.fatal("Template failure with key '%s': %s", matchKey, e)
+                    log.critical("Template failure with key '%s': %s", matchKey, e)
 
         if logFailures and unmatchedKeys:
             log.warning("Unchecked keys: %s", ", ".join([str(k) for k in unmatchedKeys]))
