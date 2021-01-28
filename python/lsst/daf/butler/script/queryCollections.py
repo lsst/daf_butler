@@ -22,7 +22,6 @@
 from __future__ import annotations
 
 from astropy.table import Table
-from typing import Any, Dict
 import itertools
 from numpy import array
 
@@ -54,16 +53,10 @@ def queryCollections(repo, glob, collection_type, chains):
         A table containing information about collections.
     """
     butler = Butler(repo)
-    expression = globToRegex(glob)
-    # Only pass expression to queryCollections if there is an expression to
-    # apply; otherwise let queryCollections use its default value.
-    kwargs: Dict[str, Any] = {}
-    if expression:
-        kwargs["expression"] = expression
 
     if chains == "TABLE":
         collectionNames = list(butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
-                                                                **kwargs))
+                                                                expression=globToRegex(glob)))
         collectionTypes = [butler.registry.getCollectionType(c).name for c in collectionNames]
         collectionDefinitions = [str(butler.registry.getCollectionChain(name)) if colType == "CHAINED" else ""
                                  for name, colType in zip(collectionNames, collectionTypes)]
@@ -115,13 +108,13 @@ def queryCollections(repo, glob, collection_type, chains):
                 return [(nested(collectionName), collectionType)]
 
         collectionNameIter = butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
-                                                              **kwargs)
+                                                              expression=globToRegex(glob))
         collections = list(itertools.chain(*[getCollections(name) for name in collectionNameIter]))
         return Table(array(collections), names=("Name", "Type"))
     elif chains == "FLATTEN":
         collectionNames = list(butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
                                                                 flattenChains=True,
-                                                                **kwargs))
+                                                                expression=globToRegex(glob)))
         collectionTypes = [butler.registry.getCollectionType(c).name for c in collectionNames]
         return Table((collectionNames,
                       collectionTypes),

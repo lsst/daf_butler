@@ -139,13 +139,9 @@ def queryDatasets(repo, glob, collections, where, find_first, show_uri):
     butler = Butler(repo)
 
     dataset: Any = globToRegex(glob)
-    if not dataset:
-        dataset = ...
 
-    if collections and not find_first:
+    if not find_first:
         collections = globToRegex(collections)
-    elif not collections:
-        collections = ...
 
     datasets = butler.registry.queryDatasets(datasetType=dataset,
                                              collections=collections,

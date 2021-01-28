@@ -57,13 +57,7 @@ def queryDatasetTypes(repo, verbose, glob, components):
         collection names.
     """
     butler = Butler(repo)
-    expression = globToRegex(glob)
-    # Only pass expression to queryDatasetTypes if there is an expression to
-    # apply; otherwise let queryDatasetTypes use its default value.
-    kwargs = {}
-    if expression:
-        kwargs["expression"] = expression
-    datasetTypes = butler.registry.queryDatasetTypes(components=components, **kwargs)
+    datasetTypes = butler.registry.queryDatasetTypes(components=components, expression=globToRegex(glob))
     info: List[Any]
     if verbose:
         table = Table(array([(d.name, str(list(d.dimensions.names)) or "None", d.storageClass.name)
