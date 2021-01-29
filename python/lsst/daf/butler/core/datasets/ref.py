@@ -74,9 +74,6 @@ class DatasetRef:
         not be created in new code, but are still supported for backwards
         compatibility.  New code should only pass `False` if it can guarantee
         that the dimensions are already consistent.
-    hasParentId : `bool`, optional
-        If `True` this `DatasetRef` is a component that has the ``id``
-        of the composite parent.
 
     Raises
     ------
@@ -85,19 +82,17 @@ class DatasetRef:
         provided but ``run`` is not.
     """
 
-    __slots__ = ("id", "datasetType", "dataId", "run", "hasParentId")
+    __slots__ = ("id", "datasetType", "dataId", "run",)
 
     def __init__(
         self,
         datasetType: DatasetType, dataId: DataCoordinate, *,
         id: Optional[int] = None,
         run: Optional[str] = None,
-        hasParentId: bool = False,
         conform: bool = True
     ):
         self.id = id
         self.datasetType = datasetType
-        self.hasParentId = hasParentId
         if conform:
             self.dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
         else:
@@ -190,7 +185,6 @@ class DatasetRef:
         # Convert to a dict form
         as_dict: Dict[str, Any] = {"datasetType": self.datasetType.to_simple(minimal=minimal),
                                    "dataId": self.dataId.to_simple(),
-                                   "hasParentId": self.hasParentId
                                    }
 
         # Only include the id entry if it is defined
@@ -250,7 +244,7 @@ class DatasetRef:
         datasetType = DatasetType.from_simple(simple["datasetType"], universe=universe, registry=registry)
         dataId = DataCoordinate.from_simple(simple["dataId"], universe=universe)
         return cls(datasetType, dataId,
-                   id=simple["id"], run=simple["run"], hasParentId=simple["hasParentId"])
+                   id=simple["id"], run=simple["run"])
 
     to_json = to_json_generic
     from_json = classmethod(from_json_generic)
@@ -262,15 +256,14 @@ class DatasetRef:
         dataId: DataCoordinate,
         id: Optional[int],
         run: Optional[str],
-        hasParentId: bool,
     ) -> DatasetRef:
         """A custom factory method for use by `__reduce__` as a workaround for
         its lack of support for keyword arguments.
         """
-        return cls(datasetType, dataId, id=id, run=run, hasParentId=hasParentId)
+        return cls(datasetType, dataId, id=id, run=run)
 
     def __reduce__(self) -> tuple:
-        return (self._unpickle, (self.datasetType, self.dataId, self.id, self.run, self.hasParentId))
+        return (self._unpickle, (self.datasetType, self.dataId, self.id, self.run))
 
     def __deepcopy__(self, memo: dict) -> DatasetRef:
         # DatasetRef is recursively immutable; see note in @immutable
@@ -437,11 +430,11 @@ class DatasetRef:
         -------
         ref : `DatasetRef`
             A `DatasetRef` with a dataset type that corresponds to the given
-            component, with ``hasParentId=True``, and the same ID and run
+            component, and the same ID and run
             (which may be `None`, if they are `None` in ``self``).
         """
         return DatasetRef(self.datasetType.makeComponentDatasetType(name), self.dataId,
-                          id=self.id, run=self.run, hasParentId=True)
+                          id=self.id, run=self.run)
 
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).
