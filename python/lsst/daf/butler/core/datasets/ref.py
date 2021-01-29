@@ -30,7 +30,6 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Union,
 )
 
 from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse
@@ -159,7 +158,7 @@ class DatasetRef:
         # Compare tuples in the priority order
         return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
 
-    def to_simple(self, minimal: bool = False) -> Union[int, Dict]:
+    def to_simple(self, minimal: bool = False) -> Dict:
         """Convert this class to a simple python type suitable for
         serialization.
 
@@ -177,14 +176,16 @@ class DatasetRef:
         if minimal and self.id is not None:
             # The only thing needed to uniquely define a DatasetRef
             # is the integer id so that can be used directly if it is
-            # resolved and if it is not a component DatasetRef
-            if not self.isComponent():
-                return self.id
-
-            # We can still be a little minimalist with a component
-            # but we will also need to record the datasetType component
-            return {"id": self.id,
-                    "component": self.datasetType.component()}
+            # resolved and if it is not a component DatasetRef.
+            # Store is in a dict to allow us to easily add the planned
+            # origin information later without having to support
+            # an int and dict in simple form.
+            simple: Dict[str, Any] = {"id": self.id}
+            if self.isComponent():
+                # We can still be a little minimalist with a component
+                # but we will also need to record the datasetType component
+                simple["component"] = self.datasetType.component()
+            return simple
 
         # Convert to a dict form
         as_dict: Dict[str, Any] = {"datasetType": self.datasetType.to_simple(minimal=minimal),
@@ -200,7 +201,7 @@ class DatasetRef:
         return as_dict
 
     @classmethod
-    def from_simple(cls, simple: Union[int, Dict],
+    def from_simple(cls, simple: Dict,
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> DatasetRef:
         """Construct a new object from the data returned from the `to_simple`
@@ -208,7 +209,7 @@ class DatasetRef:
 
         Parameters
         ----------
-        simple : `dict` of [`str`, `Any`] or `int`
+        simple : `dict` of [`str`, `Any`]
             The value returned by `to_simple()`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions.
@@ -224,24 +225,17 @@ class DatasetRef:
             Newly-constructed object.
         """
 
-        if isinstance(simple, int):
-            if registry is None:
-                raise ValueError("Registry is required to construct DatasetRef from integer id")
-
-            ref = registry.getDataset(simple)
-            if ref is None:
-                raise RuntimeError(f"No matching dataset found in registry for id {simple}")
-            return ref
-
         # Minimalist component will just specify component and id and
         # require registry to reconstruct
-        if set(simple) == {"id", "component"}:
+        if set(simple).issubset({"id", "component"}):
             if registry is None:
                 raise ValueError("Registry is required to construct component DatasetRef from integer id")
-            parent_ref = registry.getDataset(simple["id"])
-            if parent_ref is None:
+            ref = registry.getDataset(simple["id"])
+            if ref is None:
                 raise RuntimeError(f"No matching dataset found in registry for id {simple['id']}")
-            return parent_ref.makeComponentRef(simple["component"])
+            if "component" in simple:
+                ref = ref.makeComponentRef(simple["component"])
+            return ref
 
         if universe is None and registry is None:
             raise ValueError("One of universe or registry must be provided.")
