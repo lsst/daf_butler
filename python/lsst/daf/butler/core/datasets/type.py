@@ -532,14 +532,7 @@ class DatasetType:
             if registry is None:
                 raise ValueError(f"Unable to convert a DatasetType name '{simple}' to DatasetType"
                                  " without a Registry")
-            datasetTypes = list(registry.queryDatasetTypes(simple))
-            if len(datasetTypes) != 1:
-                if not datasetTypes:
-                    raise RuntimeError(f"No DatasetType found in Registry with name '{simple}'")
-                else:
-                    raise RuntimeError(f"Unexpectedly got multiple DatasetTypes matching '{simple}': "
-                                       f"{datasetTypes}")
-            return datasetTypes[0]
+            return registry.getDatasetType(simple)
 
         if universe is None and registry is None:
             raise ValueError("One of universe or registry must be provided.")
