@@ -25,9 +25,10 @@ __all__ = ("to_json_generic", "from_json_generic")
 
 from typing import (
     TYPE_CHECKING,
+    Any,
     Optional,
+    Protocol,
     Type,
-    TypeVar,
 )
 
 import json
@@ -36,10 +37,18 @@ if TYPE_CHECKING:
     from .dimensions import DimensionUniverse
     from ..registry import Registry
 
-_T = TypeVar("_T")
+
+class SupportsSimple(Protocol):
+    def to_simple(self, minimal: bool) -> Any:
+        ...
+
+    @classmethod
+    def from_simple(cls, simple: Any, universe: Optional[DimensionUniverse] = None,
+                    registry: Optional[Registry] = None) -> SupportsSimple:
+        ...
 
 
-def to_json_generic(self: _T, minimal: bool = False) -> str:
+def to_json_generic(self: SupportsSimple, minimal: bool = False) -> str:
     """Convert this class to JSON form.
 
     The class type is not recorded in the JSON so the JSON decoder
@@ -58,12 +67,12 @@ def to_json_generic(self: _T, minimal: bool = False) -> str:
     """
     # For now use the core json library to convert a dict to JSON
     # for us.
-    return json.dumps(self.to_simple(minimal=minimal))  # type: ignore
+    return json.dumps(self.to_simple(minimal=minimal))
 
 
-def from_json_generic(cls: Type[_T], json_str: str,
+def from_json_generic(cls: Type[SupportsSimple], json_str: str,
                       universe: Optional[DimensionUniverse] = None,
-                      registry: Optional[Registry] = None) -> _T:
+                      registry: Optional[Registry] = None) -> SupportsSimple:
     """Convert a JSON string created by `to_json` and return
     something of the supplied class.
 
@@ -86,6 +95,6 @@ def from_json_generic(cls: Type[_T], json_str: str,
     """
     simple = json.loads(json_str)
     try:
-        return cls.from_simple(simple, universe=universe, registry=registry)  # type: ignore
+        return cls.from_simple(simple, universe=universe, registry=registry)
     except AttributeError as e:
         raise AttributeError(f"JSON deserialization requires {cls} has a from_simple() class method") from e
