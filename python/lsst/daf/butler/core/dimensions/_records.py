@@ -211,10 +211,11 @@ class DimensionRecord:
                 mapping[k] = v.to_simple(minimal=minimal)
             except AttributeError:
                 if isinstance(v, lsst.sphgeom.Region):
-                    # Match YAML serialization
-                    mapping[k] = {"cls": f"lsst.sphgeom.{type(v).__name__}",
-                                  "encoded": v.encode().hex()}
-
+                    # YAML serialization specifies the class when it
+                    # doesn't have to. This is partly for explicitness
+                    # and also history. Here use a different approach.
+                    # This code needs to be migrated to sphgeom
+                    mapping[k] = {"encoded_region": v.encode().hex()}
         definition = self.definition.to_simple(minimal=minimal)
 
         return {"definition": definition,
@@ -269,7 +270,7 @@ class DimensionRecord:
         if (ts := "timespan") in rec:
             rec[ts] = Timespan.from_simple(rec[ts], universe=universe, registry=registry)
         if (reg := "region") in rec:
-            encoded = bytes.fromhex(rec[reg]["encoded"])
+            encoded = bytes.fromhex(rec[reg]["encoded_region"])
             rec[reg] = lsst.sphgeom.Region.decode(encoded)
 
         return _reconstructDimensionRecord(definition, simple["record"])
