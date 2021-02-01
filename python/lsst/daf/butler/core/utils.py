@@ -52,10 +52,14 @@ from typing import (
     Pattern,
     Type,
     TypeVar,
+    TYPE_CHECKING,
     Union,
 )
 
 from lsst.utils import doImport
+
+if TYPE_CHECKING:
+    from ..registry.wildcards import Ellipsis, EllipsisType
 
 
 _LOG = logging.getLogger(__name__)
@@ -401,11 +405,12 @@ def findFileResources(values: Iterable[str], regex: Optional[str] = None) -> Lis
     return resources
 
 
-def globToRegex(expressions: List[str]) -> List[Pattern[str]]:
+def globToRegex(expressions: List[str]) -> Union[List[Pattern[str]], EllipsisType]:
     """Translate glob-style search terms to regex.
 
-    If a stand-alone '*' is found in ``expressions`` then an empty list will be
-    returned, meaning there are no pattern constraints.
+    If a stand-alone '*' is found in ``expressions``, or expressions is empty,
+    then the special value ``...`` will be returned, indicating that any string
+    will match.
 
     Parameters
     ----------
@@ -414,10 +419,9 @@ def globToRegex(expressions: List[str]) -> List[Pattern[str]]:
 
     Returns
     -------
-    expressions : `list` [`str`]
-        A list of regex Patterns.
+    expressions : `list` [`str`] or ``...``
+        A list of regex Patterns
     """
-    if "*" in expressions:
-        _LOG.warning("Found a '*' in the glob terms, returning zero search restrictions.")
-        return list()
+    if not expressions or "*" in expressions:
+        return Ellipsis
     return [re.compile(fnmatch.translate(e)) for e in expressions]

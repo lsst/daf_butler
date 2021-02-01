@@ -255,9 +255,9 @@ class GlobToRegexTestCase(unittest.TestCase):
 
     def testStarInList(self):
         """Test that if a one of the items in the expression list is a star
-        (stand-alone) then no search terms are returned (which implies no
-        restrictions) """
-        self.assertEqual(globToRegex(["foo", "*", "bar"]), [])
+        (stand-alone) then ``...`` is returned (which implies no restrictions)
+        """
+        self.assertIs(globToRegex(["foo", "*", "bar"]), ...)
 
     def testGlobList(self):
         """Test that a list of glob strings converts as expected to a regex and
