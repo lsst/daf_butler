@@ -14,6 +14,7 @@ VisitInfo: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 ApCorr: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 PhotoCalib: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 FilterLabel: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
+ExposureSummaryStats: lsst.daf.butler.formatters.yaml.YamlFormatter
 TransmissionCurve: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Camera: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Detector: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
