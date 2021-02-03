@@ -153,7 +153,14 @@ def prune_collection(**kwargs):
     script.pruneCollection(**kwargs)
 
 
-pruneDatasets_wouldRemoveMsg = "The following datasets would be removed:"
+pruneDatasets_wouldRemoveMsg = unwrap("""The following datasets will be removed from any datastores in which
+                                      they are present:""")
+pruneDatasets_wouldDisassociateMsg = unwrap("""The following datasets will be disassociated from {collections}
+                                            if they are currently present in it (which is not checked):""")
+pruneDatasets_wouldDisassociateAndRemoveMsg = unwrap("""The following datasets will be disassociated from
+                                                  {collections} if they are currently present in it (which is
+                                                  not checked), and removed from any datastores in which they
+                                                  are present.""")
 pruneDatasets_willRemoveMsg = "The following datasets will be removed:"
 pruneDatasets_askContinueMsg = "Continue?"
 pruneDatasets_didRemoveAforementioned = "The datasets were removed."
@@ -277,7 +284,13 @@ def prune_datasets(**kwargs):
     if result.errNoOp:
         raise click.ClickException(pruneDatasets_errNoOp)
     if result.dryRun:
-        print(pruneDatasets_wouldRemoveMsg)
+        if result.action["disassociate"] and result.action["unstore"]:
+            msg = pruneDatasets_wouldDisassociateAndRemoveMsg
+        elif result.action["disassociate"]:
+            msg = pruneDatasets_wouldDisassociateMsg
+        else:
+            msg = pruneDatasets_wouldRemoveMsg
+        print(msg.format(**result.action))
         printAstropyTables(result.tables)
         return
     if result.confirm:

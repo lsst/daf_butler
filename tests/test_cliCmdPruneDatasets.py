@@ -30,6 +30,8 @@ from lsst.daf.butler import Butler
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cmd.commands import (
     pruneDatasets_wouldRemoveMsg,
+    pruneDatasets_wouldDisassociateMsg,
+    pruneDatasets_wouldDisassociateAndRemoveMsg,
     pruneDatasets_willRemoveMsg,
     pruneDatasets_askContinueMsg,
     pruneDatasets_didRemoveAforementioned,
@@ -232,8 +234,8 @@ class PruneDatasetsTestCase(unittest.TestCase):
                               pruneDatasets_didNotRemoveAforementioned),
                       invokeInput="no")
 
-    def test_dryRun(self):
-        """Test the --dry-run flag.
+    def test_dryRun_unstore(self):
+        """Test the --dry-run flag with --unstore.
 
         Verify that with the dry-run flag the subcommand says what it would
         remove, but does not remove the datasets."""
@@ -243,6 +245,34 @@ class PruneDatasetsTestCase(unittest.TestCase):
                                                                          collections=("myCollection",)),
                       exGetTablesCalled=True,
                       exMsgs=(pruneDatasets_wouldRemoveMsg,
+                              astropyTablesToStr(getTables())))
+
+    def test_dryRun_disassociate(self):
+        """Test the --dry-run flag with --disassociate.
+
+        Verify that with the dry-run flag the subcommand says what it would
+        remove, but does not remove the datasets. """
+        collection = "myCollection"
+        self.run_test(cliArgs=[collection, "--dry-run", "--disassociate", "tag1"],
+                      exPruneDatasetsCallArgs=None,
+                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
+                                                                         collections=(collection,)),
+                      exGetTablesCalled=True,
+                      exMsgs=(pruneDatasets_wouldDisassociateMsg.format(collections=(collection,)),
+                              astropyTablesToStr(getTables())))
+
+    def test_dryRun_unstoreAndDisassociate(self):
+        """Test the --dry-run flag with --unstore and --disassociate.
+
+        Verify that with the dry-run flag the subcommand says what it would
+        remove, but does not remove the datasets. """
+        collection = "myCollection"
+        self.run_test(cliArgs=[collection, "--dry-run", "--unstore", "--disassociate", "tag1"],
+                      exPruneDatasetsCallArgs=None,
+                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
+                                                                         collections=(collection,)),
+                      exGetTablesCalled=True,
+                      exMsgs=(pruneDatasets_wouldDisassociateAndRemoveMsg.format(collections=(collection,)),
                               astropyTablesToStr(getTables())))
 
     def test_noConfirm(self):

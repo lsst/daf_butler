@@ -66,8 +66,11 @@ class PruneDatasetsResult:
         self.state = state or self.State.INIT
         self.tables = tables
         self.onConfirmation = None
-        # Container for variables related to the error that may be substituted
-        # into a user-visible string.
+        # Action describes the removal action for dry-run, will be a dict with
+        # keys disassociate, unstore, purge, and collections.
+        self.action = None
+        # errDict is a container for variables related to the error that may be
+        # substituted into a user-visible string.
         self.errDict = errDict or {}
 
     @property
@@ -203,19 +206,24 @@ def pruneDatasets(repo, collections, datasets, where, disassociate_tags, unstore
 
     result = PruneDatasetsResult(datasets.getTables())
 
+    disassociate = bool(disassociate_tags) or bool(purge_run)
+    purge = bool(purge_run)
+    unstore = unstore or bool(purge_run)
+
     if dry_run:
         result.state = PruneDatasetsResult.State.DRY_RUN_COMPLETE
+        result.action = dict(disassociate=disassociate, purge=purge, unstore=unstore, collections=collections)
         return result
 
     def doPruneDatasets():
         butler = Butler(repo, writeable=True)
         butler.pruneDatasets(
             refs=datasets.getDatasets(),
-            disassociate=bool(disassociate_tags) or bool(purge_run),
+            disassociate=disassociate,
             tags=disassociate_tags or None,
-            purge=bool(purge_run),
+            purge=purge,
             run=purge_run or None,
-            unstore=unstore or bool(purge_run)
+            unstore=unstore,
         )
         result.state = PruneDatasetsResult.State.FINISHED
         return result
