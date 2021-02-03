@@ -38,14 +38,12 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
-    mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryDatasets"
-
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory = StorageClassFactory()
 
     @staticmethod
     def _queryDatasets(repo, glob=(), collections=(), where="", find_first=False, show_uri=False):
-        return script.queryDatasets(repo, glob, collections, where, find_first, show_uri)
+        return script.QueryDatasets(repo, glob, collections, where, find_first, show_uri).getTables()
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)

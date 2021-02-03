@@ -52,6 +52,30 @@ typeStrAcceptsSingle = "TEXT"
 split_kv_separator = "="
 
 
+def astropyTablesToStr(tables):
+    """Render astropy tables to string as they are displayed in the CLI.
+
+    Output formatting matches ``printAstropyTables``.
+    """
+    ret = ""
+    for table in tables:
+        ret += "\n"
+        table.pformat_all()
+    ret += "\n"
+    return ret
+
+
+def printAstropyTables(tables):
+    """Print astropy tables to be displayed in the CLI.
+
+    Output formatting matches ``astropyTablesToStr``.
+    """
+    for table in tables:
+        print("")
+        table.pprint_all()
+    print("")
+
+
 def textTypeStr(multiple):
     """Get the text type string for CLI help documentation.
 
