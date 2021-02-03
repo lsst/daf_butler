@@ -92,10 +92,11 @@ class DbAuth:
         except Exception as exc:
             raise DbAuthError(f"Unable to load DbAuth configuration file: {secretPath}.") from exc
 
-    # Host is tagged as Optional only because other routines delegate to this
-    # one in order to raise a consistent exception for that condition.
-    def getAuth(self, dialectname: str, username: Optional[str], host: Optional[str],
-                port: Optional[Union[int, str]], database: str) -> Tuple[Optional[str], str]:
+    # dialectname, hose, and database are tagged as Optional only because other
+    # routines delegate to this one in order to raise a consistent exception
+    # for that condition.
+    def getAuth(self, dialectname: Optional[str], username: Optional[str], host: Optional[str],
+                port: Optional[Union[int, str]], database: Optional[str]) -> Tuple[Optional[str], str]:
         """Retrieve a username and password for a database connection.
 
         This function matches elements from the database connection URL with

@@ -220,7 +220,7 @@ def pruneDatasets(repo, collections, datasets, where, disassociate_tags, unstore
         butler.pruneDatasets(
             refs=datasets.getDatasets(),
             disassociate=disassociate,
-            tags=disassociate_tags or None,
+            tags=disassociate_tags or (),
             purge=purge,
             run=purge_run or None,
             unstore=unstore,
