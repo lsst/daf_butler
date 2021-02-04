@@ -531,9 +531,12 @@ class FileTemplate:
             output = output + literal + format(value, format_spec)
 
         # Replace periods with underscores in the non-directory part to
-        # prevent file extension confusion.
+        # prevent file extension confusion. Also replace # in the non-dir
+        # part to avoid confusion with URI fragments
         head, tail = os.path.split(output)
-        output = os.path.join(head, tail.replace(".", "_"))
+        tail = tail.replace(".", "_")
+        tail = tail.replace("#", "HASH")
+        output = os.path.join(head, tail)
 
         # Complain if we were meant to use a component
         if component is not None and not usedComponent:
