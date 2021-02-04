@@ -48,9 +48,11 @@ from ..timespan import Timespan
 from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph
 from ._records import DimensionRecord
+from ..json import from_json_generic, to_json_generic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
+    from ...registry import Registry
 
 DataIdKey = Union[str, Dimension]
 """Type annotation alias for the keys that can be used to index a
@@ -607,6 +609,58 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         """
         assert self.hasRecords(), "pack() may only be called if hasRecords() returns True."
         return self.universe.makePacker(name, self).pack(self, returnMaxBits=returnMaxBits)
+
+    def to_simple(self, minimal: bool = False) -> Dict:
+        """Convert this class to a simple python type suitable for
+        serialization.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Has no effect on for this class.
+
+        Returns
+        -------
+        as_dict : `dict`
+            The object converted to a dictionary.
+        """
+        # Convert to a dict form
+        return self.byName()
+
+    @classmethod
+    def from_simple(cls, simple: Dict[str, Any],
+                    universe: Optional[DimensionUniverse] = None,
+                    registry: Optional[Registry] = None) -> DataCoordinate:
+        """Construct a new object from the data returned from the `to_simple`
+        method.
+
+        Parameters
+        ----------
+        simple : `dict` of [`str`, `Any`]
+            The `dict` returned by `to_simple()`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions.
+        registry : `lsst.daf.butler.Registry`, optional
+            Registry from which a universe can be extracted. Can be `None`
+            if universe is provided explicitly.
+
+        Returns
+        -------
+        dataId : `DataCoordinate`
+            Newly-constructed object.
+        """
+        if universe is None and registry is None:
+            raise ValueError("One of universe or registry is required to convert a dict to a DataCoordinate")
+        if universe is None and registry is not None:
+            universe = registry.dimensions
+        if universe is None:
+            # this is for mypy
+            raise ValueError("Unable to determine a usable universe")
+
+        return cls.standardize(simple, universe=universe)
+
+    to_json = to_json_generic
+    from_json = classmethod(from_json_generic)
 
 
 DataId = Union[DataCoordinate, Mapping[str, Any]]

@@ -239,6 +239,13 @@ class TimespanTestCase(unittest.TestCase):
             warnings.warn("deliberate")
         self.assertEqual(str(cm.warning), "deliberate")
 
+    def testJson(self):
+        ts1 = Timespan(begin=astropy.time.Time('2013-06-17 13:34:45.775000', scale='tai', format='iso'),
+                       end=astropy.time.Time('2013-06-17 13:35:17.947000', scale='tai', format='iso'))
+        json_str = ts1.to_json()
+        ts_json = Timespan.from_json(json_str)
+        self.assertEqual(ts_json, ts1)
+
 
 if __name__ == "__main__":
     unittest.main()

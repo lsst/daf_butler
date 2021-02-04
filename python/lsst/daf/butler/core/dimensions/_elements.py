@@ -40,13 +40,14 @@ from ..named import NamedValueAbstractSet, NamedValueSet
 from ..utils import cached_getter
 from .. import ddl
 from .._topology import TopologicalRelationshipEndpoint
-
+from ..json import from_json_generic, to_json_generic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
     from ._governor import GovernorDimension
     from ._graph import DimensionGraph
     from ._records import DimensionRecord
+    from ...registry import Registry
 
 
 class DimensionElement(TopologicalRelationshipEndpoint):
@@ -132,6 +133,57 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         # DimensionElement is recursively immutable; see note in @immutable
         # decorator.
         return self
+
+    def to_simple(self, minimal: bool = False) -> str:
+        """Convert this class to a simple python type suitable for
+        serialization.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Has no effect on for this class.
+
+        Returns
+        -------
+        simple : `str`
+            The object converted to a single string.
+        """
+        return self.name
+
+    @classmethod
+    def from_simple(cls, simple: str,
+                    universe: Optional[DimensionUniverse] = None,
+                    registry: Optional[Registry] = None) -> DimensionElement:
+        """Construct a new object from the data returned from the `to_simple`
+        method.
+
+        Parameters
+        ----------
+        simple : `str`
+            The value returned by `to_simple()`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions.
+        registry : `lsst.daf.butler.Registry`, optional
+            Registry from which a universe can be extracted. Can be `None`
+            if universe is provided explicitly.
+
+        Returns
+        -------
+        dataId : `DimensionElement`
+            Newly-constructed object.
+        """
+        if universe is None and registry is None:
+            raise ValueError("One of universe or registry is required to convert a dict to a DataCoordinate")
+        if universe is None and registry is not None:
+            universe = registry.dimensions
+        if universe is None:
+            # this is for mypy
+            raise ValueError("Unable to determine a usable universe")
+
+        return universe[simple]
+
+    to_json = to_json_generic
+    from_json = classmethod(from_json_generic)
 
     def hasTable(self) -> bool:
         """Return `True` if this element is associated with a table

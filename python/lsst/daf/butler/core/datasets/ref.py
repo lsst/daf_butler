@@ -23,18 +23,24 @@ from __future__ import annotations
 __all__ = ["AmbiguousDatasetError", "DatasetRef"]
 
 from typing import (
+    TYPE_CHECKING,
     Any,
+    Dict,
     Iterable,
     List,
     Optional,
     Tuple,
 )
 
-from ..dimensions import DataCoordinate, DimensionGraph
+from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse
 from ..configSupport import LookupKey
 from ..utils import immutable
 from ..named import NamedKeyDict
 from .type import DatasetType
+from ..json import from_json_generic, to_json_generic
+
+if TYPE_CHECKING:
+    from ...registry import Registry
 
 
 class AmbiguousDatasetError(Exception):
@@ -68,9 +74,6 @@ class DatasetRef:
         not be created in new code, but are still supported for backwards
         compatibility.  New code should only pass `False` if it can guarantee
         that the dimensions are already consistent.
-    hasParentId : `bool`, optional
-        If `True` this `DatasetRef` is a component that has the ``id``
-        of the composite parent.
 
     Raises
     ------
@@ -79,19 +82,17 @@ class DatasetRef:
         provided but ``run`` is not.
     """
 
-    __slots__ = ("id", "datasetType", "dataId", "run", "hasParentId")
+    __slots__ = ("id", "datasetType", "dataId", "run",)
 
     def __init__(
         self,
         datasetType: DatasetType, dataId: DataCoordinate, *,
         id: Optional[int] = None,
         run: Optional[str] = None,
-        hasParentId: bool = False,
         conform: bool = True
     ):
         self.id = id
         self.datasetType = datasetType
-        self.hasParentId = hasParentId
         if conform:
             self.dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
         else:
@@ -152,6 +153,102 @@ class DatasetRef:
         # Compare tuples in the priority order
         return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
 
+    def to_simple(self, minimal: bool = False) -> Dict:
+        """Convert this class to a simple python type suitable for
+        serialization.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Requires Registry to convert
+            back to a full type.
+
+        Returns
+        -------
+        simple : `dict` or `int`
+            The object converted to a dictionary.
+        """
+        if minimal and self.id is not None:
+            # The only thing needed to uniquely define a DatasetRef
+            # is the integer id so that can be used directly if it is
+            # resolved and if it is not a component DatasetRef.
+            # Store is in a dict to allow us to easily add the planned
+            # origin information later without having to support
+            # an int and dict in simple form.
+            simple: Dict[str, Any] = {"id": self.id}
+            if self.isComponent():
+                # We can still be a little minimalist with a component
+                # but we will also need to record the datasetType component
+                simple["component"] = self.datasetType.component()
+            return simple
+
+        # Convert to a dict form
+        as_dict: Dict[str, Any] = {"datasetType": self.datasetType.to_simple(minimal=minimal),
+                                   "dataId": self.dataId.to_simple(),
+                                   }
+
+        # Only include the id entry if it is defined
+        if self.id is not None:
+            as_dict["run"] = self.run
+            as_dict["id"] = self.id
+
+        return as_dict
+
+    @classmethod
+    def from_simple(cls, simple: Dict,
+                    universe: Optional[DimensionUniverse] = None,
+                    registry: Optional[Registry] = None) -> DatasetRef:
+        """Construct a new object from the data returned from the `to_simple`
+        method.
+
+        Parameters
+        ----------
+        simple : `dict` of [`str`, `Any`]
+            The value returned by `to_simple()`.
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions.
+            Can be `None` if a registry is provided.
+        registry : `lsst.daf.butler.Registry`, optional
+            Registry to use to convert simple form of a DatasetRef to
+            a full `DatasetRef`. Can be `None` if a full description of
+            the type is provided along with a universe.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            Newly-constructed object.
+        """
+
+        # Minimalist component will just specify component and id and
+        # require registry to reconstruct
+        if set(simple).issubset({"id", "component"}):
+            if registry is None:
+                raise ValueError("Registry is required to construct component DatasetRef from integer id")
+            ref = registry.getDataset(simple["id"])
+            if ref is None:
+                raise RuntimeError(f"No matching dataset found in registry for id {simple['id']}")
+            if "component" in simple:
+                ref = ref.makeComponentRef(simple["component"])
+            return ref
+
+        if universe is None and registry is None:
+            raise ValueError("One of universe or registry must be provided.")
+
+        if universe is None and registry is not None:
+            universe = registry.dimensions
+
+        if universe is None:
+            # this is for mypy
+            raise ValueError("Unable to determine a usable universe")
+
+        datasetType = DatasetType.from_simple(simple["datasetType"], universe=universe, registry=registry)
+        dataId = DataCoordinate.from_simple(simple["dataId"], universe=universe)
+        return cls(datasetType, dataId,
+                   id=simple["id"], run=simple["run"])
+
+    to_json = to_json_generic
+    from_json = classmethod(from_json_generic)
+
     @classmethod
     def _unpickle(
         cls,
@@ -159,15 +256,14 @@ class DatasetRef:
         dataId: DataCoordinate,
         id: Optional[int],
         run: Optional[str],
-        hasParentId: bool,
     ) -> DatasetRef:
         """A custom factory method for use by `__reduce__` as a workaround for
         its lack of support for keyword arguments.
         """
-        return cls(datasetType, dataId, id=id, run=run, hasParentId=hasParentId)
+        return cls(datasetType, dataId, id=id, run=run)
 
     def __reduce__(self) -> tuple:
-        return (self._unpickle, (self.datasetType, self.dataId, self.id, self.run, self.hasParentId))
+        return (self._unpickle, (self.datasetType, self.dataId, self.id, self.run))
 
     def __deepcopy__(self, memo: dict) -> DatasetRef:
         # DatasetRef is recursively immutable; see note in @immutable
@@ -334,11 +430,11 @@ class DatasetRef:
         -------
         ref : `DatasetRef`
             A `DatasetRef` with a dataset type that corresponds to the given
-            component, with ``hasParentId=True``, and the same ID and run
+            component, and the same ID and run
             (which may be `None`, if they are `None` in ``self``).
         """
         return DatasetRef(self.datasetType.makeComponentDatasetType(name), self.dataId,
-                          id=self.id, run=self.run, hasParentId=True)
+                          id=self.id, run=self.run)
 
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).

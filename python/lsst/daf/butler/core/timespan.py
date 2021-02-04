@@ -28,11 +28,13 @@ __all__ = (
 from abc import abstractmethod
 import enum
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     Dict,
     Generator,
     Iterator,
+    List,
     Mapping,
     Optional,
     Tuple,
@@ -57,6 +59,11 @@ from . import ddl
 from .time_utils import TimeConverter
 from ._topology import TopologicalExtentDatabaseRepresentation, TopologicalSpace
 from .utils import cached_getter
+from .json import from_json_generic, to_json_generic
+
+if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
+    from .dimensions import DimensionUniverse
+    from ..registry import Registry
 
 
 class _SpecialTimespanBound(enum.Enum):
@@ -478,6 +485,50 @@ class Timespan:
                 yield Timespan(None, None, _nsec=(self._nsec[0], intersection._nsec[0]))
             if intersection._nsec[1] < self._nsec[1]:
                 yield Timespan(None, None, _nsec=(intersection._nsec[1], self._nsec[1]))
+
+    def to_simple(self, minimal: bool = False) -> List[int]:
+        """Convert this class to a simple python type suitable for
+        serialization.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            Use minimal serialization. Has no effect on for this class.
+
+        Returns
+        -------
+        simple : `list` of `int`
+            The internal span as integer nanoseconds.
+        """
+        # Return the internal nanosecond form rather than astropy ISO string
+        return list(self._nsec)
+
+    @classmethod
+    def from_simple(cls, simple: List[int],
+                    universe: Optional[DimensionUniverse] = None,
+                    registry: Optional[Registry] = None) -> Timespan:
+        """Construct a new object from the data returned from the `to_simple`
+        method.
+
+        Parameters
+        ----------
+        simple : `list` of `int`
+            The values returned by `to_simple()`.
+        universe : `DimensionUniverse`, optional
+            Unused.
+        registry : `lsst.daf.butler.Registry`, optional
+            Unused.
+
+        Returns
+        -------
+        result : `Timespan`
+            Newly-constructed object.
+        """
+        nsec1, nsec2 = simple  # for mypy
+        return cls(begin=None, end=None, _nsec=(nsec1, nsec2))
+
+    to_json = to_json_generic
+    from_json = classmethod(from_json_generic)
 
 
 _S = TypeVar("_S", bound="TimespanDatabaseRepresentation")
