@@ -34,6 +34,7 @@ from ..opt import (
     element_argument,
     glob_argument,
     options_file_option,
+    query_datasets_options,
     repo_argument,
     transfer_option,
     verbose_option,
@@ -49,6 +50,7 @@ from ..utils import (
     to_upper,
     typeStrAcceptsMultiple,
     unwrap,
+    where_help,
 )
 
 from ... import script
@@ -56,9 +58,6 @@ from ... import script
 
 willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
 existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."
-whereHelp = unwrap("""A string expression similar to a SQL WHERE clause. May involve any column of a dimension
-                   table or a dimension name as a shortcut for the primary key column of a dimension
-                   table.""")
 
 
 # The conversion from the import command name to the butler_import function
@@ -251,7 +250,7 @@ quiet_option = MWOptionDecorator(
                  multiple=True,
                  callback=split_commas)
 @find_all_option()
-@where_option(help=whereHelp)
+@where_option(help=where_help)
 @option_section("Prune Options:")
 @disassociate_option()
 @purge_option()
@@ -364,20 +363,7 @@ def remove_dataset_type(*args, **kwargs):
 
 
 @click.command(cls=ButlerCommand)
-@repo_argument(required=True)
-@glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
-                    "dataset types to be queried.")
-@collections_option()
-@where_option(help=whereHelp)
-@click.option("--find-first",
-              is_flag=True,
-              help=unwrap("""For each result data ID, only yield one DatasetRef of each DatasetType, from the
-                          first collection in which a dataset of that dataset type appears (according to the
-                          order of 'collections' passed in).  If used, 'collections' must specify at least one
-                          expression and must not contain wildcards."""))
-@click.option("--show-uri",
-              is_flag=True,
-              help="Show the dataset URI in results.")
+@query_datasets_options()
 @options_file_option()
 def query_datasets(**kwargs):
     """List the datasets in a repository."""
@@ -401,6 +387,7 @@ def query_datasets(**kwargs):
 @click.option("--search-all-inputs", is_flag=True, default=False,
               help=unwrap("""Search all children of the inputCollection if it is a CHAINED collection,
                           instead of just the most recent one."""))
+@options_file_option()
 def certify_calibrations(*args, **kwargs):
     """Certify calibrations in a repository.
     """
@@ -417,7 +404,7 @@ def certify_calibrations(*args, **kwargs):
                              constrain the yielded "instrument", "exposure", "detector", and
                              "physical_filter" values to only those for which at least one "raw" dataset
                              exists in "collections"."""))
-@where_option(help=whereHelp)
+@where_option(help=where_help)
 @options_file_option()
 def query_data_ids(**kwargs):
     """List the data IDs in a repository.
@@ -439,7 +426,7 @@ def query_data_ids(**kwargs):
                              constrain the yielded records. Only affects results when used with
                              --collections."""))
 @collections_option(help=collections_option.help + " Only affects results when used with --datasets.")
-@where_option(help=whereHelp)
+@where_option(help=where_help)
 @click.option("--no-check", is_flag=True,
               help=unwrap("""Don't check the query before execution. By default the query is checked before it
                           executed, this may reject some valid queries that resemble common mistakes."""))
