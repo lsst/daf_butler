@@ -198,7 +198,9 @@ class ButlerSchemelessURI(ButlerFileURI):
         # ParseResult is a NamedTuple so _replace is standard API
         parsed = parsed._replace(**replacements)
 
-        if parsed.params or parsed.fragment or parsed.query:
+        # We do allow fragment but do not expect params or query to be
+        # specified for schemeless
+        if parsed.params or parsed.query:
             log.warning("Additional items unexpectedly encountered in schemeless URI: %s", parsed.geturl())
 
         return parsed, dirLike

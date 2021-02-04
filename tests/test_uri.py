@@ -256,6 +256,13 @@ class FileURITestCase(unittest.TestCase):
             uri = ButlerURI(urllib.parse.quote(plus_path), forceDirectory=True)
         self.assertEqual(uri.ospath, plus_path)
 
+        # Check that # is not escaped for schemeless URIs
+        hash_path = "/a/b#/c&d#xyz"
+        hpos = hash_path.rfind("#")
+        uri = ButlerURI(hash_path)
+        self.assertEqual(uri.ospath, hash_path[:hpos])
+        self.assertEqual(uri.fragment, hash_path[hpos + 1:])
+
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3

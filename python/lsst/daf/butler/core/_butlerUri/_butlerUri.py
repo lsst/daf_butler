@@ -53,6 +53,9 @@ log = logging.getLogger(__name__)
 # Regex for looking for URI escapes
 ESCAPES_RE = re.compile(r"%[A-F0-9]{2}")
 
+# Precomputed escaped hash
+ESCAPED_HASH = urllib.parse.quote("#")
+
 
 class ButlerURI:
     """Convenience wrapper around URI parsers.
@@ -144,6 +147,14 @@ class ButlerURI:
                     log.warning("Possible double encoding of %s", uri)
                 else:
                     uri = urllib.parse.quote(uri)
+                    # Special case hash since we must support fragments
+                    # even in schemeless URIs -- although try to only replace
+                    # them in file part and not directory part
+                    if ESCAPED_HASH in uri:
+                        dirpos = uri.rfind("/")
+                        # Do replacement after this /
+                        uri = uri[:dirpos+1] + uri[dirpos+1:].replace(ESCAPED_HASH, "#")
+
             parsed = urllib.parse.urlparse(uri)
         elif isinstance(uri, urllib.parse.ParseResult):
             parsed = copy.copy(uri)

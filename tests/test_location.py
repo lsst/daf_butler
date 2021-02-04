@@ -282,7 +282,7 @@ class LocationTestCase(unittest.TestCase):
 
         for pathInStore in ("relative/path/file.ext.gz",
                             "relative/path+2/file.ext.gz",
-                            "relative/path+3/file#.ext.gz"):
+                            "relative/path+3/file&.ext.gz"):
             loc1 = factory.fromPath(pathInStore)
 
             self.assertEqual(loc1.pathInStore.path, pathInStore)
