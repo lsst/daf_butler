@@ -1829,3 +1829,15 @@ class RegistryTests(ABC):
         self.assertEqual(registry.getCollectionSummary("imported_r"), expected1)
         self.assertEqual(registry.getCollectionSummary(tag), expected2)
         self.assertEqual(registry.getCollectionSummary(calibs), expected2)
+
+    def testUnrelatedDimensionQueries(self):
+        """Test that WHERE expressions in queries can reference dimensions that
+        are not in the result set.
+        """
+        registry = self.makeRegistry()
+        # There is no data to back this query, but it should still return
+        # zero records instead of raising.
+        self.assertFalse(
+            set(registry.queryDataIds(["visit", "detector"],
+                                      where="instrument='Cam1' AND skymap='not_here' AND tract=0")),
+        )
