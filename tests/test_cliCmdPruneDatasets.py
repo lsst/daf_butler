@@ -87,7 +87,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
 
     @staticmethod
     def makePruneDatasetsArgs(**kwargs):
-        expectedArgs = dict(refs=tuple(), disassociate=False, tags=None, purge=False, run=None,
+        expectedArgs = dict(refs=tuple(), disassociate=False, tags=(), purge=False, run=None,
                             unstore=False)
         expectedArgs.update(kwargs)
         return expectedArgs

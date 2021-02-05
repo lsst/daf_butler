@@ -281,7 +281,7 @@ class QueryBuilder:
         datasets : `DatasetQueryColumns`, optional
             Columns that identify a dataset that is part of the query results.
         """
-        unexpectedDimensions = NamedValueSet(dimensions - self.summary.requested.dimensions)
+        unexpectedDimensions = NamedValueSet(dimensions - self.summary.mustHaveKeysJoined.dimensions)
         unexpectedDimensions.discard(self.summary.universe.commonSkyPix)
         if unexpectedDimensions:
             raise NotImplementedError(

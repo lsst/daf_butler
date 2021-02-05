@@ -42,25 +42,21 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSet,
+    Protocol,
     TypeVar,
     Union,
     ValuesView,
 )
 from types import MappingProxyType
-try:
-    # If we're running mypy, we should have typing_extensions.
-    # If we aren't running mypy, we shouldn't assume we do.
-    # When we're safely on Python 3.8, we can import Protocol
-    # from typing and avoid all of this.
-    from typing_extensions import Protocol
 
-    class Named(Protocol):
-        @property
-        def name(self) -> str:
-            pass
 
-except ImportError:
-    Named = Any  # type: ignore
+class Named(Protocol):
+    """A non-inheritance interface for objects that have a string name that
+    maps directly to their equality comparisons.
+    """
+    @property
+    def name(self) -> str:
+        pass
 
 
 K = TypeVar("K", bound=Named)

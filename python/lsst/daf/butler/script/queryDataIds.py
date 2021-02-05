@@ -65,7 +65,7 @@ class _Table:
         # Need to hint the column types for numbers since the per-row
         # constructor of Table does not work this out on its own and sorting
         # will not work properly without.
-        typeMap = {float: np.float, int: np.int64}
+        typeMap = {float: np.float64, int: np.int64}
         columnTypes = [typeMap.get(type(value)) for value in dataId.full.values()]
 
         rows = [[value for value in dataId.full.values()] for dataId in self.dataIds]

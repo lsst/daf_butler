@@ -289,7 +289,7 @@ class Config(collections.abc.MutableMapping):
         """
         return cls.fromString(string, format="yaml")
 
-    def __initFromUri(self, path: Union[str, ButlerURI]) -> None:
+    def __initFromUri(self, path: Union[str, ButlerURI, Path]) -> None:
         """Load a file from a path or an URI.
 
         Parameters
