@@ -77,6 +77,13 @@ class Formatter(metaclass=ABCMeta):
     writeParameters : `dict`, optional
         Any parameters to be hard-coded into this instance to control how
         the dataset is serialized.
+    writeRecipes : `dict`, optional
+        Detailed write Recipes indexed by recipe name.
+
+    Notes
+    -----
+    All Formatter subclasses should share the base class's constructor
+    signature.
     """
 
     unsupportedParameters: ClassVar[Optional[AbstractSet[str]]] = frozenset()
