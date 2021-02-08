@@ -244,6 +244,22 @@ class ConfigTestCase(unittest.TestCase):
         c2[".a.b"] = 5
         self.assertNotEqual(c1, c2)
 
+    def testMerge(self):
+        c1 = Config({"a": 1, "c": 3})
+        c2 = Config({"a": 4, "b": 2})
+        c1.merge(c2)
+        self.assertEqual(c1, {"a": 1, "b": 2, "c": 3})
+
+        # Check that c2 was not changed
+        self.assertEqual(c2, {"a": 4, "b": 2})
+
+        # Repeat with a simple dict
+        c1.merge({"b": 5, "d": 42})
+        self.assertEqual(c1, {"a": 1, "b": 2, "c": 3, "d": 42})
+
+        with self.assertRaises(TypeError):
+            c1.merge([1, 2, 3])
+
     def testUpdate(self):
         c = Config({"a": {"b": 1}})
         c.update({"a": {"c": 2}})

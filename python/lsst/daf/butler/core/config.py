@@ -666,7 +666,12 @@ class Config(collections.abc.MutableMapping):
         other : `dict` or `Config`
             Source of configuration:
         """
-        otherCopy = copy.deepcopy(other)
+        if not isinstance(other, collections.abc.Mapping):
+            raise TypeError(f"Can only merge a Mapping into a Config, not {type(other)}")
+
+        # Convert the supplied mapping to a Config for consistency
+        # This will do a deepcopy if it is already a Config
+        otherCopy = Config(other)
         otherCopy.update(self)
         self._data = otherCopy._data
 
