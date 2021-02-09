@@ -129,6 +129,13 @@ def makeTestCollection(repo: Butler) -> Butler:
     butler : `lsst.daf.butler.Butler`
         A Butler referring to a new collection in the repository at ``root``.
         The collection is (almost) guaranteed to be new.
+
+    Notes
+    -----
+    This function creates a single run collection that does not necessarily
+    conform to any repository conventions. It is only suitable for creating an
+    isolated test area, and not for repositories intended for real data
+    processing or analysis.
     """
     # Create a "random" collection name
     # Speed matters more than cryptographic guarantees
@@ -311,7 +318,9 @@ def expandUniqueId(butler: Butler, partialId: Mapping[str, Any]) -> DataCoordina
     -----
     This method will only work correctly if all dimensions attached to the
     target dimension (eg., "physical_filter" for "visit") are known to the
-    repository, even if they're not needed to identify a dataset.
+    repository, even if they're not needed to identify a dataset. This function
+    is only suitable for certain kinds of test repositories, and not for
+    repositories intended for real data processing or analysis.
 
     Examples
     --------
@@ -357,6 +366,12 @@ def addDataIdValue(butler: Butler, dimension: str, value: Any, **related: Any):
         The value to register for the dimension.
     **related
         Any existing dimensions to be linked to ``value``.
+
+    Notes
+    -----
+    Because this function creates filler data, it is only suitable for test
+    repositories. It should not be used for repositories intended for real data
+    processing or analysis, which have known dimension values.
 
     Examples
     --------
