@@ -51,7 +51,7 @@ class TestFileTemplates(unittest.TestCase):
 
     def setUp(self):
         self.universe = DimensionUniverse()
-        self.dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "U"}
+        self.dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "Most Amazing U Filter Ever"}
 
     def assertTemplate(self, template, answer, ref):
         fileTmpl = FileTemplate(template)
@@ -61,25 +61,25 @@ class TestFileTemplates(unittest.TestCase):
     def testBasic(self):
         tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter}"
         self.assertTemplate(tmplstr,
-                            "run2/calexp/00052/U",
+                            "run2/calexp/00052/Most_Amazing_U_Filter_Ever",
                             self.makeDatasetRef("calexp", conform=False))
         tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter}-trail"
         self.assertTemplate(tmplstr,
-                            "run2/calexp/00052/U-trail",
+                            "run2/calexp/00052/Most_Amazing_U_Filter_Ever-trail",
                             self.makeDatasetRef("calexp", conform=False))
 
         tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
         self.assertTemplate(tmplstr,
-                            "run2/calexp/00052/U-trail-run2",
+                            "run2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run2",
                             self.makeDatasetRef("calexp", conform=False))
         self.assertTemplate(tmplstr,
-                            "run_2/calexp/00052/U-trail-run_2",
+                            "run_2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run_2",
                             self.makeDatasetRef("calexp", run="run/2", conform=False))
 
         # Retain any "/" in run
         tmplstr = "{run:/}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
         self.assertTemplate(tmplstr,
-                            "run/2/calexp/00052/U-trail-run_2",
+                            "run/2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run_2",
                             self.makeDatasetRef("calexp", run="run/2", conform=False))
 
         # Check that "." are replaced in the file basename, but not directory.
@@ -108,7 +108,7 @@ class TestFileTemplates(unittest.TestCase):
         """Optional units in templates."""
         ref = self.makeDatasetRef("calexp", conform=False)
         tmplstr = "{run}/{datasetType}/v{visit:05d}_f{physical_filter:?}"
-        self.assertTemplate(tmplstr, "run2/calexp/v00052_fU",
+        self.assertTemplate(tmplstr, "run2/calexp/v00052_fMost_Amazing_U_Filter_Ever",
                             self.makeDatasetRef("calexp", conform=False))
 
         du = {"visit": 48, "tract": 265, "skymap": "big", "instrument": "dummy"}
@@ -118,17 +118,17 @@ class TestFileTemplates(unittest.TestCase):
         # Ensure that this returns a relative path even if the first field
         # is optional
         tmplstr = "{run}/{tract:?}/{visit:?}/f{physical_filter}"
-        self.assertTemplate(tmplstr, "run2/52/fU", ref)
+        self.assertTemplate(tmplstr, "run2/52/fMost_Amazing_U_Filter_Ever", ref)
 
         # Ensure that // from optionals are converted to singles
         tmplstr = "{run}/{datasetType}/{patch:?}/{tract:?}/f{physical_filter}"
-        self.assertTemplate(tmplstr, "run2/calexp/fU", ref)
+        self.assertTemplate(tmplstr, "run2/calexp/fMost_Amazing_U_Filter_Ever", ref)
 
         # Optionals with some text between fields
         tmplstr = "{run}/{datasetType}/p{patch:?}_t{tract:?}/f{physical_filter}"
-        self.assertTemplate(tmplstr, "run2/calexp/p/fU", ref)
+        self.assertTemplate(tmplstr, "run2/calexp/p/fMost_Amazing_U_Filter_Ever", ref)
         tmplstr = "{run}/{datasetType}/p{patch:?}_t{visit:04d?}/f{physical_filter}"
-        self.assertTemplate(tmplstr, "run2/calexp/p_t0052/fU", ref)
+        self.assertTemplate(tmplstr, "run2/calexp/p_t0052/fMost_Amazing_U_Filter_Ever", ref)
 
     def testComponent(self):
         """Test handling of components in templates."""
