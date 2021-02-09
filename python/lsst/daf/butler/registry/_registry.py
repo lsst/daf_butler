@@ -1718,7 +1718,11 @@ class Registry:
             Data IDs matching the given query parameters.
         """
         if not isinstance(element, DimensionElement):
-            element = self.dimensions[element]
+            try:
+                element = self.dimensions[element]
+            except KeyError as e:
+                raise KeyError(f"No such dimension '{element}', available dimensions: "
+                               + str(self.dimensions.getStaticElements())) from e
         dataIds = self.queryDataIds(element.graph, dataId=dataId, datasets=datasets, collections=collections,
                                     where=where, components=components, bind=bind, check=check, **kwargs)
         return iter(self._managers.dimensions[element].fetch(dataIds))
