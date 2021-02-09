@@ -174,7 +174,7 @@ class DimensionRecord:
     def __repr__(self) -> str:
         return "{}.RecordClass({})".format(
             self.definition.name,
-            ", ".join(f"name={getattr(self, name)!r}" for name in self.__slots__)
+            ", ".join(f"{name}={getattr(self, name)!r}" for name in self.__slots__)
         )
 
     def __reduce__(self) -> tuple:
