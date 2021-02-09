@@ -57,7 +57,7 @@ jobs:
         run: pytest -r a -v -n 3 --open-files
 
       - name: Install documenteer
-        run: pip install 'documenteer[pipelines]<0.6'
+        run: pip install 'documenteer[pipelines]>=0.6'
 
       - name: Build documentation
         working-directory: ./doc
