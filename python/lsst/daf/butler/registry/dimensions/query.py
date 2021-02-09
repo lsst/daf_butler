@@ -158,11 +158,13 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
-        raise TypeError(f"Cannot insert {self.element.name} records.")
+        raise TypeError(f"Cannot insert {self.element.name} records, "
+                        f"define as part of {self._viewOf} instead.")
 
     def sync(self, record: DimensionRecord) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
-        raise TypeError(f"Cannot sync {self.element.name} records.")
+        raise TypeError(f"Cannot sync {self.element.name} records, "
+                        f"define as part of {self._viewOf} instead.")
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.

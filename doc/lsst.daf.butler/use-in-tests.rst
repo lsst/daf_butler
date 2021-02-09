@@ -25,31 +25,29 @@ Creating and populating a repository
 ====================================
 
 The `lsst.daf.butler.tests.makeTestRepo` function creates an in-memory repository.
-In addition to the arguments used by `~lsst.daf.butler.Butler.makeRepo`, `makeTestRepo` takes a mapping of the data ID(s) needed by the test.
-This mapping does not create any datasets itself, but instead prepares the registry so that datasets with those IDs *could* be created later.
+The repository is optimized for speed rather than for production processing, but otherwise is similar to `lsst.daf.butler.Butler.makeRepo`.
 
-The data ID mapping takes the form of a key for each data ID dimension, and a list of possible values.
-For example:
+The `addDataIdValue` function defines allowed data ID values after the repository has been created.
+By default, related values are assigned to each other in an arbitrary one-to-one fashion.
+This is good enough for many tests, where a single data ID is all that's needed.
 
-.. code-block:: py
-
-   {"instrument": ["FancyCam"],
-    "exposure": [101, 102, 103],
-    "detector": [0, 1, 2, 3],
-    "skymap": ["map"],
-    "tract": [42, 43],
-    "patch": [0, 1, 2, 3, 4, 5],
-   }
-
-To avoid creating ambiguous data IDs, values are assigned to each other in an arbitrary one-to-one fashion, rather than trying every combination (e.g., in the above example all the patches might only be assigned to tract 42).
-In many tests this is not a problem, as a single data ID is all that's needed.
-If not, the `expandUniqueId` function can recover which values are assigned to which:
+If you need more control (or if the assignment algorithm produces inconsistent results), `addDataIdValue` lets you specify by keyword which values are related to which.
+Any unspecified relationships are still filled arbitrarily, so you need only give the ones your tests depend on.
 
 .. code-block:: py
 
-   >>> import lsst.daf.butler.tests as butlerTests
-   >>> butlerTests.expandUniqueId(repo, {"detector": 2})
-   DataCoordinate({instrument, detector}, ('FancyCam', 2))
+   from lsst.daf.butlker.tests import addDataIdValue
+
+   addDataIdValue(butler, "skymap", "map")
+   # Tract requires a skymap; can assume it's "map" because no other options.
+   # Were there more than one skymap, this would choose one unpredictably.
+   addDataIdValue(butler, "tract", 42)
+   # Explicit specification.
+   addDataIdValue(butler, "tract", 43, skymap="map")
+   # Can map dimensions in a many-to-many relationship.
+   for patch in [0, 1, 2, 3, 4, 5]:
+       addDataIdValue(butler, "patch", patch, tract=42)
+       addDataIdValue(butler, "patch", patch, tract=43)
 
 The `addDatasetType` function registers any dataset types needed by the test (e.g., "calexp").
 As with registering the data IDs, this is a prerequisite for actually reading or writing any datasets of that type during the test.

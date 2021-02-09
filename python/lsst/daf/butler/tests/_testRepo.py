@@ -20,7 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-__all__ = ["makeTestRepo", "makeTestCollection", "addDatasetType", "expandUniqueId", "DatastoreMock"]
+__all__ = ["makeTestRepo", "makeTestCollection", "addDatasetType", "expandUniqueId", "DatastoreMock",
+           "addDataIdValue",
+           ]
 
 import random
 from typing import (
@@ -28,31 +30,43 @@ from typing import (
     Iterable,
     Mapping,
     Optional,
+    Set,
     Tuple,
 )
 from unittest.mock import MagicMock
 
+import sqlalchemy
+
 from lsst.daf.butler import (
     Butler,
     Config,
+    DataCoordinate,
     DatasetRef,
     DatasetType,
+    Dimension,
+    DimensionUniverse,
     FileDataset,
+    Registry,
 )
 
 
-def makeTestRepo(root, dataIds, *, config=None, **kwargs):
-    """Create an empty repository with dummy data IDs.
+def makeTestRepo(root: str,
+                 dataIds: Optional[Mapping[str, Iterable]] = None, *,
+                 config: Config = None,
+                 **kwargs) -> Butler:
+    """Create an empty test repository.
 
     Parameters
     ----------
     root : `str`
         The location of the root directory for the repository.
-    dataIds : `~collections.abc.Mapping` [`str`, `iterable`]
+    dataIds : `~collections.abc.Mapping` [`str`, `iterable`], optional
         A mapping keyed by the dimensions used in the test. Each value
         is an iterable of names for that dimension (e.g., detector IDs for
         `"detector"`). Related dimensions (e.g., instruments and detectors)
-        are linked arbitrarily.
+        are linked arbitrarily. This parameter is provided for compatibility
+        with old code; newer code should make the repository, then call
+        `~lsst.daf.butler.tests.addDataIdValue`.
     config : `lsst.daf.butler.Config`, optional
         A configuration for the repository (for details, see
         `lsst.daf.butler.Butler.makeRepo`). If omitted, creates a repository
@@ -75,15 +89,9 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
     Notes
     -----
     This function provides a "quick and dirty" repository for simple unit
-    tests that don't depend on complex data relationships. Because it assigns
-    dimension relationships and other metadata abitrarily, it is ill-suited
+    tests that don't depend on complex data relationships. It is ill-suited
     for tests where the structure of the data matters. If you need such a
     dataset, create it directly or use a saved test dataset.
-
-    Since the values in ``dataIds`` uniquely determine the repository's
-    data IDs, the fully linked IDs can be recovered by calling
-    `expandUniqueId`, so long as no other code has inserted dimensions into
-    the repository registry.
     """
     defaults = Config()
     defaults["datastore", "cls"] = "lsst.daf.butler.datastores.inMemoryDatastore.InMemoryDatastore"
@@ -92,6 +100,9 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
 
     if config:
         defaults.update(config)
+
+    if not dataIds:
+        dataIds = {}
 
     # Disable config root by default so that our registry override will
     # not be ignored.
@@ -104,7 +115,7 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
     return butler
 
 
-def makeTestCollection(repo):
+def makeTestCollection(repo: Butler) -> Butler:
     """Create a read/write Butler to a fresh collection.
 
     Parameters
@@ -118,6 +129,13 @@ def makeTestCollection(repo):
     butler : `lsst.daf.butler.Butler`
         A Butler referring to a new collection in the repository at ``root``.
         The collection is (almost) guaranteed to be new.
+
+    Notes
+    -----
+    This function creates a single run collection that does not necessarily
+    conform to any repository conventions. It is only suitable for creating an
+    isolated test area, and not for repositories intended for real data
+    processing or analysis.
     """
     # Create a "random" collection name
     # Speed matters more than cryptographic guarantees
@@ -125,7 +143,8 @@ def makeTestCollection(repo):
     return Butler(butler=repo, run=collection)
 
 
-def _makeRecords(dataIds, universe):
+def _makeRecords(dataIds: Mapping[str, Iterable],
+                 universe: DimensionUniverse) -> Mapping[str, Iterable]:
     """Create cross-linked dimension records from a collection of
     data ID values.
 
@@ -151,21 +170,7 @@ def _makeRecords(dataIds, universe):
         expandedIds[name] = []
         dimension = universe[name]
         for value in values:
-            expandedValue = {}
-            for key in dimension.uniqueKeys:
-                if key.nbytes:
-                    castType = bytes
-                else:
-                    castType = key.dtype().python_type
-                try:
-                    castValue = castType(value)
-                except TypeError:
-                    castValue = castType()
-                expandedValue[key.name] = castValue
-            for key in dimension.metadata:
-                if not key.nullable:
-                    expandedValue[key.name] = key.dtype().python_type(value)
-            expandedIds[name].append(expandedValue)
+            expandedIds[name].append(_fillAllKeys(dimension, value))
 
     # Pick cross-relationships arbitrarily
     for name, values in expandedIds.items():
@@ -186,14 +191,117 @@ def _makeRecords(dataIds, universe):
             for dimension, values in expandedIds.items()}
 
 
-def expandUniqueId(butler, partialId):
+def _fillAllKeys(dimension: Dimension, value: Any) -> Mapping[str, Any]:
+    """Create an arbitrary mapping of all required keys for a given dimension
+    that do not refer to other dimensions.
+
+    Parameters
+    ----------
+    dimension : `lsst.daf.butler.Dimension`
+        The dimension for which to generate a set of keys (e.g., detector).
+    value
+        The value assigned to ``dimension`` (e.g., detector ID).
+
+    Returns
+    -------
+    expandedValue : `dict` [`str`]
+        A mapping of dimension keys to values. ``dimension's`` primary key
+        maps to ``value``, but all other mappings (e.g., detector name)
+        are arbitrary.
+    """
+    expandedValue = {}
+    for key in dimension.uniqueKeys:
+        if key.nbytes:
+            castType = bytes
+        else:
+            castType = key.dtype().python_type
+        try:
+            castValue = castType(value)
+        except TypeError:
+            castValue = castType()
+        expandedValue[key.name] = castValue
+    for key in dimension.metadata:
+        if not key.nullable:
+            expandedValue[key.name] = key.dtype().python_type(value)
+    return expandedValue
+
+
+def _matchAnyDataId(record: Mapping[str, Any], registry: Registry, dimension: Dimension):
+    """Matches a partial dimension record to an existing record along a
+    specific dimension.
+
+    Parameters
+    ----------
+    record : `dict` [`str`]
+        A mapping representing the record to be matched.
+    registry : `lsst.daf.butler.Registry`
+        The registry with all known dimension records.
+    dimension : `lsst.daf.butler.Dimension`
+        The dimension on which to find a match for ``record``.
+
+    Raises
+    ------
+    RuntimeError
+        Raised if there are no existing records for ``dimension``.
+    """
+    matches = list(registry.queryDimensionRecords(dimension.name))
+    if matches:
+        record[dimension.name] = matches[0].dataId[dimension.name]
+    else:
+        raise RuntimeError(f"No matching values for {dimension.name} found.")
+
+
+def _fillRelationships(dimension: Dimension,
+                       dimensionInfo: Mapping[str, Any],
+                       existing: Registry) -> Mapping[str, Any]:
+    """Create arbitrary mappings from one dimension to all dimensions it
+    depends on.
+
+    Parameters
+    ----------
+    dimension : `lsst.daf.butler.Dimension`
+        The dimension for which to generate relationships.
+    dimensionInfo : `dict` [`str`]
+        A mapping of dimension keys to values.
+    existing : `lsst.daf.butler.Registry`
+        The registry with all previously registered dimensions.
+
+    Returns
+    -------
+    filledInfo : `dict` [`str`]
+        A version of ``dimensionInfo`` with extra mappings for any
+        relationships required by ``dimension``. Any relationships already
+        defined in ``dimensionInfo`` are preserved.
+
+    Raises
+    ------
+    ValueError
+        Raised if ``dimension`` depends on a dimension for which no values
+        exist yet.
+    """
+    filledInfo = dimensionInfo.copy()
+    for other in dimension.required:
+        if other != dimension and other.name not in filledInfo:
+            _matchAnyDataId(filledInfo, existing, other)
+    # Do not recurse, to keep the user from having to provide
+    # irrelevant dimensions.
+    for other in dimension.implied:
+        toUpdate = other != dimension and other.name not in filledInfo
+        updatable = other.viewOf is None
+        # Do not run query if either toUpdate or updatable is false
+        if toUpdate and updatable and list(existing.queryDimensionRecords(other)):
+            _matchAnyDataId(filledInfo, existing, other)
+    return filledInfo
+
+
+def expandUniqueId(butler: Butler, partialId: Mapping[str, Any]) -> DataCoordinate:
     """Return a complete data ID matching some criterion.
 
     Parameters
     ----------
     butler : `lsst.daf.butler.Butler`
         The repository to query.
-    partialId : `~collections.abc.Mapping` [`str`, any]
+    partialId : `~collections.abc.Mapping` [`str`]
         A mapping of known dimensions and values.
 
     Returns
@@ -210,7 +318,9 @@ def expandUniqueId(butler, partialId):
     -----
     This method will only work correctly if all dimensions attached to the
     target dimension (eg., "physical_filter" for "visit") are known to the
-    repository, even if they're not needed to identify a dataset.
+    repository, even if they're not needed to identify a dataset. This function
+    is only suitable for certain kinds of test repositories, and not for
+    repositories intended for real data processing or analysis.
 
     Examples
     --------
@@ -237,7 +347,64 @@ def expandUniqueId(butler, partialId):
         raise ValueError(f"Found {len(dataId)} matches for {partialId}, expected 1.")
 
 
-def addDatasetType(butler, name, dimensions, storageClass):
+def addDataIdValue(butler: Butler, dimension: str, value: Any, **related: Any):
+    """Add a new data ID to a repository.
+
+    Related dimensions (e.g., the instrument associated with a detector) may
+    be specified using ``related``. While these keywords are sometimes needed
+    to get self-consistent repositories, you do not need to define
+    relationships you do not use. Any unspecified dimensions will be
+    linked arbitrarily.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        The repository to update.
+    dimension : `str`
+        The name of the dimension to gain a new value.
+    value
+        The value to register for the dimension.
+    **related
+        Any existing dimensions to be linked to ``value``.
+
+    Notes
+    -----
+    Because this function creates filler data, it is only suitable for test
+    repositories. It should not be used for repositories intended for real data
+    processing or analysis, which have known dimension values.
+
+    Examples
+    --------
+
+    See the guide on :ref:`using-butler-in-tests-make-repo` for usage examples.
+    """
+    # Example is not doctest, because it's probably unsafe to create even an
+    # in-memory butler in that environment.
+    try:
+        fullDimension = butler.registry.dimensions[dimension]
+    except KeyError as e:
+        raise ValueError from e
+    # Bad keys ignored by registry code
+    extraKeys = related.keys() - (fullDimension.required | fullDimension.implied)
+    if extraKeys:
+        raise ValueError(f"Unexpected keywords {extraKeys} not found "
+                         f"in {fullDimension.required | fullDimension.implied}")
+
+    # Define secondary keys (e.g., detector name given detector id)
+    expandedValue = _fillAllKeys(fullDimension, value)
+    expandedValue.update(**related)
+    completeValue = _fillRelationships(fullDimension, expandedValue, butler.registry)
+
+    dimensionRecord = fullDimension.RecordClass(**completeValue)
+    try:
+        butler.registry.syncDimensionData(dimension, dimensionRecord)
+    except sqlalchemy.exc.IntegrityError as e:
+        raise RuntimeError("Could not create data ID value. Automatic relationship generation "
+                           "may have failed; try adding keywords to assign a specific instrument, "
+                           "physical_filter, etc. based on the nested exception message.") from e
+
+
+def addDatasetType(butler: Butler, name: str, dimensions: Set[str], storageClass: str) -> DatasetType:
     """Add a new dataset type to a repository.
 
     Parameters
