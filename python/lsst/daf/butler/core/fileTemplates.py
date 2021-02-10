@@ -524,6 +524,8 @@ class FileTemplate:
                 replace_slash = False
 
             if isinstance(value, str):
+                # Replace spaces with underscores for more friendly file paths
+                value = value.replace(" ", "_")
                 if replace_slash:
                     value = value.replace("/", "_")
 
