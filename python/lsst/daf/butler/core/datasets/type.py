@@ -393,6 +393,29 @@ class DatasetType:
             return self.nameWithComponent(self.name, component)
         raise KeyError("Requested component ({}) not understood by this DatasetType".format(component))
 
+    def makeCompositeDatasetType(self) -> DatasetType:
+        """Return a DatasetType suitable for the composite version of this
+        component dataset type.
+
+        Returns
+        -------
+        composite : `DatasetType`
+            The composite dataset type.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if this dataset type is not a component dataset type.
+        """
+        if not self.isComponent():
+            raise RuntimeError(f"DatasetType {self.name} must be a component to form the composite")
+        composite_name, _ = self.nameAndComponent()
+        if self.parentStorageClass is None:
+            raise ValueError("Parent storage class is not set. "
+                             f"Unable to create composite type from {self.name}")
+        return DatasetType(composite_name, dimensions=self.dimensions,
+                           storageClass=self.parentStorageClass)
+
     def makeComponentDatasetType(self, component: str) -> DatasetType:
         """Return a DatasetType suitable for the given component, assuming the
         same dimensions as the parent.
