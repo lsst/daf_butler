@@ -548,7 +548,23 @@ class FileDatastore(GenericBaseDatastore):
             The associated `DatasetType` is not handled by this datastore.
         """
         self._validate_put_parameters(inMemoryDataset, ref)
+        return self._determine_put_formatter_location(ref)
 
+    def _determine_put_formatter_location(self, ref: DatasetRef) -> Tuple[Location, Formatter]:
+        """Calculate the formatter and output location to use for put.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the associated Dataset.
+
+        Returns
+        -------
+        location : `Location`
+            The location to write the dataset.
+        formatter : `Formatter`
+            The `Formatter` to use to write the dataset.
+        """
         # Work out output file name
         try:
             template = self.templates.getTemplate(ref)
