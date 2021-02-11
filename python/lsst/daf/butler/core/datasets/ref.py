@@ -433,8 +433,10 @@ class DatasetRef:
             component, and the same ID and run
             (which may be `None`, if they are `None` in ``self``).
         """
+        # Assume that the data ID does not need to be standardized
+        # and should match whatever this ref already has.
         return DatasetRef(self.datasetType.makeComponentDatasetType(name), self.dataId,
-                          id=self.id, run=self.run)
+                          id=self.id, run=self.run, conform=False)
 
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).
