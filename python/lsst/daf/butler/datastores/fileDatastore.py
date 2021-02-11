@@ -282,6 +282,10 @@ class FileDatastore(GenericBaseDatastore):
         # Determine whether checksums should be used - default to False
         self.useChecksum = self.config.get("checksum", False)
 
+        # Determine whether we can fall back to configuration if a
+        # requested dataset is not known to registry
+        self.trustGetRequest = self.config.get("trust_get_request", False)
+
         # Check existence and create directory structure if necessary
         if not self.root.exists():
             if "create" not in self.config or not self.config["create"]:
@@ -538,7 +542,10 @@ class FileDatastore(GenericBaseDatastore):
         # Get file metadata and internal metadata
         fileLocations = self._get_dataset_locations_info(ref)
         if not fileLocations:
-            raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
+            if not self.trustGetRequest:
+                raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
+            # Assume the dataset is where we think it should be
+            fileLocations = self._get_expected_dataset_locations_info(ref)
 
         # The storage class we want to use eventually
         refStorageClass = ref.datasetType.storageClass
