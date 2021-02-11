@@ -1084,8 +1084,13 @@ class FileDatastore(GenericBaseDatastore):
             `True` if the entity exists in the `Datastore`.
         """
         fileLocations = self._get_dataset_locations_info(ref)
+
+        # if we are being asked to trust that registry might not be correct
+        # we ask for the expected locations and check them explicitly
         if not fileLocations:
-            return False
+            if not self.trustGetRequest:
+                return False
+            fileLocations = self._get_expected_dataset_locations_info(ref)
         for location, _ in fileLocations:
             if not self._artifact_exists(location):
                 return False
