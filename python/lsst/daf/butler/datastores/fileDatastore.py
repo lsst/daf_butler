@@ -1051,36 +1051,20 @@ class FileDatastore(GenericBaseDatastore):
             if not predict:
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
 
-            def predictLocation(thisRef: DatasetRef) -> Location:
-                template = self.templates.getTemplate(thisRef)
-                location = self.locationFactory.fromPath(template.format(thisRef))
-                storageClass = ref.datasetType.storageClass
-                formatter = self.formatterFactory.getFormatter(thisRef,
-                                                               FileDescriptor(location,
-                                                                              storageClass=storageClass))
-                # Try to use the extension attribute but ignore problems if the
-                # formatter does not define one.
-                try:
-                    location = formatter.makeUpdatedLocation(location)
-                except Exception:
-                    # Use the default extension
-                    pass
-                return location
-
             doDisassembly = self.composites.shouldBeDisassembled(ref)
 
             if doDisassembly:
 
                 for component, componentStorage in ref.datasetType.storageClass.components.items():
                     compRef = ref.makeComponentRef(component)
-                    compLocation = predictLocation(compRef)
+                    compLocation, _ = self._determine_put_formatter_location(compRef)
 
                     # Add a URI fragment to indicate this is a guess
                     components[component] = ButlerURI(compLocation.uri.geturl() + "#predicted")
 
             else:
 
-                location = predictLocation(ref)
+                location, _ = self._determine_put_formatter_location(ref)
 
                 # Add a URI fragment to indicate this is a guess
                 primary = ButlerURI(location.uri.geturl() + "#predicted")
