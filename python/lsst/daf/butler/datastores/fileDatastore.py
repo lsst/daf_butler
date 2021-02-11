@@ -452,6 +452,69 @@ class FileDatastore(GenericBaseDatastore):
             return False
         return True
 
+    def _get_expected_dataset_locations_info(self, ref: DatasetRef) -> List[Tuple[Location,
+                                                                                  StoredFileInfo]]:
+        """Predict the location and related file information of the requested
+        dataset in this datastore.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required `Dataset`.
+
+        Returns
+        -------
+        results : `list` [`tuple` [`Location`, `StoredFileInfo` ]]
+            Expected Location of the dataset within the datastore and
+            placeholder information about each file and its formatter.
+
+        Notes
+        -----
+        Uses the current configuration to determine how we would expect the
+        datastore files to have been written if we couldn't ask registry.
+        This is safe so long as there has been no change to datastore
+        configuration between writing the dataset and wanting to read it.
+        Will not work for files that have been ingested without using the
+        standard file template or default formatter.
+        """
+
+        # If we have a component ref we always need to ask the questions
+        # of the composite.  If the composite is disassembled this routine
+        # should return all components.  If the composite was not
+        # disassembled the composite is what is stored regardless of
+        # component request. Note that if the caller has disassembled
+        # a composite there is no way for this guess to know that
+        # without trying both the composite and component ref and seeing
+        # if there is something at the component Location even without
+        # disassembly being enabled.
+        if ref.datasetType.isComponent():
+            ref = ref.makeCompositeRef()
+
+        # See if the ref is a composite that should be disassembled
+        doDisassembly = self.composites.shouldBeDisassembled(ref)
+
+        all_info: List[Tuple[Location, Formatter, StorageClass, Optional[str]]] = []
+
+        if doDisassembly:
+            for component, componentStorage in ref.datasetType.storageClass.components.items():
+                compRef = ref.makeComponentRef(component)
+                location, formatter = self._determine_put_formatter_location(compRef)
+                all_info.append((location, formatter, componentStorage, component))
+
+        else:
+            # Always use the composite ref if no disassembly
+            location, formatter = self._determine_put_formatter_location(ref)
+            all_info.append((location, formatter, ref.datasetType.storageClass, None))
+
+        # Convert the list of tuples to have StoredFileInfo as second element
+        return [(location, StoredFileInfo(formatter=formatter,
+                                          path=location.pathInStore.path,
+                                          storageClass=storageClass,
+                                          component=component,
+                                          checksum=None,
+                                          file_size=-1))
+                for location, formatter, storageClass, component in all_info]
+
     def _prepare_for_get(self, ref: DatasetRef,
                          parameters: Optional[Mapping[str, Any]] = None) -> List[DatastoreFileGetInformation]:
         """Check parameters for ``get`` and obtain formatter and
