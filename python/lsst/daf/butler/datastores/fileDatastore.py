@@ -945,9 +945,11 @@ class FileDatastore(GenericBaseDatastore):
         log.debug("Accessing data from %s", uri)
 
         # Cannot recalculate checksum but can compare size as a quick check
+        # Do not do this if the size is negative since that indicates
+        # we do not know.
         recorded_size = getInfo.info.file_size
         resource_size = uri.size()
-        if resource_size != recorded_size:
+        if recorded_size >= 0 and resource_size != recorded_size:
             raise RuntimeError("Integrity failure in Datastore. "
                                f"Size of file {uri} ({resource_size}) "
                                f"does not match size recorded in registry of {recorded_size}")
