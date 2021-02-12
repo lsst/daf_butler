@@ -1152,20 +1152,28 @@ class FileDatastore(GenericBaseDatastore):
         # Get file metadata and internal metadata
         fileLocations = self._get_dataset_locations_info(ref)
 
+        guessing = False
         if not fileLocations:
             if not self.trustGetRequest:
                 raise RuntimeError(f"Unexpectedly got no artifacts for dataset {ref}")
             fileLocations = self._get_expected_dataset_locations_info(ref)
+            guessing = True
 
         if len(fileLocations) == 1:
             # No disassembly so this is the primary URI
-            primary = ButlerURI(fileLocations[0][0].uri)
+            uri = fileLocations[0][0].uri
+            if guessing and not uri.exists():
+                raise FileNotFoundError(f"Expected URI ({uri}) does not exist")
+            primary = uri
 
         else:
             for location, storedFileInfo in fileLocations:
                 if storedFileInfo.component is None:
                     raise RuntimeError(f"Unexpectedly got no component name for a component at {location}")
-                components[storedFileInfo.component] = ButlerURI(location.uri)
+                uri = location.uri
+                if guessing and not uri.exists():
+                    raise FileNotFoundError(f"Expected URI ({uri}) does not exist")
+                components[storedFileInfo.component] = uri
 
         return primary, components
 
