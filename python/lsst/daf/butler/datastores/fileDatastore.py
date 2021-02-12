@@ -1153,7 +1153,9 @@ class FileDatastore(GenericBaseDatastore):
         fileLocations = self._get_dataset_locations_info(ref)
 
         if not fileLocations:
-            raise RuntimeError(f"Unexpectedly got no artifacts for dataset {ref}")
+            if not self.trustGetRequest:
+                raise RuntimeError(f"Unexpectedly got no artifacts for dataset {ref}")
+            fileLocations = self._get_expected_dataset_locations_info(ref)
 
         if len(fileLocations) == 1:
             # No disassembly so this is the primary URI
