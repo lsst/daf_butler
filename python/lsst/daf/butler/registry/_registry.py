@@ -1316,11 +1316,11 @@ class Registry:
         Parameters
         ----------
         expression : `Any`, optional
-            An expression that fully or partially identifies the collections
-            to return, such as a `str`, `re.Pattern`, or iterable thereof.
-            `...` can be used to return all collections, and is the default.
-            See :ref:`daf_butler_collection_expressions` for more
-            information.
+            An expression that identifies the collections to return, such as a
+            `str` (for full matches), `re.Pattern` (for partial matches), or
+            iterable thereof.  `...` can be used to return all collections,
+            and is the default.  See :ref:`daf_butler_collection_expressions`
+            for more information.
         datasetType : `DatasetType`, optional
             If provided, only yield collections that may contain datasets of
             this type.  This is a conservative approximation in general; it may
@@ -1400,13 +1400,13 @@ class Registry:
             be used to query all dataset types.  See
             :ref:`daf_butler_dataset_type_expressions` for more information.
         collections: optional
-            An expression that fully or partially identifies the collections
-            to search for datasets, such as a `str`, `re.Pattern`, or iterable
-            thereof.  `...` can be used to find datasets from all
-            `~CollectionType.RUN` collections (no other collections are
-            necessary, because all datasets are in a ``RUN`` collection).  See
+            An expression that identifies the collections to search, such as a
+            `str` (for full matches), `re.Pattern` (for partial matches), or
+            iterable thereof.  `...` can be used to search all collections
+            (actually just all `~CollectionType.RUN` collections, because this
+            will still find all datasets).  If not provided,
+            ``self.default.collections`` is used.  See
             :ref:`daf_butler_collection_expressions` for more information.
-            If not provided, ``self.default.collections`` is used.
         dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
             Dimensions to include in the query (in addition to those used
             to identify the queried dataset type(s)), either to constrain
@@ -1600,12 +1600,14 @@ class Registry:
             See :ref:`daf_butler_dataset_type_expressions` for more
             information.
         collections: `Any`, optional
-            An expression that fully or partially identifies the collections
-            to search for datasets, such as a `str`, `re.Pattern`, or iterable
-            thereof.  `...` can be used to return all collections.  Must be
-            provided if ``datasets`` is, and is ignored if it is not.  See
+            An expression that identifies the collections to search for
+            datasets, such as a `str` (for full matches), `re.Pattern` (for
+            partial matches), or iterable thereof.  `...` can be used to search
+            all collections (actually just all `~CollectionType.RUN`
+            collections, because this will still find all datasets).  If not
+            provided, ``self.default.collections`` is used.  Ignored unless
+            ``datasets`` is also passed.  See
             :ref:`daf_butler_collection_expressions` for more information.
-            If not provided, ``self.default.collections`` is used.
         where : `str`, optional
             A string expression similar to a SQL WHERE clause.  May involve
             any column of a dimension table or (as a shortcut for the primary
@@ -1714,8 +1716,13 @@ class Registry:
             that should constrain the yielded records.  See `queryDataIds` and
             :ref:`daf_butler_dataset_type_expressions` for more information.
         collections: `Any`, optional
-            An expression that fully or partially identifies the collections
-            to search for datasets.  See `queryDataIds` and
+            An expression that identifies the collections to search for
+            datasets, such as a `str` (for full matches), `re.Pattern` (for
+            partial matches), or iterable thereof.  `...` can be used to search
+            all collections (actually just all `~CollectionType.RUN`
+            collections, because this will still find all datasets).  If not
+            provided, ``self.default.collections`` is used.  Ignored unless
+            ``datasets`` is also passed.  See
             :ref:`daf_butler_collection_expressions` for more information.
         where : `str`, optional
             A string expression similar to a SQL WHERE clause.  See
@@ -1774,10 +1781,13 @@ class Registry:
         datasetType : `DatasetType` or `str`
             A dataset type object or the name of one.
         collections: `Any`, optional
-            An expression that fully or partially identifies the collections
-            to search for datasets.  See `queryCollections` and
+            An expression that identifies the collections to search for
+            datasets, such as a `str` (for full matches), `re.Pattern` (for
+            partial matches), or iterable thereof.  `...` can be used to search
+            all collections (actually just all `~CollectionType.RUN`
+            collections, because this will still find all datasets).  If not
+            provided, ``self.default.collections`` is used.  See
             :ref:`daf_butler_collection_expressions` for more information.
-            If not provided, ``self.default.collections`` is used.
         collectionTypes : `AbstractSet` [ `CollectionType` ], optional
             If provided, only yield associations from collections of these
             types.
