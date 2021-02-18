@@ -95,6 +95,12 @@ class Location:
         path = self._path
         return f"{self.__class__.__name__}({uri!r}, {path.path!r})"
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Location):
+            return NotImplemented
+        # Compare the combined URI rather than how it is apportioned
+        return self.uri == other.uri
+
     @property
     def uri(self) -> ButlerURI:
         """URI corresponding to fully-specified location in datastore.

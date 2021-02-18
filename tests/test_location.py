@@ -250,6 +250,10 @@ class LocationTestCase(unittest.TestCase):
         self.assertTrue(loc1.uri.geturl().endswith("file"), f"Checking no extension in {loc1.uri}")
         self.assertEqual(loc1.getExtension(), "")
 
+        loc2 = factory.fromPath(pathInStore)
+        loc3 = factory.fromPath(pathInStore)
+        self.assertEqual(loc2, loc3)
+
     def testAbsoluteLocations(self):
         """Using a pathInStore that refers to absolute URI."""
         loc = Location(None, "file:///something.txt")

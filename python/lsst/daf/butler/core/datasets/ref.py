@@ -417,6 +417,23 @@ class DatasetRef:
                                         f"a resolved reference is required.")
         return self.id
 
+    def makeCompositeRef(self) -> DatasetRef:
+        """Create a `DatasetRef` of the composite from a component ref.
+
+        Requires that this `DatasetRef` is a component.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A `DatasetRef` with a dataset type that corresponds to the
+            composite parent of this component, and the same ID and run
+            (which may be `None`, if they are `None` in ``self``).
+        """
+        # Assume that the data ID does not need to be standardized
+        # and should match whatever this ref already has.
+        return DatasetRef(self.datasetType.makeCompositeDatasetType(), self.dataId,
+                          id=self.id, run=self.run, conform=False)
+
     def makeComponentRef(self, name: str) -> DatasetRef:
         """Create a `DatasetRef` that corresponds to a component of this
         dataset.
@@ -433,8 +450,10 @@ class DatasetRef:
             component, and the same ID and run
             (which may be `None`, if they are `None` in ``self``).
         """
+        # Assume that the data ID does not need to be standardized
+        # and should match whatever this ref already has.
         return DatasetRef(self.datasetType.makeComponentDatasetType(name), self.dataId,
-                          id=self.id, run=self.run)
+                          id=self.id, run=self.run, conform=False)
 
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).

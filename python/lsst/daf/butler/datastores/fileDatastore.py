@@ -282,6 +282,10 @@ class FileDatastore(GenericBaseDatastore):
         # Determine whether checksums should be used - default to False
         self.useChecksum = self.config.get("checksum", False)
 
+        # Determine whether we can fall back to configuration if a
+        # requested dataset is not known to registry
+        self.trustGetRequest = self.config.get("trust_get_request", False)
+
         # Check existence and create directory structure if necessary
         if not self.root.exists():
             if "create" not in self.config or not self.config["create"]:
@@ -452,6 +456,69 @@ class FileDatastore(GenericBaseDatastore):
             return False
         return True
 
+    def _get_expected_dataset_locations_info(self, ref: DatasetRef) -> List[Tuple[Location,
+                                                                                  StoredFileInfo]]:
+        """Predict the location and related file information of the requested
+        dataset in this datastore.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required `Dataset`.
+
+        Returns
+        -------
+        results : `list` [`tuple` [`Location`, `StoredFileInfo` ]]
+            Expected Location of the dataset within the datastore and
+            placeholder information about each file and its formatter.
+
+        Notes
+        -----
+        Uses the current configuration to determine how we would expect the
+        datastore files to have been written if we couldn't ask registry.
+        This is safe so long as there has been no change to datastore
+        configuration between writing the dataset and wanting to read it.
+        Will not work for files that have been ingested without using the
+        standard file template or default formatter.
+        """
+
+        # If we have a component ref we always need to ask the questions
+        # of the composite.  If the composite is disassembled this routine
+        # should return all components.  If the composite was not
+        # disassembled the composite is what is stored regardless of
+        # component request. Note that if the caller has disassembled
+        # a composite there is no way for this guess to know that
+        # without trying both the composite and component ref and seeing
+        # if there is something at the component Location even without
+        # disassembly being enabled.
+        if ref.datasetType.isComponent():
+            ref = ref.makeCompositeRef()
+
+        # See if the ref is a composite that should be disassembled
+        doDisassembly = self.composites.shouldBeDisassembled(ref)
+
+        all_info: List[Tuple[Location, Formatter, StorageClass, Optional[str]]] = []
+
+        if doDisassembly:
+            for component, componentStorage in ref.datasetType.storageClass.components.items():
+                compRef = ref.makeComponentRef(component)
+                location, formatter = self._determine_put_formatter_location(compRef)
+                all_info.append((location, formatter, componentStorage, component))
+
+        else:
+            # Always use the composite ref if no disassembly
+            location, formatter = self._determine_put_formatter_location(ref)
+            all_info.append((location, formatter, ref.datasetType.storageClass, None))
+
+        # Convert the list of tuples to have StoredFileInfo as second element
+        return [(location, StoredFileInfo(formatter=formatter,
+                                          path=location.pathInStore.path,
+                                          storageClass=storageClass,
+                                          component=component,
+                                          checksum=None,
+                                          file_size=-1))
+                for location, formatter, storageClass, component in all_info]
+
     def _prepare_for_get(self, ref: DatasetRef,
                          parameters: Optional[Mapping[str, Any]] = None) -> List[DatastoreFileGetInformation]:
         """Check parameters for ``get`` and obtain formatter and
@@ -475,7 +542,10 @@ class FileDatastore(GenericBaseDatastore):
         # Get file metadata and internal metadata
         fileLocations = self._get_dataset_locations_info(ref)
         if not fileLocations:
-            raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
+            if not self.trustGetRequest:
+                raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
+            # Assume the dataset is where we think it should be
+            fileLocations = self._get_expected_dataset_locations_info(ref)
 
         # The storage class we want to use eventually
         refStorageClass = ref.datasetType.storageClass
@@ -548,7 +618,23 @@ class FileDatastore(GenericBaseDatastore):
             The associated `DatasetType` is not handled by this datastore.
         """
         self._validate_put_parameters(inMemoryDataset, ref)
+        return self._determine_put_formatter_location(ref)
 
+    def _determine_put_formatter_location(self, ref: DatasetRef) -> Tuple[Location, Formatter]:
+        """Calculate the formatter and output location to use for put.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the associated Dataset.
+
+        Returns
+        -------
+        location : `Location`
+            The location to write the dataset.
+        formatter : `Formatter`
+            The `Formatter` to use to write the dataset.
+        """
         # Work out output file name
         try:
             template = self.templates.getTemplate(ref)
@@ -929,9 +1015,11 @@ class FileDatastore(GenericBaseDatastore):
         log.debug("Accessing data from %s", uri)
 
         # Cannot recalculate checksum but can compare size as a quick check
+        # Do not do this if the size is negative since that indicates
+        # we do not know.
         recorded_size = getInfo.info.file_size
         resource_size = uri.size()
-        if resource_size != recorded_size:
+        if recorded_size >= 0 and resource_size != recorded_size:
             raise RuntimeError("Integrity failure in Datastore. "
                                f"Size of file {uri} ({resource_size}) "
                                f"does not match size recorded in registry of {recorded_size}")
@@ -996,8 +1084,13 @@ class FileDatastore(GenericBaseDatastore):
             `True` if the entity exists in the `Datastore`.
         """
         fileLocations = self._get_dataset_locations_info(ref)
+
+        # if we are being asked to trust that registry might not be correct
+        # we ask for the expected locations and check them explicitly
         if not fileLocations:
-            return False
+            if not self.trustGetRequest:
+                return False
+            fileLocations = self._get_expected_dataset_locations_info(ref)
         for location, _ in fileLocations:
             if not self._artifact_exists(location):
                 return False
@@ -1035,36 +1128,20 @@ class FileDatastore(GenericBaseDatastore):
             if not predict:
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
 
-            def predictLocation(thisRef: DatasetRef) -> Location:
-                template = self.templates.getTemplate(thisRef)
-                location = self.locationFactory.fromPath(template.format(thisRef))
-                storageClass = ref.datasetType.storageClass
-                formatter = self.formatterFactory.getFormatter(thisRef,
-                                                               FileDescriptor(location,
-                                                                              storageClass=storageClass))
-                # Try to use the extension attribute but ignore problems if the
-                # formatter does not define one.
-                try:
-                    location = formatter.makeUpdatedLocation(location)
-                except Exception:
-                    # Use the default extension
-                    pass
-                return location
-
             doDisassembly = self.composites.shouldBeDisassembled(ref)
 
             if doDisassembly:
 
                 for component, componentStorage in ref.datasetType.storageClass.components.items():
                     compRef = ref.makeComponentRef(component)
-                    compLocation = predictLocation(compRef)
+                    compLocation, _ = self._determine_put_formatter_location(compRef)
 
                     # Add a URI fragment to indicate this is a guess
                     components[component] = ButlerURI(compLocation.uri.geturl() + "#predicted")
 
             else:
 
-                location = predictLocation(ref)
+                location, _ = self._determine_put_formatter_location(ref)
 
                 # Add a URI fragment to indicate this is a guess
                 primary = ButlerURI(location.uri.geturl() + "#predicted")
@@ -1075,18 +1152,28 @@ class FileDatastore(GenericBaseDatastore):
         # Get file metadata and internal metadata
         fileLocations = self._get_dataset_locations_info(ref)
 
+        guessing = False
         if not fileLocations:
-            raise RuntimeError(f"Unexpectedly got no artifacts for dataset {ref}")
+            if not self.trustGetRequest:
+                raise RuntimeError(f"Unexpectedly got no artifacts for dataset {ref}")
+            fileLocations = self._get_expected_dataset_locations_info(ref)
+            guessing = True
 
         if len(fileLocations) == 1:
             # No disassembly so this is the primary URI
-            primary = ButlerURI(fileLocations[0][0].uri)
+            uri = fileLocations[0][0].uri
+            if guessing and not uri.exists():
+                raise FileNotFoundError(f"Expected URI ({uri}) does not exist")
+            primary = uri
 
         else:
             for location, storedFileInfo in fileLocations:
                 if storedFileInfo.component is None:
                     raise RuntimeError(f"Unexpectedly got no component name for a component at {location}")
-                components[storedFileInfo.component] = ButlerURI(location.uri)
+                uri = location.uri
+                if guessing and not uri.exists():
+                    raise FileNotFoundError(f"Expected URI ({uri}) does not exist")
+                components[storedFileInfo.component] = uri
 
         return primary, components
 

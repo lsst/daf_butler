@@ -205,6 +205,109 @@ class DatastoreTests(DatastoreTestsBase):
         with self.assertRaises(FileNotFoundError):
             datastore.getURI(ref)
 
+    def testTrustGetRequest(self):
+        """Check that we can get datasets that registry knows nothing about.
+        """
+
+        datastore = self.makeDatastore()
+
+        # Skip test if the attribute is not defined
+        if not hasattr(datastore, "trustGetRequest"):
+            return
+
+        metrics = makeExampleMetrics()
+
+        i = 0
+        for sc_name in ("StructuredData", "StructuredComposite"):
+            i += 1
+            datasetTypeName = f"metric{i}"
+
+            if sc_name == "StructuredComposite":
+                disassembled = True
+            else:
+                disassembled = False
+
+            # Start datastore in default configuration of using registry
+            datastore.trustGetRequest = False
+
+            # Create multiple storage classes for testing with or without
+            # disassembly
+            sc = self.storageClassFactory.getStorageClass(sc_name)
+            dimensions = self.universe.extract(("visit", "physical_filter"))
+            dataId = {"instrument": "dummy", "visit": 52 + i, "physical_filter": "V"}
+
+            ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId, conform=False)
+            datastore.put(metrics, ref)
+
+            # Does it exist?
+            self.assertTrue(datastore.exists(ref))
+
+            # Get
+            metricsOut = datastore.get(ref)
+            self.assertEqual(metrics, metricsOut)
+
+            # Get the URI(s)
+            primaryURI, componentURIs = datastore.getURIs(ref)
+            if disassembled:
+                self.assertIsNone(primaryURI)
+                self.assertEqual(len(componentURIs), 3)
+            else:
+                self.assertIn(datasetTypeName, primaryURI.path)
+                self.assertFalse(componentURIs)
+
+            # Delete registry entry so now we are trusting
+            datastore.removeStoredItemInfo(ref)
+
+            # Now stop trusting and check that things break
+            datastore.trustGetRequest = False
+
+            # Does it exist?
+            self.assertFalse(datastore.exists(ref))
+
+            with self.assertRaises(FileNotFoundError):
+                datastore.get(ref)
+
+            with self.assertRaises(FileNotFoundError):
+                datastore.get(ref.makeComponentRef("data"))
+
+            # URI should fail unless we ask for prediction
+            with self.assertRaises(FileNotFoundError):
+                datastore.getURIs(ref)
+
+            predicted_primary, predicted_disassembled = datastore.getURIs(ref, predict=True)
+            if disassembled:
+                self.assertIsNone(predicted_primary)
+                self.assertEqual(len(predicted_disassembled), 3)
+                for uri in predicted_disassembled.values():
+                    self.assertEqual(uri.fragment, "predicted")
+                    self.assertIn(datasetTypeName, uri.path)
+            else:
+                self.assertIn(datasetTypeName, predicted_primary.path)
+                self.assertFalse(predicted_disassembled)
+                self.assertEqual(predicted_primary.fragment, "predicted")
+
+            # Now enable registry-free trusting mode
+            datastore.trustGetRequest = True
+
+            # Try again to get it
+            metricsOut = datastore.get(ref)
+            self.assertEqual(metricsOut, metrics)
+
+            # Does it exist?
+            self.assertTrue(datastore.exists(ref))
+
+            # Get a component
+            comp = "data"
+            compRef = ref.makeComponentRef(comp)
+            output = datastore.get(compRef)
+            self.assertEqual(output, getattr(metrics, comp))
+
+            # Get the URI -- if we trust this should work even without
+            # enabling prediction.
+            primaryURI2, componentURIs2 = datastore.getURIs(ref)
+            self.assertEqual(primaryURI2, primaryURI)
+            self.assertEqual(componentURIs2, componentURIs)
+
     def testDisassembly(self):
         """Test disassembly within datastore."""
         metrics = makeExampleMetrics()
