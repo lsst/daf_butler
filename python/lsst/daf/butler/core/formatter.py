@@ -72,11 +72,18 @@ class Formatter(metaclass=ABCMeta):
         Identifies the file to read or write, and the associated storage
         classes and parameter information.  Its value can be `None` if the
         caller will never call `Formatter.read` or `Formatter.write`.
-    dataId : `DataCoordinate`, optional
+    dataId : `DataCoordinate`
         Data ID associated with this formatter.
     writeParameters : `dict`, optional
         Any parameters to be hard-coded into this instance to control how
         the dataset is serialized.
+    writeRecipes : `dict`, optional
+        Detailed write Recipes indexed by recipe name.
+
+    Notes
+    -----
+    All Formatter subclasses should share the base class's constructor
+    signature.
     """
 
     unsupportedParameters: ClassVar[Optional[AbstractSet[str]]] = frozenset()
@@ -97,11 +104,12 @@ class Formatter(metaclass=ABCMeta):
     assigned to the ``extension`` property will be automatically included in
     the list of supported extensions."""
 
-    def __init__(self, fileDescriptor: FileDescriptor, dataId: Optional[DataCoordinate] = None,
+    def __init__(self, fileDescriptor: FileDescriptor, dataId: DataCoordinate,
                  writeParameters: Optional[Dict[str, Any]] = None,
                  writeRecipes: Optional[Dict[str, Any]] = None):
         if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
+        assert dataId is not None, "dataId is now required for formatter initialization"
         self._fileDescriptor = fileDescriptor
         self._dataId = dataId
 
@@ -134,7 +142,7 @@ class Formatter(metaclass=ABCMeta):
         return self._fileDescriptor
 
     @property
-    def dataId(self) -> Optional[DataCoordinate]:
+    def dataId(self) -> DataCoordinate:
         """DataId associated with this formatter (`DataCoordinate`)"""
         return self._dataId
 
