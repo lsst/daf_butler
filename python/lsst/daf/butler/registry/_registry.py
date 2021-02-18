@@ -1452,7 +1452,12 @@ class Registry:
         Returns
         -------
         refs : `queries.DatasetQueryResults`
-            Dataset references matching the given query criteria.
+            Dataset references matching the given query criteria.  Nested data
+            IDs are guaranteed to include values for all implied dimensions
+            (i.e. `DataCoordinate.hasFull` will return `True`), but will not
+            include dimension records (`DataCoordinate.hasRecords` will be
+            `False`) unless `~queries.DatasetQueryResults.expanded` is called
+            on the result object (which returns a new one).
 
         Raises
         ------
