@@ -1,8 +1,8 @@
-# This file is part of obs_base.
+# This file is part of daf_butler.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
-# (https://www.lsst.org).
+# (http://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -19,6 +19,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .arguments import *
-from .options import *
-from .optionGroups import *
+from .. import Butler, CollectionType
+from ..script import QueryDatasets
+
+
+def associate(repo, collection, dataset_type, collections, where, find_first):
+    """Add existing datasets to a CHAINED collection.
+    """
+
+    butler = Butler(repo, writeable=True)
+
+    butler.registry.registerCollection(collection, CollectionType.TAGGED)
+
+    results = QueryDatasets(
+        butler=butler,
+        glob=dataset_type,
+        collections=collections,
+        where=where,
+        find_first=find_first,
+        show_uri=False,
+        repo=None
+    )
+
+    butler.registry.associate(collection, results.getDatasets())

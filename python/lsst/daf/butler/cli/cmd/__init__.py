@@ -19,7 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("butler_import",
+__all__ = ("associate",
+           "butler_import",
            "certify_calibrations",
            "create",
            "config_dump",
@@ -32,10 +33,11 @@ __all__ = ("butler_import",
            "query_datasets",
            "query_dimension_records",
            "remove_dataset_type",
-           )
+)
 
 
-from .commands import (butler_import,
+from .commands import (associate,
+                       butler_import,
                        certify_calibrations,
                        create,
                        config_dump,
@@ -48,4 +50,4 @@ from .commands import (butler_import,
                        query_datasets,
                        query_dimension_records,
                        remove_dataset_type,
-                       )
+)

@@ -52,6 +52,12 @@ typeStrAcceptsSingle = "TEXT"
 split_kv_separator = "="
 
 
+# The standard help string for the --where option when it takes a WHERE clause.
+where_help = "A string expression similar to a SQL WHERE clause. May involve any column of a " \
+             "dimension table or a dimension name as a shortcut for the primary key column of a " \
+             "dimension table."
+
+
 def astropyTablesToStr(tables):
     """Render astropy tables to string as they are displayed in the CLI.
 
@@ -668,6 +674,16 @@ class ButlerCommand(MWCommand):
     """Command subclass with butler-command specific overrides."""
 
     extra_epilog = "See 'butler --help' for more options."
+
+
+class OptionGroup:
+    """Base class for an option group decorator. Requires the option group
+    subclass to have a property called `decorator`."""
+
+    def __call__(self, f):
+        for decorator in reversed(self.decorators):
+            f = decorator(f)
+        return f
 
 
 class MWCtxObj():
