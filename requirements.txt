@@ -14,12 +14,11 @@ pandas >= 1.0
 numpy >= 1.17
 matplotlib >= 3.0.3
 pyarrow >= 0.16
-responses == 0.12.0
-urllib3 == 1.25
+responses >= 0.12.0
+urllib3 >= 1.25.10
 
-# We don't use mock directly, but something else (moto?) does and is
-# incompatible with mock == 4.0.3.
-mock == 4.0.2
+# We don't use mock directly, but something else (moto?) does
+mock >= 4.0.2
 
 # These are required by lsst.utils
 psutil >= 5.7
