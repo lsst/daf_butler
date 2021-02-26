@@ -23,6 +23,11 @@ jobs:
       - name: Install sqlite
         run: sudo apt-get install sqlite libyaml-dev
 
+      - name: Update pip/wheel infrastructure
+        run: |
+          python -m pip install --upgrade pip
+          pip install wheel
+
       - name: Install postgresql (server)
         run: sudo apt install postgresql
 
