@@ -466,16 +466,17 @@ class Query(ABC):
             else).
         """
         spec = self._makeTableSpec()
-        table = db.makeTemporaryTable(spec)
-        db.insert(table, select=self.sql, names=spec.fields.names)
-        yield MaterializedQuery(table=table,
-                                spatial=self.spatial,
-                                datasetType=self.datasetType,
-                                isUnique=self.isUnique(),
-                                graph=self.graph,
-                                whereRegion=self.whereRegion,
-                                managers=self.managers)
-        db.dropTemporaryTable(table)
+        with db.session() as session:
+            table = session.makeTemporaryTable(spec)
+            db.insert(table, select=self.sql, names=spec.fields.names)
+            yield MaterializedQuery(table=table,
+                                    spatial=self.spatial,
+                                    datasetType=self.datasetType,
+                                    isUnique=self.isUnique(),
+                                    graph=self.graph,
+                                    whereRegion=self.whereRegion,
+                                    managers=self.managers)
+            session.dropTemporaryTable(table)
 
     @abstractmethod
     def subset(self, *, graph: Optional[DimensionGraph] = None,

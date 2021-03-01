@@ -63,35 +63,38 @@ class PostgresqlDatabase(Database):
     on the database being connected to; this is checked at connection time.
     """
 
-    def __init__(self, *, connection: sqlalchemy.engine.Connection, origin: int,
+    def __init__(self, *, engine: sqlalchemy.engine.Engine, origin: int,
                  namespace: Optional[str] = None, writeable: bool = True):
-        super().__init__(origin=origin, connection=connection, namespace=namespace)
-        dbapi = connection.connection
-        try:
-            dsn = dbapi.get_dsn_parameters()
-        except (AttributeError, KeyError) as err:
-            raise RuntimeError("Only the psycopg2 driver for PostgreSQL is supported.") from err
-        if namespace is None:
-            namespace = connection.execute("SELECT current_schema();").scalar()
-        if not connection.execute("SELECT COUNT(*) FROM pg_extension WHERE extname='btree_gist';").scalar():
-            raise RuntimeError(
-                "The Butler PostgreSQL backend requires the btree_gist extension. "
-                "As extensions are enabled per-database, this may require an administrator to run "
-                "`CREATE EXTENSION btree_gist;` in a database before a butler client for it is initialized."
-            )
+        super().__init__(origin=origin, engine=engine, namespace=namespace)
+        with engine.connect() as connection:
+            dbapi = connection.connection
+            try:
+                dsn = dbapi.get_dsn_parameters()
+            except (AttributeError, KeyError) as err:
+                raise RuntimeError("Only the psycopg2 driver for PostgreSQL is supported.") from err
+            if namespace is None:
+                namespace = connection.execute("SELECT current_schema();").scalar()
+            query = "SELECT COUNT(*) FROM pg_extension WHERE extname='btree_gist';"
+            if not connection.execute(query).scalar():
+                raise RuntimeError(
+                    "The Butler PostgreSQL backend requires the btree_gist extension. "
+                    "As extensions are enabled per-database, this may require an administrator to run "
+                    "`CREATE EXTENSION btree_gist;` in a database before a butler client for it is "
+                    " initialized."
+                )
         self.namespace = namespace
         self.dbname = dsn.get("dbname")
         self._writeable = writeable
         self._shrinker = NameShrinker(connection.engine.dialect.max_identifier_length)
 
     @classmethod
-    def connect(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Connection:
-        return sqlalchemy.engine.create_engine(uri, poolclass=sqlalchemy.pool.NullPool).connect()
+    def makeEngine(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Engine:
+        return sqlalchemy.engine.create_engine(uri)
 
     @classmethod
-    def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
-                       namespace: Optional[str] = None, writeable: bool = True) -> Database:
-        return cls(connection=connection, origin=origin, namespace=namespace, writeable=writeable)
+    def fromEngine(cls, engine: sqlalchemy.engine.Engine, *, origin: int,
+                   namespace: Optional[str] = None, writeable: bool = True) -> Database:
+        return cls(engine=engine, origin=origin, namespace=namespace, writeable=writeable)
 
     @contextmanager
     def transaction(self, *, interrupting: bool = False, savepoint: bool = False,

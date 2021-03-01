@@ -149,12 +149,13 @@ class SqliteDatabase(Database):
     across databases well enough to define it.
     """
 
-    def __init__(self, *, connection: sqlalchemy.engine.Connection, origin: int,
+    def __init__(self, *, engine: sqlalchemy.engine.Engine, origin: int,
                  namespace: Optional[str] = None, writeable: bool = True):
-        super().__init__(origin=origin, connection=connection, namespace=namespace)
+        super().__init__(origin=origin, engine=engine, namespace=namespace)
         # Get the filename from a call to 'PRAGMA database_list'.
-        with closing(connection.connection.cursor()) as cursor:
-            dbList = list(cursor.execute("PRAGMA database_list").fetchall())
+        with engine.connect() as connection:
+            with closing(connection.connection.cursor()) as cursor:
+                dbList = list(cursor.execute("PRAGMA database_list").fetchall())
         if len(dbList) == 0:
             raise RuntimeError("No database in connection.")
         if namespace is None:
@@ -176,9 +177,9 @@ class SqliteDatabase(Database):
         return "sqlite:///" + os.path.join(root, "gen3.sqlite3")
 
     @classmethod
-    def connect(cls, uri: Optional[str] = None, *, filename: Optional[str] = None,
-                writeable: bool = True) -> sqlalchemy.engine.Connection:
-        """Create a `sqlalchemy.engine.Connection` from a SQLAlchemy URI or
+    def makeEngine(cls, uri: Optional[str] = None, *, filename: Optional[str] = None,
+                   writeable: bool = True) -> sqlalchemy.engine.Engine:
+        """Create a `sqlalchemy.engine.Engine` from a SQLAlchemy URI or
         filename.
 
         Parameters
@@ -188,18 +189,14 @@ class SqliteDatabase(Database):
         filename : `str`
             Name of the SQLite database file, or `None` to use an in-memory
             database.  Ignored if ``uri is not None``.
-        origin : `int`
-            An integer ID that should be used as the default for any datasets,
-            quanta, or other entities that use a (autoincrement, origin)
-            compound primary key.
         writeable : `bool`, optional
             If `True`, allow write operations on the database, including
             ``CREATE TABLE``.
 
         Returns
         -------
-        cs : `sqlalchemy.engine.Connection`
-            A database connection and transaction state.
+        engine : `sqlalchemy.engine.Engine`
+            A database engine.
         """
         # In order to be able to tell SQLite that we want a read-only or
         # read-write connection, we need to make the SQLite DBAPI connection
@@ -248,21 +245,20 @@ class SqliteDatabase(Database):
         def creator() -> sqlite3.Connection:
             return sqlite3.connect(target, check_same_thread=False, uri=True)
 
-        engine = sqlalchemy.engine.create_engine(uri, poolclass=sqlalchemy.pool.NullPool,
-                                                 creator=creator)
+        engine = sqlalchemy.engine.create_engine(uri, creator=creator)
 
         sqlalchemy.event.listen(engine, "connect", _onSqlite3Connect)
         sqlalchemy.event.listen(engine, "begin", _onSqlite3Begin)
         try:
-            return engine.connect()
+            return engine
         except sqlalchemy.exc.OperationalError as err:
             raise RuntimeError(f"Error creating connection with uri='{uri}', filename='{filename}', "
                                f"target={target}.") from err
 
     @classmethod
-    def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
-                       namespace: Optional[str] = None, writeable: bool = True) -> Database:
-        return cls(connection=connection, origin=origin, writeable=writeable, namespace=namespace)
+    def fromEngine(cls, engine: sqlalchemy.engine.Engine, *, origin: int,
+                   namespace: Optional[str] = None, writeable: bool = True) -> Database:
+        return cls(engine=engine, origin=origin, writeable=writeable, namespace=namespace)
 
     def isWriteable(self) -> bool:
         return self._writeable
