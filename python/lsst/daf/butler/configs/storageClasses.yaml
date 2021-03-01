@@ -186,8 +186,12 @@ storageClasses:
     pytype: lsst.verify.Measurement
   Stamps:
     pytype: lsst.meas.algorithms.Stamps
+    parameters:
+      - bbox
   BrightStarStamps:
     pytype: lsst.meas.algorithms.brightStarStamps.BrightStarStamps
+    parameters:
+      - bbox
   AstropyTable:
     pytype: astropy.table.Table
   AstropyQTable:
