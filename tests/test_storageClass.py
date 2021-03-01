@@ -68,7 +68,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertIs(scn.pytype, object)
 
         # Include some components
-        scc = StorageClass(className, pytype=PythonType, components={"comp1": sc})
+        scc = StorageClass(className, pytype=PythonType, components={"comp1": sc, "comp2": sc})
         self.assertIn("comp1", scc.components)
         r = repr(scc)
         self.assertIn("comp1", r)
@@ -131,10 +131,11 @@ class StorageClassFactoryTestCase(unittest.TestCase):
                            components={"comp1": sc4, "comp2": sc3})
         self.assertNotEqual(sc5, sc7)
         sc8 = StorageClass("Composite", pytype=PythonType,
-                           components={"comp2": sc3})
+                           components={"comp2": sc3, "comp3": sc3})
         self.assertNotEqual(sc5, sc8)
         sc9 = StorageClass("Composite", pytype=PythonType,
-                           components={"comp2": sc3}, delegate="lsst.daf.butler.Butler")
+                           components={"comp1": sc1, "comp2": sc3},
+                           delegate="lsst.daf.butler.Butler")
         self.assertNotEqual(sc5, sc9)
 
     def testRegistry(self):
