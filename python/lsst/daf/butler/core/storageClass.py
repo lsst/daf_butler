@@ -119,7 +119,14 @@ class StorageClass:
             self._pytypeName = pytype
             self._pytype = None
 
-        self._components = components if components is not None else {}
+        if components is not None:
+            if len(components) == 1:
+                raise ValueError(f"Composite storage class {name} is not allowed to have"
+                                 f" only one component '{next(iter(components))}'."
+                                 " Did you mean it to be a derived component?")
+            self._components = components
+        else:
+            self._components = {}
         self._derivedComponents = derivedComponents if derivedComponents is not None else {}
         self._parameters = frozenset(parameters) if parameters is not None else frozenset()
         # if the delegate is not None also set it and clear the default

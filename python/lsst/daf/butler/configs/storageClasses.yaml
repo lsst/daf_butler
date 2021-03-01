@@ -87,7 +87,7 @@ storageClasses:
     pytype: lsst.afw.table.ExposureCatalog
   DataFrame:
     pytype: pandas.DataFrame
-    components:
+    derivedComponents:
       columns: DataFrameIndex
     parameters:
       - columns

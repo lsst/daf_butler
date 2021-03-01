@@ -69,7 +69,7 @@ class TestCompositesConfig(unittest.TestCase):
 
         # Repeat but this time use a composite storage class
         sccomp = StorageClass("Dummy")
-        sc = StorageClass("StructuredDataJson", components={"dummy": sccomp})
+        sc = StorageClass("StructuredDataJson", components={"dummy": sccomp, "dummy2": sccomp})
         d = DatasetType("dummyTrue", universe.empty, sc)
         self.assertTrue(sc.isComposite())
         self.assertTrue(d.isComposite())
@@ -85,9 +85,13 @@ class TestCompositesConfig(unittest.TestCase):
         self.assertFalse(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
 
         # StorageClass that will be disassembled
-        sc = StorageClass("StructuredComposite", components={"dummy": sccomp})
+        sc = StorageClass("StructuredComposite", components={"dummy": sccomp, "dummy2": sccomp})
         d = DatasetType("dummyFred", universe.empty, sc)
         self.assertTrue(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
+
+        # Check that we are not allowed a single component in a composite
+        with self.assertRaises(ValueError):
+            StorageClass("TestSC", components={"dummy": sccomp})
 
 
 if __name__ == "__main__":
