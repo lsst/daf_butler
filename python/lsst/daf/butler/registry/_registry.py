@@ -307,6 +307,18 @@ class Registry:
             self._managers.dimensions.clearCaches()
             raise
 
+    def resetConnectionPool(self) -> None:
+        """Reset SQLAlchemy connection pool for registry database.
+
+        This operation is useful when using registry with fork-based
+        multiprocessing. To use registry across fork boundary one has to make
+        sure that there are no currently active connections (no session or
+        transaction is in progress) and connection pool is reset using this
+        method. This method should be called by the child process immediately
+        after the fork.
+        """
+        self._db._engine.dispose()
+
     def registerOpaqueTable(self, tableName: str, spec: ddl.TableSpec) -> None:
         """Add an opaque (to the `Registry`) table for use by a `Datastore` or
         other data repository client.

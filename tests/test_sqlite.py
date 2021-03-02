@@ -62,7 +62,7 @@ def isEmptyDatabaseActuallyWriteable(database: SqliteDatabase) -> bool:
                 ddl.TableSpec(fields=[ddl.FieldSpec("b", dtype=sqlalchemy.Integer, primaryKey=True)])
             )
         # Drop created table so that schema remains empty.
-        database._metadata.drop_all(database._connection, tables=[table])
+        database._metadata.drop_all(database._engine, tables=[table])
         return True
     except Exception:
         return False
@@ -80,13 +80,12 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
     def makeEmptyDatabase(self, origin: int = 0) -> SqliteDatabase:
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
-        connection = SqliteDatabase.connect(filename=filename)
-        return SqliteDatabase.fromConnection(connection=connection, origin=origin)
+        engine = SqliteDatabase.makeEngine(filename=filename)
+        return SqliteDatabase.fromEngine(engine=engine, origin=origin)
 
     def getNewConnection(self, database: SqliteDatabase, *, writeable: bool) -> SqliteDatabase:
-        connection = SqliteDatabase.connect(filename=database.filename, writeable=writeable)
-        return SqliteDatabase.fromConnection(origin=database.origin, connection=connection,
-                                             writeable=writeable)
+        engine = SqliteDatabase.makeEngine(filename=database.filename, writeable=writeable)
+        return SqliteDatabase.fromEngine(origin=database.origin, engine=engine, writeable=writeable)
 
     @contextmanager
     def asReadOnly(self, database: SqliteDatabase) -> SqliteDatabase:
@@ -99,7 +98,7 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
         """
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         # Create a read-write database by passing in the filename.
-        rwFromFilename = SqliteDatabase.fromConnection(SqliteDatabase.connect(filename=filename), origin=0)
+        rwFromFilename = SqliteDatabase.fromEngine(SqliteDatabase.makeEngine(filename=filename), origin=0)
         self.assertEqual(rwFromFilename.filename, filename)
         self.assertEqual(rwFromFilename.origin, 0)
         self.assertTrue(rwFromFilename.isWriteable())
@@ -112,13 +111,13 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
         self.assertTrue(isEmptyDatabaseActuallyWriteable(rwFromUri))
         # We don't support SQLite URIs inside SQLAlchemy URIs.
         with self.assertRaises(NotImplementedError):
-            SqliteDatabase.connect(uri=f"sqlite:///file:{filename}?uri=true")
+            SqliteDatabase.makeEngine(uri=f"sqlite:///file:{filename}?uri=true")
 
         # Test read-only connections against a read-only file.
         with removeWritePermission(filename):
             # Create a read-only database by passing in the filename.
-            roFromFilename = SqliteDatabase.fromConnection(SqliteDatabase.connect(filename=filename),
-                                                           origin=0, writeable=False)
+            roFromFilename = SqliteDatabase.fromEngine(SqliteDatabase.makeEngine(filename=filename),
+                                                       origin=0, writeable=False)
             self.assertEqual(roFromFilename.filename, filename)
             self.assertEqual(roFromFilename.origin, 0)
             self.assertFalse(roFromFilename.isWriteable())
@@ -141,12 +140,12 @@ class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
     """
 
     def makeEmptyDatabase(self, origin: int = 0) -> SqliteDatabase:
-        connection = SqliteDatabase.connect(filename=None)
-        return SqliteDatabase.fromConnection(connection=connection, origin=origin)
+        engine = SqliteDatabase.makeEngine(filename=None)
+        return SqliteDatabase.fromEngine(engine=engine, origin=origin)
 
     def getNewConnection(self, database: SqliteDatabase, *, writeable: bool) -> SqliteDatabase:
-        return SqliteDatabase.fromConnection(origin=database.origin, connection=database._connection,
-                                             writeable=writeable)
+        return SqliteDatabase.fromEngine(origin=database.origin, engine=database._engine,
+                                         writeable=writeable)
 
     @contextmanager
     def asReadOnly(self, database: SqliteDatabase) -> SqliteDatabase:
@@ -157,7 +156,7 @@ class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
         are equivalent.
         """
         # Create an in-memory database by passing filename=None.
-        memFromFilename = SqliteDatabase.fromConnection(SqliteDatabase.connect(filename=None), origin=0)
+        memFromFilename = SqliteDatabase.fromEngine(SqliteDatabase.makeEngine(filename=None), origin=0)
         self.assertIsNone(memFromFilename.filename)
         self.assertEqual(memFromFilename.origin, 0)
         self.assertTrue(memFromFilename.isWriteable())
@@ -170,10 +169,10 @@ class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
         self.assertTrue(isEmptyDatabaseActuallyWriteable(memFromUri))
         # We don't support SQLite URIs inside SQLAlchemy URIs.
         with self.assertRaises(NotImplementedError):
-            SqliteDatabase.connect(uri="sqlite:///:memory:?uri=true")
+            SqliteDatabase.makeEngine(uri="sqlite:///:memory:?uri=true")
         # We don't support read-only in-memory databases.
         with self.assertRaises(NotImplementedError):
-            SqliteDatabase.connect(filename=None, writeable=False)
+            SqliteDatabase.makeEngine(filename=None, writeable=False)
 
     def testTransactionLocking(self):
         # This (inherited) test can't run on SQLite because of our use of an

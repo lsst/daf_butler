@@ -241,66 +241,70 @@ class DatabaseTests(ABC):
                                   {"name": "b3", "value": 13},
                                   returnIds=True)
         # Create the table.
-        table1 = newDatabase.makeTemporaryTable(TEMPORARY_TABLE_SPEC, "e1")
-        self.checkTable(TEMPORARY_TABLE_SPEC, table1)
-        # Insert via a INSERT INTO ... SELECT query.
-        newDatabase.insert(
-            table1,
-            select=sqlalchemy.sql.select(
-                [static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")]
-            ).select_from(
-                static.a.join(static.b, onclause=sqlalchemy.sql.literal(True))
-            ).where(
-                sqlalchemy.sql.and_(
-                    static.a.columns.name == "a1",
-                    static.b.columns.value <= 12,
-                )
-            )
-        )
-        # Check that the inserted rows are present.
-        self.assertCountEqual(
-            [{"a_name": "a1", "b_id": bId} for bId in bIds[:2]],
-            [dict(row) for row in newDatabase.query(table1.select())]
-        )
-        # Create another one via a read-only connection to the database.
-        # We _do_ allow temporary table modifications in read-only databases.
-        with self.asReadOnly(newDatabase) as existingReadOnlyDatabase:
-            with existingReadOnlyDatabase.declareStaticTables(create=False) as context:
-                context.addTableTuple(STATIC_TABLE_SPECS)
-            table2 = existingReadOnlyDatabase.makeTemporaryTable(TEMPORARY_TABLE_SPEC)
-            self.checkTable(TEMPORARY_TABLE_SPEC, table2)
-            # Those tables should not be the same, despite having the same ddl.
-            self.assertIsNot(table1, table2)
-            # Do a slightly different insert into this table, to check that
-            # it works in a read-only database.  This time we pass column
-            # names as a kwarg to insert instead of by labeling the columns in
-            # the select.
-            existingReadOnlyDatabase.insert(
-                table2,
+        with newDatabase.session() as session:
+            table1 = session.makeTemporaryTable(TEMPORARY_TABLE_SPEC, "e1")
+            self.checkTable(TEMPORARY_TABLE_SPEC, table1)
+            # Insert via a INSERT INTO ... SELECT query.
+            newDatabase.insert(
+                table1,
                 select=sqlalchemy.sql.select(
-                    [static.a.columns.name, static.b.columns.id]
+                    [static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")]
                 ).select_from(
                     static.a.join(static.b, onclause=sqlalchemy.sql.literal(True))
                 ).where(
                     sqlalchemy.sql.and_(
-                        static.a.columns.name == "a2",
-                        static.b.columns.value >= 12,
+                        static.a.columns.name == "a1",
+                        static.b.columns.value <= 12,
                     )
-                ),
-                names=["a_name", "b_id"],
+                )
             )
             # Check that the inserted rows are present.
             self.assertCountEqual(
-                [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
-                [dict(row) for row in existingReadOnlyDatabase.query(table2.select())]
+                [{"a_name": "a1", "b_id": bId} for bId in bIds[:2]],
+                [dict(row) for row in newDatabase.query(table1.select())]
             )
-            # Drop the temporary table from the read-only DB.  It's unspecified
-            # whether attempting to use it after this point is an error or just
-            # never returns any results, so we can't test what it does, only
-            # that it's not an error.
-            existingReadOnlyDatabase.dropTemporaryTable(table2)
-        # Drop the original temporary table.
-        newDatabase.dropTemporaryTable(table1)
+            # Create another one via a read-only connection to the database.
+            # We _do_ allow temporary table modifications in read-only
+            # databases.
+            with self.asReadOnly(newDatabase) as existingReadOnlyDatabase:
+                with existingReadOnlyDatabase.declareStaticTables(create=False) as context:
+                    context.addTableTuple(STATIC_TABLE_SPECS)
+                with existingReadOnlyDatabase.session() as session2:
+                    table2 = session2.makeTemporaryTable(TEMPORARY_TABLE_SPEC)
+                    self.checkTable(TEMPORARY_TABLE_SPEC, table2)
+                    # Those tables should not be the same, despite having the
+                    # same ddl.
+                    self.assertIsNot(table1, table2)
+                    # Do a slightly different insert into this table, to check
+                    # that it works in a read-only database.  This time we
+                    # pass column names as a kwarg to insert instead of by
+                    # labeling the columns in the select.
+                    existingReadOnlyDatabase.insert(
+                        table2,
+                        select=sqlalchemy.sql.select(
+                            [static.a.columns.name, static.b.columns.id]
+                        ).select_from(
+                            static.a.join(static.b, onclause=sqlalchemy.sql.literal(True))
+                        ).where(
+                            sqlalchemy.sql.and_(
+                                static.a.columns.name == "a2",
+                                static.b.columns.value >= 12,
+                            )
+                        ),
+                        names=["a_name", "b_id"],
+                    )
+                    # Check that the inserted rows are present.
+                    self.assertCountEqual(
+                        [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
+                        [dict(row) for row in existingReadOnlyDatabase.query(table2.select())]
+                    )
+                    # Drop the temporary table from the read-only DB.  It's
+                    # unspecified whether attempting to use it after this
+                    # point is an error or just never returns any results, so
+                    # we can't test what it does, only that it's not an error.
+                    session2.dropTemporaryTable(table2)
+            # Drop the original temporary table.
+            session.dropTemporaryTable(table1)
 
     def testSchemaSeparation(self):
         """Test that creating two different `Database` instances allows us
