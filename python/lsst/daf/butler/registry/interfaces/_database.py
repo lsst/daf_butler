@@ -180,15 +180,15 @@ class Session:
 
     Notes
     -----
-    Instances of Session class should not be created by client code, the
+    Instances of Session class should not be created by client code;
     `Database.session` should be used to create context for a session::
 
         with db.session() as session:
             session.method()
             db.method()
 
-    In current implementation sessions can be nested and transactions can be
-    nested within a session. All nested sessions and transaction share the
+    In the current implementation sessions can be nested and transactions can
+    be nested within a session. All nested sessions and transaction share the
     same database connection.
 
     Session class represents a limited subset of database API that requires
