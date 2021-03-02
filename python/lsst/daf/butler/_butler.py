@@ -787,9 +787,13 @@ class Butler:
             if allowUnresolved:
                 return DatasetRef(datasetType, dataId)
             else:
+                if collections is None:
+                    collections = self.registry.defaults.collections
                 raise LookupError(f"Dataset {datasetType.name} with data ID {dataId} "
                                   f"could not be found in collections {collections}.")
         if idNumber is not None and idNumber != ref.id:
+            if collections is None:
+                collections = self.registry.defaults.collections
             raise ValueError(f"DatasetRef.id provided ({idNumber}) does not match "
                              f"id ({ref.id}) in registry in collections {collections}.")
         return ref
