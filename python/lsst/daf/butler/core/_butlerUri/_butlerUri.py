@@ -478,7 +478,12 @@ class ButlerURI:
         POSIX separator if the supplied path has directory structure. It
         may be this never becomes a problem but datastore templates assume
         POSIX separator is being used.
+
+        Currently, if the join path is given as an absolute scheme-less
+        URI it will be returned as an absolute ``file:`` URI even if the
+        URI it is being joined to is non-file.
         """
+
         # If we have a full URI in path we will use it directly
         # but without forcing to absolute so that we can trap the
         # expected option of relative path.
