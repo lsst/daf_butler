@@ -1202,8 +1202,12 @@ class Database(ABC):
                 # ones that perform similar logic.
                 n, bad, result = check()
                 if n < 1:
-                    raise RuntimeError(
-                        "Necessary insertion in sync did not seem to affect table.  This is a bug."
+                    raise ConflictingDefinitionError(
+                        f"Attempted to ensure {row} exists by inserting it with ON CONFLICT IGNORE, "
+                        f"but a post-insert query on {keys} returned no results. "
+                        f"Insert was {'' if inserted else 'not '}reported as successful. "
+                        "This can occur if the insert violated a database constraint other than the "
+                        "unique constraint or primary key used to identify the row in this call."
                     )
                 elif n > 1:
                     raise RuntimeError(f"Keys passed to sync {keys.keys()} do not comprise a "
