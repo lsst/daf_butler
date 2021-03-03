@@ -813,7 +813,8 @@ class ButlerURI:
 
     @classmethod
     def findFileResources(cls, candidates: Iterable[Union[str, ButlerURI]],
-                          file_filter: Optional[str] = None) -> Iterator[ButlerURI]:
+                          file_filter: Optional[str] = None,
+                          grouped: bool = False) -> Iterator[Union[ButlerURI, Iterator[ButlerURI]]]:
         """Get the files from a list of values. If a value is a file it is
         yielded immediately. If a value is a directory, all the files in
         the directory (recursively) that match the regex will be yielded in
@@ -827,11 +828,18 @@ class ButlerURI:
         file_filter : `str`, optional
             The regex to use when searching for files within directories.
             By default returns all the found files.
+        grouped : `bool`, optional
+            If `True` the results will be grouped by directly and each
+            yielded value will be an iterator over URIs. If `False` each
+            URI will be returned separately.
 
         Yields
         ------
         found_file: `ButlerURI`
             The passed-in URIs and URIs found in passed-in directories.
+            If grouping is enabled, each of the yielded values will be an
+            iterator yielding members of the group. This includes single
+            files that were initially passed in.
         """
         fileRegex = None if file_filter is None else re.compile(file_filter)
 
@@ -840,7 +848,15 @@ class ButlerURI:
             uri = ButlerURI(location)
             if uri.isdir():
                 for root, dirs, files in uri.walk(fileRegex):
-                    for name in files:
-                        yield root.join(name)
+                    if not files:
+                        continue
+                    if grouped:
+                        yield (root.join(name) for name in files)
+                    else:
+                        for name in files:
+                            yield root.join(name)
             else:
-                yield uri
+                if grouped:
+                    yield iter([uri])
+                else:
+                    yield uri

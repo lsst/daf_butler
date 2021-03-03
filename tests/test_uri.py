@@ -280,10 +280,10 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(found, expected)
 
         # Now solely the YAML files
-        expected = set(glob.glob(os.path.join(TESTDIR, "config", "**", "*.yaml"), recursive=True))
+        expected_yaml = set(glob.glob(os.path.join(TESTDIR, "config", "**", "*.yaml"), recursive=True))
         found = set(u.ospath for u in ButlerURI.findFileResources([test_dir_uri.join("config")],
                                                                   file_filter=r".*\.yaml$"))
-        self.assertEqual(found, expected)
+        self.assertEqual(found, expected_yaml)
 
         # Now two explicit directories and a file
         expected = set(glob.glob(os.path.join(TESTDIR, "config", "**", "basic", "*.yaml"), recursive=True))
@@ -295,6 +295,22 @@ class FileURITestCase(unittest.TestCase):
                                                                    test_dir_uri.join("config/templates")],
                                                                   file_filter=r".*\.yaml$"))
         self.assertEqual(found, expected)
+
+        # Group by directory -- find everything and compare it with what
+        # we expected to be there in total. We expect to find 9 directories
+        # containing yaml files so make sure we only iterate 9 times.
+        found_yaml = set()
+        counter = 0
+        for uris in ButlerURI.findFileResources([file, test_dir_uri.join("config/")],
+                                                file_filter=r".*\.yaml$", grouped=True):
+            found = set(u.ospath for u in uris)
+            if found:
+                counter += 1
+
+            found_yaml.update(found)
+
+        self.assertEqual(found_yaml, expected_yaml)
+        self.assertEqual(counter, 9)
 
         with self.assertRaises(ValueError):
             list(file.walk())
