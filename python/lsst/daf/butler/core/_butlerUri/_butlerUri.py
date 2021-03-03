@@ -35,7 +35,9 @@ __all__ = ('ButlerURI',)
 from typing import (
     TYPE_CHECKING,
     Any,
+    Iterable,
     Iterator,
+    List,
     Optional,
     Tuple,
     Type,
@@ -656,6 +658,10 @@ class ButlerURI:
         """
         raise NotImplementedError()
 
+    def isdir(self) -> bool:
+        """Return True if this URI looks like a directory, else False."""
+        return self.dirLike
+
     def size(self) -> int:
         """For non-dir-like URI, return the size of the resource.
 
@@ -782,3 +788,59 @@ class ButlerURI:
         expected to be problematic if a remote resource was involved.
         """
         raise NotImplementedError(f"No transfer modes supported by URI scheme {self.scheme}")
+
+    def walk(self, filter: Optional[Union[str, re.Pattern]] = None) -> Iterator[Tuple[ButlerURI,
+                                                                                List[str], List[str]]]:
+        """For dir-like URI, walk the directory returning matching files and
+        directories.
+
+        Parameters
+        ----------
+        filter : `str` or `re.Pattern`, optional
+            Regex to filter out files from the list before it is returned.
+
+        Yields
+        ------
+        dirpath : `ButlerURI`
+            Current directory being examined.
+        dirnames : `list` of `str`
+            Names of subdirectories within dirpath.
+        filenames : `list` of `str`
+            Names of all the files within dirpath.
+        """
+        print("WHAT IS HAPPENING")
+        raise NotImplementedError()
+
+    @classmethod
+    def findFileResources(cls, candidates: Iterable[Union[str, ButlerURI]],
+                          file_filter: Optional[str] = None) -> Iterator[ButlerURI]:
+        """Get the files from a list of values. If a value is a file it is
+        yielded immediately. If a value is a directory, all the files in
+        the directory (recursively) that match the regex will be yielded in
+        turn.
+
+        Parameters
+        ----------
+        candidates : iterable [`str` or `ButlerURI`]
+            The files to return and directories in which to look for files to
+            return.
+        file_filter : `str`, optional
+            The regex to use when searching for files within directories.
+            By default returns all the found files.
+
+        Yields
+        ------
+        found_file: `ButlerURI`
+            The passed-in URIs and URIs found in passed-in directories.
+        """
+        fileRegex = None if file_filter is None else re.compile(file_filter)
+
+        # Find all the files of interest
+        for location in candidates:
+            uri = ButlerURI(location)
+            if uri.isdir():
+                for root, dirs, files in uri.walk(fileRegex):
+                    for name in files:
+                        yield root.join(name)
+            else:
+                yield uri

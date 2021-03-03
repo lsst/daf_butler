@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import glob
 import os
 import shutil
 import unittest
@@ -262,6 +263,41 @@ class FileURITestCase(unittest.TestCase):
         uri = ButlerURI(hash_path)
         self.assertEqual(uri.ospath, hash_path[:hpos])
         self.assertEqual(uri.fragment, hash_path[hpos + 1:])
+
+    def testWalk(self):
+        """Test ButlerURI.walk()."""
+        test_dir_uri = ButlerURI(TESTDIR)
+
+        file = test_dir_uri.join("config/basic/butler.yaml")
+        found = list(ButlerURI.findFileResources([file]))
+        self.assertEqual(found[0], file)
+
+        # ButlerURI is not hashable so can't be put in a set
+        # Instead we put a string form in the set for comparison
+        expected = set(p for p in glob.glob(os.path.join(TESTDIR, "config", "**"), recursive=True)
+                       if os.path.isfile(p))
+        found = set(u.ospath for u in ButlerURI.findFileResources([test_dir_uri.join("config")]))
+        self.assertEqual(found, expected)
+
+        # Now solely the YAML files
+        expected = set(glob.glob(os.path.join(TESTDIR, "config", "**", "*.yaml"), recursive=True))
+        found = set(u.ospath for u in ButlerURI.findFileResources([test_dir_uri.join("config")],
+                                                                  file_filter=r".*\.yaml$"))
+        self.assertEqual(found, expected)
+
+        # Now two explicit directories and a file
+        expected = set(glob.glob(os.path.join(TESTDIR, "config", "**", "basic", "*.yaml"), recursive=True))
+        expected.update(set(glob.glob(os.path.join(TESTDIR, "config", "**", "templates", "*.yaml"),
+                                      recursive=True)))
+        expected.add(file.ospath)
+
+        found = set(u.ospath for u in ButlerURI.findFileResources([file, test_dir_uri.join("config/basic"),
+                                                                   test_dir_uri.join("config/templates")],
+                                                                  file_filter=r".*\.yaml$"))
+        self.assertEqual(found, expected)
+
+        with self.assertRaises(ValueError):
+            list(file.walk())
 
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
