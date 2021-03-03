@@ -502,6 +502,12 @@ class ButlerURI:
             path = urllib.parse.quote(path)
 
         newpath = self._pathModule.normpath(self._pathModule.join(new.path, path))
+
+        # normpath can strip trailing / so for consistency we add it back
+        # since geturl() does not add it
+        if path.endswith(self._pathModule.sep) and not newpath.endswith(self._pathModule.sep):
+            newpath += self._pathModule.sep
+
         new._uri = new._uri._replace(path=newpath)
         # Declare the new URI not be dirLike unless path ended in /
         if not path.endswith(self._pathModule.sep):
