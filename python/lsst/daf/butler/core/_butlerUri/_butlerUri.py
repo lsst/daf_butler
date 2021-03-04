@@ -35,7 +35,9 @@ __all__ = ('ButlerURI',)
 from typing import (
     TYPE_CHECKING,
     Any,
+    Iterable,
     Iterator,
+    List,
     Optional,
     Tuple,
     Type,
@@ -478,7 +480,12 @@ class ButlerURI:
         POSIX separator if the supplied path has directory structure. It
         may be this never becomes a problem but datastore templates assume
         POSIX separator is being used.
+
+        Currently, if the join path is given as an absolute scheme-less
+        URI it will be returned as an absolute ``file:`` URI even if the
+        URI it is being joined to is non-file.
         """
+
         # If we have a full URI in path we will use it directly
         # but without forcing to absolute so that we can trap the
         # expected option of relative path.
@@ -497,6 +504,12 @@ class ButlerURI:
             path = urllib.parse.quote(path)
 
         newpath = self._pathModule.normpath(self._pathModule.join(new.path, path))
+
+        # normpath can strip trailing / so for consistency we add it back
+        # since geturl() does not add it
+        if path.endswith(self._pathModule.sep) and not newpath.endswith(self._pathModule.sep):
+            newpath += self._pathModule.sep
+
         new._uri = new._uri._replace(path=newpath)
         # Declare the new URI not be dirLike unless path ended in /
         if not path.endswith(self._pathModule.sep):
@@ -645,6 +658,10 @@ class ButlerURI:
         """
         raise NotImplementedError()
 
+    def isdir(self) -> bool:
+        """Return True if this URI looks like a directory, else False."""
+        return self.dirLike
+
     def size(self) -> int:
         """For non-dir-like URI, return the size of the resource.
 
@@ -771,3 +788,87 @@ class ButlerURI:
         expected to be problematic if a remote resource was involved.
         """
         raise NotImplementedError(f"No transfer modes supported by URI scheme {self.scheme}")
+
+    def walk(self, file_filter: Optional[Union[str, re.Pattern]] = None) -> Iterator[Union[List,
+                                                                                           Tuple[ButlerURI,
+                                                                                                 List[str],
+                                                                                                 List[str]]]]:
+        """For dir-like URI, walk the directory returning matching files and
+        directories.
+
+        Parameters
+        ----------
+        file_filter : `str` or `re.Pattern`, optional
+            Regex to filter out files from the list before it is returned.
+
+        Yields
+        ------
+        dirpath : `ButlerURI`
+            Current directory being examined.
+        dirnames : `list` of `str`
+            Names of subdirectories within dirpath.
+        filenames : `list` of `str`
+            Names of all the files within dirpath.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def findFileResources(cls, candidates: Iterable[Union[str, ButlerURI]],
+                          file_filter: Optional[str] = None,
+                          grouped: bool = False) -> Iterator[Union[ButlerURI, Iterator[ButlerURI]]]:
+        """Get the files from a list of values. If a value is a file it is
+        yielded immediately. If a value is a directory, all the files in
+        the directory (recursively) that match the regex will be yielded in
+        turn.
+
+        Parameters
+        ----------
+        candidates : iterable [`str` or `ButlerURI`]
+            The files to return and directories in which to look for files to
+            return.
+        file_filter : `str`, optional
+            The regex to use when searching for files within directories.
+            By default returns all the found files.
+        grouped : `bool`, optional
+            If `True` the results will be grouped by directory and each
+            yielded value will be an iterator over URIs. If `False` each
+            URI will be returned separately.
+
+        Yields
+        ------
+        found_file: `ButlerURI`
+            The passed-in URIs and URIs found in passed-in directories.
+            If grouping is enabled, each of the yielded values will be an
+            iterator yielding members of the group. Files given explicitly
+            will be returned as a single group at the end.
+        """
+        fileRegex = None if file_filter is None else re.compile(file_filter)
+
+        singles = []
+
+        # Find all the files of interest
+        for location in candidates:
+            uri = ButlerURI(location)
+            if uri.isdir():
+                for found in uri.walk(fileRegex):
+                    if not found:
+                        # This means the uri does not exist and by
+                        # convention we ignore it
+                        continue
+                    root, dirs, files = found
+                    if not files:
+                        continue
+                    if grouped:
+                        yield (root.join(name) for name in files)
+                    else:
+                        for name in files:
+                            yield root.join(name)
+            else:
+                if grouped:
+                    singles.append(uri)
+                else:
+                    yield uri
+
+        # Finally, return any explicitly given files in one group
+        if grouped and singles:
+            yield iter(singles)

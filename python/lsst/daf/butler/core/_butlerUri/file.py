@@ -28,12 +28,15 @@ import urllib.parse
 import posixpath
 import copy
 import logging
+import re
 
 __all__ = ('ButlerFileURI',)
 
 from typing import (
     TYPE_CHECKING,
     cast,
+    Iterator,
+    List,
     Optional,
     Tuple,
     Union,
@@ -196,6 +199,12 @@ class ButlerFileURI(ButlerURI):
         elif not os.path.isdir(self.ospath):
             raise FileExistsError(f"URI {self} exists but is not a directory!")
 
+    def isdir(self) -> bool:
+        """Return True if this URI is a directory or looks like a directory,
+        else False.
+        """
+        return self.dirLike or os.path.isdir(self.ospath)
+
     def transfer_from(self, src: ButlerURI, transfer: str,
                       overwrite: bool = False,
                       transaction: Optional[Union[DatastoreTransaction, NoTransaction]] = None) -> None:
@@ -322,6 +331,39 @@ class ButlerFileURI(ButlerURI):
             if requested_transfer == "move" and is_temporary:
                 # Transactions do not work here
                 src.remove()
+
+    def walk(self, file_filter: Optional[Union[str, re.Pattern]] = None) -> Iterator[Union[List,
+                                                                                           Tuple[ButlerURI,
+                                                                                                 List[str],
+                                                                                                 List[str]]]]:
+        """For dir-like URI, walk the directory returning matching files and
+        directories.
+
+        Parameters
+        ----------
+        file_filter : `str` or `re.Pattern`, optional
+            Regex to filter out files from the list before it is returned.
+
+        Yields
+        ------
+        dirpath : `ButlerURI`
+            Current directory being examined.
+        dirnames : `list` of `str`
+            Names of subdirectories within dirpath.
+        filenames : `list` of `str`
+            Names of all the files within dirpath.
+        """
+        if not self.isdir():
+            raise ValueError("Can not walk a non-directory URI")
+
+        if isinstance(file_filter, str):
+            file_filter = re.compile(file_filter)
+
+        for root, dirs, files in os.walk(self.ospath):
+            # Filter by the regex
+            if file_filter is not None:
+                files = [f for f in files if file_filter.search(f)]
+            yield type(self)(root, forceAbsolute=False, forceDirectory=True), dirs, files
 
     @staticmethod
     def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,

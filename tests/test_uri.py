@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import glob
 import os
 import shutil
 import unittest
@@ -263,6 +264,65 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(uri.ospath, hash_path[:hpos])
         self.assertEqual(uri.fragment, hash_path[hpos + 1:])
 
+    def testWalk(self):
+        """Test ButlerURI.walk()."""
+        test_dir_uri = ButlerURI(TESTDIR)
+
+        file = test_dir_uri.join("config/basic/butler.yaml")
+        found = list(ButlerURI.findFileResources([file]))
+        self.assertEqual(found[0], file)
+
+        # ButlerURI is not hashable so can't be put in a set
+        # Instead we put a string form in the set for comparison
+        expected = set(p for p in glob.glob(os.path.join(TESTDIR, "config", "**"), recursive=True)
+                       if os.path.isfile(p))
+        found = set(u.ospath for u in ButlerURI.findFileResources([test_dir_uri.join("config")]))
+        self.assertEqual(found, expected)
+
+        # Now solely the YAML files
+        expected_yaml = set(glob.glob(os.path.join(TESTDIR, "config", "**", "*.yaml"), recursive=True))
+        found = set(u.ospath for u in ButlerURI.findFileResources([test_dir_uri.join("config")],
+                                                                  file_filter=r".*\.yaml$"))
+        self.assertEqual(found, expected_yaml)
+
+        # Now two explicit directories and a file
+        expected = set(glob.glob(os.path.join(TESTDIR, "config", "**", "basic", "*.yaml"), recursive=True))
+        expected.update(set(glob.glob(os.path.join(TESTDIR, "config", "**", "templates", "*.yaml"),
+                                      recursive=True)))
+        expected.add(file.ospath)
+
+        found = set(u.ospath for u in ButlerURI.findFileResources([file, test_dir_uri.join("config/basic"),
+                                                                   test_dir_uri.join("config/templates")],
+                                                                  file_filter=r".*\.yaml$"))
+        self.assertEqual(found, expected)
+
+        # Group by directory -- find everything and compare it with what
+        # we expected to be there in total. We expect to find 9 directories
+        # containing yaml files so make sure we only iterate 9 times.
+        found_yaml = set()
+        counter = 0
+        for uris in ButlerURI.findFileResources([file, test_dir_uri.join("config/")],
+                                                file_filter=r".*\.yaml$", grouped=True):
+            found = set(u.ospath for u in uris)
+            if found:
+                counter += 1
+
+            found_yaml.update(found)
+
+        self.assertEqual(found_yaml, expected_yaml)
+        self.assertEqual(counter, 9)
+
+        # Grouping but check that single files are returned in a single group
+        # at the end
+        file2 = test_dir_uri.join("config/templates/templates-bad.yaml")
+        found = list(ButlerURI.findFileResources([file, file2, test_dir_uri.join("config/dbAuth")],
+                                                 grouped=True))
+        self.assertEqual(len(found), 2)
+        self.assertEqual(list(found[1]), [file, file2])
+
+        with self.assertRaises(ValueError):
+            list(file.walk())
+
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
@@ -342,6 +402,71 @@ class S3URITestCase(unittest.TestCase):
             dest.transfer_from(src, transfer="copy")
 
         dest.transfer_from(src, transfer="copy", overwrite=True)
+
+    def testWalk(self):
+        """Test that we can list an S3 bucket"""
+        # Files we want to create
+        expected = ("a/x.txt", "a/y.txt", "a/z.json", "a/b/w.txt", "a/b/c/d/v.json")
+        expected_uris = [ButlerURI(self.makeS3Uri(path)) for path in expected]
+        for uri in expected_uris:
+            # Doesn't matter what we write
+            uri.write("123".encode())
+
+        # Find all the files in the a/ tree
+        found = set(uri.path for uri in ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("a/"))]))
+        self.assertEqual(found, {uri.path for uri in expected_uris})
+
+        # Find all the files in the a/ tree but group by folder
+        found = ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("a/"))],
+                                            grouped=True)
+        expected = (("/a/x.txt", "/a/y.txt", "/a/z.json"), ("/a/b/w.txt",), ("/a/b/c/d/v.json",))
+
+        for got, expect in zip(found, expected):
+            self.assertEqual(tuple(u.path for u in got), expect)
+
+        # Find only JSON files
+        found = set(uri.path for uri in ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("a/"))],
+                                                                    file_filter=r"\.json$"))
+        self.assertEqual(found, {uri.path for uri in expected_uris if uri.path.endswith(".json")})
+
+        # JSON files grouped by directory
+        found = ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("a/"))],
+                                            file_filter=r"\.json$", grouped=True)
+        expected = (("/a/z.json",), ("/a/b/c/d/v.json",))
+
+        for got, expect in zip(found, expected):
+            self.assertEqual(tuple(u.path for u in got), expect)
+
+        # Check pagination works with large numbers of files. S3 API limits
+        # us to 1000 response per list_objects call so create lots of files
+        created = set()
+        counter = 1
+        n_dir1 = 1100
+        while counter <= n_dir1:
+            new = ButlerURI(self.makeS3Uri(f"test/file{counter:04d}.txt"))
+            new.write(f"{counter}".encode())
+            created.add(str(new))
+            counter += 1
+        counter = 1
+        # Put some in a subdirectory to make sure we are looking in a
+        # hierarchy.
+        n_dir2 = 100
+        while counter <= n_dir2:
+            new = ButlerURI(self.makeS3Uri(f"test/subdir/file{counter:04d}.txt"))
+            new.write(f"{counter}".encode())
+            created.add(str(new))
+            counter += 1
+
+        found = ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("test/"))])
+        self.assertEqual({str(u) for u in found}, created)
+
+        # Again with grouping.
+        found = list(ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("test/"))], grouped=True))
+        self.assertEqual(len(found), 2)
+        dir_1 = list(found[0])
+        dir_2 = list(found[1])
+        self.assertEqual(len(dir_1), n_dir1)
+        self.assertEqual(len(dir_2), n_dir2)
 
     def testWrite(self):
         s3write = ButlerURI(self.makeS3Uri("created.txt"))

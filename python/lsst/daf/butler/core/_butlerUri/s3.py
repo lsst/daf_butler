@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import tempfile
 
 __all__ = ('ButlerS3URI',)
@@ -31,6 +32,8 @@ from typing import (
     Optional,
     Any,
     Callable,
+    Iterator,
+    List,
     Tuple,
     Union,
 )
@@ -226,3 +229,79 @@ class ButlerS3URI(ButlerURI):
         if transfer == "move":
             # Transactions do not work here
             src.remove()
+
+    @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
+    def walk(self, file_filter: Optional[Union[str, re.Pattern]] = None) -> Iterator[Union[List,
+                                                                                           Tuple[ButlerURI,
+                                                                                                 List[str],
+                                                                                                 List[str]]]]:
+        """For dir-like URI, walk the directory returning matching files and
+        directories.
+
+        Parameters
+        ----------
+        file_filter : `str` or `re.Pattern`, optional
+            Regex to filter out files from the list before it is returned.
+
+        Yields
+        ------
+        dirpath : `ButlerURI`
+            Current directory being examined.
+        dirnames : `list` of `str`
+            Names of subdirectories within dirpath.
+        filenames : `list` of `str`
+            Names of all the files within dirpath.
+        """
+        # We pretend that S3 uses directories and files and not simply keys
+        if not self.isdir():
+            raise ValueError(f"Can not walk a non-directory URI: {self}")
+
+        if isinstance(file_filter, str):
+            file_filter = re.compile(file_filter)
+
+        s3_paginator = self.client.get_paginator('list_objects_v2')
+
+        # Limit each query to a single "directory" to match os.walk
+        # We could download all keys at once with no delimiter and work
+        # it out locally but this could potentially lead to large memory
+        # usage for millions of keys. It will also make the initial call
+        # to this method potentially very slow. If making this method look
+        # like os.walk was not required, we could query all keys with
+        # pagination and return them in groups of 1000, but that would
+        # be a different interface since we can't guarantee we would get
+        # them all grouped properly across the 1000 limit boundary.
+        prefix_len = len(self.relativeToPathRoot)
+        dirnames = []
+        filenames = []
+        files_there = False
+
+        for page in s3_paginator.paginate(Bucket=self.netloc, Prefix=self.relativeToPathRoot, Delimiter="/"):
+            # All results are returned as full key names and we must
+            # convert them back to the root form. The prefix is fixed
+            # and delimited so that is a simple trim
+
+            # Directories are reported in the CommonPrefixes result
+            # which reports the entire key and must be stripped.
+            found_dirs = [dir["Prefix"][prefix_len:] for dir in page.get("CommonPrefixes", ())]
+            dirnames.extend(found_dirs)
+
+            found_files = [file["Key"][prefix_len:] for file in page.get("Contents", ())]
+            if found_files:
+                files_there = True
+            if file_filter is not None:
+                found_files = [f for f in found_files if file_filter.search(f)]
+
+            filenames.extend(found_files)
+
+        # Directories do not exist so we can't test for them. If no files
+        # or directories were found though, this means that it effectively
+        # does not exist and we should match os.walk() behavior and return
+        # [].
+        if not dirnames and not files_there:
+            yield []
+        else:
+            yield self, dirnames, filenames
+
+        for dir in dirnames:
+            new_uri = self.join(dir)
+            yield from new_uri.walk(file_filter)
