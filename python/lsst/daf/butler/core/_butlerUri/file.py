@@ -332,8 +332,10 @@ class ButlerFileURI(ButlerURI):
                 # Transactions do not work here
                 src.remove()
 
-    def walk(self, file_filter: Optional[Union[str, re.Pattern]] = None) -> Iterator[Tuple[ButlerURI,
-                                                                                     List[str], List[str]]]:
+    def walk(self, file_filter: Optional[Union[str, re.Pattern]] = None) -> Iterator[Union[List,
+                                                                                           Tuple[ButlerURI,
+                                                                                                 List[str],
+                                                                                                 List[str]]]]:
         """For dir-like URI, walk the directory returning matching files and
         directories.
 

@@ -789,14 +789,16 @@ class ButlerURI:
         """
         raise NotImplementedError(f"No transfer modes supported by URI scheme {self.scheme}")
 
-    def walk(self, filter: Optional[Union[str, re.Pattern]] = None) -> Iterator[Tuple[ButlerURI,
-                                                                                List[str], List[str]]]:
+    def walk(self, file_filter: Optional[Union[str, re.Pattern]] = None) -> Iterator[Union[List,
+                                                                                           Tuple[ButlerURI,
+                                                                                                 List[str],
+                                                                                                 List[str]]]]:
         """For dir-like URI, walk the directory returning matching files and
         directories.
 
         Parameters
         ----------
-        filter : `str` or `re.Pattern`, optional
+        file_filter : `str` or `re.Pattern`, optional
             Regex to filter out files from the list before it is returned.
 
         Yields
@@ -808,7 +810,6 @@ class ButlerURI:
         filenames : `list` of `str`
             Names of all the files within dirpath.
         """
-        print("WHAT IS HAPPENING")
         raise NotImplementedError()
 
     @classmethod
