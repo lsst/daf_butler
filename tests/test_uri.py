@@ -312,6 +312,14 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(found_yaml, expected_yaml)
         self.assertEqual(counter, 9)
 
+        # Grouping but check that single files are returned in a single group
+        # at the end
+        file2 = test_dir_uri.join("config/templates/templates-bad.yaml")
+        found = list(ButlerURI.findFileResources([file, file2, test_dir_uri.join("config/dbAuth")],
+                                                 grouped=True))
+        self.assertEqual(len(found), 2)
+        self.assertEqual(list(found[1]), [file, file2])
+
         with self.assertRaises(ValueError):
             list(file.walk())
 

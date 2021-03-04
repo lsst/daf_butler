@@ -830,7 +830,7 @@ class ButlerURI:
             The regex to use when searching for files within directories.
             By default returns all the found files.
         grouped : `bool`, optional
-            If `True` the results will be grouped by directly and each
+            If `True` the results will be grouped by directory and each
             yielded value will be an iterator over URIs. If `False` each
             URI will be returned separately.
 
@@ -839,10 +839,12 @@ class ButlerURI:
         found_file: `ButlerURI`
             The passed-in URIs and URIs found in passed-in directories.
             If grouping is enabled, each of the yielded values will be an
-            iterator yielding members of the group. This includes single
-            files that were initially passed in.
+            iterator yielding members of the group. Files given explicitly
+            will be returned as a single group at the end.
         """
         fileRegex = None if file_filter is None else re.compile(file_filter)
+
+        singles = []
 
         # Find all the files of interest
         for location in candidates:
@@ -863,6 +865,10 @@ class ButlerURI:
                             yield root.join(name)
             else:
                 if grouped:
-                    yield iter([uri])
+                    singles.append(uri)
                 else:
                     yield uri
+
+        # Finally, return any explicitly given files in one group
+        if grouped and singles:
+            yield iter(singles)
