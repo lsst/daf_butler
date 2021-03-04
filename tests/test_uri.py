@@ -395,6 +395,40 @@ class S3URITestCase(unittest.TestCase):
 
         dest.transfer_from(src, transfer="copy", overwrite=True)
 
+    def testWalk(self):
+        """Test that we can list an S3 bucket"""
+        # Files we want to create
+        expected = ("a/x.txt", "a/y.txt", "a/z.json", "a/b/w.txt", "a/b/c/d/v.json")
+        expected_uris = [ButlerURI(self.makeS3Uri(path)) for path in expected]
+        for uri in expected_uris:
+            # Doesn't matter what we write
+            uri.write("123".encode())
+
+        # Find all the files in the a/ tree
+        found = set(uri.path for uri in ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("a/"))]))
+        self.assertEqual(found, {uri.path for uri in expected_uris})
+
+        # Find all the files in the a/ tree but group by folder
+        found = ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("a/"))],
+                                            grouped=True)
+        expected = (("/a/x.txt", "/a/y.txt", "/a/z.json"), ("/a/b/w.txt",), ("/a/b/c/d/v.json",))
+
+        for got, expect in zip(found, expected):
+            self.assertEqual(tuple(u.path for u in got), expect)
+
+        # Find only JSON files
+        found = set(uri.path for uri in ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("a/"))],
+                                                                    file_filter=r"\.json$"))
+        self.assertEqual(found, {uri.path for uri in expected_uris if uri.path.endswith(".json")})
+
+        # JSON files grouped by directory
+        found = ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("a/"))],
+                                            file_filter=r"\.json$", grouped=True)
+        expected = (("/a/z.json",), ("/a/b/c/d/v.json",))
+
+        for got, expect in zip(found, expected):
+            self.assertEqual(tuple(u.path for u in got), expect)
+
     def testWrite(self):
         s3write = ButlerURI(self.makeS3Uri("created.txt"))
         content = "abcdefghijklmnopqrstuv\n"
