@@ -437,6 +437,37 @@ class S3URITestCase(unittest.TestCase):
         for got, expect in zip(found, expected):
             self.assertEqual(tuple(u.path for u in got), expect)
 
+        # Check pagination works with large numbers of files. S3 API limits
+        # us to 1000 response per list_objects call so create lots of files
+        created = set()
+        counter = 1
+        n_dir1 = 1100
+        while counter <= n_dir1:
+            new = ButlerURI(self.makeS3Uri(f"test/file{counter:04d}.txt"))
+            new.write(f"{counter}".encode())
+            created.add(str(new))
+            counter += 1
+        counter = 1
+        # Put some in a subdirectory to make sure we are looking in a
+        # hierarchy.
+        n_dir2 = 100
+        while counter <= n_dir2:
+            new = ButlerURI(self.makeS3Uri(f"test/subdir/file{counter:04d}.txt"))
+            new.write(f"{counter}".encode())
+            created.add(str(new))
+            counter += 1
+
+        found = ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("test/"))])
+        self.assertEqual({str(u) for u in found}, created)
+
+        # Again with grouping.
+        found = list(ButlerURI.findFileResources([ButlerURI(self.makeS3Uri("test/"))], grouped=True))
+        self.assertEqual(len(found), 2)
+        dir_1 = list(found[0])
+        dir_2 = list(found[1])
+        self.assertEqual(len(dir_1), n_dir1)
+        self.assertEqual(len(dir_2), n_dir2)
+
     def testWrite(self):
         s3write = ButlerURI(self.makeS3Uri("created.txt"))
         content = "abcdefghijklmnopqrstuv\n"
