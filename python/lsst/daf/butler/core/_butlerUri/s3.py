@@ -263,9 +263,13 @@ class ButlerS3URI(ButlerURI):
 
         # Limit each query to a single "directory" to match os.walk
         # We could download all keys at once with no delimiter and work
-        # it out locally but as yet I'm not sure what the trade off is
-        # between doing a single listing of potentially millions of keys
-        # or an incremental get per folder.
+        # it out locally but this could potentially lead to large memory
+        # usage for millions of keys. It will also make the initial call
+        # to this method potentially very slow. If making this method look
+        # like os.walk was not required, we could query all keys with
+        # pagination and return them in groups of 1000, but that would
+        # be a different interface since we can't guarantee we would get
+        # them all grouped properly across the 1000 limit boundary.
         prefix_len = len(self.relativeToPathRoot)
         dirnames = []
         filenames = []
