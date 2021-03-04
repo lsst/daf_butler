@@ -847,7 +847,12 @@ class ButlerURI:
         for location in candidates:
             uri = ButlerURI(location)
             if uri.isdir():
-                for root, dirs, files in uri.walk(fileRegex):
+                for found in uri.walk(fileRegex):
+                    if not found:
+                        # This means the uri does not exist and by
+                        # convention we ignore it
+                        continue
+                    root, dirs, files = found
                     if not files:
                         continue
                     if grouped:
