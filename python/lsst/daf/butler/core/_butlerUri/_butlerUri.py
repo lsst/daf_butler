@@ -160,6 +160,18 @@ class ButlerURI:
             parsed = urllib.parse.urlparse(uri)
         elif isinstance(uri, urllib.parse.ParseResult):
             parsed = copy.copy(uri)
+            # If we are being instantiated with a subclass, rather than
+            # ButlerURI, ensure that that subclass is used directly.
+            # This could lead to inconsistencies if this constructor
+            # is used externally outside of the ButlerURI.replace() method.
+            #   ButlerS3URI(urllib.parse.urlparse("file://a/b.txt"))
+            # will be a problem.
+            # This is needed to prevent a schemeless absolute URI become
+            # a file URI unexpectedly when calling updatedFile or
+            # updatedExtension
+            if cls != ButlerURI:
+                subclass = cls
+                dirLike = forceDirectory or parsed.path.endswith(cls._pathModule.sep)
         elif isinstance(uri, ButlerURI):
             parsed = copy.copy(uri._uri)
             dirLike = uri.dirLike
