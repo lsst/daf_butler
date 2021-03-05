@@ -741,7 +741,7 @@ class ButlerURI:
         Object is immutable so copy can return itself.
         """
         # Implement here because the __new__ method confuses things
-        return self.__copy__()
+        return self
 
     def __getnewargs__(self) -> Tuple:
         """Support pickling."""
