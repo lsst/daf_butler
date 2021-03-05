@@ -167,7 +167,7 @@ class Location:
         if ext is None:
             return
 
-        self._path.updateExtension(ext)
+        self._path = self._path.updatedExtension(ext)
 
         # Clear the URI cache so it can be recreated with the new path
         self._uri = None

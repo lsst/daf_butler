@@ -118,8 +118,7 @@ class Loader(yamlLoader):
         if requesteduri.scheme:
             fileuri = requesteduri
         else:
-            fileuri = copy.copy(self._root)
-            fileuri.updateFile(filename)
+            fileuri = copy.copy(self._root).updatedFile(filename)
 
         log.debug("Opening YAML file via !include: %s", fileuri)
 
@@ -875,7 +874,7 @@ class Config(collections.abc.MutableMapping):
         uri = ButlerURI(uri)
 
         if updateFile and not uri.getExtension():
-            uri.updateFile(defaultFileName)
+            uri = uri.updatedFile(defaultFileName)
 
         # Try to work out the format from the extension
         ext = uri.getExtension()

@@ -190,12 +190,12 @@ class FileURITestCase(unittest.TestCase):
         self.assertIn("???", file.ospath)
         self.assertNotIn("???", file.path)
 
-        file.updateFile("tests??.txt")
+        file = file.updatedFile("tests??.txt")
         self.assertNotIn("??.txt", file.path)
         file.write(b"Other content")
         self.assertEqual(file.read(), b"Other content")
 
-        src.updateFile("tests??.txt")
+        src = src.updatedFile("tests??.txt")
         self.assertIn("??.txt", src.path)
         self.assertEqual(file.read(), src.read(), f"reading from {file.ospath} and {src.ospath}")
 
