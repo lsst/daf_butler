@@ -681,7 +681,7 @@ class ButlerURI:
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, ButlerURI):
-            return False
+            return NotImplemented
         return self.geturl() == other.geturl()
 
     def __copy__(self) -> ButlerURI:
