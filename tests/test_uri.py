@@ -264,6 +264,16 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(uri.ospath, hash_path[:hpos])
         self.assertEqual(uri.fragment, hash_path[hpos + 1:])
 
+    def testHash(self):
+        """Test that we can store URIs in sets and as keys."""
+        uri1 = ButlerURI(TESTDIR)
+        uri2 = uri1.join("test/")
+        s = {uri1, uri2}
+        self.assertIn(uri1, s)
+
+        d = {uri1: "1", uri2: "2"}
+        self.assertEqual(d[uri2], "2")
+
     def testWalk(self):
         """Test ButlerURI.walk()."""
         test_dir_uri = ButlerURI(TESTDIR)
@@ -272,8 +282,7 @@ class FileURITestCase(unittest.TestCase):
         found = list(ButlerURI.findFileResources([file]))
         self.assertEqual(found[0], file)
 
-        # ButlerURI is not hashable so can't be put in a set
-        # Instead we put a string form in the set for comparison
+        # Compare against the full local paths
         expected = set(p for p in glob.glob(os.path.join(TESTDIR, "config", "**"), recursive=True)
                        if os.path.isfile(p))
         found = set(u.ospath for u in ButlerURI.findFileResources([test_dir_uri.join("config")]))

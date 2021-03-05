@@ -717,6 +717,9 @@ class ButlerURI:
             return NotImplemented
         return self.geturl() == other.geturl()
 
+    def __hash__(self) -> int:
+        return hash(str(self))
+
     def __copy__(self) -> ButlerURI:
         # Implement here because the __new__ method confuses things
         # Be careful not to convert a relative schemeless URI to absolute
