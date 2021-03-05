@@ -53,8 +53,9 @@ DATAID_RE = re.compile(r"([a-z_]+)<(.*)>$")
 
 
 class LookupKey:
-    """Representation of key that can be used to lookup information based
-    on dataset type name, storage class name, dimensions.
+    """Representation of key that can be used to lookup information.
+
+    Look up is based on dataset type name, storage class name, dimensions.
 
     Parameters
     ----------
@@ -154,18 +155,20 @@ class LookupKey:
 
     @property
     def name(self) -> Optional[str]:
-        """Primary name string to use as lookup. (`str`)"""
+        """Primary name string to use as lookup (`str`)."""
         return self._name
 
     @property
     def dimensions(self) -> Optional[DimensionGraph]:
-        """Dimensions associated with lookup. (`DimensionGraph`)"""
+        """Dimensions associated with lookup (`DimensionGraph`)."""
         return self._dimensions
 
     @property
     def dataId(self) -> Optional[Dict[str, Any]]:
-        """Dict of keys/values that are important for dataId lookup.
-        (`dict` or `None`)"""
+        """Return dict of keys/values that are important for dataId lookup.
+
+        (`dict` or `None`)
+        """
         if self._dataId is not None:
             return {k: v for k, v in self._dataId}
         else:
@@ -218,8 +221,10 @@ def processLookupConfigs(config: Config, *,
                          allow_hierarchy: bool = False,
                          universe: Optional[DimensionUniverse] = None) -> Dict[LookupKey,
                                                                                Union[str, Dict[str, Any]]]:
-    """Process sections of configuration relating to lookups by dataset type
-    name, storage class name, dimensions, or values of dimensions.
+    """Process sections of configuration relating to lookups.
+
+    Can be by dataset type name, storage class name, dimensions, or values
+    of dimensions.
 
     Parameters
     ----------
@@ -299,8 +304,10 @@ def processLookupConfigs(config: Config, *,
 
 def processLookupConfigList(config: Iterable[Union[str, Mapping]],
                             *, universe: Optional[DimensionUniverse] = None) -> Set[LookupKey]:
-    """Process sections of configuration relating to lookups by dataset type
-    name, storage class name, dimensions, or values of dimensions.
+    """Process sections of configuration relating to lookups.
+
+    Can be by dataset type name, storage class name, dimensions, or values
+    of dimensions.
 
     Parameters
     ----------

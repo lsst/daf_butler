@@ -47,7 +47,9 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
 
 
 class DimensionPacker(metaclass=ABCMeta):
-    """An abstract base class for bidirectional mappings between a
+    """Class for going from `DataCoordinate` to packed integer ID and back.
+
+    An abstract base class for bidirectional mappings between a
     `DataCoordinate` and a packed integer ID.
 
     Parameters
@@ -66,14 +68,15 @@ class DimensionPacker(metaclass=ABCMeta):
 
     @property
     def universe(self) -> DimensionUniverse:
-        """A graph containing all known dimensions (`DimensionUniverse`).
-        """
+        """Graph containing all known dimensions (`DimensionUniverse`)."""
         return self.fixed.universe
 
     @property
     @abstractmethod
     def maxBits(self) -> int:
-        """The maximum number of nonzero bits in the packed ID returned by
+        """Return The maximum number of nonzero bits in the packed ID.
+
+        This packed ID will be returned by
         `~DimensionPacker.pack` (`int`).
 
         Must be implemented by all concrete derived classes.  May return
@@ -174,8 +177,9 @@ class DimensionPacker(metaclass=ABCMeta):
 
 
 class DimensionPackerFactory:
-    """A factory class for `DimensionPacker` instances that can be constructed
-    from configuration.
+    """A factory class for `DimensionPacker` instances.
+
+    Can be constructed from configuration.
 
     This class is primarily intended for internal use by `DimensionUniverse`.
 
@@ -192,6 +196,7 @@ class DimensionPackerFactory:
         This will be expanded lazily into a `DimensionGraph` prior to
         `DimensionPacker` construction.
     """
+
     def __init__(
         self,
         clsName: str,
@@ -251,6 +256,7 @@ class DimensionPackerConstructionVisitor(DimensionConstructionVisitor):
         This will be expanded lazily into a `DimensionGraph` prior to
         `DimensionPacker` construction.
     """
+
     def __init__(self, name: str, clsName: str, fixed: Iterable[str], dimensions: Iterable[str]):
         super().__init__(name)
         self._fixed = set(fixed)

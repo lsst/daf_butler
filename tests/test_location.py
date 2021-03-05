@@ -119,8 +119,7 @@ class LocationTestCase(unittest.TestCase):
         )
 
         for uriInfo in uriStrings:
-            uri = ButlerURI(uriInfo[0], forceAbsolute=False)
-            uri.updateFile(uriInfo[1])
+            uri = ButlerURI(uriInfo[0], forceAbsolute=False).updatedFile(uriInfo[1])
             with self.subTest(uri=uriInfo[0]):
                 self.assertEqual(uri.path, uriInfo[2])
 

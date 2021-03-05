@@ -51,9 +51,12 @@ from types import MappingProxyType
 
 
 class Named(Protocol):
-    """A non-inheritance interface for objects that have a string name that
+    """Protocol for objects with string name.
+
+    A non-inheritance interface for objects that have a string name that
     maps directly to their equality comparisons.
     """
+
     @property
     def name(self) -> str:
         pass
@@ -66,7 +69,9 @@ V_co = TypeVar("V_co", covariant=True)
 
 
 class NamedKeyMapping(Mapping[K_co, V_co]):
-    """An abstract base class for custom mappings whose keys are objects with
+    """Custom mapping class.
+
+    An abstract base class for custom mappings whose keys are objects with
     a `str` ``name`` attribute, for which lookups on the name as well as the
     object are permitted.
 
@@ -83,14 +88,14 @@ class NamedKeyMapping(Mapping[K_co, V_co]):
     @property
     @abstractmethod
     def names(self) -> AbstractSet[str]:
-        """The set of names associated with the keys, in the same order
+        """Return the set of names associated with the keys, in the same order.
+
         (`AbstractSet` [ `str` ]).
         """
         raise NotImplementedError()
 
     def byName(self) -> Dict[str, V_co]:
-        """Return a `Mapping` with names as keys and the same values as
-        ``self``.
+        """Return a `Mapping` with names as keys and the ``self`` values.
 
         Returns
         -------
@@ -124,8 +129,7 @@ NameLookupMapping = Union[NamedKeyMapping[K_co, V_co], Mapping[str, V_co]]
 
 
 class NamedKeyMutableMapping(NamedKeyMapping[K, V], MutableMapping[K, V]):
-    """An abstract base class that adds mutation to `NamedKeyMapping`.
-    """
+    """An abstract base class that adds mutation to `NamedKeyMapping`."""
 
     __slots__ = ()
 
@@ -143,7 +147,9 @@ class NamedKeyMutableMapping(NamedKeyMapping[K, V], MutableMapping[K, V]):
 
 
 class NamedKeyDict(NamedKeyMutableMapping[K, V]):
-    """A dictionary wrapper that require keys to have a ``.name`` attribute,
+    """Dictionary wrapper for named keys.
+
+    Requires keys to have a ``.name`` attribute,
     and permits lookups using either key objects or their names.
 
     Names can be used in place of keys when updating existing items, but not
@@ -179,14 +185,14 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
 
     @property
     def names(self) -> KeysView[str]:
-        """The set of names associated with the keys, in the same order
+        """Return set of names associated with the keys, in the same order.
+
         (`~collections.abc.KeysView`).
         """
         return self._names.keys()
 
     def byName(self) -> Dict[str, V]:
-        """Return a `dict` with names as keys and the same values as ``self``.
-        """
+        """Return a `dict` with names as keys and the ``self`` values."""
         return dict(zip(self._names.keys(), self._dict.values()))
 
     def __len__(self) -> int:
@@ -233,16 +239,16 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
         return self._dict.items()
 
     def copy(self) -> NamedKeyDict[K, V]:
-        """Return a new `NamedKeyDict` with the same elements.
-        """
+        """Return a new `NamedKeyDict` with the same elements."""
         result = NamedKeyDict.__new__(NamedKeyDict)
         result._dict = dict(self._dict)
         result._names = dict(self._names)
         return result
 
     def freeze(self) -> NamedKeyMapping[K, V]:
-        """Disable all mutators, effectively transforming ``self`` into
-        an immutable mapping.
+        """Disable all mutators.
+
+        Effectively transforms ``self`` into an immutable mapping.
 
         Returns
         -------
@@ -258,7 +264,9 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
 
 
 class NamedValueAbstractSet(AbstractSet[K_co]):
-    """An abstract base class for custom sets whose elements are objects with
+    """Custom sets with named elements.
+
+    An abstract base class for custom sets whose elements are objects with
     a `str` ``name`` attribute, allowing some dict-like operations and
     views to be supported.
     """
@@ -268,7 +276,8 @@ class NamedValueAbstractSet(AbstractSet[K_co]):
     @property
     @abstractmethod
     def names(self) -> AbstractSet[str]:
-        """The set of names associated with the keys, in the same order
+        """Return set of names associated with the keys, in the same order.
+
         (`AbstractSet` [ `str` ]).
         """
         raise NotImplementedError()
@@ -289,8 +298,9 @@ class NamedValueAbstractSet(AbstractSet[K_co]):
         raise NotImplementedError()
 
     def get(self, key: Union[str, K_co], default: Any = None) -> Any:
-        """Return the element with the given name, or ``default`` if
-        no such element is present.
+        """Return the element with the given name.
+
+        Returns ``default`` if no such element is present.
         """
         try:
             return self[key]
@@ -299,7 +309,9 @@ class NamedValueAbstractSet(AbstractSet[K_co]):
 
     @classmethod
     def _from_iterable(cls, iterable: Iterable[K_co]) -> NamedValueSet[K_co]:
-        """Hook to ensure that inherited `collections.abc.Set` operators return
+        """Construct class from an iterable.
+
+        Hook to ensure that inherited `collections.abc.Set` operators return
         `NamedValueSet` instances, not something else (see `collections.abc`
         documentation for more information).
 
@@ -310,14 +322,16 @@ class NamedValueAbstractSet(AbstractSet[K_co]):
 
 
 class NameMappingSetView(NamedValueAbstractSet[K_co]):
-    """A lightweight implementation of `NamedValueAbstractSet` backed by a
-    mapping from name to named object.
+    """A lightweight implementation of `NamedValueAbstractSet`.
+
+    Backed by a mapping from name to named object.
 
     Parameters
     ----------
     mapping : `Mapping` [ `str`, `object` ]
         Mapping this object will provide a view of.
     """
+
     def __init__(self, mapping: Mapping[str, K_co]):
         self._mapping = mapping
 
@@ -373,8 +387,7 @@ class NameMappingSetView(NamedValueAbstractSet[K_co]):
 
 
 class NamedValueMutableSet(NamedValueAbstractSet[K], MutableSet[K]):
-    """An abstract base class that adds mutation interfaces to
-    `NamedValueAbstractSet`.
+    """Mutable variant of `NamedValueAbstractSet`.
 
     Methods that can add new elements to the set are unchanged from their
     `MutableSet` definitions, while those that only remove them can generally
@@ -444,7 +457,9 @@ class NamedValueMutableSet(NamedValueAbstractSet[K], MutableSet[K]):
 
 
 class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
-    """A custom mutable set class that requires elements to have a ``.name``
+    """Custom mutable set class.
+
+    A custom mutable set class that requires elements to have a ``.name``
     attribute, which can then be used as keys in `dict`-like lookup.
 
     Names and elements can both be used with the ``in`` and ``del``
@@ -529,15 +544,15 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
             self.add(element)
 
     def copy(self) -> NamedValueSet[K]:
-        """Return a new `NamedValueSet` with the same elements.
-        """
+        """Return a new `NamedValueSet` with the same elements."""
         result = NamedValueSet.__new__(NamedValueSet)
         result._mapping = dict(self._mapping)
         return result
 
     def freeze(self) -> NamedValueAbstractSet[K]:
-        """Disable all mutators, effectively transforming ``self`` into
-        an immutable set.
+        """Disable all mutators.
+
+        Effectively transforming ``self`` into an immutable set.
 
         Returns
         -------

@@ -53,6 +53,8 @@ log = logging.getLogger(__name__)
 
 
 class StorageClassConfig(ConfigSubset):
+    """Configuration class for defining Storage Classes."""
+
     component = "storageClasses"
     defaultConfigFile = "storageClasses.yaml"
 
@@ -77,6 +79,7 @@ class StorageClass:
         Fully qualified name of class supporting assembly and disassembly
         of a `pytype` instance.
     """
+
     _cls_name: str = "BaseStorageClass"
     _cls_components: Optional[Dict[str, StorageClass]] = None
     _cls_derivedComponents: Optional[Dict[str, StorageClass]] = None
@@ -148,25 +151,22 @@ class StorageClass:
 
     @property
     def components(self) -> Dict[str, StorageClass]:
-        """Component names mapped to associated `StorageClass`
-        """
+        """Return the components associated with this `StorageClass`."""
         return self._components
 
     @property
     def derivedComponents(self) -> Dict[str, StorageClass]:
-        """Derived component names mapped to associated `StorageClass`
-        """
+        """Return derived components associated with `StorageClass`."""
         return self._derivedComponents
 
     @property
     def parameters(self) -> Set[str]:
-        """`set` of names of parameters supported by this `StorageClass`
-        """
+        """Return `set` of names of supported parameters."""
         return set(self._parameters)
 
     @property
     def pytype(self) -> Type:
-        """Python type associated with this `StorageClass`."""
+        """Return Python type associated with this `StorageClass`."""
         if self._pytype is not None:
             return self._pytype
 
@@ -188,8 +188,10 @@ class StorageClass:
         return self._delegate
 
     def allComponents(self) -> Mapping[str, StorageClass]:
-        """Return a mapping of all the derived and read/write components
-        to the corresponding storage class.
+        """Return all defined components.
+
+        This mapping includes all the derived and read/write components
+        for the corresponding storage class.
 
         Returns
         -------
@@ -220,8 +222,7 @@ class StorageClass:
         return cls(storageClass=self)
 
     def isComposite(self) -> bool:
-        """Boolean indicating whether this `StorageClass` is a composite
-        or not.
+        """Return Boolean indicating whether this is a composite or not.
 
         Returns
         -------
@@ -246,7 +247,7 @@ class StorageClass:
         return (LookupKey(name=self.name), )
 
     def knownParameters(self) -> Set[str]:
-        """Return set of all parameters known to this `StorageClass`
+        """Return set of all parameters known to this `StorageClass`.
 
         The set includes parameters understood by components of a composite.
 
@@ -262,7 +263,7 @@ class StorageClass:
         return known
 
     def validateParameters(self, parameters: Collection = None) -> None:
-        """Check that the parameters are known to this `StorageClass`
+        """Check that the parameters are known to this `StorageClass`.
 
         Does not check the values.
 
@@ -294,7 +295,7 @@ class StorageClass:
 
     def filterParameters(self, parameters: Dict[str, Any],
                          subset: Collection = None) -> Dict[str, Any]:
-        """Filter out parameters that are not known to this StorageClass
+        """Filter out parameters that are not known to this `StorageClass`.
 
         Parameters
         ----------
@@ -337,7 +338,7 @@ class StorageClass:
         return {k: parameters[k] for k in wanted if k in parameters}
 
     def validateInstance(self, instance: Any) -> bool:
-        """Check that the supplied Python object has the expected Python type
+        """Check that the supplied Python object has the expected Python type.
 
         Parameters
         ----------
@@ -353,10 +354,9 @@ class StorageClass:
         return isinstance(instance, self.pytype)
 
     def __eq__(self, other: Any) -> bool:
-        """Equality checks name, pytype name, delegate name, and components"""
-
+        """Equality checks name, pytype name, delegate name, and components."""
         if not isinstance(other, StorageClass):
-            return False
+            return NotImplemented
 
         if self.name != other.name:
             return False
@@ -455,7 +455,7 @@ StorageClasses
 """
 
     def __contains__(self, storageClassOrName: Union[StorageClass, str]) -> bool:
-        """Indicates whether the storage class exists in the factory.
+        """Indicate whether the storage class exists in the factory.
 
         Parameters
         ----------
@@ -561,7 +561,6 @@ StorageClasses
         newtype : `type` subclass of `StorageClass`
             Newly created Python type.
         """
-
         if baseClass is None:
             baseClass = StorageClass
         if not issubclass(baseClass, StorageClass):

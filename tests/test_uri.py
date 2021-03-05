@@ -69,15 +69,32 @@ class FileURITestCase(unittest.TestCase):
         self.assertTrue(uri.exists(), f"{uri} should now exist")
         self.assertEqual(uri.read().decode(), content)
 
+        # Check that creating a URI from a URI returns the same thing
+        uri2 = ButlerURI(uri)
+        self.assertEqual(uri, uri2)
+        self.assertEqual(id(uri), id(uri2))
+
+    def testExtension(self):
+        file = ButlerURI(os.path.join(self.tmpdir, "test.txt"))
+        self.assertEqual(file.updatedExtension(None), file)
+        self.assertEqual(file.updatedExtension(".txt"), file)
+        self.assertEqual(id(file.updatedExtension(".txt")), id(file))
+
+        fits = file.updatedExtension(".fits.gz")
+        self.assertEqual(fits.basename(), "test.fits.gz")
+        self.assertEqual(fits.updatedExtension(".jpeg").basename(), "test.jpeg")
+
     def testRelative(self):
         """Check that we can get subpaths back from two URIs"""
         parent = ButlerURI(self.tmpdir, forceDirectory=True, forceAbsolute=True)
+        self.assertTrue(parent.isdir())
         child = ButlerURI(os.path.join(self.tmpdir, "dir1", "file.txt"), forceAbsolute=True)
 
         self.assertEqual(child.relative_to(parent), "dir1/file.txt")
 
         not_child = ButlerURI("/a/b/dir1/file.txt")
         self.assertFalse(not_child.relative_to(parent))
+        self.assertFalse(not_child.isdir())
 
         not_directory = ButlerURI(os.path.join(self.tmpdir, "dir1", "file2.txt"))
         self.assertFalse(child.relative_to(not_directory))
@@ -101,6 +118,22 @@ class FileURITestCase(unittest.TestCase):
 
         child = ButlerURI("../c/e/f/g.txt", forceAbsolute=False)
         self.assertEqual(child.relative_to(parent), "e/f/g.txt")
+
+    def testParents(self):
+        """Test of splitting and parent walking."""
+        parent = ButlerURI(self.tmpdir, forceDirectory=True, forceAbsolute=True)
+        child_file = parent.join("subdir/file.txt")
+        self.assertFalse(child_file.isdir())
+        child_subdir, file = child_file.split()
+        self.assertEqual(file, "file.txt")
+        self.assertTrue(child_subdir.isdir())
+        self.assertEqual(child_file.dirname(), child_subdir)
+        self.assertEqual(child_file.basename(), file)
+        self.assertEqual(child_file.parent(), child_subdir)
+        derived_parent = child_subdir.parent()
+        self.assertEqual(derived_parent, parent)
+        self.assertTrue(derived_parent.isdir())
+        self.assertEqual(child_file.parent().parent(), parent)
 
     def testEnvVar(self):
         """Test that environment variables are expanded."""
@@ -175,6 +208,7 @@ class FileURITestCase(unittest.TestCase):
         j = d.join("datastore.yaml")
         self.assertEqual(u, j)
         self.assertFalse(j.dirLike)
+        self.assertFalse(j.isdir())
         self.assertFalse(d.join("not-there.yaml").exists())
 
     def testEscapes(self):
@@ -190,12 +224,12 @@ class FileURITestCase(unittest.TestCase):
         self.assertIn("???", file.ospath)
         self.assertNotIn("???", file.path)
 
-        file.updateFile("tests??.txt")
+        file = file.updatedFile("tests??.txt")
         self.assertNotIn("??.txt", file.path)
         file.write(b"Other content")
         self.assertEqual(file.read(), b"Other content")
 
-        src.updateFile("tests??.txt")
+        src = src.updatedFile("tests??.txt")
         self.assertIn("??.txt", src.path)
         self.assertEqual(file.read(), src.read(), f"reading from {file.ospath} and {src.ospath}")
 
@@ -264,6 +298,16 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(uri.ospath, hash_path[:hpos])
         self.assertEqual(uri.fragment, hash_path[hpos + 1:])
 
+    def testHash(self):
+        """Test that we can store URIs in sets and as keys."""
+        uri1 = ButlerURI(TESTDIR)
+        uri2 = uri1.join("test/")
+        s = {uri1, uri2}
+        self.assertIn(uri1, s)
+
+        d = {uri1: "1", uri2: "2"}
+        self.assertEqual(d[uri2], "2")
+
     def testWalk(self):
         """Test ButlerURI.walk()."""
         test_dir_uri = ButlerURI(TESTDIR)
@@ -272,8 +316,7 @@ class FileURITestCase(unittest.TestCase):
         found = list(ButlerURI.findFileResources([file]))
         self.assertEqual(found[0], file)
 
-        # ButlerURI is not hashable so can't be put in a set
-        # Instead we put a string form in the set for comparison
+        # Compare against the full local paths
         expected = set(p for p in glob.glob(os.path.join(TESTDIR, "config", "**"), recursive=True)
                        if os.path.isfile(p))
         found = set(u.ospath for u in ButlerURI.findFileResources([test_dir_uri.join("config")]))

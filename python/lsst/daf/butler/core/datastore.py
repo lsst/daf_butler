@@ -19,9 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""
-Support for generic data stores.
-"""
+"""Support for generic data stores."""
 
 from __future__ import annotations
 
@@ -66,14 +64,16 @@ if TYPE_CHECKING:
 
 
 class DatastoreConfig(ConfigSubset):
+    """Configuration for Datastores."""
+
     component = "datastore"
     requiredKeys = ("cls",)
     defaultConfigFile = "datastore.yaml"
 
 
 class DatastoreValidationError(ValidationError):
-    """There is a problem with the Datastore configuration.
-    """
+    """There is a problem with the Datastore configuration."""
+
     pass
 
 
@@ -100,6 +100,7 @@ class IngestPrepData:
     refs : iterable of `DatasetRef`
         References for the datasets that can be ingested by this datastore.
     """
+
     def __init__(self, refs: Iterable[DatasetRef]):
         self.refs = {ref.id: ref for ref in refs}
 
@@ -112,6 +113,7 @@ class DatastoreTransaction:
     parent : `DatastoreTransaction`, optional
         The parent transaction (if any)
     """
+
     Event: ClassVar[Type] = Event
 
     parent: Optional['DatastoreTransaction']
@@ -139,8 +141,9 @@ class DatastoreTransaction:
 
     @contextlib.contextmanager
     def undoWith(self, name: str, undoFunc: Callable, *args: Any, **kwargs: Any) -> Iterator[None]:
-        """A context manager that calls `registerUndo` if the nested operation
-        does not raise an exception.
+        """Register undo function if nested operation succeeds.
+
+        Calls `registerUndo`.
 
         This can be used to wrap individual undo-able statements within a
         DatastoreTransaction block.  Multiple statements that can fail
@@ -156,8 +159,7 @@ class DatastoreTransaction:
             self.registerUndo(name, undoFunc, *args, **kwargs)
 
     def rollback(self) -> None:
-        """Roll back all events in this transaction.
-        """
+        """Roll back all events in this transaction."""
         log = logging.getLogger(__name__)
         while self._log:
             ev = self._log.pop()
@@ -177,8 +179,7 @@ class DatastoreTransaction:
                 pass
 
     def commit(self) -> None:
-        """Commit this transaction.
-        """
+        """Commit this transaction."""
         if self.parent is None:
             # Just forget about the events, they have already happened.
             return
@@ -241,8 +242,10 @@ class Datastore(metaclass=ABCMeta):
     @classmethod
     @abstractmethod
     def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
-        """Set any filesystem-dependent config options for this Datastore to
-        be appropriate for a new empty repository with the given root.
+        """Set filesystem-dependent config options for this datastore.
+
+        The options will be appropriate for a new empty repository with the
+        given root.
 
         Parameters
         ----------
@@ -413,8 +416,7 @@ class Datastore(metaclass=ABCMeta):
         raise RuntimeError(f"{transfer} is not allowed without specialization.")
 
     def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> IngestPrepData:
-        """Process datasets to identify which ones can be ingested into this
-        Datastore.
+        """Process datasets to identify which ones can be ingested.
 
         Parameters
         ----------
@@ -684,13 +686,12 @@ class Datastore(metaclass=ABCMeta):
 
     @abstractmethod
     def transfer(self, inputDatastore: Datastore, datasetRef: DatasetRef) -> None:
-        """Retrieve a Dataset from an input `Datastore`, and store the result
-        in this `Datastore`.
+        """Transfer a dataset from another datastore to this datastore.
 
         Parameters
         ----------
         inputDatastore : `Datastore`
-            The external `Datastore` from which to retreive the Dataset.
+            The external `Datastore` from which to retrieve the Dataset.
         datasetRef : `DatasetRef`
             Reference to the required Dataset.
         """

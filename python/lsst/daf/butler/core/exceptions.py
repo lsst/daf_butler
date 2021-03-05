@@ -29,10 +29,11 @@ class DatasetTypeNotSupportedError(RuntimeError):
     This can happen in a `Datastore` when a particular `DatasetType`
     has no formatters associated with it.
     """
+
     pass
 
 
 class ValidationError(RuntimeError):
-    """Some sort of validation error has occurred.
-    """
+    """Some sort of validation error has occurred."""
+
     pass

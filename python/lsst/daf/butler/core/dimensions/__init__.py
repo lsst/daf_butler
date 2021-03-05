@@ -25,6 +25,7 @@
 # problems at import time, via a combination of typing.TYPE_CHECKING guards and
 # function-scope imports.  The order below is one that is consistent with the
 # unguarded dependencies.
+"""Butler dimensions."""
 
 from ._elements import *
 from ._schema import *

@@ -75,9 +75,10 @@ class FileDescriptor:
 
     @property
     def readStorageClass(self) -> StorageClass:
-        """Storage class to use when reading. (`StorageClass`)
+        """Storage class to use when reading. (`StorageClass`).
 
-        Will default to ``storageClass`` if none specified."""
+        Will default to ``storageClass`` if none specified.
+        """
         if self._readStorageClass is None:
             return self.storageClass
         return self._readStorageClass

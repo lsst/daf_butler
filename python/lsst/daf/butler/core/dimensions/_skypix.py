@@ -52,7 +52,9 @@ if TYPE_CHECKING:
 
 
 class SkyPixSystem(TopologicalFamily):
-    """A `TopologicalFamily` that represents a hierarchical pixelization of the
+    """Class for hierarchical pixelization of the sky.
+
+    A `TopologicalFamily` that represents a hierarchical pixelization of the
     sky.
 
     Parameters
@@ -65,6 +67,7 @@ class SkyPixSystem(TopologicalFamily):
         Class whose instances represent a particular level of this
         pixelization.
     """
+
     def __init__(
         self,
         name: str, *,
@@ -96,7 +99,9 @@ class SkyPixSystem(TopologicalFamily):
 
 
 class SkyPixDimension(Dimension):
-    """A special `Dimension` subclass for hierarchical pixelizations of the
+    """Special dimension for sky pixelizations.
+
+    A special `Dimension` subclass for hierarchical pixelizations of the
     sky at a particular level.
 
     Unlike most other dimensions, skypix dimension records are not stored in
@@ -111,6 +116,7 @@ class SkyPixDimension(Dimension):
     level : `int`
         Integer level of this pixelization (smaller numbers are coarser grids).
     """
+
     def __init__(self, system: SkyPixSystem, level: int):
         self.system = system
         self.level = level
@@ -145,7 +151,9 @@ class SkyPixDimension(Dimension):
         return False
 
     def makeStorage(self) -> SkyPixDimensionRecordStorage:
-        """Construct the `DimensionRecordStorage` instance that should
+        """Make the storage record.
+
+        Constructs the `DimensionRecordStorage` instance that should
         be used to back this element in a registry.
 
         Returns
@@ -209,6 +217,7 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
     away or otherwise eliminating assumptions about the set of dimensions in a
     universe being static.
     """
+
     def __init__(self, name: str, pixelizationClassName: str, maxLevel: Optional[int] = None):
         super().__init__(name)
         self._pixelizationClassName = pixelizationClassName

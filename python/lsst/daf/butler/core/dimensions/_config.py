@@ -140,8 +140,9 @@ class DimensionConfig(ConfigSubset):
         self.update(externalConfig)
 
     def _extractSkyPixVisitors(self) -> Iterator[DimensionConstructionVisitor]:
-        """Process the 'skypix' section of the configuration, yielding a
-        construction visitor for each `SkyPixSystem`.
+        """Process the 'skypix' section of the configuration.
+
+        Yields a construction visitor for each `SkyPixSystem`.
 
         Yields
         ------
@@ -159,8 +160,9 @@ class DimensionConfig(ConfigSubset):
             yield SkyPixConstructionVisitor(systemName, pixelizationClassName, maxLevel)
 
     def _extractElementVisitors(self) -> Iterator[DimensionConstructionVisitor]:
-        """Process the 'elements' section of the configuration, yielding a
-        construction visitor for each `StandardDimension` or
+        """Process the 'elements' section of the configuration.
+
+        Yields a construction visitor for each `StandardDimension` or
         `StandardDimensionCombination`.
 
         Yields
@@ -203,8 +205,9 @@ class DimensionConfig(ConfigSubset):
                 )
 
     def _extractTopologyVisitors(self) -> Iterator[DimensionConstructionVisitor]:
-        """Process the 'topology' section of the configuration, yielding a
-        construction visitor for each `StandardTopologicalFamily`.
+        """Process the 'topology' section of the configuration.
+
+        Yields a construction visitor for each `StandardTopologicalFamily`.
 
         Yields
         ------
@@ -223,8 +226,9 @@ class DimensionConfig(ConfigSubset):
                 )
 
     def _extractPackerVisitors(self) -> Iterator[DimensionConstructionVisitor]:
-        """Process the 'packers' section of the configuration, yielding
-        construction visitors for each `DimensionPackerFactory`.
+        """Process the 'packers' section of the configuration.
+
+        Yields construction visitors for each `DimensionPackerFactory`.
 
         Yields
         ------
@@ -241,8 +245,9 @@ class DimensionConfig(ConfigSubset):
             )
 
     def makeBuilder(self) -> DimensionConstructionBuilder:
-        """Construct a `DinmensionConstructionBuilder` that reflects this
-        configuration.
+        """Construct a `DinmensionConstructionBuilder`.
+
+        The builder will reflect this configuration.
 
         Returns
         -------

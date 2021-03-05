@@ -51,7 +51,9 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
 
 
 class DimensionElement(TopologicalRelationshipEndpoint):
-    """A named data-organization concept that defines a label and/or metadata
+    """A label and/or metadata in the dimensions system.
+
+    A named data-organization concept that defines a label and/or metadata
     in the dimensions system.
 
     A `DimensionElement` instance typically corresponds to a _logical_ table in
@@ -135,8 +137,9 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         return self
 
     def to_simple(self, minimal: bool = False) -> str:
-        """Convert this class to a simple python type suitable for
-        serialization.
+        """Convert this class to a simple python type.
+
+        This is suitable for serialization.
 
         Parameters
         ----------
@@ -154,8 +157,9 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     def from_simple(cls, simple: str,
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> DimensionElement:
-        """Construct a new object from the data returned from the `to_simple`
-        method.
+        """Construct a new object from the simplified form.
+
+        Usually the data is returned from the `to_simple` method.
 
         Parameters
         ----------
@@ -186,7 +190,9 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     from_json = classmethod(from_json_generic)
 
     def hasTable(self) -> bool:
-        """Return `True` if this element is associated with a table
+        """Indicate if this element is associated with a table.
+
+        Return `True` if this element is associated with a table
         (even if that table "belongs" to another element).
         """
         return True
@@ -199,7 +205,9 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     @property  # type: ignore
     @cached_getter
     def governor(self) -> Optional[GovernorDimension]:
-        """The `GovernorDimension` that is a required dependency of this
+        """Return the governor dimension.
+
+        This is the `GovernorDimension` that is a required dependency of this
         element, or `None` if there is no such dimension (`GovernorDimension`
         or `None`).
         """
@@ -216,7 +224,9 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     @property
     @abstractmethod
     def required(self) -> NamedValueAbstractSet[Dimension]:
-        """Dimensions that are necessary to uniquely identify a record of this
+        """Return the required dimensions.
+
+        Dimensions that are necessary to uniquely identify a record of this
         dimension element.
 
         For elements with a database representation, these dimension are
@@ -235,7 +245,9 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     @property
     @abstractmethod
     def implied(self) -> NamedValueAbstractSet[Dimension]:
-        """Other dimensions that are uniquely identified directly by a record
+        """Return the implied dimensions.
+
+        Other dimensions that are uniquely identified directly by a record
         of this dimension element.
 
         For elements with a database representation, these are exactly the
@@ -249,7 +261,9 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     @property  # type: ignore
     @cached_getter
     def dimensions(self) -> NamedValueAbstractSet[Dimension]:
-        """The union of `required` and `implied`, with all elements in
+        """Return all dimensions.
+
+        The union of `required` and `implied`, with all elements in
         `required` before any elements in `implied`.
 
         This differs from ``self.graph.dimensions`` both in order and in
@@ -268,7 +282,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     @property  # type: ignore
     @cached_getter
     def graph(self) -> DimensionGraph:
-        """Minimal graph that includes this element (`DimensionGraph`).
+        """Return minimal graph that includes this element (`DimensionGraph`).
 
         ``self.graph.required`` includes all dimensions whose primary key
         values are sufficient (often necessary) to uniquely identify ``self``
@@ -281,7 +295,9 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     @property  # type: ignore
     @cached_getter
     def RecordClass(self) -> Type[DimensionRecord]:
-        """The `DimensionRecord` subclass used to hold records for this element
+        """Return the record subclass for this element.
+
+        The `DimensionRecord` subclass used to hold records for this element
         (`type`).
 
         Because `DimensionRecord` subclasses are generated dynamically, this
@@ -294,21 +310,25 @@ class DimensionElement(TopologicalRelationshipEndpoint):
     @property
     @abstractmethod
     def metadata(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
-        """Additional metadata fields included in this element's table
+        """Additional metadata fields included in this element's table.
+
         (`NamedValueSet` of `FieldSpec`).
         """
         raise NotImplementedError()
 
     @property
     def viewOf(self) -> Optional[str]:
-        """Name of another table this element's records are drawn from (`str`
-        or `None`).
+        """Name of another table this element's records are drawn from.
+
+        (`str` or `None`).
         """
         return None
 
     @property
     def alwaysJoin(self) -> bool:
-        """If `True`, always include this element in any query or data ID in
+        """Indicate if the element should always be included.
+
+        If `True`, always include this element in any query or data ID in
         which its ``required`` dimensions appear, because it defines a
         relationship between those dimensions that must always be satisfied.
         """
@@ -316,14 +336,18 @@ class DimensionElement(TopologicalRelationshipEndpoint):
 
 
 class Dimension(DimensionElement):
-    """A named data-organization concept that can be used as a key in a data
+    """A dimension.
+
+    A named data-organization concept that can be used as a key in a data
     ID.
     """
 
     @property
     @abstractmethod
     def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
-        """All fields that can individually be used to identify records of this
+        """Return the unique fields.
+
+        All fields that can individually be used to identify records of this
         element, given the primary keys of all required dependencies
         (`NamedValueAbstractSet` of `FieldSpec`).
         """
@@ -332,7 +356,7 @@ class Dimension(DimensionElement):
     @property  # type: ignore
     @cached_getter
     def primaryKey(self) -> ddl.FieldSpec:
-        """The primary key field for this dimension (`FieldSpec`).
+        """Return primary key field for this dimension (`FieldSpec`).
 
         Note that the database primary keys for dimension tables are in general
         compound; this field is the only field in the database primary key that
@@ -344,7 +368,9 @@ class Dimension(DimensionElement):
     @property  # type: ignore
     @cached_getter
     def alternateKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
-        """Additional unique key fields for this dimension that are not the
+        """Return alternate keys.
+
+        Additional unique key fields for this dimension that are not the
         primary key (`NamedValueAbstractSet` of `FieldSpec`).
 
         If this dimension has required dependencies, the keys of those
@@ -356,7 +382,8 @@ class Dimension(DimensionElement):
 
 
 class DimensionCombination(DimensionElement):
-    """A `DimensionElement` that provides extra metadata and/or relationship
+    """Element with extra information.
+
+    A `DimensionElement` that provides extra metadata and/or relationship
     endpoint information for a combination of dimensions.
     """
-    pass

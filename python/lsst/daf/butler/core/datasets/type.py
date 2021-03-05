@@ -60,8 +60,9 @@ def _safeMakeMappingProxyType(data: Optional[Mapping]) -> Mapping:
 
 
 class DatasetType:
-    r"""A named category of Datasets that defines how they are organized,
-    related, and stored.
+    r"""A named category of Datasets.
+
+    Defines how they are organized, related, and stored.
 
     A concrete, final class whose instances represent `DatasetType`\ s.
     `DatasetType` instances may be constructed without a `Registry`,
@@ -227,29 +228,33 @@ class DatasetType:
                      self._parentStorageClassName))
 
     def __lt__(self, other: Any) -> bool:
-        """Sort using the dataset type name.
-        """
+        """Sort using the dataset type name."""
         if not isinstance(other, type(self)):
             return NotImplemented
         return self.name < other.name
 
     @property
     def name(self) -> str:
-        """A string name for the Dataset; must correspond to the same
-        `DatasetType` across all Registries.
+        """Return a string name for the Dataset.
+
+        Mmust correspond to the same `DatasetType` across all Registries.
         """
         return self._name
 
     @property
     def dimensions(self) -> DimensionGraph:
-        r"""The `Dimension`\ s that label and relate instances of this
+        r"""Return the `Dimension`\ s fir this dataset type.
+
+        The dimensions label and relate instances of this
         `DatasetType` (`DimensionGraph`).
         """
         return self._dimensions
 
     @property
     def storageClass(self) -> StorageClass:
-        """`StorageClass` instance that defines how this `DatasetType`
+        """Return `StorageClass` instance associated with this dataset type.
+
+        The `StorageClass` defines how this `DatasetType`
         is persisted. Note that if DatasetType was constructed with a name
         of a StorageClass then Butler has to be initialized before using
         this property.
@@ -260,8 +265,7 @@ class DatasetType:
 
     @property
     def parentStorageClass(self) -> Optional[StorageClass]:
-        """`StorageClass` instance that defines how the composite associated
-        with this  `DatasetType` is persisted.
+        """Return the storage class of the composite containing this component.
 
         Note that if DatasetType was constructed with a name of a
         StorageClass then Butler has to be initialized before using this
@@ -275,8 +279,7 @@ class DatasetType:
         return self._parentStorageClass
 
     def isCalibration(self) -> bool:
-        """Return whether datasets of this type may be included in calibration
-        collections.
+        """Return if datasets of this type can be in calibration collections.
 
         Returns
         -------
@@ -287,7 +290,9 @@ class DatasetType:
         return self._isCalibration
 
     def finalizeParentStorageClass(self, newParent: StorageClass) -> None:
-        """Replace the current placeholder parent storage class with
+        """Finalize the parent storage class definition.
+
+        Replaces the current placeholder parent storage class with
         the real parent.
 
         Parameters
@@ -318,8 +323,7 @@ class DatasetType:
 
     @staticmethod
     def splitDatasetTypeName(datasetTypeName: str) -> Tuple[str, Optional[str]]:
-        """Given a dataset type name, return the root name and the component
-        name.
+        """Return the root name and the component from a composite name.
 
         Parameters
         ----------
@@ -347,8 +351,7 @@ class DatasetType:
         return root, comp
 
     def nameAndComponent(self) -> Tuple[str, Optional[str]]:
-        """Return the root name of this dataset type and the component
-        name (if defined).
+        """Return the root name of this dataset type and any component.
 
         Returns
         -------
@@ -360,7 +363,7 @@ class DatasetType:
         return self.splitDatasetTypeName(self.name)
 
     def component(self) -> Optional[str]:
-        """Component name (if defined)
+        """Return the component name (if defined).
 
         Returns
         -------
@@ -372,7 +375,7 @@ class DatasetType:
         return comp
 
     def componentTypeName(self, component: str) -> str:
-        """Given a component name, derive the datasetTypeName of that component
+        """Derive a component dataset type from a composite.
 
         Parameters
         ----------
@@ -394,8 +397,7 @@ class DatasetType:
         raise KeyError("Requested component ({}) not understood by this DatasetType".format(component))
 
     def makeCompositeDatasetType(self) -> DatasetType:
-        """Return a DatasetType suitable for the composite version of this
-        component dataset type.
+        """Return a composite dataset type from the component.
 
         Returns
         -------
@@ -417,8 +419,9 @@ class DatasetType:
                            storageClass=self.parentStorageClass)
 
     def makeComponentDatasetType(self, component: str) -> DatasetType:
-        """Return a DatasetType suitable for the given component, assuming the
-        same dimensions as the parent.
+        """Return a component dataset type from a composite.
+
+        Assumes the same dimensions as the parent.
 
         Parameters
         ----------
@@ -436,8 +439,7 @@ class DatasetType:
                            parentStorageClass=self.storageClass)
 
     def makeAllComponentDatasetTypes(self) -> List[DatasetType]:
-        """Return all the component dataset types assocaited with this
-        dataset type.
+        """Return all component dataset types for this composite.
 
         Returns
         -------
@@ -449,8 +451,7 @@ class DatasetType:
                 for componentName in self.storageClass.allComponents()]
 
     def isComponent(self) -> bool:
-        """Boolean indicating whether this `DatasetType` refers to a
-        component of a composite.
+        """Return whether this `DatasetType` refers to a component.
 
         Returns
         -------
@@ -462,7 +463,7 @@ class DatasetType:
         return False
 
     def isComposite(self) -> bool:
-        """Boolean indicating whether this `DatasetType` is a composite type.
+        """Return whether this `DatasetType` is a composite.
 
         Returns
         -------
@@ -473,8 +474,7 @@ class DatasetType:
         return self.storageClass.isComposite()
 
     def _lookupNames(self) -> Tuple[LookupKey, ...]:
-        """Name keys to use when looking up this datasetType in a
-        configuration.
+        """Return name keys to use for lookups in configurations.
 
         The names are returned in order of priority.
 
@@ -498,8 +498,9 @@ class DatasetType:
         return lookups + self.storageClass._lookupNames()
 
     def to_simple(self, minimal: bool = False) -> Union[Dict, str]:
-        """Convert this class to a simple python type suitable for
-        serialization.
+        """Convert this class to a simple python type.
+
+        This makes it suitable for serialization.
 
         Parameters
         ----------
@@ -531,8 +532,9 @@ class DatasetType:
     def from_simple(cls, simple: Union[Dict, str],
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> DatasetType:
-        """Construct a new object from the data returned from the `to_simple`
-        method.
+        """Construct a new object from the simplified form.
+
+        This is usally data returned from the `to_simple` method.
 
         Parameters
         ----------
@@ -608,7 +610,7 @@ class DatasetType:
 
 
 def _unpickle_via_factory(factory: Callable, args: Any, kwargs: Any) -> DatasetType:
-    """Unpickle something by calling a factory
+    """Unpickle something by calling a factory.
 
     Allows subclasses to unpickle using `__reduce__` with keyword
     arguments as well as positional arguments.

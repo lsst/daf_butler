@@ -59,7 +59,7 @@ except AttributeError:
 
 
 class Loader(yamlLoader):
-    """YAML Loader that supports file include directives
+    """YAML Loader that supports file include directives.
 
     Uses ``!include`` directive in a YAML file to point to another
     YAML file to be included. The path in the include directive is relative
@@ -118,8 +118,7 @@ class Loader(yamlLoader):
         if requesteduri.scheme:
             fileuri = requesteduri
         else:
-            fileuri = copy.copy(self._root)
-            fileuri.updateFile(filename)
+            fileuri = self._root.updatedFile(filename)
 
         log.debug("Opening YAML file via !include: %s", fileuri)
 
@@ -133,8 +132,7 @@ class Loader(yamlLoader):
 
 
 class Config(collections.abc.MutableMapping):
-    r"""Implements a datatype that is used by `Butler` for configuration
-    parameters.
+    r"""Implements a datatype that is used by `Butler` for configuration.
 
     It is essentially a `dict` with key/value pairs, including nested dicts
     (as values). In fact, it can be initialized with a `dict`.
@@ -221,10 +219,11 @@ class Config(collections.abc.MutableMapping):
             raise RuntimeError(f"A Config could not be loaded from other: {other}")
 
     def ppprint(self):
-        """helper function for debugging, prints a config out in a readable
-        way in the debugger.
+        """Return config as formatted readable string.
 
-        use: pdb> print(myConfigObject.ppprint())
+        Examples
+        --------
+        use: ``pdb> print(myConfigObject.ppprint())``
 
         Returns
         -------
@@ -323,7 +322,7 @@ class Config(collections.abc.MutableMapping):
         self.configFile = uri
 
     def __initFromYaml(self, stream):
-        """Loads a YAML config from any readable stream that contains one.
+        """Load a YAML config from any readable stream that contains one.
 
         Parameters
         ----------
@@ -344,7 +343,7 @@ class Config(collections.abc.MutableMapping):
         return self
 
     def __initFromJson(self, stream):
-        """Loads a JSON config from any readable stream that contains one.
+        """Load a JSON config from any readable stream that contains one.
 
         Parameters
         ----------
@@ -367,9 +366,10 @@ class Config(collections.abc.MutableMapping):
         return self
 
     def _processExplicitIncludes(self):
-        """Scan through the configuration searching for the special
-        includeConfigs directive and process the includes."""
+        """Scan through the configuration searching for the special includes.
 
+        Looks for ``includeConfigs`` directive and processes the includes.
+        """
         # Search paths for config files
         searchPaths = [ButlerURI(os.path.curdir, forceDirectory=True)]
         if self.configFile is not None:
@@ -489,7 +489,7 @@ class Config(collections.abc.MutableMapping):
             return [key, ]
 
     def _getKeyHierarchy(self, name):
-        """Retrieve the key hierarchy for accessing the Config
+        """Retrieve the key hierarchy for accessing the Config.
 
         Parameters
         ----------
@@ -510,7 +510,7 @@ class Config(collections.abc.MutableMapping):
         return keys
 
     def _findInHierarchy(self, keys, create=False):
-        """Look for hierarchy of keys in Config
+        """Look for hierarchy of keys in Config.
 
         Parameters
         ----------
@@ -533,7 +533,7 @@ class Config(collections.abc.MutableMapping):
         d = self._data
 
         def checkNextItem(k, d, create):
-            """See if k is in d and if it is return the new child"""
+            """See if k is in d and if it is return the new child."""
             nextVal = None
             isThere = False
             if d is None:
@@ -627,21 +627,27 @@ class Config(collections.abc.MutableMapping):
             raise KeyError(f"{key} not found in Config")
 
     def update(self, other):
-        """Like dict.update, but will add or modify keys in nested dicts,
-        instead of overwriting the nested dict entirely.
+        """Update config from other `Config` or `dict`.
 
-        For example, for the given code:
-        foo = {"a": {"b": 1}}
-        foo.update({"a": {"c": 2}})
+        Like `dict.update()`, but will add or modify keys in nested dicts,
+        instead of overwriting the nested dict entirely.
 
         Parameters
         ----------
         other : `dict` or `Config`
             Source of configuration:
 
-            - If foo is a dict, then after the update foo == {"a": {"c": 2}}
-            - But if foo is a Config, then after the update
-              foo == {"a": {"b": 1, "c": 2}}
+        Examples
+        --------
+        >>> c = Config({"a": {"b": 1}})
+        >>> c.update({"a": {"c": 2}})
+        >>> print(c)
+        {'a': {'b': 1, 'c': 2}}
+
+        >>> foo = {"a": {"b": 1}}
+        >>> foo.update({"a": {"c": 2}})
+        >>> print(foo)
+        {'a': {'c': 2}}
         """
         def doUpdate(d, u):
             if not isinstance(u, collections.abc.Mapping) or \
@@ -656,7 +662,9 @@ class Config(collections.abc.MutableMapping):
         doUpdate(self._data, other)
 
     def merge(self, other):
-        """Like Config.update, but will add keys & values from other that
+        """Merge another Config into this one.
+
+        Like `Config.update()`, but will add keys & values from other that
         DO NOT EXIST in self.
 
         Keys and values that already exist in self will NOT be overwritten.
@@ -823,7 +831,7 @@ class Config(collections.abc.MutableMapping):
     # i/o #
 
     def dump(self, output: Optional[IO] = None, format: str = "yaml") -> Optional[str]:
-        """Writes the config to an output stream.
+        """Write the config to an output stream.
 
         Parameters
         ----------
@@ -853,7 +861,7 @@ class Config(collections.abc.MutableMapping):
     def dumpToUri(self, uri: Union[ButlerURI, str], updateFile: bool = True,
                   defaultFileName: str = "butler.yaml",
                   overwrite: bool = True) -> None:
-        """Writes the config to location pointed to by given URI.
+        """Write the config to location pointed to by given URI.
 
         Currently supports 's3' and 'file' URI schemes.
 
@@ -875,7 +883,7 @@ class Config(collections.abc.MutableMapping):
         uri = ButlerURI(uri)
 
         if updateFile and not uri.getExtension():
-            uri.updateFile(defaultFileName)
+            uri = uri.updatedFile(defaultFileName)
 
         # Try to work out the format from the extension
         ext = uri.getExtension()
@@ -888,7 +896,7 @@ class Config(collections.abc.MutableMapping):
 
     @staticmethod
     def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):
-        """Generic helper function for updating specific config parameters.
+        """Update specific config parameters.
 
         Allows for named parameters to be set to new values in bulk, and
         for other values to be set by copying from a reference config.
@@ -1130,8 +1138,7 @@ class ConfigSubset(Config):
 
     @classmethod
     def defaultSearchPaths(cls):
-        """Read the environment to determine search paths to use for global
-        defaults.
+        """Read environment to determine search paths to use.
 
         Global defaults, at lowest priority, are found in the ``config``
         directory of the butler source tree. Additional defaults can be
@@ -1167,7 +1174,7 @@ class ConfigSubset(Config):
         return defaultsPaths
 
     def _updateWithConfigsFromPath(self, searchPaths, configFile):
-        """Search the supplied paths, merging the configuration values
+        """Search the supplied paths, merging the configuration values.
 
         The values read will override values currently stored in the object.
         Every file found in the path will be read, such that the earlier
@@ -1225,7 +1232,8 @@ class ConfigSubset(Config):
     def validate(self):
         """Check that mandatory keys are present in this configuration.
 
-        Ignored if ``requiredKeys`` is empty."""
+        Ignored if ``requiredKeys`` is empty.
+        """
         # Validation
         missing = [k for k in self.requiredKeys if k not in self._data]
         if missing:

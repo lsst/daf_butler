@@ -52,7 +52,9 @@ if TYPE_CHECKING:
 
 
 class GovernorDimension(Dimension):
-    """A special `Dimension` with no dependencies and a small number of rows,
+    """Governor dimension.
+
+    A special `Dimension` with no dependencies and a small number of rows,
     used to group the dimensions that depend on it.
 
     Parameters
@@ -94,6 +96,7 @@ class GovernorDimension(Dimension):
     functionality to governor dimensions, but a number of (code) dependency
     relationships would need to be reordered first.
     """
+
     def __init__(
         self,
         name: str,
@@ -150,7 +153,9 @@ class GovernorDimension(Dimension):
         db: Database, *,
         context: Optional[StaticTablesContext] = None,
     ) -> GovernorDimensionRecordStorage:
-        """Construct the `DimensionRecordStorage` instance that should
+        """Make storage record.
+
+        Constructs the `DimensionRecordStorage` instance that should
         be used to back this element in a registry.
 
         Parameters
@@ -191,6 +196,7 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
         (part of) this dimension's table's primary key, while others are used
         to define unique constraints.
     """
+
     def __init__(
         self,
         name: str,

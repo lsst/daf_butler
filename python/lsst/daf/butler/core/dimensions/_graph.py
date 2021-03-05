@@ -94,6 +94,7 @@ class DimensionGraph:
     `DimensionUniverse`), or complete `~collection.abc.Set` semantics are
     required.
     """
+
     def __new__(
         cls,
         universe: DimensionUniverse,
@@ -185,13 +186,13 @@ class DimensionGraph:
 
     @property
     def names(self) -> AbstractSet[str]:
-        """A set of the names of all dimensions in the graph (`KeysView`).
-        """
+        """Set of the names of all dimensions in the graph (`KeysView`)."""
         return self.dimensions.names
 
     def to_simple(self, minimal: bool = False) -> List[str]:
-        """Convert this class to a simple python type suitable for
-        serialization.
+        """Convert this class to a simple python type.
+
+        This type is suitable for serialization.
 
         Parameters
         ----------
@@ -210,7 +211,9 @@ class DimensionGraph:
     def from_simple(cls, names: List[str],
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> DimensionGraph:
-        """Construct a new object from the data returned from the `to_simple`
+        """Construct a new object from the simplified form.
+
+        This is assumed to support data data returned from the `to_simple`
         method.
 
         Parameters
@@ -243,14 +246,16 @@ class DimensionGraph:
     from_json = classmethod(from_json_generic)
 
     def __iter__(self) -> Iterator[Dimension]:
-        """Iterate over all dimensions in the graph (and true `Dimension`
-        instances only).
+        """Iterate over all dimensions in the graph.
+
+        (and true `Dimension` instances only).
         """
         return iter(self.dimensions)
 
     def __len__(self) -> int:
-        """Return the number of dimensions in the graph (and true `Dimension`
-        instances only).
+        """Return the number of dimensions in the graph.
+
+        (and true `Dimension` instances only).
         """
         return len(self.dimensions)
 
@@ -306,9 +311,7 @@ class DimensionGraph:
         return self.dimensions >= other.dimensions
 
     def __eq__(self, other: Any) -> bool:
-        """Test whether ``self`` and ``other`` have exactly the same dimensions
-        and elements.
-        """
+        """Test the arguments have exactly the same dimensions & elements."""
         if isinstance(other, DimensionGraph):
             return self.dimensions == other.dimensions
         else:
@@ -318,28 +321,23 @@ class DimensionGraph:
         return hash(tuple(self.dimensions.names))
 
     def __le__(self, other: DimensionGraph) -> bool:
-        """Test whether ``self`` is a subset of ``other``.
-        """
+        """Test whether ``self`` is a subset of ``other``."""
         return self.dimensions <= other.dimensions
 
     def __ge__(self, other: DimensionGraph) -> bool:
-        """Test whether ``self`` is a superset of ``other``.
-        """
+        """Test whether ``self`` is a superset of ``other``."""
         return self.dimensions >= other.dimensions
 
     def __lt__(self, other: DimensionGraph) -> bool:
-        """Test whether ``self`` is a strict subset of ``other``.
-        """
+        """Test whether ``self`` is a strict subset of ``other``."""
         return self.dimensions < other.dimensions
 
     def __gt__(self, other: DimensionGraph) -> bool:
-        """Test whether ``self`` is a strict superset of ``other``.
-        """
+        """Test whether ``self`` is a strict superset of ``other``."""
         return self.dimensions > other.dimensions
 
     def union(self, *others: DimensionGraph) -> DimensionGraph:
-        """Construct a new graph containing all dimensions in any of the
-        operands.
+        """Construct a new graph with all dimensions in any of the operands.
 
         The elements of the returned graph may exceed the naive union of
         their elements, as some `DimensionElement` instances are included
@@ -350,30 +348,33 @@ class DimensionGraph:
         return DimensionGraph(self.universe, names=names)
 
     def intersection(self, *others: DimensionGraph) -> DimensionGraph:
-        """Construct a new graph containing only dimensions in all of the
-        operands.
+        """Construct a new graph with only dimensions in all of the operands.
+
+        See also `union`.
         """
         names = set(self.names).intersection(*[other.names for other in others])
         return DimensionGraph(self.universe, names=names)
 
     def __or__(self, other: DimensionGraph) -> DimensionGraph:
-        """Construct a new graph containing all dimensions in any of the
-        operands.
+        """Construct a new graph with all dimensions in any of the operands.
 
         See `union`.
         """
         return self.union(other)
 
     def __and__(self, other: DimensionGraph) -> DimensionGraph:
-        """Construct a new graph containing only dimensions in all of the
-        operands.
+        """Construct a new graph with only dimensions in all of the operands.
+
+        See `intersection`.
         """
         return self.intersection(other)
 
     @property  # type: ignore
     @cached_getter
     def primaryKeyTraversalOrder(self) -> Tuple[DimensionElement, ...]:
-        """Return a tuple of all elements in an order allows records to be
+        """Return a tuple of all elements in specific order.
+
+        The order allows records to be
         found given their primary keys, starting from only the primary keys of
         required dimensions (`tuple` [ `DimensionRecord` ]).
 
@@ -405,16 +406,12 @@ class DimensionGraph:
 
     @property
     def spatial(self) -> NamedValueAbstractSet[TopologicalFamily]:
-        """The `~TopologicalSpace.SPATIAL` families represented by the elements
-        in this graph.
-        """
+        """Families represented by the spatial elements in this graph."""
         return self.topology[TopologicalSpace.SPATIAL]
 
     @property
     def temporal(self) -> NamedValueAbstractSet[TopologicalFamily]:
-        """The `~TopologicalSpace.TEMPORAL` families represented by the
-        elements in this graph.
-        """
+        """Families represented by the temporal elements in this graph."""
         return self.topology[TopologicalSpace.TEMPORAL]
 
     # Class attributes below are shadowed by instance attributes, and are

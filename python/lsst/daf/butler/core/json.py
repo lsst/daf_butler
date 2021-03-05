@@ -73,7 +73,9 @@ def to_json_generic(self: SupportsSimple, minimal: bool = False) -> str:
 def from_json_generic(cls: Type[SupportsSimple], json_str: str,
                       universe: Optional[DimensionUniverse] = None,
                       registry: Optional[Registry] = None) -> SupportsSimple:
-    """Convert a JSON string created by `to_json` and return
+    """Return new class from JSON string.
+
+    Converts a JSON string created by `to_json` and return
     something of the supplied class.
 
     Parameters

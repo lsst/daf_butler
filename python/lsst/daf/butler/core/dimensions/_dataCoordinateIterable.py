@@ -62,8 +62,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
 
     @staticmethod
     def fromScalar(dataId: DataCoordinate) -> _ScalarDataCoordinateIterable:
-        """Return a `DataCoordinateIterable` containing the single data ID
-        given.
+        """Return a `DataCoordinateIterable` containing the single data ID.
 
         Parameters
         ----------
@@ -85,21 +84,22 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
     @property
     @abstractmethod
     def graph(self) -> DimensionGraph:
-        """The dimensions identified by these data IDs (`DimensionGraph`).
-        """
+        """Dimensions identified by these data IDs (`DimensionGraph`)."""
         raise NotImplementedError()
 
     @property
     def universe(self) -> DimensionUniverse:
-        """The universe that defines all known dimensions compatible with
-        this iterable (`DimensionUniverse`).
+        """Universe that defines all known compatible dimensions.
+
+        (`DimensionUniverse`).
         """
         return self.graph.universe
 
     @abstractmethod
     def hasFull(self) -> bool:
-        """Return whether all data IDs in this iterable identify all
-        dimensions, not just required dimensions.
+        """Indicate if all data IDs in this iterable identify all dimensions.
+
+        Not just required dimensions.
 
         Returns
         -------
@@ -111,8 +111,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
 
     @abstractmethod
     def hasRecords(self) -> bool:
-        """Return whether all data IDs in this iterable contain
-        `DimensionRecord` instances.
+        """Return whether all data IDs in this iterable contain records.
 
         Returns
         -------
@@ -153,8 +152,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
                                       check=False)
 
     def constrain(self, query: SimpleQuery, columns: Callable[[str], sqlalchemy.sql.ColumnElement]) -> None:
-        """Constrain a SQL query to include or relate to only data IDs in
-        this iterable.
+        """Constrain a SQL query to include or relate to only known data IDs.
 
         Parameters
         ----------
@@ -179,7 +177,9 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
 
     @abstractmethod
     def subset(self, graph: DimensionGraph) -> DataCoordinateIterable:
-        """Return an iterable whose data IDs identify a subset of the
+        """Return a subset iterable.
+
+        This subset iterable returns data IDs that identify a subset of the
         dimensions that this one's do.
 
         Parameters
@@ -202,7 +202,9 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
 
 
 class _ScalarDataCoordinateIterable(DataCoordinateIterable):
-    """A `DataCoordinateIterable` implementation that adapts a single
+    """An iterable for a single `DataCoordinate`.
+
+    A `DataCoordinateIterable` implementation that adapts a single
     `DataCoordinate` instance.
 
     This class should only be used directly by other code in the module in
@@ -214,6 +216,7 @@ class _ScalarDataCoordinateIterable(DataCoordinateIterable):
     dataId : `DataCoordinate`
         The data ID to adapt.
     """
+
     def __init__(self, dataId: DataCoordinate):
         self._dataId = dataId
 
@@ -250,7 +253,9 @@ class _ScalarDataCoordinateIterable(DataCoordinateIterable):
 
 
 class _DataCoordinateCollectionBase(DataCoordinateIterable):
-    """A partial `DataCoordinateIterable` implementation that is backed by a
+    """A partial iterable implementation backed by native Python collection.
+
+    A partial `DataCoordinateIterable` implementation that is backed by a
     native Python collection.
 
     This class is intended only to be used as an intermediate base class for
@@ -282,6 +287,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         given ``graph`` and state flags at construction.  If `False`, no
         checking will occur.
     """
+
     def __init__(self, dataIds: Collection[DataCoordinate], graph: DimensionGraph, *,
                  hasFull: Optional[bool] = None, hasRecords: Optional[bool] = None,
                  check: bool = True):
@@ -352,8 +358,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         return key in self._dataIds
 
     def _subsetKwargs(self, graph: DimensionGraph) -> Dict[str, Any]:
-        """Return constructor keyword arguments useful for subclasses
-        implementing `subset`.
+        """Return constructor kwargs useful for subclasses implementing subset.
 
         Parameters
         ----------
@@ -376,7 +381,9 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
 
 
 class DataCoordinateSet(_DataCoordinateCollectionBase):
-    """A `DataCoordinateIterable` implementation that adds some set-like
+    """Iterable iteration that is set-like.
+
+    A `DataCoordinateIterable` implementation that adds some set-like
     functionality, and is backed by a true set-like object.
 
     Parameters
@@ -442,6 +449,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
     reflect what elements are in the new set - we just don't control which
     elements are contributed by each operand).
     """
+
     def __init__(self, dataIds: AbstractSet[DataCoordinate], graph: DimensionGraph, *,
                  hasFull: Optional[bool] = None, hasRecords: Optional[bool] = None,
                  check: bool = True):
@@ -561,8 +569,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         return DataCoordinateSet(self._dataIds - other._dataIds, self.graph, check=False)
 
     def intersection(self, other: DataCoordinateIterable) -> DataCoordinateSet:
-        """Return a new set that contains all data IDs in both ``self`` and
-        ``other``.
+        """Return a new set that contains all data IDs from parameters.
 
         Parameters
         ----------
@@ -579,8 +586,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         return DataCoordinateSet(self._dataIds & other.toSet()._dataIds, self.graph, check=False)
 
     def union(self, other: DataCoordinateIterable) -> DataCoordinateSet:
-        """Return a new set that contains all data IDs in either ``self`` or
-        ``other``.
+        """Return a new set that contains all data IDs in either parameters.
 
         Parameters
         ----------
@@ -597,8 +603,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         return DataCoordinateSet(self._dataIds | other.toSet()._dataIds, self.graph, check=False)
 
     def symmetric_difference(self, other: DataCoordinateIterable) -> DataCoordinateSet:
-        """Return a new set that contains all data IDs in either ``self`` or
-        ``other``, but not both.
+        """Return a new set with all data IDs in either parameters, not both.
 
         Parameters
         ----------
@@ -615,8 +620,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         return DataCoordinateSet(self._dataIds ^ other.toSet()._dataIds, self.graph, check=False)
 
     def difference(self, other: DataCoordinateIterable) -> DataCoordinateSet:
-        """Return a new set that contains all data IDs in ``self`` that are not
-        in ``other``.
+        """Return a new set with all data IDs in this that are not in other.
 
         Parameters
         ----------
@@ -637,8 +641,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         return self
 
     def subset(self, graph: DimensionGraph) -> DataCoordinateSet:
-        """Return a set whose data IDs identify a subset of the
-        dimensions that this one's do.
+        """Return a set whose data IDs identify a subset.
 
         Parameters
         ----------
@@ -665,7 +668,9 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
 
 
 class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordinate]):
-    """A `DataCoordinateIterable` implementation that supports the full
+    """Iterable supporting the full Sequence interface.
+
+    A `DataCoordinateIterable` implementation that supports the full
     `collections.abc.Sequence` interface.
 
     Parameters
@@ -694,6 +699,7 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         given ``graph`` and state flags at construction.  If `False`, no
         checking will occur.
     """
+
     def __init__(self, dataIds: Sequence[DataCoordinate], graph: DimensionGraph, *,
                  hasFull: Optional[bool] = None, hasRecords: Optional[bool] = None,
                  check: bool = True):
@@ -739,8 +745,7 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         return self
 
     def subset(self, graph: DimensionGraph) -> DataCoordinateSequence:
-        """Return a sequence whose data IDs identify a subset of the
-        dimensions that this one's do.
+        """Return a sequence whose data IDs identify a subset.
 
         Parameters
         ----------

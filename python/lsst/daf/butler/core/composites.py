@@ -50,6 +50,8 @@ DISASSEMBLY_KEY = "disassembled"
 
 
 class CompositesConfig(ConfigSubset):
+    """Configuration specifics for Composites."""
+
     component = "composites"
     requiredKeys = ("default", DISASSEMBLY_KEY)
     defaultConfigFile = "datastores/composites.yaml"
@@ -64,8 +66,10 @@ class CompositesConfig(ConfigSubset):
 
 
 class CompositesMap:
-    """Determine whether a specific datasetType or StorageClass should be
-    disassembled.
+    """Determine whether something should be disassembled.
+
+    Compares a `DatasetType` or `StorageClass` with the map and determines
+    whether disassembly is requested.
 
     Parameters
     ----------
@@ -97,8 +101,7 @@ class CompositesMap:
         self._lut = processLookupConfigs(disassemblyMap, universe=universe)
 
     def shouldBeDisassembled(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
-        """Given some choices, indicate whether the entity should be
-        disassembled.
+        """Indicate whether the entity should be disassembled.
 
         Parameters
         ----------
@@ -119,7 +122,6 @@ class CompositesMap:
         ValueError
             The supplied argument is not understood.
         """
-
         if not hasattr(entity, "isComposite"):
             raise ValueError(f"Supplied entity ({entity}) is not understood.")
 

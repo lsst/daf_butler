@@ -54,8 +54,7 @@ from .utils import immutable
 
 @enum.unique
 class TopologicalSpace(enum.Enum):
-    """Enumeration of the different categories of continuous-variable
-    relationships supported by the dimensions system.
+    """Enumeration of continuous-variable relationships for dimensions.
 
     Most dimension relationships are discrete, in that they are regular foreign
     key relationships between tables.  Those connected to a
@@ -78,9 +77,10 @@ class TopologicalSpace(enum.Enum):
 
 @immutable
 class TopologicalFamily(ABC):
-    """A grouping of `TopologicalRelationshipEndpoint` objects whose regions
-    form a hierarchy in which one endpoint's rows always contain another's in a
-    predefined way.
+    """A grouping of `TopologicalRelationshipEndpoint` objects.
+
+    These regions form a hierarchy in which one endpoint's rows always contain
+    another's in a predefined way.
 
     This hierarchy means that endpoints in the same family do not generally
     have to be have to be related using (e.g.) overlaps; instead, the regions
@@ -94,6 +94,7 @@ class TopologicalFamily(ABC):
     category : `TopologicalSpace`
         Space in which the regions of this family live.
     """
+
     def __init__(
         self,
         name: str,
@@ -116,8 +117,10 @@ class TopologicalFamily(ABC):
     @abstractmethod
     def choose(self, endpoints: NamedValueAbstractSet[TopologicalRelationshipEndpoint]
                ) -> TopologicalRelationshipEndpoint:
-        """Select the best member of this family to use in a query join or
-        data ID when more than one is present.
+        """Select the best member of this family to use.
+
+        These are to be used in a query join or data ID when more than one
+        is present.
 
         Usually this should correspond to the most fine-grained region.
 
@@ -146,35 +149,35 @@ class TopologicalFamily(ABC):
 
 @immutable
 class TopologicalRelationshipEndpoint(ABC):
-    """An abstract base class whose instances represent a logical table that
+    """Representation of a logical table that can participate in overlap joins.
+
+    An abstract base class whose instances represent a logical table that
     may participate in overlap joins defined by a `TopologicalSpace`.
     """
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """Unique string identifier for this endpoint (`str`).
-        """
+        """Return unique string identifier for this endpoint (`str`)."""
         raise NotImplementedError()
 
     @property
     @abstractmethod
     def topology(self) -> Mapping[TopologicalSpace, TopologicalFamily]:
-        """The relationship families to which this endpoint belongs, keyed
-        by the category for that family.
+        """Return the relationship families to which this endpoint belongs.
+
+        It is keyed by the category for that family.
         """
         raise NotImplementedError()
 
     @property
     def spatial(self) -> Optional[TopologicalFamily]:
-        """This endpoint's `~TopologicalSpace.SPATIAL` family.
-        """
+        """Return this endpoint's `~TopologicalSpace.SPATIAL` family."""
         return self.topology.get(TopologicalSpace.SPATIAL)
 
     @property
     def temporal(self) -> Optional[TopologicalFamily]:
-        """This endpoint's `~TopologicalSpace.TEMPORAL` family.
-        """
+        """Return this endpoint's `~TopologicalSpace.TEMPORAL` family."""
         return self.topology.get(TopologicalSpace.TEMPORAL)
 
 
@@ -183,7 +186,9 @@ _R = TypeVar("_R")
 
 
 class TopologicalExtentDatabaseRepresentation(Generic[_R]):
-    """An abstract base class whose subclasses provide a mapping from the
+    """Mapping of in-memory representation of a region to DB representation.
+
+    An abstract base class whose subclasses provide a mapping from the
     in-memory representation of a `TopologicalSpace` region to a
     database-storage representation, and whose instances act like a
     SQLAlchemy-based column expression.
@@ -200,14 +205,16 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
     """
 
     SPACE: ClassVar[TopologicalSpace]
-    """Topological space in which the regions represented by this class exist.
+    """Topological space where regions represented by this class exist.
     """
 
     @classmethod
     @abstractmethod
     def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
                        ) -> Tuple[ddl.FieldSpec, ...]:
-        """Make one or more `ddl.FieldSpec` objects that reflect the fields
+        """Make objects that relfect the fields that must be added to table.
+
+        Makes one or more `ddl.FieldSpec` objects that reflect the fields
         that must be added to a table for this representation.
 
         Parameters
@@ -257,8 +264,9 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
     @abstractmethod
     def update(cls, extent: Optional[_R], name: Optional[str] = None,
                result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Add a region to a dictionary that represents a database row
-        in this representation.
+        """Add a region to a dictionary.
+
+        This region represents a database row in this representation.
 
         Parameters
         ----------
@@ -283,8 +291,9 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
     @classmethod
     @abstractmethod
     def extract(cls, mapping: Mapping[str, Any], name: Optional[str] = None) -> Optional[_R]:
-        """Extract a region from a dictionary that represents a
-        database row in this representation.
+        """Extract a region from a dictionary.
+
+        This region represents a database row in this representation.
 
         Parameters
         ----------
@@ -319,7 +328,9 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
     @abstractmethod
     def fromSelectable(cls: Type[_S], selectable: sqlalchemy.sql.FromClause,
                        name: Optional[str] = None) -> _S:
-        """Construct an instance that represents a logical column (which may
+        """Construct representation of a column in the table or subquery.
+
+        Constructs an instance that represents a logical column (which may
         actually be backed by multiple columns) in the given table or subquery.
 
         Parameters
@@ -340,7 +351,7 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
     @property
     @abstractmethod
     def name(self) -> str:
-        """Base logical name for the topological extent (`str`).
+        """Return base logical name for the topological extent (`str`).
 
         If the representation uses only one actual column, this should be the
         full name of the column.  In other cases it is an unspecified subset of
@@ -350,7 +361,9 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
 
     @abstractmethod
     def isNull(self) -> sqlalchemy.sql.ColumnElement:
-        """Return a SQLAlchemy expression that tests whether this region is
+        """Return expression that tests where region is ``NULL``.
+
+        Returns a SQLAlchemy expression that tests whether this region is
         logically ``NULL``.
 
         Returns
@@ -362,8 +375,7 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
 
     @abstractmethod
     def flatten(self, name: Optional[str]) -> Iterator[sqlalchemy.sql.ColumnElement]:
-        """Return the actual column or columns that comprise this logical
-        column.
+        """Return the actual column(s) that comprise this logical column.
 
         Parameters
         ----------
@@ -381,7 +393,9 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
 
 
 class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[lsst.sphgeom.Region]):
-    """An object that encapsulates how spatial regions on the sky are
+    """Class reflecting how spatial regions are represented inside the DB.
+
+    An instance of this class encapsulates how spatial regions on the sky are
     represented in a database engine.
 
     Instances should be constructed via `fromSelectable`, not by calling the
@@ -406,6 +420,7 @@ class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentatio
     If we add support for database-native regions in the future, this class may
     become an ABC with multiple concrete implementations.
     """
+
     def __init__(self, column: sqlalchemy.sql.ColumnElement, name: str):
         self.column = column
         self._name = name

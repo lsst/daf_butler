@@ -1,6 +1,4 @@
-"""
-Core code for butler.
-"""
+"""Core code for butler."""
 
 # Do not export the utility routines from utils and queries.
 

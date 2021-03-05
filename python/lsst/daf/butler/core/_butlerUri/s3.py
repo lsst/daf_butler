@@ -91,7 +91,7 @@ log = logging.getLogger(__name__)
 
 
 class ButlerS3URI(ButlerURI):
-    """S3 URI"""
+    """S3 URI implementation class."""
 
     @property
     def client(self) -> boto3.client:
@@ -101,6 +101,7 @@ class ButlerS3URI(ButlerURI):
 
     @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
     def exists(self) -> bool:
+        """Check that the S3 resource exists."""
         if self.is_root:
             # Only check for the bucket since the path is irrelevant
             return bucketExists(self.netloc)
@@ -109,6 +110,7 @@ class ButlerS3URI(ButlerURI):
 
     @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
     def size(self) -> int:
+        """Return the size of the resource in bytes."""
         if self.dirLike:
             return 0
         _, sz = s3CheckFileExists(self, client=self.client)
@@ -117,7 +119,6 @@ class ButlerS3URI(ButlerURI):
     @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
     def remove(self) -> None:
         """Remove the resource."""
-
         # https://github.com/boto/boto3/issues/507 - there is no
         # way of knowing if the file was actually deleted except
         # for checking all the keys again, reponse is  HTTP 204 OK
@@ -126,6 +127,7 @@ class ButlerS3URI(ButlerURI):
 
     @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def read(self, size: int = -1) -> bytes:
+        """Read the contents of the resource."""
         args = {}
         if size > 0:
             args["Range"] = f"bytes=0-{size-1}"
@@ -141,6 +143,7 @@ class ButlerS3URI(ButlerURI):
 
     @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def write(self, data: bytes, overwrite: bool = True) -> None:
+        """Write the supplied data to the resource."""
         if not overwrite:
             if self.exists():
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
@@ -149,6 +152,7 @@ class ButlerS3URI(ButlerURI):
 
     @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def mkdir(self) -> None:
+        """Write a directory key to S3."""
         if not bucketExists(self.netloc):
             raise ValueError(f"Bucket {self.netloc} does not exist for {self}!")
 
@@ -235,8 +239,7 @@ class ButlerS3URI(ButlerURI):
                                                                                            Tuple[ButlerURI,
                                                                                                  List[str],
                                                                                                  List[str]]]]:
-        """For dir-like URI, walk the directory returning matching files and
-        directories.
+        """Walk the directory tree returning matching files and directories.
 
         Parameters
         ----------

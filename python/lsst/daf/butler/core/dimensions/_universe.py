@@ -61,7 +61,9 @@ E = TypeVar("E", bound=DimensionElement)
 
 @immutable
 class DimensionUniverse:
-    """A parent class that represents a complete, self-consistent set of
+    """Self-consistent set of dimensions.
+
+    A parent class that represents a complete, self-consistent set of
     dimensions and their relationships.
 
     `DimensionUniverse` is not a class-level singleton, but all instances are
@@ -228,8 +230,7 @@ class DimensionUniverse:
 
     @cached_getter
     def getDatabaseElements(self) -> NamedValueAbstractSet[DatabaseDimensionElement]:
-        """Return a set of all `DatabaseDimensionElement` instances in this
-        universe.
+        """Return set of all `DatabaseDimensionElement` instances in universe.
 
         This does not include `GovernorDimension` instances, which are backed
         by the database but do not inherit from `DatabaseDimensionElement`.
@@ -244,15 +245,17 @@ class DimensionUniverse:
     @property  # type: ignore
     @cached_getter
     def skypix(self) -> NamedValueAbstractSet[SkyPixSystem]:
-        """All skypix systems known to this universe
+        """All skypix systems known to this universe.
+
         (`NamedValueAbstractSet` [ `SkyPixSystem` ]).
         """
         return NamedValueSet([family for family in self._topology[TopologicalSpace.SPATIAL]
                               if isinstance(family, SkyPixSystem)]).freeze()
 
     def getElementIndex(self, name: str) -> int:
-        """Return the position of the named dimension element in this
-        universe's sorting of all elements.
+        """Return the position of the named dimension element.
+
+        The position is in this universe's sorting of all elements.
 
         Parameters
         ----------
@@ -267,8 +270,9 @@ class DimensionUniverse:
         return self._elementIndices[name]
 
     def getDimensionIndex(self, name: str) -> int:
-        """Return the position of the named dimension in this universe's
-        sorting of all dimensions.
+        """Return the position of the named dimension.
+
+        This position is in this universe's sorting of all dimensions.
 
         Parameters
         ----------
@@ -291,8 +295,9 @@ class DimensionUniverse:
         return self._dimensionIndices[name]
 
     def expandDimensionNameSet(self, names: Set[str]) -> None:
-        """Expand a set of dimension names in-place to include recursive
-        dependencies.
+        """Expand a set of dimension names in-place.
+
+        Includes recursive dependencies.
 
         This is an advanced interface for cases where constructing a
         `DimensionGraph` (which also expands required dependencies) is
@@ -319,7 +324,9 @@ class DimensionUniverse:
                 oldSize = len(names)
 
     def extract(self, iterable: Iterable[Union[Dimension, str]]) -> DimensionGraph:
-        """Construct a `DimensionGraph` from a possibly-heterogenous iterable
+        """Construct graph from iterable.
+
+        Constructs a `DimensionGraph` from a possibly-heterogenous iterable
         of `Dimension` instances and string names thereof.
 
         Constructing `DimensionGraph` directly from names or dimension
@@ -373,7 +380,9 @@ class DimensionUniverse:
         return result  # type: ignore
 
     def makePacker(self, name: str, dataId: DataCoordinate) -> DimensionPacker:
-        """Construct a `DimensionPacker` that can pack data ID dictionaries
+        """Make a dimension packer.
+
+        Constructs a `DimensionPacker` that can pack data ID dictionaries
         into unique integers.
 
         Parameters
@@ -390,7 +399,9 @@ class DimensionUniverse:
         return self._packers[name](self, dataId)
 
     def getEncodeLength(self) -> int:
-        """Return the size (in bytes) of the encoded size of `DimensionGraph`
+        """Return encoded size of graph.
+
+        Returns the size (in bytes) of the encoded size of `DimensionGraph`
         instances in this universe.
 
         See `DimensionGraph.encode` and `DimensionGraph.decode` for more
@@ -400,7 +411,9 @@ class DimensionUniverse:
 
     @classmethod
     def _unpickle(cls, version: int) -> DimensionUniverse:
-        """Callable used for unpickling.
+        """Return an unpickled dimension universe.
+
+        Callable used for unpickling.
 
         For internal use only.
         """

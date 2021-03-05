@@ -38,8 +38,9 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
 
 
 def _makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
-    """Make a `ddl.ForeignKeySpec` that references the table for the given
-    `Dimension` table.
+    """Make a `ddl.ForeignKeySpec`.
+
+    This will reference the table for the given `Dimension` table.
 
     Most callers should use the higher-level `addDimensionForeignKey` function
     instead.
@@ -69,8 +70,9 @@ def _makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
 def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
                            primaryKey: bool, nullable: bool = False, constraint: bool = True
                            ) -> ddl.FieldSpec:
-    """Add a field and possibly a foreign key to a table specification that
-    reference the table for the given `Dimension`.
+    """Add a field and possibly a foreign key to a table specification.
+
+    The field will reference the table for the given `Dimension`.
 
     Parameters
     ----------
@@ -112,8 +114,10 @@ def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
 
 
 class DimensionElementFields:
-    """An object that constructs the table schema for a `DimensionElement` and
-    provides a categorized view of its fields.
+    """Class for constructing table schemas for `DimensionElement`.
+
+    This creates an object that constructs the table schema for a
+    `DimensionElement` and provides a categorized view of its fields.
 
     Parameters
     ----------
@@ -133,6 +137,7 @@ class DimensionElementFields:
     (e.g. `DimensionRecord`) where we want to simulate the existence of such a
     table.
     """
+
     def __init__(self, element: DimensionElement):
         self.element = element
         self._tableSpec = ddl.TableSpec(fields=())
@@ -191,8 +196,9 @@ class DimensionElementFields:
         RegionReprClass: Type[SpatialRegionDatabaseRepresentation],
         TimespanReprClass: Type[TimespanDatabaseRepresentation],
     ) -> ddl.TableSpec:
-        """Construct a complete specification for a table that could hold the
-        records of this element.
+        """Construct a complete specification for a table.
+
+        The table could hold the records of this element.
 
         Parameters
         ----------
@@ -233,29 +239,38 @@ class DimensionElementFields:
         return "\n".join(lines)
 
     element: DimensionElement
-    """The dimension element these fields correspond to (`DimensionElement`).
+    """The dimension element these fields correspond to.
+
+    (`DimensionElement`)
     """
 
     required: NamedValueSet[ddl.FieldSpec]
-    """The fields of this table that correspond to the element's required
+    """The required dimension fields of this table.
+
+    They correspond to the element's required
     dimensions, in that order, i.e. `DimensionElement.required`
     (`NamedValueSet` [ `ddl.FieldSpec` ]).
     """
 
     implied: NamedValueSet[ddl.FieldSpec]
-    """The fields of this table that correspond to the element's implied
+    """The implied dimension fields of this table.
+
+    They correspond to the element's implied
     dimensions, in that order, i.e. `DimensionElement.implied`
     (`NamedValueSet` [ `ddl.FieldSpec` ]).
     """
 
     dimensions: NamedValueSet[ddl.FieldSpec]
-    """The fields of this table that correspond to the element's direct
+    """The direct and implied dimension fields of this table.
+
+    They correspond to the element's direct
     required and implied dimensions, in that order, i.e.
     `DimensionElement.dimensions` (`NamedValueSet` [ `ddl.FieldSpec` ]).
     """
 
     facts: NamedValueSet[ddl.FieldSpec]
-    """The standard fields of this table that do not correspond to dimensions
+    """The standard fields of this table that do not correspond to dimensions.
+
     (`NamedValueSet` [ `ddl.FieldSpec` ]).
 
     This is equivalent to ``standard - dimensions`` (but possibly in a
@@ -263,7 +278,9 @@ class DimensionElementFields:
     """
 
     standard: NamedValueSet[ddl.FieldSpec]
-    """All standard fields that are expected to have the same form in all
+    """All standard fields that are expected to have the same form.
+
+    They are expected to have the same form in all
     databases; this is all fields other than those that represent a region
     and/or timespan (`NamedValueSet` [ `ddl.FieldSpec` ]).
     """
