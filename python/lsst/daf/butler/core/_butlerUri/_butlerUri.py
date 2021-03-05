@@ -171,8 +171,9 @@ class ButlerURI:
             # a file URI unexpectedly when calling updatedFile or
             # updatedExtension
             if cls != ButlerURI:
+                parsed, dirLike = cls._fixDirectorySep(parsed, forceDirectory)
                 subclass = cls
-                dirLike = forceDirectory or parsed.path.endswith(cls._pathModule.sep)
+
         elif isinstance(uri, ButlerURI):
             parsed = copy.copy(uri._uri)
             dirLike = uri.dirLike
@@ -538,16 +539,9 @@ class ButlerURI:
 
         newpath = self._pathModule.normpath(self._pathModule.join(new.path, path))
 
-        # normpath can strip trailing / so for consistency we add it back
-        # since geturl() does not add it
-        if path.endswith(self._pathModule.sep) and not newpath.endswith(self._pathModule.sep):
-            newpath += self._pathModule.sep
-
-        new._uri = new._uri._replace(path=newpath)
-        # Declare the new URI not be dirLike unless path ended in /
-        if not path.endswith(self._pathModule.sep):
-            new.dirLike = False
-        return new
+        # normpath can strip trailing / so we force directory if the supplied
+        # path ended with a /
+        return new.replace(path=newpath, forceDirectory=path.endswith(self._pathModule.sep))
 
     def relative_to(self, other: ButlerURI) -> Optional[str]:
         """Return the relative path from this URI to the other URI.
@@ -732,8 +726,47 @@ class ButlerURI:
     def __getnewargs__(self) -> Tuple:
         return (str(self),)
 
-    @staticmethod
-    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
+    @classmethod
+    def _fixDirectorySep(cls, parsed: urllib.parse.ParseResult,
+                         forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
+        """Ensure that a path separator is present on directory paths.
+
+        Parameters
+        ----------
+        parsed : `~urllib.parse.ParseResult`
+            The result from parsing a URI using `urllib.parse`.
+        forceDirectory : `bool`, optional
+            If `True` forces the URI to end with a separator, otherwise given
+            URI is interpreted as is. Specifying that the URI is conceptually
+            equivalent to a directory can break some ambiguities when
+            interpreting the last element of a path.
+
+        Returns
+        -------
+        modified : `~urllib.parse.ParseResult`
+            Update result if a URI is being handled.
+        dirLike : `bool`
+            `True` if given parsed URI has a trailing separator or
+            forceDirectory is True. Otherwise `False`.
+        """
+        # assume we are not dealing with a directory like URI
+        dirLike = False
+
+        # Directory separator
+        sep = cls._pathModule.sep
+
+        # URI is dir-like if explicitly stated or if it ends on a separator
+        endsOnSep = parsed.path.endswith(sep)
+        if forceDirectory or endsOnSep:
+            dirLike = True
+            # only add the separator if it's not already there
+            if not endsOnSep:
+                parsed = parsed._replace(path=parsed.path+sep)
+
+        return parsed, dirLike
+
+    @classmethod
+    def _fixupPathUri(cls, parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
                       forceAbsolute: bool = False,
                       forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
         """Correct any issues with the supplied URI.
@@ -774,18 +807,7 @@ class ButlerURI:
 
         Scheme-less paths are normalized.
         """
-        # assume we are not dealing with a directory like URI
-        dirLike = False
-
-        # URI is dir-like if explicitly stated or if it ends on a separator
-        endsOnSep = parsed.path.endswith(posixpath.sep)
-        if forceDirectory or endsOnSep:
-            dirLike = True
-            # only add the separator if it's not already there
-            if not endsOnSep:
-                parsed = parsed._replace(path=parsed.path+posixpath.sep)
-
-        return parsed, dirLike
+        return cls._fixDirectorySep(parsed, forceDirectory)
 
     def transfer_from(self, src: ButlerURI, transfer: str,
                       overwrite: bool = False,

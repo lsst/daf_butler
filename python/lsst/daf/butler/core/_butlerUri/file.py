@@ -365,8 +365,8 @@ class ButlerFileURI(ButlerURI):
                 files = [f for f in files if file_filter.search(f)]
             yield type(self)(root, forceAbsolute=False, forceDirectory=True), dirs, files
 
-    @staticmethod
-    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
+    @classmethod
+    def _fixupPathUri(cls, parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
                       forceAbsolute: bool = False,
                       forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
         """Fix up relative paths in URI instances.

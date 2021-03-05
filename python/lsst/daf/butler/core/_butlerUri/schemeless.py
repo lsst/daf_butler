@@ -91,8 +91,8 @@ class ButlerSchemelessURI(ButlerFileURI):
         # mypy really wants a ButlerFileURI to be returned here
         return ButlerURI(uri, forceDirectory=self.dirLike)  # type: ignore
 
-    @staticmethod
-    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
+    @classmethod
+    def _fixupPathUri(cls, parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
                       forceAbsolute: bool = False,
                       forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
         """Fix up relative paths for local file system.
