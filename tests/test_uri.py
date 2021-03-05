@@ -72,12 +72,14 @@ class FileURITestCase(unittest.TestCase):
     def testRelative(self):
         """Check that we can get subpaths back from two URIs"""
         parent = ButlerURI(self.tmpdir, forceDirectory=True, forceAbsolute=True)
+        self.assertTrue(parent.isdir())
         child = ButlerURI(os.path.join(self.tmpdir, "dir1", "file.txt"), forceAbsolute=True)
 
         self.assertEqual(child.relative_to(parent), "dir1/file.txt")
 
         not_child = ButlerURI("/a/b/dir1/file.txt")
         self.assertFalse(not_child.relative_to(parent))
+        self.assertFalse(not_child.isdir())
 
         not_directory = ButlerURI(os.path.join(self.tmpdir, "dir1", "file2.txt"))
         self.assertFalse(child.relative_to(not_directory))
@@ -101,6 +103,22 @@ class FileURITestCase(unittest.TestCase):
 
         child = ButlerURI("../c/e/f/g.txt", forceAbsolute=False)
         self.assertEqual(child.relative_to(parent), "e/f/g.txt")
+
+    def testParents(self):
+        """Test of splitting and parent walking."""
+        parent = ButlerURI(self.tmpdir, forceDirectory=True, forceAbsolute=True)
+        child_file = parent.join("subdir/file.txt")
+        self.assertFalse(child_file.isdir())
+        child_subdir, file = child_file.split()
+        self.assertEqual(file, "file.txt")
+        self.assertTrue(child_subdir.isdir())
+        self.assertEqual(child_file.dirname(), child_subdir)
+        self.assertEqual(child_file.basename(), file)
+        self.assertEqual(child_file.parent(), child_subdir)
+        derived_parent = child_subdir.parent()
+        self.assertEqual(derived_parent, parent)
+        self.assertTrue(derived_parent.isdir())
+        self.assertEqual(child_file.parent().parent(), parent)
 
     def testEnvVar(self):
         """Test that environment variables are expanded."""
@@ -175,6 +193,7 @@ class FileURITestCase(unittest.TestCase):
         j = d.join("datastore.yaml")
         self.assertEqual(u, j)
         self.assertFalse(j.dirLike)
+        self.assertFalse(j.isdir())
         self.assertFalse(d.join("not-there.yaml").exists())
 
     def testEscapes(self):
