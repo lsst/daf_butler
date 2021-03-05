@@ -109,7 +109,7 @@ class ButlerURI:
     """True if path-like elements modifying a URI should be quoted.
 
     All non-schemeless URIs have to internally use quoted paths. Therefore
-    if a new file name is given (e.g. to updateFile or join) a decision must
+    if a new file name is given (e.g. to updatedFile or join) a decision must
     be made whether to quote it to be consistent.
     """
 
@@ -373,46 +373,60 @@ class ButlerURI:
         # regardless of the presence of a trailing separator
         originalPath = self._pathLib(self.path)
         parentPath = originalPath.parent
-        parentURI = self._uri._replace(path=str(parentPath))
+        return self.replace(path=str(parentPath), forceDirectory=True)
 
-        return ButlerURI(parentURI, forceDirectory=True)
-
-    def replace(self, **kwargs: Any) -> ButlerURI:
+    def replace(self, forceDirectory: bool = False, **kwargs: Any) -> ButlerURI:
         """Replace components in a URI with new values and return a new
         instance.
+
+        Parameters
+        ----------
+        forceDirectory : `bool`
+            Parameter passed to ButlerURI constructor to force this
+            new URI to be dir-like.
 
         Returns
         -------
         new : `ButlerURI`
             New `ButlerURI` object with updated values.
-        """
-        return self.__class__(self._uri._replace(**kwargs))
 
-    def updateFile(self, newfile: str) -> None:
-        """Update in place the final component of the path with the supplied
-        file name.
+        Notes
+        -----
+        Does not, for now, allow a change in URI scheme.
+        """
+        # Disallow a change in scheme
+        if "scheme" in kwargs:
+            raise ValueError(f"Can not use replace() method to change URI scheme for {self}")
+        return self.__class__(self._uri._replace(**kwargs), forceDirectory=forceDirectory)
+
+    def updatedFile(self, newfile: str) -> ButlerURI:
+        """Return new URI with an updated final component of the path.
 
         Parameters
         ----------
         newfile : `str`
             File name with no path component.
 
+        Returns
+        -------
+        updated : `ButlerURI`
+
         Notes
         -----
-        Updates the URI in place.
-        Updates the ButlerURI.dirLike attribute. The new file path will
-        be quoted if necessary.
+        Forces the ButlerURI.dirLike attribute to be false. The new file path
+        will be quoted if necessary.
         """
         if self.quotePaths:
             newfile = urllib.parse.quote(newfile)
         dir, _ = self._pathModule.split(self.path)
         newpath = self._pathModule.join(dir, newfile)
 
-        self.dirLike = False
-        self._uri = self._uri._replace(path=newpath)
+        updated = self.replace(path=newpath)
+        updated.dirLike = False
+        return updated
 
-    def updateExtension(self, ext: Optional[str]) -> None:
-        """Update the file extension associated with this `ButlerURI` in place.
+    def updatedExtension(self, ext: Optional[str]) -> ButlerURI:
+        """Return a new `ButlerURI` with updated file extension.
 
         All file extensions are replaced.
 
@@ -421,9 +435,15 @@ class ButlerURI:
         ext : `str` or `None`
             New extension. If an empty string is given any extension will
             be removed. If `None` is given there will be no change.
+
+        Returns
+        -------
+        updated : `ButlerURI`
+            URI with the specified extension. Can return itself if
+            no extension was specified.
         """
         if ext is None:
-            return
+            return self
 
         # Get the extension and remove it from the path if one is found
         # .fits.gz counts as one extension do not use os.path.splitext
@@ -437,7 +457,7 @@ class ButlerURI:
         if ext and not ext.startswith("."):
             ext = "." + ext
 
-        self._uri = self._uri._replace(path=path + ext)
+        return self.replace(path=path + ext)
 
     def getExtension(self) -> str:
         """Return the file extension(s) associated with this URI path.
