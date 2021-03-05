@@ -37,13 +37,14 @@ class StoredDatastoreItemInfo:
     This is an empty base class.  Datastore implementations are expected to
     write their own subclasses.
     """
+
     __slots__ = ()
 
 
 @dataclass(frozen=True)
 class StoredFileInfo(StoredDatastoreItemInfo):
-    """Datastore-private metadata associated with a file stored in a Datastore.
-    """
+    """Datastore-private metadata associated with a Datastore file."""
+
     __slots__ = {"formatter", "path", "storageClass", "component",
                  "checksum", "file_size"}
 

@@ -18,8 +18,9 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-"""Classes for representing SQL data-definition language (DDL; "CREATE TABLE",
-etc.) in Python.
+"""Classes for representing SQL data-definition language (DDL) in Python.
+
+This include "CREATE TABLE" etc.
 
 This provides an extra layer on top of SQLAlchemy's classes for these concepts,
 because we need a level of indirection between logical tables and the actual
@@ -58,12 +59,11 @@ _LOG = logging.getLogger(__name__)
 
 
 class SchemaValidationError(ValidationError):
-    """Exceptions used to indicate problems in Registry schema configuration.
-    """
+    """Exceptions that indicate problems in Registry schema configuration."""
 
     @classmethod
     def translate(cls, caught: Type[Exception], message: str) -> Callable:
-        """A decorator that re-raises exceptions as `SchemaValidationError`.
+        """Return decorator to re-raise exceptions as `SchemaValidationError`.
 
         Decorated functions must be class or instance methods, with a
         ``config`` parameter as their first argument.  This will be passed
@@ -90,8 +90,9 @@ class SchemaValidationError(ValidationError):
 
 
 class Base64Bytes(sqlalchemy.TypeDecorator):
-    """A SQLAlchemy custom type that maps Python `bytes` to a base64-encoded
-    `sqlalchemy.Text` field.
+    """A SQLAlchemy custom type for Python `bytes`.
+
+    Maps Python `bytes` to a base64-encoded `sqlalchemy.Text` field.
     """
 
     impl = sqlalchemy.Text
@@ -123,8 +124,9 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
 
 
 class Base64Region(Base64Bytes):
-    """A SQLAlchemy custom type that maps Python `sphgeom.Region` to a
-    base64-encoded `sqlalchemy.String`.
+    """A SQLAlchemy custom type for Python `sphgeom.Region`.
+
+    Maps Python `sphgeom.Region` to a base64-encoded `sqlalchemy.String`.
     """
 
     def process_bind_param(self, value: Optional[Region], dialect: sqlalchemy.engine.Dialect
@@ -141,8 +143,10 @@ class Base64Region(Base64Bytes):
 
 
 class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
-    """A SQLAlchemy custom type that maps Python `astropy.time.Time` to a
-    number of nanoseconds since Unix epoch in TAI scale.
+    """A SQLAlchemy custom type for Python `astropy.time.Time`.
+
+    Maps Python `astropy.time.Time` to a number of nanoseconds since Unix
+    epoch in TAI scale.
     """
 
     impl = sqlalchemy.BigInteger
@@ -179,9 +183,7 @@ VALID_CONFIG_COLUMN_TYPES = {
 
 @dataclass
 class FieldSpec:
-    """A struct-like class used to define a column in a logical `Registry`
-    table.
-    """
+    """A data class for defining a column in a logical `Registry` table."""
 
     name: str
     """Name of the column."""
@@ -289,8 +291,9 @@ class FieldSpec:
         return False
 
     def getSizedColumnType(self) -> sqlalchemy.types.TypeEngine:
-        """Return a sized version of the column type, utilizing either (or
-        neither) of ``self.length`` and ``self.nbytes``.
+        """Return a sized version of the column type.
+
+        Utilizes either (or neither) of ``self.length`` and ``self.nbytes``.
 
         Returns
         -------
@@ -319,9 +322,7 @@ class FieldSpec:
 
 @dataclass
 class ForeignKeySpec:
-    """A struct-like class used to define a foreign key constraint in a logical
-    `Registry` table.
-    """
+    """Definition of a foreign key constraint in a logical `Registry` table."""
 
     table: str
     """Name of the target table."""
@@ -373,8 +374,7 @@ class ForeignKeySpec:
 
 @dataclass
 class TableSpec:
-    """A struct-like class used to define a table or table-like
-    query interface.
+    """A data class used to define a table or table-like query interface.
 
     Parameters
     ----------
@@ -392,13 +392,14 @@ class TableSpec:
         constraints, but each tuple may contain a single
         `TimespanDatabaseRepresentation` subclass representing a timespan
         column.
-    recycleIds : bool, optional
+    recycleIds : `bool`, optional
         If `True`, allow databases that might normally recycle autoincrement
         IDs to do so (usually better for performance) on any autoincrement
         field in this table.
-    doc : str, optional
+    doc : `str`, optional
         Documentation for the table.
     """
+
     def __init__(
         self, fields: Iterable[FieldSpec], *,
         unique: Iterable[Tuple[str, ...]] = (),

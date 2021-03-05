@@ -103,8 +103,7 @@ class Location:
 
     @property
     def uri(self) -> ButlerURI:
-        """URI corresponding to fully-specified location in datastore.
-        """
+        """Return URI corresponding to fully-specified datastore location."""
         if self._uri is None:
             root = self._datastoreRootUri
             if root is None:
@@ -116,7 +115,7 @@ class Location:
 
     @property
     def path(self) -> str:
-        """Path corresponding to location.
+        """Return path corresponding to location.
 
         This path includes the root of the `Datastore`, but does not include
         non-path components of the root URI.  Paths will not include URI
@@ -131,7 +130,7 @@ class Location:
 
     @property
     def pathInStore(self) -> ButlerURI:
-        """Path corresponding to location relative to `Datastore` root.
+        """Return path corresponding to location relative to `Datastore` root.
 
         Uses the same path separator as supplied to the object constructor.
         Can be an absolute URI if that is how the location was configured.
@@ -140,13 +139,12 @@ class Location:
 
     @property
     def netloc(self) -> str:
-        """The URI network location."""
+        """Return the URI network location."""
         return self.uri.netloc
 
     @property
     def relativeToPathRoot(self) -> str:
-        """Returns the path component of the URI relative to the network
-        location.
+        """Return the path component relative to the network location.
 
         Effectively, this is the path property with POSIX separator stripped
         from the left hand side of the path.  Will be unquoted.
@@ -213,11 +211,11 @@ class LocationFactory:
 
     @property
     def netloc(self) -> str:
-        """Returns the network location of root location of the `Datastore`."""
+        """Return the network location of root location of the `Datastore`."""
         return self._datastoreRootUri.netloc
 
     def fromPath(self, path: str) -> Location:
-        """Factory function to create a `Location` from a POSIX path.
+        """Create a `Location` from a POSIX path.
 
         Parameters
         ----------

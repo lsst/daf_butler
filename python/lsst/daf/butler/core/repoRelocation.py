@@ -63,7 +63,6 @@ def replaceRoot(configRoot: str, butlerRoot: Optional[Union[ButlerURI, str]]) ->
     ValueError
         Raised if ``butlerRoot`` is not set but a value is required.
     """
-
     # Do nothing if there is nothing to be done
     if BUTLER_ROOT_TAG not in configRoot:
         return configRoot

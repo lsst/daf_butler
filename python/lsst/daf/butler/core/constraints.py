@@ -47,19 +47,21 @@ log = logging.getLogger(__name__)
 
 
 class ConstraintsValidationError(ValidationError):
-    """Exception thrown when a constraints list has mutually exclusive
-    definitions."""
+    """Thrown when a constraints list has mutually exclusive definitions."""
+
     pass
 
 
 class ConstraintsConfig(Config):
-    """Configuration information for `Constraints`"""
+    """Configuration information for `Constraints`."""
+
     pass
 
 
 class Constraints:
-    """Determine whether a `DatasetRef`, `DatasetType`, or `StorageClass`
-    is allowed to be handled.
+    """Determine whether an entity is allowed to be handled.
+
+    Supported entities are `DatasetRef`, `DatasetType`, or `StorageClass`.
 
     Parameters
     ----------
@@ -101,8 +103,7 @@ class Constraints:
         return f"Accepts: {accepts}; Rejects: {rejects}"
 
     def isAcceptable(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
-        """Check whether the supplied entity will be acceptable to whatever
-        this `Constraints` class is associated with.
+        """Check whether the supplied entity will be acceptable.
 
         Parameters
         ----------

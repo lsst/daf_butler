@@ -56,13 +56,14 @@ log = logging.getLogger(__name__)
 
 
 class FileTemplateValidationError(ValidationError):
-    """Exception thrown when a file template is not consistent with the
-    associated `DatasetType`."""
+    """Exception for file template inconsistent with associated DatasetType."""
+
     pass
 
 
 class FileTemplatesConfig(Config):
-    """Configuration information for `FileTemplates`"""
+    """Configuration information for `FileTemplates`."""
+
     pass
 
 
@@ -126,11 +127,11 @@ class FileTemplates:
 
     @property
     def templates(self) -> Mapping[LookupKey, FileTemplate]:
-        """Collection of templates indexed by lookup key (`dict`)."""
+        """Return collection of templates indexed by lookup key (`dict`)."""
         return MappingProxyType(self._templates)
 
     def __contains__(self, key: LookupKey) -> bool:
-        """Indicates whether the supplied key is present in the templates.
+        """Indicate whether the supplied key is present in the templates.
 
         Parameters
         ----------
@@ -150,8 +151,10 @@ class FileTemplates:
 
     def validateTemplates(self, entities: Iterable[Union[DatasetType, DatasetRef, StorageClass]],
                           logFailures: bool = False) -> None:
-        """Retrieve the template associated with each dataset type and
-        validate the dimensions against the template.
+        """Validate the templates.
+
+        Retrieves the template associated with each dataset type and
+        validates the dimensions against the template.
 
         Parameters
         ----------
@@ -218,8 +221,9 @@ class FileTemplates:
     def getTemplateWithMatch(self, entity: Union[DatasetRef,
                                                  DatasetType, StorageClass]) -> Tuple[LookupKey,
                                                                                       FileTemplate]:
-        """Retrieve the `FileTemplate` associated with the dataset type along
-        with the lookup key that was a match for this template.
+        """Retrieve the `FileTemplate` associated with the dataset type.
+
+        Also retrieves the lookup key that was a match for this template.
 
         If the lookup name corresponds to a component the base name for
         the component will be examined if the full component name does
@@ -560,8 +564,7 @@ class FileTemplate:
         return path
 
     def validateTemplate(self, entity: Union[DatasetRef, DatasetType, StorageClass, None]) -> None:
-        """Compare the template against a representative entity that would
-        like to use template.
+        """Compare the template against supplied entity that wants to use it.
 
         Parameters
         ----------
@@ -582,7 +585,6 @@ class FileTemplate:
         used to compare the available dimensions with those specified in the
         template.
         """
-
         # Check that the template has run
         withSpecials = self.fields(specials=True, optionals=True)
         if not withSpecials & self.mandatoryFields:
@@ -661,8 +663,7 @@ class FileTemplate:
         return
 
     def _determine_skypix_alias(self, entity: Union[DatasetRef, DatasetType]) -> Optional[str]:
-        """Given a `DatasetRef` return the dimension name that refers to a sky
-        pixel.
+        """Return the dimension name that refers to a sky pixel.
 
         Parameters
         ----------

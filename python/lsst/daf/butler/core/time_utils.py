@@ -43,12 +43,12 @@ _LOG = logging.getLogger(__name__)
 
 
 class TimeConverter(metaclass=Singleton):
-    """A singleton that provides methods for mapping TAI times to integer
-    nanoseconds.
+    """A singleton for mapping TAI times to integer nanoseconds.
 
     This class allows some time calculations to be deferred until first use,
     rather than forcing them to happen at module import time.
     """
+
     def __init__(self) -> None:
         # EPOCH is used to convert from nanoseconds; its precision is used by
         # all timestamps returned by nsec_to_astropy, and we set it to 1
@@ -228,7 +228,7 @@ class _AstropyTimeToYAML:
 
     @classmethod
     def from_yaml(cls, loader: yaml.SafeLoader, node: yaml.ScalarNode) -> astropy.time.Time:
-        """Convert YAML node into astropy time
+        """Convert YAML node into astropy time.
 
         Parameters
         ----------

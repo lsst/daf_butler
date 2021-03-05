@@ -44,8 +44,10 @@ if TYPE_CHECKING:
 
 
 class AmbiguousDatasetError(Exception):
-    """Exception raised when a `DatasetRef` is not resolved (has no ID or run),
-    but the requested operation requires one of them.
+    """Raised when a `DatasetRef` is not resolved but should be.
+
+    This happens when the `DatasetRef` has no ID or run but the requested
+    operation requires one of them.
     """
 
 
@@ -118,8 +120,7 @@ class DatasetRef:
 
     @property
     def dimensions(self) -> DimensionGraph:
-        """The dimensions associated with the underlying `DatasetType`
-        """
+        """Dimensions associated with the underlying `DatasetType`."""
         return self.datasetType.dimensions
 
     def __repr__(self) -> str:
@@ -154,8 +155,9 @@ class DatasetRef:
         return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
 
     def to_simple(self, minimal: bool = False) -> Dict:
-        """Convert this class to a simple python type suitable for
-        serialization.
+        """Convert this class to a simple python type.
+
+        This makes it suitable for serialization.
 
         Parameters
         ----------
@@ -198,8 +200,9 @@ class DatasetRef:
     def from_simple(cls, simple: Dict,
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> DatasetRef:
-        """Construct a new object from the data returned from the `to_simple`
-        method.
+        """Construct a new object from simplified form.
+
+        Generally this is data returned from the `to_simple` method.
 
         Parameters
         ----------
@@ -218,7 +221,6 @@ class DatasetRef:
         ref : `DatasetRef`
             Newly-constructed object.
         """
-
         # Minimalist component will just specify component and id and
         # require registry to reconstruct
         if set(simple).issubset({"id", "component"}):
@@ -257,7 +259,9 @@ class DatasetRef:
         id: Optional[int],
         run: Optional[str],
     ) -> DatasetRef:
-        """A custom factory method for use by `__reduce__` as a workaround for
+        """Create new `DatasetRef`.
+
+        A custom factory method for use by `__reduce__` as a workaround for
         its lack of support for keyword arguments.
         """
         return cls(datasetType, dataId, id=id, run=run)
@@ -271,7 +275,9 @@ class DatasetRef:
         return self
 
     def resolved(self, id: int, run: str) -> DatasetRef:
-        """Return a new `DatasetRef` with the same data ID and dataset type
+        """Return resolved `DatasetRef`.
+
+        This is a new `DatasetRef` with the same data ID and dataset type
         and the given ID and run.
 
         Parameters
@@ -290,7 +296,9 @@ class DatasetRef:
                           id=id, run=run, conform=False)
 
     def unresolved(self) -> DatasetRef:
-        """Return a new `DatasetRef` with the same data ID and dataset type,
+        """Return unresolved `DatasetRef`.
+
+        This is a new `DatasetRef` with the same data ID and dataset type,
         but no ID or run.
 
         Returns
@@ -329,8 +337,7 @@ class DatasetRef:
                           conform=False)
 
     def isComponent(self) -> bool:
-        """Boolean indicating whether this `DatasetRef` refers to a
-        component of a composite.
+        """Indicate whether this `DatasetRef` refers to a component.
 
         Returns
         -------
@@ -435,8 +442,7 @@ class DatasetRef:
                           id=self.id, run=self.run, conform=False)
 
     def makeComponentRef(self, name: str) -> DatasetRef:
-        """Create a `DatasetRef` that corresponds to a component of this
-        dataset.
+        """Create a `DatasetRef` that corresponds to a component.
 
         Parameters
         ----------

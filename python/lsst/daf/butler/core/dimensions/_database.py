@@ -60,7 +60,9 @@ if TYPE_CHECKING:
 
 
 class DatabaseTopologicalFamily(TopologicalFamily):
-    """A `TopologicalFamily` implementation for the `DatabaseDimension` and
+    """Database topological family implementation.
+
+    A `TopologicalFamily` implementation for the `DatabaseDimension` and
     `DatabaseDimensionCombination` objects that have direct database
     representations.
 
@@ -74,6 +76,7 @@ class DatabaseTopologicalFamily(TopologicalFamily):
         The members of this family, ordered according to the priority used
         in `choose` (first-choice member first).
     """
+
     def __init__(
         self,
         name: str,
@@ -93,7 +96,8 @@ class DatabaseTopologicalFamily(TopologicalFamily):
     @property  # type: ignore
     @cached_getter
     def governor(self) -> GovernorDimension:
-        """The `GovernorDimension` common to all members of this family
+        """Return `GovernorDimension` common to all members of this family.
+
         (`GovernorDimension`).
         """
         governors = set(m.governor for m in self.members)
@@ -130,6 +134,7 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
         The names of the members of this family, ordered according to the
         priority used in `choose` (first-choice member first).
     """
+
     def __init__(self, name: str, space: TopologicalSpace, members: Iterable[str]):
         super().__init__(name)
         self._space = space
@@ -157,8 +162,10 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
 
 
 class DatabaseDimensionElement(DimensionElement):
-    """An intermediate base class for `DimensionElement` classes whose
-    instances that map directly to a database table or query.
+    """An intermediate base class for `DimensionElement` database classes.
+
+    Theese classes are ones whose instances map directly to a database
+    table or query.
 
     Parameters
     ----------
@@ -237,7 +244,9 @@ class DatabaseDimensionElement(DimensionElement):
         context: Optional[StaticTablesContext] = None,
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
-        """Construct the `DimensionRecordStorage` instance that should
+        """Make the dimension record storage instance for this database.
+
+        Constructs the `DimensionRecordStorage` instance that should
         be used to back this element in a registry.
 
         Parameters
@@ -263,8 +272,7 @@ class DatabaseDimensionElement(DimensionElement):
 
 
 class DatabaseDimension(Dimension, DatabaseDimensionElement):
-    """A `Dimension` implementation that maps directly to a database table or
-    query.
+    """A `Dimension` class that maps directly to a database table or query.
 
     Parameters
     ----------
@@ -298,6 +306,7 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
     update the `~TopologicalRelationshipEndpoint.topology` attribute of their
     members.
     """
+
     def __init__(
         self,
         name: str,
@@ -324,8 +333,7 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
 
 
 class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElement):
-    """A `DimensionCombination` implementation that maps directly to a database
-    table or query.
+    """A combination class that maps directly to a database table or query.
 
     Parameters
     ----------
@@ -364,6 +372,7 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     the drawbacks (particularly the constraints it imposes on constructor
     signatures).
     """
+
     def __init__(
         self,
         name: str,
@@ -389,7 +398,9 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
 
 
 class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
-    """A construction visitor for `DatabaseDimension` and
+    """Construction visitor for database dimension and dimension combination.
+
+    Specifically, a construction visitor for `DatabaseDimension` and
     `DatabaseDimensionCombination`.
 
     Parameters
@@ -422,6 +433,7 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
         Should only be provided when a `DimensionCombination` is being
         constructed.
     """
+
     def __init__(
         self,
         name: str,

@@ -66,7 +66,7 @@ _LOG = logging.getLogger(__name__)
 
 
 def safeMakeDir(directory: str) -> None:
-    """Make a directory in a manner avoiding race conditions"""
+    """Make a directory in a manner avoiding race conditions."""
     if directory != "" and not os.path.exists(directory):
         try:
             os.makedirs(directory)
@@ -254,7 +254,7 @@ F = TypeVar("F", bound=Callable)
 
 
 def transactional(func: F) -> F:
-    """Decorator that wraps a method and makes it transactional.
+    """Decorate a method and makes it transactional.
 
     This depends on the class also defining a `transaction` method
     that takes no arguments and acts as a context manager.
@@ -289,8 +289,7 @@ _T = TypeVar("_T", bound="Type")
 
 
 def immutable(cls: _T) -> _T:
-    """A class decorator that simulates a simple form of immutability for the
-    decorated class.
+    """Decorate a class to simulates a simple form of immutability.
 
     A class decorated as `immutable` may only set each of its attributes once;
     any attempts to set an already-set attribute will raise `AttributeError`.
@@ -345,8 +344,10 @@ _R = TypeVar("_R")
 
 
 def cached_getter(func: Callable[[_S], _R]) -> Callable[[_S], _R]:
-    """A decorator that caches the result of a method that takes only ``self``
-    as an argument, returning the cached result on subsequent calls.
+    """Decorate a method to caches the result.
+
+    Only works on methods that take only ``self``
+    as an argument, and returns the cached result on subsequent calls.
 
     Notes
     -----
@@ -371,7 +372,9 @@ def cached_getter(func: Callable[[_S], _R]) -> Callable[[_S], _R]:
 
 
 def findFileResources(values: Iterable[str], regex: Optional[str] = None) -> List[str]:
-    """Get the files from a list of values. If a value is a file it is added to
+    """Scan the supplied directories and return all matching files.
+
+    Get the files from a list of values. If a value is a file it is added to
     the list of returned files. If a value is a directory, all the files in
     the directory (recursively) that match the regex will be returned.
 

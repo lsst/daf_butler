@@ -38,8 +38,8 @@ from .formatter import FormatterParameter
 
 @dataclass
 class FileDataset:
-    """A struct that represents a dataset exported to a file.
-    """
+    """A struct that represents a dataset exported to a file."""
+
     __slots__ = ("refs", "path", "formatter")
 
     refs: List[DatasetRef]

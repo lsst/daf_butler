@@ -62,7 +62,7 @@ class MappingFactory:
         self.refType = refType
 
     def __contains__(self, key: Any) -> bool:
-        """Indicates whether the supplied key is present in the factory.
+        """Indicate whether the supplied key is present in the factory.
 
         Parameters
         ----------
@@ -90,8 +90,7 @@ class MappingFactory:
 
     def getClassFromRegistryWithMatch(self, targetClasses: Iterable[Any]) -> Tuple[LookupKey, Type,
                                                                                    Dict[Any, Any]]:
-        """Get the class stored in the registry along with
-        the matching key.
+        """Get the class stored in the registry along with the matching key.
 
         Parameters
         ----------
@@ -160,8 +159,7 @@ class MappingFactory:
 
     def getFromRegistryWithMatch(self, targetClasses: Iterable[Any], *args: Any,
                                  **kwargs: Any) -> Tuple[LookupKey, Any]:
-        """Get a new instance of the object stored in the registry along with
-        the matching key.
+        """Get a new instance of the registry object along with matching key.
 
         Parameters
         ----------
@@ -267,8 +265,7 @@ class MappingFactory:
 
     @staticmethod
     def _getNameKey(typeOrName: Any) -> LookupKey:
-        """Extract name of supplied object as string or entity suitable for
-        using as key.
+        """Extract name of supplied object as entity suitable for key use.
 
         Parameters
         ----------

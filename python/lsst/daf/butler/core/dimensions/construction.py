@@ -38,7 +38,9 @@ if TYPE_CHECKING:
 
 
 class DimensionConstructionVisitor(ABC):
-    """An abstract base class for adding one or more entities to a
+    """For adding entities to a builder class.
+
+    An abstract base class for adding one or more entities to a
     `DimensionConstructionBuilder`.
 
     Parameters
@@ -59,7 +61,9 @@ class DimensionConstructionVisitor(ABC):
 
     @abstractmethod
     def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
-        """Test whether other entities this visitor depends on have already
+        """Test if dependencies have already been constructed.
+
+        Tests whether other entities this visitor depends on have already
         been constructed.
 
         Parameters
@@ -78,8 +82,7 @@ class DimensionConstructionVisitor(ABC):
 
     @abstractmethod
     def visit(self, builder: DimensionConstructionBuilder) -> None:
-        """Modify the given builder object to include the entities this object
-        is responsible for constructing.
+        """Modify the given builder object to include responsible entities.
 
         Parameters
         ----------

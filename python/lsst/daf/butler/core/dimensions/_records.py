@@ -56,8 +56,7 @@ def _reconstructDimensionRecord(definition: DimensionElement, mapping: Dict[str,
 
 
 def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionRecord]:
-    """Create a dynamic subclass of `DimensionRecord` for the given
-    `DimensionElement`.
+    """Create a dynamic subclass of `DimensionRecord` for the given element.
 
     For internal use by `DimensionRecord`.
     """
@@ -78,8 +77,7 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
 
 @immutable
 class DimensionRecord:
-    """Base class for the Python representation of database records for
-    a `DimensionElement`.
+    """Base class for the Python representation of database records.
 
     Parameters
     ----------
@@ -182,8 +180,9 @@ class DimensionRecord:
         return (_reconstructDimensionRecord, (self.definition, mapping))
 
     def to_simple(self, minimal: bool = False) -> Dict[str, Any]:
-        """Convert this class to a simple python type suitable for
-        serialization.
+        """Convert this class to a simple python type.
+
+        This makes it suitable for serialization.
 
         Parameters
         ----------
@@ -225,7 +224,9 @@ class DimensionRecord:
     def from_simple(cls, simple: Dict[str, Any],
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> DimensionRecord:
-        """Construct a new object from the data returned from the `to_simple`
+        """Construct a new object from the simplified form.
+
+        This is generally data returned from the `to_simple`
         method.
 
         Parameters

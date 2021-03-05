@@ -63,8 +63,9 @@ if TYPE_CHECKING:
 
 
 class Formatter(metaclass=ABCMeta):
-    """Interface for reading and writing Datasets with a particular
-    `StorageClass`.
+    """Interface for reading and writing Datasets.
+
+    The formatters are associated with a particular `StorageClass`.
 
     Parameters
     ----------
@@ -137,13 +138,15 @@ class Formatter(metaclass=ABCMeta):
 
     @property
     def fileDescriptor(self) -> FileDescriptor:
-        """FileDescriptor associated with this formatter
-        (`FileDescriptor`, read-only)"""
+        """File descriptor associated with this formatter (`FileDescriptor`).
+
+        Read-only property.
+        """
         return self._fileDescriptor
 
     @property
     def dataId(self) -> DataCoordinate:
-        """DataId associated with this formatter (`DataCoordinate`)"""
+        """Return Data ID associated with this formatter (`DataCoordinate`)."""
         return self._dataId
 
     @property
@@ -188,7 +191,7 @@ class Formatter(metaclass=ABCMeta):
 
     @classmethod
     def name(cls) -> str:
-        """Returns the fully qualified name of the formatter.
+        """Return the fully qualified name of the formatter.
 
         Returns
         -------
@@ -249,7 +252,7 @@ class Formatter(metaclass=ABCMeta):
 
     def fromBytes(self, serializedDataset: bytes,
                   component: Optional[str] = None) -> object:
-        """Reads serialized data into a Dataset or its component.
+        """Read serialized data into a Dataset or its component.
 
         Parameters
         ----------
@@ -318,8 +321,7 @@ class Formatter(metaclass=ABCMeta):
                 self._fileDescriptor.location = old
 
     def makeUpdatedLocation(self, location: Location) -> Location:
-        """Return a new `Location` instance updated with this formatter's
-        extension.
+        """Return a new `Location` updated with this formatter's extension.
 
         Parameters
         ----------
@@ -357,8 +359,7 @@ class Formatter(metaclass=ABCMeta):
 
     @classmethod
     def validateExtension(cls, location: Location) -> None:
-        """Check that the provided location refers to a file extension that is
-        understood by this formatter.
+        """Check the extension of the provided location for compatibility.
 
         Parameters
         ----------
@@ -410,8 +411,9 @@ class Formatter(metaclass=ABCMeta):
                          f"is not supported by Formatter '{cls.__name__}' (supports: {supported})")
 
     def predictPath(self) -> str:
-        """Return the path that would be returned by write, without actually
-        writing.
+        """Return the path that would be returned by write.
+
+        Does not write any data file.
 
         Uses the `FileDescriptor` associated with the instance.
 
@@ -425,7 +427,9 @@ class Formatter(metaclass=ABCMeta):
         return updated.pathInStore.path
 
     def segregateParameters(self, parameters: Optional[Dict[str, Any]] = None) -> Tuple[Dict, Dict]:
-        """Segregate the supplied parameters into those understood by the
+        """Segregate the supplied parameters.
+
+        This splits the parameters into those understood by the
         formatter and those not understood by the formatter.
 
         Any unsupported parameters are assumed to be usable by associated
@@ -445,7 +449,6 @@ class Formatter(metaclass=ABCMeta):
         unsupported : `dict`
             Those parameters not supported by this formatter.
         """
-
         if parameters is None:
             parameters = self.fileDescriptor.parameters
 
@@ -469,8 +472,7 @@ class Formatter(metaclass=ABCMeta):
 
 
 class FormatterFactory:
-    """Factory for `Formatter` instances.
-    """
+    """Factory for `Formatter` instances."""
 
     defaultKey = LookupKey("default")
     """Configuration key associated with default write parameter settings."""
@@ -482,7 +484,7 @@ class FormatterFactory:
         self._mappingFactory = MappingFactory(Formatter)
 
     def __contains__(self, key: Union[LookupKey, str]) -> bool:
-        """Indicates whether the supplied key is present in the factory.
+        """Indicate whether the supplied key is present in the factory.
 
         Parameters
         ----------
@@ -648,8 +650,7 @@ class FormatterFactory:
 
     def getFormatterClassWithMatch(self, entity: Entity) -> Tuple[LookupKey, Type[Formatter],
                                                                   Dict[str, Any]]:
-        """Get the matching formatter class along with the matching registry
-        key.
+        """Get the matching formatter class along with the registry key.
 
         Parameters
         ----------
@@ -697,8 +698,7 @@ class FormatterFactory:
         return formatter
 
     def getFormatterWithMatch(self, entity: Entity, *args: Any, **kwargs: Any) -> Tuple[LookupKey, Formatter]:
-        """Get a new formatter instance along with the matching registry
-        key.
+        """Get a new formatter instance along with the matching registry key.
 
         Parameters
         ----------

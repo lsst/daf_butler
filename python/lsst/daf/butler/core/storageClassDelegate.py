@@ -48,8 +48,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class DatasetComponent:
-    """Component of a dataset and associated information.
-    """
+    """Component of a dataset and associated information."""
 
     name: str
     """Name of the component.
@@ -65,7 +64,9 @@ class DatasetComponent:
 
 
 class StorageClassDelegate:
-    """Class to delegate the handling of components and parameters for the
+    """Delegate class for StorageClass components and parameters.
+
+    This class delegates the handling of components and parameters for the
     python type associated with a particular `StorageClass`.
 
     A delegate is required for any storage class that defines components
@@ -101,7 +102,7 @@ class StorageClassDelegate:
         -------
         attrs : `tuple(str)`
             Tuple of strings to attempt.
-            """
+        """
         root = "get" if getter else "set"
 
         # Capitalized name for getXxx must only capitalize first letter and not
@@ -256,8 +257,9 @@ class StorageClassDelegate:
 
     def disassemble(self, composite: Any, subset: Optional[Iterable] = None,
                     override: bool = None) -> Dict[str, Any]:
-        """Generic implementation of a disassembler.
+        """Disassembler a composite.
 
+        This is a generic implementation of a disassembler.
         This implementation attempts to extract components from the parent
         by looking for attributes of the same name or getter methods derived
         from the component name.
@@ -335,8 +337,9 @@ class StorageClassDelegate:
         return components
 
     def handleParameters(self, inMemoryDataset: Any, parameters: Optional[Mapping[str, Any]] = None) -> Any:
-        """Modify the in-memory dataset using the supplied parameters,
-        returning a possibly new object.
+        """Modify the in-memory dataset using the supplied parameters.
+
+        Can return a possibly new object.
 
         For safety, if any parameters are given to this method an
         exception will be raised.  This is to protect the user from
@@ -371,7 +374,9 @@ class StorageClassDelegate:
 
     @classmethod
     def selectResponsibleComponent(cls, derivedComponent: str, fromComponents: Set[Optional[str]]) -> str:
-        """Given a possible set of components to choose from, return the
+        """Select the best component for calcluating a derived component.
+
+        Given a possible set of components to choose from, return the
         component that should be used to calculate the requested derived
         component.
 

@@ -30,8 +30,10 @@ from ..timespan import Timespan
 
 @dataclass
 class DatasetAssociation:
-    """A struct that represents the membership of a single dataset in a
-    single collection.
+    """Class representing the membership of a dataset in a single collection.
+
+    One dataset is associated with one collection, possibly including
+    a timespan.
     """
 
     __slots__ = ("ref", "collection", "timespan")

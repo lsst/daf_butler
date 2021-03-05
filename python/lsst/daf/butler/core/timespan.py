@@ -142,6 +142,7 @@ class Timespan:
     `Timespan.begin` and `Timespan.end` are also guaranteed to round-trip
     exactly when used to construct other `Timespan` instances.
     """
+
     def __init__(self, begin: TimespanBound, end: TimespanBound, padInstantaneous: bool = True,
                  _nsec: Optional[Tuple[int, int]] = None):
         converter = TimeConverter()
@@ -213,8 +214,10 @@ class Timespan:
 
     @classmethod
     def fromInstant(cls, time: astropy.time.Time) -> Timespan:
-        """Construct a timespan that approximates an instant in time by a
-        minimum-possible (1 ns) duration timespan.
+        """Construct a timespan that approximates an instant in time.
+
+        This is done by constructing a minimum-possible (1 ns) duration
+        timespan.
 
         This is equivalent to ``Timespan(time, time, padInstantaneous=True)``,
         but may be slightly more efficient.
@@ -271,8 +274,7 @@ class Timespan:
             return TimeConverter().nsec_to_astropy(self._nsec[1])
 
     def isEmpty(self) -> bool:
-        """Test whether ``self`` is the empty timespan (`bool`).
-        """
+        """Test whether ``self`` is the empty timespan (`bool`)."""
         return self._nsec[0] >= self._nsec[1]
 
     def __str__(self) -> str:
@@ -322,9 +324,7 @@ class Timespan:
         return (Timespan, (None, None, False, self._nsec))
 
     def __lt__(self, other: Union[astropy.time.Time, Timespan]) -> bool:
-        """Test whether a Timespan's bounds are strictly less than the given
-        time or timespan.
-
+        """Test if a Timespan's bounds are strictly less than the given time.
 
         Parameters
         ----------
@@ -351,9 +351,7 @@ class Timespan:
             return self._nsec[1] <= other._nsec[0] and self._nsec[0] < other._nsec[1]
 
     def __gt__(self, other: Union[astropy.time.Time, Timespan]) -> bool:
-        """Test whether a Timespan's bounds are strictly greater than the given
-        time or timespan.
-
+        """Test if a Timespan's bounds are strictly greater than given time.
 
         Parameters
         ----------
@@ -380,8 +378,7 @@ class Timespan:
             return self._nsec[0] >= other._nsec[1] and self._nsec[1] > other._nsec[0]
 
     def overlaps(self, other: Timespan) -> bool:
-        """Test whether the intersection of this Timespan with another
-        is empty.
+        """Test if the intersection of this Timespan with another is empty.
 
         Parameters
         ----------
@@ -402,7 +399,9 @@ class Timespan:
         return self._nsec[1] > other._nsec[0] and other._nsec[1] > self._nsec[0]
 
     def contains(self, other: Union[astropy.time.Time, Timespan]) -> bool:
-        """Test whether the intersection of this timespan with another timespan
+        """Test if the supplied timespan is within this one.
+
+        Tests whether the intersection of this timespan with another timespan
         or point is equal to the other one.
 
         Parameters
@@ -457,8 +456,9 @@ class Timespan:
         return Timespan(begin=None, end=None, _nsec=nsec)
 
     def difference(self, other: Timespan) -> Generator[Timespan, None, None]:
-        """Return the one or two timespans that cover the interval(s) that are
-        in ``self`` but not ``other``.
+        """Return the one or two timespans that cover the interval(s).
+
+        The interval is defined as one that is in ``self`` but not ``other``.
 
         This is implemented as a generator because the result may be zero, one,
         or two `Timespan` objects, depending on the relationship between the
@@ -487,8 +487,7 @@ class Timespan:
                 yield Timespan(None, None, _nsec=(intersection._nsec[1], self._nsec[1]))
 
     def to_simple(self, minimal: bool = False) -> List[int]:
-        """Convert this class to a simple python type suitable for
-        serialization.
+        """Return simple python type form suitable for serialization.
 
         Parameters
         ----------
@@ -507,8 +506,9 @@ class Timespan:
     def from_simple(cls, simple: List[int],
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> Timespan:
-        """Construct a new object from the data returned from the `to_simple`
-        method.
+        """Construct a new object from simplified form.
+
+        Designed to use the data returned from the `to_simple` method.
 
         Parameters
         ----------
@@ -535,7 +535,9 @@ _S = TypeVar("_S", bound="TimespanDatabaseRepresentation")
 
 
 class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Timespan]):
-    """An interface that encapsulates how timespans are represented in a
+    """Representation of a time span within a database engine.
+
+    Provides an interface that encapsulates how timespans are represented in a
     database engine.
 
     Most of this class's interface is comprised of classmethods.  Instances
@@ -566,8 +568,7 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
     @classmethod
     @abstractmethod
     def fromLiteral(cls: Type[_S], timespan: Timespan) -> _S:
-        """Construct a database timespan representation from a literal
-        `Timespan` instance.
+        """Construct a database timespan from a literal `Timespan` instance.
 
         Parameters
         ----------
@@ -584,8 +585,7 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
 
     @abstractmethod
     def isEmpty(self) -> sqlalchemy.sql.ColumnElement:
-        """Return a boolean SQLAlchemy expression that tests whether the
-        timespan is empty.
+        """Return a boolean SQLAlchemy expression for testing empty timespans.
 
         Returns
         -------
@@ -596,7 +596,9 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
 
     @abstractmethod
     def __lt__(self: _S, other: Union[_S, sqlalchemy.sql.ColumnElement]) -> sqlalchemy.sql.ColumnElement:
-        """Return a SQLAlchemy expression representing a test for whether an
+        """Return SQLAlchemy expression for testing less than.
+
+        Returns a SQLAlchemy expression representing a test for whether an
         in-database timespan is strictly less than another timespan or a time
         point.
 
@@ -620,7 +622,9 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
 
     @abstractmethod
     def __gt__(self: _S, other: Union[_S, sqlalchemy.sql.ColumnElement]) -> sqlalchemy.sql.ColumnElement:
-        """Return a SQLAlchemy expression representing a test for whether an
+        """Return a SQLAlchemy expression for testing greater than.
+
+        Returns a SQLAlchemy expression representing a test for whether an
         in-database timespan is strictly greater than another timespan or a
         time point.
 
@@ -644,8 +648,7 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
 
     @abstractmethod
     def overlaps(self: _S, other: _S) -> sqlalchemy.sql.ColumnElement:
-        """Return a SQLAlchemy expression representing an overlap operation on
-        timespans.
+        """Return a SQLAlchemy expression representing timespan overlaps.
 
         Parameters
         ----------
@@ -665,8 +668,10 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
 
     @abstractmethod
     def contains(self: _S, other: Union[_S, sqlalchemy.sql.ColumnElement]) -> sqlalchemy.sql.ColumnElement:
-        """Return a SQLAlchemy expression representing a test for whether an
-        in-database timespan contains another timespan or a time point.
+        """Return a SQLAlchemy expression representing containment.
+
+        Returns a test for whether an in-database timespan contains another
+        timespan or a time point.
 
         Parameters
         ----------
@@ -688,7 +693,9 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
 
 
 class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
-    """An implementation of `TimespanDatabaseRepresentation` that simply stores
+    """Representation of a time span as two separate fields.
+
+    An implementation of `TimespanDatabaseRepresentation` that simply stores
     the endpoints in two separate fields.
 
     This type should generally be accessed via
@@ -714,6 +721,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
     are set to fields mapped to the minimum and maximum value constants used
     by our integer-time mapping.
     """
+
     def __init__(self, nsec: Tuple[sqlalchemy.sql.ColumnElement, sqlalchemy.sql.ColumnElement], name: str):
         self._nsec = nsec
         self._name = name

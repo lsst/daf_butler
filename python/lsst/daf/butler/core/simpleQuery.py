@@ -40,8 +40,9 @@ T = TypeVar("T")
 
 
 class SimpleQuery:
-    """A struct that combines SQLAlchemy objects representing SELECT, FROM,
-    and WHERE clauses.
+    """A struct that combines SQLAlchemy objects.
+
+    Represents SELECT, FROM, and WHERE clauses.
     """
 
     def __init__(self) -> None:
@@ -50,7 +51,9 @@ class SimpleQuery:
         self._from: Optional[sqlalchemy.sql.FromClause] = None
 
     class Select:
-        """Tag class used to indicate that a field should be returned in
+        """Tag class for SELECT queries.
+
+        Used to indicate that a field should be returned in
         a SELECT query.
         """
 
@@ -66,8 +69,10 @@ class SimpleQuery:
              isouter: bool = False,
              full: bool = False,
              **kwargs: Any) -> None:
-        """Add a table or subquery join to the query, possibly adding
-        SELECT columns or WHERE expressions at the same time.
+        """Add a table or subquery join to the query.
+
+        Possibly also adding SELECT columns or WHERE expressions at the same
+        time.
 
         Parameters
         ----------
@@ -130,7 +135,7 @@ class SimpleQuery:
 
     @property
     def from_(self) -> sqlalchemy.sql.FromClause:
-        """The FROM clause of the query (`sqlalchemy.sql.FromClause`).
+        """Return the FROM clause of the query (`sqlalchemy.sql.FromClause`).
 
         This property cannot be set.  To add tables to the FROM clause, call
         `join`.
@@ -138,7 +143,9 @@ class SimpleQuery:
         return self._from
 
     def copy(self) -> SimpleQuery:
-        """Return a copy of this object, with new lists for the `where` and
+        """Return a copy of this object.
+
+        Returns the copy with new lists for the `where` and
         `columns` attributes that can be modified without changing the
         original.
 
