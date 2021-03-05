@@ -171,7 +171,7 @@ class ButlerURI:
             # This is needed to prevent a schemeless absolute URI become
             # a file URI unexpectedly when calling updatedFile or
             # updatedExtension
-            if cls != ButlerURI:
+            if cls is not ButlerURI:
                 parsed, dirLike = cls._fixDirectorySep(parsed, forceDirectory)
                 subclass = cls
 
