@@ -118,7 +118,7 @@ class Loader(yamlLoader):
         if requesteduri.scheme:
             fileuri = requesteduri
         else:
-            fileuri = copy.copy(self._root).updatedFile(filename)
+            fileuri = self._root.updatedFile(filename)
 
         log.debug("Opening YAML file via !include: %s", fileuri)
 
