@@ -465,9 +465,15 @@ class ButlerURI:
         if ext is None:
             return self
 
-        # Get the extension and remove it from the path if one is found
-        # .fits.gz counts as one extension do not use os.path.splitext
+        # Get the extension
         current = self.getExtension()
+
+        # Nothing to do if the extension already matches
+        if current == ext:
+            return self
+
+        # Remove the current extension from the path
+        # .fits.gz counts as one extension do not use os.path.splitext
         path = self.path
         if current:
             path = path[:-len(current)]

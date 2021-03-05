@@ -74,6 +74,16 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(uri, uri2)
         self.assertEqual(id(uri), id(uri2))
 
+    def testExtension(self):
+        file = ButlerURI(os.path.join(self.tmpdir, "test.txt"))
+        self.assertEqual(file.updatedExtension(None), file)
+        self.assertEqual(file.updatedExtension(".txt"), file)
+        self.assertEqual(id(file.updatedExtension(".txt")), id(file))
+
+        fits = file.updatedExtension(".fits.gz")
+        self.assertEqual(fits.basename(), "test.fits.gz")
+        self.assertEqual(fits.updatedExtension(".jpeg").basename(), "test.jpeg")
+
     def testRelative(self):
         """Check that we can get subpaths back from two URIs"""
         parent = ButlerURI(self.tmpdir, forceDirectory=True, forceAbsolute=True)
