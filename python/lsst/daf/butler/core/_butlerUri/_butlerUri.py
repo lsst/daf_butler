@@ -125,13 +125,14 @@ class ButlerURI:
     # mypy is confused without these
     _uri: urllib.parse.ParseResult
     isTemporary: bool
+    dirLike: bool
 
     def __new__(cls, uri: Union[str, urllib.parse.ParseResult, ButlerURI, Path],
                 root: Optional[Union[str, ButlerURI]] = None, forceAbsolute: bool = True,
                 forceDirectory: bool = False, isTemporary: bool = False) -> ButlerURI:
         parsed: urllib.parse.ParseResult
         dirLike: bool = False
-        subclass: Optional[Type] = None
+        subclass: Optional[Type[ButlerURI]] = None
 
         if isinstance(uri, Path):
             uri = str(uri)
