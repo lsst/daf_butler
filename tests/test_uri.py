@@ -69,6 +69,11 @@ class FileURITestCase(unittest.TestCase):
         self.assertTrue(uri.exists(), f"{uri} should now exist")
         self.assertEqual(uri.read().decode(), content)
 
+        # Check that creating a URI from a URI returns the same thing
+        uri2 = ButlerURI(uri)
+        self.assertEqual(uri, uri2)
+        self.assertEqual(id(uri), id(uri2))
+
     def testRelative(self):
         """Check that we can get subpaths back from two URIs"""
         parent = ButlerURI(self.tmpdir, forceDirectory=True, forceAbsolute=True)

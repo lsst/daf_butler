@@ -175,10 +175,9 @@ class ButlerURI:
                 subclass = cls
 
         elif isinstance(uri, ButlerURI):
-            parsed = copy.copy(uri._uri)
-            dirLike = uri.dirLike
-            # No further parsing required and we know the subclass
-            subclass = type(uri)
+            # Since ButlerURI is immutable we can return the argument
+            # unchanged.
+            return uri
         else:
             raise ValueError("Supplied URI must be string, Path, "
                              f"ButlerURI, or ParseResult but got '{uri!r}'")
