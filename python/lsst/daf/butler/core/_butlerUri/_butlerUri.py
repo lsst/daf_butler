@@ -401,6 +401,9 @@ class ButlerURI:
         forceDirectory : `bool`
             Parameter passed to ButlerURI constructor to force this
             new URI to be dir-like.
+        kwargs : `dict`
+            Components of a `urllib.parse.ParseResult` that should be
+            modified for the newly-created `ButlerURI`.
 
         Returns
         -------
