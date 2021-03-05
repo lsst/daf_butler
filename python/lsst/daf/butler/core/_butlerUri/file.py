@@ -72,11 +72,13 @@ class ButlerFileURI(ButlerURI):
         return urllib.parse.unquote(posix2os(self._uri.path))
 
     def exists(self) -> bool:
+        """Indicate that the file exists."""
         # Uses os.path.exists so if there is a soft link that points
         # to a file that no longer exists this will return False
         return os.path.exists(self.ospath)
 
     def size(self) -> int:
+        """Return the size of the file in bytes."""
         if not os.path.isdir(self.ospath):
             stat = os.stat(self.ospath)
             sz = stat.st_size
@@ -178,11 +180,12 @@ class ButlerFileURI(ButlerURI):
         return self._force_to_file().relative_to(cast(ButlerFileURI, other)._force_to_file())
 
     def read(self, size: int = -1) -> bytes:
-        # Docstring inherits
+        """Return the entire content of the file as bytes."""
         with open(self.ospath, "rb") as fh:
             return fh.read(size)
 
     def write(self, data: bytes, overwrite: bool = True) -> None:
+        """Write the supplied data to the file."""
         dir = os.path.dirname(self.ospath)
         if not os.path.exists(dir):
             safeMakeDir(dir)
@@ -194,14 +197,20 @@ class ButlerFileURI(ButlerURI):
             f.write(data)
 
     def mkdir(self) -> None:
+        """Make the directory associated with this URI."""
         if not os.path.exists(self.ospath):
             safeMakeDir(self.ospath)
         elif not os.path.isdir(self.ospath):
             raise FileExistsError(f"URI {self} exists but is not a directory!")
 
     def isdir(self) -> bool:
-        """Return True if this URI is a directory or looks like a directory,
-        else False.
+        """Return whether this URI is a directory.
+
+        Returns
+        -------
+        isdir : `bool`
+            `True` if this URI is a directory or looks like a directory,
+            else `False`.
         """
         return self.dirLike or os.path.isdir(self.ospath)
 
@@ -336,8 +345,7 @@ class ButlerFileURI(ButlerURI):
                                                                                            Tuple[ButlerURI,
                                                                                                  List[str],
                                                                                                  List[str]]]]:
-        """For dir-like URI, walk the directory returning matching files and
-        directories.
+        """Walk the directory tree returning matching files and directories.
 
         Parameters
         ----------

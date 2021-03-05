@@ -42,5 +42,6 @@ class ButlerPackageResourceURI(ButlerURI):
         return pkg_resources.resource_exists(self.netloc, self.relativeToPathRoot)
 
     def read(self, size: int = -1) -> bytes:
+        """Read the contents of the resource."""
         with pkg_resources.resource_stream(self.netloc, self.relativeToPathRoot) as fh:
             return fh.read(size)

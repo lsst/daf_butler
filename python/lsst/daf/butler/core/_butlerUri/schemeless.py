@@ -45,7 +45,7 @@ log = logging.getLogger(__name__)
 
 
 class ButlerSchemelessURI(ButlerFileURI):
-    """Scheme-less URI referring to the local file system"""
+    """Scheme-less URI referring to the local file system."""
 
     _pathLib = PurePath
     _pathModule = os.path

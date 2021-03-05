@@ -53,7 +53,7 @@ TIMEOUT = 20
 
 
 def getHttpSession() -> requests.Session:
-    """Create a requests.Session pre-configured with environment variable data
+    """Create a requests.Session pre-configured with environment variable data.
 
     Returns
     -------
@@ -76,7 +76,6 @@ def getHttpSession() -> requests.Session:
         "Expect: 100-Continue" header in all requests. This is required
         on certain endpoints where requests redirection is made.
     """
-
     retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
 
     session = requests.Session()
@@ -119,7 +118,7 @@ def getHttpSession() -> requests.Session:
 
 
 def useExpect100() -> bool:
-    """Returns the status of the "Expect-100" header.
+    """Return the status of the "Expect-100" header.
 
     Returns
     -------
@@ -134,7 +133,7 @@ def useExpect100() -> bool:
 
 
 def isTokenAuth() -> bool:
-    """Returns the status of bearer-token authentication.
+    """Return the status of bearer-token authentication.
 
     Returns
     -------
@@ -153,14 +152,16 @@ def isTokenAuth() -> bool:
 
 
 def refreshToken(session: requests.Session) -> None:
-    """Set or update the 'Authorization' header of the session,
+    """Refresh the session token.
+
+    Set or update the 'Authorization' header of the session,
     configure bearer token authentication, with the value fetched
     from LSST_BUTLER_WEBDAV_TOKEN_FILE
 
     Parameters
     ----------
     session : `requests.Session`
-        Session on which bearer token authentication must be configured
+        Session on which bearer token authentication must be configured.
     """
     try:
         token_path = os.environ['LSST_BUTLER_WEBDAV_TOKEN_FILE']
@@ -206,7 +207,6 @@ def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
 def webdavDeleteFile(path: Union[Location, ButlerURI, str],
                      session: Optional[requests.Session] = None) -> None:
     """Remove a remote HTTP resource.
-    Raises a FileNotFoundError if the resource does not exist or on failure.
 
     Parameters
     ----------
@@ -214,6 +214,12 @@ def webdavDeleteFile(path: Union[Location, ButlerURI, str],
         Location or ButlerURI containing the bucket name and filepath.
     session : `requests.Session`, optional
         Session object to query.
+
+    Raises
+    ------
+    FileNotFoundError
+        Raises a FileNotFoundError if the resource does not exist or on
+        failure.
     """
     if session is None:
         session = getHttpSession()
@@ -280,7 +286,9 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
 
 
 def finalurl(r: requests.Response) -> str:
-    """Check whether the remote HTTP endpoint redirects to a different
+    """Calculate the final URL, including redirects.
+
+    Check whether the remote HTTP endpoint redirects to a different
     endpoint, and return the final destination of the request.
     This is needed when using PUT operations, to avoid starting
     to send the data to the endpoint, before having to send it again once
@@ -304,7 +312,7 @@ def finalurl(r: requests.Response) -> str:
 
 
 def _getFileURL(path: Union[Location, ButlerURI, str]) -> str:
-    """Returns the absolute URL of the resource as a string.
+    """Return the absolute URL of the resource as a string.
 
     Parameters
     ----------
@@ -325,6 +333,7 @@ def _getFileURL(path: Union[Location, ButlerURI, str]) -> str:
 
 class ButlerHttpURI(ButlerURI):
     """General HTTP(S) resource."""
+
     _session = requests.Session()
     _sessionInitialized = False
 
@@ -356,6 +365,7 @@ class ButlerHttpURI(ButlerURI):
         return True if r.status_code == 200 else False
 
     def size(self) -> int:
+        """Return the size of the remote resource in bytes."""
         if self.dirLike:
             return 0
         r = self.session.head(self.geturl(), timeout=TIMEOUT)
@@ -365,9 +375,7 @@ class ButlerHttpURI(ButlerURI):
             raise FileNotFoundError(f"Resource {self} does not exist")
 
     def mkdir(self) -> None:
-        """For a dir-like URI, create the directory resource if it does not
-        already exist.
-        """
+        """Create the directory resource if it does not already exist."""
         if not self.dirLike:
             raise ValueError(f"Can not create a 'directory' for file-like URI {self}")
 
@@ -509,8 +517,10 @@ class ButlerHttpURI(ButlerURI):
             src.remove()
 
     def _emptyPut(self) -> requests.Response:
-        """Send an empty PUT request to current URL. This is used to detect
-        if redirection is enabled before sending actual data.
+        """Send an empty PUT request to current URL.
+
+        This is used to detect if redirection is enabled before sending actual
+        data.
 
         Returns
         -------

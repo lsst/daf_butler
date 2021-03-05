@@ -47,7 +47,7 @@ from ._butlerUri import ButlerURI
 
 
 def getS3Client() -> boto3.client:
-    """Create a S3 client with AWS (default) or the specified endpoint
+    """Create a S3 client with AWS (default) or the specified endpoint.
 
     Returns
     -------
@@ -83,8 +83,7 @@ def getS3Client() -> boto3.client:
 
 def s3CheckFileExists(path: Union[Location, ButlerURI, str], bucket: Optional[str] = None,
                       client: Optional[boto3.client] = None) -> Tuple[bool, int]:
-    """Returns (True, filesize) if file exists in the bucket and (False, -1) if
-    the file is not found.
+    """Return if the file exists in the bucket or not.
 
     Parameters
     ----------
@@ -102,7 +101,7 @@ def s3CheckFileExists(path: Union[Location, ButlerURI, str], bucket: Optional[st
     exists : `bool`
         True if key exists, False otherwise.
     size : `int`
-        Size of the key, if key exists, in bytes, otherwise -1
+        Size of the key, if key exists, in bytes, otherwise -1.
 
     Notes
     -----
@@ -186,17 +185,16 @@ def bucketExists(bucketName: str, client: Optional[boto3.client] = None) -> bool
 
 def setAwsEnvCredentials(accessKeyId: str = 'dummyAccessKeyId',
                          secretAccessKey: str = "dummySecretAccessKey") -> bool:
-    """Set AWS credentials environmental variables AWS_ACCESS_KEY_ID and
-    AWS_SECRET_ACCESS_KEY.
+    """Set AWS credentials environmental variables.
 
     Parameters
     ----------
     accessKeyId : `str`
         Value given to AWS_ACCESS_KEY_ID environmental variable. Defaults to
-        'dummyAccessKeyId'
+        `dummyAccessKeyId`.
     secretAccessKey : `str`
         Value given to AWS_SECRET_ACCESS_KEY environmental variable. Defaults
-        to 'dummySecretAccessKey'
+        to `dummySecretAccessKey`.
 
     Returns
     -------
@@ -206,7 +204,7 @@ def setAwsEnvCredentials(accessKeyId: str = 'dummyAccessKeyId',
     Notes
     -----
     If either AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY are not set, both
-    values are overwritten.
+    values are overwritten to ensure that the values are consistent.
     """
     if "AWS_ACCESS_KEY_ID" not in os.environ or "AWS_SECRET_ACCESS_KEY" not in os.environ:
         os.environ["AWS_ACCESS_KEY_ID"] = accessKeyId
@@ -216,7 +214,9 @@ def setAwsEnvCredentials(accessKeyId: str = 'dummyAccessKeyId',
 
 
 def unsetAwsEnvCredentials() -> None:
-    """Unsets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environmental
+    """Unset AWS credential environment variables.
+
+    Unsets the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environmental
     variables.
     """
     if "AWS_ACCESS_KEY_ID" in os.environ:

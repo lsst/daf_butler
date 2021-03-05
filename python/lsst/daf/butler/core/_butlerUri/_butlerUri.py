@@ -130,6 +130,7 @@ class ButlerURI:
     def __new__(cls, uri: Union[str, urllib.parse.ParseResult, ButlerURI, Path],
                 root: Optional[Union[str, ButlerURI]] = None, forceAbsolute: bool = True,
                 forceDirectory: bool = False, isTemporary: bool = False) -> ButlerURI:
+        """Create and return new specialist ButlerURI subclass."""
         parsed: urllib.parse.ParseResult
         dirLike: bool = False
         subclass: Optional[Type[ButlerURI]] = None
@@ -228,32 +229,37 @@ class ButlerURI:
 
     @property
     def scheme(self) -> str:
-        """The URI scheme (``://`` is not part of the scheme)."""
+        """Return the URI scheme.
+
+        Notes
+        -----
+        (``://`` is not part of the scheme).
+        """
         return self._uri.scheme
 
     @property
     def netloc(self) -> str:
-        """The URI network location."""
+        """Return the URI network location."""
         return self._uri.netloc
 
     @property
     def path(self) -> str:
-        """The path component of the URI."""
+        """Return the path component of the URI."""
         return self._uri.path
 
     @property
     def unquoted_path(self) -> str:
-        """The path component of the URI with any URI quoting reversed."""
+        """Return path component of the URI with any URI quoting reversed."""
         return urllib.parse.unquote(self._uri.path)
 
     @property
     def ospath(self) -> str:
-        """Path component of the URI localized to current OS."""
+        """Return the path component of the URI localized to current OS."""
         raise AttributeError(f"Non-file URI ({self}) has no local OS path.")
 
     @property
     def relativeToPathRoot(self) -> str:
-        """Returns path relative to network location.
+        """Return path relative to network location.
 
         Effectively, this is the path property with posix separator stripped
         from the left hand side of the path.
@@ -268,7 +274,7 @@ class ButlerURI:
 
     @property
     def is_root(self) -> bool:
-        """`True` if this URI points to the root of the network location.
+        """Return whether this URI points to the root of the network location.
 
         This means that the path components refers to the top level.
         """
@@ -279,17 +285,17 @@ class ButlerURI:
 
     @property
     def fragment(self) -> str:
-        """The fragment component of the URI."""
+        """Return the fragment component of the URI."""
         return self._uri.fragment
 
     @property
     def params(self) -> str:
-        """Any parameters included in the URI."""
+        """Return any parameters included in the URI."""
         return self._uri.params
 
     @property
     def query(self) -> str:
-        """Any query strings included in the URI."""
+        """Return any query strings included in the URI."""
         return self._uri.query
 
     def geturl(self) -> str:
@@ -303,8 +309,7 @@ class ButlerURI:
         return self._uri.geturl()
 
     def split(self) -> Tuple[ButlerURI, str]:
-        """Splits URI into head and tail. Equivalent to os.path.split where
-        head preserves the URI components.
+        """Split URI into head and tail.
 
         Returns
         -------
@@ -315,6 +320,11 @@ class ButlerURI:
             Last `self.path` component. Tail will be empty if path ends on a
             separator. Tail will never contain separators. It will be
             unquoted.
+
+        Notes
+        -----
+        Equivalent to `os.path.split()` where head preserves the URI
+        components.
         """
         head, tail = self._pathModule.split(self.path)
         headuri = self._uri._replace(path=head)
@@ -329,43 +339,50 @@ class ButlerURI:
         return ButlerURI(headuri, forceDirectory=True, forceAbsolute=forceAbsolute), tail
 
     def basename(self) -> str:
-        """Returns the base name, last element of path, of the URI. If URI ends
-        on a slash returns an empty string. This is the second element returned
-        by split().
-
-        Equivalent of os.path.basename().
+        """Return the base name, last element of path, of the URI.
 
         Returns
         -------
         tail : `str`
             Last part of the path attribute. Trail will be empty if path ends
             on a separator.
+
+        Notes
+        -----
+        If URI ends on a slash returns an empty string. This is the second
+        element returned by `split()`.
+
+        Equivalent of `os.path.basename()``.
         """
         return self.split()[1]
 
     def dirname(self) -> ButlerURI:
-        """Returns a ButlerURI containing all the directories of the path
-        attribute.
-
-        Equivalent of os.path.dirname()
+        """Return the directory component of the path as a new `ButlerURI`.
 
         Returns
         -------
         head : `ButlerURI`
             Everything except the tail of path attribute, expanded and
             normalized as per ButlerURI rules.
+
+        Notes
+        -----
+        Equivalent of `os.path.dirname()`.
         """
         return self.split()[0]
 
     def parent(self) -> ButlerURI:
-        """Returns a ButlerURI containing all the directories of the path
-        attribute, minus the last one.
+        """Return a `ButlerURI` of the parent directory.
 
         Returns
         -------
         head : `ButlerURI`
             Everything except the tail of path attribute, expanded and
-            normalized as per ButlerURI rules.
+            normalized as per `ButlerURI` rules.
+
+        Notes
+        -----
+        For a file-like URI this will be the same as calling `dirname()`.
         """
         # When self is file-like, return self.dirname()
         if not self.dirLike:
@@ -377,8 +394,7 @@ class ButlerURI:
         return self.replace(path=str(parentPath), forceDirectory=True)
 
     def replace(self, forceDirectory: bool = False, **kwargs: Any) -> ButlerURI:
-        """Replace components in a URI with new values and return a new
-        instance.
+        """Return new `ButlerURI` with specified components replaced.
 
         Parameters
         ----------
@@ -488,8 +504,7 @@ class ButlerURI:
         return ext
 
     def join(self, path: Union[str, ButlerURI]) -> ButlerURI:
-        """Create a new `ButlerURI` with additional path components including
-        a file.
+        """Return new `ButlerURI` with additional path components.
 
         Parameters
         ----------
@@ -518,7 +533,6 @@ class ButlerURI:
         URI it will be returned as an absolute ``file:`` URI even if the
         URI it is being joined to is non-file.
         """
-
         # If we have a full URI in path we will use it directly
         # but without forcing to absolute so that we can trap the
         # expected option of relative path.
@@ -599,10 +613,9 @@ class ButlerURI:
         return True
 
     def _as_local(self) -> Tuple[str, bool]:
-        """Return the location of the (possibly remote) resource in the
-        local file system.
+        """Return the location of the (possibly remote) resource as local file.
 
-        This is a helper function for ``as_local`` context manager.
+        This is a helper function for `as_local` context manager.
 
         Returns
         -------
@@ -618,8 +631,7 @@ class ButlerURI:
 
     @contextlib.contextmanager
     def as_local(self) -> Iterator[ButlerURI]:
-        """Return the location of the (possibly remote) resource in the
-        local file system.
+        """Return the location of the (possibly remote) resource as local file.
 
         Yields
         ------
@@ -679,9 +691,7 @@ class ButlerURI:
         raise NotImplementedError()
 
     def mkdir(self) -> None:
-        """For a dir-like URI, create the directory resource if it does not
-        already exist.
-        """
+        """For a dir-like URI, create the directory resource if needed."""
         raise NotImplementedError()
 
     def isdir(self) -> bool:
@@ -700,29 +710,41 @@ class ButlerURI:
         raise NotImplementedError()
 
     def __str__(self) -> str:
+        """Convert the URI to its native string form."""
         return self.geturl()
 
     def __repr__(self) -> str:
+        """Return string representation suitable for evaluation."""
         return f'ButlerURI("{self.geturl()}")'
 
     def __eq__(self, other: Any) -> bool:
+        """Compare supplied object with this `ButlerURI`."""
         if not isinstance(other, ButlerURI):
             return NotImplemented
         return self.geturl() == other.geturl()
 
     def __hash__(self) -> int:
+        """Return hash of this object."""
         return hash(str(self))
 
     def __copy__(self) -> ButlerURI:
+        """Copy constructor.
+
+        Object is immutable so copy can return itself.
+        """
         # Implement here because the __new__ method confuses things
-        # Be careful not to convert a relative schemeless URI to absolute
-        return type(self)(str(self), forceAbsolute=self.isabs())
+        return self
 
     def __deepcopy__(self, memo: Any) -> ButlerURI:
+        """Deepcopy the object.
+
+        Object is immutable so copy can return itself.
+        """
         # Implement here because the __new__ method confuses things
         return self.__copy__()
 
     def __getnewargs__(self) -> Tuple:
+        """Support pickling."""
         return (str(self),)
 
     @classmethod
@@ -850,8 +872,7 @@ class ButlerURI:
                                                                                            Tuple[ButlerURI,
                                                                                                  List[str],
                                                                                                  List[str]]]]:
-        """For dir-like URI, walk the directory returning matching files and
-        directories.
+        """Walk the directory tree returning matching files and directories.
 
         Parameters
         ----------
@@ -873,10 +894,7 @@ class ButlerURI:
     def findFileResources(cls, candidates: Iterable[Union[str, ButlerURI]],
                           file_filter: Optional[str] = None,
                           grouped: bool = False) -> Iterator[Union[ButlerURI, Iterator[ButlerURI]]]:
-        """Get the files from a list of values. If a value is a file it is
-        yielded immediately. If a value is a directory, all the files in
-        the directory (recursively) that match the regex will be yielded in
-        turn.
+        """Get all the files from a list of values.
 
         Parameters
         ----------
@@ -898,6 +916,12 @@ class ButlerURI:
             If grouping is enabled, each of the yielded values will be an
             iterator yielding members of the group. Files given explicitly
             will be returned as a single group at the end.
+
+        Notes
+        -----
+        If a value is a file it is yielded immediately. If a value is a
+        directory, all the files in the directory (recursively) that match
+        the regex will be yielded in turn.
         """
         fileRegex = None if file_filter is None else re.compile(file_filter)
 

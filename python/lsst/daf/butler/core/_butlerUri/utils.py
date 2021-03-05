@@ -107,14 +107,16 @@ def posix2os(posix: Union[PurePath, str]) -> str:
 class NoTransaction:
     """A simple emulation of the `DatastoreTransaction` class.
 
-    Does nothing.
+    Notes
+    -----
+    Does nothing. Used as a fallback in the absence of an explicit transaction
+    class.
     """
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         return
 
     @contextlib.contextmanager
     def undoWith(self, name: str, undoFunc: Callable, *args: Any, **kwargs: Any) -> Iterator[None]:
-        """No-op context manager to replace `DatastoreTransaction`
-        """
+        """No-op context manager to replace `DatastoreTransaction`."""
         yield None
