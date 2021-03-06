@@ -64,7 +64,7 @@ from lsst.daf.butler import FileDataset
 from lsst.daf.butler import CollectionSearch, CollectionType
 from lsst.daf.butler import ButlerURI
 from lsst.daf.butler import script
-from lsst.daf.butler.registry import MissingCollectionError, OrphanedRecordError
+from lsst.daf.butler.registry import MissingCollectionError
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core._butlerUri.s3utils import (setAwsEnvCredentials,
                                                      unsetAwsEnvCredentials)
@@ -584,26 +584,6 @@ class ButlerTests(ButlerPutGetTests):
         ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
         ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
         ref3 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-R1"}, run=run1)
-
-        # Add a new dataset type and delete it
-        tmpName = "prune_collections_disposable"
-        tmpDatasetType = self.addDatasetType(tmpName, dimensions, storageClass,
-                                             butler.registry)
-        tmpFromRegistry = butler.registry.getDatasetType(tmpName)
-        self.assertEqual(tmpDatasetType, tmpFromRegistry)
-        butler.registry.removeDatasetType(tmpName)
-        with self.assertRaises(KeyError):
-            butler.registry.getDatasetType(tmpName)
-        # Removing a second time is fine
-        butler.registry.removeDatasetType(tmpName)
-
-        # Component removal is not allowed
-        with self.assertRaises(ValueError):
-            butler.registry.removeDatasetType(DatasetType.nameWithComponent(tmpName, "component"))
-
-        # Try and fail to delete a datasetType that is associated with data
-        with self.assertRaises(OrphanedRecordError):
-            butler.registry.removeDatasetType(datasetType.name)
 
         # Try to delete a RUN collection without purge, or with purge and not
         # unstore.
