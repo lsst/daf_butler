@@ -646,6 +646,23 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    def forget(self, refs: Iterable[DatasetRef]) -> None:
+        """Indicate to the Datastore that it should remove all records of the
+        given datasets, without actually deleting them.
+
+        Parameters
+        ----------
+        refs : `Iterable` [ `DatasetRef` ]
+            References to the datasets being forgotten.
+
+        Notes
+        -----
+        Asking a datastore to forget a `DatasetRef` it does not hold should be
+        a silent no-op, not an error.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
     def trash(self, datasetRef: DatasetRef, ignore_errors: bool = True) -> None:
         """Indicate to the Datastore that a Dataset can be moved to the trash.
 

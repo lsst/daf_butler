@@ -1573,6 +1573,13 @@ class FileDatastore(GenericBaseDatastore):
                             f"of {self.name}"
                         ) from e
 
+    @transactional
+    def forget(self, refs: Iterable[DatasetRef]) -> None:
+        # Docstring inherited.
+        refs = list(refs)
+        self.bridge.forget(refs)
+        self._table.delete(["dataset_id"], *[{"dataset_id": ref.getCheckedId()} for ref in refs])
+
     def validateConfiguration(self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]],
                               logFailures: bool = False) -> None:
         """Validate some of the configuration for this datastore.

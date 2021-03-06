@@ -148,6 +148,11 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # Docstring inherited from DatastoreRegistryBridge
         self._db.insert(self._tables.dataset_location, *self._refsToRows(refs))
 
+    def forget(self, refs: Iterable[DatasetIdRef]) -> None:
+        # Docstring inherited from DatastoreRegistryBridge
+        rows = self._refsToRows(self.check(refs))
+        self._db.delete(self._tables.dataset_location, ["datastore_name", "dataset_id"], *rows)
+
     def moveToTrash(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
         # TODO: avoid self.check() call via queries like

@@ -551,6 +551,10 @@ class ChainedDatastore(Datastore):
         self.trash(ref, ignore_errors=False)
         self.emptyTrash(ignore_errors=False)
 
+    def forget(self, refs: Iterable[DatasetRef]) -> None:
+        for datastore in tuple(self.datastores):
+            datastore.forget(refs)
+
     def trash(self, ref: DatasetRef, ignore_errors: bool = True) -> None:
         log.debug("Trashing %s", ref)
 

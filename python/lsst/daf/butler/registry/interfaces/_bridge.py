@@ -134,6 +134,26 @@ class DatastoreRegistryBridge(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def forget(self, refs: Iterable[DatasetIdRef]) -> None:
+        """Remove dataset location information without any attempt to put it
+        in the trash while waiting for external deletes.
+
+        This should be used only to implement `Datastore.forget`, or in cases
+        where deleting the actual datastore artifacts cannot fail.
+
+        Parameters
+        ----------
+        refs : `Iterable` of `DatasetIdRef`
+            References to the datasets.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``any(ref.id is None for ref in refs)``.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def moveToTrash(self, refs: Iterable[DatasetIdRef]) -> None:
         """Move dataset location information to trash.
 

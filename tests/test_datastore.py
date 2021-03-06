@@ -427,7 +427,7 @@ class DatastoreTests(DatastoreTestsBase):
             metricsOut = sc.delegate().assemble(compsRead)
             self.assertEqual(metrics, metricsOut)
 
-    def testRemove(self):
+    def prepDeleteTest(self):
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
         # Put
@@ -444,6 +444,12 @@ class DatastoreTests(DatastoreTestsBase):
         # Get
         metricsOut = datastore.get(ref)
         self.assertEqual(metrics, metricsOut)
+
+        return datastore, ref
+
+    def testRemove(self):
+        datastore, ref = self.prepDeleteTest()
+
         # Remove
         datastore.remove(ref)
 
@@ -460,6 +466,29 @@ class DatastoreTests(DatastoreTestsBase):
         # Can only delete once
         with self.assertRaises(FileNotFoundError):
             datastore.remove(ref)
+
+    def testForget(self):
+        datastore, ref = self.prepDeleteTest()
+
+        # Remove
+        datastore.forget([ref])
+
+        # Does it exist (as far as we know)?
+        self.assertFalse(datastore.exists(ref))
+
+        # Do we now get a predicted URI?
+        uri = datastore.getURI(ref, predict=True)
+        self.assertEqual(uri.fragment, "predicted")
+
+        # Get should now fail
+        with self.assertRaises(FileNotFoundError):
+            datastore.get(ref)
+
+        # Forgetting again is a silent no-op
+        datastore.forget([ref])
+
+        # Predicted URI should still point to the file.
+        self.assertTrue(uri.exists())
 
     def testTransfer(self):
         metrics = makeExampleMetrics()
