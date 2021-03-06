@@ -394,7 +394,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
         # Docstring inherited from GenericBaseDatastore
-        self._table.delete(dataset_id=ref.id)
+        self._table.delete(["dataset_id"], {"dataset_id": ref.id})
 
     def _get_dataset_locations_info(self, ref: DatasetIdRef) -> List[Tuple[Location, StoredFileInfo]]:
         r"""Find all the `Location`\ s  of the requested dataset in the
@@ -1568,7 +1568,10 @@ class FileDatastore(GenericBaseDatastore):
                                     ref.id, location.uri, self.name, e)
                         continue
                     else:
-                        raise FileNotFoundError(err_msg)
+                        raise FileNotFoundError(
+                            f"Error removing dataset {ref.id} ({location.uri}) from internal registry "
+                            f"of {self.name}"
+                        ) from e
 
     def validateConfiguration(self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]],
                               logFailures: bool = False) -> None:

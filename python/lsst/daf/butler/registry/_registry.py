@@ -387,7 +387,7 @@ class Registry:
             keyword arguments are column names and values are the values they
             must have.
         """
-        self._managers.opaque[tableName].delete(**where)
+        self._managers.opaque[tableName].delete(where.keys(), where)
 
     def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED,
                            doc: Optional[str] = None) -> None:
