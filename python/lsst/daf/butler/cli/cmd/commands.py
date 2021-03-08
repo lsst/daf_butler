@@ -158,6 +158,10 @@ def config_validate(*args, **kwargs):
 @click.option("--unstore",
               help=("""Remove all datasets in the collection from all datastores in which they appear."""),
               is_flag=True)
+@click.option("--unlink",
+              help="Before removing the given `collection` unlink it from from this parent collection.",
+              multiple=True,
+              callback=split_commas)
 @options_file_option()
 def prune_collection(**kwargs):
     """Remove a collection and possibly prune datasets within it."""

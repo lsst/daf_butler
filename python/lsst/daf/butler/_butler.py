@@ -1204,7 +1204,8 @@ class Butler:
             # Point of no return for removing artifacts
             self.datastore.emptyTrash()
 
-    def pruneCollection(self, name: str, purge: bool = False, unstore: bool = False) -> None:
+    def pruneCollection(self, name: str, purge: bool = False, unstore: bool = False,
+                        unlink: Optional[List[str]] = None) -> None:
         """Remove a collection and possibly prune datasets within it.
 
         Parameters
@@ -1224,6 +1225,9 @@ class Butler:
         unstore: `bool`, optional
             If `True`, remove all datasets in the collection from all
             datastores in which they appear.
+        unlink: `list` [`str`], optional
+            Before removing the given `collection` unlink it from from these
+            parent collections.
 
         Raises
         ------
@@ -1246,7 +1250,20 @@ class Butler:
         if collectionType is not CollectionType.RUN and purge:
             raise PurgeUnsupportedPruneCollectionsError(collectionType)
 
+        def remove(child: str, parent: str) -> None:
+            """Remove a child collection from a parent collection."""
+            # Remove child from parent.
+            chain = list(self.registry.getCollectionChain(parent))
+            try:
+                chain.remove(name)
+            except ValueError as e:
+                raise RuntimeError(f"{name} is not a child of {parent}") from e
+            self.registry.setCollectionChain(parent, chain)
+
         with self.registry.transaction():
+            if (unlink):
+                for parent in unlink:
+                    remove(name, parent)
             if unstore:
                 for ref in self.registry.queryDatasets(..., collections=name, findFirst=True):
                     if self.datastore.exists(ref):

@@ -27,7 +27,7 @@ from .. import (
 )
 
 
-def pruneCollection(repo, collection, purge, unstore):
+def pruneCollection(repo, collection, purge, unstore, unlink):
     """Remove a collection and possibly prune datasets within it.
 
     Parameters
@@ -40,10 +40,12 @@ def pruneCollection(repo, collection, purge, unstore):
         Same as the ``purge`` argument to ``Butler.pruneCollection``.
     unstore: `bool`, optional
         Same as the ``unstore`` argument to ``Butler.pruneCollection``.
+    unlink: `list` [`str`]
+        Same as the ``unlink`` argument to ``Butler.pruneCollection``.
     """
     butler = Butler(repo, writeable=True)
     try:
-        butler.pruneCollection(collection, purge, unstore)
+        butler.pruneCollection(collection, purge, unstore, unlink)
     except PurgeWithoutUnstorePruneCollectionsError as e:
         raise TypeError("Cannot pass --purge without --unstore.") from e
     except RunWithoutPurgePruneCollectionsError as e:
