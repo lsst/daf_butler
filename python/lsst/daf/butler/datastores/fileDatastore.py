@@ -328,6 +328,8 @@ class FileDatastore(GenericBaseDatastore):
         location : `Location`
             Location of the artifact associated with this datastore.
         """
+        if location.pathInStore.isabs():
+            raise RuntimeError(f"Cannot delete artifact with absolute uri {location.uri}.")
         log.debug("Deleting file: %s", location.uri)
         location.uri.remove()
         log.debug("Successfully deleted file: %s", location.uri)
@@ -442,6 +444,9 @@ class FileDatastore(GenericBaseDatastore):
         can_remove : `Bool`
             True if the artifact can be safely removed.
         """
+        # Can't ever delete absolute URIs.
+        if location.pathInStore.isabs():
+            return False
 
         # Get all entries associated with this path
         allRefs = self._registered_refs_per_artifact(location.pathInStore)
