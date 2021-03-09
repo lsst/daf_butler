@@ -76,6 +76,7 @@ from .core import (
     Dimension,
     DimensionConfig,
     FileDataset,
+    Progress,
     StorageClassFactory,
     Timespan,
     ValidationError,
@@ -1418,6 +1419,7 @@ class Butler:
         """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
+        progress = Progress("lsst.daf.butler.Butler.ingest", level=logging.DEBUG)
         # Reorganize the inputs so they're grouped by DatasetType and then
         # data ID.  We also include a list of DatasetRefs for each FileDataset
         # to hold the resolved DatasetRefs returned by the Registry, before
@@ -1428,7 +1430,7 @@ class Butler:
         # The actual data structure:
         groupedData: GroupedData = defaultdict(dict)
         # And the nested loop that populates it:
-        for dataset in datasets:
+        for dataset in progress.wrap(datasets, desc="Grouping by dataset type"):
             # This list intentionally shared across the inner loop, since it's
             # associated with `dataset`.
             resolvedRefs: List[DatasetRef] = []
@@ -1442,7 +1444,8 @@ class Butler:
 
         # Now we can bulk-insert into Registry for each DatasetType.
         allResolvedRefs: List[DatasetRef] = []
-        for datasetType, groupForType in groupedData.items():
+        for datasetType, groupForType in progress.iter_item_chunks(groupedData.items(),
+                                                                   desc="Bulk-inserting datasets by type"):
             refs = self.registry.insertDatasets(datasetType,
                                                 dataIds=groupForType.keys(),
                                                 run=run)
@@ -1454,7 +1457,8 @@ class Butler:
         # Go back to the original FileDatasets to replace their refs with the
         # new resolved ones, and also build a big list of all refs.
         allResolvedRefs = []
-        for groupForType in groupedData.values():
+        for groupForType in progress.iter_chunks(groupedData.values(),
+                                                 desc="Reassociating resolved dataset refs with files"):
             for dataset, resolvedRefs in groupForType.values():
                 dataset.refs = resolvedRefs
                 allResolvedRefs.extend(resolvedRefs)
