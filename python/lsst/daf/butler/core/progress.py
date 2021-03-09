@@ -141,6 +141,24 @@ class Progress:
                 return True
         return False
 
+    def at(self, level: int) -> Progress:
+        """Return a copy of this progress interface with a different level.
+
+        Parameters
+        ----------
+        level : `int`
+            A `logging` level value.  Progress reporting is enabled if a logger
+            with ``name`` is enabled for this level, and a `ProgressHandler`
+            has been installed.
+
+        Returns
+        -------
+        progress : `Progress`
+            A new `Progress` object with the same name as ``self`` and the
+            given ``level``.
+        """
+        return Progress(self._name, level)
+
     def bar(
         self,
         iterable: Optional[Iterable[_T]] = None,
