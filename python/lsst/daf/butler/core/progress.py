@@ -164,6 +164,7 @@ class Progress:
         iterable: Optional[Iterable[_T]] = None,
         desc: Optional[str] = None,
         total: Optional[int] = None,
+        skip_scalar: bool = True,
     ) -> ContextManager[ProgressBar[_T]]:
         """Return a new progress bar context manager.
 
@@ -183,6 +184,8 @@ class Progress:
             ``len(iterable)`` is used.  If that does not work, whether the
             progress bar works at all is handler-defined, and hence this mode
             should not be relied upon.
+        skip_scalar: `bool`, optional
+            If `True` and ``total`` is zero or one, do not report progress.
 
         Returns
         -------
@@ -195,6 +198,16 @@ class Progress:
                 desc = self._name
             handler = self._active_handler
             assert handler, "Guaranteed by `is_enabled` check above."
+            if skip_scalar:
+                if total is None:
+                    try:
+                        # static typing says len() won't but that's why
+                        # we're doing it inside a try block.
+                        total = len(iterable)  # type: ignore
+                    except TypeError:
+                        pass
+                if total is not None and total <= 1:
+                    return _NullProgressBar.context(iterable)
             return handler.get_progress_bar(iterable, desc=desc, total=total, level=self._level)
         return _NullProgressBar.context(iterable)
 
@@ -203,6 +216,7 @@ class Progress:
         iterable: Iterable[_T],
         desc: Optional[str] = None,
         total: Optional[int] = None,
+        skip_scalar: bool = True,
     ) -> Generator[_T, None, None]:
         """Iterate over an object while reporting progress.
 
@@ -220,13 +234,15 @@ class Progress:
             ``len(iterable)`` is used.  If that does not work, whether the
             progress bar works at all is handler-defined, and hence this mode
             should not be relied upon.
+        skip_scalar: `bool`, optional
+            If `True` and ``total`` is zero or one, do not report progress.
 
         Yields
         ------
         element
             The same objects that iteration over ``iterable`` would yield.
         """
-        with self.bar(iterable, desc=desc, total=total) as bar:
+        with self.bar(iterable, desc=desc, total=total, skip_scalar=skip_scalar) as bar:
             yield from bar
 
     def iter_chunks(
