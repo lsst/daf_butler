@@ -22,6 +22,8 @@ from __future__ import annotations
 
 __all__ = [
     "Database",
+    "Session",
+    "TableSchemaConverter",
     "ReadOnlyDatabaseError",
     "DatabaseConflictError",
     "SchemaAlreadyDefinedError",
@@ -111,7 +113,7 @@ class StaticTablesContext:
     def __init__(self, db: Database):
         self._db = db
         self._foreignKeys: List[Tuple[sqlalchemy.schema.Table, sqlalchemy.schema.ForeignKeyConstraint]] = []
-        self._inspector = sqlalchemy.engine.reflection.Inspector(self._db._connection)
+        self._inspector = sqlalchemy.engine.reflection.Inspector(self._db._engine)
         self._tableNames = frozenset(self._inspector.get_table_names(schema=self._db.namespace))
         self._initializers: List[Callable[[Database], None]] = []
 
@@ -124,14 +126,15 @@ class StaticTablesContext:
         to be declared in any order even in the presence of foreign key
         relationships.
         """
-        name = self._db._mangleTableName(name)
+        converter = self._db._converter
+        name = converter._mangleTableName(name)
         if name in self._tableNames:
             _checkExistingTableDefinition(name, spec, self._inspector.get_columns(name,
                                                                                   schema=self._db.namespace))
-        table = self._db._convertTableSpec(name, spec, self._db._metadata)
+        table = converter._convertTableSpec(name, spec, self._db._metadata)
         for foreignKeySpec in spec.foreignKeys:
             self._foreignKeys.append(
-                (table, self._db._convertForeignKeySpec(name, foreignKeySpec, self._db._metadata))
+                (table, converter._convertForeignKeySpec(name, foreignKeySpec, self._db._metadata))
             )
         return table
 
@@ -170,681 +173,12 @@ class StaticTablesContext:
         self._initializers.append(initializer)
 
 
-class Session:
-    """Class representing a persistent connection to a database.
+class TableSchemaConverter:
+    """Class responsible for conversion of table schema to sqlalchemy.
 
-    Parameters
-    ----------
-    db : `Database`
-        Database instance.
-
-    Notes
-    -----
-    Instances of Session class should not be created by client code;
-    `Database.session` should be used to create context for a session::
-
-        with db.session() as session:
-            session.method()
-            db.method()
-
-    In the current implementation sessions can be nested and transactions can
-    be nested within a session. All nested sessions and transaction share the
-    same database connection.
-
-    Session class represents a limited subset of database API that requires
-    persistent connection to a database (e.g. temporary tables which have
-    lifetime of a session). Potentially most of the database API could be
-    associated with a Session class.
+    Default implementation produces reasonable output for most cases,
+    subclasses can override individual methods for specific backend.
     """
-    def __init__(self, db: Database):
-        self._db = db
-
-    def makeTemporaryTable(self, spec: ddl.TableSpec, name: Optional[str] = None) -> sqlalchemy.schema.Table:
-        """Create a temporary table.
-
-        Parameters
-        ----------
-        spec : `TableSpec`
-            Specification for the table.
-        name : `str`, optional
-            A unique (within this session/connetion) name for the table.
-            Subclasses may override to modify the actual name used.  If not
-            provided, a unique name will be generated.
-
-        Returns
-        -------
-        table : `sqlalchemy.schema.Table`
-            SQLAlchemy representation of the table.
-
-        Notes
-        -----
-        Temporary tables may be created, dropped, and written to even in
-        read-only databases - at least according to the Python-level
-        protections in the `Database` classes.  Server permissions may say
-        otherwise, but in that case they probably need to be modified to
-        support the full range of expected read-only butler behavior.
-
-        Temporary table rows are guaranteed to be dropped when a connection is
-        closed.  `Database` implementations are permitted to allow the table to
-        remain as long as this is transparent to the user (i.e. "creating" the
-        temporary table in a new session should not be an error, even if it
-        does nothing).
-
-        It may not be possible to use temporary tables within transactions with
-        some database engines (or configurations thereof).
-        """
-        if name is None:
-            name = f"tmp_{uuid.uuid4().hex}"
-        table = self._db._convertTableSpec(name, spec, self._db._metadata, prefixes=['TEMPORARY'],
-                                           schema=sqlalchemy.schema.BLANK_SCHEMA)
-        if table.key in self._db._tempTables:
-            if table.key != name:
-                raise ValueError(f"A temporary table with name {name} (transformed to {table.key} by "
-                                 f"Database) already exists.")
-        for foreignKeySpec in spec.foreignKeys:
-            table.append_constraint(self._db._convertForeignKeySpec(name, foreignKeySpec,
-                                                                    self._db._metadata))
-        table.create(self._db._session_connection)
-        self._db._tempTables.add(table.key)
-        return table
-
-    def dropTemporaryTable(self, table: sqlalchemy.schema.Table) -> None:
-        """Drop a temporary table.
-
-        Parameters
-        ----------
-        table : `sqlalchemy.schema.Table`
-            A SQLAlchemy object returned by a previous call to
-            `makeTemporaryTable`.
-        """
-        if table.key in self._db._tempTables:
-            table.drop(self._db._session_connection)
-            self._db._tempTables.remove(table.key)
-        else:
-            raise TypeError(f"Table {table.key} was not created by makeTemporaryTable.")
-
-
-class Database(ABC):
-    """An abstract interface that represents a particular database engine's
-    representation of a single schema/namespace/database.
-
-    Parameters
-    ----------
-    origin : `int`
-        An integer ID that should be used as the default for any datasets,
-        quanta, or other entities that use a (autoincrement, origin) compound
-        primary key.
-    engine : `sqlalchemy.engine.Engine`
-        The SQLAlchemy engine for this `Database`.
-    namespace : `str`, optional
-        Name of the schema or namespace this instance is associated with.
-        This is passed as the ``schema`` argument when constructing a
-        `sqlalchemy.schema.MetaData` instance.  We use ``namespace`` instead to
-        avoid confusion between "schema means namespace" and "schema means
-        table definitions".
-
-    Notes
-    -----
-    `Database` requires all write operations to go through its special named
-    methods.  Our write patterns are sufficiently simple that we don't really
-    need the full flexibility of SQL insert/update/delete syntax, and we need
-    non-standard (but common) functionality in these operations sufficiently
-    often that it seems worthwhile to provide our own generic API.
-
-    In contrast, `Database.query` allows arbitrary ``SELECT`` queries (via
-    their SQLAlchemy representation) to be run, as we expect these to require
-    significantly more sophistication while still being limited to standard
-    SQL.
-
-    `Database` itself has several underscore-prefixed attributes:
-
-     - ``_engine``: SQLAlchemy object representing its engine.
-     - ``_connection``: the `sqlalchemy.engine.Connectable` object which can
-       be either an Engine or Connection if a session is active.
-     - ``_metadata``: the `sqlalchemy.schema.MetaData` object representing
-        the tables and other schema entities.
-
-    These are considered protected (derived classes may access them, but other
-    code should not), and read-only, aside from executing SQL via
-    ``_connection``.
-    """
-
-    def __init__(self, *, origin: int, engine: sqlalchemy.engine.Engine,
-                 namespace: Optional[str] = None):
-        self.origin = origin
-        self.namespace = namespace
-        self._engine = engine
-        self._session_connection: Optional[sqlalchemy.engine.Connection] = None
-        self._metadata: Optional[sqlalchemy.schema.MetaData] = None
-        self._tempTables: Set[str] = set()
-
-    def __repr__(self) -> str:
-        # Rather than try to reproduce all the parameters used to create
-        # the object, instead report the more useful information of the
-        # connection URL.
-        uri = str(self._engine.url)
-        if self.namespace:
-            uri += f"#{self.namespace}"
-        return f'{type(self).__name__}("{uri}")'
-
-    @classmethod
-    def makeDefaultUri(cls, root: str) -> Optional[str]:
-        """Create a default connection URI appropriate for the given root
-        directory, or `None` if there can be no such default.
-        """
-        return None
-
-    @classmethod
-    def fromUri(cls, uri: str, *, origin: int, namespace: Optional[str] = None,
-                writeable: bool = True) -> Database:
-        """Construct a database from a SQLAlchemy URI.
-
-        Parameters
-        ----------
-        uri : `str`
-            A SQLAlchemy URI connection string.
-        origin : `int`
-            An integer ID that should be used as the default for any datasets,
-            quanta, or other entities that use a (autoincrement, origin)
-            compound primary key.
-        namespace : `str`, optional
-            A database namespace (i.e. schema) the new instance should be
-            associated with.  If `None` (default), the namespace (if any) is
-            inferred from the URI.
-        writeable : `bool`, optional
-            If `True`, allow write operations on the database, including
-            ``CREATE TABLE``.
-
-        Returns
-        -------
-        db : `Database`
-            A new `Database` instance.
-        """
-        return cls.fromEngine(cls.makeEngine(uri, writeable=writeable),
-                              origin=origin,
-                              namespace=namespace,
-                              writeable=writeable)
-
-    @classmethod
-    @abstractmethod
-    def makeEngine(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Engine:
-        """Create a `sqlalchemy.engine.Engine` from a SQLAlchemy URI.
-
-        Parameters
-        ----------
-        uri : `str`
-            A SQLAlchemy URI connection string.
-        writeable : `bool`, optional
-            If `True`, allow write operations on the database, including
-            ``CREATE TABLE``.
-
-        Returns
-        -------
-        engine : `sqlalchemy.engine.Engine`
-            A database engine.
-
-        Notes
-        -----
-        Subclasses that support other ways to connect to a database are
-        encouraged to add optional arguments to their implementation of this
-        method, as long as they maintain compatibility with the base class
-        call signature.
-        """
-        raise NotImplementedError()
-
-    @classmethod
-    @abstractmethod
-    def fromEngine(cls, engine: sqlalchemy.engine.Engine, *, origin: int,
-                   namespace: Optional[str] = None, writeable: bool = True) -> Database:
-        """Create a new `Database` from an existing `sqlalchemy.engine.Engine`.
-
-        Parameters
-        ----------
-        engine : `sqllachemy.engine.Engine`
-            The engine for the database.  May be shared between `Database`
-            instances.
-        origin : `int`
-            An integer ID that should be used as the default for any datasets,
-            quanta, or other entities that use a (autoincrement, origin)
-            compound primary key.
-        namespace : `str`, optional
-            A different database namespace (i.e. schema) the new instance
-            should be associated with.  If `None` (default), the namespace
-            (if any) is inferred from the connection.
-        writeable : `bool`, optional
-            If `True`, allow write operations on the database, including
-            ``CREATE TABLE``.
-
-        Returns
-        -------
-        db : `Database`
-            A new `Database` instance.
-
-        Notes
-        -----
-        This method allows different `Database` instances to share the same
-        engine, which is desirable when they represent different namespaces
-        can be queried together.
-        """
-        raise NotImplementedError()
-
-    @contextmanager
-    def session(self) -> Iterator:
-        """Return a context manager that represents a session (persistent
-        connection to a database).
-        """
-        if self._session_connection is not None:
-            # session already started, just reuse that
-            yield Session(self)
-        else:
-            # open new connection and close it when done
-            self._session_connection = self._engine.connect()
-            yield Session(self)
-            self._session_connection.close()
-            self._session_connection = None
-            # Temporary tables only live within session
-            self._tempTables = set()
-
-    @contextmanager
-    def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
-                    lock: Iterable[sqlalchemy.schema.Table] = ()) -> Iterator:
-        """Return a context manager that represents a transaction.
-
-        Parameters
-        ----------
-        interrupting : `bool`, optional
-            If `True` (`False` is default), this transaction block may not be
-            nested without an outer one, and attempting to do so is a logic
-            (i.e. assertion) error.
-        savepoint : `bool`, optional
-            If `True` (`False` is default), create a `SAVEPOINT`, allowing
-            exceptions raised by the database (e.g. due to constraint
-            violations) during this transaction's context to be caught outside
-            it without also rolling back all operations in an outer transaction
-            block.  If `False`, transactions may still be nested, but a
-            rollback may be generated at any level and affects all levels, and
-            commits are deferred until the outermost block completes.  If any
-            outer transaction block was created with ``savepoint=True``, all
-            inner blocks will be as well (regardless of the actual value
-            passed).  This has no effect if this is the outermost transaction.
-        lock : `Iterable` [ `sqlalchemy.schema.Table` ], optional
-            A list of tables to lock for the duration of this transaction.
-            These locks are guaranteed to prevent concurrent writes and allow
-            this transaction (only) to acquire the same locks (others should
-            block), but only prevent concurrent reads if the database engine
-            requires that in order to block concurrent writes.
-
-        Notes
-        -----
-        All transactions on a connection managed by one or more `Database`
-        instances _must_ go through this method, or transaction state will not
-        be correctly managed.
-        """
-        # need a connection, use session to manage it
-        with self.session():
-            assert self._session_connection is not None
-            connection = self._session_connection
-            assert not (interrupting and connection.in_transaction()), (
-                "Logic error in transaction nesting: an operation that would "
-                "interrupt the active transaction context has been requested."
-            )
-            # We remember whether we are already in a SAVEPOINT transaction via
-            # the connection object's 'info' dict, which is explicitly for user
-            # information like this.  This is safer than a regular `Database`
-            # instance attribute, because it guards against multiple `Database`
-            # instances sharing the same connection.  The need to use our own
-            # flag here to track whether we're in a nested transaction should
-            # go away in SQLAlchemy 1.4, which seems to have a
-            # `Connection.in_nested_transaction()` method.
-            savepoint = savepoint or connection.info.get(_IN_SAVEPOINT_TRANSACTION, False)
-            connection.info[_IN_SAVEPOINT_TRANSACTION] = savepoint
-            if connection.in_transaction() and savepoint:
-                trans = connection.begin_nested()
-            else:
-                # Use a regular (non-savepoint) transaction always for the
-                # outermost context, as well as when a savepoint was not
-                # requested.
-                trans = connection.begin()
-            self._lockTables(lock)
-            try:
-                yield
-                trans.commit()
-            except BaseException:
-                trans.rollback()
-                raise
-            finally:
-                if not connection.in_transaction():
-                    connection.info.pop(_IN_SAVEPOINT_TRANSACTION, None)
-
-    @property
-    def _connection(self) -> sqlalchemy.engine.Connectable:
-        """Object that can be used to execute queries
-        (`sqlalchemy.engine.Connectable`)
-        """
-        return self._session_connection or self._engine
-
-    @abstractmethod
-    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
-        """Acquire locks on the given tables.
-
-        This is an implementation hook for subclasses, called by `transaction`.
-        It should not be called directly by other code.
-
-        Parameters
-        ----------
-        tables : `Iterable` [ `sqlalchemy.schema.Table` ], optional
-            A list of tables to lock for the duration of this transaction.
-            These locks are guaranteed to prevent concurrent writes and allow
-            this transaction (only) to acquire the same locks (others should
-            block), but only prevent concurrent reads if the database engine
-            requires that in order to block concurrent writes.
-        """
-        raise NotImplementedError()
-
-    def isTableWriteable(self, table: sqlalchemy.schema.Table) -> bool:
-        """Check whether a table is writeable, either because the database
-        connection is read-write or the table is a temporary table.
-
-        Parameters
-        ----------
-        table : `sqlalchemy.schema.Table`
-            SQLAlchemy table object to check.
-
-        Returns
-        -------
-        writeable : `bool`
-            Whether this table is writeable.
-        """
-        return self.isWriteable() or table.key in self._tempTables
-
-    def assertTableWriteable(self, table: sqlalchemy.schema.Table, msg: str) -> None:
-        """Raise if the given table is not writeable, either because the
-        database connection is read-write or the table is a temporary table.
-
-        Parameters
-        ----------
-        table : `sqlalchemy.schema.Table`
-            SQLAlchemy table object to check.
-        msg : `str`, optional
-            If provided, raise `ReadOnlyDatabaseError` instead of returning
-            `False`, with this message.
-        """
-        if not self.isTableWriteable(table):
-            raise ReadOnlyDatabaseError(msg)
-
-    @contextmanager
-    def declareStaticTables(self, *, create: bool) -> Iterator[StaticTablesContext]:
-        """Return a context manager in which the database's static DDL schema
-        can be declared.
-
-        Parameters
-        ----------
-        create : `bool`
-            If `True`, attempt to create all tables at the end of the context.
-            If `False`, they will be assumed to already exist.
-
-        Returns
-        -------
-        schema : `StaticTablesContext`
-            A helper object that is used to add new tables.
-
-        Raises
-        ------
-        ReadOnlyDatabaseError
-            Raised if ``create`` is `True`, `Database.isWriteable` is `False`,
-            and one or more declared tables do not already exist.
-
-        Examples
-        --------
-        Given a `Database` instance ``db``::
-
-            with db.declareStaticTables(create=True) as schema:
-                schema.addTable("table1", TableSpec(...))
-                schema.addTable("table2", TableSpec(...))
-
-        Notes
-        -----
-        A database's static DDL schema must be declared before any dynamic
-        tables are managed via calls to `ensureTableExists` or
-        `getExistingTable`.  The order in which static schema tables are added
-        inside the context block is unimportant; they will automatically be
-        sorted and added in an order consistent with their foreign key
-        relationships.
-        """
-        if create and not self.isWriteable():
-            raise ReadOnlyDatabaseError(f"Cannot create tables in read-only database {self}.")
-        self._metadata = sqlalchemy.MetaData(schema=self.namespace)
-        try:
-            context = StaticTablesContext(self)
-            if create and context._tableNames:
-                # Looks like database is already initalized, to avoid danger
-                # of modifying/destroying valid schema we refuse to do
-                # anything in this case
-                raise SchemaAlreadyDefinedError(f"Cannot create tables in non-empty database {self}.")
-            yield context
-            for table, foreignKey in context._foreignKeys:
-                table.append_constraint(foreignKey)
-            if create:
-                if self.namespace is not None:
-                    if self.namespace not in context._inspector.get_schema_names():
-                        self._connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
-                # In our tables we have columns that make use of sqlalchemy
-                # Sequence objects. There is currently a bug in sqlalchemy that
-                # causes a deprecation warning to be thrown on a property of
-                # the Sequence object when the repr for the sequence is
-                # created. Here a filter is used to catch these deprecation
-                # warnings when tables are created.
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", category=sqlalchemy.exc.SADeprecationWarning)
-                    self._metadata.create_all(self._connection)
-                # call all initializer methods sequentially
-                for init in context._initializers:
-                    init(self)
-        except BaseException:
-            self._metadata = None
-            raise
-
-    @abstractmethod
-    def isWriteable(self) -> bool:
-        """Return `True` if this database can be modified by this client.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def __str__(self) -> str:
-        """Return a human-readable identifier for this `Database`, including
-        any namespace or schema that identifies its names within a `Registry`.
-        """
-        raise NotImplementedError()
-
-    @property
-    def dialect(self) -> sqlalchemy.engine.Dialect:
-        """The SQLAlchemy dialect for this database engine
-        (`sqlalchemy.engine.Dialect`).
-        """
-        return self._engine.dialect
-
-    def shrinkDatabaseEntityName(self, original: str) -> str:
-        """Return a version of the given name that fits within this database
-        engine's length limits for table, constraint, indexes, and sequence
-        names.
-
-        Implementations should not assume that simple truncation is safe,
-        because multiple long names often begin with the same prefix.
-
-        The default implementation simply returns the given name.
-
-        Parameters
-        ----------
-        original : `str`
-            The original name.
-
-        Returns
-        -------
-        shrunk : `str`
-            The new, possibly shortened name.
-        """
-        return original
-
-    def expandDatabaseEntityName(self, shrunk: str) -> str:
-        """Retrieve the original name for a database entity that was too long
-        to fit within the database engine's limits.
-
-        Parameters
-        ----------
-        original : `str`
-            The original name.
-
-        Returns
-        -------
-        shrunk : `str`
-            The new, possibly shortened name.
-        """
-        return shrunk
-
-    def _mangleTableName(self, name: str) -> str:
-        """Map a logical, user-visible table name to the true table name used
-        in the database.
-
-        The default implementation returns the given name unchanged.
-
-        Parameters
-        ----------
-        name : `str`
-            Input table name.  Should not include a namespace (i.e. schema)
-            prefix.
-
-        Returns
-        -------
-        mangled : `str`
-            Mangled version of the table name (still with no namespace prefix).
-
-        Notes
-        -----
-        Reimplementations of this method must be idempotent - mangling an
-        already-mangled name must have no effect.
-        """
-        return name
-
-    def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> List[sqlalchemy.CheckConstraint]:
-        """Create constraints based on this spec.
-
-        Parameters
-        ----------
-        table : `str`
-            Name of the table this column is being added to.
-        spec : `FieldSpec`
-            Specification for the field to be added.
-
-        Returns
-        -------
-        constraint : `list` of `sqlalchemy.CheckConstraint`
-            Constraint added for this column.
-        """
-        # By default we return no additional constraints
-        return []
-
-    def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
-                          **kwds: Any) -> sqlalchemy.schema.Column:
-        """Convert a `FieldSpec` to a `sqlalchemy.schema.Column`.
-
-        Parameters
-        ----------
-        table : `str`
-            Name of the table this column is being added to.
-        spec : `FieldSpec`
-            Specification for the field to be added.
-        metadata : `sqlalchemy.MetaData`
-            SQLAlchemy representation of the DDL schema this field's table is
-            being added to.
-        **kwds
-            Additional keyword arguments to forward to the
-            `sqlalchemy.schema.Column` constructor.  This is provided to make
-            it easier for derived classes to delegate to ``super()`` while
-            making only minor changes.
-
-        Returns
-        -------
-        column : `sqlalchemy.schema.Column`
-            SQLAlchemy representation of the field.
-        """
-        args = [spec.name, spec.getSizedColumnType()]
-        if spec.autoincrement:
-            # Generate a sequence to use for auto incrementing for databases
-            # that do not support it natively.  This will be ignored by
-            # sqlalchemy for databases that do support it.
-            args.append(sqlalchemy.Sequence(self.shrinkDatabaseEntityName(f"{table}_seq_{spec.name}"),
-                                            metadata=metadata))
-        assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {table}.{spec.name}."
-        return sqlalchemy.schema.Column(*args, nullable=spec.nullable, primary_key=spec.primaryKey,
-                                        comment=spec.doc, server_default=spec.default, **kwds)
-
-    def _convertForeignKeySpec(self, table: str, spec: ddl.ForeignKeySpec, metadata: sqlalchemy.MetaData,
-                               **kwds: Any) -> sqlalchemy.schema.ForeignKeyConstraint:
-        """Convert a `ForeignKeySpec` to a
-        `sqlalchemy.schema.ForeignKeyConstraint`.
-
-        Parameters
-        ----------
-        table : `str`
-            Name of the table this foreign key is being added to.
-        spec : `ForeignKeySpec`
-            Specification for the foreign key to be added.
-        metadata : `sqlalchemy.MetaData`
-            SQLAlchemy representation of the DDL schema this constraint is
-            being added to.
-        **kwds
-            Additional keyword arguments to forward to the
-            `sqlalchemy.schema.ForeignKeyConstraint` constructor.  This is
-            provided to make it easier for derived classes to delegate to
-            ``super()`` while making only minor changes.
-
-        Returns
-        -------
-        constraint : `sqlalchemy.schema.ForeignKeyConstraint`
-            SQLAlchemy representation of the constraint.
-        """
-        name = self.shrinkDatabaseEntityName(
-            "_".join(["fkey", table, self._mangleTableName(spec.table)]
-                     + list(spec.target) + list(spec.source))
-        )
-        return sqlalchemy.schema.ForeignKeyConstraint(
-            spec.source,
-            [f"{self._mangleTableName(spec.table)}.{col}" for col in spec.target],
-            name=name,
-            ondelete=spec.onDelete
-        )
-
-    def _convertExclusionConstraintSpec(self, table: str,
-                                        spec: Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...],
-                                        metadata: sqlalchemy.MetaData) -> sqlalchemy.schema.Constraint:
-        """Convert a `tuple` from `ddl.TableSpec.exclusion` into a SQLAlchemy
-        constraint representation.
-
-        Parameters
-        ----------
-        table : `str`
-            Name of the table this constraint is being added to.
-        spec : `tuple` [ `str` or `type` ]
-            A tuple of `str` column names and the `type` object returned by
-            `getTimespanRepresentation` (which must appear exactly once),
-            indicating the order of the columns in the index used to back the
-            constraint.
-        metadata : `sqlalchemy.MetaData`
-            SQLAlchemy representation of the DDL schema this constraint is
-            being added to.
-
-        Returns
-        -------
-        constraint : `sqlalchemy.schema.Constraint`
-            SQLAlchemy representation of the constraint.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised if this database does not support exclusion constraints.
-        """
-        raise NotImplementedError(f"Database {self} does not support exclusion constraints.")
 
     def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
                           **kwds: Any) -> sqlalchemy.schema.Table:
@@ -915,166 +249,427 @@ class Database(ABC):
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {name}."
         return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwds)
 
-    def ensureTableExists(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table:
-        """Ensure that a table with the given name and specification exists,
-        creating it if necessary.
+    def _mangleTableName(self, name: str) -> str:
+        """Map a logical, user-visible table name to the true table name used
+        in the database.
+
+        The default implementation returns the given name unchanged.
 
         Parameters
         ----------
         name : `str`
-            Name of the table (not including namespace qualifiers).
+            Input table name.  Should not include a namespace (i.e. schema)
+            prefix.
+
+        Returns
+        -------
+        mangled : `str`
+            Mangled version of the table name (still with no namespace prefix).
+
+        Notes
+        -----
+        Reimplementations of this method must be idempotent - mangling an
+        already-mangled name must have no effect.
+        """
+        return name
+
+    def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
+                          **kwds: Any) -> sqlalchemy.schema.Column:
+        """Convert a `FieldSpec` to a `sqlalchemy.schema.Column`.
+
+        Parameters
+        ----------
+        table : `str`
+            Name of the table this column is being added to.
+        spec : `FieldSpec`
+            Specification for the field to be added.
+        metadata : `sqlalchemy.MetaData`
+            SQLAlchemy representation of the DDL schema this field's table is
+            being added to.
+        **kwds
+            Additional keyword arguments to forward to the
+            `sqlalchemy.schema.Column` constructor.  This is provided to make
+            it easier for derived classes to delegate to ``super()`` while
+            making only minor changes.
+
+        Returns
+        -------
+        column : `sqlalchemy.schema.Column`
+            SQLAlchemy representation of the field.
+        """
+        args = [spec.name, spec.getSizedColumnType()]
+        if spec.autoincrement:
+            # Generate a sequence to use for auto incrementing for databases
+            # that do not support it natively.  This will be ignored by
+            # sqlalchemy for databases that do support it.
+            args.append(sqlalchemy.Sequence(self.shrinkDatabaseEntityName(f"{table}_seq_{spec.name}"),
+                                            metadata=metadata))
+        assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {table}.{spec.name}."
+        return sqlalchemy.schema.Column(*args, nullable=spec.nullable, primary_key=spec.primaryKey,
+                                        comment=spec.doc, server_default=spec.default, **kwds)
+
+    def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> List[sqlalchemy.CheckConstraint]:
+        """Create constraints based on this spec.
+
+        Parameters
+        ----------
+        table : `str`
+            Name of the table this column is being added to.
+        spec : `FieldSpec`
+            Specification for the field to be added.
+
+        Returns
+        -------
+        constraint : `list` of `sqlalchemy.CheckConstraint`
+            Constraint added for this column.
+        """
+        # By default we return no additional constraints
+        return []
+
+    def _convertExclusionConstraintSpec(self, table: str,
+                                        spec: Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...],
+                                        metadata: sqlalchemy.MetaData) -> sqlalchemy.schema.Constraint:
+        """Convert a `tuple` from `ddl.TableSpec.exclusion` into a SQLAlchemy
+        constraint representation.
+
+        Parameters
+        ----------
+        table : `str`
+            Name of the table this constraint is being added to.
+        spec : `tuple` [ `str` or `type` ]
+            A tuple of `str` column names and the `type` object returned by
+            `getTimespanRepresentation` (which must appear exactly once),
+            indicating the order of the columns in the index used to back the
+            constraint.
+        metadata : `sqlalchemy.MetaData`
+            SQLAlchemy representation of the DDL schema this constraint is
+            being added to.
+
+        Returns
+        -------
+        constraint : `sqlalchemy.schema.Constraint`
+            SQLAlchemy representation of the constraint.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if this database does not support exclusion constraints.
+        """
+        raise NotImplementedError(f"Database {self.name} does not support exclusion constraints.")
+
+    def _convertForeignKeySpec(self, table: str, spec: ddl.ForeignKeySpec, metadata: sqlalchemy.MetaData,
+                               **kwds: Any) -> sqlalchemy.schema.ForeignKeyConstraint:
+        """Convert a `ForeignKeySpec` to a
+        `sqlalchemy.schema.ForeignKeyConstraint`.
+
+        Parameters
+        ----------
+        table : `str`
+            Name of the table this foreign key is being added to.
+        spec : `ForeignKeySpec`
+            Specification for the foreign key to be added.
+        metadata : `sqlalchemy.MetaData`
+            SQLAlchemy representation of the DDL schema this constraint is
+            being added to.
+        **kwds
+            Additional keyword arguments to forward to the
+            `sqlalchemy.schema.ForeignKeyConstraint` constructor.  This is
+            provided to make it easier for derived classes to delegate to
+            ``super()`` while making only minor changes.
+
+        Returns
+        -------
+        constraint : `sqlalchemy.schema.ForeignKeyConstraint`
+            SQLAlchemy representation of the constraint.
+        """
+        name = self.shrinkDatabaseEntityName(
+            "_".join(["fkey", table, self._mangleTableName(spec.table)]
+                     + list(spec.target) + list(spec.source))
+        )
+        return sqlalchemy.schema.ForeignKeyConstraint(
+            spec.source,
+            [f"{self._mangleTableName(spec.table)}.{col}" for col in spec.target],
+            name=name,
+            ondelete=spec.onDelete
+        )
+
+    def shrinkDatabaseEntityName(self, original: str) -> str:
+        """Return a version of the given name that fits within this database
+        engine's length limits for table, constraint, indexes, and sequence
+        names.
+
+        Implementations should not assume that simple truncation is safe,
+        because multiple long names often begin with the same prefix.
+
+        The default implementation simply returns the given name.
+
+        Parameters
+        ----------
+        original : `str`
+            The original name.
+
+        Returns
+        -------
+        shrunk : `str`
+            The new, possibly shortened name.
+        """
+        return original
+
+    def expandDatabaseEntityName(self, shrunk: str) -> str:
+        """Retrieve the original name for a database entity that was too long
+        to fit within the database engine's limits.
+
+        Parameters
+        ----------
+        original : `str`
+            The original name.
+
+        Returns
+        -------
+        shrunk : `str`
+            The new, possibly shortened name.
+        """
+        return shrunk
+
+
+class Session(ABC):
+    """Class representing a persistent connection to a database.
+
+    Parameters
+    ----------
+    connection : `sqlalchemy.engine.Connection`
+        The SQLAlchemy connection.
+    metadata : `sqlalchemy.schema.MetaData`
+        Database metadata, this object will be deep-copied to avoid possible
+        session-specific updates.
+    isWriteable : bool
+        True if session belongs to a writeable database.
+    converter : `TableSchemaConverter`
+        Instance responsible for converting table schemas.
+
+    Notes
+    -----
+    `Session` class is designed to be used as context manager created by
+    `Database.session` method::
+
+        with db.session() as session:
+            session.method()
+
+    This is an abstract class, implementations of `Database` class need to
+    provide implementation for the abstract methods and implement
+    `Database.session` for each backend.
+    """
+    def __init__(self, *, connection: sqlalchemy.engine.Connection, metadata: sqlalchemy.schema.MetaData,
+                 isWriteable: bool, converter: TableSchemaConverter):
+        self._connection = connection
+        self._metadata = metadata
+        self._isWriteable = isWriteable
+        self._converter = converter
+        self._tempTables: Set[str] = set()
+
+    def __enter__(self):
+        """Implement context manager protocol."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Implement context manager protocol."""
+        self.close()
+        return False
+
+    def close(self):
+        """Close database connection.
+
+        This method must be called once to dispose of the associated
+        connection and return it to SQLAlchemy connection pool.
+        """
+        if self._connection is not None:
+            self._connection.close()
+            self._connection = None
+
+    @contextmanager
+    def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
+                    lock: Iterable[sqlalchemy.schema.Table] = ()) -> Iterator:
+        """Return a context manager that represents a transaction.
+
+        Parameters
+        ----------
+        interrupting : `bool`, optional
+            If `True` (`False` is default), this transaction block may not be
+            nested without an outer one, and attempting to do so is a logic
+            (i.e. assertion) error.
+        savepoint : `bool`, optional
+            If `True` (`False` is default), create a `SAVEPOINT`, allowing
+            exceptions raised by the database (e.g. due to constraint
+            violations) during this transaction's context to be caught outside
+            it without also rolling back all operations in an outer transaction
+            block.  If `False`, transactions may still be nested, but a
+            rollback may be generated at any level and affects all levels, and
+            commits are deferred until the outermost block completes.  If any
+            outer transaction block was created with ``savepoint=True``, all
+            inner blocks will be as well (regardless of the actual value
+            passed).  This has no effect if this is the outermost transaction.
+        lock : `Iterable` [ `sqlalchemy.schema.Table` ], optional
+            A list of tables to lock for the duration of this transaction.
+            These locks are guaranteed to prevent concurrent writes and allow
+            this transaction (only) to acquire the same locks (others should
+            block), but only prevent concurrent reads if the database engine
+            requires that in order to block concurrent writes.
+
+        Notes
+        -----
+        All transactions on a connection managed by one or more `Database`
+        instances _must_ go through this method, or transaction state will not
+        be correctly managed.
+        """
+        assert not (interrupting and self._connection.in_transaction()), (
+            "Logic error in transaction nesting: an operation that would "
+            "interrupt the active transaction context has been requested."
+        )
+        # We remember whether we are already in a SAVEPOINT transaction via
+        # the connection object's 'info' dict, which is explicitly for user
+        # information like this.  This is safer than a regular `Database`
+        # instance attribute, because it guards against multiple `Database`
+        # instances sharing the same connection.  The need to use our own
+        # flag here to track whether we're in a nested transaction should
+        # go away in SQLAlchemy 1.4, which seems to have a
+        # `Connection.in_nested_transaction()` method.
+        savepoint = savepoint or self._connection.info.get(_IN_SAVEPOINT_TRANSACTION, False)
+        self._connection.info[_IN_SAVEPOINT_TRANSACTION] = savepoint
+        if self._connection.in_transaction() and savepoint:
+            trans = self._connection.begin_nested()
+        else:
+            # Use a regular (non-savepoint) transaction always for the
+            # outermost context, as well as when a savepoint was not
+            # requested.
+            trans = self._connection.begin()
+        self._lockTables(lock)
+        try:
+            yield
+            trans.commit()
+        except BaseException:
+            trans.rollback()
+            raise
+        finally:
+            if not self._connection.in_transaction():
+                self._connection.info.pop(_IN_SAVEPOINT_TRANSACTION, None)
+
+    @abstractmethod
+    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+        """Acquire locks on the given tables.
+
+        This is an implementation hook for subclasses, called by `transaction`.
+        It should not be called directly by other code.
+
+        Parameters
+        ----------
+        tables : `Iterable` [ `sqlalchemy.schema.Table` ], optional
+            A list of tables to lock for the duration of this transaction.
+            These locks are guaranteed to prevent concurrent writes and allow
+            this transaction (only) to acquire the same locks (others should
+            block), but only prevent concurrent reads if the database engine
+            requires that in order to block concurrent writes.
+        """
+        raise NotImplementedError()
+
+    def makeTemporaryTable(self, spec: ddl.TableSpec, name: Optional[str] = None) -> sqlalchemy.schema.Table:
+        """Create a temporary table.
+
+        Parameters
+        ----------
         spec : `TableSpec`
-            Specification for the table.  This will be used when creating the
-            table, and *may* be used when obtaining an existing table to check
-            for consistency, but no such check is guaranteed.
+            Specification for the table.
+        name : `str`, optional
+            A unique (within this session/connetion) name for the table.
+            Subclasses may override to modify the actual name used.  If not
+            provided, a unique name will be generated.
 
         Returns
         -------
         table : `sqlalchemy.schema.Table`
             SQLAlchemy representation of the table.
 
-        Raises
-        ------
-        ReadOnlyDatabaseError
-            Raised if `isWriteable` returns `False`, and the table does not
-            already exist.
-        DatabaseConflictError
-            Raised if the table exists but ``spec`` is inconsistent with its
-            definition.
-
         Notes
         -----
-        This method may not be called within transactions.  It may be called on
-        read-only databases if and only if the table does in fact already
-        exist.
+        Temporary tables may be created, dropped, and written to even in
+        read-only databases - at least according to the Python-level
+        protections in the `Database` classes.  Server permissions may say
+        otherwise, but in that case they probably need to be modified to
+        support the full range of expected read-only butler behavior.
 
-        Subclasses may override this method, but usually should not need to.
+        Temporary table rows are guaranteed to be dropped when a connection is
+        closed.  `Database` implementations are permitted to allow the table to
+        remain as long as this is transparent to the user (i.e. "creating" the
+        temporary table in a new session should not be an error, even if it
+        does nothing).
+
+        It may not be possible to use temporary tables within transactions with
+        some database engines (or configurations thereof).
         """
-        # TODO: if _engine is used to make a table then it uses separate
-        # connection and should not interfere with current transaction
-        assert self._session_connection is None or not self._session_connection.in_transaction(), \
-            "Table creation interrupts transactions."
-        assert self._metadata is not None, "Static tables must be declared before dynamic tables."
-        table = self.getExistingTable(name, spec)
-        if table is not None:
-            return table
-        if not self.isWriteable():
-            raise ReadOnlyDatabaseError(
-                f"Table {name} does not exist, and cannot be created "
-                f"because database {self} is read-only."
-            )
-        table = self._convertTableSpec(name, spec, self._metadata)
+        if name is None:
+            name = f"tmp_{uuid.uuid4().hex}"
+        table = self._converter._convertTableSpec(name, spec, self._metadata, prefixes=['TEMPORARY'],
+                                                  schema=sqlalchemy.schema.BLANK_SCHEMA)
+        if table.key in self._tempTables:
+            if table.key != name:
+                raise ValueError(f"A temporary table with name {name} (transformed to {table.key} by "
+                                 f"Database) already exists.")
         for foreignKeySpec in spec.foreignKeys:
-            table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
+            table.append_constraint(self._converter._convertForeignKeySpec(name, foreignKeySpec,
+                                                                           self._metadata))
         table.create(self._connection)
+        self._tempTables.add(table.key)
         return table
 
-    def getExistingTable(self, name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
-        """Obtain an existing table with the given name and specification.
+    def dropTemporaryTable(self, table: sqlalchemy.schema.Table) -> None:
+        """Drop a temporary table.
 
         Parameters
         ----------
-        name : `str`
-            Name of the table (not including namespace qualifiers).
-        spec : `TableSpec`
-            Specification for the table.  This will be used when creating the
-            SQLAlchemy representation of the table, and it is used to
-            check that the actual table in the database is consistent.
-
-        Returns
-        -------
-        table : `sqlalchemy.schema.Table` or `None`
-            SQLAlchemy representation of the table, or `None` if it does not
-            exist.
-
-        Raises
-        ------
-        DatabaseConflictError
-            Raised if the table exists but ``spec`` is inconsistent with its
-            definition.
-
-        Notes
-        -----
-        This method can be called within transactions and never modifies the
-        database.
-
-        Subclasses may override this method, but usually should not need to.
+        table : `sqlalchemy.schema.Table`
+            A SQLAlchemy object returned by a previous call to
+            `makeTemporaryTable`.
         """
-        assert self._metadata is not None, "Static tables must be declared before dynamic tables."
-        name = self._mangleTableName(name)
-        table = self._metadata.tables.get(name if self.namespace is None else f"{self.namespace}.{name}")
-        if table is not None:
-            if spec.fields.names != set(table.columns.keys()):
-                raise DatabaseConflictError(f"Table '{name}' has already been defined differently; the new "
-                                            f"specification has columns {list(spec.fields.names)}, while "
-                                            f"the previous definition has {list(table.columns.keys())}.")
+        if table.key in self._tempTables:
+            table.drop(self._connection)
+            self._tempTables.remove(table.key)
         else:
-            inspector = sqlalchemy.engine.reflection.Inspector(self._connection)
-            if name in inspector.get_table_names(schema=self.namespace):
-                _checkExistingTableDefinition(name, spec, inspector.get_columns(name, schema=self.namespace))
-                table = self._convertTableSpec(name, spec, self._metadata)
-                for foreignKeySpec in spec.foreignKeys:
-                    table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
-                return table
-        return table
+            raise TypeError(f"Table {table.key} was not created by makeTemporaryTable.")
 
-    @classmethod
-    def getTimespanRepresentation(cls) -> Type[TimespanDatabaseRepresentation]:
-        """Return a `type` that encapsulates the way `Timespan` objects are
-        stored in this database.
+    def isWriteable(self) -> bool:
+        """Return `True` if this database can be modified by this client.
+        """
+        return self._isWriteable
 
-        `Database` does not automatically use the return type of this method
-        anywhere else; calling code is responsible for making sure that DDL
-        and queries are consistent with it.
+    def isTableWriteable(self, table: sqlalchemy.schema.Table) -> bool:
+        """Check whether a table is writeable, either because the database
+        connection is read-write or the table is a temporary table.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy table object to check.
 
         Returns
         -------
-        TimespanReprClass : `type` (`TimespanDatabaseRepresention` subclass)
-            A type that encapsulates the way `Timespan` objects should be
-            stored in this database.
-
-        Notes
-        -----
-        There are two big reasons we've decided to keep timespan-mangling logic
-        outside the `Database` implementations, even though the choice of
-        representation is ultimately up to a `Database` implementation:
-
-         - Timespans appear in relatively few tables and queries in our
-           typical usage, and the code that operates on them is already aware
-           that it is working with timespans.  In contrast, a
-           timespan-representation-aware implementation of, say, `insert`,
-           would need to have extra logic to identify when timespan-mangling
-           needed to occur, which would usually be useless overhead.
-
-         - SQLAlchemy's rich SELECT query expression system has no way to wrap
-           multiple columns in a single expression object (the ORM does, but
-           we are not using the ORM).  So we would have to wrap _much_ more of
-           that code in our own interfaces to encapsulate timespan
-           representations there.
+        writeable : `bool`
+            Whether this table is writeable.
         """
-        return TimespanDatabaseRepresentation.Compound
+        return self.isWriteable() or table.key in self._tempTables
 
-    @classmethod
-    def getSpatialRegionRepresentation(cls) -> Type[SpatialRegionDatabaseRepresentation]:
-        """Return a `type` that encapsulates the way `lsst.sphgeom.Region`
-        objects are stored in this database.
+    def assertTableWriteable(self, table: sqlalchemy.schema.Table, msg: str) -> None:
+        """Raise if the given table is not writeable, either because the
+        database connection is read-write or the table is a temporary table.
 
-        `Database` does not automatically use the return type of this method
-        anywhere else; calling code is responsible for making sure that DDL
-        and queries are consistent with it.
-
-        Returns
-        -------
-        RegionReprClass : `type` (`SpatialRegionDatabaseRepresention` subclass)
-            A type that encapsulates the way `lsst.sphgeom.Region` objects
-            should be stored in this database.
-
-        Notes
-        -----
-        See `getTimespanRepresentation` for comments on why this method is not
-        more tightly integrated with the rest of the `Database` interface.
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy table object to check.
+        msg : `str`, optional
+            If provided, raise `ReadOnlyDatabaseError` instead of returning
+            `False`, with this message.
         """
-        return SpatialRegionDatabaseRepresentation
+        if not self.isTableWriteable(table):
+            raise ReadOnlyDatabaseError(msg)
 
     def sync(self, table: sqlalchemy.schema.Table, *,
              keys: Dict[str, Any],
@@ -1502,6 +1097,436 @@ class Database(ABC):
         """
         # TODO: should we guard against non-SELECT queries here?
         return self._connection.execute(sql, *args, **kwds)
+
+
+class Database(ABC):
+    """An abstract interface that represents a particular database engine's
+    representation of a single schema/namespace/database.
+
+    Parameters
+    ----------
+    origin : `int`
+        An integer ID that should be used as the default for any datasets,
+        quanta, or other entities that use a (autoincrement, origin) compound
+        primary key.
+    engine : `sqlalchemy.engine.Engine`
+        The SQLAlchemy engine for this `Database`.
+    namespace : `str`, optional
+        Name of the schema or namespace this instance is associated with.
+        This is passed as the ``schema`` argument when constructing a
+        `sqlalchemy.schema.MetaData` instance.  We use ``namespace`` instead to
+        avoid confusion between "schema means namespace" and "schema means
+        table definitions".
+
+    Notes
+    -----
+    `Database` requires all write operations to go through its special named
+    methods.  Our write patterns are sufficiently simple that we don't really
+    need the full flexibility of SQL insert/update/delete syntax, and we need
+    non-standard (but common) functionality in these operations sufficiently
+    often that it seems worthwhile to provide our own generic API.
+
+    In contrast, `Database.query` allows arbitrary ``SELECT`` queries (via
+    their SQLAlchemy representation) to be run, as we expect these to require
+    significantly more sophistication while still being limited to standard
+    SQL.
+
+    `Database` itself has several underscore-prefixed attributes:
+
+     - ``_engine``: SQLAlchemy object representing its engine.
+     - ``_connection``: the `sqlalchemy.engine.Connectable` object which can
+       be either an Engine or Connection if a session is active.
+     - ``_metadata``: the `sqlalchemy.schema.MetaData` object representing
+        the tables and other schema entities.
+
+    These are considered protected (derived classes may access them, but other
+    code should not), and read-only, aside from executing SQL via
+    ``_connection``.
+    """
+
+    def __init__(self, *, origin: int, engine: sqlalchemy.engine.Engine,
+                 namespace: Optional[str] = None, converter: Optional[TableSchemaConverter] = None):
+        self.origin = origin
+        self.namespace = namespace
+        self._engine = engine
+        self._converter = converter or TableSchemaConverter()
+        self._metadata: Optional[sqlalchemy.schema.MetaData] = None
+
+    def __repr__(self) -> str:
+        # Rather than try to reproduce all the parameters used to create
+        # the object, instead report the more useful information of the
+        # connection URL.
+        uri = str(self._engine.url)
+        if self.namespace:
+            uri += f"#{self.namespace}"
+        return f'{type(self).__name__}("{uri}")'
+
+    @classmethod
+    def makeDefaultUri(cls, root: str) -> Optional[str]:
+        """Create a default connection URI appropriate for the given root
+        directory, or `None` if there can be no such default.
+        """
+        return None
+
+    @classmethod
+    def fromUri(cls, uri: str, *, origin: int, namespace: Optional[str] = None,
+                writeable: bool = True) -> Database:
+        """Construct a database from a SQLAlchemy URI.
+
+        Parameters
+        ----------
+        uri : `str`
+            A SQLAlchemy URI connection string.
+        origin : `int`
+            An integer ID that should be used as the default for any datasets,
+            quanta, or other entities that use a (autoincrement, origin)
+            compound primary key.
+        namespace : `str`, optional
+            A database namespace (i.e. schema) the new instance should be
+            associated with.  If `None` (default), the namespace (if any) is
+            inferred from the URI.
+        writeable : `bool`, optional
+            If `True`, allow write operations on the database, including
+            ``CREATE TABLE``.
+
+        Returns
+        -------
+        db : `Database`
+            A new `Database` instance.
+        """
+        return cls.fromEngine(cls.makeEngine(uri, writeable=writeable),
+                              origin=origin,
+                              namespace=namespace,
+                              writeable=writeable)
+
+    @classmethod
+    @abstractmethod
+    def makeEngine(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Engine:
+        """Create a `sqlalchemy.engine.Engine` from a SQLAlchemy URI.
+
+        Parameters
+        ----------
+        uri : `str`
+            A SQLAlchemy URI connection string.
+        writeable : `bool`, optional
+            If `True`, allow write operations on the database, including
+            ``CREATE TABLE``.
+
+        Returns
+        -------
+        engine : `sqlalchemy.engine.Engine`
+            A database engine.
+
+        Notes
+        -----
+        Subclasses that support other ways to connect to a database are
+        encouraged to add optional arguments to their implementation of this
+        method, as long as they maintain compatibility with the base class
+        call signature.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    @abstractmethod
+    def fromEngine(cls, engine: sqlalchemy.engine.Engine, *, origin: int,
+                   namespace: Optional[str] = None, writeable: bool = True) -> Database:
+        """Create a new `Database` from an existing `sqlalchemy.engine.Engine`.
+
+        Parameters
+        ----------
+        engine : `sqllachemy.engine.Engine`
+            The engine for the database.  May be shared between `Database`
+            instances.
+        origin : `int`
+            An integer ID that should be used as the default for any datasets,
+            quanta, or other entities that use a (autoincrement, origin)
+            compound primary key.
+        namespace : `str`, optional
+            A different database namespace (i.e. schema) the new instance
+            should be associated with.  If `None` (default), the namespace
+            (if any) is inferred from the connection.
+        writeable : `bool`, optional
+            If `True`, allow write operations on the database, including
+            ``CREATE TABLE``.
+
+        Returns
+        -------
+        db : `Database`
+            A new `Database` instance.
+
+        Notes
+        -----
+        This method allows different `Database` instances to share the same
+        engine, which is desirable when they represent different namespaces
+        can be queried together.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def session(self) -> Session:
+        """Return session representing a persistent connection to a database.
+
+        Returns
+        -------
+        session : `Session`
+            Instance of `Session` sub-class.
+
+        Notes
+        -----
+        Returned instance is a context manager and should be used to define a
+        context or client should call `Session.close` method explicitly.
+        """
+        raise NotImplementedError()
+
+    @contextmanager
+    def declareStaticTables(self, *, create: bool) -> Iterator[StaticTablesContext]:
+        """Return a context manager in which the database's static DDL schema
+        can be declared.
+
+        Parameters
+        ----------
+        create : `bool`
+            If `True`, attempt to create all tables at the end of the context.
+            If `False`, they will be assumed to already exist.
+
+        Returns
+        -------
+        schema : `StaticTablesContext`
+            A helper object that is used to add new tables.
+
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if ``create`` is `True`, `Database.isWriteable` is `False`,
+            and one or more declared tables do not already exist.
+
+        Examples
+        --------
+        Given a `Database` instance ``db``::
+
+            with db.declareStaticTables(create=True) as schema:
+                schema.addTable("table1", TableSpec(...))
+                schema.addTable("table2", TableSpec(...))
+
+        Notes
+        -----
+        A database's static DDL schema must be declared before any dynamic
+        tables are managed via calls to `ensureTableExists` or
+        `getExistingTable`.  The order in which static schema tables are added
+        inside the context block is unimportant; they will automatically be
+        sorted and added in an order consistent with their foreign key
+        relationships.
+        """
+        if create and not self.isWriteable():
+            raise ReadOnlyDatabaseError(f"Cannot create tables in read-only database {self}.")
+        self._metadata = sqlalchemy.MetaData(schema=self.namespace)
+        try:
+            context = StaticTablesContext(self)
+            if create and context._tableNames:
+                # Looks like database is already initalized, to avoid danger
+                # of modifying/destroying valid schema we refuse to do
+                # anything in this case
+                raise SchemaAlreadyDefinedError(f"Cannot create tables in non-empty database {self}.")
+            yield context
+            for table, foreignKey in context._foreignKeys:
+                table.append_constraint(foreignKey)
+            if create:
+                if self.namespace is not None:
+                    if self.namespace not in context._inspector.get_schema_names():
+                        self._engine.execute(sqlalchemy.schema.CreateSchema(self.namespace))
+                # In our tables we have columns that make use of sqlalchemy
+                # Sequence objects. There is currently a bug in sqlalchemy that
+                # causes a deprecation warning to be thrown on a property of
+                # the Sequence object when the repr for the sequence is
+                # created. Here a filter is used to catch these deprecation
+                # warnings when tables are created.
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=sqlalchemy.exc.SADeprecationWarning)
+                    self._metadata.create_all(self._engine)
+                # call all initializer methods sequentially
+                for init in context._initializers:
+                    init(self)
+        except BaseException:
+            self._metadata = None
+            raise
+
+    @abstractmethod
+    def isWriteable(self) -> bool:
+        """Return `True` if this database can be modified by this client.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """Return a human-readable identifier for this `Database`, including
+        any namespace or schema that identifies its names within a `Registry`.
+        """
+        raise NotImplementedError()
+
+    @property
+    def dialect(self) -> sqlalchemy.engine.Dialect:
+        """The SQLAlchemy dialect for this database engine
+        (`sqlalchemy.engine.Dialect`).
+        """
+        return self._engine.dialect
+
+    def ensureTableExists(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table:
+        """Ensure that a table with the given name and specification exists,
+        creating it if necessary.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the table (not including namespace qualifiers).
+        spec : `TableSpec`
+            Specification for the table.  This will be used when creating the
+            table, and *may* be used when obtaining an existing table to check
+            for consistency, but no such check is guaranteed.
+
+        Returns
+        -------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy representation of the table.
+
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False`, and the table does not
+            already exist.
+        DatabaseConflictError
+            Raised if the table exists but ``spec`` is inconsistent with its
+            definition.
+
+        Notes
+        -----
+        This method may be called on read-only databases if and only if the
+        table does in fact already exist.
+
+        Subclasses may override this method, but usually should not need to.
+        """
+        assert self._metadata is not None, "Static tables must be declared before dynamic tables."
+        table = self.getExistingTable(name, spec)
+        if table is not None:
+            return table
+        if not self.isWriteable():
+            raise ReadOnlyDatabaseError(
+                f"Table {name} does not exist, and cannot be created "
+                f"because database {self} is read-only."
+            )
+        table = self._converter._convertTableSpec(name, spec, self._metadata)
+        for foreignKeySpec in spec.foreignKeys:
+            table.append_constraint(self._converter._convertForeignKeySpec(name, foreignKeySpec,
+                                                                           self._metadata))
+        table.create(self._engine)
+        return table
+
+    def getExistingTable(self, name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
+        """Obtain an existing table with the given name and specification.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the table (not including namespace qualifiers).
+        spec : `TableSpec`
+            Specification for the table.  This will be used when creating the
+            SQLAlchemy representation of the table, and it is used to
+            check that the actual table in the database is consistent.
+
+        Returns
+        -------
+        table : `sqlalchemy.schema.Table` or `None`
+            SQLAlchemy representation of the table, or `None` if it does not
+            exist.
+
+        Raises
+        ------
+        DatabaseConflictError
+            Raised if the table exists but ``spec`` is inconsistent with its
+            definition.
+
+        Notes
+        -----
+        This method can be called within transactions and never modifies the
+        database.
+
+        Subclasses may override this method, but usually should not need to.
+        """
+        assert self._metadata is not None, "Static tables must be declared before dynamic tables."
+        name = self._converter._mangleTableName(name)
+        table = self._metadata.tables.get(name if self.namespace is None else f"{self.namespace}.{name}")
+        if table is not None:
+            if spec.fields.names != set(table.columns.keys()):
+                raise DatabaseConflictError(f"Table '{name}' has already been defined differently; the new "
+                                            f"specification has columns {list(spec.fields.names)}, while "
+                                            f"the previous definition has {list(table.columns.keys())}.")
+        else:
+            inspector = sqlalchemy.engine.reflection.Inspector(self._engine)
+            if name in inspector.get_table_names(schema=self.namespace):
+                _checkExistingTableDefinition(name, spec, inspector.get_columns(name, schema=self.namespace))
+                table = self._converter._convertTableSpec(name, spec, self._metadata)
+                for foreignKeySpec in spec.foreignKeys:
+                    table.append_constraint(self._converter._convertForeignKeySpec(name, foreignKeySpec,
+                                                                                   self._metadata))
+                return table
+        return table
+
+    @classmethod
+    def getTimespanRepresentation(cls) -> Type[TimespanDatabaseRepresentation]:
+        """Return a `type` that encapsulates the way `Timespan` objects are
+        stored in this database.
+
+        `Database` does not automatically use the return type of this method
+        anywhere else; calling code is responsible for making sure that DDL
+        and queries are consistent with it.
+
+        Returns
+        -------
+        TimespanReprClass : `type` (`TimespanDatabaseRepresention` subclass)
+            A type that encapsulates the way `Timespan` objects should be
+            stored in this database.
+
+        Notes
+        -----
+        There are two big reasons we've decided to keep timespan-mangling logic
+        outside the `Database` implementations, even though the choice of
+        representation is ultimately up to a `Database` implementation:
+
+         - Timespans appear in relatively few tables and queries in our
+           typical usage, and the code that operates on them is already aware
+           that it is working with timespans.  In contrast, a
+           timespan-representation-aware implementation of, say, `insert`,
+           would need to have extra logic to identify when timespan-mangling
+           needed to occur, which would usually be useless overhead.
+
+         - SQLAlchemy's rich SELECT query expression system has no way to wrap
+           multiple columns in a single expression object (the ORM does, but
+           we are not using the ORM).  So we would have to wrap _much_ more of
+           that code in our own interfaces to encapsulate timespan
+           representations there.
+        """
+        return TimespanDatabaseRepresentation.Compound
+
+    @classmethod
+    def getSpatialRegionRepresentation(cls) -> Type[SpatialRegionDatabaseRepresentation]:
+        """Return a `type` that encapsulates the way `lsst.sphgeom.Region`
+        objects are stored in this database.
+
+        `Database` does not automatically use the return type of this method
+        anywhere else; calling code is responsible for making sure that DDL
+        and queries are consistent with it.
+
+        Returns
+        -------
+        RegionReprClass : `type` (`SpatialRegionDatabaseRepresention` subclass)
+            A type that encapsulates the way `lsst.sphgeom.Region` objects
+            should be stored in this database.
+
+        Notes
+        -----
+        See `getTimespanRepresentation` for comments on why this method is not
+        more tightly integrated with the rest of the `Database` interface.
+        """
+        return SpatialRegionDatabaseRepresentation
 
     origin: int
     """An integer ID that should be used as the default for any datasets,

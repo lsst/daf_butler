@@ -134,7 +134,6 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         if element.spatial is not None:
             governor = governors[element.spatial.governor]
             skyPixOverlap = _SkyPixOverlapStorage.initialize(
-                db,
                 element,
                 context=context,
                 governor=governor,
@@ -144,11 +143,12 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             # Whenever anyone inserts a new governor dimension value, we want
             # to enable overlaps for that value between this element and
             # commonSkyPix.
-            def callback(record: DimensionRecord) -> None:
+            def callback(record: DimensionRecord, session: Session) -> None:
                 skyPixOverlap.enable(  # type: ignore
                     result,
                     element.universe.commonSkyPix,
                     getattr(record, element.spatial.governor.primaryKey.name),  # type: ignore
+                    session,
                 )
 
             governor.registerInsertionListener(callback)
@@ -176,10 +176,11 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             dimensions = NamedValueSet(self.element.required)
             dimensions.add(self.element.universe.commonSkyPix)
             assert self._skyPixOverlap is not None
-            builder.joinTable(
-                self._skyPixOverlap.select(self.element.universe.commonSkyPix, Ellipsis),
-                dimensions,
-            )
+            with self._db.session() as session:
+                builder.joinTable(
+                    self._skyPixOverlap.select(self.element.universe.commonSkyPix, Ellipsis, session),
+                    dimensions,
+                )
             regionsInTable = self._db.getSpatialRegionRepresentation().fromSelectable(self._table)
             regions[self.element] = regionsInTable
         joinOn = builder.startJoin(self._table, self.element.dimensions,
@@ -204,11 +205,12 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             query.columns.extend(self._table.columns[name] for name in TimespanReprClass.getFieldNames())
         query.join(self._table)
         dataIds.constrain(query, lambda name: self._fetchColumns[name])
-        for row in self._db.query(query.combine()):
-            values = dict(row)
-            if self.element.temporal is not None:
-                values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
-            yield RecordClass(**values)
+        with self._db.session() as session:
+            for row in session.query(query.combine()):
+                values = dict(row)
+                if self.element.temporal is not None:
+                    values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
+                yield RecordClass(**values)
 
     def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
@@ -218,10 +220,10 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             for row in elementRows:
                 timespan = row.pop(TimespanDatabaseRepresentation.NAME)
                 TimespanReprClass.update(timespan, result=row)
-        with self._db.transaction():
-            self._db.insert(self._table, *elementRows)
+        with self._db.session() as session, session.transaction():
+            session.insert(self._table, *elementRows)
             if self._skyPixOverlap is not None:
-                self._skyPixOverlap.insert(records)
+                self._skyPixOverlap.insert(records, session)
 
     def sync(self, record: DimensionRecord) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
@@ -233,14 +235,14 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             TimespanReprClass = self._db.getTimespanRepresentation()
             timespan = compared.pop(TimespanDatabaseRepresentation.NAME)
             TimespanReprClass.update(timespan, result=compared)
-        with self._db.transaction():
-            _, inserted = self._db.sync(
+        with self._db.session() as session, session.transaction():
+            _, inserted = session.sync(
                 self._table,
                 keys=keys,
                 compared=compared,
             )
             if inserted and self._skyPixOverlap is not None:
-                self._skyPixOverlap.insert([record])
+                self._skyPixOverlap.insert([record], session)
         return inserted
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
@@ -302,13 +304,11 @@ class _SkyPixOverlapStorage:
     """
     def __init__(
         self,
-        db: Database,
         element: DatabaseDimensionElement,
         summaryTable: sqlalchemy.schema.Table,
         overlapTable: sqlalchemy.schema.Table,
         governor: GovernorDimensionRecordStorage,
     ):
-        self._db = db
         self.element = element
         assert element.spatial is not None
         self._summaryTable = summaryTable
@@ -318,7 +318,6 @@ class _SkyPixOverlapStorage:
     @classmethod
     def initialize(
         cls,
-        db: Database,
         element: DatabaseDimensionElement, *,
         context: Optional[StaticTablesContext],
         governor: GovernorDimensionRecordStorage,
@@ -327,8 +326,6 @@ class _SkyPixOverlapStorage:
 
         Parameters
         ----------
-        db : `Database`
-            Interface to the underlying database engine and namespace.
         element : `DatabaseDimensionElement`
             Dimension element whose overlaps are to be managed.
         context : `StaticTablesContext`, optional
@@ -349,7 +346,7 @@ class _SkyPixOverlapStorage:
             cls._OVERLAP_TABLE_NAME_SPEC.format(element=element),
             cls._makeOverlapTableSpec(element),
         )
-        return _SkyPixOverlapStorage(db, element, summaryTable=summaryTable, overlapTable=overlapTable,
+        return _SkyPixOverlapStorage(element, summaryTable=summaryTable, overlapTable=overlapTable,
                                      governor=governor)
 
     _SUMMARY_TABLE_NAME_SPEC = "{element.name}_skypix_overlap_summary"
@@ -469,6 +466,7 @@ class _SkyPixOverlapStorage:
         storage: TableDimensionRecordStorage,
         skypix: SkyPixDimension,
         governorValue: str,
+        session: Session,
     ) -> None:
         """Enable materialization of overlaps between a skypix dimension
         and the records of ``self.element`` with a particular governor value.
@@ -485,6 +483,8 @@ class _SkyPixOverlapStorage:
             should be materialized.  For example, if ``self.element`` is
             ``visit``, this is an instrument name; if ``self.element`` is
             ``patch``, this is a skymap name.
+        session: `Session`
+            Database session instance.
 
         Notes
         -----
@@ -506,9 +506,9 @@ class _SkyPixOverlapStorage:
         # approach possible, but we'll focus on correct before we focus on
         # fast, and enabling a new overlap combination should be a very rare
         # operation anyway, and never one we do in parallel.
-        with self._db.transaction(lock=[self._governor.table, storage._table,
-                                        self._summaryTable, self._overlapTable]):
-            result, inserted = self._db.sync(
+        lockTables = [self._governor.table, storage._table, self._summaryTable, self._overlapTable]
+        with session.transaction(lock=lockTables):
+            result, inserted = session.sync(
                 self._summaryTable,
                 keys={
                     "skypix_system": skypix.system.name,
@@ -524,7 +524,7 @@ class _SkyPixOverlapStorage:
                     self._governor.element.name,
                     governorValue
                 )
-                self._fill(storage=storage, skypix=skypix, governorValue=governorValue)
+                self._fill(storage=storage, skypix=skypix, governorValue=governorValue, session=session)
             else:
                 _LOG.debug(
                     "Overlaps already precomputed for %s vs %s for %s=%s",
@@ -539,6 +539,7 @@ class _SkyPixOverlapStorage:
         storage: TableDimensionRecordStorage,
         skypix: SkyPixDimension,
         governorValue: str,
+        session: Session,
     ) -> None:
         """Insert overlap records for a newly-enabled combination of skypix
         dimension and governor value.
@@ -557,6 +558,8 @@ class _SkyPixOverlapStorage:
             should be materialized.  For example, if ``self.element`` is
             ``visit``, this is an instrument name; if ``self.element`` is
             ``patch``, this is a skymap name.
+        session: `Session`
+            Database session instance.
         """
         overlapRecords: List[dict] = []
         # `DimensionRecordStorage.fetch` as defined by the ABC expects to be
@@ -585,9 +588,9 @@ class _SkyPixOverlapStorage:
             self._governor.element.name,
             governorValue,
         )
-        self._db.insert(self._overlapTable, *overlapRecords)
+        session.insert(self._overlapTable, *overlapRecords)
 
-    def insert(self, records: Sequence[DimensionRecord]) -> None:
+    def insert(self, records: Sequence[DimensionRecord], session: Session) -> None:
         """Insert overlaps for a sequence of ``self.element`` records that
         have just been inserted.
 
@@ -600,6 +603,8 @@ class _SkyPixOverlapStorage:
         records : `Sequence` [ `DimensionRecord` ]
             Records for ``self.element``.  Records with `None` regions are
             ignored.
+        session: `Session`
+            Database session instance.
         """
         # Group records by family.governor value.
         grouped: Dict[str, List[DimensionRecord]] = defaultdict(list)
@@ -614,7 +619,7 @@ class _SkyPixOverlapStorage:
         # table.  Because we aren't planning to write to the summary table,
         # this could just be a SHARED lock instead of an EXCLUSIVE one, but
         # there's no API for that right now.
-        with self._db.transaction(lock=[self._summaryTable]):
+        with session.transaction(lock=[self._summaryTable]):
             # Query for the skypix dimensions to be associated with each
             # governor value.
             gvCol = self._summaryTable.columns[self._governor.element.name]
@@ -631,7 +636,7 @@ class _SkyPixOverlapStorage:
             skypix: Dict[str, NamedKeyDict[SkyPixSystem, List[int]]] = {
                 gv: NamedKeyDict() for gv in grouped.keys()
             }
-            for summaryRow in self._db.query(query):
+            for summaryRow in session.query(query):
                 system = self.element.universe.skypix[summaryRow[sysCol]]
                 skypix[summaryRow[gvCol]].setdefault(system, []).append(summaryRow[lvlCol])
             overlapRecords: List[dict] = []
@@ -643,7 +648,7 @@ class _SkyPixOverlapStorage:
                 "Inserting %d new skypix overlap rows for %s where %s in %s.",
                 len(overlapRecords), self.element.name, self._governor.element.name, grouped.keys()
             )
-            self._db.insert(self._overlapTable, *overlapRecords)
+            session.insert(self._overlapTable, *overlapRecords)
 
     def _compute(
         self,
@@ -710,6 +715,7 @@ class _SkyPixOverlapStorage:
         self,
         skypix: SkyPixDimension,
         governorValues: Union[AbstractSet[str], EllipsisType],
+        session: Session,
     ) -> sqlalchemy.sql.FromClause:
         """Construct a subquery expression containing overlaps between the
         given skypix dimension and governor values.
@@ -725,6 +731,8 @@ class _SkyPixOverlapStorage:
             this is a set of instrument names; if ``self.element`` is
             ``patch``, this is a set of skymap names.  If ``...`` all values
             in the database are used (`GovernorDimensionRecordStorage.values`).
+        session: `Session`
+            Database session instance.
 
         Returns
         -------
@@ -751,7 +759,7 @@ class _SkyPixOverlapStorage:
             ).where(
                 sqlalchemy.sql.and_(*summaryWhere)
             )
-            materializedGovernorValues = {row[gvCol] for row in self._db.query(summaryQuery)}
+            materializedGovernorValues = {row[gvCol] for row in session.query(summaryQuery)}
             if governorValues is Ellipsis:
                 missingGovernorValues = self._governor.values - materializedGovernorValues
             else:

@@ -33,7 +33,7 @@ import sqlite3
 import sqlalchemy
 import sqlalchemy.ext.compiler
 
-from ..interfaces import Database, StaticTablesContext
+from ..interfaces import Database, Session, StaticTablesContext, TableSchemaConverter
 from ...core import ddl
 
 
@@ -123,6 +123,177 @@ class _AutoincrementCompoundKeyWorkaround:
     """
 
 
+class SqliteTableSchemaConverter(TableSchemaConverter):
+    """Implementation of `TableSchemaConverter` for SQLite backend.
+    """
+    def __init__(self):
+        self._autoincr: Dict[str, _AutoincrementCompoundKeyWorkaround] = {}
+
+    def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> List[sqlalchemy.CheckConstraint]:
+        # For sqlite we force constraints on all string columns since sqlite
+        # ignores everything otherwise and this leads to problems with
+        # other databases.
+
+        constraints = []
+        if spec.isStringType():
+            name = self.shrinkDatabaseEntityName("_".join([table, "len", spec.name]))
+            constraints.append(sqlalchemy.CheckConstraint(f"length({spec.name})<={spec.length}"
+                                                          # Oracle converts
+                                                          # empty strings to
+                                                          # NULL so check
+                                                          f" AND length({spec.name})>=1",
+                                                          name=name))
+
+        constraints.extend(super()._makeColumnConstraints(table, spec))
+        return constraints
+
+    def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
+                          **kwargs: Any) -> sqlalchemy.schema.Table:
+        primaryKeyFieldNames = set(field.name for field in spec.fields if field.primaryKey)
+        autoincrFieldNames = set(field.name for field in spec.fields if field.autoincrement)
+        if len(autoincrFieldNames) > 1:
+            raise RuntimeError("At most one autoincrement field per table is allowed.")
+        if len(primaryKeyFieldNames) > 1 and len(autoincrFieldNames) > 0:
+            # SQLite's default rowid-based autoincrement doesn't work if the
+            # field is just one field in a compound primary key.  As a
+            # workaround, we create an extra table with just one column that
+            # we'll insert into to generate those IDs.  That's only safe if
+            # that single-column table's records are already unique with just
+            # the autoincrement field, not the rest of the primary key.  In
+            # practice, that means the single-column table's records are those
+            # for which origin == self.origin.
+            autoincrFieldName, = autoincrFieldNames
+            otherPrimaryKeyFieldNames = primaryKeyFieldNames - autoincrFieldNames
+            if otherPrimaryKeyFieldNames != {"origin"}:
+                # We need the only other field in the key to be 'origin'.
+                raise NotImplementedError(
+                    "Compound primary keys with an autoincrement are only supported in SQLite "
+                    "if the only non-autoincrement primary key field is 'origin'."
+                )
+            self._autoincr[name] = _AutoincrementCompoundKeyWorkaround(
+                table=self._convertTableSpec(f"_autoinc_{name}", _AUTOINCR_TABLE_SPEC, metadata, **kwargs),
+                column=autoincrFieldName
+            )
+        if not spec.recycleIds:
+            kwargs = dict(kwargs, sqlite_autoincrement=True)
+        return super()._convertTableSpec(name, spec, metadata, **kwargs)
+
+    def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
+                          **kwargs: Any) -> sqlalchemy.schema.Column:
+        if spec.autoincrement:
+            if not spec.primaryKey:
+                raise RuntimeError(f"Autoincrement field {table}.{spec.name} that is not a "
+                                   f"primary key is not supported.")
+            if spec.dtype != sqlalchemy.Integer:
+                # SQLite's autoincrement is really limited; it only works if
+                # the column type is exactly "INTEGER".  But it also doesn't
+                # care about the distinctions between different integer types,
+                # so it's safe to change it.
+                spec = copy.copy(spec)
+                spec.dtype = sqlalchemy.Integer
+        return super()._convertFieldSpec(table, spec, metadata, **kwargs)
+
+
+class SqliteSession(Session):
+    """Implementation of `Session` for SQLite backend.
+    """
+    def __init__(self, *, connection: sqlalchemy.engine.Connection, metadata: sqlalchemy.schema.MetaData,
+                 isWriteable: bool, converter: TableSchemaConverter, origin: int):
+        super().__init__(connection=connection, metadata=metadata, isWriteable=isWriteable,
+                         converter=converter)
+        self.origin = origin
+
+    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+        # Docstring inherited.
+        # Our SQLite database always acquires full-database locks at the
+        # beginning of a transaction, so there's no need to acquire table-level
+        # locks - which is good, because SQLite doesn't have table-level
+        # locking.
+        pass
+
+    def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
+               select: Optional[sqlalchemy.sql.Select] = None,
+               names: Optional[Iterable[str]] = None,
+               ) -> Optional[List[int]]:
+        self.assertTableWriteable(table, f"Cannot insert into read-only table {table}.")
+        autoincr = self._converter._autoincr.get(table.name)
+        if autoincr is not None:
+            if select is not None:
+                raise NotImplementedError(
+                    "Cannot do INSERT INTO ... SELECT on a SQLite table with a simulated autoincrement "
+                    "compound primary key"
+                )
+            # This table has a compound primary key that includes an
+            # autoincrement.  That doesn't work natively in SQLite, so we
+            # insert into a single-column table and use those IDs.
+            if not rows:
+                return [] if returnIds else None
+            if autoincr.column in rows[0]:
+                # Caller passed the autoincrement key values explicitly in the
+                # first row.  They had better have done the same for all rows,
+                # or SQLAlchemy would have a problem, even if we didn't.
+                assert all(autoincr.column in row for row in rows)
+                # We need to insert only the values that correspond to
+                # ``origin == self.origin`` into the single-column table, to
+                # make sure we don't generate conflicting keys there later.
+                rowsForAutoincrTable = [dict(id=row[autoincr.column])
+                                        for row in rows if row["origin"] == self.origin]
+                # Insert into the autoincr table and the target table inside
+                # a transaction.  The main-table insertion can take care of
+                # returnIds for us.
+                with self.transaction():
+                    self._connection.execute(autoincr.table.insert(), *rowsForAutoincrTable)
+                    return super().insert(table, *rows, returnIds=returnIds)
+            else:
+                # Caller did not pass autoincrement key values on the first
+                # row.  Make sure they didn't ever do that, and also make
+                # sure the origin that was passed in is always self.origin,
+                # because we can't safely generate autoincrement values
+                # otherwise.
+                assert all(autoincr.column not in row and row["origin"] == self.origin for row in rows)
+                # Insert into the autoincr table one by one to get the
+                # primary key values back, then insert into the target table
+                # in the same transaction.
+                with self.transaction():
+                    newRows = []
+                    ids = []
+                    for row in rows:
+                        newRow = row.copy()
+                        id = self._connection.execute(autoincr.table.insert()).inserted_primary_key[0]
+                        newRow[autoincr.column] = id
+                        newRows.append(newRow)
+                        ids.append(id)
+                    # Don't ever ask to returnIds here, because we've already
+                    # got them.
+                    super().insert(table, *newRows)
+                if returnIds:
+                    return ids
+                else:
+                    return None
+        else:
+            return super().insert(table, *rows, select=select, names=names, returnIds=returnIds)
+
+    def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
+        self.assertTableWriteable(table, f"Cannot replace into read-only table {table}.")
+        if not rows:
+            return
+        if table.name in self._converter._autoincr:
+            raise NotImplementedError(
+                "replace does not support compound primary keys with autoincrement fields."
+            )
+        self._connection.execute(_Replace(table), *rows)
+
+    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
+        self.assertTableWriteable(table, f"Cannot ensure into read-only table {table}.")
+        if not rows:
+            return 0
+        if table.name in self._converter._autoincr:
+            raise NotImplementedError(
+                "ensure does not support compound primary keys with autoincrement fields."
+            )
+        return self._connection.execute(_Ensure(table), *rows).rowcount
+
+
 class SqliteDatabase(Database):
     """An implementation of the `Database` interface for SQLite3.
 
@@ -151,7 +322,8 @@ class SqliteDatabase(Database):
 
     def __init__(self, *, engine: sqlalchemy.engine.Engine, origin: int,
                  namespace: Optional[str] = None, writeable: bool = True):
-        super().__init__(origin=origin, engine=engine, namespace=namespace)
+        super().__init__(origin=origin, engine=engine, namespace=namespace,
+                         converter=SqliteTableSchemaConverter())
         # Get the filename from a call to 'PRAGMA database_list'.
         with engine.connect() as connection:
             with closing(connection.connection.cursor()) as cursor:
@@ -170,7 +342,6 @@ class SqliteDatabase(Database):
         else:
             self.filename = filename
         self._writeable = writeable
-        self._autoincr: Dict[str, _AutoincrementCompoundKeyWorkaround] = {}
 
     @classmethod
     def makeDefaultUri(cls, root: str) -> Optional[str]:
@@ -269,14 +440,6 @@ class SqliteDatabase(Database):
         else:
             return "SQLite3@:memory:"
 
-    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
-        # Docstring inherited.
-        # Our SQLite database always acquires full-database locks at the
-        # beginning of a transaction, so there's no need to acquire table-level
-        # locks - which is good, because SQLite doesn't have table-level
-        # locking.
-        pass
-
     # MyPy claims that the return type here isn't covariant with the return
     # type of the base class method, which is formally correct but irrelevant
     # - the base class return type is _GeneratorContextManager, but only
@@ -287,157 +450,21 @@ class SqliteDatabase(Database):
         # lost on re-connect. This is only really relevant for tests, and it's
         # convenient there.
         if self.filename is None and self.isWriteable():
-            inspector = sqlalchemy.engine.reflection.Inspector(self._connection)
+            inspector = sqlalchemy.engine.reflection.Inspector(self._engine)
             tables = inspector.get_table_names(schema=self.namespace)
             if not tables:
                 create = True
         return super().declareStaticTables(create=create)
 
-    def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
-                          **kwargs: Any) -> sqlalchemy.schema.Column:
-        if spec.autoincrement:
-            if not spec.primaryKey:
-                raise RuntimeError(f"Autoincrement field {table}.{spec.name} that is not a "
-                                   f"primary key is not supported.")
-            if spec.dtype != sqlalchemy.Integer:
-                # SQLite's autoincrement is really limited; it only works if
-                # the column type is exactly "INTEGER".  But it also doesn't
-                # care about the distinctions between different integer types,
-                # so it's safe to change it.
-                spec = copy.copy(spec)
-                spec.dtype = sqlalchemy.Integer
-        return super()._convertFieldSpec(table, spec, metadata, **kwargs)
-
-    def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> List[sqlalchemy.CheckConstraint]:
-        # For sqlite we force constraints on all string columns since sqlite
-        # ignores everything otherwise and this leads to problems with
-        # other databases.
-
-        constraints = []
-        if spec.isStringType():
-            name = self.shrinkDatabaseEntityName("_".join([table, "len", spec.name]))
-            constraints.append(sqlalchemy.CheckConstraint(f"length({spec.name})<={spec.length}"
-                                                          # Oracle converts
-                                                          # empty strings to
-                                                          # NULL so check
-                                                          f" AND length({spec.name})>=1",
-                                                          name=name))
-
-        constraints.extend(super()._makeColumnConstraints(table, spec))
-        return constraints
-
-    def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
-                          **kwargs: Any) -> sqlalchemy.schema.Table:
-        primaryKeyFieldNames = set(field.name for field in spec.fields if field.primaryKey)
-        autoincrFieldNames = set(field.name for field in spec.fields if field.autoincrement)
-        if len(autoincrFieldNames) > 1:
-            raise RuntimeError("At most one autoincrement field per table is allowed.")
-        if len(primaryKeyFieldNames) > 1 and len(autoincrFieldNames) > 0:
-            # SQLite's default rowid-based autoincrement doesn't work if the
-            # field is just one field in a compound primary key.  As a
-            # workaround, we create an extra table with just one column that
-            # we'll insert into to generate those IDs.  That's only safe if
-            # that single-column table's records are already unique with just
-            # the autoincrement field, not the rest of the primary key.  In
-            # practice, that means the single-column table's records are those
-            # for which origin == self.origin.
-            autoincrFieldName, = autoincrFieldNames
-            otherPrimaryKeyFieldNames = primaryKeyFieldNames - autoincrFieldNames
-            if otherPrimaryKeyFieldNames != {"origin"}:
-                # We need the only other field in the key to be 'origin'.
-                raise NotImplementedError(
-                    "Compound primary keys with an autoincrement are only supported in SQLite "
-                    "if the only non-autoincrement primary key field is 'origin'."
-                )
-            self._autoincr[name] = _AutoincrementCompoundKeyWorkaround(
-                table=self._convertTableSpec(f"_autoinc_{name}", _AUTOINCR_TABLE_SPEC, metadata, **kwargs),
-                column=autoincrFieldName
-            )
-        if not spec.recycleIds:
-            kwargs = dict(kwargs, sqlite_autoincrement=True)
-        return super()._convertTableSpec(name, spec, metadata, **kwargs)
-
-    def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
-               select: Optional[sqlalchemy.sql.Select] = None,
-               names: Optional[Iterable[str]] = None,
-               ) -> Optional[List[int]]:
-        self.assertTableWriteable(table, f"Cannot insert into read-only table {table}.")
-        autoincr = self._autoincr.get(table.name)
-        if autoincr is not None:
-            if select is not None:
-                raise NotImplementedError(
-                    "Cannot do INSERT INTO ... SELECT on a SQLite table with a simulated autoincrement "
-                    "compound primary key"
-                )
-            # This table has a compound primary key that includes an
-            # autoincrement.  That doesn't work natively in SQLite, so we
-            # insert into a single-column table and use those IDs.
-            if not rows:
-                return [] if returnIds else None
-            if autoincr.column in rows[0]:
-                # Caller passed the autoincrement key values explicitly in the
-                # first row.  They had better have done the same for all rows,
-                # or SQLAlchemy would have a problem, even if we didn't.
-                assert all(autoincr.column in row for row in rows)
-                # We need to insert only the values that correspond to
-                # ``origin == self.origin`` into the single-column table, to
-                # make sure we don't generate conflicting keys there later.
-                rowsForAutoincrTable = [dict(id=row[autoincr.column])
-                                        for row in rows if row["origin"] == self.origin]
-                # Insert into the autoincr table and the target table inside
-                # a transaction.  The main-table insertion can take care of
-                # returnIds for us.
-                with self.transaction():
-                    self._connection.execute(autoincr.table.insert(), *rowsForAutoincrTable)
-                    return super().insert(table, *rows, returnIds=returnIds)
-            else:
-                # Caller did not pass autoincrement key values on the first
-                # row.  Make sure they didn't ever do that, and also make
-                # sure the origin that was passed in is always self.origin,
-                # because we can't safely generate autoincrement values
-                # otherwise.
-                assert all(autoincr.column not in row and row["origin"] == self.origin for row in rows)
-                # Insert into the autoincr table one by one to get the
-                # primary key values back, then insert into the target table
-                # in the same transaction.
-                with self.transaction():
-                    newRows = []
-                    ids = []
-                    for row in rows:
-                        newRow = row.copy()
-                        id = self._connection.execute(autoincr.table.insert()).inserted_primary_key[0]
-                        newRow[autoincr.column] = id
-                        newRows.append(newRow)
-                        ids.append(id)
-                    # Don't ever ask to returnIds here, because we've already
-                    # got them.
-                    super().insert(table, *newRows)
-                if returnIds:
-                    return ids
-                else:
-                    return None
-        else:
-            return super().insert(table, *rows, select=select, names=names, returnIds=returnIds)
-
-    def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
-        self.assertTableWriteable(table, f"Cannot replace into read-only table {table}.")
-        if not rows:
-            return
-        if table.name in self._autoincr:
-            raise NotImplementedError(
-                "replace does not support compound primary keys with autoincrement fields."
-            )
-        self._connection.execute(_Replace(table), *rows)
-
-    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
-        self.assertTableWriteable(table, f"Cannot ensure into read-only table {table}.")
-        if not rows:
-            return 0
-        if table.name in self._autoincr:
-            raise NotImplementedError(
-                "ensure does not support compound primary keys with autoincrement fields."
-            )
-        return self._connection.execute(_Ensure(table), *rows).rowcount
+    def session(self) -> Session:
+        # docstring inherited from base class
+        return SqliteSession(
+            connection=self._engine.connect(),
+            metadata=self._metadata,
+            isWriteable=self.isWriteable(),
+            converter=self._converter,
+            origin=self.origin,
+        )
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).

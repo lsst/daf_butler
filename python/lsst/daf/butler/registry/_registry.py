@@ -299,7 +299,7 @@ class Registry:
         """Return a context manager that represents a transaction.
         """
         try:
-            with self._db.transaction(savepoint=savepoint):
+            with self._db.session() as session, session.transaction(savepoint=savepoint):
                 yield
         except BaseException:
             # TODO: this clears the caches sometimes when we wouldn't actually
@@ -1802,19 +1802,21 @@ class Registry:
             query = storage.select(collectionRecord)
             if query is None:
                 continue
-            for row in self._db.query(query.combine()):
-                dataId = DataCoordinate.fromRequiredValues(
-                    storage.datasetType.dimensions,
-                    tuple(row[name] for name in storage.datasetType.dimensions.required.names)
-                )
-                runRecord = self._managers.collections[row[self._managers.collections.getRunForeignKeyName()]]
-                ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name,
-                                 conform=False)
-                if collectionRecord.type is CollectionType.CALIBRATION:
-                    timespan = TimespanReprClass.extract(row)
-                else:
-                    timespan = None
-                yield DatasetAssociation(ref=ref, collection=collectionRecord.name, timespan=timespan)
+            with self._db.session() as session:
+                for row in session.query(query.combine()):
+                    dataId = DataCoordinate.fromRequiredValues(
+                        storage.datasetType.dimensions,
+                        tuple(row[name] for name in storage.datasetType.dimensions.required.names)
+                    )
+                    runRecord = self._managers.collections[
+                        row[self._managers.collections.getRunForeignKeyName()]]
+                    ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name,
+                                    conform=False)
+                    if collectionRecord.type is CollectionType.CALIBRATION:
+                        timespan = TimespanReprClass.extract(row)
+                    else:
+                        timespan = None
+                    yield DatasetAssociation(ref=ref, collection=collectionRecord.name, timespan=timespan)
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).

@@ -121,23 +121,25 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         # Docstring inherited from ButlerAttributeManager.
         if not name or not value:
             raise ValueError("name and value cannot be empty")
-        if force:
-            self._db.replace(self._table, {
-                "name": name,
-                "value": value,
-            })
-        else:
-            try:
-                self._db.insert(self._table, {
+        with self._db.session() as session:
+            if force:
+                session.replace(self._table, {
                     "name": name,
                     "value": value,
                 })
-            except sqlalchemy.exc.IntegrityError as exc:
-                raise ButlerAttributeExistsError(f"attribute {name} already exists") from exc
+            else:
+                try:
+                    session.insert(self._table, {
+                        "name": name,
+                        "value": value,
+                    })
+                except sqlalchemy.exc.IntegrityError as exc:
+                    raise ButlerAttributeExistsError(f"attribute {name} already exists") from exc
 
     def delete(self, name: str) -> bool:
         # Docstring inherited from ButlerAttributeManager.
-        numRows = self._db.delete(self._table, ["name"], {"name": name})
+        with self._db.session() as session:
+            numRows = session.delete(self._table, ["name"], {"name": name})
         return numRows > 0
 
     def items(self) -> Iterable[Tuple[str, str]]:
@@ -146,14 +148,16 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
             self._table.columns.name,
             self._table.columns.value,
         ])
-        for row in self._db.query(sql):
-            yield row[0], row[1]
+        with self._db.session() as session:
+            for row in session.query(sql):
+                yield row[0], row[1]
 
     def empty(self) -> bool:
         # Docstring inherited from ButlerAttributeManager.
         try:
             sql = sqlalchemy.sql.select([sqlalchemy.sql.func.count()]).select_from(self._table)
-            row = self._db.query(sql).fetchone()
+            with self._db.session() as session:
+                row = session.query(sql).fetchone()
             return row[0] == 0
         except sqlalchemy.exc.OperationalError:
             # if this is due to missing table raise different exception

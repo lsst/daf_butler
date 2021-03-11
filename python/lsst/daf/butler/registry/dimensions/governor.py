@@ -37,6 +37,7 @@ from ...core import (
 from ..interfaces import (
     Database,
     GovernorDimensionRecordStorage,
+    Session,
     StaticTablesContext,
 )
 from ..queries import QueryBuilder
@@ -61,7 +62,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         self._dimension = dimension
         self._table = table
         self._cache: Dict[str, DimensionRecord] = {}
-        self._callbacks: List[Callable[[DimensionRecord], None]] = []
+        self._callbacks: List[Callable[[DimensionRecord, Session], None]] = []
 
     @classmethod
     def initialize(cls, db: Database, element: GovernorDimension, *,
@@ -90,9 +91,10 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
             [self._table.columns[name] for name in RecordClass.fields.standard.names]
         ).select_from(self._table)
         cache: Dict[str, DimensionRecord] = {}
-        for row in self._db.query(sql):
-            record = RecordClass(**dict(row))
-            cache[getattr(record, self._dimension.primaryKey.name)] = record
+        with self._db.session() as session:
+            for row in session.query(sql):
+                record = RecordClass(**dict(row))
+                cache[getattr(record, self._dimension.primaryKey.name)] = record
         self._cache = cache
 
     @property
@@ -104,7 +106,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
     def table(self) -> sqlalchemy.schema.Table:
         return self._table
 
-    def registerInsertionListener(self, callback: Callable[[DimensionRecord], None]) -> None:
+    def registerInsertionListener(self, callback: Callable[[DimensionRecord, Session], None]) -> None:
         # Docstring inherited from GovernorDimensionRecordStorage.
         self._callbacks.append(callback)
 
@@ -127,12 +129,14 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
     def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         elementRows = [record.toDict() for record in records]
-        with self._db.transaction():
-            self._db.insert(self._table, *elementRows)
-        for record in records:
-            self._cache[getattr(record, self.element.primaryKey.name)] = record
-            for callback in self._callbacks:
-                callback(record)
+        with self._db.session() as session:
+            with session.transaction():
+                session.insert(self._table, *elementRows)
+            # have to commit before calling callbacks
+            for record in records:
+                self._cache[getattr(record, self.element.primaryKey.name)] = record
+                for callback in self._callbacks:
+                    callback(record, session)
 
     def sync(self, record: DimensionRecord) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
@@ -140,16 +144,18 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         keys = {}
         for name in record.fields.required.names:
             keys[name] = compared.pop(name)
-        with self._db.transaction():
-            _, inserted = self._db.sync(
-                self._table,
-                keys=keys,
-                compared=compared,
-            )
-        if inserted:
-            self._cache[getattr(record, self.element.primaryKey.name)] = record
-            for callback in self._callbacks:
-                callback(record)
+        with self._db.session() as session:
+            with session.transaction():
+                _, inserted = session.sync(
+                    self._table,
+                    keys=keys,
+                    compared=compared,
+                )
+            # have to commit before calling callbacks
+            if inserted:
+                self._cache[getattr(record, self.element.primaryKey.name)] = record
+                for callback in self._callbacks:
+                    callback(record, session)
         return inserted
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:

@@ -257,9 +257,10 @@ class Query(ABC):
             of any real rows to indicate an empty query (see `EmptyQuery`).
         """
         predicate = self.predicate(region)
-        for row in db.query(self.sql):
-            if predicate(row):
-                yield row
+        with db.session() as session:
+            for row in session.query(self.sql):
+                if predicate(row):
+                    yield row
 
     def extractDimensionsTuple(self, row: Optional[sqlalchemy.engine.RowProxy],
                                dimensions: Iterable[Dimension]) -> tuple:
