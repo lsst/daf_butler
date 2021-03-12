@@ -63,13 +63,16 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
             if all(d[k] == v for k, v in where.items()):
                 yield d
 
-    def delete(self, **where: Any):
+    def delete(self, columns: Iterable[str], *rows: dict):
         # Docstring inherited from OpaqueTableStorage.
-        kept = []
-        for d in self._rows:
-            if not all(d[k] == v for k, v in where.items()):
-                kept.append(d)
-        self._rows = kept
+        kept_rows = []
+        for table_row in self._rows:
+            for where_row in rows:
+                if all(table_row[k] == v for k, v in where_row.items()):
+                    break
+                else:
+                    kept_rows.append(table_row)
+        self._rows = kept_rows
 
 
 class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):

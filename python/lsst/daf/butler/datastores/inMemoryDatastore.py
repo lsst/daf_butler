@@ -462,6 +462,13 @@ class InMemoryDatastore(GenericBaseDatastore):
             raise AssertionError(f"Unexpectedly got no URI for in-memory datastore for {ref}")
         return primary
 
+    def forget(self, refs: Iterable[DatasetRef]) -> None:
+        # Docstring inherited.
+        refs = list(refs)
+        self._bridge.forget(refs)
+        for ref in refs:
+            self.removeStoredItemInfo(ref)
+
     def trash(self, ref: DatasetRef, ignore_errors: bool = False) -> None:
         """Indicate to the Datastore that a dataset can be removed.
 

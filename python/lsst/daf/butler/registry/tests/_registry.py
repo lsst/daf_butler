@@ -57,6 +57,7 @@ from .._registry import (
     CollectionType,
     ConflictingDefinitionError,
     InconsistentDataIdError,
+    OrphanedRecordError,
     Registry,
     RegistryConfig,
 )
@@ -343,6 +344,28 @@ class RegistryTests(ABC):
         # Check that requesting a non-existing dataId returns None
         nonExistingDataId = {"instrument": "Cam1", "detector": 3}
         self.assertIsNone(registry.findDataset(datasetType, nonExistingDataId, collections=run))
+
+    def testRemoveDatasetTypeSuccess(self):
+        """Test that Registry.removeDatasetType works when there are no
+        datasets of that type present.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        registry.removeDatasetType("flat")
+        with self.assertRaises(KeyError):
+            registry.getDatasetType("flat")
+
+    def testRemoveDatasetTypeFailure(self):
+        """Test that Registry.removeDatasetType raises when there are datasets
+        of that type present or if the dataset type is for a component.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        with self.assertRaises(OrphanedRecordError):
+            registry.removeDatasetType("flat")
+        with self.assertRaises(ValueError):
+            registry.removeDatasetType(DatasetType.nameWithComponent("flat", "image"))
 
     def testDatasetTypeComponentQueries(self):
         """Test component options when querying for dataset types.

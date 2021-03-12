@@ -1396,7 +1396,7 @@ class Database(ABC):
         *rows
             Positional arguments are the keys of rows to be deleted, as
             dictionaries mapping column name to value.  The keys in all
-            dictionaries must exactly the names in ``columns``.
+            dictionaries must be exactly the names in ``columns``.
 
         Returns
         -------

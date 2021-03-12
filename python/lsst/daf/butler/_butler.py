@@ -787,9 +787,13 @@ class Butler:
             if allowUnresolved:
                 return DatasetRef(datasetType, dataId)
             else:
+                if collections is None:
+                    collections = self.registry.defaults.collections
                 raise LookupError(f"Dataset {datasetType.name} with data ID {dataId} "
                                   f"could not be found in collections {collections}.")
         if idNumber is not None and idNumber != ref.id:
+            if collections is None:
+                collections = self.registry.defaults.collections
             raise ValueError(f"DatasetRef.id provided ({idNumber}) does not match "
                              f"id ({ref.id}) in registry in collections {collections}.")
         return ref
@@ -1155,6 +1159,49 @@ class Butler:
         """
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         return self.datastore.exists(ref)
+
+    def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
+        """Remove one or more `~CollectionType.RUN` collections and the
+        datasets within them.
+
+        Parameters
+        ----------
+        names : `Iterable` [ `str` ]
+            The names of the collections to remove.
+        unstore : `bool`, optional
+            If `True` (default), delete datasets from all datastores in which
+            they are present, and attempt to rollback the registry deletions if
+            datastore deletions fail (which may not always be possible).  If
+            `False`, datastore records for these datasets are still removed,
+            but any artifacts (e.g. files) will not be.
+
+        Raises
+        ------
+        TypeError
+            Raised if one or more collections are not of type
+            `~CollectionType.RUN`.
+        """
+        if not self.isWriteable():
+            raise TypeError("Butler is read-only.")
+        names = list(names)
+        refs: List[DatasetRef] = []
+        for name in names:
+            collectionType = self.registry.getCollectionType(name)
+            if collectionType is not CollectionType.RUN:
+                raise TypeError(f"The collection type of '{name}' is {collectionType.name}, not RUN.")
+            refs.extend(self.registry.queryDatasets(..., collections=name, findFirst=True))
+        with self.registry.transaction():
+            if unstore:
+                for ref in refs:
+                    if self.datastore.exists(ref):
+                        self.datastore.trash(ref)
+            else:
+                self.datastore.forget(refs)
+            for name in names:
+                self.registry.removeCollection(name)
+        if unstore:
+            # Point of no return for removing artifacts
+            self.datastore.emptyTrash()
 
     def pruneCollection(self, name: str, purge: bool = False, unstore: bool = False) -> None:
         """Remove a collection and possibly prune datasets within it.

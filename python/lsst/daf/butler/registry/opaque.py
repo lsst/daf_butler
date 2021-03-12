@@ -29,6 +29,7 @@ from typing import (
     Any,
     ClassVar,
     Dict,
+    Iterable,
     Iterator,
     Optional,
 )
@@ -84,9 +85,9 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         for row in self._db.query(sql):
             yield dict(row)
 
-    def delete(self, **where: Any) -> None:
+    def delete(self, columns: Iterable[str], *rows: dict) -> None:
         # Docstring inherited from OpaqueTableStorage.
-        self._db.delete(self._table, where.keys(), where)
+        self._db.delete(self._table, columns, *rows)
 
 
 class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):

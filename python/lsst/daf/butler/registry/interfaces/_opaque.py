@@ -28,6 +28,7 @@ __all__ = ["OpaqueTableStorageManager", "OpaqueTableStorage"]
 from abc import ABC, abstractmethod
 from typing import (
     Any,
+    Iterable,
     Iterator,
     Optional,
 )
@@ -81,16 +82,19 @@ class OpaqueTableStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def delete(self, **where: Any) -> None:
+    def delete(self, columns: Iterable[str], *rows: dict) -> None:
         """Remove records from an opaque table.
 
         Parameters
         ----------
-        **where
-            Additional keyword arguments are interpreted as equality
-            constraints that restrict the deleted rows (combined with AND);
-            keyword arguments are column names and values are the values they
-            must have.
+        columns: `~collections.abc.Iterable` of `str`
+            The names of columns that will be used to constrain the rows to
+            be deleted; these will be combined via ``AND`` to form the
+            ``WHERE`` clause of the delete query.
+        *rows
+            Positional arguments are the keys of rows to be deleted, as
+            dictionaries mapping column name to value.  The keys in all
+            dictionaries must be exactly the names in ``columns``.
         """
         raise NotImplementedError()
 

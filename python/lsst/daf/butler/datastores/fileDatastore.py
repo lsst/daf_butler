@@ -328,6 +328,8 @@ class FileDatastore(GenericBaseDatastore):
         location : `Location`
             Location of the artifact associated with this datastore.
         """
+        if location.pathInStore.isabs():
+            raise RuntimeError(f"Cannot delete artifact with absolute uri {location.uri}.")
         log.debug("Deleting file: %s", location.uri)
         location.uri.remove()
         log.debug("Successfully deleted file: %s", location.uri)
@@ -394,7 +396,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
         # Docstring inherited from GenericBaseDatastore
-        self._table.delete(dataset_id=ref.id)
+        self._table.delete(["dataset_id"], {"dataset_id": ref.id})
 
     def _get_dataset_locations_info(self, ref: DatasetIdRef) -> List[Tuple[Location, StoredFileInfo]]:
         r"""Find all the `Location`\ s  of the requested dataset in the
@@ -442,6 +444,9 @@ class FileDatastore(GenericBaseDatastore):
         can_remove : `Bool`
             True if the artifact can be safely removed.
         """
+        # Can't ever delete absolute URIs.
+        if location.pathInStore.isabs():
+            return False
 
         # Get all entries associated with this path
         allRefs = self._registered_refs_per_artifact(location.pathInStore)
@@ -1568,7 +1573,17 @@ class FileDatastore(GenericBaseDatastore):
                                     ref.id, location.uri, self.name, e)
                         continue
                     else:
-                        raise FileNotFoundError(err_msg)
+                        raise FileNotFoundError(
+                            f"Error removing dataset {ref.id} ({location.uri}) from internal registry "
+                            f"of {self.name}"
+                        ) from e
+
+    @transactional
+    def forget(self, refs: Iterable[DatasetRef]) -> None:
+        # Docstring inherited.
+        refs = list(refs)
+        self.bridge.forget(refs)
+        self._table.delete(["dataset_id"], *[{"dataset_id": ref.getCheckedId()} for ref in refs])
 
     def validateConfiguration(self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]],
                               logFailures: bool = False) -> None:

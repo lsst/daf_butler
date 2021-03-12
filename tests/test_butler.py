@@ -64,7 +64,7 @@ from lsst.daf.butler import FileDataset
 from lsst.daf.butler import CollectionSearch, CollectionType
 from lsst.daf.butler import ButlerURI
 from lsst.daf.butler import script
-from lsst.daf.butler.registry import MissingCollectionError, OrphanedRecordError
+from lsst.daf.butler.registry import MissingCollectionError
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core._butlerUri.s3utils import (setAwsEnvCredentials,
                                                      unsetAwsEnvCredentials)
@@ -585,26 +585,6 @@ class ButlerTests(ButlerPutGetTests):
         ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
         ref3 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-R1"}, run=run1)
 
-        # Add a new dataset type and delete it
-        tmpName = "prune_collections_disposable"
-        tmpDatasetType = self.addDatasetType(tmpName, dimensions, storageClass,
-                                             butler.registry)
-        tmpFromRegistry = butler.registry.getDatasetType(tmpName)
-        self.assertEqual(tmpDatasetType, tmpFromRegistry)
-        butler.registry.removeDatasetType(tmpName)
-        with self.assertRaises(KeyError):
-            butler.registry.getDatasetType(tmpName)
-        # Removing a second time is fine
-        butler.registry.removeDatasetType(tmpName)
-
-        # Component removal is not allowed
-        with self.assertRaises(ValueError):
-            butler.registry.removeDatasetType(DatasetType.nameWithComponent(tmpName, "component"))
-
-        # Try and fail to delete a datasetType that is associated with data
-        with self.assertRaises(OrphanedRecordError):
-            butler.registry.removeDatasetType(datasetType.name)
-
         # Try to delete a RUN collection without purge, or with purge and not
         # unstore.
         with self.assertRaises(TypeError):
@@ -986,6 +966,42 @@ class FileDatastoreButlerTests(ButlerTests):
                         self.assertTrue(importButler.datasetExists(ref.datasetType, ref.dataId))
                 self.assertEqual(list(importButler.registry.queryDimensionRecords("skymap")),
                                  [importButler.registry.dimensions["skymap"].RecordClass(**skymapRecord)])
+
+    def testRemoveRuns(self):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        butler = Butler(self.tmpConfigFile, writeable=True)
+        # Load registry data with dimensions to hang datasets off of.
+        registryDataDir = os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
+        butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
+        # Add some RUN-type collection.
+        run1 = "run1"
+        butler.registry.registerRun(run1)
+        run2 = "run2"
+        butler.registry.registerRun(run2)
+        # put a dataset in each
+        metric = makeExampleMetrics()
+        dimensions = butler.registry.dimensions.extract(["instrument", "physical_filter"])
+        datasetType = self.addDatasetType("prune_collections_test_dataset", dimensions, storageClass,
+                                          butler.registry)
+        ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
+        ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
+        uri1 = butler.getURI(ref1, collections=[run1])
+        uri2 = butler.getURI(ref2, collections=[run2])
+        # Remove from both runs with different values for unstore.
+        butler.removeRuns([run1], unstore=True)
+        butler.removeRuns([run2], unstore=False)
+        # Should be nothing in registry for either one, and datastore should
+        # not think either exists.
+        with self.assertRaises(MissingCollectionError):
+            butler.registry.getCollectionType(run1)
+        with self.assertRaises(MissingCollectionError):
+            butler.registry.getCollectionType(run2)
+        self.assertFalse(butler.datastore.exists(ref1))
+        self.assertFalse(butler.datastore.exists(ref2))
+        # The ref we unstored should be gone according to the URI, but the
+        # one we forgot should still be around.
+        self.assertFalse(uri1.exists())
+        self.assertTrue(uri2.exists())
 
 
 class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
