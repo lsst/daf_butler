@@ -504,7 +504,7 @@ class Registry:
         return record.children
 
     @transactional
-    def setCollectionChain(self, parent: str, children: Any) -> None:
+    def setCollectionChain(self, parent: str, children: Any, *, flatten: bool = False) -> None:
         """Define or redefine a `~CollectionType.CHAINED` collection.
 
         Parameters
@@ -516,6 +516,9 @@ class Registry:
             An expression defining an ordered search of child collections,
             generally an iterable of `str`; see
             :ref:`daf_butler_collection_expressions` for more information.
+        flatten : `bool`, optional
+            If `True` (`False` is default), recursively flatten out any nested
+            `~CollectionType.CHAINED` collections in ``children`` first.
 
         Raises
         ------
@@ -533,8 +536,8 @@ class Registry:
             raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
         assert isinstance(record, ChainedCollectionRecord)
         children = CollectionSearch.fromExpression(children)
-        if children != record.children:
-            record.update(self._managers.collections, children)
+        if children != record.children or flatten:
+            record.update(self._managers.collections, children, flatten=flatten)
 
     def getCollectionDocumentation(self, collection: str) -> Optional[str]:
         """Retrieve the documentation string for a collection.

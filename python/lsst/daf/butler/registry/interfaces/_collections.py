@@ -150,7 +150,7 @@ class ChainedCollectionRecord(CollectionRecord):
         """
         return self._children
 
-    def update(self, manager: CollectionManager, children: CollectionSearch) -> None:
+    def update(self, manager: CollectionManager, children: CollectionSearch, flatten: bool) -> None:
         """Redefine this chain to search the given child collections.
 
         This method should be used by all external code to set children.  It
@@ -165,6 +165,9 @@ class ChainedCollectionRecord(CollectionRecord):
         children : `CollectionSearch`
             A collection search path that should be resolved to set the child
             collections of this chain.
+        flatten : `bool`
+            If `True`, recursively flatten out any nested
+            `~CollectionType.CHAINED` collections in ``children`` first.
 
         Raises
         ------
@@ -175,6 +178,10 @@ class ChainedCollectionRecord(CollectionRecord):
                                     collectionTypes={CollectionType.CHAINED}):
             if record == self:
                 raise ValueError(f"Cycle in collection chaining when defining '{self.name}'.")
+        if flatten:
+            children = CollectionSearch(
+                tuple(record.name for record in children.iter(manager, flattenChains=True))
+            )
         self._update(manager, children)
         self._children = children
 
