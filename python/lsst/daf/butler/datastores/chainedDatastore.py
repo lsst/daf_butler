@@ -663,3 +663,18 @@ class ChainedDatastore(Datastore):
                 keys.update(p.getLookupKeys())
 
         return keys
+
+    def needs_expanded_data_ids(
+        self,
+        transfer: Optional[str],
+        entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
+    ) -> bool:
+        # Docstring inherited.
+        # We can't safely use `self.datastoreConstraints` with `entity` to
+        # check whether a child datastore would even want to ingest this
+        # dataset, because we don't want to filter out datastores that might
+        # need an expanded data ID based in incomplete information (e.g. we
+        # pass a StorageClass, but the constraint dispatches on DatasetType).
+        # So we pessimistically check if any datastore would need an expanded
+        # data ID for this transfer mode.
+        return any(datastore.needs_expanded_data_ids(transfer) for datastore in self.datastores)

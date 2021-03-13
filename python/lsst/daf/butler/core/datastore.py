@@ -822,3 +822,27 @@ class Datastore(metaclass=ABCMeta):
             on `DatasetType` name or `StorageClass`.
         """
         raise NotImplementedError("Must be implemented by subclass")
+
+    def needs_expanded_data_ids(
+        self,
+        transfer: Optional[str],
+        entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
+    ) -> bool:
+        """Test whether this datastore needs expanded data IDs to ingest.
+
+        Parameters
+        ----------
+        transfer : `str` or `None`
+            Transfer mode for ingest.
+        entity, optional
+            Object representing what will be ingested.  If not provided (or not
+            specific enough), `True` may be returned even if expanded data
+            IDs aren't necessary.
+
+        Returns
+        -------
+        needed : `bool`
+            If `True`, expanded data IDs may be needed.  `False` only if
+            expansion definitely isn't necessary.
+        """
+        return True
