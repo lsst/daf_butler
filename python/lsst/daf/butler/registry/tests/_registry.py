@@ -644,6 +644,19 @@ class RegistryTests(ABC):
         with self.assertRaises(MissingCollectionError):
             registry.getCollectionType(tag1)
 
+    def testCollectionChainFlatten(self):
+        """Test that Registry.setCollectionChain obeys its 'flatten' option.
+        """
+        registry = self.makeRegistry()
+        registry.registerCollection("inner", CollectionType.CHAINED)
+        registry.registerCollection("innermost", CollectionType.RUN)
+        registry.setCollectionChain("inner", ["innermost"])
+        registry.registerCollection("outer", CollectionType.CHAINED)
+        registry.setCollectionChain("outer", ["inner"], flatten=False)
+        self.assertEqual(list(registry.getCollectionChain("outer")), ["inner"])
+        registry.setCollectionChain("outer", ["inner"], flatten=True)
+        self.assertEqual(list(registry.getCollectionChain("outer")), ["innermost"])
+
     def testBasicTransaction(self):
         """Test that all operations within a single transaction block are
         rolled back if an exception propagates out of the block.
