@@ -68,28 +68,27 @@ class ButlerSchemelessURI(ButlerFileURI):
         """
         return os.path.isabs(self.ospath)
 
-    def _force_to_file(self) -> ButlerFileURI:
-        """Force a schemeless URI to a file URI and returns a new URI.
+    def abspath(self) -> ButlerURI:
+        """Force a schemeless URI to a file URI.
 
         This will include URI quoting of the path.
 
         Returns
         -------
         file : `ButlerFileURI`
-            A copy of the URI using file scheme. If already a file scheme
-            the copy will be identical.
+            A new URI using file scheme.
 
-        Raises
-        ------
-        ValueError
-            Raised if this URI is schemeless and relative path and so can
-            not be forced to file absolute path without context.
+        Notes
+        -----
+        The current working directory will be used to convert this scheme-less
+        URI to an absolute path.
         """
-        if not self.isabs():
-            raise RuntimeError(f"Internal error: Can not force {self} to absolute file URI")
-        uri = self._uri._replace(scheme="file", path=urllib.parse.quote(os2posix(self.path)))
-        # mypy really wants a ButlerFileURI to be returned here
-        return ButlerURI(uri, forceDirectory=self.dirLike)  # type: ignore
+        # Convert this URI to a string so that any fragments will be
+        # processed correctly by the ButlerURI constructor.  We provide
+        # the options that will force the code below in _fixupPathUri to
+        # return a file URI from a scheme-less one.
+        return ButlerURI(str(self), forceAbsolute=True, forceDirectory=self.isdir(),
+                         isTemporary=self.isTemporary)
 
     @classmethod
     def _fixupPathUri(cls, parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,

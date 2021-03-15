@@ -621,6 +621,17 @@ class ButlerURI:
         """
         return True
 
+    def abspath(self) -> ButlerURI:
+        """Return URI using an absolute path.
+
+        Returns
+        -------
+        abs : `ButlerURI`
+            Absolute URI. For non-schemeless URIs this always returns itself.
+            Schemeless URIs are upgraded to file URIs.
+        """
+        return self
+
     def _as_local(self) -> Tuple[str, bool]:
         """Return the location of the (possibly remote) resource as local file.
 

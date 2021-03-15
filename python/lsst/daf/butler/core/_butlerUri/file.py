@@ -104,24 +104,6 @@ class ButlerFileURI(ButlerURI):
         """
         return self.ospath, False
 
-    def _force_to_file(self) -> ButlerFileURI:
-        """Force a schemeless URI to a file URI and returns a new URI.
-
-        Returns
-        -------
-        file : `ButlerFileURI`
-            A copy of the URI using file scheme. If already a file scheme
-            the copy will be identical.
-
-        Raises
-        ------
-        ValueError
-            Raised if this URI is schemeless and relative path and so can
-            not be forced to file absolute path without context.
-        """
-        # This is always a file scheme so always return copy
-        return copy.copy(self)
-
     def relative_to(self, other: ButlerURI) -> Optional[str]:
         """Return the relative path from this URI to the other URI.
 
@@ -177,7 +159,7 @@ class ButlerFileURI(ButlerURI):
         # forcing to file is fine.
         # Use a cast to convince mypy that other has to be a ButlerFileURI
         # in order to get to this part of the code.
-        return self._force_to_file().relative_to(cast(ButlerFileURI, other)._force_to_file())
+        return self.abspath().relative_to(cast(ButlerFileURI, other).abspath())
 
     def read(self, size: int = -1) -> bytes:
         """Return the entire content of the file as bytes."""
