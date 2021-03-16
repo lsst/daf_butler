@@ -256,7 +256,7 @@ class ButlerS3URI(ButlerURI):
             Names of all the files within dirpath.
         """
         # We pretend that S3 uses directories and files and not simply keys
-        if not self.isdir():
+        if not (self.isdir() or self.is_root):
             raise ValueError(f"Can not walk a non-directory URI: {self}")
 
         if isinstance(file_filter, str):
@@ -273,12 +273,13 @@ class ButlerS3URI(ButlerURI):
         # pagination and return them in groups of 1000, but that would
         # be a different interface since we can't guarantee we would get
         # them all grouped properly across the 1000 limit boundary.
-        prefix_len = len(self.relativeToPathRoot)
+        prefix = self.relativeToPathRoot if not self.is_root else ""
+        prefix_len = len(prefix)
         dirnames = []
         filenames = []
         files_there = False
 
-        for page in s3_paginator.paginate(Bucket=self.netloc, Prefix=self.relativeToPathRoot, Delimiter="/"):
+        for page in s3_paginator.paginate(Bucket=self.netloc, Prefix=prefix, Delimiter="/"):
             # All results are returned as full key names and we must
             # convert them back to the root form. The prefix is fixed
             # and delimited so that is a simple trim
