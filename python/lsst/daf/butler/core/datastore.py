@@ -556,6 +556,20 @@ class Datastore(metaclass=ABCMeta):
         transfer = self._overrideTransferMode(*datasets, transfer=transfer)
         prepData = self._prepIngest(*datasets, transfer=transfer)
         refs = {ref.id: ref for dataset in datasets for ref in dataset.refs}
+        if None in refs:
+            # Find the file for the error message. There may be multiple
+            # bad refs so look for all of them.
+            unresolved_paths = {}
+            for dataset in datasets:
+                unresolved = []
+                for ref in dataset.refs:
+                    if ref.id is None:
+                        unresolved.append(ref)
+                if unresolved:
+                    unresolved_paths[dataset.path] = unresolved
+            raise RuntimeError("Attempt to ingest unresolved DatasetRef from: "
+                               + ",".join(f"{p}: ({[str(r) for r in ref]})"
+                                          for p, ref in unresolved_paths.items()))
         if refs.keys() != prepData.refs.keys():
             unsupported = refs.keys() - prepData.refs.keys()
             # Group unsupported refs by DatasetType for an informative
