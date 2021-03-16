@@ -84,7 +84,7 @@ from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional, getClassOf
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
-from .registry import Registry, RegistryConfig, RegistryDefaults, CollectionType
+from .registry import Registry, RegistryConfig, RegistryDefaults, CollectionType, ConflictingDefinitionError
 from .registry.wildcards import CollectionSearch
 from .transfers import RepoExportContext
 
@@ -1433,6 +1433,11 @@ class Butler:
             # associated with `dataset`.
             resolvedRefs: List[DatasetRef] = []
             for ref in dataset.refs:
+                if ref.dataId in groupedData[ref.datasetType]:
+                    raise ConflictingDefinitionError(f"Ingest conflict. Dataset {dataset.path} has same"
+                                                     " DataId as other ingest dataset"
+                                                     f" {groupedData[ref.datasetType][ref.dataId][0].path} "
+                                                     f" ({ref.dataId})")
                 groupedData[ref.datasetType][ref.dataId] = (dataset, resolvedRefs)
 
         # Now we can bulk-insert into Registry for each DatasetType.
