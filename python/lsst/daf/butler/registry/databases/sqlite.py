@@ -287,7 +287,7 @@ class SqliteDatabase(Database):
         # lost on re-connect. This is only really relevant for tests, and it's
         # convenient there.
         if self.filename is None and self.isWriteable():
-            inspector = sqlalchemy.engine.reflection.Inspector(self._connection)
+            inspector = sqlalchemy.inspect(self._connection)
             tables = inspector.get_table_names(schema=self.namespace)
             if not tables:
                 create = True

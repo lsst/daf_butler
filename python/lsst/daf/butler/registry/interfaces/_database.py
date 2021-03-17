@@ -111,7 +111,7 @@ class StaticTablesContext:
     def __init__(self, db: Database):
         self._db = db
         self._foreignKeys: List[Tuple[sqlalchemy.schema.Table, sqlalchemy.schema.ForeignKeyConstraint]] = []
-        self._inspector = sqlalchemy.engine.reflection.Inspector(self._db._connection)
+        self._inspector = sqlalchemy.inspect(self._db._connection)
         self._tableNames = frozenset(self._inspector.get_table_names(schema=self._db.namespace))
         self._initializers: List[Callable[[Database], None]] = []
 
@@ -1009,7 +1009,7 @@ class Database(ABC):
                                             f"specification has columns {list(spec.fields.names)}, while "
                                             f"the previous definition has {list(table.columns.keys())}.")
         else:
-            inspector = sqlalchemy.engine.reflection.Inspector(self._connection)
+            inspector = sqlalchemy.inspect(self._connection)
             if name in inspector.get_table_names(schema=self.namespace):
                 _checkExistingTableDefinition(name, spec, inspector.get_columns(name, schema=self.namespace))
                 table = self._convertTableSpec(name, spec, self._metadata)

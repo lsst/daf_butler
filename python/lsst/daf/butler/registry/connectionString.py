@@ -99,7 +99,12 @@ class ConnectionStringFactory:
 
         for key in cls.keys:
             if getattr(conStr, key) is None:
-                setattr(conStr, key, regConf.get(key))
+                # check for SQLAlchemy >= 1.4
+                if hasattr(conStr, "set"):
+                    conStr = conStr.set(**{key: regConf.get(key)})
+                else:
+                    # SQLAlchemy 1.3 or earlier, mutate in place
+                    setattr(conStr, key, regConf.get(key))
 
         # Allow 3rd party authentication mechanisms by assuming connection
         # string is correct when we can not recognize (dialect, host, database)
@@ -119,7 +124,12 @@ class ConnectionStringFactory:
             pass
         else:
             # only assign auth when *no* errors were raised
-            conStr.username = auth[0]
-            conStr.password = auth[1]
+            if hasattr(conStr, "set"):
+                # for SQLAlchemy >= 1.4
+                conStr = conStr.set(username=auth[0], password=auth[1])
+            else:
+                # SQLAlchemy 1.3 or earlier, mutate in place
+                conStr.username = auth[0]
+                conStr.password = auth[1]
 
         return conStr

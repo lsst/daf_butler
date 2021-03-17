@@ -79,9 +79,11 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
 
     def fetch(self, **where: Any) -> Iterator[dict]:
         # Docstring inherited from OpaqueTableStorage.
-        sql = self._table.select().where(
-            sqlalchemy.sql.and_(*[self._table.columns[k] == v for k, v in where.items()])
-        )
+        sql = self._table.select()
+        if where:
+            sql = sql.where(
+                sqlalchemy.sql.and_(*[self._table.columns[k] == v for k, v in where.items()])
+            )
         for row in self._db.query(sql):
             yield dict(row)
 
