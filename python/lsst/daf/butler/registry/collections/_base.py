@@ -322,7 +322,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
     def refresh(self) -> None:
         # Docstring inherited from CollectionManager.
         sql = sqlalchemy.sql.select(
-            self._tables.collection.columns + self._tables.run.columns
+            list(self._tables.collection.columns) + list(self._tables.run.columns)
         ).select_from(
             self._tables.collection.join(self._tables.run, isouter=True)
         )
