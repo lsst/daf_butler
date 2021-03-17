@@ -23,7 +23,6 @@ from __future__ import annotations
 
 __all__ = ["YamlRepoExportBackend", "YamlRepoImportBackend"]
 
-import os
 from datetime import datetime
 from typing import (
     Any,
@@ -55,6 +54,7 @@ from ..core import (
     FileDataset,
     Timespan,
 )
+from ..core._butlerUri import ButlerURI
 from ..core.utils import iterable
 from ..core.named import NamedValueSet
 from ..registry import CollectionType, Registry
@@ -369,7 +369,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             for sliceForFileDataset, fileDataset in zip(slices, records):
                 fileDataset.refs = resolvedRefs[sliceForFileDataset]
                 if directory is not None:
-                    fileDataset.path = os.path.join(directory, fileDataset.path)
+                    fileDataset.path = ButlerURI(directory, forceDirectory=True).join(fileDataset.path)
                 fileDatasets.append(fileDataset)
         # Ingest everything into the datastore at once.
         if datastore is not None and fileDatasets:
