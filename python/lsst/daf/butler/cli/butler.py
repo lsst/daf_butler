@@ -29,6 +29,7 @@ import yaml
 
 from .cliLog import CliLog
 from .opt import log_level_option, long_log_option
+from .progress import ClickProgressHandler
 from lsst.utils import doImport
 
 
@@ -308,7 +309,8 @@ class ButlerCLI(LoaderCLI):
 @click.command(cls=ButlerCLI, context_settings=dict(help_option_names=["-h", "--help"]))
 @log_level_option()
 @long_log_option()
-def cli(log_level, long_log):
+@ClickProgressHandler.option
+def cli(log_level, long_log, progress):
     # log_level is handled by get_command and list_commands, and is called in
     # one of those functions before this is called. long_log is handled by
     # setup_logging.

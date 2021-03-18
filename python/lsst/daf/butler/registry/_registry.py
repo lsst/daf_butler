@@ -61,6 +61,7 @@ from ..core import (
     DimensionUniverse,
     NamedKeyMapping,
     NameLookupMapping,
+    Progress,
     StorageClassFactory,
     Timespan,
 )
@@ -804,8 +805,10 @@ class Registry:
         if runRecord.type is not CollectionType.RUN:
             raise TypeError(f"Given collection is of type {runRecord.type.name}; RUN collection required.")
         assert isinstance(runRecord, RunRecord)
+        progress = Progress("lsst.daf.butler.Registry.insertDatasets", level=logging.DEBUG)
         expandedDataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions)
-                           for dataId in dataIds]
+                           for dataId in progress.wrap(dataIds,
+                                                       f"Expanding {storage.datasetType.name} data IDs")]
         try:
             refs = list(storage.insert(runRecord, expandedDataIds))
         except sqlalchemy.exc.IntegrityError as err:
@@ -859,7 +862,9 @@ class Registry:
         OrphanedRecordError
             Raised if any dataset is still present in any `Datastore`.
         """
-        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
+        progress = Progress("lsst.daf.butler.Registry.removeDatasets", level=logging.DEBUG)
+        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
+                                                                  desc="Removing datasets by type"):
             storage = self._managers.datasets.find(datasetType.name)
             assert storage is not None
             try:
@@ -898,10 +903,12 @@ class Registry:
             Raise adding new datasets to the given ``collection`` is not
             allowed.
         """
+        progress = Progress("lsst.daf.butler.Registry.associate", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
-        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
+        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
+                                                                  desc="Associating datasets by type"):
             storage = self._managers.datasets.find(datasetType.name)
             assert storage is not None
             try:
@@ -939,11 +946,13 @@ class Registry:
             Raise adding new datasets to the given ``collection`` is not
             allowed.
         """
+        progress = Progress("lsst.daf.butler.Registry.disassociate", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}; "
                             "expected TAGGED.")
-        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
+        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
+                                                                  desc="Disassociating datasets by type"):
             storage = self._managers.datasets.find(datasetType.name)
             assert storage is not None
             storage.disassociate(collectionRecord, refsForType)
@@ -976,8 +985,10 @@ class Registry:
             collection or if one or more datasets are of a dataset type for
             which `DatasetType.isCalibration` returns `False`.
         """
+        progress = Progress("lsst.daf.butler.Registry.certify", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
-        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
+        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
+                                                                  desc="Certifying datasets by type"):
             storage = self._managers.datasets[datasetType.name]
             storage.certify(collectionRecord, refsForType, timespan)
 
