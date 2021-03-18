@@ -687,13 +687,13 @@ class FileDatastore(GenericBaseDatastore):
 
         return transfer
 
-    def _pathInStore(self, path: str) -> Optional[str]:
+    def _pathInStore(self, path: Union[str, ButlerURI]) -> Optional[str]:
         """Return path relative to datastore root
 
         Parameters
         ----------
-        path : `str`
-            Path to dataset. Can be absolute. If relative assumed to
+        path : `str` or `ButlerURI`
+            Path to dataset. Can be absolute URI. If relative assumed to
             be relative to the datastore. Returns path in datastore
             or raises an exception if the path it outside.
 
@@ -707,12 +707,13 @@ class FileDatastore(GenericBaseDatastore):
         pathUri = ButlerURI(path, forceAbsolute=False)
         return pathUri.relative_to(self.root)
 
-    def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
+    def _standardizeIngestPath(self, path: Union[str, ButlerURI], *,
+                               transfer: Optional[str] = None) -> Union[str, ButlerURI]:
         """Standardize the path of a to-be-ingested file.
 
         Parameters
         ----------
-        path : `str`
+        path : `str` or `ButlerURI`
             Path of a file to be ingested.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
@@ -723,8 +724,9 @@ class FileDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        path : `str`
-            New path in what the datastore considers standard form.
+        path : `str` or `ButlerURI`
+            New path in what the datastore considers standard form. If an
+            absolute URI was given that will be returned unchanged.
 
         Notes
         -----

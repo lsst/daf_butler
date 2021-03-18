@@ -31,7 +31,7 @@ from typing import (
     Union,
 )
 
-
+from ._butlerUri import ButlerURI
 from .datasets import DatasetRef
 from .formatter import FormatterParameter
 
@@ -46,8 +46,8 @@ class FileDataset:
     """Registry information about the dataset. (`list` of `DatasetRef`).
     """
 
-    path: str
-    """Path to the dataset (`str`).
+    path: Union[str, ButlerURI]
+    """Path to the dataset (`str` or `ButlerURI`).
 
     If the dataset was exported with ``transfer=None`` (i.e. in-place),
     this is relative to the datastore root (only datastores that have a
@@ -72,4 +72,4 @@ class FileDataset:
         # Sort on path alone
         if not isinstance(other, type(self)):
             return NotImplemented
-        return self.path < other.path
+        return str(self.path) < str(other.path)

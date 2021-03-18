@@ -218,8 +218,8 @@ class FileURITestCase(unittest.TestCase):
         src.write(b"Some content")
         self.assertTrue(src.exists())
 
-        # Use the internal API to force to a file
-        file = src._force_to_file()
+        # abspath always returns a file scheme
+        file = src.abspath()
         self.assertTrue(file.exists())
         self.assertIn("???", file.ospath)
         self.assertNotIn("???", file.path)
@@ -264,7 +264,7 @@ class FileURITestCase(unittest.TestCase):
         self.assertTrue(new2.ospath.endswith(new2name))
         self.assertEqual(new.read(), new2.read())
 
-        fdir = dir._force_to_file()
+        fdir = dir.abspath()
         self.assertNotIn("???", fdir.path)
         self.assertIn("???", fdir.ospath)
         self.assertEqual(fdir.scheme, "file")
