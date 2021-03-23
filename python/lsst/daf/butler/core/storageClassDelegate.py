@@ -42,6 +42,7 @@ from typing import (
 
 if TYPE_CHECKING:
     from .storageClass import StorageClass
+    from .dimensions import DataId
 
 log = logging.getLogger(__name__)
 
@@ -115,7 +116,8 @@ class StorageClassDelegate:
         capitalized = "{}{}{}".format(root, first, tail)
         return (componentName, "{}_{}".format(root, componentName), capitalized)
 
-    def assemble(self, components: Dict[str, Any], pytype: Optional[Type] = None) -> Any:
+    def assemble(self, components: Dict[str, Any], pytype: Optional[Type] = None,
+                 dataId: Optional[DataId] = None) -> Any:
         """Construct an object from components based on storageClass.
 
         This generic implementation assumes that instances of objects
@@ -131,6 +133,8 @@ class StorageClassDelegate:
             Override the type from the
             :attr:`StorageClassDelegate.storageClass`
             to use when assembling the final object.
+        dataId : `DataId`, optional
+            The data Id associated associated with the assembled composite.
 
         Returns
         -------

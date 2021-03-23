@@ -1316,7 +1316,8 @@ class FileDatastore(GenericBaseDatastore):
                 # component.
                 components[component] = self._read_artifact_into_memory(getInfo, ref, isComponent=False)
 
-            inMemoryDataset = ref.datasetType.storageClass.delegate().assemble(components)
+            inMemoryDataset = ref.datasetType.storageClass.delegate().assemble(components,
+                                                                               dataId=ref.dataId)
 
             # Any unused parameters will have to be passed to the assembler
             if parameters:
