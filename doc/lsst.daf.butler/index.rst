@@ -103,13 +103,7 @@ Example datastores
 .. automodapi:: lsst.daf.butler.datastores.inMemoryDatastore
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.datastores.posixDatastore
-   :no-main-docstr:
-   :headings: ^"
-.. automodapi:: lsst.daf.butler.datastores.s3Datastore
-   :no-main-docstr:
-   :headings: ^"
-.. automodapi:: lsst.daf.butler.datastores.webdavDatastore
+.. automodapi:: lsst.daf.butler.datastores.fileDatastore
    :no-main-docstr:
    :headings: ^"
 

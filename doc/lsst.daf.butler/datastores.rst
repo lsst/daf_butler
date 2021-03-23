@@ -9,7 +9,7 @@ Datastore Configuration
 A Butler `Datastore` is configured in the ``datastore`` section of the top-level Butler YAML configuration.
 The only mandatory entry in the datastore configuration is the ``cls`` key.
 This specifies the fully qualified class name of the Python class implementing the datastore.
-The default Butler configurations uses the `~datastores.posixDatastore.PosixDatastore`.
+The default Butler configuration uses the `~datastores.fileDatastore.FileDatastore`.
 All other keys depend on the specific datastore class that is selected.
 
 
@@ -28,7 +28,10 @@ The supported datastores are:
 File-Based Datastores
 =====================
 
-The file-based datastores (for example `~datastores.posixDatastore.PosixDatastore` and `~datastores.s3Datastore.S3Datastore`) share configuration since they use formatters to serialize datasets to file artifacts using file name template schemes and also support disassembly of :ref:`composite storage classes <daf_butler_storage_classes>`.
+There is a single file-based datastore (`~datastores.fileDatastore.FileDatastore`) that handles local POSIX file system and remote object stores.
+This datastore uses formatters to read datasets from files and write datasets to files.
+Data access is entirely mediated by the URI used to specify the datastore root and currently supports S3 and WebDAV in addition to local files.
+If an absolute URI is stored directly in the datastore it can use a different URI scheme from that used to locate the root of the datastore.
 
 The supported configurations are:
 
