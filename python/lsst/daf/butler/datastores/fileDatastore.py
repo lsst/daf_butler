@@ -1703,7 +1703,8 @@ class FileDatastore(GenericBaseDatastore):
                 # For now go with option 2
                 if location.pathInStore.isabs():
                     template = self.templates.getTemplate(ref)
-                    pathInStore = template.format(ref)
+                    newURI = ButlerURI(template.format(ref), forceAbsolute=False)
+                    pathInStore = str(newURI.updatedExtension(location.pathInStore.getExtension()))
 
                 exportUri = directoryUri.join(pathInStore)
                 exportUri.transfer_from(storeUri, transfer=transfer)
