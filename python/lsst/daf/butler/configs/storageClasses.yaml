@@ -200,3 +200,5 @@ storageClasses:
     pytype: astropy.table.Table
   AstropyQTable:
     pytype: astropy.table.QTable
+  ExtendedPsf:
+    pytype: lsst.pipe.tasks.extended_psf.ExtendedPsf
