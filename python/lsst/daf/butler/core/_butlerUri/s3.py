@@ -113,7 +113,9 @@ class ButlerS3URI(ButlerURI):
         """Return the size of the resource in bytes."""
         if self.dirLike:
             return 0
-        _, sz = s3CheckFileExists(self, client=self.client)
+        exists, sz = s3CheckFileExists(self, client=self.client)
+        if not exists:
+            raise FileNotFoundError(f"Resource {self} does not exist")
         return sz
 
     @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
