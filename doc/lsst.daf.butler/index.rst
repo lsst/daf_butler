@@ -59,7 +59,7 @@ Butler Command-Line Reference
    :maxdepth: 1
 
    scripts/options-file.rst
-   scripts/butler.py
+   scripts/butler
 
 .. _lsst.daf.butler-dev:
 
