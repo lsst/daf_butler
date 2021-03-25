@@ -66,6 +66,7 @@ BrighterFatterKernel: lsst.daf.butler.formatters.pickle.PickleFormatter
 StructuredDataDict: lsst.daf.butler.formatters.yaml.YamlFormatter
 # TODO: remove Filter in DM-27177
 Filter: lsst.obs.base.formatters.filter.FilterFormatter
+StampsBase: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Stamps: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 BrightStarStamps: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 AstropyTable: lsst.daf.butler.formatters.astropyTable.AstropyTableFormatter
