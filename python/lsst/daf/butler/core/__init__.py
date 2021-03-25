@@ -10,6 +10,7 @@ from .constraints import *
 from . import ddl
 from .datasets import *
 from .datastore import *
+from .datastoreCacheManager import *
 from .exceptions import *
 from .fileDescriptor import *
 from .fileTemplates import *

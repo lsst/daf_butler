@@ -92,7 +92,7 @@ class ConfigDumpUseTest(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             cfg = yaml.safe_load(result.stdout)
             # count the keys in the datastore config
-            self.assertIs(len(cfg), 7)
+            self.assertEqual(len(cfg), 8)
             self.assertIn("cls", cfg)
             self.assertIn("create", cfg)
             self.assertIn("formatters", cfg)
