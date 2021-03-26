@@ -8,7 +8,7 @@ Querying datasets
 =================
 
 Datasets in a butler-managed data repository are identified by the combination of their *dataset type* and *data ID* within a *collection*.
-The `Registry` class's query methods (`~Registry.queryDatasetTypes`, `~Registry.queryCollections`, `~Registry.queryDataIds`, and `~Registry.queryDatasets`) allow these to be specified either fully or partially in various ways.
+The `Registry` class's query methods (`~Registry.queryDatasetTypes`, `~Registry.queryCollections`, `~Registry.queryDataIds`, `~Registry.queryDatasets`, and `~Registry.queryDimensionRecords`) allow these to be specified either fully or partially in various ways.
 
 .. _daf_butler_dataset_type_expressions:
 

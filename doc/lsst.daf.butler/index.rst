@@ -24,6 +24,43 @@ Using the Butler
 This module provides an abstracted data access interface, known as the Butler.
 It can be used to read and write data without having to know the details of file formats or locations.
 
+.. _lsst.daf.butler-dimensions:
+
+The Dimensions System
+=====================
+
+.. toctree::
+  :maxdepth: 1
+
+  dimensions.rst
+
+Concrete Storage Classes
+========================
+
+.. toctree::
+  :maxdepth: 1
+
+  concreteStorageClasses.rst
+
+..
+   The sphinx+click tooling generates docs using sphinx's built-in
+   "program" and "option" directive, but linking to those is broken (in
+   sphinx itself): https://github.com/sphinx-doc/sphinx/issues/880
+
+   It seems the best we can do is link to the anchor below (even putting a
+   manual anchor in scripts/butler.py.rst does not seem to work).
+
+.. _lsst.daf.butler-scripts:
+
+Butler Command-Line Reference
+=============================
+
+.. toctree::
+   :maxdepth: 1
+
+   scripts/options-file.rst
+   scripts/butler
+
 .. _lsst.daf.butler-dev:
 
 Design and Development
@@ -44,35 +81,6 @@ Butler Command Line Interface Development
    :maxdepth: 1
 
    writing-subcommands.rst
-
-.. _lsst.daf.butler-dimensions:
-
-The Dimensions System
-=====================
-
-.. toctree::
-  :maxdepth: 1
-
-  dimensions.rst
-
-Concrete Storage Classes
-========================
-
-.. toctree::
-  :maxdepth: 1
-
-  concreteStorageClasses.rst
-
-.. _lsst.daf.butler-scripts:
-
-Butler Command Reference
-========================
-
-.. toctree::
-   :maxdepth: 1
-
-   scripts/options-file.rst
-   scripts/butler.py
 
 .. _lsst.daf.butler-pyapi:
 
