@@ -18,7 +18,7 @@ datastore:
     # Instantiating a Butler from another Butler could propagate temporary
     # location. This can be left out or null used
     # to indicate a temporary directory.
-    root: null
+    root: /Volumes/MediaHD/Users/timj/work/lsstsw/build/daf_butler_test/cache
     # Use a dict over list to simplify merging logic.
     # Later could change it to be the timescale for caching:
     #   - Quantum (clear at end of quantum)

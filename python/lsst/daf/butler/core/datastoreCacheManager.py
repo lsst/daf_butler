@@ -97,11 +97,12 @@ class AbstractDatastoreCacheManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def move_to_cache(self, uri: ButlerURI, ref: DatasetRef) -> ButlerURI:
+    def move_to_cache(self, uri: ButlerURI, ref: DatasetRef) -> Optional[ButlerURI]:
         """Move a file to the cache.
 
         Move the given file into the cache, using the supplied DatasetRef
-        for naming.
+        for naming. A call is made to `should_be_cached()` and if the
+        DatasetRef should not be accepted `None` will be returned.
 
         Parameters
         ----------
@@ -113,8 +114,9 @@ class AbstractDatastoreCacheManager(ABC):
 
         Returns
         -------
-        new : `ButlerURI`
-            URI to the file within the cache.
+        new : `ButlerURI` or `None`
+            URI to the file within the cache, or `None` if the dataset
+            was not accepted by the cache.
         """
         raise NotImplementedError()
 
@@ -199,10 +201,13 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         """
         return self.cache_directory.join(f"{ref.id}{extension}")
 
-    def move_to_cache(self, uri: ButlerURI, ref: DatasetRef) -> ButlerURI:
+    def move_to_cache(self, uri: ButlerURI, ref: DatasetRef) -> Optional[ButlerURI]:
         # Docstring inherited
         if ref.id is None:
             raise ValueError(f"Can not cache a file associated with an unresolved reference ({ref})")
+
+        if not self.should_be_cached(ref):
+            return None
 
         # Write the file using the id of the dataset ref and the file
         # extension.
@@ -248,15 +253,9 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         """
         return False
 
-    def move_to_cache(self, uri: ButlerURI, ref: DatasetRef) -> ButlerURI:
-        """Move a file to the cache.
-
-        Always raises to indicate that there has been a logic error if
-        this is called without first checking that it should be cached.
-        """
-        # If this is a no-op what URI would it return?
-        raise RuntimeError("Caching is disabled. Please use should_be_cached() method prior to"
-                           " trying to cache a dataset")
+    def move_to_cache(self, uri: ButlerURI, ref: DatasetRef) -> Optional[ButlerURI]:
+        """Move dataset to cache but always refuse and returns `None`."""
+        return None
 
     def find_in_cache(self, ref: DatasetRef, extension: str) -> Optional[ButlerURI]:
         """Look for a dataset in the cache and return its location.

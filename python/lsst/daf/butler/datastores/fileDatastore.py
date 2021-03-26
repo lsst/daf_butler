@@ -1009,8 +1009,7 @@ class FileDatastore(GenericBaseDatastore):
                     uri.transfer_from(tmpLocation.uri, transfer="copy", overwrite=True)
 
                     # Cache if required
-                    if self.cacheManager.should_be_cached(ref):
-                        self.cacheManager.move_to_cache(tmpLocation.uri, ref)
+                    self.cacheManager.move_to_cache(tmpLocation.uri, ref)
 
                 log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
 
@@ -1096,8 +1095,9 @@ class FileDatastore(GenericBaseDatastore):
                     location_updated = True
 
                     # Cache the downloaded file if needed.
-                    if self.cacheManager.should_be_cached(ref):
-                        local_uri = self.cacheManager.move_to_cache(local_uri, ref)
+                    cached_uri = self.cacheManager.move_to_cache(local_uri, ref)
+                    if cached_uri is not None:
+                        local_uri = cached_uri
                         cache_msg = " and cached"
 
                     msg = f"(via download to local file{cache_msg})"
