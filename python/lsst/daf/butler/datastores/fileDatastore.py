@@ -56,6 +56,8 @@ from lsst.daf.butler import (
     DatasetType,
     DatasetTypeNotSupportedError,
     Datastore,
+    DatastoreCacheManager,
+    DatastoreDisabledCacheManager,
     DatastoreConfig,
     DatastoreValidationError,
     FileDescriptor,
@@ -81,7 +83,7 @@ from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import LookupKey
+    from lsst.daf.butler import LookupKey, AbstractDatastoreCacheManager
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
@@ -286,6 +288,15 @@ class FileDatastore(GenericBaseDatastore):
         # Determine whether we can fall back to configuration if a
         # requested dataset is not known to registry
         self.trustGetRequest = self.config.get("trust_get_request", False)
+
+        # Create a cache manager
+        self.cacheManager: AbstractDatastoreCacheManager
+        if "cached" in self.config:
+            self.cacheManager = DatastoreCacheManager(self.config["cached"],
+                                                      universe=bridgeManager.universe)
+        else:
+            self.cacheManager = DatastoreDisabledCacheManager("",
+                                                              universe=bridgeManager.universe)
 
         # Check existence and create directory structure if necessary
         if not self.root.exists():
@@ -996,6 +1007,10 @@ class FileDatastore(GenericBaseDatastore):
                     with formatter._updateLocation(tmpLocation):
                         formatter.write(inMemoryDataset)
                     uri.transfer_from(tmpLocation.uri, transfer="copy", overwrite=True)
+
+                    # Cache if required
+                    self.cacheManager.move_to_cache(tmpLocation.uri, ref)
+
                 log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
 
         # URI is needed to resolve what ingest case are we dealing with
@@ -1055,19 +1070,44 @@ class FileDatastore(GenericBaseDatastore):
                 raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
                                  f" ({ref.datasetType.name} from {uri}): {e}") from e
         else:
-            # Read from file
-            with uri.as_local() as local_uri:
-                # Have to update the Location associated with the formatter
-                # because formatter.read does not allow an override.
-                # This could be improved.
-                msg = ""
-                newLocation = None
-                if uri != local_uri:
-                    newLocation = Location(*local_uri.split())
-                    msg = "(via download to local file)"
+            # Read from file.
 
-                log.debug("Reading %s from location %s %s with formatter %s",
-                          f"component {getInfo.component}" if isComponent else "",
+            # Have to update the Location associated with the formatter
+            # because formatter.read does not allow an override.
+            # This could be improved.
+            location_updated = False
+            msg = ""
+
+            # First check in cache for local version.
+            # The cache will only be relevant for remote resources.
+            if not uri.isLocal:
+                cached_file = self.cacheManager.find_in_cache(ref, uri.getExtension())
+                if cached_file is not None:
+                    msg = f"(via cache read of remote file {uri})"
+                    uri = cached_file
+                    location_updated = True
+
+            with uri.as_local() as local_uri:
+
+                # URI was remote and file was downloaded
+                if uri != local_uri:
+                    cache_msg = ""
+                    location_updated = True
+
+                    # Cache the downloaded file if needed.
+                    cached_uri = self.cacheManager.move_to_cache(local_uri, ref)
+                    if cached_uri is not None:
+                        local_uri = cached_uri
+                        cache_msg = " and cached"
+
+                    msg = f"(via download to local file{cache_msg})"
+
+                # Calculate the (possibly) new location for the formatter
+                # to use.
+                newLocation = Location(*local_uri.split()) if location_updated else None
+
+                log.debug("Reading%s from location %s %s with formatter %s",
+                          f" component {getInfo.component}" if isComponent else "",
                           uri, msg, formatter.name())
                 try:
                     with formatter._updateLocation(newLocation):

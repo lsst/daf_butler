@@ -11,3 +11,21 @@ datastore:
     physical_filter+detector+exposure: "{run:/}/{datasetType}.{component:?}/{exposure.day_obs}/{exposure.obs_id}/{datasetType}_{component:?}_{instrument:?}_{physical_filter}_{exposure.obs_id}_{detector.full_name}_{run}"
   formatters: !include formatters.yaml
   composites: !include composites.yaml
+  cached:
+    # Explicit location of a cache directory root that can be shared
+    # between multiple Butler instantiations. Without this the Butler
+    # will use a new temporary location each time.
+    # Instantiating a Butler from another Butler could propagate temporary
+    # location. This can be left out or null used
+    # to indicate a temporary directory.
+    root: /Volumes/MediaHD/Users/timj/work/lsstsw/build/daf_butler_test/cache
+    # Use a dict over list to simplify merging logic.
+    # Later could change it to be the timescale for caching:
+    #   - Quantum (clear at end of quantum)
+    #   - Pipeline (clear at end of pipeline)
+    # pipeline activator could call clear_cache with a parameter indicating
+    # the event.
+    cacheable:
+      # The formatter associated with this storage class
+      # implements deferred loading of data
+      StrayLightData: true
