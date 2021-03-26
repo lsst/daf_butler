@@ -68,6 +68,10 @@ class FileURITestCase(unittest.TestCase):
         self.assertTrue(os.path.exists(file), "File should exist locally")
         self.assertTrue(uri.exists(), f"{uri} should now exist")
         self.assertEqual(uri.read().decode(), content)
+        self.assertEqual(uri.size(), len(content.encode()))
+
+        with self.assertRaises(FileNotFoundError):
+            ButlerURI("file/not/there.txt").size()
 
         # Check that creating a URI from a URI returns the same thing
         uri2 = ButlerURI(uri)
@@ -414,9 +418,15 @@ class S3URITestCase(unittest.TestCase):
         src = ButlerURI(os.path.join(self.tmpdir, "test.txt"))
         content = "Content is some content\nwith something to say\n\n"
         src.write(content.encode())
+        self.assertTrue(src.exists())
+        self.assertEqual(src.size(), len(content.encode()))
 
         dest = ButlerURI(self.makeS3Uri("test.txt"))
         self.assertFalse(dest.exists())
+
+        with self.assertRaises(FileNotFoundError):
+            dest.size()
+
         dest.transfer_from(src, transfer="copy")
         self.assertTrue(dest.exists())
 
@@ -638,6 +648,10 @@ class WebdavURITestCase(unittest.TestCase):
 
         self.assertTrue(self.existingFileButlerURI.exists())
         self.assertFalse(self.notExistingFileButlerURI.exists())
+
+        self.assertEqual(self.existingFileButlerURI.size(), 1024)
+        with self.assertRaises(FileNotFoundError):
+            self.notExistingFileButlerURI.size()
 
     @responses.activate
     def testRemove(self):
