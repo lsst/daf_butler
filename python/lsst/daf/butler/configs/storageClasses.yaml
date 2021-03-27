@@ -184,6 +184,10 @@ storageClasses:
     pytype: matplotlib.figure.Figure
   MetricValue:
     pytype: lsst.verify.Measurement
+  StampsBase:
+    pytype: lsst.meas.algorithms.stamps.StampsBase
+    parameters:
+      - bbox
   Stamps:
     pytype: lsst.meas.algorithms.Stamps
     parameters:
