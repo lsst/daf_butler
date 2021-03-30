@@ -241,6 +241,8 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
         Manager object for opaque table storage in the `Registry`.
     universe : `DimensionUniverse`
         All dimensions know to the `Registry`.
+    datasetIdColumnType : `type`
+        Type for dataset ID column.
 
     Notes
     -----
@@ -258,9 +260,11 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
       filename templates.
 
     """
-    def __init__(self, *, opaque: OpaqueTableStorageManager, universe: DimensionUniverse):
+    def __init__(self, *, opaque: OpaqueTableStorageManager, universe: DimensionUniverse,
+                 datasetIdColumnType: type):
         self.opaque = opaque
         self.universe = universe
+        self.datasetIdColumnType = datasetIdColumnType
 
     @classmethod
     @abstractmethod

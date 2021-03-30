@@ -336,6 +336,21 @@ class DatasetRecordStorageManager(VersionedExtension):
 
     @classmethod
     @abstractmethod
+    def getIdColumnType(cls) -> type:
+        """Return type used for columns storing dataset IDs.
+
+        This type is used for columns storing `DatasetRef.id` values, usually
+        a `type` subclass provided by SQLAlchemy.
+
+        Returns
+        -------
+        dtype : `type`
+            Type used for dataset identification in database.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    @abstractmethod
     def addDatasetForeignKey(cls, tableSpec: ddl.TableSpec, *,
                              name: str = "dataset", constraint: bool = True, onDelete: Optional[str] = None,
                              **kwargs: Any) -> ddl.FieldSpec:

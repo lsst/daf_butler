@@ -24,6 +24,8 @@ __all__ = ("DummyRegistry", )
 
 from typing import Any, Iterable, Iterator, Optional, Type
 
+import sqlalchemy
+
 from lsst.daf.butler import ddl, DatasetRef, DimensionUniverse
 from lsst.daf.butler.registry.interfaces import (
     Database,
@@ -106,8 +108,9 @@ class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
 
 class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
 
-    def __init__(self, opaque: OpaqueTableStorageManager, universe: DimensionUniverse):
-        super().__init__(opaque=opaque, universe=universe)
+    def __init__(self, opaque: OpaqueTableStorageManager, universe: DimensionUniverse,
+                 datasetIdColumnType: type):
+        super().__init__(opaque=opaque, universe=universe, datasetIdColumnType=datasetIdColumnType)
         self._bridges = {}
 
     @classmethod
@@ -118,7 +121,7 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
                    ) -> DatastoreRegistryBridgeManager:
         # Docstring inherited from DatastoreRegistryBridgeManager
         # Not used, but needed to satisfy ABC requirement.
-        return cls(opaque=opaque, universe=universe)
+        return cls(opaque=opaque, universe=universe, datasetIdColumnType=datasets.getIdColumnType())
 
     def refresh(self):
         # Docstring inherited from DatastoreRegistryBridgeManager
@@ -150,7 +153,8 @@ class DummyRegistry:
     def __init__(self):
         self._opaque = DummyOpaqueTableStorageManager()
         self.dimensions = DimensionUniverse()
-        self._datastoreBridges = DummyDatastoreRegistryBridgeManager(self._opaque, self.dimensions)
+        self._datastoreBridges = DummyDatastoreRegistryBridgeManager(
+            self._opaque, self.dimensions, sqlalchemy.BigInteger)
 
     def getDatastoreBridgeManager(self):
         return self._datastoreBridges

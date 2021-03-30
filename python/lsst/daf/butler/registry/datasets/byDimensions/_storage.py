@@ -11,6 +11,7 @@ from typing import (
     Set,
     TYPE_CHECKING,
 )
+import uuid
 
 import sqlalchemy
 
@@ -59,50 +60,6 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._tags = tags
         self._calibs = calibs
         self._runKeyColumn = collections.getRunForeignKeyName()
-
-    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
-        # Docstring inherited from DatasetRecordStorage.
-        staticRow = {
-            "dataset_type_id": self._dataset_type_id,
-            self._runKeyColumn: run.key,
-        }
-        # Iterate over data IDs, transforming a possibly-single-pass iterable
-        # into a list, and remembering any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-        dataIdList = []
-        for dataId in dataIds:
-            dataIdList.append(dataId)
-            governorValues.update_extract(dataId)
-        with self._db.transaction():
-            # Insert into the static dataset table, generating autoincrement
-            # dataset_id values.
-            datasetIds = self._db.insert(self._static.dataset, *([staticRow]*len(dataIdList)),
-                                         returnIds=True)
-            assert datasetIds is not None
-            # Update the summary tables for this collection in case this is the
-            # first time this dataset type or these governor values will be
-            # inserted there.
-            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
-            # Combine the generated dataset_id values and data ID fields to
-            # form rows to be inserted into the tags table.
-            protoTagsRow = {
-                "dataset_type_id": self._dataset_type_id,
-                self._collections.getCollectionForeignKeyName(): run.key,
-            }
-            tagsRows = [
-                dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
-                for dataId, dataset_id in zip(dataIdList, datasetIds)
-            ]
-            # Insert those rows into the tags table.  This is where we'll
-            # get any unique constraint violations.
-            self._db.insert(self._tags, *tagsRows)
-        for dataId, datasetId in zip(dataIdList, datasetIds):
-            yield DatasetRef(
-                datasetType=self.datasetType,
-                dataId=dataId,
-                id=datasetId,
-                run=run.name,
-            )
 
     def find(self, collection: CollectionRecord, dataId: DataCoordinate,
              timespan: Optional[Timespan] = None) -> Optional[DatasetRef]:
@@ -430,3 +387,98 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             {dimension.name: row[dimension.name] for dimension in self.datasetType.dimensions.required},
             graph=self.datasetType.dimensions
         )
+
+
+class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
+
+    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
+        # Docstring inherited from DatasetRecordStorage.
+        staticRow = {
+            "dataset_type_id": self._dataset_type_id,
+            self._runKeyColumn: run.key,
+        }
+        # Iterate over data IDs, transforming a possibly-single-pass iterable
+        # into a list, and remembering any governor dimension values we see.
+        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
+        dataIdList = []
+        for dataId in dataIds:
+            dataIdList.append(dataId)
+            governorValues.update_extract(dataId)
+        with self._db.transaction():
+            # Insert into the static dataset table, generating autoincrement
+            # dataset_id values.
+            datasetIds = self._db.insert(self._static.dataset, *([staticRow]*len(dataIdList)),
+                                         returnIds=True)
+            assert datasetIds is not None
+            # Update the summary tables for this collection in case this is the
+            # first time this dataset type or these governor values will be
+            # inserted there.
+            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+            # Combine the generated dataset_id values and data ID fields to
+            # form rows to be inserted into the tags table.
+            protoTagsRow = {
+                "dataset_type_id": self._dataset_type_id,
+                self._collections.getCollectionForeignKeyName(): run.key,
+            }
+            tagsRows = [
+                dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
+                for dataId, dataset_id in zip(dataIdList, datasetIds)
+            ]
+            # Insert those rows into the tags table.  This is where we'll
+            # get any unique constraint violations.
+            self._db.insert(self._tags, *tagsRows)
+        for dataId, datasetId in zip(dataIdList, datasetIds):
+            yield DatasetRef(
+                datasetType=self.datasetType,
+                dataId=dataId,
+                id=datasetId,
+                run=run.name,
+            )
+
+
+class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
+
+    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
+        # Docstring inherited from DatasetRecordStorage.
+
+        # Iterate over data IDs, transforming a possibly-single-pass iterable
+        # into a list, and remembering any governor dimension values we see.
+        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
+        dataIdList = []
+        rows = []
+        for dataId in dataIds:
+            dataIdList.append(dataId)
+            governorValues.update_extract(dataId)
+            rows.append({
+                "id": uuid.uuid4(),
+                "dataset_type_id": self._dataset_type_id,
+                self._runKeyColumn: run.key,
+            })
+        with self._db.transaction():
+            # Insert into the static dataset table, generating autoincrement
+            # dataset_id values.
+            self._db.insert(self._static.dataset, *rows)
+            # Update the summary tables for this collection in case this is the
+            # first time this dataset type or these governor values will be
+            # inserted there.
+            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+            # Combine the generated dataset_id values and data ID fields to
+            # form rows to be inserted into the tags table.
+            protoTagsRow = {
+                "dataset_type_id": self._dataset_type_id,
+                self._collections.getCollectionForeignKeyName(): run.key,
+            }
+            tagsRows = [
+                dict(protoTagsRow, dataset_id=row["id"], **dataId.byName())
+                for dataId, row in zip(dataIdList, rows)
+            ]
+            # Insert those rows into the tags table.  This is where we'll
+            # get any unique constraint violations.
+            self._db.insert(self._tags, *tagsRows)
+        for dataId, row in zip(dataIdList, rows):
+            yield DatasetRef(
+                datasetType=self.datasetType,
+                dataId=dataId,
+                id=row["id"],
+                run=run.name,
+            )

@@ -33,15 +33,17 @@ databases, a "schema" is also another term for a namespace.
 from __future__ import annotations
 
 __all__ = ("TableSpec", "FieldSpec", "ForeignKeySpec", "Base64Bytes", "Base64Region",
-           "AstropyTimeNsecTai")
+           "AstropyTimeNsecTai", "GUID")
 
 from base64 import b64encode, b64decode
 import logging
 from math import ceil
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, List, Optional, Set, Tuple, Type, TYPE_CHECKING, Union
+import uuid
 
 import sqlalchemy
+from sqlalchemy.dialects.postgresql import UUID
 import astropy.time
 
 from lsst.sphgeom import Region
@@ -169,6 +171,49 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
         return value
 
 
+class GUID(sqlalchemy.TypeDecorator):
+    """Platform-independent GUID type.
+
+    Uses PostgreSQL's UUID type, otherwise uses CHAR(32), storing as
+    stringified hex values.
+    """
+
+    impl = sqlalchemy.CHAR
+
+    def load_dialect_impl(self, dialect: sqlalchemy.Dialect) -> sqlalchemy.TypeEngine:
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(UUID())
+        else:
+            return dialect.type_descriptor(sqlalchemy.CHAR(32))
+
+    def process_bind_param(self, value: Any, dialect: sqlalchemy.Dialect) -> Optional[str]:
+        if value is None:
+            return value
+
+        # Coerce input to UUID type, in general having UUID on input is the
+        # only thing that we want but there is code right now that uses ints.
+        if isinstance(value, int):
+            value = uuid.UUID(int=value)
+        elif isinstance(value, bytes):
+            value = uuid.UUID(bytes=value)
+        elif isinstance(value, str):
+            # hexstring
+            value = uuid.UUID(hex=value)
+        elif not isinstance(value, uuid.UUID):
+            raise TypeError(f"Unexpected type of a bind value: {type(value)}")
+
+        if dialect.name == 'postgresql':
+            return str(value)
+        else:
+            return "%.32x" % value.int
+
+    def process_result_value(self, value: Optional[str], dialect: sqlalchemy.Dialect) -> Optional[uuid.UUID]:
+        if value is None:
+            return value
+        else:
+            return uuid.UUID(hex=value)
+
+
 VALID_CONFIG_COLUMN_TYPES = {
     "string": sqlalchemy.String,
     "int": sqlalchemy.BigInteger,
@@ -177,7 +222,8 @@ VALID_CONFIG_COLUMN_TYPES = {
     "bool": sqlalchemy.Boolean,
     "blob": sqlalchemy.LargeBinary,
     "datetime": AstropyTimeNsecTai,
-    "hash": Base64Bytes
+    "hash": Base64Bytes,
+    "uuid": GUID,
 }
 
 
