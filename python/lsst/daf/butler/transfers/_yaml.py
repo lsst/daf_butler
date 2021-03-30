@@ -36,6 +36,7 @@ from typing import (
     Tuple,
     Type,
 )
+import uuid
 import warnings
 from collections import defaultdict
 
@@ -74,6 +75,25 @@ EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 1)
 Files with a different major version or a newer minor version cannot be read by
 this version of the code.
 """
+
+
+def _uuid_representer(dumper: yaml.Dumper, data: uuid.UUID) -> yaml.Node:
+    """Generate YAML representation for UUID.
+
+    This produces a scalar node with a tag "!uuid" and value being a regular
+    string representation of UUID.
+    """
+    return dumper.represent_scalar("!uuid", str(data))
+
+
+def _uuid_constructor(loader: yaml.Loader, node: yaml.Node) -> Optional[uuid.UUID]:
+    if node.value is not None:
+        return uuid.UUID(hex=node.value)
+    return None
+
+
+yaml.Dumper.add_representer(uuid.UUID, _uuid_representer)
+yaml.SafeLoader.add_constructor("!uuid", _uuid_constructor)
 
 
 class YamlRepoExportBackend(RepoExportBackend):

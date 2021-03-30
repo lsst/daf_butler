@@ -22,6 +22,7 @@ from __future__ import annotations
 
 __all__ = ["AmbiguousDatasetError", "DatasetRef", "SerializedDatasetRef"]
 
+import uuid
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -30,6 +31,7 @@ from typing import (
     List,
     Optional,
     Tuple,
+    Union,
 )
 
 from pydantic import BaseModel, StrictStr, ConstrainedInt, validator
@@ -61,7 +63,8 @@ class PositiveInt(ConstrainedInt):
 class SerializedDatasetRef(BaseModel):
     """Simplified model of a `DatasetRef` suitable for serialization."""
 
-    id: Optional[PositiveInt] = None
+    # DO NOT change order in the Union, pydantic is sensitive to that!
+    id: Optional[Union[uuid.UUID, PositiveInt]] = None
     datasetType: Optional[SerializedDatasetType] = None
     dataId: Optional[Dict[str, Any]] = None  # Do not use specialist pydantic model for this
     run: Optional[StrictStr] = None
