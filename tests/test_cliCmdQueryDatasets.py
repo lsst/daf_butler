@@ -59,41 +59,41 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         expectedTables = (
             AstropyTable(array((
-                ("test_metric_comp.data", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
+                ("test_metric_comp.data", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423",
                  self.testRepo.butler.datastore.root.join(
                      "ingest/run/test_metric_comp.data/"
                      "test_metric_comp_v00000423_fDummyCamComp_data.yaml")),
-                ("test_metric_comp.data", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
+                ("test_metric_comp.data", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424",
                  self.testRepo.butler.datastore.root.join(
                      "ingest/run/test_metric_comp.data/"
                      "test_metric_comp_v00000424_fDummyCamComp_data.yaml")))),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                names=("type", "run", "band", "instrument", "physical_filter", "visit_system",
                        "visit", "URI")),
             AstropyTable(array((
-                ("test_metric_comp.output", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
+                ("test_metric_comp.output", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423",
                     self.testRepo.butler.datastore.root.join(
                         "ingest/run/test_metric_comp.output/"
                         "test_metric_comp_v00000423_fDummyCamComp_output.yaml")),
-                ("test_metric_comp.output", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
+                ("test_metric_comp.output", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424",
                     self.testRepo.butler.datastore.root.join(
                         "ingest/run/test_metric_comp.output/"
                         "test_metric_comp_v00000424_fDummyCamComp_output.yaml")))),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                names=("type", "run", "band", "instrument", "physical_filter", "visit_system",
                        "visit", "URI")),
             AstropyTable(array((
-                ("test_metric_comp.summary", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
+                ("test_metric_comp.summary", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423",
                     self.testRepo.butler.datastore.root.join(
                         "ingest/run/test_metric_comp.summary/"
                         "test_metric_comp_v00000423_fDummyCamComp_summary.yaml")),
-                ("test_metric_comp.summary", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
+                ("test_metric_comp.summary", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424",
                     self.testRepo.butler.datastore.root.join(
                         "ingest/run/test_metric_comp.summary/"
                         "test_metric_comp_v00000424_fDummyCamComp_summary.yaml")))),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
+                names=("type", "run", "band", "instrument", "physical_filter", "visit_system",
                        "visit", "URI")),
         )
 
-        self.assertAstropyTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
     def testNoShowURI(self):
         """Test for expected output without show_uri (default is False)."""
@@ -101,13 +101,13 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         expectedTables = (
             AstropyTable(array((
-                ("test_metric_comp", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423"),
-                ("test_metric_comp", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424"))),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system", "visit")
+                ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423"),
+                ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424"))),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit")
             ),
         )
 
-        self.assertAstropyTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
     def testWhere(self):
         """Test using the where clause to reduce the number of rows returned.
@@ -116,12 +116,12 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         expectedTables = (
             AstropyTable(array(
-                ("test_metric_comp", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423")),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system", "visit"),
+                ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423")),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit"),
             ),
         )
 
-        self.assertAstropyTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
     def testGlobDatasetType(self):
         """Test specifying dataset type."""
@@ -144,17 +144,17 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         expectedTables = (
             AstropyTable(array((
-                ("test_metric_comp", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423"),
-                ("test_metric_comp", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424"))),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system", "visit")
+                ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423"),
+                ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424"))),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit")
             ),
             AstropyTable(array((
-                ("alt_test_metric_comp", "ingest/run", "3", "R", "DummyCamComp", "d-r", "1", "425"))),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system", "visit")
+                ("alt_test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "425"))),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit")
             )
         )
 
-        self.assertAstropyTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
     def testFindFirstAndCollections(self):
         """Test the find-first option, and the collections option, since it
