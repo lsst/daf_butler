@@ -7,8 +7,10 @@ from typing import (
     Dict,
     Iterable,
     Iterator,
+    List,
     Optional,
     Set,
+    Tuple,
     TYPE_CHECKING,
 )
 import uuid
@@ -25,7 +27,7 @@ from lsst.daf.butler import (
     Timespan,
 )
 from lsst.daf.butler.registry import ConflictingDefinitionError
-from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
+from lsst.daf.butler.registry.interfaces import DatasetRecordStorage, DatasetIdGenEnum
 
 from ...summaries import GovernorDimensionRestriction
 
@@ -391,7 +393,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
 
 class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
 
-    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
+    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate],
+               idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
         staticRow = {
             "dataset_type_id": self._dataset_type_id,
@@ -438,7 +441,13 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
 
 class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
 
-    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
+    NS_UUID = uuid.UUID('840b31d9-05cd-5161-b2c8-00d32b280d0f')
+    """Namespace UUID used for UUID5 generation. Do not change. This was
+    produced by `uuid.uuid5(uuid.NAMESPACE_DNS, "lsst.org")`.
+    """
+
+    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate],
+               idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
         # Iterate over data IDs, transforming a possibly-single-pass iterable
@@ -450,7 +459,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             dataIdList.append(dataId)
             governorValues.update_extract(dataId)
             rows.append({
-                "id": uuid.uuid4(),
+                "id": self._makeDatasetId(run, dataId, idMode),
                 "dataset_type_id": self._dataset_type_id,
                 self._runKeyColumn: run.key,
             })
@@ -482,3 +491,20 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 id=row["id"],
                 run=run.name,
             )
+
+    def _makeDatasetId(self, run: RunRecord, dataId: DataCoordinate, idMode: DatasetIdGenEnum) -> uuid.UUID:
+        if idMode is DatasetIdGenEnum.UNIQUE:
+            return uuid.uuid4()
+        elif idMode is DatasetIdGenEnum.DETERMINISTIC:
+            # Combine all items in a single string, make sure that order of
+            # items is always the same
+            items: List[Tuple[str, str]] = [
+                ("run", run.name),
+                ("dataset_type", self.datasetType.name),
+            ]
+            for name, value in sorted(dataId.byName().items()):
+                items.append((name, str(value)))
+            data = ",".join(f"{key}={value}" for key, value in items)
+            return uuid.uuid5(self.NS_UUID, data)
+        else:
+            raise ValueError(f"Unexpected ID generation mode: {idMode}")
