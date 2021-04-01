@@ -79,6 +79,12 @@ class RegistryTests(ABC):
     (`str`).
     """
 
+    datasetsManager: Optional[str] = None
+    """Name of the datasets manager class, if subclass provides value for
+    this member then it overrides name specified in default configuration
+    (`str`).
+    """
+
     @classmethod
     @abstractmethod
     def getDataDir(cls) -> str:
@@ -97,7 +103,9 @@ class RegistryTests(ABC):
         """
         config = RegistryConfig()
         if self.collectionsManager:
-            config["managers"]["collections"] = self.collectionsManager
+            config["managers", "collections"] = self.collectionsManager
+        if self.datasetsManager:
+            config["managers", "datasets"] = self.datasetsManager
         return config
 
     @abstractmethod
