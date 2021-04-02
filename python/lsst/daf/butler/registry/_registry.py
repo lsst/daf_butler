@@ -49,6 +49,7 @@ from ..core import (
     DataCoordinate,
     DataId,
     DatasetAssociation,
+    DatasetId,
     DatasetRef,
     DatasetType,
     Dimension,
@@ -704,12 +705,12 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def getDataset(self, id: int) -> Optional[DatasetRef]:
+    def getDataset(self, id: DatasetId) -> Optional[DatasetRef]:
         """Retrieve a Dataset entry.
 
         Parameters
         ----------
-        id : `int`
+        id : `DatasetId`
             The unique identifier for the dataset.
 
         Returns
@@ -749,10 +750,10 @@ class Registry(ABC):
     def associate(self, collection: str, refs: Iterable[DatasetRef]) -> None:
         """Add existing datasets to a `~CollectionType.TAGGED` collection.
 
-        If a DatasetRef with the same exact integer ID is already in a
-        collection nothing is changed. If a `DatasetRef` with the same
-        `DatasetType` and data ID but with different integer ID
-        exists in the collection, `ConflictingDefinitionError` is raised.
+        If a DatasetRef with the same exact ID is already in a collection
+        nothing is changed. If a `DatasetRef` with the same `DatasetType` and
+        data ID but with different ID exists in the collection,
+        `ConflictingDefinitionError` is raised.
 
         Parameters
         ----------

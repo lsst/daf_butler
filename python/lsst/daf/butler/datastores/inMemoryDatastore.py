@@ -42,7 +42,7 @@ from typing import (
     Union,
 )
 
-from lsst.daf.butler import StoredDatastoreItemInfo, StorageClass, ButlerURI
+from lsst.daf.butler import DatasetId, StoredDatastoreItemInfo, StorageClass, ButlerURI
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from .genericDatastore import GenericBaseDatastore
 
@@ -67,7 +67,7 @@ class StoredMemoryItemInfo(StoredDatastoreItemInfo):
     storageClass: StorageClass
     """StorageClass associated with the dataset."""
 
-    parentID: int
+    parentID: DatasetId
     """ID of the parent `DatasetRef` if this entry is a concrete
     composite. Not used if the dataset being stored is not a
     virtual component of a composite
@@ -104,10 +104,10 @@ class InMemoryDatastore(GenericBaseDatastore):
     """A new datastore is created every time and datasets disappear when
     the process shuts down."""
 
-    datasets: Dict[int, Any]
+    datasets: Dict[DatasetId, Any]
     """Internal storage of datasets indexed by dataset ID."""
 
-    records: Dict[int, StoredMemoryItemInfo]
+    records: Dict[DatasetId, StoredMemoryItemInfo]
     """Internal records about stored datasets."""
 
     def __init__(self, config: Union[Config, str],
@@ -121,14 +121,14 @@ class InMemoryDatastore(GenericBaseDatastore):
         log.debug("Creating datastore %s", self.name)
 
         # Storage of datasets, keyed by dataset_id
-        self.datasets: Dict[int, Any] = {}
+        self.datasets: Dict[DatasetId, Any] = {}
 
         # Records is distinct in order to track concrete composite components
         # where we register multiple components for a single dataset.
-        self.records: Dict[int, StoredMemoryItemInfo] = {}
+        self.records: Dict[DatasetId, StoredMemoryItemInfo] = {}
 
         # Related records that share the same parent
-        self.related: Dict[int, Set[int]] = {}
+        self.related: Dict[DatasetId, Set[DatasetId]] = {}
 
         self._bridge = bridgeManager.register(self.name, ephemeral=True)
 
@@ -204,7 +204,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         del self.records[ref.id]
         self.related[record.parentID].remove(ref.id)
 
-    def _get_dataset_info(self, ref: DatasetIdRef) -> Tuple[int, StoredMemoryItemInfo]:
+    def _get_dataset_info(self, ref: DatasetIdRef) -> Tuple[DatasetId, StoredMemoryItemInfo]:
         """Check that the dataset is present and return the real ID and
         associated information.
 

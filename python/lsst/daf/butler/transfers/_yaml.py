@@ -46,6 +46,7 @@ import astropy.time
 from lsst.utils import doImport
 from ..core import (
     DatasetAssociation,
+    DatasetId,
     DatasetRef,
     DatasetType,
     DataCoordinate,
@@ -171,7 +172,7 @@ class YamlRepoExportBackend(RepoExportBackend):
                 "dataset_ids": [assoc.ref.id for assoc in associations],
             })
         elif collectionType is CollectionType.CALIBRATION:
-            idsByTimespan: Dict[Timespan, List[int]] = defaultdict(list)
+            idsByTimespan: Dict[Timespan, List[DatasetId]] = defaultdict(list)
             for association in associations:
                 assert association.timespan is not None
                 assert association.ref.id is not None

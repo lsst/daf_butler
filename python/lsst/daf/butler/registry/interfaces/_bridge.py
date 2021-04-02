@@ -33,7 +33,7 @@ from typing import (
 )
 
 from ...core.utils import immutable
-from ...core import DatasetRef
+from ...core import DatasetId, DatasetRef
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -54,12 +54,12 @@ class FakeDatasetRef:
 
     Parameters
     ----------
-    id : `int`
+    id : `DatasetId`
         The dataset ID.
     """
     __slots__ = ("id",)
 
-    def __init__(self, id: int):
+    def __init__(self, id: DatasetId):
         self.id = id
 
     def __str__(self) -> str:
@@ -77,11 +77,11 @@ class FakeDatasetRef:
     def __hash__(self) -> int:
         return hash(self.id)
 
-    id: int
-    """Unique integer that identifies this dataset.
+    id: DatasetId
+    """Unique identifier for this dataset.
     """
 
-    def getCheckedId(self) -> int:
+    def getCheckedId(self) -> DatasetId:
         """Return ``self.id``.
 
         This trivial method exists for compatibility with `DatasetRef`, for
@@ -89,7 +89,7 @@ class FakeDatasetRef:
 
         Returns
         -------
-        id : `int`
+        id : `DatasetId`
             ``self.id``.
         """
         return self.id

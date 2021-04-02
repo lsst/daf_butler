@@ -50,6 +50,7 @@ from ..core import (
     DataCoordinateIterable,
     DataId,
     DatasetAssociation,
+    DatasetId,
     DatasetRef,
     DatasetType,
     ddl,
@@ -451,7 +452,7 @@ class SqlRegistry(Registry):
                                              f"dimension row is missing.") from err
         return refs
 
-    def getDataset(self, id: int) -> Optional[DatasetRef]:
+    def getDataset(self, id: DatasetId) -> Optional[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.datasets.getDatasetRef(id)
 

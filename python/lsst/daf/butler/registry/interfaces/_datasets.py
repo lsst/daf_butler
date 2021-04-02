@@ -36,6 +36,7 @@ from typing import (
 
 from ...core import (
     DataCoordinate,
+    DatasetId,
     DatasetRef,
     DatasetType,
     ddl,
@@ -262,7 +263,7 @@ class DatasetRecordStorage(ABC):
     @abstractmethod
     def select(self, collection: CollectionRecord,
                dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
-               id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
+               id: SimpleQuery.Select.Or[Optional[DatasetId]] = SimpleQuery.Select,
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
                ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
@@ -284,10 +285,9 @@ class DatasetRecordStorage(ABC):
             The data ID to restrict results with, or an instruction to return
             the data ID via columns with names
             ``self.datasetType.dimensions.names``.
-        id : `int`, `Select` or None,
-            The integer primary key value for the dataset, an instruction to
-            return it via a ``id`` column, or `None` to ignore it
-            entirely.
+        id : `DatasetId`, `Select` or None,
+            The primary key value for the dataset, an instruction to return it
+            via a ``id`` column, or `None` to ignore it entirely.
         run : `None` or `Select`
             If `Select` (default), include the dataset's run key value (as
             column labeled with the return value of
@@ -514,14 +514,14 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def getDatasetRef(self, id: int) -> Optional[DatasetRef]:
+    def getDatasetRef(self, id: DatasetId) -> Optional[DatasetRef]:
         """Return a `DatasetRef` for the given dataset primary key
         value.
 
         Parameters
         ----------
-        id : `int`
-            Autoincrement primary key value for the dataset.
+        id : `DatasetId`
+            Primary key value for the dataset.
 
         Returns
         -------

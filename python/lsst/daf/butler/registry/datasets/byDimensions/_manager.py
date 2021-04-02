@@ -15,11 +15,11 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from abc import abstractmethod
 import copy
 import sqlalchemy
 
 from lsst.daf.butler import (
+    DatasetId,
     DatasetRef,
     DatasetType,
     ddl,
@@ -84,6 +84,10 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     Alternative implementations that make different choices for these while
     keeping the same general table organization might be reasonable as well.
 
+    This class provides complete implementation of manager logic but it is
+    parametrized by few class attributes that have to be defined by
+    sub-classes.
+
     Parameters
     ----------
     db : `Database`
@@ -112,7 +116,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         self._static = static
         self._summaries = summaries
         self._byName: Dict[str, ByDimensionsDatasetRecordStorage] = {}
-        self._byId: Dict[int, ByDimensionsDatasetRecordStorage] = {}
+        self._byId: Dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
 
     @classmethod
     def initialize(
@@ -134,7 +138,11 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         return cls(db=db, collections=collections, dimensions=dimensions, static=static, summaries=summaries)
 
     @classmethod
-    @abstractmethod
+    def currentVersion(cls) -> Optional[VersionTuple]:
+        # Docstring inherited from VersionedExtension.
+        return cls._version
+
+    @classmethod
     def makeStaticTableSpecs(cls, collections: Type[CollectionManager],
                              universe: DimensionUniverse) -> StaticDatasetTablesTuple:
         """Construct all static tables used by the classes in this package.
@@ -154,7 +162,13 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         specs : `StaticDatasetTablesTuple`
             A named tuple containing `ddl.TableSpec` instances.
         """
-        raise NotImplementedError()
+        return makeStaticTableSpecs(collections, universe=universe,
+                                    dtype=cls.getIdColumnType(), autoincrement=cls._autoincrement)
+
+    @classmethod
+    def getIdColumnType(cls) -> type:
+        # Docstring inherited from base class.
+        return cls._idColumnType
 
     @classmethod
     def addDatasetForeignKey(cls, tableSpec: ddl.TableSpec, *, name: str = "dataset",
@@ -167,7 +181,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     def refresh(self) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         byName = {}
-        byId = {}
+        byId: Dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
         c = self._static.dataset_type.columns
         for row in self._db.query(self._static.dataset_type.select()).fetchall():
             name = row[c.name]
@@ -279,7 +293,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         for storage in self._byName.values():
             yield storage.datasetType
 
-    def getDatasetRef(self, id: int) -> Optional[DatasetRef]:
+    def getDatasetRef(self, id: DatasetId) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         sql = sqlalchemy.sql.select(
             [
@@ -314,48 +328,34 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         # Docstring inherited from VersionedExtension.
         return self._defaultSchemaDigest(self._static, self._db.dialect)
 
+    _version: VersionTuple
+    """Schema version for this class."""
+
     _recordStorageType: Type[ByDimensionsDatasetRecordStorage]
+    """Type of the storage class returned by this manager."""
+
+    _autoincrement: bool
+    """If True then PK column of the dataset table is auto-increment."""
+
+    _idColumnType: type
+    """Type of dataset column used to store dataset ID."""
 
 
 class ByDimensionsDatasetRecordStorageManager(ByDimensionsDatasetRecordStorageManagerBase):
-
-    @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
-        # Docstring inherited from VersionedExtension.
-        return _VERSION_INT
-
-    @classmethod
-    def getIdColumnType(cls) -> type:
-        # Docstring inherited from base class.
-        return sqlalchemy.BigInteger
-
-    @classmethod
-    def makeStaticTableSpecs(cls, collections: Type[CollectionManager],
-                             universe: DimensionUniverse) -> StaticDatasetTablesTuple:
-        # Docstring inherited from base class.
-        return makeStaticTableSpecs(collections, universe=universe,
-                                    dtype=cls.getIdColumnType(), autoincrement=True)
-
+    """Implementation of ByDimensionsDatasetRecordStorageManagerBase which uses
+    integer for dataset primary key.
+    """
+    _version: VersionTuple = _VERSION_INT
     _recordStorageType: Type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageInt
+    _autoincrement: bool = True
+    _idColumnType: type = sqlalchemy.BigInteger
 
 
 class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStorageManagerBase):
-
-    @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
-        # Docstring inherited from VersionedExtension.
-        return _VERSION_UUID
-
-    @classmethod
-    def getIdColumnType(cls) -> type:
-        # Docstring inherited from base class.
-        return ddl.GUID
-
-    @classmethod
-    def makeStaticTableSpecs(cls, collections: Type[CollectionManager],
-                             universe: DimensionUniverse) -> StaticDatasetTablesTuple:
-        # Docstring inherited from base class.
-        return makeStaticTableSpecs(collections, universe=universe,
-                                    dtype=cls.getIdColumnType(), autoincrement=False)
-
+    """Implementation of ByDimensionsDatasetRecordStorageManagerBase which uses
+    UUID for dataset primary key.
+    """
+    _version: VersionTuple = _VERSION_UUID
     _recordStorageType: Type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageUUID
+    _autoincrement: bool = False
+    _idColumnType: type = ddl.GUID

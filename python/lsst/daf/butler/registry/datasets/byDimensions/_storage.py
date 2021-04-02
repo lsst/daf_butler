@@ -21,6 +21,7 @@ from lsst.daf.butler import (
     CollectionType,
     DataCoordinate,
     DataCoordinateSet,
+    DatasetId,
     DatasetRef,
     DatasetType,
     SimpleQuery,
@@ -372,8 +373,19 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             )
         return query
 
-    def getDataId(self, id: int) -> DataCoordinate:
-        # Docstring inherited from DatasetRecordStorage.
+    def getDataId(self, id: DatasetId) -> DataCoordinate:
+        """Return DataId for a dataset.
+
+        Parameters
+        ----------
+        id : `DatasetId`
+            Unique dataset identifier.
+
+        Returns
+        -------
+        dataId : `DataCoordinate`
+            DataId for the dataset.
+        """
         # This query could return multiple rows (one for each tagged collection
         # the dataset is in, plus one for its run collection), and we don't
         # care which of those we get.

@@ -52,6 +52,7 @@ from lsst.daf.butler import (
     CompositesMap,
     Config,
     FileDataset,
+    DatasetId,
     DatasetRef,
     DatasetType,
     DatasetTypeNotSupportedError,
@@ -390,7 +391,7 @@ class FileDatastore(GenericBaseDatastore):
 
         return results
 
-    def _registered_refs_per_artifact(self, pathInStore: ButlerURI) -> Set[int]:
+    def _registered_refs_per_artifact(self, pathInStore: ButlerURI) -> Set[DatasetId]:
         """Return all dataset refs associated with the supplied path.
 
         Parameters
