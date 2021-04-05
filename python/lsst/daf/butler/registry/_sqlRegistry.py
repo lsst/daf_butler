@@ -75,7 +75,7 @@ from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, Or
 from .managers import RegistryManagerTypes, RegistryManagerInstances
 from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch, Ellipsis
 from .summaries import CollectionSummary
-from .interfaces import ChainedCollectionRecord, RunRecord
+from .interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
 from ._registry import Registry
 
 if TYPE_CHECKING:
@@ -414,7 +414,8 @@ class SqlRegistry(Registry):
 
     @transactional
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
-                       run: Optional[str] = None, expand: bool = True) -> List[DatasetRef]:
+                       run: Optional[str] = None, expand: bool = True,
+                       idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> List[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if isinstance(datasetType, DatasetType):
             storage = self._managers.datasets.find(datasetType.name)
@@ -442,7 +443,65 @@ class SqlRegistry(Registry):
             expandedDataIds = [DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions)
                                for dataId in dataIds]
         try:
-            refs = list(storage.insert(runRecord, expandedDataIds))
+            refs = list(storage.insert(runRecord, expandedDataIds, idGenerationMode))
+        except sqlalchemy.exc.IntegrityError as err:
+            raise ConflictingDefinitionError(f"A database constraint failure was triggered by inserting "
+                                             f"one or more datasets of type {storage.datasetType} into "
+                                             f"collection '{run}'. "
+                                             f"This probably means a dataset with the same data ID "
+                                             f"and dataset type already exists, but it may also mean a "
+                                             f"dimension row is missing.") from err
+        return refs
+
+    @transactional
+    def _importDatasets(self, datasets: Iterable[DatasetRef], expand: bool = True,
+                        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> List[DatasetRef]:
+        # Docstring inherited from lsst.daf.butler.registry.Registry
+        datasets = list(datasets)
+        if not datasets:
+            # nothing to do
+            return []
+
+        # find dataset type
+        datasetTypes = set(dataset.datasetType for dataset in datasets)
+        if len(datasetTypes) != 1:
+            raise ValueError(f"Multiple dataset types in input datasets: {datasetTypes}")
+        datasetType = datasetTypes.pop()
+
+        # get storage handler for this dataset type
+        storage = self._managers.datasets.find(datasetType.name)
+        if storage is None:
+            raise LookupError(f"DatasetType '{datasetType}' has not been registered.")
+
+        # find run name
+        runs = set(dataset.run for dataset in datasets)
+        if len(runs) != 1:
+            raise ValueError(f"Multiple run names in input datasets: {runs}")
+        run = runs.pop()
+        if run is None:
+            if self.defaults.run is None:
+                raise TypeError("No run provided to ingestDatasets, "
+                                "and no default from registry construction.")
+            run = self.defaults.run
+
+        runRecord = self._managers.collections.find(run)
+        if runRecord.type is not CollectionType.RUN:
+            raise TypeError(f"Given collection is of type {runRecord.type.name}; RUN collection required.")
+        assert isinstance(runRecord, RunRecord)
+
+        progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
+        if expand:
+            expandedDatasets = [
+                dataset.expanded(self.expandDataId(dataset.dataId, graph=storage.datasetType.dimensions))
+                for dataset in progress.wrap(datasets, f"Expanding {storage.datasetType.name} data IDs")]
+        else:
+            expandedDatasets = [
+                DatasetRef(datasetType, dataset.dataId, id=dataset.id, run=dataset.run, conform=True)
+                for dataset in datasets
+            ]
+
+        try:
+            refs = list(storage.import_(runRecord, expandedDatasets, idGenerationMode))
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(f"A database constraint failure was triggered by inserting "
                                              f"one or more datasets of type {storage.datasetType} into "

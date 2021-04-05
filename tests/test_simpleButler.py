@@ -25,6 +25,7 @@ import os
 import tempfile
 from typing import Any
 import unittest
+import uuid
 
 try:
     import numpy as np
@@ -37,6 +38,7 @@ from lsst.daf.butler import (
     Butler,
     ButlerConfig,
     CollectionType,
+    DatasetRef,
     DatasetType,
     Registry,
     Timespan,
@@ -55,6 +57,11 @@ class SimpleButlerTestCase(unittest.TestCase):
     can instead utilize an in-memory SQLite Registry and a mocked Datastore.
     """
 
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+    datasetsImportFile = "datasets.yaml"
+    datasetsIdType = int
+
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
 
@@ -69,6 +76,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         # make separate temporary directory for registry of this instance
         tmpdir = tempfile.mkdtemp(dir=self.root)
         config["registry", "db"] = f"sqlite:///{tmpdir}/gen3.sqlite3"
+        config["registry", "managers", "datasets"] = self.datasetsManager
         config["root"] = self.root
 
         # have to make a registry first
@@ -78,6 +86,16 @@ class SimpleButlerTestCase(unittest.TestCase):
         butler = Butler(config, **kwargs)
         DatastoreMock.apply(butler)
         return butler
+
+    def comparableRef(self, ref: DatasetRef) -> DatasetRef:
+        """Return a DatasetRef that can be compared to a DatasetRef from
+        other repository.
+
+        For repositories that do not support round-trip of ID values this
+        method returns unresolved DatasetRef, for round-trip-safe repos it
+        returns unchanged ref.
+        """
+        return ref if self.datasetsIdType is uuid.UUID else ref.unresolved()
 
     def testReadBackwardsCompatibility(self):
         """Test that we can read an export file written by a previous version
@@ -134,7 +152,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         # Import data to play with.
         butler1 = self.makeButler(writeable=True)
         butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
         with tempfile.NamedTemporaryFile(mode='w', suffix=".yaml") as file:
             # Export all datasets.
             with butler1.export(filename=file.name) as exporter:
@@ -144,12 +162,45 @@ class SimpleButlerTestCase(unittest.TestCase):
             # Import it all again.
             butler2 = self.makeButler(writeable=True)
             butler2.import_(filename=file.name)
-        # Check that it all round-tripped.  Use unresolved() to make
-        # comparison not care about dataset_id values, which may be
-        # rewritten.
+        datasets1 = list(butler1.registry.queryDatasets(..., collections=...))
+        datasets2 = list(butler2.registry.queryDatasets(..., collections=...))
+        self.assertTrue(all(isinstance(ref.id, self.datasetsIdType) for ref in datasets1))
+        self.assertTrue(all(isinstance(ref.id, self.datasetsIdType) for ref in datasets2))
         self.assertCountEqual(
-            [ref.unresolved() for ref in butler1.registry.queryDatasets(..., collections=...)],
-            [ref.unresolved() for ref in butler2.registry.queryDatasets(..., collections=...)],
+            [self.comparableRef(ref) for ref in datasets1],
+            [self.comparableRef(ref) for ref in datasets2],
+        )
+
+    def testDatasetImportTwice(self):
+        """Test exporting all datasets from a repo and then importing them all
+        back in again twice.
+        """
+        if self.datasetsIdType is not uuid.UUID:
+            self.skipTest("This test can only work for UUIDs")
+        # Import data to play with.
+        butler1 = self.makeButler(writeable=True)
+        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+        with tempfile.NamedTemporaryFile(mode='w', suffix=".yaml", delete=False) as file:
+            # Export all datasets.
+            with butler1.export(filename=file.name) as exporter:
+                exporter.saveDatasets(
+                    butler1.registry.queryDatasets(..., collections=...)
+                )
+            butler2 = self.makeButler(writeable=True)
+            # Import it once.
+            butler2.import_(filename=file.name)
+            # Import it again, but ignore all dimensions
+            dimensions = set(
+                dimension.name for dimension in butler2.registry.dimensions.getStaticDimensions())
+            butler2.import_(filename=file.name, skip_dimensions=dimensions)
+        datasets1 = list(butler1.registry.queryDatasets(..., collections=...))
+        datasets2 = list(butler2.registry.queryDatasets(..., collections=...))
+        self.assertTrue(all(isinstance(ref.id, self.datasetsIdType) for ref in datasets1))
+        self.assertTrue(all(isinstance(ref.id, self.datasetsIdType) for ref in datasets2))
+        self.assertCountEqual(
+            [self.comparableRef(ref) for ref in datasets1],
+            [self.comparableRef(ref) for ref in datasets2],
         )
 
     def testCollectionTransfers(self):
@@ -158,7 +209,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         # Populate a registry with some datasets.
         butler1 = self.makeButler(writeable=True)
         butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
         registry1 = butler1.registry
         # Add some more collections.
         registry1.registerRun("run1")
@@ -213,14 +264,14 @@ class SimpleButlerTestCase(unittest.TestCase):
         # Check that tag collection contents are the same.
         self.maxDiff = None
         self.assertCountEqual(
-            [ref.unresolved() for ref in registry1.queryDatasets(..., collections="tag1")],
-            [ref.unresolved() for ref in registry2.queryDatasets(..., collections="tag1")],
+            [self.comparableRef(ref) for ref in registry1.queryDatasets(..., collections="tag1")],
+            [self.comparableRef(ref) for ref in registry2.queryDatasets(..., collections="tag1")],
         )
         # Check that calibration collection contents are the same.
         self.assertCountEqual(
-            [(assoc.ref.unresolved(), assoc.timespan)
+            [(self.comparableRef(assoc.ref), assoc.timespan)
              for assoc in registry1.queryDatasetAssociations("bias", collections="calibration1")],
-            [(assoc.ref.unresolved(), assoc.timespan)
+            [(self.comparableRef(assoc.ref), assoc.timespan)
              for assoc in registry2.queryDatasetAssociations("bias", collections="calibration1")],
         )
 
@@ -230,7 +281,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         # Import data to play with.
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
 
         # Find the DatasetRef for a flat
         coll = "imported_g"
@@ -277,7 +328,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         # Import data to play with.
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
         # Certify some biases into a CALIBRATION collection.
         registry = butler.registry
         registry.registerCollection("calibs", CollectionType.CALIBRATION)
@@ -369,7 +420,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         """
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
         # Need to actually set defaults later, not at construction, because
         # we need to import the instrument before we can use it as a default.
         # Don't set a default instrument value for data IDs, because 'Cam1'
@@ -424,7 +475,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         """
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
-        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "datasets.yaml"))
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
         # Need to actually set defaults later, not at construction, because
         # we need to import the instrument before we can use it as a default.
         # Don't set a default instrument value for data IDs, because 'Cam1'
@@ -465,6 +516,28 @@ class SimpleButlerTestCase(unittest.TestCase):
                     self.assertEqual(r_json, r)
                     # Also check equality of each of the components as dicts
                     self.assertEqual(r_json.toDict(), r.toDict())
+
+
+class SimpleButlerUUIDTestCase(SimpleButlerTestCase):
+    """Same as SimpleButlerTestCase but uses UUID-based datasets manager and
+    loads datasets from YAML file with UUIDs.
+    """
+
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    datasetsImportFile = "datasets-uuid.yaml"
+    datasetsIdType = uuid.UUID
+
+
+class SimpleButlerMixedUUIDTestCase(SimpleButlerTestCase):
+    """Same as SimpleButlerTestCase but uses UUID-based datasets manager and
+    loads datasets from YAML file with integer IDs.
+    """
+
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    datasetsImportFile = "datasets.yaml"
+    datasetsIdType = uuid.UUID
 
 
 if __name__ == "__main__":

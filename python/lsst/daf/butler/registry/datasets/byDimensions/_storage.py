@@ -4,6 +4,7 @@ __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterable,
     Iterator,
@@ -404,6 +405,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
 
 
 class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
+    """Implementation of ByDimensionsDatasetRecordStorage which uses integer
+    auto-incremented column for dataset IDs.
+    """
 
     def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate],
                idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
@@ -450,8 +454,29 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
                 run=run.name,
             )
 
+    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
+                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
+        # Docstring inherited from DatasetRecordStorage.
+
+        # We only accept integer dataset IDs, but also allow None.
+        types = set(type(dataset.id) for dataset in datasets)
+        extra_types = types - {int, type(None)}
+        if extra_types:
+            raise TypeError(f"Unsupported type of dataset IDs: {extra_types}")
+
+        # We do not reuse integer IDs from other repository as it is going
+        # to clash with auto-incremented IDs from this and other repos.
+        return self.insert(
+            run,
+            (dataset.dataId for dataset in datasets),
+            idGenerationMode
+        )
+
 
 class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
+    """Implementation of ByDimensionsDatasetRecordStorage which uses UUID for
+    dataset IDs.
+    """
 
     NS_UUID = uuid.UUID('840b31d9-05cd-5161-b2c8-00d32b280d0f')
     """Namespace UUID used for UUID5 generation. Do not change. This was
@@ -463,22 +488,55 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         # Docstring inherited from DatasetRecordStorage.
 
         # Iterate over data IDs, transforming a possibly-single-pass iterable
-        # into a list, and remembering any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
+        # into a list.
         dataIdList = []
         rows = []
         for dataId in dataIds:
             dataIdList.append(dataId)
-            governorValues.update_extract(dataId)
             rows.append({
                 "id": self._makeDatasetId(run, dataId, idMode),
                 "dataset_type_id": self._dataset_type_id,
                 self._runKeyColumn: run.key,
             })
+
+        yield from self._insert(run, dataIdList, rows, self._db.insert)
+
+    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
+                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
+        # Docstring inherited from DatasetRecordStorage.
+
+        # Iterate over data IDs, transforming a possibly-single-pass iterable
+        # into a list.
+        dataIdList = []
+        rows = []
+        for dataset in datasets:
+            dataIdList.append(dataset.dataId)
+            # Ignore unknown ID types, normally all IDs have the same type but
+            # this code supports mixed types or missing IDs.
+            datasetId = dataset.id if isinstance(dataset.id, uuid.UUID) else None
+            if datasetId is None:
+                datasetId = self._makeDatasetId(run, dataset.dataId, idGenerationMode)
+            rows.append({
+                "id": datasetId,
+                "dataset_type_id": self._dataset_type_id,
+                self._runKeyColumn: run.key,
+            })
+
+        yield from self._insert(run, dataIdList, rows, self._db.ensure)
+
+    def _insert(self, run: RunRecord, dataIdList: List[DataCoordinate],
+                rows: List[Dict], insertMethod: Callable) -> Iterator[DatasetRef]:
+        """Common part of implementation of `insert` and `import_` methods.
+        """
+
+        # Remember any governor dimension values we see.
+        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
+        for dataId in dataIdList:
+            governorValues.update_extract(dataId)
+
         with self._db.transaction():
-            # Insert into the static dataset table, generating autoincrement
-            # dataset_id values.
-            self._db.insert(self._static.dataset, *rows)
+            # Insert into the static dataset table.
+            insertMethod(self._static.dataset, *rows)
             # Update the summary tables for this collection in case this is the
             # first time this dataset type or these governor values will be
             # inserted there.
@@ -493,9 +551,8 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 dict(protoTagsRow, dataset_id=row["id"], **dataId.byName())
                 for dataId, row in zip(dataIdList, rows)
             ]
-            # Insert those rows into the tags table.  This is where we'll
-            # get any unique constraint violations.
-            self._db.insert(self._tags, *tagsRows)
+            # Insert those rows into the tags table.
+            insertMethod(self._tags, *tagsRows)
         for dataId, row in zip(dataIdList, rows):
             yield DatasetRef(
                 datasetType=self.datasetType,
@@ -504,19 +561,48 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 run=run.name,
             )
 
-    def _makeDatasetId(self, run: RunRecord, dataId: DataCoordinate, idMode: DatasetIdGenEnum) -> uuid.UUID:
-        if idMode is DatasetIdGenEnum.UNIQUE:
+    def _makeDatasetId(self, run: RunRecord, dataId: DataCoordinate,
+                       idGenerationMode: DatasetIdGenEnum) -> uuid.UUID:
+        """Generate dataset ID for a dataset.
+
+        Parameters
+        ----------
+        run : `RunRecord`
+            The record object describing the RUN collection for the dataset.
+        dataId : `DataCoordinate`
+            Expanded data ID for the dataset.
+        idGenerationMode : `DatasetIdGenEnum`
+            ID generation option. `~DatasetIdGenEnum.UNIQUE` make a random
+            UUID4-type ID. `~DatasetIdGenEnum.DATAID_TYPE` makes a
+            deterministic UUID5-type ID based on a dataset type name and
+            ``dataId``.  `~DatasetIdGenEnum.DATAID_TYPE_RUN` makes a
+            deterministic UUID5-type ID based on a dataset type name, run
+            collection name, and ``dataId``.
+
+        Returns
+        -------
+        datasetId : `uuid.UUID`
+            Dataset identifier.
+        """
+        if idGenerationMode is DatasetIdGenEnum.UNIQUE:
             return uuid.uuid4()
-        elif idMode is DatasetIdGenEnum.DETERMINISTIC:
-            # Combine all items in a single string, make sure that order of
-            # items is always the same
-            items: List[Tuple[str, str]] = [
-                ("run", run.name),
-                ("dataset_type", self.datasetType.name),
-            ]
+        else:
+            # WARNING: If you modify this code make sure that the order of
+            # items in the `items` list below never changes.
+            items: List[Tuple[str, str]] = []
+            if idGenerationMode is DatasetIdGenEnum.DATAID_TYPE:
+                items = [
+                    ("dataset_type", self.datasetType.name),
+                ]
+            elif idGenerationMode is DatasetIdGenEnum.DATAID_TYPE_RUN:
+                items = [
+                    ("dataset_type", self.datasetType.name),
+                    ("run", run.name),
+                ]
+            else:
+                raise ValueError(f"Unexpected ID generation mode: {idGenerationMode}")
+
             for name, value in sorted(dataId.byName().items()):
                 items.append((name, str(value)))
             data = ",".join(f"{key}={value}" for key, value in items)
             return uuid.uuid5(self.NS_UUID, data)
-        else:
-            raise ValueError(f"Unexpected ID generation mode: {idMode}")

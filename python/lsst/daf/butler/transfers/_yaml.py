@@ -49,7 +49,6 @@ from ..core import (
     DatasetId,
     DatasetRef,
     DatasetType,
-    DataCoordinate,
     Datastore,
     DimensionElement,
     DimensionRecord,
@@ -245,9 +244,9 @@ class YamlRepoImportBackend(RepoImportBackend):
         self.collectionDocs: Dict[str, str] = {}
         self.datasetTypes: NamedValueSet[DatasetType] = NamedValueSet()
         self.dimensions: Mapping[DimensionElement, List[DimensionRecord]] = defaultdict(list)
-        self.tagAssociations: Dict[str, List[int]] = defaultdict(list)
-        self.calibAssociations: Dict[str, Dict[Timespan, List[int]]] = defaultdict(dict)
-        self.refsByFileId: Dict[int, DatasetRef] = {}
+        self.tagAssociations: Dict[str, List[DatasetId]] = defaultdict(list)
+        self.calibAssociations: Dict[str, Dict[Timespan, List[DatasetId]]] = defaultdict(dict)
+        self.refsByFileId: Dict[DatasetId, DatasetRef] = {}
         self.registry: Registry = registry
         datasetData = []
         for data in wrapper["data"]:
@@ -358,28 +357,23 @@ class YamlRepoImportBackend(RepoImportBackend):
         # FileDatasets to ingest into the datastore (in bulk):
         fileDatasets = []
         for (datasetTypeName, run), records in self.datasets.items():
-            datasetType = self.registry.getDatasetType(datasetTypeName)
             # Make a big flattened list of all data IDs and dataset_ids, while
             # remembering slices that associate them with the FileDataset
             # instances they came from.
-            dataIds: List[DataCoordinate] = []
-            dataset_ids: List[int] = []
+            datasets: List[DatasetRef] = []
+            dataset_ids: List[DatasetId] = []
             slices = []
             for fileDataset in records:
-                start = len(dataIds)
-                dataIds.extend(ref.dataId for ref in fileDataset.refs)
+                start = len(datasets)
+                datasets.extend(fileDataset.refs)
                 dataset_ids.extend(ref.id for ref in fileDataset.refs)  # type: ignore
-                stop = len(dataIds)
+                stop = len(datasets)
                 slices.append(slice(start, stop))
             # Insert all of those DatasetRefs at once.
             # For now, we ignore the dataset_id we pulled from the file
             # and just insert without one to get a new autoincrement value.
             # Eventually (once we have origin in IDs) we'll preserve them.
-            resolvedRefs = self.registry.insertDatasets(
-                datasetType,
-                dataIds=dataIds,
-                run=run,
-            )
+            resolvedRefs = self.registry._importDatasets(datasets)
             # Populate our dictionary that maps int dataset_id values from the
             # export file to the new DatasetRefs
             for fileId, ref in zip(dataset_ids, resolvedRefs):

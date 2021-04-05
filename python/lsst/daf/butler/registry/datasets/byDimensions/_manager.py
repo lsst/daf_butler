@@ -343,7 +343,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
 class ByDimensionsDatasetRecordStorageManager(ByDimensionsDatasetRecordStorageManagerBase):
     """Implementation of ByDimensionsDatasetRecordStorageManagerBase which uses
-    integer for dataset primary key.
+    auto-incremental integer for dataset primary key.
     """
     _version: VersionTuple = _VERSION_INT
     _recordStorageType: Type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageInt
