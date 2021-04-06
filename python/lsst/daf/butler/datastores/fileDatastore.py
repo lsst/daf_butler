@@ -1788,3 +1788,15 @@ class FileDatastore(GenericBaseDatastore):
                     hasher.update(chunk)
 
         return hasher.hexdigest()
+
+    def needs_expanded_data_ids(
+        self,
+        transfer: Optional[str],
+        entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
+    ) -> bool:
+        # Docstring inherited.
+        # This _could_ also use entity to inspect whether the filename template
+        # involves placeholders other than the required dimensions for its
+        # dataset type, but that's not necessary for correctness; it just
+        # enables more optimizations (perhaps only in theory).
+        return transfer not in ("direct", None)

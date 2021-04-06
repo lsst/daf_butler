@@ -585,3 +585,11 @@ class InMemoryDatastore(GenericBaseDatastore):
     def getLookupKeys(self) -> Set[LookupKey]:
         # Docstring is inherited from base class
         return self.constraints.getLookupKeys()
+
+    def needs_expanded_data_ids(
+        self,
+        transfer: Optional[str],
+        entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
+    ) -> bool:
+        # Docstring inherited.
+        return False

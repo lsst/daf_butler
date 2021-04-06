@@ -1463,9 +1463,12 @@ class Butler:
         allResolvedRefs: List[DatasetRef] = []
         for datasetType, groupForType in progress.iter_item_chunks(groupedData.items(),
                                                                    desc="Bulk-inserting datasets by type"):
-            refs = self.registry.insertDatasets(datasetType,
-                                                dataIds=groupForType.keys(),
-                                                run=run)
+            refs = self.registry.insertDatasets(
+                datasetType,
+                dataIds=groupForType.keys(),
+                run=run,
+                expand=self.datastore.needs_expanded_data_ids(transfer, datasetType),
+            )
             # Append those resolved DatasetRefs to the new lists we set up for
             # them.
             for ref, (_, resolvedRefs) in zip(refs, groupForType.values()):

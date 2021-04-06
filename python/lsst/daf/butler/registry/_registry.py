@@ -756,7 +756,7 @@ class Registry:
 
     @transactional
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
-                       run: Optional[str] = None) -> List[DatasetRef]:
+                       run: Optional[str] = None, expand: bool = True) -> List[DatasetRef]:
         """Insert one or more datasets into the `Registry`
 
         This always adds new datasets; to associate existing datasets with
@@ -771,6 +771,11 @@ class Registry:
         run : `str`, optional
             The name of the run that produced the datasets.  Defaults to
             ``self.defaults.run``.
+        expand : `bool`, optional
+            If `True` (default), expand data IDs as they are inserted.  This is
+            necessary in general to allow datastore to generate file templates,
+            but it may be disabled if the caller can guarantee this is
+            unnecessary.
 
         Returns
         -------
@@ -805,10 +810,14 @@ class Registry:
         if runRecord.type is not CollectionType.RUN:
             raise TypeError(f"Given collection is of type {runRecord.type.name}; RUN collection required.")
         assert isinstance(runRecord, RunRecord)
-        progress = Progress("lsst.daf.butler.Registry.insertDatasets", level=logging.DEBUG)
-        expandedDataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions)
-                           for dataId in progress.wrap(dataIds,
-                                                       f"Expanding {storage.datasetType.name} data IDs")]
+        progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
+        if expand:
+            expandedDataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions)
+                               for dataId in progress.wrap(dataIds,
+                                                           f"Expanding {storage.datasetType.name} data IDs")]
+        else:
+            expandedDataIds = [DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions)
+                               for dataId in dataIds]
         try:
             refs = list(storage.insert(runRecord, expandedDataIds))
         except sqlalchemy.exc.IntegrityError as err:
