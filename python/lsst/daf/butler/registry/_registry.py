@@ -26,6 +26,7 @@ __all__ = (
 )
 
 from abc import ABC, abstractmethod
+import contextlib
 import logging
 from typing import (
     Any,
@@ -69,7 +70,10 @@ from .summaries import CollectionSummary
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
-    from .interfaces import CollectionRecord
+    from .interfaces import (
+        CollectionRecord,
+        DatastoreRegistryBridgeManager,
+    )
 
 _LOG = logging.getLogger(__name__)
 
@@ -266,6 +270,13 @@ class Registry(ABC):
 
         This may be necessary to enable querying for entities added by other
         registry instances after this one was constructed.
+        """
+        raise NotImplementedError()
+
+    @contextlib.contextmanager
+    @abstractmethod
+    def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
+        """Return a context manager that represents a transaction.
         """
         raise NotImplementedError()
 
@@ -826,6 +837,19 @@ class Registry(ABC):
         TypeError
             Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
             collection or if ``datasetType.isCalibration() is False``.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
+        """Return an object that allows a new `Datastore` instance to
+        communicate with this `Registry`.
+
+        Returns
+        -------
+        manager : `DatastoreRegistryBridgeManager`
+            Object that mediates communication between this `Registry` and its
+            associated datastores.
         """
         raise NotImplementedError()
 
