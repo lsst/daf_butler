@@ -25,8 +25,6 @@ __all__ = ("RegistryConfig",)
 
 from typing import Optional, Type, TYPE_CHECKING, Union
 
-import sqlalchemy
-
 from lsst.utils import doImport
 
 from ..core import ConfigSubset
@@ -34,6 +32,7 @@ from ..core.repoRelocation import replaceRoot
 from .connectionString import ConnectionStringFactory
 
 if TYPE_CHECKING:
+    import sqlalchemy
     from ..core import ButlerURI
     from .interfaces import Database
 
