@@ -52,16 +52,17 @@ from ...core import (
     ddl,
     Timespan,
 )
-from .._registry import (
-    CollectionSummary,
-    CollectionType,
+from .._registry import Registry
+from ..summaries import CollectionSummary
+from .._collectionType import CollectionType
+from .._config import RegistryConfig
+
+from .._exceptions import (
     ConflictingDefinitionError,
     InconsistentDataIdError,
+    MissingCollectionError,
     OrphanedRecordError,
-    Registry,
-    RegistryConfig,
 )
-from .._exceptions import MissingCollectionError
 from ..interfaces import ButlerAttributeExistsError
 
 
