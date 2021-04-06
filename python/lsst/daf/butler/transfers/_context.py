@@ -109,7 +109,7 @@ class RepoExportContext:
         export its child collections; these must be explicitly exported or
         already be present in the repository they are being imported into.
         """
-        self._collections[name] = self._registry._managers.collections.find(name)
+        self._collections[name] = self._registry._get_collection_record(name)
 
     def saveDimensionData(self, element: Union[str, DimensionElement],
                           records: Iterable[Union[dict, DimensionRecord]]) -> None:
@@ -235,7 +235,7 @@ class RepoExportContext:
             self._backend.saveDimensionData(element, *[r[dataId] for dataId in sorted(r.keys())])
         for datasetsByRun in self._datasets.values():
             for run in datasetsByRun.keys():
-                self._collections[run] = self._registry._managers.collections.find(run)
+                self._collections[run] = self._registry._get_collection_record(run)
         for collectionName in self._computeSortedCollections():
             doc = self._registry.getCollectionDocumentation(collectionName)
             self._backend.saveCollection(self._collections[collectionName], doc)

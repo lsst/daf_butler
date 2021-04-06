@@ -406,6 +406,21 @@ class SqlRegistry(Registry):
         """
         return self._managers.collections.find(name).type
 
+    def _get_collection_record(self, name: str) -> CollectionRecord:
+        """Return the record for this collection.
+
+        Parameters
+        ----------
+        collection : `str`
+            Name of the collection for which the record is to be retrieved.
+
+        Returns
+        -------
+        record : `CollectionRecord`
+            The record for this collection.
+        """
+        return self._managers.collections.find(name)
+
     def registerRun(self, name: str, doc: Optional[str] = None) -> None:
         """Add a new run if one with the given name does not exist.
 

@@ -69,6 +69,7 @@ from .summaries import CollectionSummary
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
+    from .interfaces import CollectionRecord
 
 _LOG = logging.getLogger(__name__)
 
@@ -310,6 +311,22 @@ class Registry(ABC):
             Raised if no collection with the given name exists.
         """
         raise NotImplementedError()
+
+    @abstractmethod
+    def _get_collection_record(self, name: str) -> CollectionRecord:
+        """Return the record for this collection.
+
+        Parameters
+        ----------
+        collection : `str`
+            Name of the collection for which the record is to be retrieved.
+
+        Returns
+        -------
+        record : `CollectionRecord`
+            The record for this collection.
+        """
+        raise NotImplementedError
 
     @abstractmethod
     def registerRun(self, name: str, doc: Optional[str] = None) -> None:
