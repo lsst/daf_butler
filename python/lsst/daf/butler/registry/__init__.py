@@ -22,7 +22,7 @@
 from ._config import *
 from ._defaults import *
 from ._exceptions import *
-from ._registry import *
+from ._sqlRegistry import *
 from ._dbAuth import *
 from ._collectionType import *
 
