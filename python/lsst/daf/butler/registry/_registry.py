@@ -25,106 +25,128 @@ __all__ = (
     "Registry",
 )
 
-from collections import defaultdict
+from abc import ABC, abstractmethod
 import contextlib
 import logging
 from typing import (
     Any,
-    Dict,
     Iterable,
     Iterator,
     List,
     Mapping,
     Optional,
-    Set,
+    Tuple,
+    Type,
     TYPE_CHECKING,
     Union,
 )
 
-import sqlalchemy
+from lsst.utils import doImport
 
 from ..core import (
     ButlerURI,
     Config,
     DataCoordinate,
-    DataCoordinateIterable,
     DataId,
     DatasetAssociation,
     DatasetRef,
     DatasetType,
-    ddl,
     Dimension,
     DimensionConfig,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
-    NamedKeyMapping,
     NameLookupMapping,
-    Progress,
     StorageClassFactory,
     Timespan,
 )
 from . import queries
-from ..core.utils import iterable, transactional
 from ._config import RegistryConfig
 from ._collectionType import CollectionType
 from ._defaults import RegistryDefaults
-from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
-from .managers import RegistryManagerTypes, RegistryManagerInstances
-from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch, Ellipsis
+from .wildcards import CollectionSearch
 from .summaries import CollectionSummary
-from .interfaces import ChainedCollectionRecord, RunRecord
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
     from .interfaces import (
-        Database,
+        CollectionRecord,
         DatastoreRegistryBridgeManager,
     )
 
-
 _LOG = logging.getLogger(__name__)
 
-# key for dimensions configuration in attributes table
-_DIMENSIONS_ATTR = "config:dimensions.json"
 
+class Registry(ABC):
+    """Abstract Registry interface.
 
-class Registry:
-    """Registry interface.
+    Each registry implementation can have its own constructor parameters.
+    The assumption is that an instance of a specific subclass will be
+    constructed from configuration using `Registry.fromConfig()`.
+    The base class will look for a ``cls`` entry and call that specific
+    `fromConfig()` method.
 
-    Parameters
-    ----------
-    database : `Database`
-        Database instance to store Registry.
-    defaults : `RegistryDefaults`, optional
-        Default collection search path and/or output `~CollectionType.RUN`
-        collection.
-    attributes : `type`
-        Manager class implementing `ButlerAttributeManager`.
-    opaque : `type`
-        Manager class implementing `OpaqueTableStorageManager`.
-    dimensions : `type`
-        Manager class implementing `DimensionRecordStorageManager`.
-    collections : `type`
-        Manager class implementing `CollectionManager`.
-    datasets : `type`
-        Manager class implementing `DatasetRecordStorageManager`.
-    datastoreBridges : `type`
-        Manager class implementing `DatastoreRegistryBridgeManager`.
-    dimensionConfig : `DimensionConfig`, optional
-        Dimension universe configuration, only used when ``create`` is True.
-    writeable : `bool`, optional
-        If True then Registry will support write operations.
-    create : `bool`, optional
-        If True then database schema will be initialized, it must be empty
-        before instantiating Registry.
+    All subclasses should store `RegistryDefaults` in a ``_defaults``
+    property. No other properties are assumed shared between implementations.
     """
 
     defaultConfigFile: Optional[str] = None
     """Path to configuration defaults. Accessed within the ``configs`` resource
     or relative to a search path. Can be None if no defaults specified.
     """
+
+    @classmethod
+    def forceRegistryConfig(cls, config: Optional[Union[ButlerConfig,
+                                                        RegistryConfig, Config, str]]) -> RegistryConfig:
+        """Force the supplied config to a `RegistryConfig`.
+
+        Parameters
+        ----------
+        config : `RegistryConfig`, `Config` or `str` or `None`
+            Registry configuration, if missing then default configuration will
+            be loaded from registry.yaml.
+
+        Returns
+        -------
+        registry_config : `RegistryConfig`
+            A registry config.
+        """
+        if not isinstance(config, RegistryConfig):
+            if isinstance(config, (str, Config)) or config is None:
+                config = RegistryConfig(config)
+            else:
+                raise ValueError(f"Incompatible Registry configuration: {config}")
+        return config
+
+    @classmethod
+    def determineTrampoline(cls,
+                            config: Optional[Union[ButlerConfig,
+                                                   RegistryConfig,
+                                                   Config,
+                                                   str]]) -> Tuple[Type[Registry], RegistryConfig]:
+        """Return class to use to instantiate real registry.
+
+        Parameters
+        ----------
+        config : `RegistryConfig` or `str`, optional
+            Registry configuration, if missing then default configuration will
+            be loaded from registry.yaml.
+
+        Returns
+        -------
+        requested_cls : `type` of `Registry`
+            The real registry class to use.
+        registry_config : `RegistryConfig`
+            The `RegistryConfig` to use.
+        """
+        config = cls.forceRegistryConfig(config)
+
+        # Default to the standard registry
+        registry_cls = doImport(config.get("cls", "lsst.daf.butler.registry.SqlRegistry"))
+        if registry_cls is cls:
+            raise ValueError("Can not instantiate the abstract base Registry from config")
+        return registry_cls, config
 
     @classmethod
     def createFromConfig(cls, config: Optional[Union[RegistryConfig, str]] = None,
@@ -150,28 +172,15 @@ class Registry:
         -------
         registry : `Registry`
             A new `Registry` instance.
+
+        Notes
+        -----
+        This class will determine the concrete `Registry` subclass to
+        use from configuration.  Each subclass should implement this method
+        even if it can not create a registry.
         """
-        if isinstance(config, str):
-            config = RegistryConfig(config)
-        elif config is None:
-            config = RegistryConfig()
-        elif not isinstance(config, RegistryConfig):
-            raise TypeError(f"Incompatible Registry configuration type: {type(config)}")
-        config.replaceRoot(butlerRoot)
-
-        if isinstance(dimensionConfig, str):
-            dimensionConfig = DimensionConfig(config)
-        elif dimensionConfig is None:
-            dimensionConfig = DimensionConfig()
-        elif not isinstance(dimensionConfig, DimensionConfig):
-            raise TypeError(f"Incompatible Dimension configuration type: {type(dimensionConfig)}")
-
-        DatabaseClass = config.getDatabaseClass()
-        database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
-                                         namespace=config.get("namespace"))
-        managerTypes = RegistryManagerTypes.fromConfig(config)
-        managers = managerTypes.makeRepo(database, dimensionConfig)
-        return cls(database, RegistryDefaults(), managers)
+        registry_cls, registry_config = cls.determineTrampoline(config)
+        return registry_cls.createFromConfig(registry_config, dimensionConfig, butlerRoot)
 
     @classmethod
     def fromConfig(cls, config: Union[ButlerConfig, RegistryConfig, Config, str],
@@ -179,7 +188,7 @@ class Registry:
                    defaults: Optional[RegistryDefaults] = None) -> Registry:
         """Create `Registry` subclass instance from `config`.
 
-        Registry database must be inbitialized prior to calling this method.
+        Registry database must be initialized prior to calling this method.
 
         Parameters
         ----------
@@ -197,43 +206,27 @@ class Registry:
         -------
         registry : `Registry` (subclass)
             A new `Registry` subclass instance.
+
+        Notes
+        -----
+        This class will determine the concrete `Registry` subclass to
+        use from configuration.  Each subclass should implement this method.
         """
-        if not isinstance(config, RegistryConfig):
-            if isinstance(config, str) or isinstance(config, Config):
-                config = RegistryConfig(config)
-            else:
-                raise ValueError("Incompatible Registry configuration: {}".format(config))
-        config.replaceRoot(butlerRoot)
-        DatabaseClass = config.getDatabaseClass()
-        database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
-                                         namespace=config.get("namespace"), writeable=writeable)
-        managerTypes = RegistryManagerTypes.fromConfig(config)
-        managers = managerTypes.loadRepo(database)
-        if defaults is None:
-            defaults = RegistryDefaults()
-        return cls(database, defaults, managers)
+        # The base class implementation should trampoline to the correct
+        # subclass. No implementation should ever use this implementation
+        # directly. If no class is specified, default to the standard
+        # registry.
+        registry_cls, registry_config = cls.determineTrampoline(config)
+        return registry_cls.fromConfig(config, butlerRoot, writeable, defaults)
 
-    def __init__(self, database: Database, defaults: RegistryDefaults, managers: RegistryManagerInstances):
-        self._db = database
-        self._managers = managers
-        self.storageClasses = StorageClassFactory()
-        # Intentionally invoke property setter to initialize defaults.  This
-        # can only be done after most of the rest of Registry has already been
-        # initialized, and must be done before the property getter is used.
-        self.defaults = defaults
-
-    def __str__(self) -> str:
-        return str(self._db)
-
-    def __repr__(self) -> str:
-        return f"Registry({self._db!r}, {self.dimensions!r})"
-
+    @abstractmethod
     def isWriteable(self) -> bool:
         """Return `True` if this registry allows write operations, and `False`
         otherwise.
         """
-        return self._db.isWriteable()
+        raise NotImplementedError()
 
+    @abstractmethod
     def copy(self, defaults: Optional[RegistryDefaults] = None) -> Registry:
         """Create a new `Registry` backed by the same data repository and
         connection as this one, but independent defaults.
@@ -257,17 +250,14 @@ class Registry:
         context manager methods do not reflect this), and must be used with
         care.
         """
-        if defaults is None:
-            # No need to copy, because `RegistryDefaults` is immutable; we
-            # effectively copy on write.
-            defaults = self.defaults
-        return Registry(self._db, defaults, self._managers)
+        raise NotImplementedError()
 
     @property
+    @abstractmethod
     def dimensions(self) -> DimensionUniverse:
         """All dimensions recognized by this `Registry` (`DimensionUniverse`).
         """
-        return self._managers.dimensions.universe
+        raise NotImplementedError()
 
     @property
     def defaults(self) -> RegistryDefaults:
@@ -287,109 +277,35 @@ class Registry:
         value.finish(self)
         self._defaults = value
 
+    @abstractmethod
     def refresh(self) -> None:
         """Refresh all in-memory state by querying the database.
 
         This may be necessary to enable querying for entities added by other
-        `Registry` instances after this one was constructed.
+        registry instances after this one was constructed.
         """
-        self._managers.refresh()
+        raise NotImplementedError()
 
     @contextlib.contextmanager
+    @abstractmethod
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
         """Return a context manager that represents a transaction.
         """
-        try:
-            with self._db.transaction(savepoint=savepoint):
-                yield
-        except BaseException:
-            # TODO: this clears the caches sometimes when we wouldn't actually
-            # need to.  Can we avoid that?
-            self._managers.dimensions.clearCaches()
-            raise
+        raise NotImplementedError()
 
     def resetConnectionPool(self) -> None:
-        """Reset SQLAlchemy connection pool for registry database.
+        """Reset connection pool for registry if relevant.
 
-        This operation is useful when using registry with fork-based
-        multiprocessing. To use registry across fork boundary one has to make
-        sure that there are no currently active connections (no session or
-        transaction is in progress) and connection pool is reset using this
-        method. This method should be called by the child process immediately
+        This operation can be used reset connections to servers when
+        using registry with fork-based multiprocessing. This method should
+        usually be called by the child process immediately
         after the fork.
+
+        The base class implementation is a no-op.
         """
-        self._db._engine.dispose()
+        pass
 
-    def registerOpaqueTable(self, tableName: str, spec: ddl.TableSpec) -> None:
-        """Add an opaque (to the `Registry`) table for use by a `Datastore` or
-        other data repository client.
-
-        Opaque table records can be added via `insertOpaqueData`, retrieved via
-        `fetchOpaqueData`, and removed via `deleteOpaqueData`.
-
-        Parameters
-        ----------
-        tableName : `str`
-            Logical name of the opaque table.  This may differ from the
-            actual name used in the database by a prefix and/or suffix.
-        spec : `ddl.TableSpec`
-            Specification for the table to be added.
-        """
-        self._managers.opaque.register(tableName, spec)
-
-    @transactional
-    def insertOpaqueData(self, tableName: str, *data: dict) -> None:
-        """Insert records into an opaque table.
-
-        Parameters
-        ----------
-        tableName : `str`
-            Logical name of the opaque table.  Must match the name used in a
-            previous call to `registerOpaqueTable`.
-        data
-            Each additional positional argument is a dictionary that represents
-            a single row to be added.
-        """
-        self._managers.opaque[tableName].insert(*data)
-
-    def fetchOpaqueData(self, tableName: str, **where: Any) -> Iterator[dict]:
-        """Retrieve records from an opaque table.
-
-        Parameters
-        ----------
-        tableName : `str`
-            Logical name of the opaque table.  Must match the name used in a
-            previous call to `registerOpaqueTable`.
-        where
-            Additional keyword arguments are interpreted as equality
-            constraints that restrict the returned rows (combined with AND);
-            keyword arguments are column names and values are the values they
-            must have.
-
-        Yields
-        ------
-        row : `dict`
-            A dictionary representing a single result row.
-        """
-        yield from self._managers.opaque[tableName].fetch(**where)
-
-    @transactional
-    def deleteOpaqueData(self, tableName: str, **where: Any) -> None:
-        """Remove records from an opaque table.
-
-        Parameters
-        ----------
-        tableName : `str`
-            Logical name of the opaque table.  Must match the name used in a
-            previous call to `registerOpaqueTable`.
-        where
-            Additional keyword arguments are interpreted as equality
-            constraints that restrict the deleted rows (combined with AND);
-            keyword arguments are column names and values are the values they
-            must have.
-        """
-        self._managers.opaque[tableName].delete(where.keys(), where)
-
+    @abstractmethod
     def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED,
                            doc: Optional[str] = None) -> None:
         """Add a new collection if one with the given name does not exist.
@@ -408,8 +324,9 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        self._managers.collections.register(name, type, doc=doc)
+        raise NotImplementedError()
 
+    @abstractmethod
     def getCollectionType(self, name: str) -> CollectionType:
         """Return an enumeration value indicating the type of the given
         collection.
@@ -429,8 +346,25 @@ class Registry:
         MissingCollectionError
             Raised if no collection with the given name exists.
         """
-        return self._managers.collections.find(name).type
+        raise NotImplementedError()
 
+    @abstractmethod
+    def _get_collection_record(self, name: str) -> CollectionRecord:
+        """Return the record for this collection.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the collection for which the record is to be retrieved.
+
+        Returns
+        -------
+        record : `CollectionRecord`
+            The record for this collection.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def registerRun(self, name: str, doc: Optional[str] = None) -> None:
         """Add a new run if one with the given name does not exist.
 
@@ -446,9 +380,9 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        self._managers.collections.register(name, CollectionType.RUN, doc=doc)
+        raise NotImplementedError()
 
-    @transactional
+    @abstractmethod
     def removeCollection(self, name: str) -> None:
         """Completely remove the given collection.
 
@@ -472,8 +406,9 @@ class Registry:
         `~CollectionType.CHAINED` collection; the ``CHAINED`` collection must
         be deleted or redefined first.
         """
-        self._managers.collections.remove(name)
+        raise NotImplementedError()
 
+    @abstractmethod
     def getCollectionChain(self, parent: str) -> CollectionSearch:
         """Return the child collections in a `~CollectionType.CHAINED`
         collection.
@@ -498,13 +433,9 @@ class Registry:
             Raised if ``parent`` does not correspond to a
             `~CollectionType.CHAINED` collection.
         """
-        record = self._managers.collections.find(parent)
-        if record.type is not CollectionType.CHAINED:
-            raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
-        assert isinstance(record, ChainedCollectionRecord)
-        return record.children
+        raise NotImplementedError()
 
-    @transactional
+    @abstractmethod
     def setCollectionChain(self, parent: str, children: Any, *, flatten: bool = False) -> None:
         """Define or redefine a `~CollectionType.CHAINED` collection.
 
@@ -532,14 +463,9 @@ class Registry:
         ValueError
             Raised if the given collections contains a cycle.
         """
-        record = self._managers.collections.find(parent)
-        if record.type is not CollectionType.CHAINED:
-            raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
-        assert isinstance(record, ChainedCollectionRecord)
-        children = CollectionSearch.fromExpression(children)
-        if children != record.children or flatten:
-            record.update(self._managers.collections, children, flatten=flatten)
+        raise NotImplementedError()
 
+    @abstractmethod
     def getCollectionDocumentation(self, collection: str) -> Optional[str]:
         """Retrieve the documentation string for a collection.
 
@@ -553,8 +479,9 @@ class Registry:
         docs : `str` or `None`
             Docstring for the collection with the given name.
         """
-        return self._managers.collections.getDocumentation(self._managers.collections.find(collection).key)
+        raise NotImplementedError()
 
+    @abstractmethod
     def setCollectionDocumentation(self, collection: str, doc: Optional[str]) -> None:
         """Set the documentation string for a collection.
 
@@ -567,8 +494,9 @@ class Registry:
             existing docstring.  Passing `None` will remove any existing
             docstring.
         """
-        self._managers.collections.setDocumentation(self._managers.collections.find(collection).key, doc)
+        raise NotImplementedError()
 
+    @abstractmethod
     def getCollectionSummary(self, collection: str) -> CollectionSummary:
         """Return a summary for the given collection.
 
@@ -583,9 +511,9 @@ class Registry:
             Summary of the dataset types and governor dimension values in
             this collection.
         """
-        record = self._managers.collections.find(collection)
-        return self._managers.datasets.getCollectionSummary(record)
+        raise NotImplementedError()
 
+    @abstractmethod
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         """
         Add a new `DatasetType` to the Registry.
@@ -618,18 +546,18 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        _, inserted = self._managers.datasets.register(datasetType)
-        return inserted
+        raise NotImplementedError()
 
+    @abstractmethod
     def removeDatasetType(self, name: str) -> None:
         """Remove the named `DatasetType` from the registry.
 
         .. warning::
 
-            Registry caches the dataset type definitions. This means that
-            deleting the dataset type definition may result in unexpected
-            behavior from other butler processes that are active that have
-            not seen the deletion.
+            Registry implementations can cache the dataset type definitions.
+            This means that deleting the dataset type definition may result in
+            unexpected behavior from other butler processes that are active
+            that have not seen the deletion.
 
         Parameters
         ----------
@@ -647,8 +575,9 @@ class Registry:
         If the dataset type is not registered the method will return without
         action.
         """
-        self._managers.datasets.remove(name)
+        raise NotImplementedError()
 
+    @abstractmethod
     def getDatasetType(self, name: str) -> DatasetType:
         """Get the `DatasetType`.
 
@@ -667,8 +596,9 @@ class Registry:
         KeyError
             Requested named DatasetType could not be found in registry.
         """
-        return self._managers.datasets[name].datasetType
+        raise NotImplementedError()
 
+    @abstractmethod
     def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
                     collections: Any = None, timespan: Optional[Timespan] = None,
                     **kwargs: Any) -> Optional[DatasetRef]:
@@ -730,31 +660,9 @@ class Registry:
         additional collections that do not contain a match to the search path
         never changes the behavior.
         """
-        if isinstance(datasetType, DatasetType):
-            storage = self._managers.datasets[datasetType.name]
-        else:
-            storage = self._managers.datasets[datasetType]
-        dataId = DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions,
-                                            universe=self.dimensions, defaults=self.defaults.dataId,
-                                            **kwargs)
-        if collections is None:
-            if not self.defaults.collections:
-                raise TypeError("No collections provided to findDataset, "
-                                "and no defaults from registry construction.")
-            collections = self.defaults.collections
-        else:
-            collections = CollectionSearch.fromExpression(collections)
-        for collectionRecord in collections.iter(self._managers.collections):
-            if (collectionRecord.type is CollectionType.CALIBRATION
-                    and (not storage.datasetType.isCalibration() or timespan is None)):
-                continue
-            result = storage.find(collectionRecord, dataId, timespan=timespan)
-            if result is not None:
-                return result
+        raise NotImplementedError()
 
-        return None
-
-    @transactional
+    @abstractmethod
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
                        run: Optional[str] = None, expand: bool = True) -> List[DatasetRef]:
         """Insert one or more datasets into the `Registry`
@@ -793,42 +701,9 @@ class Registry:
         MissingCollectionError
             Raised if ``run`` does not exist in the registry.
         """
-        if isinstance(datasetType, DatasetType):
-            storage = self._managers.datasets.find(datasetType.name)
-            if storage is None:
-                raise LookupError(f"DatasetType '{datasetType}' has not been registered.")
-        else:
-            storage = self._managers.datasets.find(datasetType)
-            if storage is None:
-                raise LookupError(f"DatasetType with name '{datasetType}' has not been registered.")
-        if run is None:
-            if self.defaults.run is None:
-                raise TypeError("No run provided to insertDatasets, "
-                                "and no default from registry construction.")
-            run = self.defaults.run
-        runRecord = self._managers.collections.find(run)
-        if runRecord.type is not CollectionType.RUN:
-            raise TypeError(f"Given collection is of type {runRecord.type.name}; RUN collection required.")
-        assert isinstance(runRecord, RunRecord)
-        progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
-        if expand:
-            expandedDataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions)
-                               for dataId in progress.wrap(dataIds,
-                                                           f"Expanding {storage.datasetType.name} data IDs")]
-        else:
-            expandedDataIds = [DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions)
-                               for dataId in dataIds]
-        try:
-            refs = list(storage.insert(runRecord, expandedDataIds))
-        except sqlalchemy.exc.IntegrityError as err:
-            raise ConflictingDefinitionError(f"A database constraint failure was triggered by inserting "
-                                             f"one or more datasets of type {storage.datasetType} into "
-                                             f"collection '{run}'. "
-                                             f"This probably means a dataset with the same data ID "
-                                             f"and dataset type already exists, but it may also mean a "
-                                             f"dimension row is missing.") from err
-        return refs
+        raise NotImplementedError()
 
+    @abstractmethod
     def getDataset(self, id: int) -> Optional[DatasetRef]:
         """Retrieve a Dataset entry.
 
@@ -843,12 +718,9 @@ class Registry:
             A ref to the Dataset, or `None` if no matching Dataset
             was found.
         """
-        ref = self._managers.datasets.getDatasetRef(id)
-        if ref is None:
-            return None
-        return ref
+        raise NotImplementedError()
 
-    @transactional
+    @abstractmethod
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         """Remove datasets from the Registry.
 
@@ -871,18 +743,9 @@ class Registry:
         OrphanedRecordError
             Raised if any dataset is still present in any `Datastore`.
         """
-        progress = Progress("lsst.daf.butler.Registry.removeDatasets", level=logging.DEBUG)
-        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
-                                                                  desc="Removing datasets by type"):
-            storage = self._managers.datasets.find(datasetType.name)
-            assert storage is not None
-            try:
-                storage.delete(refsForType)
-            except sqlalchemy.exc.IntegrityError as err:
-                raise OrphanedRecordError("One or more datasets is still "
-                                          "present in one or more Datastores.") from err
+        raise NotImplementedError()
 
-    @transactional
+    @abstractmethod
     def associate(self, collection: str, refs: Iterable[DatasetRef]) -> None:
         """Add existing datasets to a `~CollectionType.TAGGED` collection.
 
@@ -912,25 +775,9 @@ class Registry:
             Raise adding new datasets to the given ``collection`` is not
             allowed.
         """
-        progress = Progress("lsst.daf.butler.Registry.associate", level=logging.DEBUG)
-        collectionRecord = self._managers.collections.find(collection)
-        if collectionRecord.type is not CollectionType.TAGGED:
-            raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
-        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
-                                                                  desc="Associating datasets by type"):
-            storage = self._managers.datasets.find(datasetType.name)
-            assert storage is not None
-            try:
-                storage.associate(collectionRecord, refsForType)
-            except sqlalchemy.exc.IntegrityError as err:
-                raise ConflictingDefinitionError(
-                    f"Constraint violation while associating dataset of type {datasetType.name} with "
-                    f"collection {collection}.  This probably means that one or more datasets with the same "
-                    f"dataset type and data ID already exist in the collection, but it may also indicate "
-                    f"that the datasets do not exist."
-                ) from err
+        raise NotImplementedError()
 
-    @transactional
+    @abstractmethod
     def disassociate(self, collection: str, refs: Iterable[DatasetRef]) -> None:
         """Remove existing datasets from a `~CollectionType.TAGGED` collection.
 
@@ -955,18 +802,9 @@ class Registry:
             Raise adding new datasets to the given ``collection`` is not
             allowed.
         """
-        progress = Progress("lsst.daf.butler.Registry.disassociate", level=logging.DEBUG)
-        collectionRecord = self._managers.collections.find(collection)
-        if collectionRecord.type is not CollectionType.TAGGED:
-            raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}; "
-                            "expected TAGGED.")
-        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
-                                                                  desc="Disassociating datasets by type"):
-            storage = self._managers.datasets.find(datasetType.name)
-            assert storage is not None
-            storage.disassociate(collectionRecord, refsForType)
+        raise NotImplementedError()
 
-    @transactional
+    @abstractmethod
     def certify(self, collection: str, refs: Iterable[DatasetRef], timespan: Timespan) -> None:
         """Associate one or more datasets with a calibration collection and a
         validity range within it.
@@ -994,14 +832,9 @@ class Registry:
             collection or if one or more datasets are of a dataset type for
             which `DatasetType.isCalibration` returns `False`.
         """
-        progress = Progress("lsst.daf.butler.Registry.certify", level=logging.DEBUG)
-        collectionRecord = self._managers.collections.find(collection)
-        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
-                                                                  desc="Certifying datasets by type"):
-            storage = self._managers.datasets[datasetType.name]
-            storage.certify(collectionRecord, refsForType, timespan)
+        raise NotImplementedError()
 
-    @transactional
+    @abstractmethod
     def decertify(self, collection: str, datasetType: Union[str, DatasetType], timespan: Timespan, *,
                   dataIds: Optional[Iterable[DataId]] = None) -> None:
         """Remove or adjust datasets to clear a validity range within a
@@ -1030,17 +863,9 @@ class Registry:
             Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
             collection or if ``datasetType.isCalibration() is False``.
         """
-        collectionRecord = self._managers.collections.find(collection)
-        if isinstance(datasetType, str):
-            storage = self._managers.datasets[datasetType]
-        else:
-            storage = self._managers.datasets[datasetType.name]
-        standardizedDataIds = None
-        if dataIds is not None:
-            standardizedDataIds = [DataCoordinate.standardize(d, graph=storage.datasetType.dimensions)
-                                   for d in dataIds]
-        storage.decertify(collectionRecord, timespan, dataIds=standardizedDataIds)
+        raise NotImplementedError()
 
+    @abstractmethod
     def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
         """Return an object that allows a new `Datastore` instance to
         communicate with this `Registry`.
@@ -1051,8 +876,9 @@ class Registry:
             Object that mediates communication between this `Registry` and its
             associated datastores.
         """
-        return self._managers.datastores
+        raise NotImplementedError()
 
+    @abstractmethod
     def getDatasetLocations(self, ref: DatasetRef) -> Iterable[str]:
         """Retrieve datastore locations for a given dataset.
 
@@ -1072,8 +898,9 @@ class Registry:
         AmbiguousDatasetError
             Raised if ``ref.id`` is `None`.
         """
-        return self._managers.datastores.findDatastores(ref)
+        raise NotImplementedError()
 
+    @abstractmethod
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
                      records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
                      withDefaults: bool = True,
@@ -1108,68 +935,9 @@ class Registry:
             identifieds, i.e. guarantees that ``expanded.hasRecords()`` and
             ``expanded.hasFull()`` both return `True`.
         """
-        if not withDefaults:
-            defaults = None
-        else:
-            defaults = self.defaults.dataId
-        standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions,
-                                                  defaults=defaults, **kwargs)
-        if standardized.hasRecords():
-            return standardized
-        if records is None:
-            records = {}
-        elif isinstance(records, NamedKeyMapping):
-            records = records.byName()
-        else:
-            records = dict(records)
-        if isinstance(dataId, DataCoordinate) and dataId.hasRecords():
-            records.update(dataId.records.byName())
-        keys = standardized.byName()
-        for element in standardized.graph.primaryKeyTraversalOrder:
-            record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
-            if record is ...:
-                if isinstance(element, Dimension) and keys.get(element.name) is None:
-                    if element in standardized.graph.required:
-                        raise LookupError(
-                            f"No value or null value for required dimension {element.name}."
-                        )
-                    keys[element.name] = None
-                    record = None
-                else:
-                    storage = self._managers.dimensions[element]
-                    dataIdSet = DataCoordinateIterable.fromScalar(
-                        DataCoordinate.standardize(keys, graph=element.graph)
-                    )
-                    fetched = tuple(storage.fetch(dataIdSet))
-                    try:
-                        (record,) = fetched
-                    except ValueError:
-                        record = None
-                records[element.name] = record
-            if record is not None:
-                for d in element.implied:
-                    value = getattr(record, d.name)
-                    if keys.setdefault(d.name, value) != value:
-                        raise InconsistentDataIdError(
-                            f"Data ID {standardized} has {d.name}={keys[d.name]!r}, "
-                            f"but {element.name} implies {d.name}={value!r}."
-                        )
-            else:
-                if element in standardized.graph.required:
-                    raise LookupError(
-                        f"Could not fetch record for required dimension {element.name} via keys {keys}."
-                    )
-                if element.alwaysJoin:
-                    raise InconsistentDataIdError(
-                        f"Could not fetch record for element {element.name} via keys {keys}, ",
-                        "but it is marked alwaysJoin=True; this means one or more dimensions are not "
-                        "related."
-                    )
-                for d in element.implied:
-                    keys.setdefault(d.name, None)
-                    records.setdefault(d.name, None)
-        return DataCoordinate.standardize(keys, graph=standardized.graph).expanded(records=records)
+        raise NotImplementedError()
 
+    @abstractmethod
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[Mapping[str, Any], DimensionRecord],
                             conform: bool = True) -> None:
@@ -1188,17 +956,9 @@ class Registry:
             ``data`` is a one or more `DimensionRecord` instances of the
             appropriate subclass.
         """
-        if conform:
-            if isinstance(element, str):
-                element = self.dimensions[element]
-            records = [row if isinstance(row, DimensionRecord) else element.RecordClass(**row)
-                       for row in data]
-        else:
-            # Ignore typing since caller said to trust them with conform=False.
-            records = data  # type: ignore
-        storage = self._managers.dimensions[element]  # type: ignore
-        storage.insert(*records)
+        raise NotImplementedError()
 
+    @abstractmethod
     def syncDimensionData(self, element: Union[DimensionElement, str],
                           row: Union[Mapping[str, Any], DimensionRecord],
                           conform: bool = True) -> bool:
@@ -1229,16 +989,9 @@ class Registry:
             Raised if the record exists in the database (according to primary
             key lookup) but is inconsistent with the given one.
         """
-        if conform:
-            if isinstance(element, str):
-                element = self.dimensions[element]
-            record = row if isinstance(row, DimensionRecord) else element.RecordClass(**row)
-        else:
-            # Ignore typing since caller said to trust them with conform=False.
-            record = row  # type: ignore
-        storage = self._managers.dimensions[element]  # type: ignore
-        return storage.sync(record)
+        raise NotImplementedError()
 
+    @abstractmethod
     def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None
                           ) -> Iterator[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
@@ -1264,57 +1017,9 @@ class Registry:
         datasetType : `DatasetType`
             A `DatasetType` instance whose name matches ``expression``.
         """
-        wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
-        if wildcard is Ellipsis:
-            for datasetType in self._managers.datasets:
-                # The dataset type can no longer be a component
-                yield datasetType
-                if components:
-                    # Automatically create the component dataset types
-                    try:
-                        componentsForDatasetType = datasetType.makeAllComponentDatasetTypes()
-                    except KeyError as err:
-                        _LOG.warning(f"Could not load storage class {err} for {datasetType.name}; "
-                                     "if it has components they will not be included in query results.")
-                    else:
-                        yield from componentsForDatasetType
-            return
-        done: Set[str] = set()
-        for name in wildcard.strings:
-            storage = self._managers.datasets.find(name)
-            if storage is not None:
-                done.add(storage.datasetType.name)
-                yield storage.datasetType
-        if wildcard.patterns:
-            # If components (the argument) is None, we'll save component
-            # dataset that we might want to match, but only if their parents
-            # didn't get included.
-            componentsForLater = []
-            for registeredDatasetType in self._managers.datasets:
-                # Components are not stored in registry so expand them here
-                allDatasetTypes = [registeredDatasetType]
-                try:
-                    allDatasetTypes.extend(registeredDatasetType.makeAllComponentDatasetTypes())
-                except KeyError as err:
-                    _LOG.warning(f"Could not load storage class {err} for {registeredDatasetType.name}; "
-                                 "if it has components they will not be included in query results.")
-                for datasetType in allDatasetTypes:
-                    if datasetType.name in done:
-                        continue
-                    parentName, componentName = datasetType.nameAndComponent()
-                    if componentName is not None and not components:
-                        if components is None and parentName not in done:
-                            componentsForLater.append(datasetType)
-                        continue
-                    if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
-                        done.add(datasetType.name)
-                        yield datasetType
-            # Go back and try to match saved components.
-            for datasetType in componentsForLater:
-                parentName, _ = datasetType.nameAndComponent()
-                if parentName not in done and any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
-                    yield datasetType
+        raise NotImplementedError()
 
+    @abstractmethod
     def queryCollections(self, expression: Any = ...,
                          datasetType: Optional[DatasetType] = None,
                          collectionTypes: Iterable[CollectionType] = CollectionType.all(),
@@ -1349,44 +1054,9 @@ class Registry:
         collection : `str`
             The name of a collection that matches ``expression``.
         """
-        # Right now the datasetTypes argument is completely ignored, but that
-        # is consistent with its [lack of] guarantees.  DM-24939 or a follow-up
-        # ticket will take care of that.
-        query = CollectionQuery.fromExpression(expression)
-        for record in query.iter(self._managers.collections, collectionTypes=frozenset(collectionTypes),
-                                 flattenChains=flattenChains, includeChains=includeChains):
-            yield record.name
+        raise NotImplementedError()
 
-    def makeQueryBuilder(self, summary: queries.QuerySummary) -> queries.QueryBuilder:
-        """Return a `QueryBuilder` instance capable of constructing and
-        managing more complex queries than those obtainable via `Registry`
-        interfaces.
-
-        This is an advanced interface; downstream code should prefer
-        `Registry.queryDataIds` and `Registry.queryDatasets` whenever those
-        are sufficient.
-
-        Parameters
-        ----------
-        summary : `queries.QuerySummary`
-            Object describing and categorizing the full set of dimensions that
-            will be included in the query.
-
-        Returns
-        -------
-        builder : `queries.QueryBuilder`
-            Object that can be used to construct and perform advanced queries.
-        """
-        return queries.QueryBuilder(
-            summary,
-            queries.RegistryManagers(
-                collections=self._managers.collections,
-                dimensions=self._managers.dimensions,
-                datasets=self._managers.datasets,
-                TimespanReprClass=self._db.getTimespanRepresentation(),
-            ),
-        )
-
+    @abstractmethod
     def queryDatasets(self, datasetType: Any, *,
                       collections: Any = None,
                       dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
@@ -1488,99 +1158,9 @@ class Registry:
         query), and then use multiple (generally much simpler) calls to
         `queryDatasets` with the returned data IDs passed as constraints.
         """
-        # Standardize the collections expression.
-        if collections is None:
-            if not self.defaults.collections:
-                raise TypeError("No collections provided to findDataset, "
-                                "and no defaults from registry construction.")
-            collections = self.defaults.collections
-        elif findFirst:
-            collections = CollectionSearch.fromExpression(collections)
-        else:
-            collections = CollectionQuery.fromExpression(collections)
-        # Standardize and expand the data ID provided as a constraint.
-        standardizedDataId = self.expandDataId(dataId, **kwargs)
+        raise NotImplementedError()
 
-        # We can only query directly if given a non-component DatasetType
-        # instance.  If we were given an expression or str or a component
-        # DatasetType instance, we'll populate this dict, recurse, and return.
-        # If we already have a non-component DatasetType, it will remain None
-        # and we'll run the query directly.
-        composition: Optional[
-            Dict[
-                DatasetType,  # parent dataset type
-                List[Optional[str]]  # component name, or None for parent
-            ]
-        ] = None
-        if not isinstance(datasetType, DatasetType):
-            # We were given a dataset type expression (which may be as simple
-            # as a str).  Loop over all matching datasets, delegating handling
-            # of the `components` argument to queryDatasetTypes, as we populate
-            # the composition dict.
-            composition = defaultdict(list)
-            for trueDatasetType in self.queryDatasetTypes(datasetType, components=components):
-                parentName, componentName = trueDatasetType.nameAndComponent()
-                if componentName is not None:
-                    parentDatasetType = self.getDatasetType(parentName)
-                    composition.setdefault(parentDatasetType, []).append(componentName)
-                else:
-                    composition.setdefault(trueDatasetType, []).append(None)
-        elif datasetType.isComponent():
-            # We were given a true DatasetType instance, but it's a component.
-            # the composition dict will have exactly one item.
-            parentName, componentName = datasetType.nameAndComponent()
-            parentDatasetType = self.getDatasetType(parentName)
-            composition = {parentDatasetType: [componentName]}
-        if composition is not None:
-            # We need to recurse.  Do that once for each parent dataset type.
-            chain = []
-            for parentDatasetType, componentNames in composition.items():
-                parentResults = self.queryDatasets(
-                    parentDatasetType,
-                    collections=collections,
-                    dimensions=dimensions,
-                    dataId=standardizedDataId,
-                    where=where,
-                    findFirst=findFirst,
-                    check=check,
-                )
-                if isinstance(parentResults, queries.ParentDatasetQueryResults):
-                    chain.append(
-                        parentResults.withComponents(componentNames)
-                    )
-                else:
-                    # Should only happen if we know there would be no results.
-                    assert isinstance(parentResults, queries.ChainedDatasetQueryResults) \
-                        and not parentResults._chain
-            return queries.ChainedDatasetQueryResults(chain)
-        # If we get here, there's no need to recurse (or we are already
-        # recursing; there can only ever be one level of recursion).
-
-        # The full set of dimensions in the query is the combination of those
-        # needed for the DatasetType and those explicitly requested, if any.
-        requestedDimensionNames = set(datasetType.dimensions.names)
-        if dimensions is not None:
-            requestedDimensionNames.update(self.dimensions.extract(dimensions).names)
-        # Construct the summary structure needed to construct a QueryBuilder.
-        summary = queries.QuerySummary(
-            requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
-            dataId=standardizedDataId,
-            expression=where,
-            bind=bind,
-            defaults=self.defaults.dataId,
-            check=check,
-        )
-        builder = self.makeQueryBuilder(summary)
-        # Add the dataset subquery to the query, telling the QueryBuilder to
-        # include the rank of the selected collection in the results only if we
-        # need to findFirst.  Note that if any of the collections are
-        # actually wildcard expressions, and we've asked for deduplication,
-        # this will raise TypeError for us.
-        if not builder.joinDataset(datasetType, collections, isResult=True, findFirst=findFirst):
-            return queries.ChainedDatasetQueryResults(())
-        query = builder.finish()
-        return queries.ParentDatasetQueryResults(self._db, query, components=[None])
-
+    @abstractmethod
     def queryDataIds(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                      dataId: Optional[DataId] = None,
                      datasets: Any = None,
@@ -1667,46 +1247,9 @@ class Registry:
             Raised if ``collections`` is `None`, ``self.defaults.collections``
             is `None`, and ``datasets`` is not `None`.
         """
-        dimensions = iterable(dimensions)
-        standardizedDataId = self.expandDataId(dataId, **kwargs)
-        standardizedDatasetTypes = set()
-        requestedDimensions = self.dimensions.extract(dimensions)
-        queryDimensionNames = set(requestedDimensions.names)
-        if datasets is not None:
-            if collections is None:
-                if not self.defaults.collections:
-                    raise TypeError("Cannot pass 'datasets' without 'collections'.")
-                collections = self.defaults.collections
-            else:
-                # Preprocess collections expression in case the original
-                # included single-pass iterators (we'll want to use it multiple
-                # times below).
-                collections = CollectionQuery.fromExpression(collections)
-            for datasetType in self.queryDatasetTypes(datasets, components=components):
-                queryDimensionNames.update(datasetType.dimensions.names)
-                # If any matched dataset type is a component, just operate on
-                # its parent instead, because Registry doesn't know anything
-                # about what components exist, and here (unlike queryDatasets)
-                # we don't care about returning them.
-                parentDatasetTypeName, componentName = datasetType.nameAndComponent()
-                if componentName is not None:
-                    datasetType = self.getDatasetType(parentDatasetTypeName)
-                standardizedDatasetTypes.add(datasetType)
+        raise NotImplementedError()
 
-        summary = queries.QuerySummary(
-            requested=DimensionGraph(self.dimensions, names=queryDimensionNames),
-            dataId=standardizedDataId,
-            expression=where,
-            bind=bind,
-            defaults=self.defaults.dataId,
-            check=check,
-        )
-        builder = self.makeQueryBuilder(summary)
-        for datasetType in standardizedDatasetTypes:
-            builder.joinDataset(datasetType, collections, isResult=False)
-        query = builder.finish()
-        return queries.DataCoordinateQueryResults(self._db, query)
-
+    @abstractmethod
     def queryDimensionRecords(self, element: Union[DimensionElement, str], *,
                               dataId: Optional[DataId] = None,
                               datasets: Any = None,
@@ -1764,16 +1307,9 @@ class Registry:
         dataIds : `DataCoordinateQueryResults`
             Data IDs matching the given query parameters.
         """
-        if not isinstance(element, DimensionElement):
-            try:
-                element = self.dimensions[element]
-            except KeyError as e:
-                raise KeyError(f"No such dimension '{element}', available dimensions: "
-                               + str(self.dimensions.getStaticElements())) from e
-        dataIds = self.queryDataIds(element.graph, dataId=dataId, datasets=datasets, collections=collections,
-                                    where=where, components=components, bind=bind, check=check, **kwargs)
-        return iter(self._managers.dimensions[element].fetch(dataIds))
+        raise NotImplementedError()
 
+    @abstractmethod
     def queryDatasetAssociations(
         self,
         datasetType: Union[str, DatasetType],
@@ -1822,37 +1358,7 @@ class Registry:
             Raised if ``collections`` is `None` and
             ``self.defaults.collections`` is `None`.
         """
-        if collections is None:
-            if not self.defaults.collections:
-                raise TypeError("No collections provided to findDataset, "
-                                "and no defaults from registry construction.")
-            collections = self.defaults.collections
-        else:
-            collections = CollectionQuery.fromExpression(collections)
-        TimespanReprClass = self._db.getTimespanRepresentation()
-        if isinstance(datasetType, str):
-            storage = self._managers.datasets[datasetType]
-        else:
-            storage = self._managers.datasets[datasetType.name]
-        for collectionRecord in collections.iter(self._managers.collections,
-                                                 collectionTypes=frozenset(collectionTypes),
-                                                 flattenChains=flattenChains):
-            query = storage.select(collectionRecord)
-            if query is None:
-                continue
-            for row in self._db.query(query.combine()):
-                dataId = DataCoordinate.fromRequiredValues(
-                    storage.datasetType.dimensions,
-                    tuple(row[name] for name in storage.datasetType.dimensions.required.names)
-                )
-                runRecord = self._managers.collections[row[self._managers.collections.getRunForeignKeyName()]]
-                ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name,
-                                 conform=False)
-                if collectionRecord.type is CollectionType.CALIBRATION:
-                    timespan = TimespanReprClass.extract(row)
-                else:
-                    timespan = None
-                yield DatasetAssociation(ref=ref, collection=collectionRecord.name, timespan=timespan)
+        raise NotImplementedError()
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).

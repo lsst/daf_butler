@@ -32,7 +32,7 @@ import unittest
 
 import astropy.time
 import sqlalchemy
-from typing import Optional, Type, Union
+from typing import Optional, Type, Union, TYPE_CHECKING
 
 try:
     import numpy as np
@@ -52,17 +52,20 @@ from ...core import (
     ddl,
     Timespan,
 )
-from .._registry import (
-    CollectionSummary,
-    CollectionType,
+from ..summaries import CollectionSummary
+from .._collectionType import CollectionType
+from .._config import RegistryConfig
+
+from .._exceptions import (
     ConflictingDefinitionError,
     InconsistentDataIdError,
+    MissingCollectionError,
     OrphanedRecordError,
-    Registry,
-    RegistryConfig,
 )
-from .._exceptions import MissingCollectionError
 from ..interfaces import ButlerAttributeExistsError
+
+if TYPE_CHECKING:
+    from .._registry import Registry
 
 
 class RegistryTests(ABC):
@@ -433,7 +436,7 @@ class RegistryTests(ABC):
         # Querying for all dataset types, including components, should include
         # at least all non-component dataset types (and I don't want to
         # enumerate all of the Exposure components for bias and flat here).
-        with self.assertLogs("lsst.daf.butler.registry._registry", logging.WARN) as cm:
+        with self.assertLogs("lsst.daf.butler.registry._sqlRegistry", logging.WARN) as cm:
             everything = NamedValueSet(registry.queryDatasetTypes(components=True))
         self.assertIn("TempStorageClass", cm.output[0])
         self.assertLess({"bias", "flat", "temporary"}, everything.names)
@@ -447,7 +450,7 @@ class RegistryTests(ABC):
         self.assertNotIn("temporary.data", everything.names)
         # Query for dataset types that start with "temp".  This should again
         # not include the component, and also not fail.
-        with self.assertLogs("lsst.daf.butler.registry._registry", logging.WARN) as cm:
+        with self.assertLogs("lsst.daf.butler.registry._sqlRegistry", logging.WARN) as cm:
             startsWithTemp = NamedValueSet(registry.queryDatasetTypes(re.compile("temp.*")))
         self.assertIn("TempStorageClass", cm.output[0])
         self.assertEqual({"temporary"}, startsWithTemp.names)
