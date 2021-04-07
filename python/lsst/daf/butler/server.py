@@ -68,6 +68,7 @@ def get_uri(id: Union[int, UUID]) -> str:
 @app.get(
     "/registry/datasetType/{datasetTypeName}",
     summary="Retrieve this dataset type definition.",
+    response_model=SerializedDatasetType,
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
@@ -81,6 +82,7 @@ def get_dataset_type(datasetTypeName: str) -> SerializedDatasetType:
 @app.get(
     "/registry/datasetTypes",
     summary="Retrieve all dataset type definitions.",
+    response_model=List[SerializedDatasetType],
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
@@ -94,6 +96,7 @@ def query_all_dataset_types(components: Optional[bool] = None) -> List[Serialize
 @app.get(
     "/registry/datasetTypes/{expression}",
     summary="Retrieve dataset type definitions matching expression",
+    response_model=List[SerializedDatasetType],
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
