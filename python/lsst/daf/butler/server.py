@@ -164,7 +164,14 @@ def register_collection(name: str, type_: str, doc: Optional[str] = None) -> str
     return name
 
 
-@app.get("/registry/dataset/{id}")
+@app.get(
+    "/registry/dataset/{id}",
+    summary="Retrieve this dataset definition.",
+    response_model=Optional[SerializedDatasetRef],
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
 def get_dataset(id: Union[int, UUID]) -> Optional[SerializedDatasetRef]:
     butler = Butler(BUTLER_ROOT)
     ref = butler.registry.getDataset(id)
@@ -183,7 +190,14 @@ def get_dataset_locations(id: Union[int, UUID]) -> List[str]:
 
 
 # TimeSpan not yet a pydantic model
-@app.post("/registry/findDataset/{datasetType}")
+@app.post(
+    "/registry/findDataset/{datasetType}",
+    summary="Retrieve this dataset definition from collection, dataset type, and dataId",
+    response_model=SerializedDatasetRef,
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
 def find_dataset(datasetType: str,
                  dataId: Optional[MaximalDataId] = None,
                  collections: Optional[List[str]] = Query(None),
@@ -199,7 +213,14 @@ def find_dataset(datasetType: str,
 
 
 # POST is used for the complex dict data structures
-@app.post("/registry/datasets/{datasetType}")
+@app.post(
+    "/registry/datasets/{datasetType}",
+    summary="Query all dataset holdings.",
+    response_model=List[SerializedDatasetRef],
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
 def query_datasets(datasetType: str,
                    collections: Optional[List[str]] = Query(None),
                    dimensions: Optional[List[str]] = Query(None),
@@ -233,7 +254,10 @@ def query_datasets(datasetType: str,
 
 
 # POST is used for the complex dict data structures
-@app.post("/registry/dataIds")
+@app.post(
+    "/registry/dataIds",
+    summary="Query all data IDs.",
+)
 def query_data_ids(dimensions: List[str],
                    collections: Optional[List[str]] = Query(None),
                    datasets: Optional[List[str]] = Query(None),
@@ -241,7 +265,7 @@ def query_data_ids(dimensions: List[str],
                    where: Optional[str] = None,
                    components: Optional[bool] = None,
                    bind: Optional[Dict[str, Any]] = None,
-                   check: bool = True) -> List[SerializedDatasetRef]:
+                   check: bool = True) -> List[Dict]:
     # Can use "*" dataset type to match everything.
     # This will take a long time.
     butler = Butler(BUTLER_ROOT)
