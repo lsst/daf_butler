@@ -362,7 +362,7 @@ class Registry(ABC):
         record : `CollectionRecord`
             The record for this collection.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
 
     @abstractmethod
     def registerRun(self, name: str, doc: Optional[str] = None) -> None:

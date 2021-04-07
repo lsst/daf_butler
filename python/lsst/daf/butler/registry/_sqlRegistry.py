@@ -199,7 +199,7 @@ class SqlRegistry(Registry):
         return str(self._db)
 
     def __repr__(self) -> str:
-        return f"Registry({self._db!r}, {self.dimensions!r})"
+        return f"SqlRegistry({self._db!r}, {self.dimensions!r})"
 
     def isWriteable(self) -> bool:
         """Return `True` if this registry allows write operations, and `False`
@@ -813,10 +813,7 @@ class SqlRegistry(Registry):
             A ref to the Dataset, or `None` if no matching Dataset
             was found.
         """
-        ref = self._managers.datasets.getDatasetRef(id)
-        if ref is None:
-            return None
-        return ref
+        return self._managers.datasets.getDatasetRef(id)
 
     @transactional
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:

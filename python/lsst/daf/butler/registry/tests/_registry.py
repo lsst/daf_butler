@@ -32,7 +32,7 @@ import unittest
 
 import astropy.time
 import sqlalchemy
-from typing import Optional, Type, Union
+from typing import Optional, Type, Union, TYPE_CHECKING
 
 try:
     import numpy as np
@@ -52,7 +52,6 @@ from ...core import (
     ddl,
     Timespan,
 )
-from .._sqlRegistry import Registry
 from ..summaries import CollectionSummary
 from .._collectionType import CollectionType
 from .._config import RegistryConfig
@@ -64,6 +63,9 @@ from .._exceptions import (
     OrphanedRecordError,
 )
 from ..interfaces import ButlerAttributeExistsError
+
+if TYPE_CHECKING:
+    from .._registry import Registry
 
 
 class RegistryTests(ABC):
