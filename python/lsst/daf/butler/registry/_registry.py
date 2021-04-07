@@ -180,7 +180,7 @@ class Registry(ABC):
         even if it can not create a registry.
         """
         registry_cls, registry_config = cls.determineTrampoline(config)
-        return registry_cls.createFromConfig(config, dimensionConfig, butlerRoot)
+        return registry_cls.createFromConfig(registry_config, dimensionConfig, butlerRoot)
 
     @classmethod
     def fromConfig(cls, config: Union[ButlerConfig, RegistryConfig, Config, str],
