@@ -93,34 +93,17 @@ _DIMENSIONS_ATTR = "config:dimensions.json"
 
 
 class SqlRegistry(Registry):
-    """Registry interface based on SQLAlchemy.
+    """Registry implementation based on SQLAlchemy.
 
     Parameters
     ----------
     database : `Database`
         Database instance to store Registry.
-    defaults : `RegistryDefaults`, optional
+    defaults : `RegistryDefaults`
         Default collection search path and/or output `~CollectionType.RUN`
         collection.
-    attributes : `type`
-        Manager class implementing `ButlerAttributeManager`.
-    opaque : `type`
-        Manager class implementing `OpaqueTableStorageManager`.
-    dimensions : `type`
-        Manager class implementing `DimensionRecordStorageManager`.
-    collections : `type`
-        Manager class implementing `CollectionManager`.
-    datasets : `type`
-        Manager class implementing `DatasetRecordStorageManager`.
-    datastoreBridges : `type`
-        Manager class implementing `DatastoreRegistryBridgeManager`.
-    dimensionConfig : `DimensionConfig`, optional
-        Dimension universe configuration, only used when ``create`` is True.
-    writeable : `bool`, optional
-        If True then Registry will support write operations.
-    create : `bool`, optional
-        If True then database schema will be initialized, it must be empty
-        before instantiating Registry.
+    managers : `RegistryManagerInstances`
+        All the managers required for this registry.
     """
 
     defaultConfigFile: Optional[str] = None
@@ -411,7 +394,7 @@ class SqlRegistry(Registry):
 
         Parameters
         ----------
-        collection : `str`
+        name : `str`
             Name of the collection for which the record is to be retrieved.
 
         Returns

@@ -106,9 +106,14 @@ class Registry(ABC):
 
         Parameters
         ----------
-        config : `RegistryConfig` or `str`, optional
+        config : `RegistryConfig`, `Config` or `str` or `None`
             Registry configuration, if missing then default configuration will
             be loaded from registry.yaml.
+
+        Returns
+        -------
+        registry_config : `RegistryConfig`
+            A registry config.
         """
         if not isinstance(config, RegistryConfig):
             if isinstance(config, (str, Config)):
@@ -170,6 +175,12 @@ class Registry(ABC):
         -------
         registry : `Registry`
             A new `Registry` instance.
+
+        Notes
+        -----
+        This class will determine the concrete `Registry` subclass to
+        use from configuration.  Each subclass should implement this method
+        even if it can not create a registry.
         """
         registry_cls, registry_config = cls.determineTrampoline(config)
         return registry_cls.createFromConfig(config, dimensionConfig, butlerRoot)
@@ -198,6 +209,11 @@ class Registry(ABC):
         -------
         registry : `Registry` (subclass)
             A new `Registry` subclass instance.
+
+        Notes
+        -----
+        This class will determine the concrete `Registry` subclass to
+        use from configuration.  Each subclass should implement this method.
         """
         # The base class implementation should trampoline to the correct
         # subclass. No implementation should ever use this implementation
@@ -329,7 +345,7 @@ class Registry(ABC):
 
         Parameters
         ----------
-        collection : `str`
+        name : `str`
             Name of the collection for which the record is to be retrieved.
 
         Returns
