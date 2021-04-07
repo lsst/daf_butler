@@ -293,6 +293,18 @@ class Registry(ABC):
         """
         raise NotImplementedError()
 
+    def resetConnectionPool(self) -> None:
+        """Reset connection pool for registry if relevant.
+
+        This operation can be used reset connections to servers when
+        using registry with fork-based multiprocessing. This method should
+        usually be called by the child process immediately
+        after the fork.
+
+        The base class implementation is a no-op.
+        """
+        pass
+
     @abstractmethod
     def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED,
                            doc: Optional[str] = None) -> None:
