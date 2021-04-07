@@ -554,10 +554,10 @@ class Registry(ABC):
 
         .. warning::
 
-            Registry caches the dataset type definitions. This means that
-            deleting the dataset type definition may result in unexpected
-            behavior from other butler processes that are active that have
-            not seen the deletion.
+            Registry implementations can cache the dataset type definitions.
+            This means that deleting the dataset type definition may result in
+            unexpected behavior from other butler processes that are active
+            that have not seen the deletion.
 
         Parameters
         ----------

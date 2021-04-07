@@ -112,7 +112,7 @@ class SqlRegistry(Registry):
     def createFromConfig(cls, config: Optional[Union[RegistryConfig, str]] = None,
                          dimensionConfig: Optional[Union[DimensionConfig, str]] = None,
                          butlerRoot: Optional[str] = None) -> Registry:
-        """Create registry database and return `Registry` instance.
+        """Create registry database and return `SqlRegistry` instance.
 
         This method initializes database contents, database must be empty
         prior to calling this method.
@@ -126,12 +126,12 @@ class SqlRegistry(Registry):
             Dimensions configuration, if missing then default configuration
             will be loaded from dimensions.yaml.
         butlerRoot : `str`, optional
-            Path to the repository root this `Registry` will manage.
+            Path to the repository root this `SqlRegistry` will manage.
 
         Returns
         -------
-        registry : `Registry`
-            A new `Registry` instance.
+        registry : `SqlRegistry`
+            A new `SqlRegistry` instance.
         """
         config = cls.forceRegistryConfig(config)
         config.replaceRoot(butlerRoot)
@@ -172,8 +172,8 @@ class SqlRegistry(Registry):
 
         Returns
         -------
-        registry : `Registry` (subclass)
-            A new `Registry` subclass instance.
+        registry : `SqlRegistry` (subclass)
+            A new `SqlRegistry` subclass instance.
         """
         config = cls.forceRegistryConfig(config)
         config.replaceRoot(butlerRoot)
@@ -202,34 +202,11 @@ class SqlRegistry(Registry):
         return f"SqlRegistry({self._db!r}, {self.dimensions!r})"
 
     def isWriteable(self) -> bool:
-        """Return `True` if this registry allows write operations, and `False`
-        otherwise.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._db.isWriteable()
 
     def copy(self, defaults: Optional[RegistryDefaults] = None) -> Registry:
-        """Create a new `Registry` backed by the same data repository and
-        connection as this one, but independent defaults.
-
-        Parameters
-        ----------
-        defaults : `RegistryDefaults`, optional
-            Default collections and data ID values for the new registry.  If
-            not provided, ``self.defaults`` will be used (but future changes
-            to either registry's defaults will not affect the other).
-
-        Returns
-        -------
-        copy : `Registry`
-            A new `Registry` instance with its own defaults.
-
-        Notes
-        -----
-        Because the new registry shares a connection with the original, they
-        also share transaction state (despite the fact that their `transaction`
-        context manager methods do not reflect this), and must be used with
-        care.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         if defaults is None:
             # No need to copy, because `RegistryDefaults` is immutable; we
             # effectively copy on write.
@@ -238,22 +215,16 @@ class SqlRegistry(Registry):
 
     @property
     def dimensions(self) -> DimensionUniverse:
-        """All dimensions recognized by this `Registry` (`DimensionUniverse`).
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.dimensions.universe
 
     def refresh(self) -> None:
-        """Refresh all in-memory state by querying the database.
-
-        This may be necessary to enable querying for entities added by other
-        `Registry` instances after this one was constructed.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         self._managers.refresh()
 
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
-        """Return a context manager that represents a transaction.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         try:
             with self._db.transaction(savepoint=savepoint):
                 yield
@@ -264,7 +235,7 @@ class SqlRegistry(Registry):
             raise
 
     def resetConnectionPool(self) -> None:
-        """Reset SQLAlchemy connection pool for registry database.
+        """Reset SQLAlchemy connection pool for `SqlRegistry` database.
 
         This operation is useful when using registry with fork-based
         multiprocessing. To use registry across fork boundary one has to make
@@ -347,127 +318,28 @@ class SqlRegistry(Registry):
 
     def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED,
                            doc: Optional[str] = None) -> None:
-        """Add a new collection if one with the given name does not exist.
-
-        Parameters
-        ----------
-        name : `str`
-            The name of the collection to create.
-        type : `CollectionType`
-            Enum value indicating the type of collection to create.
-        doc : `str`, optional
-            Documentation string for the collection.
-
-        Notes
-        -----
-        This method cannot be called within transactions, as it needs to be
-        able to perform its own transaction to be concurrent.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         self._managers.collections.register(name, type, doc=doc)
 
     def getCollectionType(self, name: str) -> CollectionType:
-        """Return an enumeration value indicating the type of the given
-        collection.
-
-        Parameters
-        ----------
-        name : `str`
-            The name of the collection.
-
-        Returns
-        -------
-        type : `CollectionType`
-            Enum value indicating the type of this collection.
-
-        Raises
-        ------
-        MissingCollectionError
-            Raised if no collection with the given name exists.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.collections.find(name).type
 
     def _get_collection_record(self, name: str) -> CollectionRecord:
-        """Return the record for this collection.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the collection for which the record is to be retrieved.
-
-        Returns
-        -------
-        record : `CollectionRecord`
-            The record for this collection.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.collections.find(name)
 
     def registerRun(self, name: str, doc: Optional[str] = None) -> None:
-        """Add a new run if one with the given name does not exist.
-
-        Parameters
-        ----------
-        name : `str`
-            The name of the run to create.
-        doc : `str`, optional
-            Documentation string for the collection.
-
-        Notes
-        -----
-        This method cannot be called within transactions, as it needs to be
-        able to perform its own transaction to be concurrent.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         self._managers.collections.register(name, CollectionType.RUN, doc=doc)
 
     @transactional
     def removeCollection(self, name: str) -> None:
-        """Completely remove the given collection.
-
-        Parameters
-        ----------
-        name : `str`
-            The name of the collection to remove.
-
-        Raises
-        ------
-        MissingCollectionError
-            Raised if no collection with the given name exists.
-
-        Notes
-        -----
-        If this is a `~CollectionType.RUN` collection, all datasets and quanta
-        in it are also fully removed.  This requires that those datasets be
-        removed (or at least trashed) from any datastores that hold them first.
-
-        A collection may not be deleted as long as it is referenced by a
-        `~CollectionType.CHAINED` collection; the ``CHAINED`` collection must
-        be deleted or redefined first.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         self._managers.collections.remove(name)
 
     def getCollectionChain(self, parent: str) -> CollectionSearch:
-        """Return the child collections in a `~CollectionType.CHAINED`
-        collection.
-
-        Parameters
-        ----------
-        parent : `str`
-            Name of the chained collection.  Must have already been added via
-            a call to `Registry.registerCollection`.
-
-        Returns
-        -------
-        children : `CollectionSearch`
-            An object that defines the search path of the collection.
-            See :ref:`daf_butler_collection_expressions` for more information.
-
-        Raises
-        ------
-        MissingCollectionError
-            Raised if ``parent`` does not exist in the `Registry`.
-        TypeError
-            Raised if ``parent`` does not correspond to a
-            `~CollectionType.CHAINED` collection.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         record = self._managers.collections.find(parent)
         if record.type is not CollectionType.CHAINED:
             raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
@@ -476,32 +348,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def setCollectionChain(self, parent: str, children: Any, *, flatten: bool = False) -> None:
-        """Define or redefine a `~CollectionType.CHAINED` collection.
-
-        Parameters
-        ----------
-        parent : `str`
-            Name of the chained collection.  Must have already been added via
-            a call to `Registry.registerCollection`.
-        children : `Any`
-            An expression defining an ordered search of child collections,
-            generally an iterable of `str`; see
-            :ref:`daf_butler_collection_expressions` for more information.
-        flatten : `bool`, optional
-            If `True` (`False` is default), recursively flatten out any nested
-            `~CollectionType.CHAINED` collections in ``children`` first.
-
-        Raises
-        ------
-        MissingCollectionError
-            Raised when any of the given collections do not exist in the
-            `Registry`.
-        TypeError
-            Raised if ``parent`` does not correspond to a
-            `~CollectionType.CHAINED` collection.
-        ValueError
-            Raised if the given collections contains a cycle.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         record = self._managers.collections.find(parent)
         if record.type is not CollectionType.CHAINED:
             raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
@@ -511,195 +358,35 @@ class SqlRegistry(Registry):
             record.update(self._managers.collections, children, flatten=flatten)
 
     def getCollectionDocumentation(self, collection: str) -> Optional[str]:
-        """Retrieve the documentation string for a collection.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the collection.
-
-        Returns
-        -------
-        docs : `str` or `None`
-            Docstring for the collection with the given name.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.collections.getDocumentation(self._managers.collections.find(collection).key)
 
     def setCollectionDocumentation(self, collection: str, doc: Optional[str]) -> None:
-        """Set the documentation string for a collection.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the collection.
-        docs : `str` or `None`
-            Docstring for the collection with the given name; will replace any
-            existing docstring.  Passing `None` will remove any existing
-            docstring.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         self._managers.collections.setDocumentation(self._managers.collections.find(collection).key, doc)
 
     def getCollectionSummary(self, collection: str) -> CollectionSummary:
-        """Return a summary for the given collection.
-
-        Parameters
-        ----------
-        collection : `str`
-            Name of the collection for which a summary is to be retrieved.
-
-        Returns
-        -------
-        summary : `CollectionSummary`
-            Summary of the dataset types and governor dimension values in
-            this collection.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         record = self._managers.collections.find(collection)
         return self._managers.datasets.getCollectionSummary(record)
 
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
-        """
-        Add a new `DatasetType` to the Registry.
-
-        It is not an error to register the same `DatasetType` twice.
-
-        Parameters
-        ----------
-        datasetType : `DatasetType`
-            The `DatasetType` to be added.
-
-        Returns
-        -------
-        inserted : `bool`
-            `True` if ``datasetType`` was inserted, `False` if an identical
-            existing `DatsetType` was found.  Note that in either case the
-            DatasetType is guaranteed to be defined in the Registry
-            consistently with the given definition.
-
-        Raises
-        ------
-        ValueError
-            Raised if the dimensions or storage class are invalid.
-        ConflictingDefinitionError
-            Raised if this DatasetType is already registered with a different
-            definition.
-
-        Notes
-        -----
-        This method cannot be called within transactions, as it needs to be
-        able to perform its own transaction to be concurrent.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         _, inserted = self._managers.datasets.register(datasetType)
         return inserted
 
     def removeDatasetType(self, name: str) -> None:
-        """Remove the named `DatasetType` from the registry.
-
-        .. warning::
-
-            Registry caches the dataset type definitions. This means that
-            deleting the dataset type definition may result in unexpected
-            behavior from other butler processes that are active that have
-            not seen the deletion.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the type to be removed.
-
-        Raises
-        ------
-        lsst.daf.butler.registry.OrphanedRecordError
-            Raised if an attempt is made to remove the dataset type definition
-            when there are already datasets associated with it.
-
-        Notes
-        -----
-        If the dataset type is not registered the method will return without
-        action.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         self._managers.datasets.remove(name)
 
     def getDatasetType(self, name: str) -> DatasetType:
-        """Get the `DatasetType`.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the type.
-
-        Returns
-        -------
-        type : `DatasetType`
-            The `DatasetType` associated with the given name.
-
-        Raises
-        ------
-        KeyError
-            Requested named DatasetType could not be found in registry.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.datasets[name].datasetType
 
     def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
                     collections: Any = None, timespan: Optional[Timespan] = None,
                     **kwargs: Any) -> Optional[DatasetRef]:
-        """Find a dataset given its `DatasetType` and data ID.
-
-        This can be used to obtain a `DatasetRef` that permits the dataset to
-        be read from a `Datastore`. If the dataset is a component and can not
-        be found using the provided dataset type, a dataset ref for the parent
-        will be returned instead but with the correct dataset type.
-
-        Parameters
-        ----------
-        datasetType : `DatasetType` or `str`
-            A `DatasetType` or the name of one.
-        dataId : `dict` or `DataCoordinate`, optional
-            A `dict`-like object containing the `Dimension` links that identify
-            the dataset within a collection.
-        collections, optional.
-            An expression that fully or partially identifies the collections to
-            search for the dataset; see
-            :ref:`daf_butler_collection_expressions` for more information.
-            Defaults to ``self.defaults.collections``.
-        timespan : `Timespan`, optional
-            A timespan that the validity range of the dataset must overlap.
-            If not provided, any `~CollectionType.CALIBRATION` collections
-            matched by the ``collections`` argument will not be searched.
-        **kwargs
-            Additional keyword arguments passed to
-            `DataCoordinate.standardize` to convert ``dataId`` to a true
-            `DataCoordinate` or augment an existing one.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A reference to the dataset, or `None` if no matching Dataset
-            was found.
-
-        Raises
-        ------
-        TypeError
-            Raised if ``collections`` is `None` and
-            ``self.defaults.collections`` is `None`.
-        LookupError
-            Raised if one or more data ID keys are missing.
-        KeyError
-            Raised if the dataset type does not exist.
-        MissingCollectionError
-            Raised if any of ``collections`` does not exist in the registry.
-
-        Notes
-        -----
-        This method simply returns `None` and does not raise an exception even
-        when the set of collections searched is intrinsically incompatible with
-        the dataset type, e.g. if ``datasetType.isCalibration() is False``, but
-        only `~CollectionType.CALIBRATION` collections are being searched.
-        This may make it harder to debug some lookup failures, but the behavior
-        is intentional; we consider it more important that failed searches are
-        reported consistently, regardless of the reason, and that adding
-        additional collections that do not contain a match to the search path
-        never changes the behavior.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         if isinstance(datasetType, DatasetType):
             storage = self._managers.datasets[datasetType.name]
         else:
@@ -727,42 +414,7 @@ class SqlRegistry(Registry):
     @transactional
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
                        run: Optional[str] = None, expand: bool = True) -> List[DatasetRef]:
-        """Insert one or more datasets into the `Registry`
-
-        This always adds new datasets; to associate existing datasets with
-        a new collection, use ``associate``.
-
-        Parameters
-        ----------
-        datasetType : `DatasetType` or `str`
-            A `DatasetType` or the name of one.
-        dataIds :  `~collections.abc.Iterable` of `dict` or `DataCoordinate`
-            Dimension-based identifiers for the new datasets.
-        run : `str`, optional
-            The name of the run that produced the datasets.  Defaults to
-            ``self.defaults.run``.
-        expand : `bool`, optional
-            If `True` (default), expand data IDs as they are inserted.  This is
-            necessary in general to allow datastore to generate file templates,
-            but it may be disabled if the caller can guarantee this is
-            unnecessary.
-
-        Returns
-        -------
-        refs : `list` of `DatasetRef`
-            Resolved `DatasetRef` instances for all given data IDs (in the same
-            order).
-
-        Raises
-        ------
-        TypeError
-            Raised if ``run`` is `None` and ``self.defaults.run`` is `None`.
-        ConflictingDefinitionError
-            If a dataset with the same dataset type and data ID as one of those
-            given already exists in ``run``.
-        MissingCollectionError
-            Raised if ``run`` does not exist in the registry.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         if isinstance(datasetType, DatasetType):
             storage = self._managers.datasets.find(datasetType.name)
             if storage is None:
@@ -800,44 +452,12 @@ class SqlRegistry(Registry):
         return refs
 
     def getDataset(self, id: int) -> Optional[DatasetRef]:
-        """Retrieve a Dataset entry.
-
-        Parameters
-        ----------
-        id : `int`
-            The unique identifier for the dataset.
-
-        Returns
-        -------
-        ref : `DatasetRef` or `None`
-            A ref to the Dataset, or `None` if no matching Dataset
-            was found.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.datasets.getDatasetRef(id)
 
     @transactional
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
-        """Remove datasets from the Registry.
-
-        The datasets will be removed unconditionally from all collections, and
-        any `Quantum` that consumed this dataset will instead be marked with
-        having a NULL input.  `Datastore` records will *not* be deleted; the
-        caller is responsible for ensuring that the dataset has already been
-        removed from all Datastores.
-
-        Parameters
-        ----------
-        refs : `Iterable` of `DatasetRef`
-            References to the datasets to be removed.  Must include a valid
-            ``id`` attribute, and should be considered invalidated upon return.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if any ``ref.id`` is `None`.
-        OrphanedRecordError
-            Raised if any dataset is still present in any `Datastore`.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         progress = Progress("lsst.daf.butler.Registry.removeDatasets", level=logging.DEBUG)
         for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
                                                                   desc="Removing datasets by type"):
@@ -850,34 +470,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def associate(self, collection: str, refs: Iterable[DatasetRef]) -> None:
-        """Add existing datasets to a `~CollectionType.TAGGED` collection.
-
-        If a DatasetRef with the same exact integer ID is already in a
-        collection nothing is changed. If a `DatasetRef` with the same
-        `DatasetType` and data ID but with different integer ID
-        exists in the collection, `ConflictingDefinitionError` is raised.
-
-        Parameters
-        ----------
-        collection : `str`
-            Indicates the collection the datasets should be associated with.
-        refs : `Iterable` [ `DatasetRef` ]
-            An iterable of resolved `DatasetRef` instances that already exist
-            in this `Registry`.
-
-        Raises
-        ------
-        ConflictingDefinitionError
-            If a Dataset with the given `DatasetRef` already exists in the
-            given collection.
-        AmbiguousDatasetError
-            Raised if ``any(ref.id is None for ref in refs)``.
-        MissingCollectionError
-            Raised if ``collection`` does not exist in the registry.
-        TypeError
-            Raise adding new datasets to the given ``collection`` is not
-            allowed.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         progress = Progress("lsst.daf.butler.Registry.associate", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
@@ -897,29 +490,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def disassociate(self, collection: str, refs: Iterable[DatasetRef]) -> None:
-        """Remove existing datasets from a `~CollectionType.TAGGED` collection.
-
-        ``collection`` and ``ref`` combinations that are not currently
-        associated are silently ignored.
-
-        Parameters
-        ----------
-        collection : `str`
-            The collection the datasets should no longer be associated with.
-        refs : `Iterable` [ `DatasetRef` ]
-            An iterable of resolved `DatasetRef` instances that already exist
-            in this `Registry`.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if any of the given dataset references is unresolved.
-        MissingCollectionError
-            Raised if ``collection`` does not exist in the registry.
-        TypeError
-            Raise adding new datasets to the given ``collection`` is not
-            allowed.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         progress = Progress("lsst.daf.butler.Registry.disassociate", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
@@ -932,32 +503,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def certify(self, collection: str, refs: Iterable[DatasetRef], timespan: Timespan) -> None:
-        """Associate one or more datasets with a calibration collection and a
-        validity range within it.
-
-        Parameters
-        ----------
-        collection : `str`
-            The name of an already-registered `~CollectionType.CALIBRATION`
-            collection.
-        refs : `Iterable` [ `DatasetRef` ]
-            Datasets to be associated.
-        timespan : `Timespan`
-            The validity range for these datasets within the collection.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if any of the given `DatasetRef` instances is unresolved.
-        ConflictingDefinitionError
-            Raised if the collection already contains a different dataset with
-            the same `DatasetType` and data ID and an overlapping validity
-            range.
-        TypeError
-            Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
-            collection or if one or more datasets are of a dataset type for
-            which `DatasetType.isCalibration` returns `False`.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         progress = Progress("lsst.daf.butler.Registry.certify", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
         for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
@@ -968,32 +514,7 @@ class SqlRegistry(Registry):
     @transactional
     def decertify(self, collection: str, datasetType: Union[str, DatasetType], timespan: Timespan, *,
                   dataIds: Optional[Iterable[DataId]] = None) -> None:
-        """Remove or adjust datasets to clear a validity range within a
-        calibration collection.
-
-        Parameters
-        ----------
-        collection : `str`
-            The name of an already-registered `~CollectionType.CALIBRATION`
-            collection.
-        datasetType : `str` or `DatasetType`
-            Name or `DatasetType` instance for the datasets to be decertified.
-        timespan : `Timespan`, optional
-            The validity range to remove datasets from within the collection.
-            Datasets that overlap this range but are not contained by it will
-            have their validity ranges adjusted to not overlap it, which may
-            split a single dataset validity range into two.
-        dataIds : `Iterable` [ `DataId` ], optional
-            Data IDs that should be decertified within the given validity range
-            If `None`, all data IDs for ``self.datasetType`` will be
-            decertified.
-
-        Raises
-        ------
-        TypeError
-            Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
-            collection or if ``datasetType.isCalibration() is False``.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         collectionRecord = self._managers.collections.find(collection)
         if isinstance(datasetType, str):
             storage = self._managers.datasets[datasetType]
@@ -1018,60 +539,14 @@ class SqlRegistry(Registry):
         return self._managers.datastores
 
     def getDatasetLocations(self, ref: DatasetRef) -> Iterable[str]:
-        """Retrieve datastore locations for a given dataset.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            A reference to the dataset for which to retrieve storage
-            information.
-
-        Returns
-        -------
-        datastores : `Iterable` [ `str` ]
-            All the matching datastores holding this dataset.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``ref.id`` is `None`.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.datastores.findDatastores(ref)
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
                      records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
                      withDefaults: bool = True,
                      **kwargs: Any) -> DataCoordinate:
-        """Expand a dimension-based data ID to include additional information.
-
-        Parameters
-        ----------
-        dataId : `DataCoordinate` or `dict`, optional
-            Data ID to be expanded; augmented and overridden by ``kwds``.
-        graph : `DimensionGraph`, optional
-            Set of dimensions for the expanded ID.  If `None`, the dimensions
-            will be inferred from the keys of ``dataId`` and ``kwds``.
-            Dimensions that are in ``dataId`` or ``kwds`` but not in ``graph``
-            are silently ignored, providing a way to extract and expand a
-            subset of a data ID.
-        records : `Mapping` [`str`, `DimensionRecord`], optional
-            Dimension record data to use before querying the database for that
-            data, keyed by element name.
-        withDefaults : `bool`, optional
-            Utilize ``self.defaults.dataId`` to fill in missing governor
-            dimension key-value pairs.  Defaults to `True` (i.e. defaults are
-            used).
-        **kwargs
-            Additional keywords are treated like additional key-value pairs for
-            ``dataId``, extending and overriding
-
-        Returns
-        -------
-        expanded : `DataCoordinate`
-            A data ID that includes full metadata for all of the dimensions it
-            identifieds, i.e. guarantees that ``expanded.hasRecords()`` and
-            ``expanded.hasFull()`` both return `True`.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         if not withDefaults:
             defaults = None
         else:
@@ -1137,21 +612,7 @@ class SqlRegistry(Registry):
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[Mapping[str, Any], DimensionRecord],
                             conform: bool = True) -> None:
-        """Insert one or more dimension records into the database.
-
-        Parameters
-        ----------
-        element : `DimensionElement` or `str`
-            The `DimensionElement` or name thereof that identifies the table
-            records will be inserted into.
-        data : `dict` or `DimensionRecord` (variadic)
-            One or more records to insert.
-        conform : `bool`, optional
-            If `False` (`True` is default) perform no checking or conversions,
-            and assume that ``element`` is a `DimensionElement` instance and
-            ``data`` is a one or more `DimensionRecord` instances of the
-            appropriate subclass.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         if conform:
             if isinstance(element, str):
                 element = self.dimensions[element]
@@ -1166,33 +627,7 @@ class SqlRegistry(Registry):
     def syncDimensionData(self, element: Union[DimensionElement, str],
                           row: Union[Mapping[str, Any], DimensionRecord],
                           conform: bool = True) -> bool:
-        """Synchronize the given dimension record with the database, inserting
-        if it does not already exist and comparing values if it does.
-
-        Parameters
-        ----------
-        element : `DimensionElement` or `str`
-            The `DimensionElement` or name thereof that identifies the table
-            records will be inserted into.
-        row : `dict` or `DimensionRecord`
-           The record to insert.
-        conform : `bool`, optional
-            If `False` (`True` is default) perform no checking or conversions,
-            and assume that ``element`` is a `DimensionElement` instance and
-            ``data`` is a one or more `DimensionRecord` instances of the
-            appropriate subclass.
-
-        Returns
-        -------
-        inserted : `bool`
-            `True` if a new row was inserted, `False` otherwise.
-
-        Raises
-        ------
-        ConflictingDefinitionError
-            Raised if the record exists in the database (according to primary
-            key lookup) but is inconsistent with the given one.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         if conform:
             if isinstance(element, str):
                 element = self.dimensions[element]
@@ -1205,29 +640,7 @@ class SqlRegistry(Registry):
 
     def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None
                           ) -> Iterator[DatasetType]:
-        """Iterate over the dataset types whose names match an expression.
-
-        Parameters
-        ----------
-        expression : `Any`, optional
-            An expression that fully or partially identifies the dataset types
-            to return, such as a `str`, `re.Pattern`, or iterable thereof.
-            `...` can be used to return all dataset types, and is the default.
-            See :ref:`daf_butler_dataset_type_expressions` for more
-            information.
-        components : `bool`, optional
-            If `True`, apply all expression patterns to component dataset type
-            names as well.  If `False`, never apply patterns to components.
-            If `None` (default), apply patterns to components only if their
-            parent datasets were not matched by the expression.
-            Fully-specified component datasets (`str` or `DatasetType`
-            instances) are always included.
-
-        Yields
-        ------
-        datasetType : `DatasetType`
-            A `DatasetType` instance whose name matches ``expression``.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
         if wildcard is Ellipsis:
             for datasetType in self._managers.datasets:
@@ -1284,35 +697,8 @@ class SqlRegistry(Registry):
                          collectionTypes: Iterable[CollectionType] = CollectionType.all(),
                          flattenChains: bool = False,
                          includeChains: Optional[bool] = None) -> Iterator[str]:
-        """Iterate over the collections whose names match an expression.
+        # Docstring inherited from lsst.daf.butler.registry.Registry
 
-        Parameters
-        ----------
-        expression : `Any`, optional
-            An expression that identifies the collections to return, such as a
-            `str` (for full matches), `re.Pattern` (for partial matches), or
-            iterable thereof.  `...` can be used to return all collections,
-            and is the default.  See :ref:`daf_butler_collection_expressions`
-            for more information.
-        datasetType : `DatasetType`, optional
-            If provided, only yield collections that may contain datasets of
-            this type.  This is a conservative approximation in general; it may
-            yield collections that do not have any such datasets.
-        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
-            If provided, only yield collections of these types.
-        flattenChains : `bool`, optional
-            If `True` (`False` is default), recursively yield the child
-            collections of matching `~CollectionType.CHAINED` collections.
-        includeChains : `bool`, optional
-            If `True`, yield records for matching `~CollectionType.CHAINED`
-            collections.  Default is the opposite of ``flattenChains``: include
-            either CHAINED collections or their children, but not both.
-
-        Yields
-        ------
-        collection : `str`
-            The name of a collection that matches ``expression``.
-        """
         # Right now the datasetTypes argument is completely ignored, but that
         # is consistent with its [lack of] guarantees.  DM-24939 or a follow-up
         # ticket will take care of that.
@@ -1361,97 +747,8 @@ class SqlRegistry(Registry):
                       bind: Optional[Mapping[str, Any]] = None,
                       check: bool = True,
                       **kwargs: Any) -> queries.DatasetQueryResults:
-        """Query for and iterate over dataset references matching user-provided
-        criteria.
+        # Docstring inherited from lsst.daf.butler.registry.Registry
 
-        Parameters
-        ----------
-        datasetType
-            An expression that fully or partially identifies the dataset types
-            to be queried.  Allowed types include `DatasetType`, `str`,
-            `re.Pattern`, and iterables thereof.  The special value `...` can
-            be used to query all dataset types.  See
-            :ref:`daf_butler_dataset_type_expressions` for more information.
-        collections: optional
-            An expression that identifies the collections to search, such as a
-            `str` (for full matches), `re.Pattern` (for partial matches), or
-            iterable thereof.  `...` can be used to search all collections
-            (actually just all `~CollectionType.RUN` collections, because this
-            will still find all datasets).  If not provided,
-            ``self.default.collections`` is used.  See
-            :ref:`daf_butler_collection_expressions` for more information.
-        dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
-            Dimensions to include in the query (in addition to those used
-            to identify the queried dataset type(s)), either to constrain
-            the resulting datasets to those for which a matching dimension
-            exists, or to relate the dataset type's dimensions to dimensions
-            referenced by the ``dataId`` or ``where`` arguments.
-        dataId : `dict` or `DataCoordinate`, optional
-            A data ID whose key-value pairs are used as equality constraints
-            in the query.
-        where : `str`, optional
-            A string expression similar to a SQL WHERE clause.  May involve
-            any column of a dimension table or (as a shortcut for the primary
-            key column of a dimension table) dimension name.  See
-            :ref:`daf_butler_dimension_expressions` for more information.
-        findFirst : `bool`, optional
-            If `True` (`False` is default), for each result data ID, only
-            yield one `DatasetRef` of each `DatasetType`, from the first
-            collection in which a dataset of that dataset type appears
-            (according to the order of ``collections`` passed in).  If `True`,
-            ``collections`` must not contain regular expressions and may not
-            be `...`.
-        components : `bool`, optional
-            If `True`, apply all dataset expression patterns to component
-            dataset type names as well.  If `False`, never apply patterns to
-            components.  If `None` (default), apply patterns to components only
-            if their parent datasets were not matched by the expression.
-            Fully-specified component datasets (`str` or `DatasetType`
-            instances) are always included.
-        bind : `Mapping`, optional
-            Mapping containing literal values that should be injected into the
-            ``where`` expression, keyed by the identifiers they replace.
-        check : `bool`, optional
-            If `True` (default) check the query for consistency before
-            executing it.  This may reject some valid queries that resemble
-            common mistakes (e.g. queries for visits without specifying an
-            instrument).
-        **kwargs
-            Additional keyword arguments are forwarded to
-            `DataCoordinate.standardize` when processing the ``dataId``
-            argument (and may be used to provide a constraining data ID even
-            when the ``dataId`` argument is `None`).
-
-        Returns
-        -------
-        refs : `queries.DatasetQueryResults`
-            Dataset references matching the given query criteria.  Nested data
-            IDs are guaranteed to include values for all implied dimensions
-            (i.e. `DataCoordinate.hasFull` will return `True`), but will not
-            include dimension records (`DataCoordinate.hasRecords` will be
-            `False`) unless `~queries.DatasetQueryResults.expanded` is called
-            on the result object (which returns a new one).
-
-        Raises
-        ------
-        TypeError
-            Raised when the arguments are incompatible, such as when a
-            collection wildcard is passed when ``findFirst`` is `True`, or
-            when ``collections`` is `None` and``self.defaults.collections`` is
-            also `None`.
-
-        Notes
-        -----
-        When multiple dataset types are queried in a single call, the
-        results of this operation are equivalent to querying for each dataset
-        type separately in turn, and no information about the relationships
-        between datasets of different types is included.  In contexts where
-        that kind of information is important, the recommended pattern is to
-        use `queryDataIds` to first obtain data IDs (possibly with the
-        desired dataset types and collections passed as constraints to the
-        query), and then use multiple (generally much simpler) calls to
-        `queryDatasets` with the returned data IDs passed as constraints.
-        """
         # Standardize the collections expression.
         if collections is None:
             if not self.defaults.collections:
@@ -1554,83 +851,7 @@ class SqlRegistry(Registry):
                      bind: Optional[Mapping[str, Any]] = None,
                      check: bool = True,
                      **kwargs: Any) -> queries.DataCoordinateQueryResults:
-        """Query for data IDs matching user-provided criteria.
-
-        Parameters
-        ----------
-        dimensions : `Dimension` or `str`, or iterable thereof
-            The dimensions of the data IDs to yield, as either `Dimension`
-            instances or `str`.  Will be automatically expanded to a complete
-            `DimensionGraph`.
-        dataId : `dict` or `DataCoordinate`, optional
-            A data ID whose key-value pairs are used as equality constraints
-            in the query.
-        datasets : `Any`, optional
-            An expression that fully or partially identifies dataset types
-            that should constrain the yielded data IDs.  For example, including
-            "raw" here would constrain the yielded ``instrument``,
-            ``exposure``, ``detector``, and ``physical_filter`` values to only
-            those for which at least one "raw" dataset exists in
-            ``collections``.  Allowed types include `DatasetType`, `str`,
-            `re.Pattern`, and iterables thereof.  Unlike other dataset type
-            expressions, ``...`` is not permitted - it doesn't make sense to
-            constrain data IDs on the existence of *all* datasets.
-            See :ref:`daf_butler_dataset_type_expressions` for more
-            information.
-        collections: `Any`, optional
-            An expression that identifies the collections to search for
-            datasets, such as a `str` (for full matches), `re.Pattern` (for
-            partial matches), or iterable thereof.  `...` can be used to search
-            all collections (actually just all `~CollectionType.RUN`
-            collections, because this will still find all datasets).  If not
-            provided, ``self.default.collections`` is used.  Ignored unless
-            ``datasets`` is also passed.  See
-            :ref:`daf_butler_collection_expressions` for more information.
-        where : `str`, optional
-            A string expression similar to a SQL WHERE clause.  May involve
-            any column of a dimension table or (as a shortcut for the primary
-            key column of a dimension table) dimension name.  See
-            :ref:`daf_butler_dimension_expressions` for more information.
-        components : `bool`, optional
-            If `True`, apply all dataset expression patterns to component
-            dataset type names as well.  If `False`, never apply patterns to
-            components.  If `None` (default), apply patterns to components only
-            if their parent datasets were not matched by the expression.
-            Fully-specified component datasets (`str` or `DatasetType`
-            instances) are always included.
-        bind : `Mapping`, optional
-            Mapping containing literal values that should be injected into the
-            ``where`` expression, keyed by the identifiers they replace.
-        check : `bool`, optional
-            If `True` (default) check the query for consistency before
-            executing it.  This may reject some valid queries that resemble
-            common mistakes (e.g. queries for visits without specifying an
-            instrument).
-        **kwargs
-            Additional keyword arguments are forwarded to
-            `DataCoordinate.standardize` when processing the ``dataId``
-            argument (and may be used to provide a constraining data ID even
-            when the ``dataId`` argument is `None`).
-
-        Returns
-        -------
-        dataIds : `DataCoordinateQueryResults`
-            Data IDs matching the given query parameters.  These are guaranteed
-            to identify all dimensions (`DataCoordinate.hasFull` returns
-            `True`), but will not contain `DimensionRecord` objects
-            (`DataCoordinate.hasRecords` returns `False`).  Call
-            `DataCoordinateQueryResults.expanded` on the returned object to
-            fetch those (and consider using
-            `DataCoordinateQueryResults.materialize` on the returned object
-            first if the expected number of rows is very large).  See
-            documentation for those methods for additional information.
-
-        Raises
-        ------
-        TypeError
-            Raised if ``collections`` is `None`, ``self.defaults.collections``
-            is `None`, and ``datasets`` is not `None`.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         dimensions = iterable(dimensions)
         standardizedDataId = self.expandDataId(dataId, **kwargs)
         standardizedDatasetTypes = set()
@@ -1680,54 +901,7 @@ class SqlRegistry(Registry):
                               bind: Optional[Mapping[str, Any]] = None,
                               check: bool = True,
                               **kwargs: Any) -> Iterator[DimensionRecord]:
-        """Query for dimension information matching user-provided criteria.
-
-        Parameters
-        ----------
-        element : `DimensionElement` or `str`
-            The dimension element to obtain records for.
-        dataId : `dict` or `DataCoordinate`, optional
-            A data ID whose key-value pairs are used as equality constraints
-            in the query.
-        datasets : `Any`, optional
-            An expression that fully or partially identifies dataset types
-            that should constrain the yielded records.  See `queryDataIds` and
-            :ref:`daf_butler_dataset_type_expressions` for more information.
-        collections: `Any`, optional
-            An expression that identifies the collections to search for
-            datasets, such as a `str` (for full matches), `re.Pattern` (for
-            partial matches), or iterable thereof.  `...` can be used to search
-            all collections (actually just all `~CollectionType.RUN`
-            collections, because this will still find all datasets).  If not
-            provided, ``self.default.collections`` is used.  Ignored unless
-            ``datasets`` is also passed.  See
-            :ref:`daf_butler_collection_expressions` for more information.
-        where : `str`, optional
-            A string expression similar to a SQL WHERE clause.  See
-            `queryDataIds` and :ref:`daf_butler_dimension_expressions` for more
-            information.
-        components : `bool`, optional
-            Whether to apply dataset expressions to components as well.
-            See `queryDataIds` for more information.
-        bind : `Mapping`, optional
-            Mapping containing literal values that should be injected into the
-            ``where`` expression, keyed by the identifiers they replace.
-        check : `bool`, optional
-            If `True` (default) check the query for consistency before
-            executing it.  This may reject some valid queries that resemble
-            common mistakes (e.g. queries for visits without specifying an
-            instrument).
-        **kwargs
-            Additional keyword arguments are forwarded to
-            `DataCoordinate.standardize` when processing the ``dataId``
-            argument (and may be used to provide a constraining data ID even
-            when the ``dataId`` argument is `None`).
-
-        Returns
-        -------
-        dataIds : `DataCoordinateQueryResults`
-            Data IDs matching the given query parameters.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         if not isinstance(element, DimensionElement):
             try:
                 element = self.dimensions[element]
@@ -1746,46 +920,7 @@ class SqlRegistry(Registry):
         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
         flattenChains: bool = False,
     ) -> Iterator[DatasetAssociation]:
-        """Iterate over dataset-collection combinations where the dataset is in
-        the collection.
-
-        This method is a temporary placeholder for better support for
-        assocation results in `queryDatasets`.  It will probably be
-        removed in the future, and should be avoided in production code
-        whenever possible.
-
-        Parameters
-        ----------
-        datasetType : `DatasetType` or `str`
-            A dataset type object or the name of one.
-        collections: `Any`, optional
-            An expression that identifies the collections to search for
-            datasets, such as a `str` (for full matches), `re.Pattern` (for
-            partial matches), or iterable thereof.  `...` can be used to search
-            all collections (actually just all `~CollectionType.RUN`
-            collections, because this will still find all datasets).  If not
-            provided, ``self.default.collections`` is used.  See
-            :ref:`daf_butler_collection_expressions` for more information.
-        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
-            If provided, only yield associations from collections of these
-            types.
-        flattenChains : `bool`, optional
-            If `True` (default) search in the children of
-            `~CollectionType.CHAINED` collections.  If `False`, ``CHAINED``
-            collections are ignored.
-
-        Yields
-        ------
-        association : `DatasetAssociation`
-            Object representing the relationship beween a single dataset and
-            a single collection.
-
-        Raises
-        ------
-        TypeError
-            Raised if ``collections`` is `None` and
-            ``self.defaults.collections`` is `None`.
-        """
+        # Docstring inherited from lsst.daf.butler.registry.Registry
         if collections is None:
             if not self.defaults.collections:
                 raise TypeError("No collections provided to findDataset, "
