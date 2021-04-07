@@ -66,6 +66,19 @@ def get_uri(id: Union[int, UUID]) -> str:
 
 
 @app.get(
+    "/registry/datasetType/{datasetTypeName}",
+    summary="Retrieve this dataset type definition.",
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
+def get_dataset_type(datasetTypeName: str) -> SerializedDatasetType:
+    butler = Butler(BUTLER_ROOT)
+    datasetType = butler.registry.getDatasetType(datasetTypeName)
+    return datasetType.to_simple()
+
+
+@app.get(
     "/registry/datasetTypes",
     summary="Retrieve all dataset type definitions.",
     response_model_exclude_unset=True,
