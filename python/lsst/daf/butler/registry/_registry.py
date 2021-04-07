@@ -113,10 +113,10 @@ class Registry(ABC):
             A registry config.
         """
         if not isinstance(config, RegistryConfig):
-            if isinstance(config, (str, Config)):
+            if isinstance(config, (str, Config)) or config is None:
                 config = RegistryConfig(config)
             else:
-                raise ValueError("Incompatible Registry configuration: {}".format(config))
+                raise ValueError(f"Incompatible Registry configuration: {config}")
         return config
 
     @classmethod
