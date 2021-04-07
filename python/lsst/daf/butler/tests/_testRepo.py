@@ -115,7 +115,7 @@ def makeTestRepo(root: str,
     return butler
 
 
-def makeTestCollection(repo: Butler) -> Butler:
+def makeTestCollection(repo: Butler, uniqueId: Optional[str] = None) -> Butler:
     """Create a read/write Butler to a fresh collection.
 
     Parameters
@@ -123,6 +123,9 @@ def makeTestCollection(repo: Butler) -> Butler:
     repo : `lsst.daf.butler.Butler`
         A previously existing Butler to a repository, such as that returned by
         `~lsst.daf.butler.Butler.makeRepo` or `makeTestRepo`.
+    uniqueId : `str`, optional
+        A collection ID guaranteed by external code to be unique across all
+        calls to ``makeTestCollection`` for the same repository.
 
     Returns
     -------
@@ -137,9 +140,11 @@ def makeTestCollection(repo: Butler) -> Butler:
     isolated test area, and not for repositories intended for real data
     processing or analysis.
     """
-    # Create a "random" collection name
-    # Speed matters more than cryptographic guarantees
-    collection = "test" + str(random.randrange(1_000_000_000))
+    if not uniqueId:
+        # Create a "random" collection name
+        # Speed matters more than cryptographic guarantees
+        uniqueId = str(random.randrange(1_000_000_000))
+    collection = "test_" + uniqueId
     return Butler(butler=repo, run=collection)
 
 

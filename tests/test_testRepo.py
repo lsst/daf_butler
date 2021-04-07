@@ -65,7 +65,8 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         removeTestTempDir(cls.root)
 
     def setUp(self):
-        self.butler = makeTestCollection(self.creatorButler)
+        # TestCase.id() is unique for each test method
+        self.butler = makeTestCollection(self.creatorButler, uniqueId=self.id())
 
     def testButlerValid(self):
         self.butler.validateConfiguration()
