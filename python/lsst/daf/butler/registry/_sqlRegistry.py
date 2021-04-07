@@ -88,9 +88,6 @@ if TYPE_CHECKING:
 
 _LOG = logging.getLogger(__name__)
 
-# key for dimensions configuration in attributes table
-_DIMENSIONS_ATTR = "config:dimensions.json"
-
 
 class SqlRegistry(Registry):
     """Registry implementation based on SQLAlchemy.
