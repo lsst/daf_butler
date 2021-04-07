@@ -75,15 +75,15 @@ class SerializedDatasetRef(BaseModel):
 
     @validator("run")
     def check_run(cls, v: Any, values: Dict[str, Any]) -> Any:
-        if (i := "id") in values and values[i] is None:
+        if v and (i := "id") in values and values[i] is None:
             raise ValueError("'run' cannot be provided unless 'id' is.")
         return v
 
     @validator("component")
     def check_component(cls, v: Any, values: Dict[str, Any]) -> Any:
         # Component should not be given if datasetType is given
-        if (d := "datasetType") in values and values[d] is not None:
-            raise ValueError("datasetType can not be set if component is given.")
+        if v and (d := "datasetType") in values and values[d] is not None:
+            raise ValueError(f"datasetType ({values[d]}) can not be set if component is given ({v}).")
         return v
 
 
