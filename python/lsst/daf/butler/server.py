@@ -65,8 +65,14 @@ def get_uri(id: Union[int, UUID]) -> str:
     return str(uri)
 
 
-@app.get("/registry/datasetTypes")
-def query_dataset_types(expression: Optional[str] = None,
+@app.get(
+    "/registry/datasetTypes/{expression}",
+    summary="Retrieve dataset type definitions matching expression",
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
+def query_dataset_types(expression: str,
                         components: Optional[bool] = None) -> List[SerializedDatasetType]:
     butler = Butler(BUTLER_ROOT)
     if expression is None:
@@ -74,7 +80,6 @@ def query_dataset_types(expression: Optional[str] = None,
     else:
         expression = globToRegex([expression])
     datasetTypes = butler.registry.queryDatasetTypes(expression, components=components)
-    datasetTypes = list(datasetTypes)
     return [d.to_simple() for d in datasetTypes]
 
 
