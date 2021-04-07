@@ -841,8 +841,7 @@ class SqlRegistry(Registry):
         progress = Progress("lsst.daf.butler.Registry.removeDatasets", level=logging.DEBUG)
         for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
                                                                   desc="Removing datasets by type"):
-            storage = self._managers.datasets.find(datasetType.name)
-            assert storage is not None
+            storage = self._managers.datasets[datasetType.name]
             try:
                 storage.delete(refsForType)
             except sqlalchemy.exc.IntegrityError as err:
@@ -885,8 +884,7 @@ class SqlRegistry(Registry):
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
         for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
                                                                   desc="Associating datasets by type"):
-            storage = self._managers.datasets.find(datasetType.name)
-            assert storage is not None
+            storage = self._managers.datasets[datasetType.name]
             try:
                 storage.associate(collectionRecord, refsForType)
             except sqlalchemy.exc.IntegrityError as err:
@@ -929,8 +927,7 @@ class SqlRegistry(Registry):
                             "expected TAGGED.")
         for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
                                                                   desc="Disassociating datasets by type"):
-            storage = self._managers.datasets.find(datasetType.name)
-            assert storage is not None
+            storage = self._managers.datasets[datasetType.name]
             storage.disassociate(collectionRecord, refsForType)
 
     @transactional
