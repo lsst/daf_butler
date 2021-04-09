@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ["DatasetType"]
+__all__ = ["DatasetType", "SerializedDatasetType"]
 
 from copy import deepcopy
 import re
@@ -42,11 +42,12 @@ from typing import (
     Union,
 )
 
+from pydantic import BaseModel, StrictStr, StrictBool
 
 from ..storageClass import StorageClass, StorageClassFactory
-from ..dimensions import DimensionGraph
+from ..dimensions import DimensionGraph, SerializedDimensionGraph
 from ..configSupport import LookupKey
-from ..json import from_json_generic, to_json_generic
+from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:
     from ..dimensions import Dimension, DimensionUniverse
@@ -57,6 +58,16 @@ def _safeMakeMappingProxyType(data: Optional[Mapping]) -> Mapping:
     if data is None:
         data = {}
     return MappingProxyType(data)
+
+
+class SerializedDatasetType(BaseModel):
+    """Simplified model of a `DatasetType` suitable for serialization."""
+
+    name: StrictStr
+    storageClass: Optional[StrictStr] = None
+    dimensions: Optional[SerializedDimensionGraph] = None
+    parentStorageClass: Optional[StrictStr] = None
+    isCalibration: StrictBool = False
 
 
 class DatasetType:
@@ -104,6 +115,8 @@ class DatasetType:
     __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName",
                  "_parentStorageClass", "_parentStorageClassName",
                  "_isCalibration")
+
+    _serializedType = SerializedDatasetType
 
     VALID_NAME_REGEX = re.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$")
 
@@ -497,7 +510,7 @@ class DatasetType:
 
         return lookups + self.storageClass._lookupNames()
 
-    def to_simple(self, minimal: bool = False) -> Union[Dict, str]:
+    def to_simple(self, minimal: bool = False) -> SerializedDatasetType:
         """Convert this class to a simple python type.
 
         This makes it suitable for serialization.
@@ -510,26 +523,27 @@ class DatasetType:
 
         Returns
         -------
-        simple : `dict` or `str`
-            The object converted to a dictionary or a simple string.
+        simple : `SerializedDatasetType`
+            The object converted to a class suitable for serialization.
         """
+        as_dict: Dict[str, Any]
         if minimal:
             # Only needs the name.
-            return self.name
+            as_dict = {"name": self.name}
+        else:
+            # Convert to a dict form
+            as_dict = {"name": self.name,
+                       "storageClass": self._storageClassName,
+                       "isCalibration": self._isCalibration,
+                       "dimensions": self.dimensions.to_simple(),
+                       }
 
-        # Convert to a dict form
-        as_dict = {"name": self.name,
-                   "storageClass": self._storageClassName,
-                   "isCalibration": self._isCalibration,
-                   "dimensions": self.dimensions.to_simple(),
-                   }
-
-        if self._parentStorageClassName is not None:
-            as_dict["parentStorageClass"] = self._parentStorageClassName
-        return as_dict
+            if self._parentStorageClassName is not None:
+                as_dict["parentStorageClass"] = self._parentStorageClassName
+        return SerializedDatasetType(**as_dict)
 
     @classmethod
-    def from_simple(cls, simple: Union[Dict, str],
+    def from_simple(cls, simple: SerializedDatasetType,
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> DatasetType:
         """Construct a new object from the simplified form.
@@ -538,7 +552,7 @@ class DatasetType:
 
         Parameters
         ----------
-        simple : `dict` of [`str`, `Any`] or `str`
+        simple : `SerializedDatasetType`
             The value returned by `to_simple()`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions of which this graph will
@@ -553,11 +567,12 @@ class DatasetType:
         datasetType : `DatasetType`
             Newly-constructed object.
         """
-        if isinstance(simple, str):
+        if simple.storageClass is None:
+            # Treat this as minimalist representation
             if registry is None:
                 raise ValueError(f"Unable to convert a DatasetType name '{simple}' to DatasetType"
                                  " without a Registry")
-            return registry.getDatasetType(simple)
+            return registry.getDatasetType(simple.name)
 
         if universe is None and registry is None:
             raise ValueError("One of universe or registry must be provided.")
@@ -570,15 +585,19 @@ class DatasetType:
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
 
-        return cls(name=simple["name"],
-                   dimensions=DimensionGraph.from_simple(simple["dimensions"], universe=universe),
-                   storageClass=simple["storageClass"],
-                   isCalibration=simple.get("isCalibration", False),
-                   parentStorageClass=simple.get("parentStorageClass"),
+        if simple.dimensions is None:
+            # mypy hint
+            raise ValueError(f"Dimensions must be specified in {simple}")
+
+        return cls(name=simple.name,
+                   dimensions=DimensionGraph.from_simple(simple.dimensions, universe=universe),
+                   storageClass=simple.storageClass,
+                   isCalibration=simple.isCalibration,
+                   parentStorageClass=simple.parentStorageClass,
                    universe=universe)
 
-    to_json = to_json_generic
-    from_json = classmethod(from_json_generic)
+    to_json = to_json_pydantic
+    from_json = classmethod(from_json_pydantic)
 
     def __reduce__(self) -> Tuple[Callable, Tuple[Type[DatasetType],
                                                   Tuple[str, DimensionGraph, str, Optional[str]],

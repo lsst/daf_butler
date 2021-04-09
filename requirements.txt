@@ -4,6 +4,7 @@ click >= 7.0
 sqlalchemy >= 1.3
 git+git://github.com/lsst/sphgeom@master#egg=lsst_sphgeom
 deprecated == 1.2.11
+pydantic
 
 # optional
 backoff >= 1.10

@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["AmbiguousDatasetError", "DatasetRef"]
+__all__ = ["AmbiguousDatasetError", "DatasetRef", "SerializedDatasetRef"]
 
 from typing import (
     TYPE_CHECKING,
@@ -32,12 +32,14 @@ from typing import (
     Tuple,
 )
 
+from pydantic import BaseModel, StrictStr, ConstrainedInt, validator
+
 from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse
 from ..configSupport import LookupKey
 from ..utils import immutable
 from ..named import NamedKeyDict
-from .type import DatasetType
-from ..json import from_json_generic, to_json_generic
+from .type import DatasetType, SerializedDatasetType
+from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:
     from ...registry import Registry
@@ -49,6 +51,40 @@ class AmbiguousDatasetError(Exception):
     This happens when the `DatasetRef` has no ID or run but the requested
     operation requires one of them.
     """
+
+
+class PositiveInt(ConstrainedInt):
+    ge = 0
+    strict = True
+
+
+class SerializedDatasetRef(BaseModel):
+    """Simplified model of a `DatasetRef` suitable for serialization."""
+
+    id: Optional[PositiveInt] = None
+    datasetType: Optional[SerializedDatasetType] = None
+    dataId: Optional[Dict[str, Any]] = None  # Do not use specialist pydantic model for this
+    run: Optional[StrictStr] = None
+    component: Optional[StrictStr] = None
+
+    @validator("dataId")
+    def check_dataId(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
+        if (d := "datasetType") in values and values[d] is None:
+            raise ValueError("Can not specify 'dataId' without specifying 'datasetType'")
+        return v
+
+    @validator("run")
+    def check_run(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
+        if v and (i := "id") in values and values[i] is None:
+            raise ValueError("'run' cannot be provided unless 'id' is.")
+        return v
+
+    @validator("component")
+    def check_component(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
+        # Component should not be given if datasetType is given
+        if v and (d := "datasetType") in values and values[d] is not None:
+            raise ValueError(f"datasetType ({values[d]}) can not be set if component is given ({v}).")
+        return v
 
 
 @immutable
@@ -84,6 +120,7 @@ class DatasetRef:
         provided but ``run`` is not.
     """
 
+    _serializedType = SerializedDatasetRef
     __slots__ = ("id", "datasetType", "dataId", "run",)
 
     def __init__(
@@ -154,7 +191,7 @@ class DatasetRef:
         # Compare tuples in the priority order
         return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
 
-    def to_simple(self, minimal: bool = False) -> Dict:
+    def to_simple(self, minimal: bool = False) -> SerializedDatasetRef:
         """Convert this class to a simple python type.
 
         This makes it suitable for serialization.
@@ -182,7 +219,7 @@ class DatasetRef:
                 # We can still be a little minimalist with a component
                 # but we will also need to record the datasetType component
                 simple["component"] = self.datasetType.component()
-            return simple
+            return SerializedDatasetRef(**simple)
 
         # Convert to a dict form
         as_dict: Dict[str, Any] = {"datasetType": self.datasetType.to_simple(minimal=minimal),
@@ -194,10 +231,10 @@ class DatasetRef:
             as_dict["run"] = self.run
             as_dict["id"] = self.id
 
-        return as_dict
+        return SerializedDatasetRef(**as_dict)
 
     @classmethod
-    def from_simple(cls, simple: Dict,
+    def from_simple(cls, simple: SerializedDatasetRef,
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> DatasetRef:
         """Construct a new object from simplified form.
@@ -223,14 +260,16 @@ class DatasetRef:
         """
         # Minimalist component will just specify component and id and
         # require registry to reconstruct
-        if set(simple).issubset({"id", "component"}):
+        if set(simple.dict(exclude_unset=True, exclude_defaults=True)).issubset({"id", "component"}):
             if registry is None:
                 raise ValueError("Registry is required to construct component DatasetRef from integer id")
-            ref = registry.getDataset(simple["id"])
+            if simple.id is None:
+                raise ValueError("For minimal DatasetRef the ID must be defined.")
+            ref = registry.getDataset(simple.id)
             if ref is None:
-                raise RuntimeError(f"No matching dataset found in registry for id {simple['id']}")
-            if "component" in simple:
-                ref = ref.makeComponentRef(simple["component"])
+                raise RuntimeError(f"No matching dataset found in registry for id {simple.id}")
+            if simple.component:
+                ref = ref.makeComponentRef(simple.component)
             return ref
 
         if universe is None and registry is None:
@@ -243,13 +282,20 @@ class DatasetRef:
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
 
-        datasetType = DatasetType.from_simple(simple["datasetType"], universe=universe, registry=registry)
-        dataId = DataCoordinate.from_simple(simple["dataId"], universe=universe)
-        return cls(datasetType, dataId,
-                   id=simple["id"], run=simple["run"])
+        if simple.datasetType is None:
+            # mypy
+            raise ValueError("The DatasetType must be specified to construct a DatasetRef")
+        datasetType = DatasetType.from_simple(simple.datasetType, universe=universe, registry=registry)
 
-    to_json = to_json_generic
-    from_json = classmethod(from_json_generic)
+        if simple.dataId is None:
+            # mypy
+            raise ValueError("The DataId must be specified to construct a DatasetRef")
+        dataId = DataCoordinate.from_simple(simple.dataId, universe=universe)
+        return cls(datasetType, dataId,
+                   id=simple.id, run=simple.run)
+
+    to_json = to_json_pydantic
+    from_json = classmethod(from_json_pydantic)
 
     @classmethod
     def _unpickle(

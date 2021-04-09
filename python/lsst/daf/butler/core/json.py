@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("to_json_generic", "from_json_generic")
+__all__ = ("to_json_generic", "from_json_generic", "to_json_pydantic", "from_json_pydantic")
 
 from typing import (
     TYPE_CHECKING,
@@ -39,6 +39,8 @@ if TYPE_CHECKING:
 
 
 class SupportsSimple(Protocol):
+    _serializedType: Type
+
     def to_simple(self, minimal: bool) -> Any:
         ...
 
@@ -46,6 +48,25 @@ class SupportsSimple(Protocol):
     def from_simple(cls, simple: Any, universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> SupportsSimple:
         ...
+
+
+def to_json_pydantic(self: SupportsSimple, minimal: bool = False) -> str:
+    """Convert this class to JSON assuming that the ``to_simple()`` returns
+    a pydantic model.
+
+    """
+    return self.to_simple(minimal=minimal).json(exclude_defaults=True, exclude_unset=True)
+
+
+def from_json_pydantic(cls: Type[SupportsSimple], json_str: str,
+                       universe: Optional[DimensionUniverse] = None,
+                       registry: Optional[Registry] = None) -> SupportsSimple:
+    """Convert from JSON to a pydantic model."""
+    simple = cls._serializedType.parse_raw(json_str)
+    try:
+        return cls.from_simple(simple, universe=universe, registry=registry)
+    except AttributeError as e:
+        raise AttributeError(f"JSON deserialization requires {cls} has a from_simple() class method") from e
 
 
 def to_json_generic(self: SupportsSimple, minimal: bool = False) -> str:
