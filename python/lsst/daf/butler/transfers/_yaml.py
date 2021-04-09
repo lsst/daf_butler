@@ -62,6 +62,7 @@ from ..registry import CollectionType, Registry
 from ..registry.interfaces import (
     ChainedCollectionRecord,
     CollectionRecord,
+    DatasetIdGenEnum,
     RunRecord,
     VersionTuple,
 )
@@ -348,7 +349,9 @@ class YamlRepoImportBackend(RepoImportBackend):
 
     def load(self, datastore: Optional[Datastore], *,
              directory: Optional[str] = None, transfer: Optional[str] = None,
-             skip_dimensions: Optional[Set] = None) -> None:
+             skip_dimensions: Optional[Set] = None,
+             idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+             reuseIds: bool = False) -> None:
         # Docstring inherited from RepoImportBackend.load.
         for element, dimensionRecords in self.dimensions.items():
             if skip_dimensions and element in skip_dimensions:
@@ -373,7 +376,8 @@ class YamlRepoImportBackend(RepoImportBackend):
             # For now, we ignore the dataset_id we pulled from the file
             # and just insert without one to get a new autoincrement value.
             # Eventually (once we have origin in IDs) we'll preserve them.
-            resolvedRefs = self.registry._importDatasets(datasets)
+            resolvedRefs = self.registry._importDatasets(datasets, idGenerationMode=idGenerationMode,
+                                                         reuseIds=reuseIds)
             # Populate our dictionary that maps int dataset_id values from the
             # export file to the new DatasetRefs
             for fileId, ref in zip(dataset_ids, resolvedRefs):

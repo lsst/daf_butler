@@ -90,6 +90,7 @@ def associate(**kwargs):
 @click.option("--skip-dimensions", "-s", type=str, multiple=True, callback=split_commas,
               metavar=typeStrAcceptsMultiple,
               help="Dimensions that should be skipped during import")
+@click.option("--reuse-ids", is_flag=True, help="Force re-use of imported dataset IDs for integer IDs.")
 @options_file_option()
 def butler_import(*args, **kwargs):
     """Import data into a butler repository."""

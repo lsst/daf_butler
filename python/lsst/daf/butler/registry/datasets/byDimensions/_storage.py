@@ -412,23 +412,62 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
     def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate],
                idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
+
+        # Transform a possibly-single-pass iterable into a list.
+        dataIdList = list(dataIds)
+        yield from self._insert(run, dataIdList)
+
+    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
+                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+                reuseIds: bool = False) -> Iterator[DatasetRef]:
+        # Docstring inherited from DatasetRecordStorage.
+
+        # Make a list of dataIds and optionally dataset IDs.
+        dataIdList: List[DataCoordinate] = []
+        datasetIdList: List[int] = []
+        for dataset in datasets:
+            dataIdList.append(dataset.dataId)
+
+            # We only accept integer dataset IDs, but also allow None.
+            datasetId = dataset.id
+            if datasetId is None:
+                # if reuseIds is set then all IDs must be known
+                if reuseIds:
+                    raise TypeError("All dataset IDs must be known if `reuseIds` is set")
+            elif isinstance(datasetId, int):
+                if reuseIds:
+                    datasetIdList.append(datasetId)
+            else:
+                raise TypeError(f"Unsupported type of dataset ID: {type(datasetId)}")
+
+        yield from self._insert(run, dataIdList, datasetIdList)
+
+    def _insert(self, run: RunRecord, dataIdList: List[DataCoordinate],
+                datasetIdList: Optional[List[int]] = None) -> Iterator[DatasetRef]:
+        """Common part of implementation of `insert` and `import_` methods.
+        """
+
+        # Remember any governor dimension values we see.
+        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
+        for dataId in dataIdList:
+            governorValues.update_extract(dataId)
+
         staticRow = {
             "dataset_type_id": self._dataset_type_id,
             self._runKeyColumn: run.key,
         }
-        # Iterate over data IDs, transforming a possibly-single-pass iterable
-        # into a list, and remembering any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-        dataIdList = []
-        for dataId in dataIds:
-            dataIdList.append(dataId)
-            governorValues.update_extract(dataId)
         with self._db.transaction():
             # Insert into the static dataset table, generating autoincrement
             # dataset_id values.
-            datasetIds = self._db.insert(self._static.dataset, *([staticRow]*len(dataIdList)),
-                                         returnIds=True)
-            assert datasetIds is not None
+            if datasetIdList:
+                # reuse existing IDs
+                rows = [dict(staticRow, id=datasetId) for datasetId in datasetIdList]
+                self._db.insert(self._static.dataset, *rows)
+            else:
+                # use auto-incremented IDs
+                datasetIdList = self._db.insert(self._static.dataset, *([staticRow]*len(dataIdList)),
+                                                returnIds=True)
+                assert datasetIdList is not None
             # Update the summary tables for this collection in case this is the
             # first time this dataset type or these governor values will be
             # inserted there.
@@ -441,36 +480,19 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
             }
             tagsRows = [
                 dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
-                for dataId, dataset_id in zip(dataIdList, datasetIds)
+                for dataId, dataset_id in zip(dataIdList, datasetIdList)
             ]
             # Insert those rows into the tags table.  This is where we'll
             # get any unique constraint violations.
             self._db.insert(self._tags, *tagsRows)
-        for dataId, datasetId in zip(dataIdList, datasetIds):
+
+        for dataId, datasetId in zip(dataIdList, datasetIdList):
             yield DatasetRef(
                 datasetType=self.datasetType,
                 dataId=dataId,
                 id=datasetId,
                 run=run.name,
             )
-
-    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
-                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
-        # Docstring inherited from DatasetRecordStorage.
-
-        # We only accept integer dataset IDs, but also allow None.
-        types = set(type(dataset.id) for dataset in datasets)
-        extra_types = types - {int, type(None)}
-        if extra_types:
-            raise TypeError(f"Unsupported type of dataset IDs: {extra_types}")
-
-        # We do not reuse integer IDs from other repository as it is going
-        # to clash with auto-incremented IDs from this and other repos.
-        return self.insert(
-            run,
-            (dataset.dataId for dataset in datasets),
-            idGenerationMode
-        )
 
 
 class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
@@ -502,7 +524,8 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         yield from self._insert(run, dataIdList, rows, self._db.insert)
 
     def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
-                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
+                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+                reuseIds: bool = False) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
         # Iterate over data IDs, transforming a possibly-single-pass iterable

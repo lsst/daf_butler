@@ -40,7 +40,8 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
                     transfer="auto",
                     directory=None,
                     skip_dimensions=(),
-                    export_file=None)
+                    export_file=None,
+                    reuse_ids=False)
 
     @staticmethod
     def command():
@@ -83,7 +84,8 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
         return dict(repo=None,
                     transfer="auto",
                     directory=None,
-                    export_file=None)
+                    export_file=None,
+                    reuse_ids=False)
 
     @staticmethod
     def command():

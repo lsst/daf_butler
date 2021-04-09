@@ -711,7 +711,8 @@ class Registry(ABC):
 
     @abstractmethod
     def _importDatasets(self, datasets: Iterable[DatasetRef], expand: bool = True,
-                        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> List[DatasetRef]:
+                        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+                        reuseIds: bool = False) -> List[DatasetRef]:
         """Import one or more datasets into the `Registry`.
 
         Difference from `insertDatasets` method is that this method accepts
@@ -740,6 +741,12 @@ class Registry(ABC):
             Specifies option for generating dataset IDs when IDs are not
             provided or their type does not match backend type. By default
             unique IDs are generated for each inserted dataset.
+        reuseIds : `bool`, optional
+            If `True` then forces re-use of imported dataset IDs for integer
+            IDs which are normally generated as auto-incremented; exception
+            will be raised if imported IDs clash with existing ones. This
+            option has no effect on the use of globally-unique IDs which are
+            always re-used (or generated if integer IDs are being imported).
 
         Returns
         -------

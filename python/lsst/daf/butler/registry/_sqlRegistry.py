@@ -455,7 +455,8 @@ class SqlRegistry(Registry):
 
     @transactional
     def _importDatasets(self, datasets: Iterable[DatasetRef], expand: bool = True,
-                        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> List[DatasetRef]:
+                        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+                        reuseIds: bool = False) -> List[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         datasets = list(datasets)
         if not datasets:
@@ -501,7 +502,7 @@ class SqlRegistry(Registry):
             ]
 
         try:
-            refs = list(storage.import_(runRecord, expandedDatasets, idGenerationMode))
+            refs = list(storage.import_(runRecord, expandedDatasets, idGenerationMode, reuseIds))
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(f"A database constraint failure was triggered by inserting "
                                              f"one or more datasets of type {storage.datasetType} into "

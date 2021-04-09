@@ -114,7 +114,8 @@ class DatasetRecordStorage(ABC):
 
     @abstractmethod
     def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
-                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
+                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+                reuseIds: bool = False) -> Iterator[DatasetRef]:
         """Insert one or more dataset entries into the database.
 
         Parameters
@@ -133,6 +134,12 @@ class DatasetRecordStorage(ABC):
             With non-`UNIQUE` mode ID is computed from some combination of
             dataset type, dataId, and run collection name; if the same ID is
             already in the database then new record is not inserted.
+        reuseIds : `bool`, optional
+            If `True` then forces re-use of imported dataset IDs for integer
+            IDs which are normally generated as auto-incremented; exception
+            will be raised if imported IDs clash with existing ones. This
+            option has no effect on the use of globally-unique IDs which are
+            always re-used (or generated if integer IDs are being imported).
 
         Returns
         -------

@@ -43,7 +43,7 @@ from lsst.daf.butler import (
     Registry,
     Timespan,
 )
-from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults
+from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, ConflictingDefinitionError
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
@@ -202,6 +202,32 @@ class SimpleButlerTestCase(unittest.TestCase):
             [self.comparableRef(ref) for ref in datasets1],
             [self.comparableRef(ref) for ref in datasets2],
         )
+
+    def testDatasetImportReuseIds(self):
+        """Test for import that should preserve dataset IDs.
+
+        This test assumes that dataset IDs in datasets YAML are different from
+        what auto-incremental insert would produce.
+        """
+        if self.datasetsIdType is not int:
+            self.skipTest("This test can only work for UUIDs")
+        # Import data to play with.
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        filename = os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile)
+        butler.import_(filename=filename, reuseIds=True)
+        datasets = list(butler.registry.queryDatasets(..., collections=...))
+        self.assertTrue(all(isinstance(ref.id, self.datasetsIdType) for ref in datasets))
+        # IDs are copied from YAML, list needs to be updated if file contents
+        # is changed.
+        self.assertCountEqual(
+            [ref.id for ref in datasets],
+            [1001, 1002, 1003, 1010, 1020, 1030, 2001, 2002, 2003, 2010, 2020, 2030, 2040],
+        )
+
+        # Try once again, it will raise
+        with self.assertRaises(ConflictingDefinitionError):
+            butler.import_(filename=filename, reuseIds=True)
 
     def testCollectionTransfers(self):
         """Test exporting and then importing collections of various types.
