@@ -413,6 +413,10 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
                idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
+        # We only support UNIQUE mode for integer dataset IDs
+        if idMode != DatasetIdGenEnum.UNIQUE:
+            raise ValueError("Only UNIQUE mode can be used with integer dataset IDs.")
+
         # Transform a possibly-single-pass iterable into a list.
         dataIdList = list(dataIds)
         yield from self._insert(run, dataIdList)
@@ -421,6 +425,10 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
                 idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
                 reuseIds: bool = False) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
+
+        # We only support UNIQUE mode for integer dataset IDs
+        if idGenerationMode != DatasetIdGenEnum.UNIQUE:
+            raise ValueError("Only UNIQUE mode can be used with integer dataset IDs.")
 
         # Make a list of dataIds and optionally dataset IDs.
         dataIdList: List[DataCoordinate] = []
