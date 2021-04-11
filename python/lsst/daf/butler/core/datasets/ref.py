@@ -20,8 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["AmbiguousDatasetError", "DatasetRef", "SerializedDatasetRef"]
+__all__ = ["AmbiguousDatasetError", "DatasetId", "DatasetRef", "SerializedDatasetRef"]
 
+import uuid
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -30,6 +31,7 @@ from typing import (
     List,
     Optional,
     Tuple,
+    Union,
 )
 
 from pydantic import BaseModel, StrictStr, ConstrainedInt, validator
@@ -61,7 +63,8 @@ class PositiveInt(ConstrainedInt):
 class SerializedDatasetRef(BaseModel):
     """Simplified model of a `DatasetRef` suitable for serialization."""
 
-    id: Optional[PositiveInt] = None
+    # DO NOT change order in the Union, pydantic is sensitive to that!
+    id: Optional[Union[uuid.UUID, PositiveInt]] = None
     datasetType: Optional[SerializedDatasetType] = None
     dataId: Optional[Dict[str, Any]] = None  # Do not use specialist pydantic model for this
     run: Optional[StrictStr] = None
@@ -87,6 +90,12 @@ class SerializedDatasetRef(BaseModel):
         return v
 
 
+DatasetId = Union[int, uuid.UUID]
+"""A type-annotation alias for dataset ID which could be either integer or
+UUID.
+"""
+
+
 @immutable
 class DatasetRef:
     """Reference to a Dataset in a `Registry`.
@@ -100,8 +109,8 @@ class DatasetRef:
         The `DatasetType` for this Dataset.
     dataId : `DataCoordinate`
         A mapping of dimensions that labels the Dataset within a Collection.
-    id : `int`, optional
-        The unique integer identifier assigned when the dataset is created.
+    id : `DatasetId`, optional
+        The unique identifier assigned when the dataset is created.
     run : `str`, optional
         The name of the run this dataset was associated with when it was
         created.  Must be provided if ``id`` is.
@@ -126,7 +135,7 @@ class DatasetRef:
     def __init__(
         self,
         datasetType: DatasetType, dataId: DataCoordinate, *,
-        id: Optional[int] = None,
+        id: Optional[DatasetId] = None,
         run: Optional[str] = None,
         conform: bool = True
     ):
@@ -209,7 +218,7 @@ class DatasetRef:
         """
         if minimal and self.id is not None:
             # The only thing needed to uniquely define a DatasetRef
-            # is the integer id so that can be used directly if it is
+            # is its id so that can be used directly if it is
             # resolved and if it is not a component DatasetRef.
             # Store is in a dict to allow us to easily add the planned
             # origin information later without having to support
@@ -302,7 +311,7 @@ class DatasetRef:
         cls,
         datasetType: DatasetType,
         dataId: DataCoordinate,
-        id: Optional[int],
+        id: Optional[DatasetId],
         run: Optional[str],
     ) -> DatasetRef:
         """Create new `DatasetRef`.
@@ -320,7 +329,7 @@ class DatasetRef:
         # decorator.
         return self
 
-    def resolved(self, id: int, run: str) -> DatasetRef:
+    def resolved(self, id: DatasetId, run: str) -> DatasetRef:
         """Return resolved `DatasetRef`.
 
         This is a new `DatasetRef` with the same data ID and dataset type
@@ -328,8 +337,8 @@ class DatasetRef:
 
         Parameters
         ----------
-        id : `int`
-            The unique integer identifier assigned when the dataset is created.
+        id : `DatasetId`
+            The unique identifier assigned when the dataset is created.
         run : `str`
             The run this dataset was associated with when it was created.
 
@@ -449,7 +458,7 @@ class DatasetRef:
             result.setdefault(ref.datasetType, []).append(ref)
         return result
 
-    def getCheckedId(self) -> int:
+    def getCheckedId(self) -> DatasetId:
         """Return ``self.id``, or raise if it is `None`.
 
         This trivial method exists to allow operations that would otherwise be
@@ -457,7 +466,7 @@ class DatasetRef:
 
         Returns
         -------
-        id : `int`
+        id : `DatasetId`
             ``self.id`` if it is not `None`.
 
         Raises
@@ -528,8 +537,8 @@ class DatasetRef:
     `DatasetRef`.
     """
 
-    id: Optional[int]
-    """Primary key of the dataset (`int` or `None`).
+    id: Optional[DatasetId]
+    """Primary key of the dataset (`DatasetId` or `None`).
 
     Cannot be changed after a `DatasetRef` is constructed; use `resolved` or
     `unresolved` to add or remove this information when creating a new

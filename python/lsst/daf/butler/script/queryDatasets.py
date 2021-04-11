@@ -24,6 +24,7 @@ from astropy.table import Table as AstropyTable
 from collections import defaultdict, namedtuple
 from typing import Any, Dict
 import numpy as np
+import uuid
 
 from .. import Butler
 from ..core.utils import globToRegex
@@ -71,6 +72,12 @@ class _Table:
         table : `astropy.table._Table`
             The table with the provided column names and rows.
         """
+        def _id_type(datasetRef):
+            if isinstance(datasetRef.id, uuid.UUID):
+                return str
+            else:
+                return np.int64
+
         # Should never happen; adding a dataset should be the action that
         # causes a _Table to be created.
         if not self.datasetRefs:
@@ -85,7 +92,8 @@ class _Table:
         # constructor of Table does not work this out on its own and sorting
         # will not work properly without.
         typeMap = {float: np.float64, int: np.int64}
-        columnTypes = [None, None, np.int64,
+        idType = _id_type(refInfo.datasetRef)
+        columnTypes = [None, None, idType,
                        *[typeMap.get(type(value)) for value in refInfo.datasetRef.dataId.full.values()]]
         if refInfo.uri:
             columnNames.append("URI")
@@ -95,7 +103,7 @@ class _Table:
         for refInfo in self.datasetRefs:
             row = [datasetTypeName,
                    refInfo.datasetRef.run,
-                   refInfo.datasetRef.id,
+                   str(refInfo.datasetRef.id) if idType is str else refInfo.datasetRef.id,
                    *[value for value in refInfo.datasetRef.dataId.full.values()]]
             if refInfo.uri:
                 row.append(refInfo.uri)

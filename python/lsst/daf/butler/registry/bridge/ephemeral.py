@@ -25,6 +25,7 @@ __all__ = ("EphemeralDatastoreRegistryBridge",)
 from contextlib import contextmanager
 from typing import Iterable, Iterator, Set
 
+from lsst.daf.butler import DatasetId
 from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridge, FakeDatasetRef
 
 
@@ -47,8 +48,8 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
     """
     def __init__(self, datastoreName: str):
         super().__init__(datastoreName)
-        self._datasetIds: Set[int] = set()
-        self._trashedIds: Set[int] = set()
+        self._datasetIds: Set[DatasetId] = set()
+        self._trashedIds: Set[DatasetId] = set()
 
     def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge

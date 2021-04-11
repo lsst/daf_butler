@@ -956,8 +956,8 @@ class FileDatastoreButlerTests(ButlerTests):
                 # in the script folder are generally considered protected and
                 # should not be used as public api.
                 with open(exportFile, "r") as f:
-                    script.butlerImport(importDir, export_file=f,
-                                        directory=exportDir, transfer="auto", skip_dimensions=None)
+                    script.butlerImport(importDir, export_file=f, directory=exportDir,
+                                        transfer="auto", skip_dimensions=None, reuse_ids=False)
                 importButler = Butler(importDir, run="ingest")
                 for ref in datasets:
                     with self.subTest(ref=ref):

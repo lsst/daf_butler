@@ -4,13 +4,17 @@ __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterable,
     Iterator,
+    List,
     Optional,
     Set,
+    Tuple,
     TYPE_CHECKING,
 )
+import uuid
 
 import sqlalchemy
 
@@ -18,13 +22,14 @@ from lsst.daf.butler import (
     CollectionType,
     DataCoordinate,
     DataCoordinateSet,
+    DatasetId,
     DatasetRef,
     DatasetType,
     SimpleQuery,
     Timespan,
 )
 from lsst.daf.butler.registry import ConflictingDefinitionError
-from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
+from lsst.daf.butler.registry.interfaces import DatasetRecordStorage, DatasetIdGenEnum
 
 from ...summaries import GovernorDimensionRestriction
 
@@ -59,50 +64,6 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._tags = tags
         self._calibs = calibs
         self._runKeyColumn = collections.getRunForeignKeyName()
-
-    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate]) -> Iterator[DatasetRef]:
-        # Docstring inherited from DatasetRecordStorage.
-        staticRow = {
-            "dataset_type_id": self._dataset_type_id,
-            self._runKeyColumn: run.key,
-        }
-        # Iterate over data IDs, transforming a possibly-single-pass iterable
-        # into a list, and remembering any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-        dataIdList = []
-        for dataId in dataIds:
-            dataIdList.append(dataId)
-            governorValues.update_extract(dataId)
-        with self._db.transaction():
-            # Insert into the static dataset table, generating autoincrement
-            # dataset_id values.
-            datasetIds = self._db.insert(self._static.dataset, *([staticRow]*len(dataIdList)),
-                                         returnIds=True)
-            assert datasetIds is not None
-            # Update the summary tables for this collection in case this is the
-            # first time this dataset type or these governor values will be
-            # inserted there.
-            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
-            # Combine the generated dataset_id values and data ID fields to
-            # form rows to be inserted into the tags table.
-            protoTagsRow = {
-                "dataset_type_id": self._dataset_type_id,
-                self._collections.getCollectionForeignKeyName(): run.key,
-            }
-            tagsRows = [
-                dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
-                for dataId, dataset_id in zip(dataIdList, datasetIds)
-            ]
-            # Insert those rows into the tags table.  This is where we'll
-            # get any unique constraint violations.
-            self._db.insert(self._tags, *tagsRows)
-        for dataId, datasetId in zip(dataIdList, datasetIds):
-            yield DatasetRef(
-                datasetType=self.datasetType,
-                dataId=dataId,
-                id=datasetId,
-                run=run.name,
-            )
 
     def find(self, collection: CollectionRecord, dataId: DataCoordinate,
              timespan: Optional[Timespan] = None) -> Optional[DatasetRef]:
@@ -413,8 +374,19 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             )
         return query
 
-    def getDataId(self, id: int) -> DataCoordinate:
-        # Docstring inherited from DatasetRecordStorage.
+    def getDataId(self, id: DatasetId) -> DataCoordinate:
+        """Return DataId for a dataset.
+
+        Parameters
+        ----------
+        id : `DatasetId`
+            Unique dataset identifier.
+
+        Returns
+        -------
+        dataId : `DataCoordinate`
+            DataId for the dataset.
+        """
         # This query could return multiple rows (one for each tagged collection
         # the dataset is in, plus one for its run collection), and we don't
         # care which of those we get.
@@ -430,3 +402,238 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             {dimension.name: row[dimension.name] for dimension in self.datasetType.dimensions.required},
             graph=self.datasetType.dimensions
         )
+
+
+class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
+    """Implementation of ByDimensionsDatasetRecordStorage which uses integer
+    auto-incremented column for dataset IDs.
+    """
+
+    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate],
+               idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
+        # Docstring inherited from DatasetRecordStorage.
+
+        # We only support UNIQUE mode for integer dataset IDs
+        if idMode != DatasetIdGenEnum.UNIQUE:
+            raise ValueError("Only UNIQUE mode can be used with integer dataset IDs.")
+
+        # Transform a possibly-single-pass iterable into a list.
+        dataIdList = list(dataIds)
+        yield from self._insert(run, dataIdList)
+
+    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
+                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+                reuseIds: bool = False) -> Iterator[DatasetRef]:
+        # Docstring inherited from DatasetRecordStorage.
+
+        # We only support UNIQUE mode for integer dataset IDs
+        if idGenerationMode != DatasetIdGenEnum.UNIQUE:
+            raise ValueError("Only UNIQUE mode can be used with integer dataset IDs.")
+
+        # Make a list of dataIds and optionally dataset IDs.
+        dataIdList: List[DataCoordinate] = []
+        datasetIdList: List[int] = []
+        for dataset in datasets:
+            dataIdList.append(dataset.dataId)
+
+            # We only accept integer dataset IDs, but also allow None.
+            datasetId = dataset.id
+            if datasetId is None:
+                # if reuseIds is set then all IDs must be known
+                if reuseIds:
+                    raise TypeError("All dataset IDs must be known if `reuseIds` is set")
+            elif isinstance(datasetId, int):
+                if reuseIds:
+                    datasetIdList.append(datasetId)
+            else:
+                raise TypeError(f"Unsupported type of dataset ID: {type(datasetId)}")
+
+        yield from self._insert(run, dataIdList, datasetIdList)
+
+    def _insert(self, run: RunRecord, dataIdList: List[DataCoordinate],
+                datasetIdList: Optional[List[int]] = None) -> Iterator[DatasetRef]:
+        """Common part of implementation of `insert` and `import_` methods.
+        """
+
+        # Remember any governor dimension values we see.
+        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
+        for dataId in dataIdList:
+            governorValues.update_extract(dataId)
+
+        staticRow = {
+            "dataset_type_id": self._dataset_type_id,
+            self._runKeyColumn: run.key,
+        }
+        with self._db.transaction():
+            # Insert into the static dataset table, generating autoincrement
+            # dataset_id values.
+            if datasetIdList:
+                # reuse existing IDs
+                rows = [dict(staticRow, id=datasetId) for datasetId in datasetIdList]
+                self._db.insert(self._static.dataset, *rows)
+            else:
+                # use auto-incremented IDs
+                datasetIdList = self._db.insert(self._static.dataset, *([staticRow]*len(dataIdList)),
+                                                returnIds=True)
+                assert datasetIdList is not None
+            # Update the summary tables for this collection in case this is the
+            # first time this dataset type or these governor values will be
+            # inserted there.
+            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+            # Combine the generated dataset_id values and data ID fields to
+            # form rows to be inserted into the tags table.
+            protoTagsRow = {
+                "dataset_type_id": self._dataset_type_id,
+                self._collections.getCollectionForeignKeyName(): run.key,
+            }
+            tagsRows = [
+                dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
+                for dataId, dataset_id in zip(dataIdList, datasetIdList)
+            ]
+            # Insert those rows into the tags table.  This is where we'll
+            # get any unique constraint violations.
+            self._db.insert(self._tags, *tagsRows)
+
+        for dataId, datasetId in zip(dataIdList, datasetIdList):
+            yield DatasetRef(
+                datasetType=self.datasetType,
+                dataId=dataId,
+                id=datasetId,
+                run=run.name,
+            )
+
+
+class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
+    """Implementation of ByDimensionsDatasetRecordStorage which uses UUID for
+    dataset IDs.
+    """
+
+    NS_UUID = uuid.UUID('840b31d9-05cd-5161-b2c8-00d32b280d0f')
+    """Namespace UUID used for UUID5 generation. Do not change. This was
+    produced by `uuid.uuid5(uuid.NAMESPACE_DNS, "lsst.org")`.
+    """
+
+    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate],
+               idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
+        # Docstring inherited from DatasetRecordStorage.
+
+        # Iterate over data IDs, transforming a possibly-single-pass iterable
+        # into a list.
+        dataIdList = []
+        rows = []
+        for dataId in dataIds:
+            dataIdList.append(dataId)
+            rows.append({
+                "id": self._makeDatasetId(run, dataId, idMode),
+                "dataset_type_id": self._dataset_type_id,
+                self._runKeyColumn: run.key,
+            })
+
+        yield from self._insert(run, dataIdList, rows, self._db.insert)
+
+    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
+                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+                reuseIds: bool = False) -> Iterator[DatasetRef]:
+        # Docstring inherited from DatasetRecordStorage.
+
+        # Iterate over data IDs, transforming a possibly-single-pass iterable
+        # into a list.
+        dataIdList = []
+        rows = []
+        for dataset in datasets:
+            dataIdList.append(dataset.dataId)
+            # Ignore unknown ID types, normally all IDs have the same type but
+            # this code supports mixed types or missing IDs.
+            datasetId = dataset.id if isinstance(dataset.id, uuid.UUID) else None
+            if datasetId is None:
+                datasetId = self._makeDatasetId(run, dataset.dataId, idGenerationMode)
+            rows.append({
+                "id": datasetId,
+                "dataset_type_id": self._dataset_type_id,
+                self._runKeyColumn: run.key,
+            })
+
+        yield from self._insert(run, dataIdList, rows, self._db.ensure)
+
+    def _insert(self, run: RunRecord, dataIdList: List[DataCoordinate],
+                rows: List[Dict], insertMethod: Callable) -> Iterator[DatasetRef]:
+        """Common part of implementation of `insert` and `import_` methods.
+        """
+
+        # Remember any governor dimension values we see.
+        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
+        for dataId in dataIdList:
+            governorValues.update_extract(dataId)
+
+        with self._db.transaction():
+            # Insert into the static dataset table.
+            insertMethod(self._static.dataset, *rows)
+            # Update the summary tables for this collection in case this is the
+            # first time this dataset type or these governor values will be
+            # inserted there.
+            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+            # Combine the generated dataset_id values and data ID fields to
+            # form rows to be inserted into the tags table.
+            protoTagsRow = {
+                "dataset_type_id": self._dataset_type_id,
+                self._collections.getCollectionForeignKeyName(): run.key,
+            }
+            tagsRows = [
+                dict(protoTagsRow, dataset_id=row["id"], **dataId.byName())
+                for dataId, row in zip(dataIdList, rows)
+            ]
+            # Insert those rows into the tags table.
+            insertMethod(self._tags, *tagsRows)
+        for dataId, row in zip(dataIdList, rows):
+            yield DatasetRef(
+                datasetType=self.datasetType,
+                dataId=dataId,
+                id=row["id"],
+                run=run.name,
+            )
+
+    def _makeDatasetId(self, run: RunRecord, dataId: DataCoordinate,
+                       idGenerationMode: DatasetIdGenEnum) -> uuid.UUID:
+        """Generate dataset ID for a dataset.
+
+        Parameters
+        ----------
+        run : `RunRecord`
+            The record object describing the RUN collection for the dataset.
+        dataId : `DataCoordinate`
+            Expanded data ID for the dataset.
+        idGenerationMode : `DatasetIdGenEnum`
+            ID generation option. `~DatasetIdGenEnum.UNIQUE` make a random
+            UUID4-type ID. `~DatasetIdGenEnum.DATAID_TYPE` makes a
+            deterministic UUID5-type ID based on a dataset type name and
+            ``dataId``.  `~DatasetIdGenEnum.DATAID_TYPE_RUN` makes a
+            deterministic UUID5-type ID based on a dataset type name, run
+            collection name, and ``dataId``.
+
+        Returns
+        -------
+        datasetId : `uuid.UUID`
+            Dataset identifier.
+        """
+        if idGenerationMode is DatasetIdGenEnum.UNIQUE:
+            return uuid.uuid4()
+        else:
+            # WARNING: If you modify this code make sure that the order of
+            # items in the `items` list below never changes.
+            items: List[Tuple[str, str]] = []
+            if idGenerationMode is DatasetIdGenEnum.DATAID_TYPE:
+                items = [
+                    ("dataset_type", self.datasetType.name),
+                ]
+            elif idGenerationMode is DatasetIdGenEnum.DATAID_TYPE_RUN:
+                items = [
+                    ("dataset_type", self.datasetType.name),
+                    ("run", run.name),
+                ]
+            else:
+                raise ValueError(f"Unexpected ID generation mode: {idGenerationMode}")
+
+            for name, value in sorted(dataId.byName().items()):
+                items.append((name, str(value)))
+            data = ",".join(f"{key}={value}" for key, value in items)
+            return uuid.uuid5(self.NS_UUID, data)

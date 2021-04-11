@@ -41,7 +41,7 @@ from ..core import (
 )
 
 from ..registry import CollectionType
-from ..registry.interfaces import CollectionRecord
+from ..registry.interfaces import CollectionRecord, DatasetIdGenEnum
 
 
 class RepoTransferFormatConfig(ConfigSubset):
@@ -152,7 +152,9 @@ class RepoImportBackend(ABC):
     @abstractmethod
     def load(self, datastore: Optional[Datastore], *,
              directory: Optional[str] = None, transfer: Optional[str] = None,
-             skip_dimensions: Optional[Set] = None) -> None:
+             skip_dimensions: Optional[Set] = None,
+             idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+             reuseIds: bool = False) -> None:
         """Import information associated with the backend into the given
         registry and datastore.
 
@@ -172,5 +174,14 @@ class RepoImportBackend(ABC):
             Dimensions that should be skipped and not imported. This can
             be useful when importing into a registry that already knows
             about a specific instrument.
+        idGenerationMode : `DatasetIdGenEnum`, optional
+            Specifies option for generating dataset IDs when IDs are not
+            provided or their type does not match backend type. By default
+            unique IDs are generated for each inserted dataset.
+        reuseIds : `bool`, optional
+            If `True` then forces re-use of imported dataset IDs for integer
+            IDs which are normally generated as auto-incremented. This option
+            has no effect on the use of globally-unique IDs which are always
+            re-used (or generated if integer IDs are being imported).
         """
         raise NotImplementedError()

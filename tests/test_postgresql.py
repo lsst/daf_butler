@@ -236,17 +236,45 @@ class PostgresqlRegistryTests(RegistryTests):
 class PostgresqlRegistryNameKeyCollMgrTestCase(PostgresqlRegistryTests, unittest.TestCase):
     """Tests for `Registry` backed by a PostgreSQL database.
 
-    This test case uses NameKeyCollectionManager.
+    This test case uses NameKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManager.
     """
     collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
 class PostgresqlRegistrySynthIntKeyCollMgrTestCase(PostgresqlRegistryTests, unittest.TestCase):
     """Tests for `Registry` backed by a PostgreSQL database.
 
-    This test case uses SynthIntKeyCollectionManager.
+    This test case uses SynthIntKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManager.
     """
     collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+
+
+class PostgresqlRegistryNameKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, unittest.TestCase):
+    """Tests for `Registry` backed by a PostgreSQL database.
+
+    This test case uses NameKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManagerUUID.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+
+
+class PostgresqlRegistrySynthIntKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, unittest.TestCase):
+    """Tests for `Registry` backed by a PostgreSQL database.
+
+    This test case uses SynthIntKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManagerUUID.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
 
 
 if __name__ == "__main__":

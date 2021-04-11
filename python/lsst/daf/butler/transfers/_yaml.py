@@ -36,6 +36,7 @@ from typing import (
     Tuple,
     Type,
 )
+import uuid
 import warnings
 from collections import defaultdict
 
@@ -45,9 +46,9 @@ import astropy.time
 from lsst.utils import doImport
 from ..core import (
     DatasetAssociation,
+    DatasetId,
     DatasetRef,
     DatasetType,
-    DataCoordinate,
     Datastore,
     DimensionElement,
     DimensionRecord,
@@ -61,6 +62,7 @@ from ..registry import CollectionType, Registry
 from ..registry.interfaces import (
     ChainedCollectionRecord,
     CollectionRecord,
+    DatasetIdGenEnum,
     RunRecord,
     VersionTuple,
 )
@@ -74,6 +76,25 @@ EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 1)
 Files with a different major version or a newer minor version cannot be read by
 this version of the code.
 """
+
+
+def _uuid_representer(dumper: yaml.Dumper, data: uuid.UUID) -> yaml.Node:
+    """Generate YAML representation for UUID.
+
+    This produces a scalar node with a tag "!uuid" and value being a regular
+    string representation of UUID.
+    """
+    return dumper.represent_scalar("!uuid", str(data))
+
+
+def _uuid_constructor(loader: yaml.Loader, node: yaml.Node) -> Optional[uuid.UUID]:
+    if node.value is not None:
+        return uuid.UUID(hex=node.value)
+    return None
+
+
+yaml.Dumper.add_representer(uuid.UUID, _uuid_representer)
+yaml.SafeLoader.add_constructor("!uuid", _uuid_constructor)
 
 
 class YamlRepoExportBackend(RepoExportBackend):
@@ -151,7 +172,7 @@ class YamlRepoExportBackend(RepoExportBackend):
                 "dataset_ids": [assoc.ref.id for assoc in associations],
             })
         elif collectionType is CollectionType.CALIBRATION:
-            idsByTimespan: Dict[Timespan, List[int]] = defaultdict(list)
+            idsByTimespan: Dict[Timespan, List[DatasetId]] = defaultdict(list)
             for association in associations:
                 assert association.timespan is not None
                 assert association.ref.id is not None
@@ -224,9 +245,9 @@ class YamlRepoImportBackend(RepoImportBackend):
         self.collectionDocs: Dict[str, str] = {}
         self.datasetTypes: NamedValueSet[DatasetType] = NamedValueSet()
         self.dimensions: Mapping[DimensionElement, List[DimensionRecord]] = defaultdict(list)
-        self.tagAssociations: Dict[str, List[int]] = defaultdict(list)
-        self.calibAssociations: Dict[str, Dict[Timespan, List[int]]] = defaultdict(dict)
-        self.refsByFileId: Dict[int, DatasetRef] = {}
+        self.tagAssociations: Dict[str, List[DatasetId]] = defaultdict(list)
+        self.calibAssociations: Dict[str, Dict[Timespan, List[DatasetId]]] = defaultdict(dict)
+        self.refsByFileId: Dict[DatasetId, DatasetRef] = {}
         self.registry: Registry = registry
         datasetData = []
         for data in wrapper["data"]:
@@ -328,7 +349,9 @@ class YamlRepoImportBackend(RepoImportBackend):
 
     def load(self, datastore: Optional[Datastore], *,
              directory: Optional[str] = None, transfer: Optional[str] = None,
-             skip_dimensions: Optional[Set] = None) -> None:
+             skip_dimensions: Optional[Set] = None,
+             idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+             reuseIds: bool = False) -> None:
         # Docstring inherited from RepoImportBackend.load.
         for element, dimensionRecords in self.dimensions.items():
             if skip_dimensions and element in skip_dimensions:
@@ -337,28 +360,24 @@ class YamlRepoImportBackend(RepoImportBackend):
         # FileDatasets to ingest into the datastore (in bulk):
         fileDatasets = []
         for (datasetTypeName, run), records in self.datasets.items():
-            datasetType = self.registry.getDatasetType(datasetTypeName)
             # Make a big flattened list of all data IDs and dataset_ids, while
             # remembering slices that associate them with the FileDataset
             # instances they came from.
-            dataIds: List[DataCoordinate] = []
-            dataset_ids: List[int] = []
+            datasets: List[DatasetRef] = []
+            dataset_ids: List[DatasetId] = []
             slices = []
             for fileDataset in records:
-                start = len(dataIds)
-                dataIds.extend(ref.dataId for ref in fileDataset.refs)
+                start = len(datasets)
+                datasets.extend(fileDataset.refs)
                 dataset_ids.extend(ref.id for ref in fileDataset.refs)  # type: ignore
-                stop = len(dataIds)
+                stop = len(datasets)
                 slices.append(slice(start, stop))
             # Insert all of those DatasetRefs at once.
             # For now, we ignore the dataset_id we pulled from the file
             # and just insert without one to get a new autoincrement value.
             # Eventually (once we have origin in IDs) we'll preserve them.
-            resolvedRefs = self.registry.insertDatasets(
-                datasetType,
-                dataIds=dataIds,
-                run=run,
-            )
+            resolvedRefs = self.registry._importDatasets(datasets, idGenerationMode=idGenerationMode,
+                                                         reuseIds=reuseIds)
             # Populate our dictionary that maps int dataset_id values from the
             # export file to the new DatasetRefs
             for fileId, ref in zip(dataset_ids, resolvedRefs):

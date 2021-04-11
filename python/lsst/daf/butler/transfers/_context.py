@@ -39,6 +39,7 @@ from ..core import (
     DatasetAssociation,
     DimensionElement,
     DimensionRecord,
+    DatasetId,
     DatasetRef,
     DatasetType,
     Datastore,
@@ -81,7 +82,7 @@ class RepoExportContext:
         self._directory = directory
         self._transfer = transfer
         self._records: Dict[DimensionElement, Dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
-        self._dataset_ids: Set[int] = set()
+        self._dataset_ids: Set[DatasetId] = set()
         self._datasets: Dict[DatasetType, Dict[str, List[FileDataset]]] \
             = defaultdict(lambda: defaultdict(list))
         self._collections: Dict[str, CollectionRecord] = {}

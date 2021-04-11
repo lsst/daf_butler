@@ -86,6 +86,7 @@ from .core.utils import transactional, getClassOf
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
 from .registry import Registry, RegistryConfig, RegistryDefaults, CollectionType, ConflictingDefinitionError
+from .registry.interfaces import DatasetIdGenEnum
 from .registry.wildcards import CollectionSearch
 from .transfers import RepoExportContext
 
@@ -1383,6 +1384,7 @@ class Butler:
 
     @transactional
     def ingest(self, *datasets: FileDataset, transfer: Optional[str] = "auto", run: Optional[str] = None,
+               idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
                ) -> None:
         """Store and register one or more datasets that already exist on disk.
 
@@ -1407,6 +1409,9 @@ class Butler:
         run : `str`, optional
             The name of the run ingested datasets should be added to,
             overriding ``self.run``.
+        idGenerationMode : `DatasetIdGenEnum`, optional
+            Specifies option for generating dataset IDs. By default unique IDs
+            are generated for each inserted dataset.
 
         Raises
         ------
@@ -1468,6 +1473,7 @@ class Butler:
                 dataIds=groupForType.keys(),
                 run=run,
                 expand=self.datastore.needs_expanded_data_ids(transfer, datasetType),
+                idGenerationMode=idGenerationMode,
             )
             # Append those resolved DatasetRefs to the new lists we set up for
             # them.
@@ -1563,7 +1569,9 @@ class Butler:
                 filename: Union[str, TextIO, None] = None,
                 format: Optional[str] = None,
                 transfer: Optional[str] = None,
-                skip_dimensions: Optional[Set] = None) -> None:
+                skip_dimensions: Optional[Set] = None,
+                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+                reuseIds: bool = False) -> None:
         """Import datasets into this repository that were exported from a
         different butler repository via `~lsst.daf.butler.Butler.export`.
 
@@ -1587,6 +1595,16 @@ class Butler:
             Transfer mode passed to `~lsst.daf.butler.Datastore.ingest`.
         skip_dimensions : `set`, optional
             Names of dimensions that should be skipped and not imported.
+        idGenerationMode : `DatasetIdGenEnum`, optional
+            Specifies option for generating dataset IDs when IDs are not
+            provided or their type does not match backend type. By default
+            unique IDs are generated for each inserted dataset.
+        reuseIds : `bool`, optional
+            If `True` then forces re-use of imported dataset IDs for integer
+            IDs which are normally generated as auto-incremented; exception
+            will be raised if imported IDs clash with existing ones. This
+            option has no effect on the use of globally-unique IDs which are
+            always re-used (or generated if integer IDs are being imported).
 
         Raises
         ------
@@ -1612,7 +1630,8 @@ class Butler:
             backend.register()
             with self.transaction():
                 backend.load(self.datastore, directory=directory, transfer=transfer,
-                             skip_dimensions=skip_dimensions)
+                             skip_dimensions=skip_dimensions, idGenerationMode=idGenerationMode,
+                             reuseIds=reuseIds)
 
         if isinstance(filename, str):
             with open(filename, "r") as stream:

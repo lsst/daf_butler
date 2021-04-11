@@ -210,17 +210,45 @@ class SqliteFileRegistryTests(RegistryTests):
 class SqliteFileRegistryNameKeyCollMgrTestCase(SqliteFileRegistryTests, unittest.TestCase):
     """Tests for `Registry` backed by a SQLite file-based database.
 
-    This test case uses NameKeyCollectionManager.
+    This test case uses NameKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManager.
     """
     collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
 class SqliteFileRegistrySynthIntKeyCollMgrTestCase(SqliteFileRegistryTests, unittest.TestCase):
     """Tests for `Registry` backed by a SQLite file-based database.
 
-    This test case uses SynthIntKeyCollectionManager.
+    This test case uses SynthIntKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManager.
     """
     collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+
+
+class SqliteFileRegistryNameKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
+    """Tests for `Registry` backed by a SQLite file-based database.
+
+    This test case uses NameKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManagerUUID.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+
+
+class SqliteFileRegistrySynthIntKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
+    """Tests for `Registry` backed by a SQLite file-based database.
+
+    This test case uses SynthIntKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManagerUUID.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
 
 
 class SqliteMemoryRegistryTests(RegistryTests):
@@ -251,17 +279,45 @@ class SqliteMemoryRegistryTests(RegistryTests):
 class SqliteMemoryRegistryNameKeyCollMgrTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
     """Tests for `Registry` backed by a SQLite in-memory database.
 
-    This test case uses NameKeyCollectionManager.
+    This test case uses NameKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManager.
     """
     collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
 class SqliteMemoryRegistrySynthIntKeyCollMgrTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
     """Tests for `Registry` backed by a SQLite in-memory database.
 
-    This test case uses SynthIntKeyCollectionManager.
+    This test case uses SynthIntKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManager.
     """
     collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+
+
+class SqliteMemoryRegistryNameKeyCollMgrUUIDTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
+    """Tests for `Registry` backed by a SQLite in-memory database.
+
+    This test case uses NameKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManagerUUID.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+
+
+class SqliteMemoryRegistrySynthIntKeyCollMgrUUIDTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
+    """Tests for `Registry` backed by a SQLite in-memory database.
+
+    This test case uses SynthIntKeyCollectionManager and
+    ByDimensionsDatasetRecordStorageManagerUUID.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
+    datasetsManager = \
+        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
 
 
 if __name__ == "__main__":

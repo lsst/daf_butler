@@ -52,6 +52,7 @@ from lsst.daf.butler import (
     CompositesMap,
     Config,
     FileDataset,
+    DatasetId,
     DatasetRef,
     DatasetType,
     DatasetTypeNotSupportedError,
@@ -215,10 +216,10 @@ class FileDatastore(GenericBaseDatastore):
                                 toCopy=("cls", ("records", "table")), overwrite=overwrite)
 
     @classmethod
-    def makeTableSpec(cls) -> ddl.TableSpec:
+    def makeTableSpec(cls, datasetIdColumnType: type) -> ddl.TableSpec:
         return ddl.TableSpec(
             fields=[
-                ddl.FieldSpec(name="dataset_id", dtype=BigInteger, primaryKey=True),
+                ddl.FieldSpec(name="dataset_id", dtype=datasetIdColumnType, primaryKey=True),
                 ddl.FieldSpec(name="path", dtype=String, length=256, nullable=False),
                 ddl.FieldSpec(name="formatter", dtype=String, length=128, nullable=False),
                 ddl.FieldSpec(name="storage_class", dtype=String, length=64, nullable=False),
@@ -270,7 +271,8 @@ class FileDatastore(GenericBaseDatastore):
         tableName = self.config["records", "table"]
         try:
             # Storage of paths and formatters, keyed by dataset_id
-            self._table = bridgeManager.opaque.register(tableName, self.makeTableSpec())
+            self._table = bridgeManager.opaque.register(
+                tableName, self.makeTableSpec(bridgeManager.datasetIdColumnType))
             # Interface to Registry.
             self._bridge = bridgeManager.register(self.name)
         except ReadOnlyDatabaseError:
@@ -389,7 +391,7 @@ class FileDatastore(GenericBaseDatastore):
 
         return results
 
-    def _registered_refs_per_artifact(self, pathInStore: ButlerURI) -> Set[int]:
+    def _registered_refs_per_artifact(self, pathInStore: ButlerURI) -> Set[DatasetId]:
         """Return all dataset refs associated with the supplied path.
 
         Parameters

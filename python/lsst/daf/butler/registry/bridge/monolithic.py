@@ -219,10 +219,13 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         Manager object for opaque table storage in the `Registry`.
     universe : `DimensionUniverse`
         All dimensions know to the `Registry`.
+    datasetIdColumnType : `type`
+        Type for dataset ID column.
     """
     def __init__(self, *, db: Database, tables: _TablesTuple,
-                 opaque: OpaqueTableStorageManager, universe: DimensionUniverse):
-        super().__init__(opaque=opaque, universe=universe)
+                 opaque: OpaqueTableStorageManager, universe: DimensionUniverse,
+                 datasetIdColumnType: type):
+        super().__init__(opaque=opaque, universe=universe, datasetIdColumnType=datasetIdColumnType)
         self._db = db
         self._tables = tables
         self._ephemeral: Dict[str, EphemeralDatastoreRegistryBridge] = {}
@@ -235,7 +238,8 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
                    ) -> DatastoreRegistryBridgeManager:
         # Docstring inherited from DatastoreRegistryBridge
         tables = context.addTableTuple(_makeTableSpecs(datasets))
-        return cls(db=db, tables=cast(_TablesTuple, tables), opaque=opaque, universe=universe)
+        return cls(db=db, tables=cast(_TablesTuple, tables), opaque=opaque, universe=universe,
+                   datasetIdColumnType=datasets.getIdColumnType())
 
     def refresh(self) -> None:
         # Docstring inherited from DatastoreRegistryBridge
