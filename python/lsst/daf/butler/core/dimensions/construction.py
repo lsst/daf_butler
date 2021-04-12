@@ -35,6 +35,7 @@ from .._topology import TopologicalFamily, TopologicalSpace
 if TYPE_CHECKING:
     from ._elements import Dimension, DimensionElement
     from ._packer import DimensionPackerFactory
+    from ._config import DimensionConfig
 
 
 class DimensionConstructionVisitor(ABC):
@@ -121,7 +122,8 @@ class DimensionConstructionBuilder:
     def __init__(
         self,
         version: int,
-        commonSkyPixName: str, *,
+        commonSkyPixName: str,
+        config: DimensionConfig, *,
         visitors: Iterable[DimensionConstructionVisitor] = ()
     ) -> None:
         self.dimensions = NamedValueSet()
@@ -129,6 +131,7 @@ class DimensionConstructionBuilder:
         self.topology = {space: NamedValueSet() for space in TopologicalSpace.__members__.values()}
         self.packers = {}
         self.version = version
+        self.config = config
         self.commonSkyPixName = commonSkyPixName
         self._todo: Dict[str, DimensionConstructionVisitor] = {v.name: v for v in visitors}
 

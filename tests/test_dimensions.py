@@ -33,6 +33,7 @@ from lsst.daf.butler import (
     DataCoordinateSequence,
     DataCoordinateSet,
     Dimension,
+    DimensionConfig,
     DimensionGraph,
     DimensionUniverse,
     NamedKeyDict,
@@ -116,6 +117,10 @@ class DimensionTestCase(unittest.TestCase):
                 if element in graph.implied:
                     self.assertTrue(any(element in s.implied for s in seen))
         self.assertCountEqual(seen, graph.elements)
+
+    def testConfigPresent(self):
+        config = self.universe.dimensionConfig
+        self.assertIsInstance(config, DimensionConfig)
 
     def testConfigRead(self):
         self.assertEqual(self.universe.getStaticDimensions().names,
