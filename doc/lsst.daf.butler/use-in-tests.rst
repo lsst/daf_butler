@@ -68,9 +68,10 @@ Individual tests can be partly isolated using the `lsst.daf.butler.tests.makeTes
 Once a test collection is created, datasets can be read or written as usual:
 
 .. code-block:: py
-   :emphasize-lines: 1, 4
+   :emphasize-lines: 2, 5
 
-   butler = butlerTests.makeTestCollection(repo)
+   # Assuming self is a unittest.TestCase object
+   butler = butlerTests.makeTestCollection(repo, uniqueId=self.id())
 
    exposure = makeTestExposure()  # user-defined code
    butler.put(exposure, "calexp", dataId)
