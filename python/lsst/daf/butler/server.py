@@ -1,14 +1,23 @@
 from __future__ import annotations
 from typing import Optional, List, Dict, Any, Union
+import re
 import logging
 from uuid import UUID
+from collections.abc import Mapping
 
 from pydantic import BaseModel
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.gzip import GZipMiddleware
 
-from lsst.daf.butler import Butler, SerializedDatasetType, SerializedDatasetRef, DatasetRef
+from lsst.daf.butler import (
+    Butler,
+    Config,
+    SerializedDatasetType,
+    SerializedDatasetRef,
+    DatasetRef,
+    DimensionConfig,
+)
 from lsst.daf.butler.core.utils import globToRegex
 from lsst.daf.butler.registry import CollectionType
 
@@ -42,16 +51,24 @@ def read_root():
 
 
 @app.get("/butler.json")
-def read_server_config():
+def read_server_config() -> Mapping:
     """Return the butler configuration that the client should use."""
-    # This is a pretend one for now
-    return {"datastore": {"cls": "lsst.daf.butler.datastores.fileDatastore.FileDatastore"}}
+    config_str = f"""
+datastore:
+    root: {BUTLER_ROOT}
+registry:
+    cls: lsst.daf.butler.registry.RemoteRegistry
+    db: <butlerRoot>
+"""
+    config = Config.fromString(config_str, format="yaml")
+    return config
 
 
-@app.get("/universe.json")
-def read_dimension_universe():
+@app.get("/universe")
+def get_dimension_universe() -> DimensionConfig:
     """Allow remote client to get dimensions definition."""
-    return {"dimension_universe": "goes here"}
+    butler = Butler(BUTLER_ROOT)
+    return butler.registry.dimensions.dimensionConfig
 
 
 @app.get("/uri/{id}")
@@ -94,20 +111,24 @@ def query_all_dataset_types(components: Optional[bool] = None) -> List[Serialize
 
 
 @app.get(
-    "/registry/datasetTypes/{expression}",
-    summary="Retrieve dataset type definitions matching expression",
+    "/registry/datasetTypes/re",
+    summary="Retrieve dataset type definitions matching expressions",
     response_model=List[SerializedDatasetType],
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
-def query_dataset_types(expression: str,
-                        components: Optional[bool] = None) -> List[SerializedDatasetType]:
+def query_dataset_types_re(regex: Optional[List[str]] = Query(None),
+                           glob: Optional[List[str]] = Query(None),
+                           components: Optional[bool] = None) -> List[SerializedDatasetType]:
     butler = Butler(BUTLER_ROOT)
-    if expression is None:
-        expression = ...
-    else:
-        expression = globToRegex([expression])
+    expression = []
+    if regex is not None:
+        for r in regex:
+            expression.append(re.compile(r))
+    if glob is not None:
+        expression.extend(globToRegex(glob))
+
     datasetTypes = butler.registry.queryDatasetTypes(expression, components=components)
     return [d.to_simple() for d in datasetTypes]
 
