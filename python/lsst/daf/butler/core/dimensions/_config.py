@@ -256,7 +256,7 @@ class DimensionConfig(ConfigSubset):
             configuration.  The `~DimensionConstructionBuilder.finish` method
             will not have been called.
         """
-        builder = DimensionConstructionBuilder(self["version"], self["skypix", "common"])
+        builder = DimensionConstructionBuilder(self["version"], self["skypix", "common"], self)
         builder.update(self._extractSkyPixVisitors())
         builder.update(self._extractElementVisitors())
         builder.update(self._extractTopologyVisitors())

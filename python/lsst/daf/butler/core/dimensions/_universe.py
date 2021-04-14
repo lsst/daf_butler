@@ -131,6 +131,7 @@ class DimensionUniverse:
         self._elements = builder.elements
         self._topology = builder.topology
         self._packers = builder.packers
+        self.dimensionConfig = builder.config
         commonSkyPix = self._dimensions[builder.commonSkyPixName]
         assert isinstance(commonSkyPix, SkyPixDimension)
         self.commonSkyPix = commonSkyPix
@@ -447,6 +448,9 @@ class DimensionUniverse:
     """The special skypix dimension that is used to relate all other spatial
     dimensions in the `Registry` database (`SkyPixDimension`).
     """
+
+    dimensionConfig: DimensionConfig
+    """The configuration used to create this Universe (`DimensionConfig`)."""
 
     _cache: Dict[FrozenSet[str], DimensionGraph]
 
