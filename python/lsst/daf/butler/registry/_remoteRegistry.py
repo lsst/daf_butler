@@ -37,7 +37,6 @@ from typing import (
     Union,
 )
 
-import re
 import contextlib
 import httpx
 
@@ -61,7 +60,7 @@ from ..core import (
     StorageClassFactory,
     Timespan,
 )
-from ..core.utils import iterable
+from ..core.serverModels import ExpressionQueryParameter
 
 from . import queries
 from ._registry import Registry
@@ -338,21 +337,15 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         params: Dict[str, Any] = {}
 
-        if expression is ...:
-            path = "registry/datasetTypes"
-        else:
-            path = "registry/datasetTypes/re"
-            expressions = iterable(expression)
+        expression = ExpressionQueryParameter.from_expression(expression)
+        if expression.regex is not None:
+            params["regex"] = expression.regex
+        if expression.glob is not None:
+            params["glob"] = expression.glob
 
-            for expression in expressions:
-                if isinstance(expression, re.Pattern):
-                    if (k := "regex") not in params:
-                        params[k] = []
-                    params["regex"].append(expression.pattern)
-                else:
-                    if (k := "glob") not in params:
-                        params[k] = []
-                    params["glob"].append(expression)
+        path = "registry/datasetTypes"
+        if params:
+            path += "/re"
 
         if components is not None:
             params = {"components": components}
