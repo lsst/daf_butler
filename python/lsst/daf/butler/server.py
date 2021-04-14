@@ -18,6 +18,7 @@ from lsst.daf.butler import (
     DatasetRef,
     DimensionConfig,
 )
+from lsst.daf.butler.core.serverModels import ExpressionQueryParameter
 from lsst.daf.butler.core.utils import globToRegex
 from lsst.daf.butler.registry import CollectionType
 
@@ -122,14 +123,10 @@ def query_dataset_types_re(regex: Optional[List[str]] = Query(None),
                            glob: Optional[List[str]] = Query(None),
                            components: Optional[bool] = None) -> List[SerializedDatasetType]:
     butler = Butler(BUTLER_ROOT)
-    expression = []
-    if regex is not None:
-        for r in regex:
-            expression.append(re.compile(r))
-    if glob is not None:
-        expression.extend(globToRegex(glob))
+    expression_params = ExpressionQueryParameter(regex=regex, glob=glob)
 
-    datasetTypes = butler.registry.queryDatasetTypes(expression, components=components)
+    datasetTypes = butler.registry.queryDatasetTypes(expression_params.expression(),
+                                                     components=components)
     return [d.to_simple() for d in datasetTypes]
 
 
