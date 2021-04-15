@@ -72,3 +72,4 @@ BrightStarStamps: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 AstropyTable: lsst.daf.butler.formatters.astropyTable.AstropyTableFormatter
 AstropyQTable: lsst.daf.butler.formatters.astropyTable.AstropyTableFormatter
 ExtendedPsf: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
+HealSparseMap: lsst.pipe.tasks.healSparseMapping.HealSparseMapFormatter
