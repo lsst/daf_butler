@@ -18,7 +18,10 @@ from lsst.daf.butler import (
     DatasetRef,
     DimensionConfig,
 )
-from lsst.daf.butler.core.serverModels import ExpressionQueryParameter
+from lsst.daf.butler.core.serverModels import (
+    ExpressionQueryParameter,
+    QueryDatasetsModel,
+)
 from lsst.daf.butler.core.utils import globToRegex
 from lsst.daf.butler.registry import CollectionType
 
@@ -232,42 +235,33 @@ def find_dataset(datasetType: str,
 
 # POST is used for the complex dict data structures
 @app.post(
-    "/registry/datasets/{datasetType}",
+    "/registry/datasets",
     summary="Query all dataset holdings.",
     response_model=List[SerializedDatasetRef],
     response_model_exclude_unset=True,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
-def query_datasets(datasetType: str,
-                   collections: Optional[List[str]] = Query(None),
-                   dimensions: Optional[List[str]] = Query(None),
-                   dataId: Optional[MaximalDataId] = None,
-                   where: Optional[str] = None,
-                   findFirst: bool = False,
-                   components: Optional[bool] = None,
-                   bind: Optional[Dict[str, Any]] = None,
-                   check: bool = True) -> List[SerializedDatasetRef]:
-    # Can use "*" dataset type to match everything.
-    # This will take a long time.
+def query_datasets(query: QueryDatasetsModel) -> List[SerializedDatasetRef]:
+    # This method might return a lot of results
     butler = Butler(BUTLER_ROOT)
 
-    if collections is None:
-        collections = ...
+    if query.collections:
+        collections = query.collections.expression()
+    if query.kwargs:
+        kwargs = query.kwargs
+    else:
+        kwargs = {}
 
-    filteredDataId = {k: v for k, v in dataId.dict().items() if v is not None}
-
-    datasetType = globToRegex([datasetType])
-
-    datasets = butler.registry.queryDatasets(datasetType,
+    datasets = butler.registry.queryDatasets(query.datasetType.expression(),
                                              collections=collections,
-                                             dimensions=dimensions,
-                                             dataId=filteredDataId,
-                                             where=where,
-                                             findFirst=findFirst,
-                                             components=components,
-                                             bind=bind,
-                                             check=check)
+                                             dimensions=query.dimensions,
+                                             dataId=query.dataId,
+                                             where=query.where,
+                                             findFirst=query.findFirst,
+                                             components=query.components,
+                                             bind=query.bind,
+                                             check=query.check, **kwargs)
     return (ref.to_simple() for ref in datasets)
 
 
