@@ -1456,7 +1456,7 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
 
     def _serveWebdav(self, port: int, stopWebdavServer):
         """Starts a local webdav-compatible HTTP server,
-        Listening on http://localhost:8080
+        Listening on http://localhost:port
         This server only runs when this test class is instantiated,
         and then shuts down. Must be started is a separate thread.
 
