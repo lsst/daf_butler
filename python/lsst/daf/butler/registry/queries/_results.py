@@ -353,7 +353,7 @@ class DatasetQueryResults(Iterable[DatasetRef]):
 
     @abstractmethod
     def expanded(self) -> DatasetQueryResults:
-        """Return a `DatasetQueryResults` for which `DataCoordinate.hasResults`
+        """Return a `DatasetQueryResults` for which `DataCoordinate.hasRecords`
         returns `True` for all data IDs in returned `DatasetRef` objects.
 
         Returns
@@ -438,7 +438,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
 
     @property
     def dataIds(self) -> DataCoordinateQueryResults:
-        """A lazy-evaluation object representing a query for the just the data
+        """A lazy-evaluation object representing a query for just the data
         IDs of the datasets that would be returned by this query
         (`DataCoordinateQueryResults`).
 
