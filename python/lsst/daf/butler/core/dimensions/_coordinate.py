@@ -488,7 +488,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         when implied keys are accessed via the returned mapping, depending on
         the implementation and whether assertions are enabled.
         """
-        assert self.hasFull(), "full may only be accessed if hasRecords() returns True."
+        assert self.hasFull(), "full may only be accessed if hasFull() returns True."
         return _DataCoordinateFullView(self)
 
     @abstractmethod
@@ -642,7 +642,10 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             The object converted to a dictionary.
         """
         # Convert to a dict form
-        return self.byName()
+        if self.hasFull():
+            return self.full.byName()
+        else:
+            return self.byName()
 
     @classmethod
     def from_simple(cls, simple: Dict[str, Any],
