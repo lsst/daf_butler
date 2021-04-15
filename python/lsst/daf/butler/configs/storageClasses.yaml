@@ -202,3 +202,12 @@ storageClasses:
     pytype: astropy.table.QTable
   ExtendedPsf:
     pytype: lsst.pipe.tasks.extended_psf.ExtendedPsf
+  HealSparseCoverage:
+    pytype: healsparse.HealSparseCoverage
+  HealSparseMap:
+    pytype: healsparse.HealSparseMap
+    derivedComponents:
+      coverage: HealSparseCoverage
+    parameters:
+      - pixels
+      - degrade_nside
