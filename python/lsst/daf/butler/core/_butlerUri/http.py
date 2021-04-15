@@ -84,11 +84,22 @@ def getHttpSession() -> requests.Session:
 
     log.debug("Creating new HTTP session...")
 
+    ca_bundle = None
+    try:
+        ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
+    except KeyError:
+        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
+                    "HTTPS requests will fail. If you intend to use HTTPS, please "
+                    "export this variable.")
+    session.verify = ca_bundle
+
     try:
         env_auth_method = os.environ['LSST_BUTLER_WEBDAV_AUTH']
     except KeyError:
-        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, "
-                       "please use values X509 or TOKEN")
+        log.debug("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, "
+                  "no authentication configured.")
+        log.debug("Unauthenticated session configured and ready.")
+        return session
 
     if env_auth_method == "X509":
         log.debug("... using x509 authentication.")
@@ -103,17 +114,7 @@ def getHttpSession() -> requests.Session:
     else:
         raise ValueError("Environment variable LSST_BUTLER_WEBDAV_AUTH must be set to X509 or TOKEN")
 
-    ca_bundle = None
-    try:
-        ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
-    except KeyError:
-        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
-                    "HTTPS requests will fail. If you intend to use HTTPS, please "
-                    "export this variable.")
-
-    session.verify = ca_bundle
-    log.debug("Session configured and ready.")
-
+    log.debug("Authenticated session configured and ready.")
     return session
 
 
@@ -262,14 +263,7 @@ class ButlerHttpURI(ButlerURI):
                 refreshToken(ButlerHttpURI._session)
             return ButlerHttpURI._session
 
-        baseURL = self.scheme + "://" + self.netloc
-
-        if isWebdavEndpoint(baseURL):
-            log.debug("%s looks like a Webdav endpoint.", baseURL)
-            s = getHttpSession()
-        else:
-            s = requests.Session()
-
+        s = getHttpSession()
         ButlerHttpURI._session = s
         ButlerHttpURI._sessionInitialized = True
         return s
@@ -293,6 +287,10 @@ class ButlerHttpURI(ButlerURI):
 
     def mkdir(self) -> None:
         """Create the directory resource if it does not already exist."""
+        # Only available on WebDAV backends
+        if not isWebdavEndpoint(self.scheme + "://" + self.netloc):
+            raise NotImplementedError("Endpoint does not implement WebDAV functionality")
+
         if not self.dirLike:
             raise ValueError(f"Can not create a 'directory' for file-like URI {self}")
 
@@ -406,6 +404,10 @@ class ButlerHttpURI(ButlerURI):
             transfer = self.transferDefault
 
         if isinstance(src, type(self)):
+            # Only available on WebDAV backends
+            if not isWebdavEndpoint(self.scheme + "://" + self.netloc):
+                raise NotImplementedError("Endpoint does not implement WebDAV functionality")
+
             if transfer == "move":
                 r = self.session.request("MOVE", src.geturl(),
                                          headers={"Destination": self.geturl()},
