@@ -30,6 +30,7 @@ __all__ = (
 
 from typing import (
     Any,
+    Dict,
     List,
     Mapping,
     Optional,
@@ -61,12 +62,17 @@ class ExpressionQueryParameter(BaseModel):
         if self.glob is None and self.regex is None:
             return ...
 
-        expression = []
+        expression: List[Union[str, re.Pattern]] = []
         if self.regex is not None:
             for r in self.regex:
                 expression.append(re.compile(r))
         if self.glob is not None:
-            expression.extend(globToRegex(self.glob))
+            regexes = globToRegex(self.glob)
+            if isinstance(regexes, list):
+                expression.extend(regexes)
+            else:
+                # This avoids mypy needing to import Ellipsis type
+                return ...
         return expression
 
     @classmethod
@@ -76,7 +82,7 @@ class ExpressionQueryParameter(BaseModel):
             return cls()
 
         expressions = iterable(expression)
-        params = {}
+        params: Dict[str, List[str]] = {}
         for expression in expressions:
             if expression is ...:
                 # This matches everything
@@ -98,10 +104,11 @@ class QueryDatasetsModel(BaseModel):
 
     datasetType: ExpressionQueryParameter
     collections: Optional[ExpressionQueryParameter] = None
+    dimensions: Optional[List[str]] = None
     dataId: Optional[DataId] = None
     where: Optional[str] = None
     findFirst: bool = False
     components: Optional[bool] = None
     bind: Optional[DataId] = None
     check: bool = True
-    kwargs: Optional[DataId] = None
+    keyword_args: Optional[DataId] = None  # mypy refuses to allow kwargs in model

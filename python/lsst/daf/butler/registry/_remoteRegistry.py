@@ -56,11 +56,15 @@ from ..core import (
     DimensionRecord,
     DimensionUniverse,
     NameLookupMapping,
+    SerializedDatasetRef,
     SerializedDatasetType,
     StorageClassFactory,
     Timespan,
 )
-from ..core.serverModels import ExpressionQueryParameter
+from ..core.serverModels import (
+    ExpressionQueryParameter,
+    QueryDatasetsModel,
+)
 
 from . import queries
 from ._registry import Registry
@@ -382,7 +386,36 @@ class RemoteRegistry(Registry):
                       check: bool = True,
                       **kwargs: Any) -> queries.DatasetQueryResults:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        if collections is not None:
+            print("Collections:", collections)
+            collections = ExpressionQueryParameter.from_expression(collections)
+
+        kwds: Optional[Dict[str, Any]]
+        if not kwargs:
+            kwds = None  # The model makes this optional but it is always a dict as a param
+        else:
+            kwds = kwargs
+
+        parameters = QueryDatasetsModel(datasetType=ExpressionQueryParameter.from_expression(datasetType),
+                                        collections=collections,
+                                        dimensions=dimensions,
+                                        dataId=dataId,
+                                        where=where,
+                                        findFirst=findFirst,
+                                        components=components,
+                                        bind=bind,
+                                        check=check,
+                                        keyword_args=kwds,
+                                        )
+
+        response = httpx.post(str(self._db.join("registry/datasets")),
+                              json=parameters.dict(exclude_unset=True, exclude_defaults=True),
+                              timeout=20,)
+        response.raise_for_status()
+
+        simple_refs = response.json()
+        return (DatasetRef.from_simple(SerializedDatasetRef(**r), universe=self.dimensions)
+                for r in simple_refs)
 
     def queryDataIds(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                      dataId: Optional[DataId] = None,
