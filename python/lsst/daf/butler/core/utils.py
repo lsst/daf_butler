@@ -408,23 +408,40 @@ def findFileResources(values: Iterable[str], regex: Optional[str] = None) -> Lis
     return resources
 
 
-def globToRegex(expressions: List[str]) -> Union[List[Pattern[str]], EllipsisType]:
+def globToRegex(expressions: Union[str, EllipsisType, None,
+                                   List[str]]) -> Union[List[Union[str, Pattern]], EllipsisType]:
     """Translate glob-style search terms to regex.
 
-    If a stand-alone '*' is found in ``expressions``, or expressions is empty,
-    then the special value ``...`` will be returned, indicating that any string
-    will match.
+    If a stand-alone '``*``' is found in ``expressions``, or expressions is
+    empty or `None`, then the special value ``...`` will be returned,
+    indicating that any string will match.
 
     Parameters
     ----------
-    expressions : `list` [`str`]
+    expressions : `str` or `list` [`str`]
         A list of glob-style pattern strings to convert.
 
     Returns
     -------
-    expressions : `list` [`str`] or ``...``
-        A list of regex Patterns
+    expressions : `list` [`str` or `re.Pattern`] or ``...``
+        A list of regex Patterns or simple strings. Returns ``...`` if
+        the provided expressions would match everything.
     """
+    if expressions is Ellipsis or expressions is None:
+        return Ellipsis
+    expressions = list(iterable(expressions))
     if not expressions or "*" in expressions:
         return Ellipsis
-    return [re.compile(fnmatch.translate(e)) for e in expressions]
+
+    nomagic = re.compile("^[A-Za-z_/]+$")
+
+    # Try not to convert simple string to a regex.
+    results: List[Union[str, Pattern]] = []
+    for e in expressions:
+        res: Union[str, Pattern]
+        if nomagic.match(e):
+            res = e
+        else:
+            res = re.compile(fnmatch.translate(e))
+        results.append(res)
+    return results
