@@ -40,7 +40,7 @@ from typing import (
 
 import re
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .dimensions import SerializedDataCoordinate
 from .utils import iterable, globToRegex
@@ -51,16 +51,36 @@ SimpleDataId = Mapping[str, DataIdValues]
 
 
 class ExpressionQueryParameter(BaseModel):
-    """Represents a specification for an expression query."""
+    """Represents a specification for an expression query.
+
+    Generally used for collection or dataset type expressions.  This
+    implementation returns ``...`` by default.
+    """
 
     _allow_ellipsis: ClassVar[bool] = True
     """Control whether expression can match everything."""
 
-    regex: Optional[List[str]] = None
-    """List of regular expression strings."""
+    regex: Optional[List[str]] = Field(
+        None,
+        title="List of regular expression strings.",
+        example="^cal.*",
+    )
 
-    glob: Optional[List[str]] = None
-    """List of dataset type names or globs."""
+    glob: Optional[List[str]] = Field(
+        None,
+        title="List of globs or explicit strings to use in expression.",
+        example="cal*",
+    )
+
+    class Config:
+        """Local configuration overrides for model."""
+
+        schema_extra = {
+            "example": {
+                "regex": ["^cal.*"],
+                "glob": ["cal*", "raw"],
+            }
+        }
 
     def expression(self) -> Any:
         """Combine regex and glob lists into single expression."""
@@ -126,29 +146,77 @@ class DatasetsQueryParameter(ExpressionQueryParameter):
     _allow_ellipsis: ClassVar[bool] = False
 
 
+# Shared field definitions
+Where = Field(
+    None,
+    title="String expression similar to a SQL WHERE clause.",
+    example="detector = 5 AND instrument = 'HSC'",
+)
+Collections = Field(
+    None,
+    title="An expression that identifies the collections to search.",
+)
+Datasets = Field(
+    None,
+    title="An expression that identifies dataset types to search (must not match all datasets).",
+)
+Dimensions = Field(
+    None,
+    title="Relevant dimensions to include.",
+    example="['detector', 'physical_filter']",
+)
+DataId = Field(
+    None,
+    title="Data ID to constrain the query.",
+)
+FindFirst = Field(
+    False,
+    title="Control whether only first matching dataset ref or type is returned.",
+)
+Components = Field(
+    None,
+    title="Control how expressions apply to components.",
+)
+Bind = Field(
+    None,
+    title="Mapping to use to inject values into the WHERE parameter clause.",
+)
+Check = Field(
+    True,
+    title="Control whether to check the query for consistency.",
+)
+KeywordArgs = Field(
+    None,
+    title="Additional parameters to use when standardizing the supplied data ID.",
+)
+
+
 class QueryDatasetsModel(BaseModel):
     """Information needed for a registry dataset query."""
 
-    datasetType: ExpressionQueryParameter
-    collections: Optional[ExpressionQueryParameter] = None
-    dimensions: Optional[List[str]] = None
-    dataId: Optional[SerializedDataCoordinate] = None
-    where: Optional[str] = None
-    findFirst: bool = False
-    components: Optional[bool] = None
-    bind: Optional[SimpleDataId] = None
-    check: bool = True
-    keyword_args: Optional[SimpleDataId] = None  # mypy refuses to allow kwargs in model
+    datasetType: ExpressionQueryParameter = Field(
+        ...,
+        title="Dataset types to query. Can match all."
+    )
+    collections: Optional[ExpressionQueryParameter] = Collections
+    dimensions: Optional[List[str]] = Dimensions
+    dataId: Optional[SerializedDataCoordinate] = DataId
+    where: Optional[str] = Where
+    findFirst: bool = FindFirst
+    components: Optional[bool] = Components
+    bind: Optional[SimpleDataId] = Bind
+    check: bool = Check
+    keyword_args: Optional[SimpleDataId] = KeywordArgs  # mypy refuses to allow kwargs in model
 
 
 class QueryDimensionRecordsModel(BaseModel):
     """Information needed to query the dimension records."""
 
-    dataId: Optional[SerializedDataCoordinate] = None
-    datasets: Optional[DatasetsQueryParameter] = None
-    collections: Optional[ExpressionQueryParameter] = None
-    where: Optional[str] = None
-    components: Optional[bool] = None
-    bind: Optional[SimpleDataId] = None
-    check: bool = True
-    keyword_args: Optional[SimpleDataId] = None  # mypy refuses to allow kwargs in model
+    dataId: Optional[SerializedDataCoordinate] = DataId
+    datasets: Optional[DatasetsQueryParameter] = Datasets
+    collections: Optional[ExpressionQueryParameter] = Collections
+    where: Optional[str] = Where
+    components: Optional[bool] = Components
+    bind: Optional[SimpleDataId] = Bind
+    check: bool = Check
+    keyword_args: Optional[SimpleDataId] = KeywordArgs  # mypy refuses to allow kwargs in model
