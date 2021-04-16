@@ -30,6 +30,7 @@ __all__ = (
 
 from typing import (
     Any,
+    ClassVar,
     Dict,
     List,
     Mapping,
@@ -41,15 +42,19 @@ import re
 
 from pydantic import BaseModel
 
+from .dimensions import SerializedDataCoordinate
 from .utils import iterable, globToRegex
 
 # DataId and kwargs can only take limited types
-DataIdValues = Union[str, int, float]
-DataId = Mapping[str, DataIdValues]
+DataIdValues = Union[int, str]
+SimpleDataId = Mapping[str, DataIdValues]
 
 
 class ExpressionQueryParameter(BaseModel):
     """Represents a specification for an expression query."""
+
+    _allow_ellipsis: ClassVar[bool] = True
+    """Control whether expression can match everything."""
 
     regex: Optional[List[str]] = None
     """List of regular expression strings."""
@@ -60,7 +65,11 @@ class ExpressionQueryParameter(BaseModel):
     def expression(self) -> Any:
         """Combine regex and glob lists into single expression."""
         if self.glob is None and self.regex is None:
-            return ...
+            if self._allow_ellipsis:
+                return ...
+            # Rather than matching all, interpret this as no expression
+            # at all.
+            return None
 
         expression: List[Union[str, re.Pattern]] = []
         if self.regex is not None:
@@ -72,7 +81,9 @@ class ExpressionQueryParameter(BaseModel):
                 expression.extend(regexes)
             else:
                 # This avoids mypy needing to import Ellipsis type
-                return ...
+                if self._allow_ellipsis:
+                    return ...
+                raise ValueError("Expression matches everything but that is not allowed.")
         return expression
 
     @classmethod
@@ -82,21 +93,37 @@ class ExpressionQueryParameter(BaseModel):
             return cls()
 
         expressions = iterable(expression)
-        params: Dict[str, List[str]] = {}
+        params: Dict[str, List[str]] = {"glob": [], "regex": []}
         for expression in expressions:
             if expression is ...:
                 # This matches everything
                 return cls()
 
             if isinstance(expression, re.Pattern):
-                if (k := "regex") not in params:
-                    params[k] = []
                 params["regex"].append(expression.pattern)
-            else:
-                if (k := "glob") not in params:
-                    params[k] = []
+            elif isinstance(expression, str):
                 params["glob"].append(expression)
+            elif hasattr(expression, "name"):
+                params["glob"].append(expression.name)
+            else:
+                raise ValueError(f"Unrecognized type given to expression: {expression!r}")
+
+        # Clean out empty dicts.
+        for k in list(params):
+            if not params[k]:
+                del params[k]
+
         return cls(**params)
+
+
+class DatasetsQueryParameter(ExpressionQueryParameter):
+    """Represents a specification for a dataset expression query.
+
+    This differs from the standard expression query in that an empty
+    expression will return `None` rather than ``...``.
+    """
+
+    _allow_ellipsis: ClassVar[bool] = False
 
 
 class QueryDatasetsModel(BaseModel):
@@ -105,10 +132,23 @@ class QueryDatasetsModel(BaseModel):
     datasetType: ExpressionQueryParameter
     collections: Optional[ExpressionQueryParameter] = None
     dimensions: Optional[List[str]] = None
-    dataId: Optional[DataId] = None
+    dataId: Optional[SerializedDataCoordinate] = None
     where: Optional[str] = None
     findFirst: bool = False
     components: Optional[bool] = None
-    bind: Optional[DataId] = None
+    bind: Optional[SimpleDataId] = None
     check: bool = True
-    keyword_args: Optional[DataId] = None  # mypy refuses to allow kwargs in model
+    keyword_args: Optional[SimpleDataId] = None  # mypy refuses to allow kwargs in model
+
+
+class QueryDimensionRecordsModel(BaseModel):
+    """Information needed to query the dimension records."""
+
+    dataId: Optional[SerializedDataCoordinate] = None
+    datasets: Optional[DatasetsQueryParameter] = None
+    collections: Optional[ExpressionQueryParameter] = None
+    where: Optional[str] = None
+    components: Optional[bool] = None
+    bind: Optional[SimpleDataId] = None
+    check: bool = True
+    keyword_args: Optional[SimpleDataId] = None  # mypy refuses to allow kwargs in model

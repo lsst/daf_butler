@@ -58,12 +58,15 @@ from ..core import (
     NameLookupMapping,
     SerializedDatasetRef,
     SerializedDatasetType,
+    SerializedDimensionRecord,
     StorageClassFactory,
     Timespan,
 )
 from ..core.serverModels import (
     ExpressionQueryParameter,
+    DatasetsQueryParameter,
     QueryDatasetsModel,
+    QueryDimensionRecordsModel,
 )
 
 from . import queries
@@ -161,15 +164,8 @@ class RemoteRegistry(Registry):
             return self._dimensions
 
         # Access /dimensions.json on server and cache it locally.
-        try:
-            response = httpx.get(str(self._db.join("universe")))
-            response.raise_for_status()
-        except httpx.RequestError as e:
-            print(f"An error occurred while requesting {e.request.url!r}.")
-            raise e
-        except httpx.HTTPStatusError as e:
-            print(f"Error response {e.response.status_code} while requesting {e.request.url!r}.")
-            raise e
+        response = httpx.get(str(self._db.join("universe")))
+        response.raise_for_status()
 
         config = DimensionConfig.fromString(response.text, format="json")
         self._dimensions = DimensionUniverse(config)
@@ -387,7 +383,6 @@ class RemoteRegistry(Registry):
                       **kwargs: Any) -> Iterable[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if collections is not None:
-            print("Collections:", collections)
             collections = ExpressionQueryParameter.from_expression(collections)
 
         kwds: Optional[Dict[str, Any]]
@@ -439,7 +434,34 @@ class RemoteRegistry(Registry):
                               check: bool = True,
                               **kwargs: Any) -> Iterator[DimensionRecord]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        if collections is not None:
+            collections = ExpressionQueryParameter.from_expression(collections)
+        if datasets is not None:
+            datasets = DatasetsQueryParameter.from_expression(datasets)
+
+        kwds: Optional[Dict[str, Any]]
+        if not kwargs:
+            kwds = None  # The model makes this optional but it is always a dict as a param
+        else:
+            kwds = kwargs
+
+        parameters = QueryDimensionRecordsModel(dataId=dataId,
+                                                datasets=datasets,
+                                                collections=collections,
+                                                where=where,
+                                                components=components,
+                                                bind=bind,
+                                                check=check,
+                                                keyword_args=kwds)
+        response = httpx.post(str(self._db.join(f"registry/dimensionRecords/{element}")),
+                              json=parameters.dict(exclude_unset=True, exclude_defaults=True),
+                              timeout=20,)
+        response.raise_for_status()
+
+        simple_records = response.json()
+
+        return (DimensionRecord.from_simple(SerializedDimensionRecord(**r), universe=self.dimensions)
+                for r in simple_records)
 
     def queryDatasetAssociations(
         self,
