@@ -268,6 +268,11 @@ class ButlerHttpURI(ButlerURI):
         ButlerHttpURI._sessionInitialized = True
         return s
 
+    @property
+    def is_webdav_endpoint(self) -> bool:
+        """Check if the current endpoint implements WebDAV features"""
+        return isWebdavEndpoint(self.getrooturl())
+
     def exists(self) -> bool:
         """Check that a remote HTTP resource exists."""
         log.debug("Checking if resource exists: %s", self.geturl())
@@ -288,7 +293,7 @@ class ButlerHttpURI(ButlerURI):
     def mkdir(self) -> None:
         """Create the directory resource if it does not already exist."""
         # Only available on WebDAV backends
-        if not isWebdavEndpoint(self.scheme + "://" + self.netloc):
+        if not self.is_webdav_endpoint:
             raise NotImplementedError("Endpoint does not implement WebDAV functionality")
 
         if not self.dirLike:
@@ -405,7 +410,7 @@ class ButlerHttpURI(ButlerURI):
 
         if isinstance(src, type(self)):
             # Only available on WebDAV backends
-            if not isWebdavEndpoint(self.scheme + "://" + self.netloc):
+            if not self.is_webdav_endpoint:
                 raise NotImplementedError("Endpoint does not implement WebDAV functionality")
 
             if transfer == "move":
