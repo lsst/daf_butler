@@ -28,10 +28,12 @@ from typing import (
     ClassVar,
     Dict,
     Optional,
+    Tuple,
     TYPE_CHECKING,
     Type,
 )
-from pydantic import BaseModel
+import collections.abc
+from pydantic import BaseModel, create_model, validator
 
 import lsst.sphgeom
 
@@ -76,11 +78,59 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
 
 
+class SpecificSerializedDimensionRecord(BaseModel, extra="allow"):
+    """Base class for a specific serialized record content.
+
+    Will be updated to specific subclass when attached to
+    `SerializedDimensionRecord`.
+    """
+
+
+def _createSimpleRecordSubclass(definition: DimensionElement) -> Type[SpecificSerializedDimensionRecord]:
+    from ._schema import DimensionElementFields
+    fields = DimensionElementFields(definition)
+    members = {}
+    for field in fields.standard:
+        field_type = field.getPythonType()
+        if field.nullable:
+            field_type = Optional[field_type]  # type: ignore
+        members[field.name] = (field_type, ...)
+    if definition.temporal:
+        members["timespan"] = (Tuple[int, int], ...)  # type: ignore
+    if definition.spatial:
+        members["region"] = (str, ...)
+
+    # mypy does not seem to like create_model
+    return create_model(f"SpecificSerializedDimensionRecord{definition.name.capitalize()}",
+                        __base__=SpecificSerializedDimensionRecord, **members)  # type: ignore
+
+
 class SerializedDimensionRecord(BaseModel):
     """Simplified model for serializing a `DimensionRecord`."""
 
     definition: str
-    record: Dict[str, Any]
+    universe: int
+    record: SpecificSerializedDimensionRecord
+
+    @validator("record")
+    def cast_record(cls, v, values) -> SpecificSerializedDimensionRecord:  # type: ignore # noqa: N805
+        """Cast the generic v to specific v based on the definition."""
+        from ._universe import DimensionUniverse
+
+        if isinstance(v, SpecificSerializedDimensionRecord):
+            if type(v) is not SpecificSerializedDimensionRecord:
+                # If already a subclass, assume the right type.
+                return v
+            # Convert to specific subclass.
+            v = v.dict()
+
+        if not isinstance(v, collections.abc.Mapping):
+            raise ValueError(f"record can either be SpecificDimensionRecord or dict, not {v!r}")
+
+        universe = DimensionUniverse._instances[values["universe"]]
+        definition = DimensionElement.from_simple(values["definition"], universe=universe)
+        new_cls = _createSimpleRecordSubclass(definition)
+        return new_cls(**v)
 
 
 @immutable
@@ -221,9 +271,16 @@ class DimensionRecord:
                     # and also history. Here use a different approach.
                     # This code needs to be migrated to sphgeom
                     mapping[k] = v.encode().hex()
+
         definition = self.definition.to_simple(minimal=minimal)
 
-        return SerializedDimensionRecord(definition=definition, record=mapping)
+        # Create special serialized subclass
+        cls = _createSimpleRecordSubclass(self.definition)
+        version = self.definition.universe._version
+        specialist = cls(**mapping)
+
+        return SerializedDimensionRecord(definition=definition, record=specialist,
+                                         universe=version)
 
     @classmethod
     def from_simple(cls, simple: SerializedDimensionRecord,
