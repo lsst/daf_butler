@@ -384,7 +384,7 @@ class RemoteRegistry(Registry):
                       components: Optional[bool] = None,
                       bind: Optional[Mapping[str, Any]] = None,
                       check: bool = True,
-                      **kwargs: Any) -> queries.DatasetQueryResults:
+                      **kwargs: Any) -> Iterable[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if collections is not None:
             print("Collections:", collections)

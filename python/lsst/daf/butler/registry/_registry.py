@@ -1137,7 +1137,7 @@ class Registry(ABC):
                       components: Optional[bool] = None,
                       bind: Optional[Mapping[str, Any]] = None,
                       check: bool = True,
-                      **kwargs: Any) -> queries.DatasetQueryResults:
+                      **kwargs: Any) -> Iterable[DatasetRef]:
         """Query for and iterate over dataset references matching user-provided
         criteria.
 
