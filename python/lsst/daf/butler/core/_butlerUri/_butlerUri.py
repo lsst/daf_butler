@@ -308,6 +308,16 @@ class ButlerURI:
         """
         return self._uri.geturl()
 
+    def getrooturl(self) -> str:
+        """Return the base root URI in string form.
+
+        Returns
+        -------
+        url : `str`
+            String form of root URI.
+        """
+        return self._uri.scheme + "://" + self._uri.netloc
+
     def split(self) -> Tuple[ButlerURI, str]:
         """Split URI into head and tail.
 

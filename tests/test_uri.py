@@ -370,6 +370,11 @@ class FileURITestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             list(file.walk())
 
+    def testGetRootURL(self):
+        """Test ButlerURI.getrooturl()."""
+        uri = ButlerURI("https://www.notexist.com/file/test")
+        self.assertEqual(uri.getrooturl(), "https://www.notexist.com")
+
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
