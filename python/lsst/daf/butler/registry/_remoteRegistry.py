@@ -391,12 +391,6 @@ class RemoteRegistry(Registry):
         if collections is not None:
             collections = ExpressionQueryParameter.from_expression(collections)
 
-        kwds: Optional[Dict[str, Any]]
-        if not kwargs:
-            kwds = None  # The model makes this optional but it is always a dict as a param
-        else:
-            kwds = kwargs
-
         parameters = QueryDatasetsModel(datasetType=ExpressionQueryParameter.from_expression(datasetType),
                                         collections=collections,
                                         dimensions=dimensions,
@@ -406,7 +400,7 @@ class RemoteRegistry(Registry):
                                         components=components,
                                         bind=bind,
                                         check=check,
-                                        keyword_args=kwds,
+                                        keyword_args=kwargs,
                                         )
 
         response = httpx.post(str(self._db.join("registry/datasets")),
@@ -435,12 +429,6 @@ class RemoteRegistry(Registry):
         if datasets is not None:
             datasets = DatasetsQueryParameter.from_expression(datasets)
 
-        kwds: Optional[Dict[str, Any]]
-        if not kwargs:
-            kwds = None  # The model makes this optional but it is always a dict as a param
-        else:
-            kwds = kwargs
-
         parameters = QueryDataIdsModel(dimensions=cleaned_dimensions,
                                        dataId=dataId,
                                        collections=collections,
@@ -449,7 +437,7 @@ class RemoteRegistry(Registry):
                                        components=components,
                                        bind=bind,
                                        check=check,
-                                       keyword_args=kwds,
+                                       keyword_args=kwargs,
                                        )
 
         response = httpx.post(str(self._db.join("registry/dataIds")),
@@ -478,12 +466,6 @@ class RemoteRegistry(Registry):
         if datasets is not None:
             datasets = DatasetsQueryParameter.from_expression(datasets)
 
-        kwds: Optional[Dict[str, Any]]
-        if not kwargs:
-            kwds = None  # The model makes this optional but it is always a dict as a param
-        else:
-            kwds = kwargs
-
         parameters = QueryDimensionRecordsModel(dataId=dataId,
                                                 datasets=datasets,
                                                 collections=collections,
@@ -491,7 +473,7 @@ class RemoteRegistry(Registry):
                                                 components=components,
                                                 bind=bind,
                                                 check=check,
-                                                keyword_args=kwds)
+                                                keyword_args=kwargs)
         response = httpx.post(str(self._db.join(f"registry/dimensionRecords/{element}")),
                               json=parameters.dict(exclude_unset=True, exclude_defaults=True),
                               timeout=20,)

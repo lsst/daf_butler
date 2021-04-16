@@ -43,7 +43,7 @@ from typing import (
 
 import re
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 from .dimensions import SerializedDataCoordinate
 from .utils import iterable, globToRegex
@@ -199,7 +199,44 @@ KeywordArgs = Field(
 )
 
 
-class QueryDatasetsModel(BaseModel):
+class QueryBaseModel(BaseModel):
+    """Base model for all query models."""
+
+    @validator("keyword_args", check_fields=False)
+    def check_keyword_args(cls, v, values) -> Optional[Dict[str, SimpleDataId]]:  # type: ignore # noqa: N805
+        """Convert kwargs into None if empty.
+
+        This retains the property at its default value and can therefore
+        remove it from serialization.
+
+        The validator will be ignored if the subclass does not have this
+        property in its model.
+        """
+        if not v:
+            return None
+        return v
+
+    def kwargs(self) -> Dict[str, SimpleDataId]:
+        """Return keyword args, converting None to a `dict`.
+
+        Returns
+        -------
+        kwargs : `dict`
+            The keword arguments stored in the model. `None` is converted
+            to an empty dict. Returns empty dict if the ``keyword_args``
+            property is not defined.
+        """
+        try:
+            # mypy does not know about the except
+            kwargs = self.keyword_args  # type: ignore
+        except AttributeError:
+            kwargs = {}
+        if kwargs is None:
+            return {}
+        return kwargs
+
+
+class QueryDatasetsModel(QueryBaseModel):
     """Information needed for a registry dataset query."""
 
     datasetType: ExpressionQueryParameter = Field(
@@ -217,7 +254,7 @@ class QueryDatasetsModel(BaseModel):
     keyword_args: Optional[SimpleDataId] = KeywordArgs  # mypy refuses to allow kwargs in model
 
 
-class QueryDataIdsModel(BaseModel):
+class QueryDataIdsModel(QueryBaseModel):
     """Information needed to query data IDs."""
 
     dimensions: List[str] = Dimensions
@@ -231,7 +268,7 @@ class QueryDataIdsModel(BaseModel):
     keyword_args: Optional[SimpleDataId] = KeywordArgs  # mypy refuses to allow kwargs in model
 
 
-class QueryDimensionRecordsModel(BaseModel):
+class QueryDimensionRecordsModel(QueryBaseModel):
     """Information needed to query the dimension records."""
 
     dataId: Optional[SerializedDataCoordinate] = DataId
