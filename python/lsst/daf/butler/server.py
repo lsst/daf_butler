@@ -15,12 +15,14 @@ from lsst.daf.butler import (
     Config,
     SerializedDatasetType,
     SerializedDatasetRef,
+    SerializedDimensionRecord,
     DatasetRef,
     DimensionConfig,
 )
 from lsst.daf.butler.core.serverModels import (
     ExpressionQueryParameter,
     QueryDatasetsModel,
+    QueryDimensionRecordsModel,
 )
 from lsst.daf.butler.core.utils import globToRegex
 from lsst.daf.butler.registry import CollectionType
@@ -248,8 +250,10 @@ def query_datasets(query: QueryDatasetsModel) -> List[SerializedDatasetRef]:
 
     if query.collections:
         collections = query.collections.expression()
-    if query.kwargs:
-        kwargs = query.kwargs
+    else:
+        collections = None
+    if query.keyword_args:
+        kwargs = query.keyword_args
     else:
         kwargs = {}
 
@@ -299,27 +303,38 @@ def query_data_ids(dimensions: List[str],
 
 
 # Uses POST to handle the DataId
-@app.post("/registry/dimensionRecords/{element}")
+@app.post(
+    "/registry/dimensionRecords/{element}",
+    summary="Retrieve dimension records matching query",
+    response_model=List[SerializedDimensionRecord],
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
+)
 def query_dimension_records(element: str,
-                            collections: Optional[List[str]] = Query(None),
-                            datasets: Optional[List[str]] = Query(None),
-                            where: Optional[str] = None,
-                            components: Optional[bool] = None,
-                            check: bool = True,
-                            dataId: Optional[MaximalDataId] = None,
-                            bind: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                            query: QueryDimensionRecordsModel) -> List[SerializedDimensionRecord]:
+
     butler = Butler(BUTLER_ROOT)
 
-    if collections is None:
-        collections = ...
+    if query.datasets:
+        datasets = query.datasets.expression()
+    else:
+        datasets = None
+    if query.collections:
+        collections = query.collections.expression()
+    else:
+        collections = None
+    if query.keyword_args:
+        kwargs = query.keyword_args
+    else:
+        kwargs = {}
 
-    filteredDataId = {k: v for k, v in dataId.dict().items() if v is not None}
-
-    records = butler.registry.queryDimensionRecords(element, dataId=filteredDataId,
+    records = butler.registry.queryDimensionRecords(element, dataId=query.dataId,
                                                     collections=collections,
-                                                    where=where,
+                                                    where=query.where,
                                                     datasets=datasets,
-                                                    components=components,
-                                                    bind=bind,
-                                                    check=check)
+                                                    components=query.components,
+                                                    bind=query.bind,
+                                                    check=query.check,
+                                                    **kwargs)
     return [r.to_simple() for r in records]
