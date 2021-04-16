@@ -13,6 +13,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from lsst.daf.butler import (
     Butler,
     Config,
+    SerializedDataCoordinate,
     SerializedDatasetType,
     SerializedDatasetRef,
     SerializedDimensionRecord,
@@ -22,6 +23,7 @@ from lsst.daf.butler import (
 from lsst.daf.butler.core.serverModels import (
     ExpressionQueryParameter,
     QueryDatasetsModel,
+    QueryDataIdsModel,
     QueryDimensionRecordsModel,
 )
 from lsst.daf.butler.core.utils import globToRegex
@@ -273,33 +275,37 @@ def query_datasets(query: QueryDatasetsModel) -> List[SerializedDatasetRef]:
 @app.post(
     "/registry/dataIds",
     summary="Query all data IDs.",
+    response_model=List[SerializedDataCoordinate],
+    response_model_exclude_unset=True,
+    response_model_exclude_defaults=True,
+    response_model_exclude_none=True,
 )
-def query_data_ids(dimensions: List[str],
-                   collections: Optional[List[str]] = Query(None),
-                   datasets: Optional[List[str]] = Query(None),
-                   dataId: Optional[MaximalDataId] = None,
-                   where: Optional[str] = None,
-                   components: Optional[bool] = None,
-                   bind: Optional[Dict[str, Any]] = None,
-                   check: bool = True) -> List[Dict]:
-    # Can use "*" dataset type to match everything.
-    # This will take a long time.
+def query_data_ids(query: QueryDataIdsModel) -> List[SerializedDataCoordinate]:
+    if query.datasets:
+        datasets = query.datasets.expression()
+    else:
+        datasets = None
+    if query.collections:
+        collections = query.collections.expression()
+    else:
+        collections = None
+    if query.keyword_args:
+        kwargs = query.keyword_args
+    else:
+        kwargs = {}
+
     butler = Butler(BUTLER_ROOT)
 
-    if collections is None:
-        collections = ...
-
-    filteredDataId = {k: v for k, v in dataId.dict().items() if v is not None}
-
-    dataIds = butler.registry.queryDataIds(dimensions,
+    dataIds = butler.registry.queryDataIds(query.dimensions,
                                            collections=collections,
                                            datasets=datasets,
-                                           dataId=filteredDataId,
-                                           where=where,
-                                           components=components,
-                                           bind=bind,
-                                           check=check)
-    return (coord.to_simple() for coord in dataIds)
+                                           dataId=query.dataId,
+                                           where=query.where,
+                                           components=query.components,
+                                           bind=query.bind,
+                                           check=query.check,
+                                           **kwargs)
+    return [coord.to_simple() for coord in dataIds]
 
 
 # Uses POST to handle the DataId
