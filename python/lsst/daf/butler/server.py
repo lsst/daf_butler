@@ -254,10 +254,6 @@ def query_datasets(query: QueryDatasetsModel) -> List[SerializedDatasetRef]:
         collections = query.collections.expression()
     else:
         collections = None
-    if query.keyword_args:
-        kwargs = query.keyword_args
-    else:
-        kwargs = {}
 
     datasets = butler.registry.queryDatasets(query.datasetType.expression(),
                                              collections=collections,
@@ -267,7 +263,7 @@ def query_datasets(query: QueryDatasetsModel) -> List[SerializedDatasetRef]:
                                              findFirst=query.findFirst,
                                              components=query.components,
                                              bind=query.bind,
-                                             check=query.check, **kwargs)
+                                             check=query.check, **query.kwargs())
     return (ref.to_simple() for ref in datasets)
 
 
@@ -289,10 +285,6 @@ def query_data_ids(query: QueryDataIdsModel) -> List[SerializedDataCoordinate]:
         collections = query.collections.expression()
     else:
         collections = None
-    if query.keyword_args:
-        kwargs = query.keyword_args
-    else:
-        kwargs = {}
 
     butler = Butler(BUTLER_ROOT)
 
@@ -304,7 +296,7 @@ def query_data_ids(query: QueryDataIdsModel) -> List[SerializedDataCoordinate]:
                                            components=query.components,
                                            bind=query.bind,
                                            check=query.check,
-                                           **kwargs)
+                                           **query.kwargs())
     return [coord.to_simple() for coord in dataIds]
 
 
@@ -330,10 +322,6 @@ def query_dimension_records(element: str,
         collections = query.collections.expression()
     else:
         collections = None
-    if query.keyword_args:
-        kwargs = query.keyword_args
-    else:
-        kwargs = {}
 
     records = butler.registry.queryDimensionRecords(element, dataId=query.dataId,
                                                     collections=collections,
@@ -342,5 +330,5 @@ def query_dimension_records(element: str,
                                                     components=query.components,
                                                     bind=query.bind,
                                                     check=query.check,
-                                                    **kwargs)
+                                                    **query.kwargs())
     return [r.to_simple() for r in records]
