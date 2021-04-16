@@ -44,6 +44,7 @@ from ..core import (
     ButlerURI,
     Config,
     DataCoordinate,
+    DataCoordinateSequence,
     DataId,
     DatasetAssociation,
     DatasetId,
@@ -56,6 +57,7 @@ from ..core import (
     DimensionRecord,
     DimensionUniverse,
     NameLookupMapping,
+    SerializedDataCoordinate,
     SerializedDatasetRef,
     SerializedDatasetType,
     SerializedDimensionRecord,
@@ -66,10 +68,11 @@ from ..core.serverModels import (
     ExpressionQueryParameter,
     DatasetsQueryParameter,
     QueryDatasetsModel,
+    QueryDataIdsModel,
     QueryDimensionRecordsModel,
 )
+from ..core.utils import iterable
 
-from . import queries
 from ._registry import Registry
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
@@ -382,6 +385,9 @@ class RemoteRegistry(Registry):
                       check: bool = True,
                       **kwargs: Any) -> Iterable[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
+        if dimensions is not None:
+            dimensions = [str(d) for d in iterable(dimensions)]
+
         if collections is not None:
             collections = ExpressionQueryParameter.from_expression(collections)
 
@@ -420,9 +426,42 @@ class RemoteRegistry(Registry):
                      components: Optional[bool] = None,
                      bind: Optional[Mapping[str, Any]] = None,
                      check: bool = True,
-                     **kwargs: Any) -> queries.DataCoordinateQueryResults:
+                     **kwargs: Any) -> DataCoordinateSequence:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        cleaned_dimensions = [str(d) for d in iterable(dimensions)]
+
+        if collections is not None:
+            collections = ExpressionQueryParameter.from_expression(collections)
+        if datasets is not None:
+            datasets = DatasetsQueryParameter.from_expression(datasets)
+
+        kwds: Optional[Dict[str, Any]]
+        if not kwargs:
+            kwds = None  # The model makes this optional but it is always a dict as a param
+        else:
+            kwds = kwargs
+
+        parameters = QueryDataIdsModel(dimensions=cleaned_dimensions,
+                                       dataId=dataId,
+                                       collections=collections,
+                                       datasets=datasets,
+                                       where=where,
+                                       components=components,
+                                       bind=bind,
+                                       check=check,
+                                       keyword_args=kwds,
+                                       )
+
+        response = httpx.post(str(self._db.join("registry/dataIds")),
+                              json=parameters.dict(exclude_unset=True, exclude_defaults=True),
+                              timeout=20,)
+        response.raise_for_status()
+
+        simple = response.json()
+        dataIds = [DataCoordinate.from_simple(SerializedDataCoordinate(**d), universe=self.dimensions)
+                   for d in simple]
+        return DataCoordinateSequence(dataIds=dataIds, graph=DimensionGraph(self.dimensions,
+                                                                            names=cleaned_dimensions))
 
     def queryDimensionRecords(self, element: Union[DimensionElement, str], *,
                               dataId: Optional[DataId] = None,

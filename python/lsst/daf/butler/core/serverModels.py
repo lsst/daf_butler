@@ -23,7 +23,10 @@ from __future__ import annotations
 
 __all__ = (
     "QueryDatasetsModel",
+    "QueryDataIdsModel",
+    "QueryDimensionRecordsModel",
     "ExpressionQueryParameter",
+    "DatasetsQueryParameter",
 )
 
 """Models used for client/server communication."""
@@ -160,8 +163,13 @@ Datasets = Field(
     None,
     title="An expression that identifies dataset types to search (must not match all datasets).",
 )
-Dimensions = Field(
+OptionalDimensions = Field(
     None,
+    title="Relevant dimensions to include.",
+    example="['detector', 'physical_filter']",
+)
+Dimensions = Field(
+    ...,
     title="Relevant dimensions to include.",
     example="['detector', 'physical_filter']",
 )
@@ -199,10 +207,24 @@ class QueryDatasetsModel(BaseModel):
         title="Dataset types to query. Can match all."
     )
     collections: Optional[ExpressionQueryParameter] = Collections
-    dimensions: Optional[List[str]] = Dimensions
+    dimensions: Optional[List[str]] = OptionalDimensions
     dataId: Optional[SerializedDataCoordinate] = DataId
     where: Optional[str] = Where
     findFirst: bool = FindFirst
+    components: Optional[bool] = Components
+    bind: Optional[SimpleDataId] = Bind
+    check: bool = Check
+    keyword_args: Optional[SimpleDataId] = KeywordArgs  # mypy refuses to allow kwargs in model
+
+
+class QueryDataIdsModel(BaseModel):
+    """Information needed to query data IDs."""
+
+    dimensions: List[str] = Dimensions
+    dataId: Optional[SerializedDataCoordinate] = DataId
+    datasets: Optional[DatasetsQueryParameter] = Datasets
+    collections: Optional[ExpressionQueryParameter] = Collections
+    where: Optional[str] = Where
     components: Optional[bool] = Components
     bind: Optional[SimpleDataId] = Bind
     check: bool = Check

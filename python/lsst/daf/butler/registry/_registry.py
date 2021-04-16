@@ -47,6 +47,7 @@ from ..core import (
     ButlerURI,
     Config,
     DataCoordinate,
+    DataCoordinateIterable,
     DataId,
     DatasetAssociation,
     DatasetId,
@@ -62,7 +63,7 @@ from ..core import (
     StorageClassFactory,
     Timespan,
 )
-from . import queries
+
 from ._config import RegistryConfig
 from ._collectionType import CollectionType
 from ._defaults import RegistryDefaults
@@ -1240,7 +1241,7 @@ class Registry(ABC):
                      components: Optional[bool] = None,
                      bind: Optional[Mapping[str, Any]] = None,
                      check: bool = True,
-                     **kwargs: Any) -> queries.DataCoordinateQueryResults:
+                     **kwargs: Any) -> DataCoordinateIterable:
         """Query for data IDs matching user-provided criteria.
 
         Parameters
