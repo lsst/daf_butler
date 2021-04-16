@@ -36,7 +36,7 @@ from typing import (
 
 from pydantic import BaseModel, StrictStr, ConstrainedInt, validator
 
-from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse
+from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
 from ..configSupport import LookupKey
 from ..utils import immutable
 from ..named import NamedKeyDict
@@ -66,7 +66,7 @@ class SerializedDatasetRef(BaseModel):
     # DO NOT change order in the Union, pydantic is sensitive to that!
     id: Optional[Union[uuid.UUID, PositiveInt]] = None
     datasetType: Optional[SerializedDatasetType] = None
-    dataId: Optional[Dict[str, Any]] = None  # Do not use specialist pydantic model for this
+    dataId: Optional[SerializedDataCoordinate] = None
     run: Optional[StrictStr] = None
     component: Optional[StrictStr] = None
 
