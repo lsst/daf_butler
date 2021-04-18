@@ -37,6 +37,7 @@ from typing import (
     Union,
 )
 
+import functools
 import contextlib
 import httpx
 
@@ -207,9 +208,16 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
+    @functools.lru_cache
     def getCollectionType(self, name: str) -> CollectionType:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        # This could use a local cache since collection types won't
+        # change.
+        path = f"registry/collection/type/{name}"
+        response = httpx.get(str(self._db.join(path)))
+        response.raise_for_status()
+        typeName = response.json()
+        return CollectionType.__members__[typeName]
 
     def _get_collection_record(self, name: str) -> CollectionRecord:
         # Docstring inherited from lsst.daf.butler.registry.Registry
@@ -225,7 +233,11 @@ class RemoteRegistry(Registry):
 
     def getCollectionChain(self, parent: str) -> CollectionSearch:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        path = f"registry/collectionChain/{parent}"
+        response = httpx.get(str(self._db.join(path)))
+        response.raise_for_status()
+        chain = response.json()
+        return CollectionSearch.parse_obj(chain)
 
     def setCollectionChain(self, parent: str, children: Any, *, flatten: bool = False) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
@@ -352,13 +364,9 @@ class RemoteRegistry(Registry):
 
         if components is not None:
             params = {"components": components}
-        try:
-            response = httpx.get(str(self._db.join(path)), params=params)
-            response.raise_for_status()
-        except httpx.RequestError as e:
-            raise e
-        except httpx.HTTPStatusError as e:
-            raise e
+
+        response = httpx.get(str(self._db.join(path)), params=params)
+        response.raise_for_status()
 
         # Really could do with a ListSerializedDatasetType model but for
         # now do it explicitly.
@@ -372,7 +380,27 @@ class RemoteRegistry(Registry):
                          flattenChains: bool = False,
                          includeChains: Optional[bool] = None) -> Iterator[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        raise NotImplementedError()
+        params: Dict[str, Any] = {"flattenChains": flattenChains}
+
+        expression = ExpressionQueryParameter.from_expression(expression)
+        if expression.regex is not None:
+            params["regex"] = expression.regex
+        if expression.glob is not None:
+            params["glob"] = expression.glob
+        if datasetType is not None:
+            params["datasetType"] = datasetType.name
+        if includeChains is not None:
+            params["includeChains"] = includeChains
+
+        collection_types = [collectionType.name for collectionType in collectionTypes]
+        params["collectionType"] = collection_types
+
+        path = "registry/collections"
+        response = httpx.get(str(self._db.join(path)), params=params)
+        response.raise_for_status()
+
+        collections = response.json()
+        return collections
 
     def queryDatasets(self, datasetType: Any, *,
                       collections: Any = None,
