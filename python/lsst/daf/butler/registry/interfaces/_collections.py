@@ -179,7 +179,7 @@ class ChainedCollectionRecord(CollectionRecord):
             if record == self:
                 raise ValueError(f"Cycle in collection chaining when defining '{self.name}'.")
         if flatten:
-            children = CollectionSearch(
+            children = CollectionSearch.fromExpression(
                 tuple(record.name for record in children.iter(manager, flattenChains=True))
             )
         self._update(manager, children)

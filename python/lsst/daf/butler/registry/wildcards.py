@@ -26,6 +26,7 @@ __all__ = (
     "CollectionSearch",
 )
 
+from pydantic import BaseModel
 from dataclasses import dataclass
 import re
 from typing import (
@@ -343,7 +344,7 @@ def _yieldCollectionRecords(
         )
 
 
-class CollectionSearch(Sequence[str]):
+class CollectionSearch(BaseModel, Sequence[str]):
     """An ordered search path of collections.
 
     The `fromExpression` method should almost always be used to construct
@@ -372,10 +373,7 @@ class CollectionSearch(Sequence[str]):
     `CollectionSearch` constructed from an equivalent expression, regardless of
     how different the original expressions appear.
     """
-    def __init__(self, collections: Tuple[str, ...]):
-        self._collections = collections
-
-    __slots__ = ("_collections",)
+    __root__: Tuple[str, ...]
 
     @classmethod
     def fromExpression(cls, expression: Any) -> CollectionSearch:
@@ -416,7 +414,7 @@ class CollectionSearch(Sequence[str]):
         for name in wildcard.strings:
             if name not in deduplicated:
                 deduplicated.append(name)
-        return cls(tuple(deduplicated))
+        return cls(__root__=tuple(deduplicated))
 
     def iter(
         self, manager: CollectionManager, *,
@@ -473,25 +471,25 @@ class CollectionSearch(Sequence[str]):
                     includeChains=includeChains,
                 )
 
-    def __iter__(self) -> Iterator[str]:
-        yield from self._collections
+    def __iter__(self) -> Iterator[str]:  # type: ignore
+        yield from self.__root__
 
     def __len__(self) -> int:
-        return len(self._collections)
+        return len(self.__root__)
 
     def __getitem__(self, index: Any) -> str:
-        return self._collections[index]
+        return self.__root__[index]
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, CollectionSearch):
-            return self._collections == other._collections
+            return self.__root__ == other.__root__
         return False
 
     def __str__(self) -> str:
         return "[{}]".format(", ".join(self))
 
     def __repr__(self) -> str:
-        return f"CollectionSearch({self._collections!r})"
+        return f"CollectionSearch({self.__root__!r})"
 
 
 class CollectionQuery:
