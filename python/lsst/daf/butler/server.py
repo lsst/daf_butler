@@ -27,7 +27,7 @@ from lsst.daf.butler.core.serverModels import (
     QueryDimensionRecordsModel,
 )
 from lsst.daf.butler.core.utils import globToRegex
-from lsst.daf.butler.registry import CollectionType
+from lsst.daf.butler.registry import CollectionType, CollectionSearch
 
 BUTLER_ROOT = "ci_hsc_gen3/DATA"
 
@@ -137,16 +137,23 @@ def query_dataset_types_re(regex: Optional[List[str]] = Query(None),
     return [d.to_simple() for d in datasetTypes]
 
 
+@app.get("/registry/collectionChain/{parent:path}")
+def get_collection_chain(parent: str) -> CollectionSearch:
+    butler = Butler(BUTLER_ROOT)
+    chain = butler.registry.getCollectionChain(parent)
+    return chain
+
+
 @app.get("/registry/collections")
-def query_collections(expression: Optional[str] = None,
+def query_collections(regex: Optional[List[str]] = Query(None),
+                      glob: Optional[List[str]] = Query(None),
                       datasetType: Optional[str] = None,
                       flattenChains: Optional[bool] = False,
                       collectionType: Optional[List[str]] = Query(None, regex=COLLECTION_TYPE_RE),
                       includeChains: Optional[bool] = None) -> List[str]:
-    if expression is None:
-        expression = ...
-    else:
-        expression = globToRegex([expression])
+
+    expression_params = ExpressionQueryParameter(regex=regex, glob=glob)
+
     if collectionType is None:
         collectionTypes = CollectionType.all()
     else:
@@ -160,7 +167,7 @@ def query_collections(expression: Optional[str] = None,
                 raise KeyError(f"Collection type of {item} not known to Butler.")
 
     butler = Butler(BUTLER_ROOT)
-    collections = butler.registry.queryCollections(expression=expression,
+    collections = butler.registry.queryCollections(expression=expression_params.expression(),
                                                    datasetType=datasetType,
                                                    collectionTypes=collectionTypes,
                                                    flattenChains=flattenChains,
