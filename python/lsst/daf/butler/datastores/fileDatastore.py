@@ -990,16 +990,17 @@ class FileDatastore(GenericBaseDatastore):
 
         # For a local file, simply use the formatter directly
         if uri.isLocal:
-            formatter.write(inMemoryDataset)
+            try:
+                formatter.write(inMemoryDataset)
+            except Exception as e:
+                raise RuntimeError(f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} "
+                                   f"to location {uri}") from e
             log.debug("Successfully wrote python object to local file at %s", uri)
         else:
             # This is a remote URI, so first try bytes and write directly else
             # fallback to a temporary file
             try:
                 serializedDataset = formatter.toBytes(inMemoryDataset)
-                log.debug("Writing bytes directly to %s", uri)
-                uri.write(serializedDataset, overwrite=True)
-                log.debug("Successfully wrote bytes directly to %s", uri)
             except NotImplementedError:
                 with tempfile.NamedTemporaryFile(suffix=uri.getExtension()) as tmpFile:
                     # Need to configure the formatter to write to a different
@@ -1007,13 +1008,24 @@ class FileDatastore(GenericBaseDatastore):
                     tmpLocation = Location(*os.path.split(tmpFile.name))
                     log.debug("Writing dataset to temporary location at %s", tmpLocation.uri)
                     with formatter._updateLocation(tmpLocation):
-                        formatter.write(inMemoryDataset)
+                        try:
+                            formatter.write(inMemoryDataset)
+                        except Exception as e:
+                            raise RuntimeError(f"Failed to serialize dataset {ref} of type"
+                                               f" {type(inMemoryDataset)} to "
+                                               f"temporary location {tmpLocation.uri}") from e
                     uri.transfer_from(tmpLocation.uri, transfer="copy", overwrite=True)
 
                     # Cache if required
                     self.cacheManager.move_to_cache(tmpLocation.uri, ref)
 
                 log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
+            except Exception as e:
+                raise RuntimeError(f"Failed to serialize dataset {ref} to bytes.") from e
+            else:
+                log.debug("Writing bytes directly to %s", uri)
+                uri.write(serializedDataset, overwrite=True)
+                log.debug("Successfully wrote bytes directly to %s", uri)
 
         # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(uri, ref, formatter=formatter)
