@@ -223,6 +223,8 @@ storageClasses:
       variance: ImageF
   Background:
     pytype: lsst.afw.math.BackgroundList
+  FocalPlaneBackground:
+    pytype: lsst.pipe.drivers.background.FocalPlaneBackground
   Config:
     pytype: lsst.pex.config.Config
   Packages:
