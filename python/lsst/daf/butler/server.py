@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import Optional, List, Dict, Any, Union
-import re
 import logging
 from uuid import UUID
 from collections.abc import Mapping
@@ -26,7 +25,6 @@ from lsst.daf.butler.core.serverModels import (
     QueryDataIdsModel,
     QueryDimensionRecordsModel,
 )
-from lsst.daf.butler.core.utils import globToRegex
 from lsst.daf.butler.registry import CollectionType, CollectionSearch
 
 BUTLER_ROOT = "ci_hsc_gen3/DATA"
@@ -42,11 +40,6 @@ class MaximalDataId(BaseModel):
     instrument: Optional[str] = None
     physical_filter: Optional[str] = None
     exposure: Optional[int] = None
-
-
-class BindParams(BaseModel):
-    """Container for generic dict."""
-    data: Dict[str, Any]
 
 
 app = FastAPI()
