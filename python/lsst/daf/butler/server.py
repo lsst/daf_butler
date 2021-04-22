@@ -44,16 +44,18 @@ class MaximalDataId(BaseModel):
 
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+subapp = FastAPI()
+app.mount("/butler", subapp)
 
 GLOBAL_BUTLER = Butler(BUTLER_ROOT)
 
 
-@app.get("/")
+@subapp.get("/")
 def read_root():
     return "Welcome to Excalibur... aka your Butler Server"
 
 
-@app.get("/butler.json")
+@subapp.get("/butler.json")
 def read_server_config() -> Mapping:
     """Return the butler configuration that the client should use."""
     config_str = f"""
@@ -67,14 +69,14 @@ registry:
     return config
 
 
-@app.get("/universe")
+@subapp.get("/universe")
 def get_dimension_universe() -> DimensionConfig:
     """Allow remote client to get dimensions definition."""
     butler = Butler(butler=GLOBAL_BUTLER)
     return butler.registry.dimensions.dimensionConfig
 
 
-@app.get("/uri/{id}")
+@subapp.get("/uri/{id}")
 def get_uri(id: Union[int, UUID]) -> str:
     """Return a single URI of non-disassembled dataset."""
     butler = Butler(butler=GLOBAL_BUTLER)
@@ -85,7 +87,7 @@ def get_uri(id: Union[int, UUID]) -> str:
     return str(uri)
 
 
-@app.get(
+@subapp.get(
     "/registry/datasetType/{datasetTypeName}",
     summary="Retrieve this dataset type definition.",
     response_model=SerializedDatasetType,
@@ -99,7 +101,7 @@ def get_dataset_type(datasetTypeName: str) -> SerializedDatasetType:
     return datasetType.to_simple()
 
 
-@app.get(
+@subapp.get(
     "/registry/datasetTypes",
     summary="Retrieve all dataset type definitions.",
     response_model=List[SerializedDatasetType],
@@ -113,7 +115,7 @@ def query_all_dataset_types(components: Optional[bool] = None) -> List[Serialize
     return [d.to_simple() for d in datasetTypes]
 
 
-@app.get(
+@subapp.get(
     "/registry/datasetTypes/re",
     summary="Retrieve dataset type definitions matching expressions",
     response_model=List[SerializedDatasetType],
@@ -132,14 +134,14 @@ def query_dataset_types_re(regex: Optional[List[str]] = Query(None),
     return [d.to_simple() for d in datasetTypes]
 
 
-@app.get("/registry/collectionChain/{parent:path}")
+@subapp.get("/registry/collectionChain/{parent:path}")
 def get_collection_chain(parent: str) -> CollectionSearch:
     butler = Butler(butler=GLOBAL_BUTLER)
     chain = butler.registry.getCollectionChain(parent)
     return chain
 
 
-@app.get("/registry/collections")
+@subapp.get("/registry/collections")
 def query_collections(regex: Optional[List[str]] = Query(None),
                       glob: Optional[List[str]] = Query(None),
                       datasetType: Optional[str] = None,
@@ -170,14 +172,14 @@ def query_collections(regex: Optional[List[str]] = Query(None),
     return list(collections)
 
 
-@app.get("/registry/collection/type/{name:path}")
+@subapp.get("/registry/collection/type/{name:path}")
 def get_collection_type(name: str):
     butler = Butler(butler=GLOBAL_BUTLER)
     collectionType = butler.registry.getCollectionType(name)
     return collectionType.name
 
 
-@app.put("/registry/collection/{name:path}/{type_}")
+@subapp.put("/registry/collection/{name:path}/{type_}")
 def register_collection(name: str, type_: str, doc: Optional[str] = None) -> str:
     type_ = type_.upper()
     try:
@@ -191,7 +193,7 @@ def register_collection(name: str, type_: str, doc: Optional[str] = None) -> str
     return name
 
 
-@app.get(
+@subapp.get(
     "/registry/dataset/{id}",
     summary="Retrieve this dataset definition.",
     response_model=Optional[SerializedDatasetRef],
@@ -207,7 +209,7 @@ def get_dataset(id: Union[int, UUID]) -> Optional[SerializedDatasetRef]:
     return ref
 
 
-@app.get("/registry/datasetLocations/{id}")
+@subapp.get("/registry/datasetLocations/{id}")
 def get_dataset_locations(id: Union[int, UUID]) -> List[str]:
     butler = Butler(butler=GLOBAL_BUTLER)
     ref = SerializedDatasetRef(id=id)
@@ -217,7 +219,7 @@ def get_dataset_locations(id: Union[int, UUID]) -> List[str]:
 
 
 # TimeSpan not yet a pydantic model
-@app.post(
+@subapp.post(
     "/registry/findDataset/{datasetType}",
     summary="Retrieve this dataset definition from collection, dataset type, and dataId",
     response_model=SerializedDatasetRef,
@@ -240,7 +242,7 @@ def find_dataset(datasetType: str,
 
 
 # POST is used for the complex dict data structures
-@app.post(
+@subapp.post(
     "/registry/datasets",
     summary="Query all dataset holdings.",
     response_model=List[SerializedDatasetRef],
@@ -270,7 +272,7 @@ def query_datasets(query: QueryDatasetsModel) -> List[SerializedDatasetRef]:
 
 
 # POST is used for the complex dict data structures
-@app.post(
+@subapp.post(
     "/registry/dataIds",
     summary="Query all data IDs.",
     response_model=List[SerializedDataCoordinate],
@@ -303,7 +305,7 @@ def query_data_ids(query: QueryDataIdsModel) -> List[SerializedDataCoordinate]:
 
 
 # Uses POST to handle the DataId
-@app.post(
+@subapp.post(
     "/registry/dimensionRecords/{element}",
     summary="Retrieve dimension records matching query",
     response_model=List[SerializedDimensionRecord],
