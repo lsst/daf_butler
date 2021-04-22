@@ -45,12 +45,17 @@ import re
 
 from pydantic import BaseModel, Field, validator
 
-from .dimensions import SerializedDataCoordinate
+from .dimensions import SerializedDataCoordinate, DataIdValue
 from .utils import iterable, globToRegex
 
-# DataId and kwargs can only take limited types
-DataIdValues = Union[int, str]
-SimpleDataId = Mapping[str, DataIdValues]
+# Simple scalar python types.
+ScalarType = Union[int, bool, float, str]
+
+# Bind parameters can have any scalar type.
+BindType = Dict[str, ScalarType]
+
+# For serialization purposes a data ID key must be a str.
+SimpleDataId = Mapping[str, DataIdValue]
 
 
 class ExpressionQueryParameter(BaseModel):
@@ -166,12 +171,12 @@ Datasets = Field(
 OptionalDimensions = Field(
     None,
     title="Relevant dimensions to include.",
-    example="['detector', 'physical_filter']",
+    example=["detector", "physical_filter"],
 )
 Dimensions = Field(
     ...,
     title="Relevant dimensions to include.",
-    example="['detector', 'physical_filter']",
+    example=["detector", "physical_filter"],
 )
 DataId = Field(
     None,
@@ -203,7 +208,7 @@ class QueryBaseModel(BaseModel):
     """Base model for all query models."""
 
     @validator("keyword_args", check_fields=False)
-    def check_keyword_args(cls, v, values) -> Optional[Dict[str, SimpleDataId]]:  # type: ignore # noqa: N805
+    def check_keyword_args(cls, v, values) -> Optional[SimpleDataId]:  # type: ignore # noqa: N805
         """Convert kwargs into None if empty.
 
         This retains the property at its default value and can therefore
@@ -216,7 +221,7 @@ class QueryBaseModel(BaseModel):
             return None
         return v
 
-    def kwargs(self) -> Dict[str, SimpleDataId]:
+    def kwargs(self) -> SimpleDataId:
         """Return keyword args, converting None to a `dict`.
 
         Returns
@@ -249,7 +254,7 @@ class QueryDatasetsModel(QueryBaseModel):
     where: Optional[str] = Where
     findFirst: bool = FindFirst
     components: Optional[bool] = Components
-    bind: Optional[SimpleDataId] = Bind
+    bind: Optional[BindType] = Bind
     check: bool = Check
     keyword_args: Optional[SimpleDataId] = KeywordArgs  # mypy refuses to allow kwargs in model
 
@@ -263,7 +268,7 @@ class QueryDataIdsModel(QueryBaseModel):
     collections: Optional[ExpressionQueryParameter] = Collections
     where: Optional[str] = Where
     components: Optional[bool] = Components
-    bind: Optional[SimpleDataId] = Bind
+    bind: Optional[BindType] = Bind
     check: bool = Check
     keyword_args: Optional[SimpleDataId] = KeywordArgs  # mypy refuses to allow kwargs in model
 
