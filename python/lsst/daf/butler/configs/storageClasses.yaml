@@ -62,15 +62,35 @@ storageClasses:
     pytype: lsst.afw.image.MaskX
   MaskedImage:
     pytype: lsst.afw.image.MaskedImage
+    delegate: lsst.obs.base.exposureAssembler.ExposureAssembler
+    parameters:
+      - bbox
+      - origin
+    components:
+      image: Image
+      mask: Mask
+      variance: Image
   MaskedImageF:
     inheritsFrom: MaskedImage
     pytype: lsst.afw.image.MaskedImageF
+    components:
+      image: ImageF
+      mask: MaskX
+      variance: ImageF
   MaskedImageU:
     inheritsFrom: MaskedImage
     pytype: lsst.afw.image.MaskedImageU
+    components:
+      image: ImageU
+      mask: MaskX
+      variance: ImageF
   MaskedImageI:
     inheritsFrom: MaskedImage
     pytype: lsst.afw.image.MaskedImageI
+    components:
+      image: ImageI
+      mask: MaskX
+      variance: ImageF
   Catalog:
     pytype: lsst.afw.table.BaseCatalog
   PeakCatalog:
