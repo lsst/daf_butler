@@ -126,6 +126,7 @@ storageClasses:
     parameters:
       - bbox
       - origin
+      - amp
     components:
       image: Image
       mask: Mask
