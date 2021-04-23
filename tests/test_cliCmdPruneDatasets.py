@@ -48,6 +48,8 @@ from lsst.daf.butler.registry import CollectionType
 import lsst.daf.butler.script
 from lsst.daf.butler.script import QueryDatasets
 
+# Tests require the SqlRegistry
+import lsst.daf.butler.registries.sql
 
 doFindTables = True
 
@@ -349,7 +351,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
             exPruneDatasetsExitCode=1
         )
 
-    @patch.object(lsst.daf.butler.registry.SqlRegistry, "getCollectionType",
+    @patch.object(lsst.daf.butler.registries.sql.SqlRegistry, "getCollectionType",
                   side_effect=lambda x: CollectionType.RUN)
     def test_purgeImpliedArgs(self, mockGetCollectionType):
         """Verify the arguments implied by --purge.
@@ -380,7 +382,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
                     pruneDatasets_didRemoveAforementioned)
         )
 
-    @patch.object(lsst.daf.butler.registry.SqlRegistry, "getCollectionType",
+    @patch.object(lsst.daf.butler.registries.sql.SqlRegistry, "getCollectionType",
                   side_effect=lambda x: CollectionType.RUN)
     def test_purgeImpliedArgsWithCollections(self, mockGetCollectionType):
         """Verify the arguments implied by --purge, with a COLLECTIONS."""
@@ -403,7 +405,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
                     pruneDatasets_didRemoveAforementioned)
         )
 
-    @patch.object(lsst.daf.butler.registry.SqlRegistry, "getCollectionType",
+    @patch.object(lsst.daf.butler.registries.sql.SqlRegistry, "getCollectionType",
                   side_effect=lambda x: CollectionType.TAGGED)
     def test_purgeOnNonRunCollection(self, mockGetCollectionType):
         """Verify calling run on a non-run collection fails with expected

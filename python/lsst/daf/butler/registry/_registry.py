@@ -146,7 +146,7 @@ class Registry(ABC):
         config = cls.forceRegistryConfig(config)
 
         # Default to the standard registry
-        registry_cls = doImport(config.get("cls", "lsst.daf.butler.registry.SqlRegistry"))
+        registry_cls = doImport(config.get("cls", "lsst.daf.butler.registries.sql.SqlRegistry"))
         if registry_cls is cls:
             raise ValueError("Can not instantiate the abstract base Registry from config")
         return registry_cls, config

@@ -66,21 +66,27 @@ from ..core import (
     StorageClassFactory,
     Timespan,
 )
-from . import queries
 from ..core.utils import iterable, transactional
-from ._config import RegistryConfig
-from ._collectionType import CollectionType
-from ._defaults import RegistryDefaults
-from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
-from .managers import RegistryManagerTypes, RegistryManagerInstances
-from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch, Ellipsis
-from .summaries import CollectionSummary
-from .interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
-from ._registry import Registry
+
+from ..registry import (
+    Registry,
+    RegistryConfig,
+    CollectionType,
+    RegistryDefaults,
+    ConflictingDefinitionError,
+    InconsistentDataIdError,
+    OrphanedRecordError,
+    CollectionSearch,
+)
+from ..registry import queries
+from ..registry.wildcards import CategorizedWildcard, CollectionQuery, Ellipsis
+from ..registry.summaries import CollectionSummary
+from ..registry.managers import RegistryManagerTypes, RegistryManagerInstances
+from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
-    from .interfaces import (
+    from ..registry.interfaces import (
         CollectionRecord,
         Database,
         DatastoreRegistryBridgeManager,

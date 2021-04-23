@@ -74,17 +74,19 @@ from ..core.serverModels import (
 )
 from ..core.utils import iterable
 
-from ._registry import Registry
-from ._config import RegistryConfig
-from ._defaults import RegistryDefaults
-from .interfaces import DatasetIdGenEnum
-from ._collectionType import CollectionType
-from .wildcards import CollectionSearch
-from .summaries import CollectionSummary
+from ..registry import (
+    Registry,
+    RegistryConfig,
+    RegistryDefaults,
+    CollectionType,
+    CollectionSearch,
+)
+from ..registry.summaries import CollectionSummary
+from ..registry.interfaces import DatasetIdGenEnum
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
-    from .interfaces import (
+    from ..registry.interfaces import (
         CollectionRecord,
         DatastoreRegistryBridgeManager,
     )
