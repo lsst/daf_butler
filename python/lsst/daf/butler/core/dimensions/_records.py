@@ -82,8 +82,18 @@ class SpecificSerializedDimensionRecord(BaseModel, extra="forbid"):
     """Base model for a specific serialized record content."""
 
 
+_SIMPLE_RECORD_CLASS_CACHE: Dict[Tuple[DimensionElement, DimensionUniverse],
+                                 Type[SpecificSerializedDimensionRecord]] = {}
+
+
 def _createSimpleRecordSubclass(definition: DimensionElement) -> Type[SpecificSerializedDimensionRecord]:
     from ._schema import DimensionElementFields
+    # Cache on the definition (which hashes as the name) and the
+    # associated universe.
+    cache_key = (definition, definition.universe)
+    if cache_key in _SIMPLE_RECORD_CLASS_CACHE:
+        return _SIMPLE_RECORD_CLASS_CACHE[cache_key]
+
     fields = DimensionElementFields(definition)
     members = {}
     # Prefer strict typing for external data
@@ -105,8 +115,11 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> Type[SpecificSe
         members["region"] = (str, ...)
 
     # mypy does not seem to like create_model
-    return create_model(f"SpecificSerializedDimensionRecord{definition.name.capitalize()}",
-                        __base__=SpecificSerializedDimensionRecord, **members)  # type: ignore
+    model = create_model(f"SpecificSerializedDimensionRecord{definition.name.capitalize()}",
+                         __base__=SpecificSerializedDimensionRecord, **members)  # type: ignore
+
+    _SIMPLE_RECORD_CLASS_CACHE[cache_key] = model
+    return model
 
 
 class SerializedDimensionRecord(BaseModel):
