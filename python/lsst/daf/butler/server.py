@@ -62,7 +62,7 @@ def read_server_config() -> Mapping:
 datastore:
     root: {BUTLER_ROOT}
 registry:
-    cls: lsst.daf.butler.registry.RemoteRegistry
+    cls: lsst.daf.butler.registries.remote.RemoteRegistry
     db: <butlerRoot>
 """
     config = Config.fromString(config_str, format="yaml")
