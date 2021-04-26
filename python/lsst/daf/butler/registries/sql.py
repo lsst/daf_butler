@@ -774,7 +774,7 @@ class SqlRegistry(Registry):
                                  flattenChains=flattenChains, includeChains=includeChains):
             yield record.name
 
-    def makeQueryBuilder(self, summary: queries.QuerySummary) -> queries.QueryBuilder:
+    def _makeQueryBuilder(self, summary: queries.QuerySummary) -> queries.QueryBuilder:
         """Return a `QueryBuilder` instance capable of constructing and
         managing more complex queries than those obtainable via `Registry`
         interfaces.
@@ -898,7 +898,7 @@ class SqlRegistry(Registry):
             defaults=self.defaults.dataId,
             check=check,
         )
-        builder = self.makeQueryBuilder(summary)
+        builder = self._makeQueryBuilder(summary)
         # Add the dataset subquery to the query, telling the QueryBuilder to
         # include the rank of the selected collection in the results only if we
         # need to findFirst.  Note that if any of the collections are
@@ -953,7 +953,7 @@ class SqlRegistry(Registry):
             defaults=self.defaults.dataId,
             check=check,
         )
-        builder = self.makeQueryBuilder(summary)
+        builder = self._makeQueryBuilder(summary)
         for datasetType in standardizedDatasetTypes:
             builder.joinDataset(datasetType, collections, isResult=False)
         query = builder.finish()

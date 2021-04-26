@@ -197,9 +197,6 @@ class RemoteRegistry(Registry):
     #    that the server would have to have specific implementations for
     #    use by Datastore. DatastoreBridgeManager also is not needed.
 
-    # Should makeQueryBuilder be a public method? Nothing uses it outside
-    # of Registry.
-
     def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED,
                            doc: Optional[str] = None) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
