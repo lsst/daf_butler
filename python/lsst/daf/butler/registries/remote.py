@@ -184,18 +184,13 @@ class RemoteRegistry(Registry):
         # Might need a server method to return all the DatasetTypes up front.
         pass
 
-    # def transaction():
-    #    What does a transaction mean for the client? The server is running
-    #    in a transaction but if the client wants one transaction that
-    #    involves two server methods how does that work? The server will have
-    #    already closed the transaction.
     @contextlib.contextmanager
     def transaction(self, *, savepoint: bool = False) -> Iterator[None]:
-        # No-op for now
-        try:
-            yield
-        except BaseException:
-            raise
+        # Transaction handling for client server is hard and will require
+        # some support in the server to store registry changes and defer
+        # committing them. This will likely require a change in transaction
+        # interface. For now raise.
+        raise NotImplementedError()
 
     # insertOpaqueData + fetchOpaqueData + deleteOpaqueData
     #    There are no managers for opaque data in client. This implies
