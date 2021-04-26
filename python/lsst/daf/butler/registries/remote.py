@@ -207,7 +207,7 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         # This could use a local cache since collection types won't
         # change.
-        path = f"registry/collection/type/{name}"
+        path = f"v1/registry/collection/type/{name}"
         response = httpx.get(str(self._db.join(path)))
         response.raise_for_status()
         typeName = response.json()
@@ -227,7 +227,7 @@ class RemoteRegistry(Registry):
 
     def getCollectionChain(self, parent: str) -> CollectionSearch:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        path = f"registry/collectionChain/{parent}"
+        path = f"v1/registry/collectionChain/{parent}"
         response = httpx.get(str(self._db.join(path)))
         response.raise_for_status()
         chain = response.json()
@@ -352,7 +352,7 @@ class RemoteRegistry(Registry):
         if expression.glob is not None:
             params["glob"] = expression.glob
 
-        path = "registry/datasetTypes"
+        path = "v1/registry/datasetTypes"
         if params:
             path += "/re"
 
@@ -389,7 +389,7 @@ class RemoteRegistry(Registry):
         collection_types = [collectionType.name for collectionType in collectionTypes]
         params["collectionType"] = collection_types
 
-        path = "registry/collections"
+        path = "v1/registry/collections"
         response = httpx.get(str(self._db.join(path)), params=params)
         response.raise_for_status()
 
@@ -425,7 +425,7 @@ class RemoteRegistry(Registry):
                                         keyword_args=kwargs,
                                         )
 
-        response = httpx.post(str(self._db.join("registry/datasets")),
+        response = httpx.post(str(self._db.join("v1/registry/datasets")),
                               json=parameters.dict(exclude_unset=True, exclude_defaults=True),
                               timeout=20,)
         response.raise_for_status()
@@ -462,7 +462,7 @@ class RemoteRegistry(Registry):
                                        keyword_args=kwargs,
                                        )
 
-        response = httpx.post(str(self._db.join("registry/dataIds")),
+        response = httpx.post(str(self._db.join("v1/registry/dataIds")),
                               json=parameters.dict(exclude_unset=True, exclude_defaults=True),
                               timeout=20,)
         response.raise_for_status()
@@ -496,7 +496,7 @@ class RemoteRegistry(Registry):
                                                 bind=bind,
                                                 check=check,
                                                 keyword_args=kwargs)
-        response = httpx.post(str(self._db.join(f"registry/dimensionRecords/{element}")),
+        response = httpx.post(str(self._db.join(f"v1/registry/dimensionRecords/{element}")),
                               json=parameters.dict(exclude_unset=True, exclude_defaults=True),
                               timeout=20,)
         response.raise_for_status()
