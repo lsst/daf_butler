@@ -270,8 +270,13 @@ class ButlerHttpURI(ButlerURI):
 
     @property
     def is_webdav_endpoint(self) -> bool:
-        """Check if the current endpoint implements WebDAV features"""
-        return isWebdavEndpoint(self.getrooturl())
+        """Check if the current endpoint implements WebDAV features""" 
+        try:
+            return ButlerHttpURI._is_webdav
+        except AttributeError:
+            pass
+        ButlerHttpURI._is_webdav = isWebdavEndpoint(self.root_uri())
+        return ButlerHttpURI._is_webdav
 
     def exists(self) -> bool:
         """Check that a remote HTTP resource exists."""
