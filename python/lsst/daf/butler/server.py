@@ -76,7 +76,7 @@ def get_dimension_universe() -> DimensionConfig:
     return butler.registry.dimensions.dimensionConfig
 
 
-@subapp.get("/uri/{id}")
+@subapp.get("/v1/uri/{id}")
 def get_uri(id: Union[int, UUID]) -> str:
     """Return a single URI of non-disassembled dataset."""
     butler = Butler(butler=GLOBAL_BUTLER)
@@ -88,7 +88,7 @@ def get_uri(id: Union[int, UUID]) -> str:
 
 
 @subapp.get(
-    "/registry/datasetType/{datasetTypeName}",
+    "/v1/registry/datasetType/{datasetTypeName}",
     summary="Retrieve this dataset type definition.",
     response_model=SerializedDatasetType,
     response_model_exclude_unset=True,
@@ -102,7 +102,7 @@ def get_dataset_type(datasetTypeName: str) -> SerializedDatasetType:
 
 
 @subapp.get(
-    "/registry/datasetTypes",
+    "/v1/registry/datasetTypes",
     summary="Retrieve all dataset type definitions.",
     response_model=List[SerializedDatasetType],
     response_model_exclude_unset=True,
@@ -116,7 +116,7 @@ def query_all_dataset_types(components: Optional[bool] = None) -> List[Serialize
 
 
 @subapp.get(
-    "/registry/datasetTypes/re",
+    "/v1/registry/datasetTypes/re",
     summary="Retrieve dataset type definitions matching expressions",
     response_model=List[SerializedDatasetType],
     response_model_exclude_unset=True,
@@ -134,14 +134,14 @@ def query_dataset_types_re(regex: Optional[List[str]] = Query(None),
     return [d.to_simple() for d in datasetTypes]
 
 
-@subapp.get("/registry/collectionChain/{parent:path}")
+@subapp.get("/v1/registry/collectionChain/{parent:path}")
 def get_collection_chain(parent: str) -> CollectionSearch:
     butler = Butler(butler=GLOBAL_BUTLER)
     chain = butler.registry.getCollectionChain(parent)
     return chain
 
 
-@subapp.get("/registry/collections")
+@subapp.get("/v1/registry/collections")
 def query_collections(regex: Optional[List[str]] = Query(None),
                       glob: Optional[List[str]] = Query(None),
                       datasetType: Optional[str] = None,
@@ -172,14 +172,14 @@ def query_collections(regex: Optional[List[str]] = Query(None),
     return list(collections)
 
 
-@subapp.get("/registry/collection/type/{name:path}")
+@subapp.get("/v1/registry/collection/type/{name:path}")
 def get_collection_type(name: str):
     butler = Butler(butler=GLOBAL_BUTLER)
     collectionType = butler.registry.getCollectionType(name)
     return collectionType.name
 
 
-@subapp.put("/registry/collection/{name:path}/{type_}")
+@subapp.put("/v1/registry/collection/{name:path}/{type_}")
 def register_collection(name: str, type_: str, doc: Optional[str] = None) -> str:
     type_ = type_.upper()
     try:
@@ -194,7 +194,7 @@ def register_collection(name: str, type_: str, doc: Optional[str] = None) -> str
 
 
 @subapp.get(
-    "/registry/dataset/{id}",
+    "/v1/registry/dataset/{id}",
     summary="Retrieve this dataset definition.",
     response_model=Optional[SerializedDatasetRef],
     response_model_exclude_unset=True,
@@ -209,7 +209,7 @@ def get_dataset(id: Union[int, UUID]) -> Optional[SerializedDatasetRef]:
     return ref
 
 
-@subapp.get("/registry/datasetLocations/{id}")
+@subapp.get("/v1/registry/datasetLocations/{id}")
 def get_dataset_locations(id: Union[int, UUID]) -> List[str]:
     butler = Butler(butler=GLOBAL_BUTLER)
     ref = SerializedDatasetRef(id=id)
@@ -220,7 +220,7 @@ def get_dataset_locations(id: Union[int, UUID]) -> List[str]:
 
 # TimeSpan not yet a pydantic model
 @subapp.post(
-    "/registry/findDataset/{datasetType}",
+    "/v1/registry/findDataset/{datasetType}",
     summary="Retrieve this dataset definition from collection, dataset type, and dataId",
     response_model=SerializedDatasetRef,
     response_model_exclude_unset=True,
@@ -243,7 +243,7 @@ def find_dataset(datasetType: str,
 
 # POST is used for the complex dict data structures
 @subapp.post(
-    "/registry/datasets",
+    "/v1/registry/datasets",
     summary="Query all dataset holdings.",
     response_model=List[SerializedDatasetRef],
     response_model_exclude_unset=True,
@@ -273,7 +273,7 @@ def query_datasets(query: QueryDatasetsModel) -> List[SerializedDatasetRef]:
 
 # POST is used for the complex dict data structures
 @subapp.post(
-    "/registry/dataIds",
+    "/v1/registry/dataIds",
     summary="Query all data IDs.",
     response_model=List[SerializedDataCoordinate],
     response_model_exclude_unset=True,
@@ -306,7 +306,7 @@ def query_data_ids(query: QueryDataIdsModel) -> List[SerializedDataCoordinate]:
 
 # Uses POST to handle the DataId
 @subapp.post(
-    "/registry/dimensionRecords/{element}",
+    "/v1/registry/dimensionRecords/{element}",
     summary="Retrieve dimension records matching query",
     response_model=List[SerializedDimensionRecord],
     response_model_exclude_unset=True,
