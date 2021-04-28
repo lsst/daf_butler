@@ -144,7 +144,8 @@ def query_dataset_types_re(regex: Optional[List[str]] = Query(None),
     return [d.to_simple() for d in datasetTypes]
 
 
-@app.get("/butler/v1/registry/collectionChain/{parent:path}")
+@app.get("/butler/v1/registry/collection/chain/{parent:path}",
+         response_model=CollectionSearch)
 def get_collection_chain(parent: str) -> CollectionSearch:
     butler = Butler(butler=GLOBAL_BUTLER)
     chain = butler.registry.getCollectionChain(parent)
