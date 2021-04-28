@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import logging
 from collections.abc import Mapping
 from enum import auto, Enum
@@ -69,7 +69,8 @@ def read_root():
     return "Welcome to Excalibur... aka your Butler Server"
 
 
-@app.get("/butler/butler.json")
+@app.get("/butler/butler.json",
+         response_model=Dict[str, Any])
 def read_server_config() -> Mapping:
     """Return the butler configuration that the client should use."""
     config_str = f"""
@@ -83,13 +84,15 @@ registry:
     return config
 
 
-@app.get("/butler/universe")
+@app.get("/butler/universe",
+         response_model=Dict[str, Any])
 def get_dimension_universe(butler: Butler = Depends(butler_dependency)) -> DimensionConfig:
     """Allow remote client to get dimensions definition."""
     return butler.registry.dimensions.dimensionConfig
 
 
-@app.get("/butler/v1/uri/{id}")
+@app.get("/butler/v1/uri/{id}",
+         response_model=str)
 def get_uri(id: DatasetId, butler: Butler = Depends(butler_dependency)) -> str:
     """Return a single URI of non-disassembled dataset."""
     ref = butler.registry.getDataset(id)
@@ -157,7 +160,8 @@ def get_collection_chain(parent: str,
     return chain
 
 
-@app.get("/butler/v1/registry/collections")
+@app.get("/butler/v1/registry/collections",
+         response_model=List[str])
 def query_collections(regex: Optional[List[str]] = Query(None),
                       glob: Optional[List[str]] = Query(None),
                       datasetType: Optional[str] = None,
@@ -185,7 +189,8 @@ def get_collection_type(name: str,
     return collectionType.name
 
 
-@app.put("/butler/v1/registry/collection/{name:path}/{type_}")
+@app.put("/butler/v1/registry/collection/{name:path}/{type_}",
+         response_model=str)
 def register_collection(name: str, collectionTypeName: CollectionTypeNames,
                         doc: Optional[str] = None,
                         butler: Butler = Depends(butler_dependency), ) -> str:
