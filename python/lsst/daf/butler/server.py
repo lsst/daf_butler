@@ -127,7 +127,7 @@ def get_dataset_type(datasetTypeName: str,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
-def query_all_dataset_types(components: Optional[bool] = None,
+def query_all_dataset_types(components: Optional[bool] = Query(None),
                             butler: Butler = Depends(butler_dependency)) -> List[SerializedDatasetType]:
     datasetTypes = butler.registry.queryDatasetTypes(..., components=components)
     return [d.to_simple() for d in datasetTypes]
@@ -143,7 +143,7 @@ def query_all_dataset_types(components: Optional[bool] = None,
 )
 def query_dataset_types_re(regex: Optional[List[str]] = Query(None),
                            glob: Optional[List[str]] = Query(None),
-                           components: Optional[bool] = None,
+                           components: Optional[bool] = Query(None),
                            butler: Butler = Depends(butler_dependency)) -> List[SerializedDatasetType]:
     expression_params = ExpressionQueryParameter(regex=regex, glob=glob)
 
@@ -164,10 +164,10 @@ def get_collection_chain(parent: str,
          response_model=List[str])
 def query_collections(regex: Optional[List[str]] = Query(None),
                       glob: Optional[List[str]] = Query(None),
-                      datasetType: Optional[str] = None,
-                      flattenChains: Optional[bool] = False,
+                      datasetType: Optional[str] = Query(None),
+                      flattenChains: Optional[bool] = Query(False),
                       collectionType: Optional[List[CollectionTypeNames]] = Query(None),
-                      includeChains: Optional[bool] = None,
+                      includeChains: Optional[bool] = Query(None),
                       butler: Butler = Depends(butler_dependency)) -> List[str]:
 
     expression_params = ExpressionQueryParameter(regex=regex, glob=glob)
@@ -192,7 +192,7 @@ def get_collection_type(name: str,
 @app.put("/butler/v1/registry/collection/{name:path}/{type_}",
          response_model=str)
 def register_collection(name: str, collectionTypeName: CollectionTypeNames,
-                        doc: Optional[str] = None,
+                        doc: Optional[str] = Query(None),
                         butler: Butler = Depends(butler_dependency), ) -> str:
     collectionType = CollectionType.from_name(collectionTypeName)
     butler.registry.registerCollection(name, collectionType, doc)
