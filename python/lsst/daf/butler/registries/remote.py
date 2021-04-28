@@ -232,7 +232,7 @@ class RemoteRegistry(Registry):
 
     def getCollectionChain(self, parent: str) -> CollectionSearch:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        path = f"v1/registry/collectionChain/{parent}"
+        path = f"v1/registry/collection/chain/{parent}"
         response = self._client.get(str(self._db.join(path)))
         response.raise_for_status()
         chain = response.json()
