@@ -21,5 +21,10 @@ jobs:
       - name: Install
         run: pip install mypy pydantic
 
+      - name: Fake a version
+        run: |
+          echo "__all__ = ['__version__']" > python/lsst/daf/butler/version.py
+          echo "__version__ = '0.0.1'" >> python/lsst/daf/butler/version.py
+
       - name: Change to source directory and run mypy
         run: mypy python/lsst
