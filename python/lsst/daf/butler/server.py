@@ -1,7 +1,6 @@
 from __future__ import annotations
-from typing import Optional, List, Union
+from typing import Optional, List
 import logging
-from uuid import UUID
 from collections.abc import Mapping
 from enum import auto, Enum
 
@@ -17,6 +16,7 @@ from lsst.daf.butler import (
     SerializedDatasetType,
     SerializedDatasetRef,
     SerializedDimensionRecord,
+    DatasetId,
     DatasetRef,
     DimensionConfig,
 )
@@ -87,7 +87,7 @@ def get_dimension_universe() -> DimensionConfig:
 
 
 @app.get("/butler/v1/uri/{id}")
-def get_uri(id: Union[int, UUID]) -> str:
+def get_uri(id: DatasetId) -> str:
     """Return a single URI of non-disassembled dataset."""
     butler = Butler(butler=GLOBAL_BUTLER)
     ref = butler.registry.getDataset(id)
@@ -198,7 +198,7 @@ def register_collection(name: str, collectionTypeName: CollectionTypeNames,
     response_model_exclude_defaults=True,
     response_model_exclude_none=True,
 )
-def get_dataset(id: Union[int, UUID]) -> Optional[SerializedDatasetRef]:
+def get_dataset(id: DatasetId) -> Optional[SerializedDatasetRef]:
     butler = Butler(butler=GLOBAL_BUTLER)
     ref = butler.registry.getDataset(id)
     if ref is not None:
@@ -207,7 +207,7 @@ def get_dataset(id: Union[int, UUID]) -> Optional[SerializedDatasetRef]:
 
 
 @app.get("/butler/v1/registry/datasetLocations/{id}")
-def get_dataset_locations(id: Union[int, UUID]) -> List[str]:
+def get_dataset_locations(id: DatasetId) -> List[str]:
     butler = Butler(butler=GLOBAL_BUTLER)
     ref = SerializedDatasetRef(id=id)
     datastores = butler.registry.getDatasetLocations(DatasetRef.from_simple(ref,
