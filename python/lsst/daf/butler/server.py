@@ -6,7 +6,7 @@ from enum import auto, Enum
 
 from pydantic import BaseModel
 
-from fastapi import FastAPI, Query, Depends
+from fastapi import FastAPI, Query, Depends, HTTPException
 from fastapi.middleware.gzip import GZipMiddleware
 
 from lsst.daf.butler import (
@@ -93,6 +93,9 @@ def get_dimension_universe(butler: Butler = Depends(butler_dependency)) -> Dimen
 def get_uri(id: DatasetId, butler: Butler = Depends(butler_dependency)) -> str:
     """Return a single URI of non-disassembled dataset."""
     ref = butler.registry.getDataset(id)
+    if not ref:
+        raise HTTPException(status_code=404, detail=f"Dataset with id {id} does not exist.")
+
     uri = butler.datastore.getURI(ref)
 
     # In reality would have to convert this to a signed URL
