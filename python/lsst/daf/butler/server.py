@@ -208,16 +208,29 @@ def get_dataset(id: DatasetId,
     ref = butler.registry.getDataset(id)
     if ref is not None:
         return ref.to_simple()
+    # This could raise a 404 since id is not found. The standard regsitry
+    # getDataset method returns without error so follow that example here.
     return ref
 
 
-@app.get("/butler/v1/registry/datasetLocations/{id}")
+@app.get("/butler/v1/registry/datasetLocations/{id}",
+         response_model=List[str])
 def get_dataset_locations(id: DatasetId,
                           butler: Butler = Depends(butler_dependency)) -> List[str]:
-    ref = SerializedDatasetRef(id=id)
-    datastores = butler.registry.getDatasetLocations(DatasetRef.from_simple(ref,
-                                                                            registry=butler.registry))
-    return datastores
+    # Takes an ID so need to convert to a real DatasetRef
+    fake_ref = SerializedDatasetRef(id=id)
+
+    try:
+        # Converting this to a real DatasetRef takes time and is not
+        # needed internally since only the ID is used.
+        ref = DatasetRef.from_simple(fake_ref, registry=butler.registry)
+    except Exception:
+        # SQL getDatasetLocations looks at ID in datastore and does not
+        # check it is in registry. Follow that example and return without
+        # error.
+        return []
+
+    return butler.registry.getDatasetLocations(ref)
 
 
 # TimeSpan not yet a pydantic model
