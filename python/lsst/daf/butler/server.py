@@ -3,6 +3,7 @@ from typing import Optional, List, Union
 import logging
 from uuid import UUID
 from collections.abc import Mapping
+from enum import auto, Enum
 
 from pydantic import BaseModel
 
@@ -29,8 +30,6 @@ from lsst.daf.butler.registry import CollectionType, CollectionSearch
 
 BUTLER_ROOT = "ci_hsc_gen3/DATA"
 
-COLLECTION_TYPE_RE = "^(" + "|".join(t.name for t in CollectionType.all()) + ")$"
-
 log = logging.getLogger("excalibur")
 
 
@@ -40,6 +39,19 @@ class MaximalDataId(BaseModel):
     instrument: Optional[str] = None
     physical_filter: Optional[str] = None
     exposure: Optional[int] = None
+
+
+class CollectionTypeNames(str, Enum):
+    """Collection type names supported by the interface."""
+
+    def _generate_next_value_(name, start, count, last_values) -> str:  # type: ignore
+        # Use the name directly as the value
+        return name
+
+    RUN = auto()
+    CALIBRATION = auto()
+    CHAINED = auto()
+    TAGGED = auto()
 
 
 app = FastAPI()
@@ -144,22 +156,11 @@ def query_collections(regex: Optional[List[str]] = Query(None),
                       glob: Optional[List[str]] = Query(None),
                       datasetType: Optional[str] = None,
                       flattenChains: Optional[bool] = False,
-                      collectionType: Optional[List[str]] = Query(None, regex=COLLECTION_TYPE_RE),
+                      collectionType: Optional[List[CollectionTypeNames]] = Query(None),
                       includeChains: Optional[bool] = None) -> List[str]:
 
     expression_params = ExpressionQueryParameter(regex=regex, glob=glob)
-
-    if collectionType is None:
-        collectionTypes = CollectionType.all()
-    else:
-        # Convert to real collection types
-        collectionTypes = set()
-        for item in collectionType:
-            item = item.upper()
-            try:
-                collectionTypes.add(CollectionType.__members__[item])
-            except KeyError:
-                raise KeyError(f"Collection type of {item} not known to Butler.")
+    collectionTypes = CollectionType.from_names(collectionType)
 
     butler = Butler(butler=GLOBAL_BUTLER)
     collections = butler.registry.queryCollections(expression=expression_params.expression(),
@@ -170,21 +171,18 @@ def query_collections(regex: Optional[List[str]] = Query(None),
     return list(collections)
 
 
-@app.get("/butler/v1/registry/collection/type/{name:path}")
-def get_collection_type(name: str):
+@app.get("/butler/v1/registry/collection/type/{name:path}",
+         response_model=CollectionTypeNames)
+def get_collection_type(name: str) -> CollectionTypeNames:
     butler = Butler(butler=GLOBAL_BUTLER)
     collectionType = butler.registry.getCollectionType(name)
     return collectionType.name
 
 
 @app.put("/butler/v1/registry/collection/{name:path}/{type_}")
-def register_collection(name: str, type_: str, doc: Optional[str] = None) -> str:
-    type_ = type_.upper()
-    try:
-        collectionType = CollectionType.__members__[type_]
-    except KeyError:
-        raise KeyError(f"Collection type of {type_} not known to Butler.")
-
+def register_collection(name: str, collectionTypeName: CollectionTypeNames,
+                        doc: Optional[str] = None) -> str:
+    collectionType = CollectionType.from_name(collectionTypeName)
     butler = Butler(BUTLER_ROOT, writeable=True)
     butler.registry.registerCollection(name, collectionType, doc)
 
