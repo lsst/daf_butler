@@ -208,7 +208,7 @@ class QueryBaseModel(BaseModel):
     """Base model for all query models."""
 
     @validator("keyword_args", check_fields=False)
-    def check_keyword_args(cls, v, values) -> Optional[SimpleDataId]:  # type: ignore # noqa: N805
+    def _check_keyword_args(cls, v, values) -> Optional[SimpleDataId]:  # type: ignore # noqa: N805
         """Convert kwargs into None if empty.
 
         This retains the property at its default value and can therefore
