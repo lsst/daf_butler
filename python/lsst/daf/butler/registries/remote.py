@@ -72,7 +72,7 @@ from ..core.serverModels import (
     QueryDataIdsModel,
     QueryDimensionRecordsModel,
 )
-from ..core.utils import iterable
+from ..core.utils import iterable, getFullTypeName
 
 from ..registry import (
     Registry,
@@ -83,6 +83,8 @@ from ..registry import (
 )
 from ..registry.summaries import CollectionSummary
 from ..registry.interfaces import DatasetIdGenEnum
+
+from lsst.daf.butler import __version__
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
@@ -138,6 +140,9 @@ class RemoteRegistry(Registry):
 
         self._dimensions: Optional[DimensionUniverse] = None
 
+        headers = {"user-agent": f"{getFullTypeName(self)}/{__version__}"}
+        self._client = httpx.Client(headers=headers)
+
         # Does each API need to be sent the defaults so that the server
         # can use specific defaults each time?
 
@@ -170,7 +175,7 @@ class RemoteRegistry(Registry):
             return self._dimensions
 
         # Access /dimensions.json on server and cache it locally.
-        response = httpx.get(str(self._db.join("universe")))
+        response = self._client.get(str(self._db.join("universe")))
         response.raise_for_status()
 
         config = DimensionConfig.fromString(response.text, format="json")
@@ -208,7 +213,7 @@ class RemoteRegistry(Registry):
         # This could use a local cache since collection types won't
         # change.
         path = f"v1/registry/collection/type/{name}"
-        response = httpx.get(str(self._db.join(path)))
+        response = self._client.get(str(self._db.join(path)))
         response.raise_for_status()
         typeName = response.json()
         return CollectionType.from_name(typeName)
@@ -228,7 +233,7 @@ class RemoteRegistry(Registry):
     def getCollectionChain(self, parent: str) -> CollectionSearch:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         path = f"v1/registry/collectionChain/{parent}"
-        response = httpx.get(str(self._db.join(path)))
+        response = self._client.get(str(self._db.join(path)))
         response.raise_for_status()
         chain = response.json()
         return CollectionSearch.parse_obj(chain)
@@ -359,7 +364,7 @@ class RemoteRegistry(Registry):
         if components is not None:
             params = {"components": components}
 
-        response = httpx.get(str(self._db.join(path)), params=params)
+        response = self._client.get(str(self._db.join(path)), params=params)
         response.raise_for_status()
 
         # Really could do with a ListSerializedDatasetType model but for
@@ -390,7 +395,7 @@ class RemoteRegistry(Registry):
         params["collectionType"] = collection_types
 
         path = "v1/registry/collections"
-        response = httpx.get(str(self._db.join(path)), params=params)
+        response = self._client.get(str(self._db.join(path)), params=params)
         response.raise_for_status()
 
         collections = response.json()
@@ -425,9 +430,9 @@ class RemoteRegistry(Registry):
                                         keyword_args=kwargs,
                                         )
 
-        response = httpx.post(str(self._db.join("v1/registry/datasets")),
-                              json=parameters.dict(exclude_unset=True, exclude_defaults=True),
-                              timeout=20,)
+        response = self._client.post(str(self._db.join("v1/registry/datasets")),
+                                     json=parameters.dict(exclude_unset=True, exclude_defaults=True),
+                                     timeout=20,)
         response.raise_for_status()
 
         simple_refs = response.json()
@@ -462,9 +467,9 @@ class RemoteRegistry(Registry):
                                        keyword_args=kwargs,
                                        )
 
-        response = httpx.post(str(self._db.join("v1/registry/dataIds")),
-                              json=parameters.dict(exclude_unset=True, exclude_defaults=True),
-                              timeout=20,)
+        response = self._client.post(str(self._db.join("v1/registry/dataIds")),
+                                     json=parameters.dict(exclude_unset=True, exclude_defaults=True),
+                                     timeout=20,)
         response.raise_for_status()
 
         simple = response.json()
@@ -496,9 +501,9 @@ class RemoteRegistry(Registry):
                                                 bind=bind,
                                                 check=check,
                                                 keyword_args=kwargs)
-        response = httpx.post(str(self._db.join(f"v1/registry/dimensionRecords/{element}")),
-                              json=parameters.dict(exclude_unset=True, exclude_defaults=True),
-                              timeout=20,)
+        response = self._client.post(str(self._db.join(f"v1/registry/dimensionRecords/{element}")),
+                                     json=parameters.dict(exclude_unset=True, exclude_defaults=True),
+                                     timeout=20,)
         response.raise_for_status()
 
         simple_records = response.json()
