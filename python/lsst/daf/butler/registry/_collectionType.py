@@ -26,7 +26,7 @@ __all__ = [
 ]
 
 import enum
-from typing import FrozenSet
+from typing import FrozenSet, Optional, Iterable
 
 
 class CollectionType(enum.IntEnum):
@@ -71,3 +71,55 @@ class CollectionType(enum.IntEnum):
         """Return a `frozenset` containing all members.
         """
         return frozenset(cls.__members__.values())
+
+    @classmethod
+    def from_name(cls, name: str) -> CollectionType:
+        """Return the `CollectionType` given its name.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the collection type. Case insensitive.
+
+        Returns
+        -------
+        collection_type : `CollectionType`
+            The matching collection type.
+
+        Raises
+        ------
+        KeyError
+            Raised if the name does not match a collection type.
+        """
+        name = name.upper()
+        try:
+            return CollectionType.__members__[name]
+        except KeyError:
+            raise KeyError(f"Collection type of '{name}' not known to Butler.") from None
+
+    @classmethod
+    def from_names(cls, names: Optional[Iterable[str]]) -> FrozenSet[CollectionType]:
+        """Return a `frozenset` containing the `CollectionType` instances
+        corresponding to the names.
+
+        Parameters
+        ----------
+        names : iterable of `str`, or `None`
+            Names of collection types. Case insensitive. If `None` or empty,
+            all collection types will be returned.
+
+        Returns
+        -------
+        types : `frozenset` of `CollectionType`
+            The matching types.
+
+        Raises
+        ------
+        KeyError
+            Raised if the name does not correspond to a collection type.
+        """
+        if not names:
+            return CollectionType.all()
+
+        # Convert to real collection types
+        return frozenset({CollectionType.from_name(name) for name in names})

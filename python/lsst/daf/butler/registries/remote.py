@@ -211,7 +211,7 @@ class RemoteRegistry(Registry):
         response = httpx.get(str(self._db.join(path)))
         response.raise_for_status()
         typeName = response.json()
-        return CollectionType.__members__[typeName]
+        return CollectionType.from_name(typeName)
 
     def _get_collection_record(self, name: str) -> CollectionRecord:
         # Docstring inherited from lsst.daf.butler.registry.Registry

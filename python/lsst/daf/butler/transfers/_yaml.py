@@ -267,7 +267,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                     RecordClass(**r) for r in data["records"]
                 )
             elif data["type"] == "collection":
-                collectionType = CollectionType.__members__[data["collection_type"].upper()]
+                collectionType = CollectionType.from_name(data["collection_type"])
                 if collectionType is CollectionType.RUN:
                     self.runs[data["name"]] = (
                         data["host"],
@@ -305,7 +305,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                 # know about all dataset types first.
                 datasetData.append(data)
             elif data["type"] == "associations":
-                collectionType = CollectionType.__members__[data["collection_type"].upper()]
+                collectionType = CollectionType.from_name(data["collection_type"])
                 if collectionType is CollectionType.TAGGED:
                     self.tagAssociations[data["collection"]].extend(data["dataset_ids"])
                 elif collectionType is CollectionType.CALIBRATION:
