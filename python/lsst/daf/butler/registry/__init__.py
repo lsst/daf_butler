@@ -29,6 +29,7 @@ from ._collectionType import *
 from . import wildcards
 from .wildcards import CollectionSearch
 from . import interfaces
+from .interfaces import DatasetIdGenEnum
 from . import managers
 from . import queries
 from . import summaries
