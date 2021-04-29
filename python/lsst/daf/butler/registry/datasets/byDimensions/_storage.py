@@ -28,7 +28,7 @@ from lsst.daf.butler import (
     SimpleQuery,
     Timespan,
 )
-from lsst.daf.butler.registry import ConflictingDefinitionError
+from lsst.daf.butler.registry import ConflictingDefinitionError, UnsupportedIdGeneratorError
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage, DatasetIdGenEnum
 
 from ...summaries import GovernorDimensionRestriction
@@ -476,7 +476,7 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
 
         # We only support UNIQUE mode for integer dataset IDs
         if idMode != DatasetIdGenEnum.UNIQUE:
-            raise ValueError("Only UNIQUE mode can be used with integer dataset IDs.")
+            raise UnsupportedIdGeneratorError("Only UNIQUE mode can be used with integer dataset IDs.")
 
         # Transform a possibly-single-pass iterable into a list.
         dataIdList = list(dataIds)
@@ -489,7 +489,7 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
 
         # We only support UNIQUE mode for integer dataset IDs
         if idGenerationMode != DatasetIdGenEnum.UNIQUE:
-            raise ValueError("Only UNIQUE mode can be used with integer dataset IDs.")
+            raise UnsupportedIdGeneratorError("Only UNIQUE mode can be used with integer dataset IDs.")
 
         # Make a list of dataIds and optionally dataset IDs.
         dataIdList: List[DataCoordinate] = []

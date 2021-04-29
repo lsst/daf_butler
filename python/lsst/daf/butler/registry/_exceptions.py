@@ -25,6 +25,7 @@ __all__ = (
     "InconsistentDataIdError",
     "MissingCollectionError",
     "OrphanedRecordError",
+    "UnsupportedIdGeneratorError",
 )
 
 
@@ -49,4 +50,10 @@ class OrphanedRecordError(Exception):
 class MissingCollectionError(Exception):
     """Exception raised when an operation attempts to use a collection that
     does not exist.
+    """
+
+
+class UnsupportedIdGeneratorError(ValueError):
+    """Exception raised when an unsupported `DatasetIdGenEnum` option is
+    used for insert/import.
     """
