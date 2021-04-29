@@ -47,6 +47,7 @@ from ..core import (
     ButlerURI,
     Config,
     DataCoordinate,
+    DataCoordinateIterable,
     DataId,
     DatasetAssociation,
     DatasetId,
@@ -62,7 +63,7 @@ from ..core import (
     StorageClassFactory,
     Timespan,
 )
-from . import queries
+
 from ._config import RegistryConfig
 from ._collectionType import CollectionType
 from ._defaults import RegistryDefaults
@@ -145,7 +146,7 @@ class Registry(ABC):
         config = cls.forceRegistryConfig(config)
 
         # Default to the standard registry
-        registry_cls = doImport(config.get("cls", "lsst.daf.butler.registry.SqlRegistry"))
+        registry_cls = doImport(config.get("cls", "lsst.daf.butler.registries.sql.SqlRegistry"))
         if registry_cls is cls:
             raise ValueError("Can not instantiate the abstract base Registry from config")
         return registry_cls, config
@@ -1137,7 +1138,7 @@ class Registry(ABC):
                       components: Optional[bool] = None,
                       bind: Optional[Mapping[str, Any]] = None,
                       check: bool = True,
-                      **kwargs: Any) -> queries.DatasetQueryResults:
+                      **kwargs: Any) -> Iterable[DatasetRef]:
         """Query for and iterate over dataset references matching user-provided
         criteria.
 
@@ -1240,7 +1241,7 @@ class Registry(ABC):
                      components: Optional[bool] = None,
                      bind: Optional[Mapping[str, Any]] = None,
                      check: bool = True,
-                     **kwargs: Any) -> queries.DataCoordinateQueryResults:
+                     **kwargs: Any) -> DataCoordinateIterable:
         """Query for data IDs matching user-provided criteria.
 
         Parameters

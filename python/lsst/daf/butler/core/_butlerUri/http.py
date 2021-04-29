@@ -351,7 +351,7 @@ class ButlerHttpURI(ButlerURI):
             log.debug("%s looks like a Webdav endpoint.", baseURL)
             s = getHttpSession()
         else:
-            raise RuntimeError(f"Only Webdav endpoints are supported; got base URL '{baseURL}'.")
+            s = requests.Session()
 
         ButlerHttpURI._session = s
         ButlerHttpURI._sessionInitialized = True

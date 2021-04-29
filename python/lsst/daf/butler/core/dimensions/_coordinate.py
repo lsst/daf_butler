@@ -26,7 +26,7 @@
 
 from __future__ import annotations
 
-__all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue")
+__all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue", "SerializedDataCoordinate")
 
 from abc import abstractmethod
 import numbers
@@ -41,14 +41,15 @@ from typing import (
     TYPE_CHECKING,
     Union,
 )
+from pydantic import BaseModel
 
 from lsst.sphgeom import Region
 from ..named import NamedKeyDict, NamedKeyMapping, NameLookupMapping, NamedValueAbstractSet
 from ..timespan import Timespan
 from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph
-from ._records import DimensionRecord
-from ..json import from_json_generic, to_json_generic
+from ._records import DimensionRecord, SerializedDimensionRecord
+from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
@@ -59,10 +60,18 @@ DataIdKey = Union[str, Dimension]
 DataCoordinate.
 """
 
-DataIdValue = Union[str, int, None]
+# Pydantic will cast int to str if str is first in the Union.
+DataIdValue = Union[int, str, None]
 """Type annotation alias for the values that can be present in a
 DataCoordinate or other data ID.
 """
+
+
+class SerializedDataCoordinate(BaseModel):
+    """Simplified model for serializing a `DataCoordinate`."""
+
+    dataId: Dict[str, DataIdValue]
+    records: Optional[Dict[str, SerializedDimensionRecord]] = None
 
 
 def _intersectRegions(*args: Region) -> Optional[Region]:
@@ -130,6 +139,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     """
 
     __slots__ = ()
+
+    _serializedType = SerializedDataCoordinate
 
     @staticmethod
     def standardize(
@@ -488,7 +499,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         when implied keys are accessed via the returned mapping, depending on
         the implementation and whether assertions are enabled.
         """
-        assert self.hasFull(), "full may only be accessed if hasRecords() returns True."
+        assert self.hasFull(), "full may only be accessed if hasFull() returns True."
         return _DataCoordinateFullView(self)
 
     @abstractmethod
@@ -626,7 +637,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         assert self.hasRecords(), "pack() may only be called if hasRecords() returns True."
         return self.universe.makePacker(name, self).pack(self, returnMaxBits=returnMaxBits)
 
-    def to_simple(self, minimal: bool = False) -> Dict:
+    def to_simple(self, minimal: bool = False) -> SerializedDataCoordinate:
         """Convert this class to a simple python type.
 
         This is suitable for serialization.
@@ -634,18 +645,28 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         Parameters
         ----------
         minimal : `bool`, optional
-            Use minimal serialization. Has no effect on for this class.
+            Use minimal serialization. If set the records will not be attached.
 
         Returns
         -------
-        as_dict : `dict`
-            The object converted to a dictionary.
+        simple : `SerializedDataCoordinate`
+            The object converted to simple form.
         """
         # Convert to a dict form
-        return self.byName()
+        if self.hasFull():
+            dataId = self.full.byName()
+        else:
+            dataId = self.byName()
+        records: Optional[Dict[str, SerializedDimensionRecord]]
+        if not minimal and self.hasRecords():
+            records = {k: v.to_simple() for k, v in self.records.byName().items() if v is not None}
+        else:
+            records = None
+
+        return SerializedDataCoordinate(dataId=dataId, records=records)
 
     @classmethod
-    def from_simple(cls, simple: Dict[str, Any],
+    def from_simple(cls, simple: SerializedDataCoordinate,
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> DataCoordinate:
         """Construct a new object from the simplified form.
@@ -676,10 +697,14 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
 
-        return cls.standardize(simple, universe=universe)
+        dataId = cls.standardize(simple.dataId, universe=universe)
+        if simple.records:
+            dataId = dataId.expanded({k: DimensionRecord.from_simple(v, universe=universe)
+                                      for k, v in simple.records.items()})
+        return dataId
 
-    to_json = to_json_generic
-    from_json = classmethod(from_json_generic)
+    to_json = to_json_pydantic
+    from_json = classmethod(from_json_pydantic)
 
 
 DataId = Union[DataCoordinate, Mapping[str, Any]]

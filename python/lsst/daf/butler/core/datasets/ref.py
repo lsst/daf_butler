@@ -36,7 +36,7 @@ from typing import (
 
 from pydantic import BaseModel, StrictStr, ConstrainedInt, validator
 
-from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse
+from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
 from ..configSupport import LookupKey
 from ..utils import immutable
 from ..named import NamedKeyDict
@@ -66,24 +66,24 @@ class SerializedDatasetRef(BaseModel):
     # DO NOT change order in the Union, pydantic is sensitive to that!
     id: Optional[Union[uuid.UUID, PositiveInt]] = None
     datasetType: Optional[SerializedDatasetType] = None
-    dataId: Optional[Dict[str, Any]] = None  # Do not use specialist pydantic model for this
+    dataId: Optional[SerializedDataCoordinate] = None
     run: Optional[StrictStr] = None
     component: Optional[StrictStr] = None
 
     @validator("dataId")
-    def check_dataId(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
+    def _check_dataId(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
         if (d := "datasetType") in values and values[d] is None:
             raise ValueError("Can not specify 'dataId' without specifying 'datasetType'")
         return v
 
     @validator("run")
-    def check_run(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
+    def _check_run(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
         if v and (i := "id") in values and values[i] is None:
             raise ValueError("'run' cannot be provided unless 'id' is.")
         return v
 
     @validator("component")
-    def check_component(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
+    def _check_component(cls, v: Any, values: Dict[str, Any]) -> Any:  # noqa: N805
         # Component should not be given if datasetType is given
         if v and (d := "datasetType") in values and values[d] is not None:
             raise ValueError(f"datasetType ({values[d]}) can not be set if component is given ({v}).")

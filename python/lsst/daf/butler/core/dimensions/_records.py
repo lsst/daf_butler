@@ -21,16 +21,19 @@
 
 from __future__ import annotations
 
-__all__ = ("DimensionRecord",)
+__all__ = ("DimensionRecord", "SerializedDimensionRecord")
 
 from typing import (
     Any,
     ClassVar,
     Dict,
     Optional,
+    Tuple,
     TYPE_CHECKING,
     Type,
+    Union,
 )
+from pydantic import BaseModel, create_model, StrictStr, StrictInt, StrictBool, StrictFloat, Field
 
 import lsst.sphgeom
 
@@ -38,7 +41,7 @@ from .._topology import SpatialRegionDatabaseRepresentation
 from ..timespan import Timespan, TimespanDatabaseRepresentation
 from ..utils import immutable
 from ._elements import Dimension, DimensionElement
-from ..json import from_json_generic, to_json_generic
+from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._coordinate import DataCoordinate
@@ -73,6 +76,88 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
         "fields": fields
     }
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
+
+
+class SpecificSerializedDimensionRecord(BaseModel, extra="forbid"):
+    """Base model for a specific serialized record content."""
+
+
+_SIMPLE_RECORD_CLASS_CACHE: Dict[Tuple[DimensionElement, DimensionUniverse],
+                                 Type[SpecificSerializedDimensionRecord]] = {}
+
+
+def _createSimpleRecordSubclass(definition: DimensionElement) -> Type[SpecificSerializedDimensionRecord]:
+    from ._schema import DimensionElementFields
+    # Cache on the definition (which hashes as the name) and the
+    # associated universe.
+    cache_key = (definition, definition.universe)
+    if cache_key in _SIMPLE_RECORD_CLASS_CACHE:
+        return _SIMPLE_RECORD_CLASS_CACHE[cache_key]
+
+    fields = DimensionElementFields(definition)
+    members = {}
+    # Prefer strict typing for external data
+    type_map = {str: StrictStr,
+                float: StrictFloat,
+                bool: StrictBool,
+                int: StrictInt,
+                }
+
+    for field in fields.standard:
+        field_type = field.getPythonType()
+        field_type = type_map.get(field_type, field_type)
+        if field.nullable:
+            field_type = Optional[field_type]  # type: ignore
+        members[field.name] = (field_type, ...)
+    if definition.temporal:
+        members["timespan"] = (Tuple[int, int], ...)  # type: ignore
+    if definition.spatial:
+        members["region"] = (str, ...)
+
+    # mypy does not seem to like create_model
+    model = create_model(f"SpecificSerializedDimensionRecord{definition.name.capitalize()}",
+                         __base__=SpecificSerializedDimensionRecord, **members)  # type: ignore
+
+    _SIMPLE_RECORD_CLASS_CACHE[cache_key] = model
+    return model
+
+
+class SerializedDimensionRecord(BaseModel):
+    """Simplified model for serializing a `DimensionRecord`."""
+
+    definition: str = Field(
+        ...,
+        title="Name of dimension associated with this record.",
+        example="exposure",
+    )
+
+    # Use strict types to prevent casting
+    record: Dict[str,
+                 Union[None, StrictFloat, StrictStr, StrictBool, StrictInt, Tuple[int, int]]] = Field(
+        ...,
+        title="Dimension record keys and values.",
+        example={"definition": "exposure",
+                 "record": {"instrument": "LATISS",
+                            "exposure": 2021050300044,
+                            "obs_id": "AT_O_20210503_00044"}},
+    )
+
+    class Config:
+        """Local configuration overrides for model."""
+
+        schema_extra = {
+            "example": {
+                "definition": "detector",
+                "record": {
+                    "instrument": "HSC",
+                    "id": 72,
+                    "full_name": "0_01",
+                    "name_in_raft": "01",
+                    "raft": "0",
+                    "purpose": "SCIENCE",
+                }
+            }
+        }
 
 
 @immutable
@@ -113,6 +198,8 @@ class DimensionRecord:
     # derived-class slots that other methods on the base class expect to see
     # when they access self.__slots__.
     __slots__ = ("dataId",)
+
+    _serializedType = SerializedDimensionRecord
 
     def __init__(self, **kwargs: Any):
         # Accept either the dimension name or the actual name of its primary
@@ -179,7 +266,7 @@ class DimensionRecord:
         mapping = {name: getattr(self, name) for name in self.__slots__}
         return (_reconstructDimensionRecord, (self.definition, mapping))
 
-    def to_simple(self, minimal: bool = False) -> Dict[str, Any]:
+    def to_simple(self, minimal: bool = False) -> SerializedDimensionRecord:
         """Convert this class to a simple python type.
 
         This makes it suitable for serialization.
@@ -194,14 +281,10 @@ class DimensionRecord:
         names : `list`
             The names of the dimensions.
         """
-        if minimal:
-            # The DataId is sufficient if you are willing to do a deferred
-            # query. This may not be overly useful since to reconstruct
-            # a collection of records will require repeated registry queries.
-            simple = self.dataId.to_simple()
-            # Need some means of indicating this is not a full record
-            simple["element"] = self.definition.name
-            return simple
+        # The DataId is sufficient if you are willing to do a deferred
+        # query. This may not be overly useful since to reconstruct
+        # a collection of records will require repeated registry queries.
+        # For now do not implement minimal form.
 
         mapping = {name: getattr(self, name) for name in self.__slots__}
         # If the item in mapping supports simplification update it
@@ -214,14 +297,13 @@ class DimensionRecord:
                     # doesn't have to. This is partly for explicitness
                     # and also history. Here use a different approach.
                     # This code needs to be migrated to sphgeom
-                    mapping[k] = {"encoded_region": v.encode().hex()}
-        definition = self.definition.to_simple(minimal=minimal)
+                    mapping[k] = v.encode().hex()
 
-        return {"definition": definition,
-                "record": mapping}
+        definition = self.definition.to_simple(minimal=minimal)
+        return SerializedDimensionRecord(definition=definition, record=mapping)
 
     @classmethod
-    def from_simple(cls, simple: Dict[str, Any],
+    def from_simple(cls, simple: SerializedDimensionRecord,
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None) -> DimensionRecord:
         """Construct a new object from the simplified form.
@@ -231,7 +313,7 @@ class DimensionRecord:
 
         Parameters
         ----------
-        simple : `dict` of `str`
+        simple : `SerializedDimensionRecord`
             Value return from `to_simple`.
         universe : `DimensionUniverse`
             The special graph of all known dimensions of which this graph will
@@ -242,19 +324,9 @@ class DimensionRecord:
 
         Returns
         -------
-        graph : `DimensionGraph`
+        record : `DimensionRecord`
             Newly-constructed object.
         """
-        # Minimal representation requires a registry
-        if "element" in simple:
-            if registry is None:
-                raise ValueError("Registry is required to decode minimalist form of dimensions record")
-            element = simple.pop("element")
-            records = list(registry.queryDimensionRecords(element, dataId=simple))
-            if (n := len(records)) != 1:
-                raise RuntimeError(f"Unexpectedly got {n} records for element {element} dataId {simple}")
-            return records[0]
-
         if universe is None and registry is None:
             raise ValueError("One of universe or registry is required to convert names to a DimensionGraph")
         if universe is None and registry is not None:
@@ -263,21 +335,29 @@ class DimensionRecord:
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
 
-        definition = DimensionElement.from_simple(simple["definition"], universe=universe)
+        definition = DimensionElement.from_simple(simple.definition, universe=universe)
+
+        # Create a specialist subclass model with type validation.
+        # This allows us to do simple checks of external data (possibly
+        # sent as JSON) since for now _reconstructDimensionRecord does not
+        # do any validation.
+        record_model_cls = _createSimpleRecordSubclass(definition)
+        record_model = record_model_cls(**simple.record)
 
         # Timespan and region have to be converted to native form
         # for now assume that those keys are special
-        rec = simple["record"]
+        rec = record_model.dict()
+
         if (ts := "timespan") in rec:
             rec[ts] = Timespan.from_simple(rec[ts], universe=universe, registry=registry)
         if (reg := "region") in rec:
-            encoded = bytes.fromhex(rec[reg]["encoded_region"])
+            encoded = bytes.fromhex(rec[reg])
             rec[reg] = lsst.sphgeom.Region.decode(encoded)
 
-        return _reconstructDimensionRecord(definition, simple["record"])
+        return _reconstructDimensionRecord(definition, rec)
 
-    to_json = to_json_generic
-    from_json = classmethod(from_json_generic)
+    to_json = to_json_pydantic
+    from_json = classmethod(from_json_pydantic)
 
     def toDict(self, splitTimespan: bool = False) -> Dict[str, Any]:
         """Return a vanilla `dict` representation of this record.

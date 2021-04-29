@@ -29,7 +29,7 @@ from lsst.daf.butler.registry import CollectionType
 
 class CollectionTypeCallback:
 
-    collectionTypes = CollectionType.__members__.keys()
+    collectionTypes = tuple(collectionType.name for collectionType in CollectionType.all())
 
     @staticmethod
     def makeCollectionTypes(context, param, value):
@@ -42,14 +42,8 @@ class CollectionTypeCallback:
             # collection types, and hence the only way to get an empty tuple
             # is as the default.
             return tuple(CollectionType.all())
-        result = []
-        for item in split_commas(context, param, value):
-            item = item.upper()
-            try:
-                result.append(CollectionType.__members__[item])
-            except KeyError:
-                raise KeyError(f"{item} is not a valid CollectionType.") from None
-        return tuple(result)
+
+        return tuple(CollectionType.from_name(item) for item in split_commas(context, param, value))
 
 
 collection_type_option = MWOptionDecorator("--collection-type",
