@@ -27,7 +27,6 @@ from __future__ import annotations
 __all__ = ("ButlerConfig",)
 
 import copy
-import os.path
 from typing import (
     Optional,
     Sequence,
@@ -87,20 +86,23 @@ class ButlerConfig(Config):
         if isinstance(other, str):
             # This will only allow supported schemes
             uri = ButlerURI(other)
-            if uri.isLocal:
-                # Check explicitly that we have a directory
-                if os.path.isdir(uri.ospath):
-                    other = uri.join("butler.yaml")
-            else:
-                # For generic URI assume that we have a directory
-                # if the basename does not have a file extension
-                # This heuristic is needed since we can not rely on
-                # external users to include the trailing / and we
-                # can't always check that the remote resource is a directory.
-                if not uri.dirLike and not uri.getExtension():
-                    # Force to a directory and add the default config name
-                    uri = ButlerURI(other, forceDirectory=True).join("butler.yaml")
-                other = uri
+
+            # We allow the butler configuration file to be left off the
+            # URI supplied by the user. If a directory-like URI is given
+            # we add the default configuration name.
+
+            # It's easy to miss a trailing / for remote URIs so try to guess
+            # we have been given a directory-like URI if there is no
+            # file extension. Local URIs do not need any guess work.
+            if not uri.isLocal and not uri.getExtension():
+                uri = ButlerURI(other, forceDirectory=True)
+
+            if uri.isdir():
+                # Could also be butler.json (for example in the butler
+                # server) but checking for existence will slow things
+                # down given that this might involve two checks and then
+                # the config read below would still do the read.
+                other = uri.join("butler.yaml")
 
         # Create an empty config for us to populate
         super().__init__()
