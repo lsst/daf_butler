@@ -499,7 +499,10 @@ class ButlerURI:
         """
         special = {".gz", ".bz2", ".xz", ".fz"}
 
-        extensions = self._pathLib(self.path).suffixes
+        # Get the file part of the path so as not to be confused by
+        # "." in directory names.
+        basename = self.basename()
+        extensions = self._pathLib(basename).suffixes
 
         if not extensions:
             return ""

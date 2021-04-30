@@ -213,10 +213,16 @@ class LocationTestCase(unittest.TestCase):
                  ("flat_i_sim_1.4_blah.txt", ".txt"),
                  ("flat_i_sim_1.4_blah.fits.fz", ".fits.fz"),
                  ("flat_i_sim_1.4_blah.fits.txt", ".txt"),
+                 ("s3://bucket/c/a.b/", ""),
+                 ("s3://bucket/c/a.b", ".b"),
+                 ("file://localhost/c/a.b.gz", ".b.gz"),
                  )
 
         for file, expected in files:
-            uri = ButlerURI(f"a/b/{file}")
+            test_string = file
+            if ":" not in test_string:
+                test_string = f"a/b/{test_string}"
+            uri = ButlerURI(test_string)
             self.assertEqual(uri.getExtension(), expected)
 
     def testFileLocation(self):
