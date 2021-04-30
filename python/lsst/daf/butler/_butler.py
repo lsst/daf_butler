@@ -85,9 +85,15 @@ from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional, getClassOf
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
-from .registry import Registry, RegistryConfig, RegistryDefaults, CollectionType, ConflictingDefinitionError
-from .registry.interfaces import DatasetIdGenEnum
-from .registry.wildcards import CollectionSearch
+from .registry import (
+    Registry,
+    RegistryConfig,
+    RegistryDefaults,
+    CollectionSearch,
+    CollectionType,
+    ConflictingDefinitionError,
+    DatasetIdGenEnum,
+)
 from .transfers import RepoExportContext
 
 log = logging.getLogger(__name__)
