@@ -28,6 +28,7 @@ import enum
 import itertools
 from typing import (
     Callable,
+    Dict,
     Iterable,
     Iterator,
     Mapping,
@@ -632,6 +633,9 @@ class DirectQuery(Query):
         self._simpleQuery = simpleQuery
         self._columns = columns
         self._uniqueness = uniqueness
+        self._datasetQueryColumns: Optional[DatasetQueryColumns] = None
+        self._dimensionColumns: Dict[str, sqlalchemy.sql.ColumnElement] = {}
+        self._regionColumns: Dict[str, sqlalchemy.sql.ColumnElement] = {}
 
     def isUnique(self) -> bool:
         # Docstring inherited from Query.
@@ -639,7 +643,11 @@ class DirectQuery(Query):
 
     def getDimensionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from Query.
-        return self._columns.getKeyColumn(name).label(name)
+        column = self._dimensionColumns.get(name)
+        if column is None:
+            column = self._columns.getKeyColumn(name).label(name)
+            self._dimensionColumns[name] = column
+        return column
 
     @property
     def spatial(self) -> Iterator[DimensionElement]:
@@ -648,22 +656,28 @@ class DirectQuery(Query):
 
     def getRegionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from Query.
-        return self._columns.regions[name].column.label(f"{name}_region")
+        column = self._regionColumns.get(name)
+        if column is None:
+            column = self._columns.regions[name].column.label(f"{name}_region")
+            self._regionColumns[name] = column
+        return column
 
     def getDatasetColumns(self) -> Optional[DatasetQueryColumns]:
         # Docstring inherited from Query.
-        base = self._columns.datasets
-        if base is None:
-            return None
-        ingestDate = base.ingestDate
-        if ingestDate is not None:
-            ingestDate = ingestDate.label("ingest_date")
-        return DatasetQueryColumns(
-            datasetType=base.datasetType,
-            id=base.id.label("dataset_id"),
-            runKey=base.runKey.label(self.managers.collections.getRunForeignKeyName()),
-            ingestDate=ingestDate,
-        )
+        if self._datasetQueryColumns is None:
+            base = self._columns.datasets
+            if base is None:
+                return None
+            ingestDate = base.ingestDate
+            if ingestDate is not None:
+                ingestDate = ingestDate.label("ingest_date")
+            self._datasetQueryColumns = DatasetQueryColumns(
+                datasetType=base.datasetType,
+                id=base.id.label("dataset_id"),
+                runKey=base.runKey.label(self.managers.collections.getRunForeignKeyName()),
+                ingestDate=ingestDate,
+            )
+        return self._datasetQueryColumns
 
     @property
     def sql(self) -> sqlalchemy.sql.FromClause:
