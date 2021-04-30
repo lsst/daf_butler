@@ -1255,6 +1255,9 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         if self.reg_dir is not None and os.path.exists(self.reg_dir):
             shutil.rmtree(self.reg_dir, ignore_errors=True)
 
+        if self.useTempRoot and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
+
 
 @unittest.skipIf(WsgiDAVApp is None, "Warning: wsgidav/cheroot not found!")
 # Mock required environment variables during tests
@@ -1376,6 +1379,9 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
 
         if self.reg_dir is not None and os.path.exists(self.reg_dir):
             shutil.rmtree(self.reg_dir, ignore_errors=True)
+
+        if self.useTempRoot and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
 
     def _serveWebdav(self, port: int, stopWebdavServer):
         """Starts a local webdav-compatible HTTP server,
