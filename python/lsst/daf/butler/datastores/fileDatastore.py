@@ -1282,6 +1282,68 @@ class FileDatastore(GenericBaseDatastore):
                                "Use Dataastore.getURIs() instead.")
         return primary
 
+    def retrieveArtifacts(self, refs: Iterable[DatasetRef],
+                          destination: ButlerURI, transfer: str = "auto",
+                          preserve_path: Optional[bool] = True) -> List[ButlerURI]:
+        """Retrieve the file artifacts associated with the supplied refs.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets for which file artifacts are to be retrieved.
+            A single ref can result in multiple files. The refs must
+            be resolved.
+        destination : `ButlerURI`
+            Location to write the file artifacts.
+        transfer : `str`, optional
+            Method to use to transfer the artifacts. Must be one of the options
+            supported by `ButlerURI.transfer_from()`. "move" is not allowed.
+        preserve_path : `bool`, optional
+            If `True` the full path of the file artifact within the datastore
+            is preserved. If `False` the final file component of the path
+            is used.
+
+        Returns
+        -------
+        targets : `list` of `ButlerURI`
+            URIs of file artifacts in destination location. Order is not
+            preserved.
+        """
+        if not destination.isdir():
+            raise ValueError(f"Destination location must refer to a directory. Given {destination}")
+
+        if transfer == "move":
+            raise ValueError("Can not move artifacts out of datastore. Use copy instead.")
+
+        # Source -> Destination
+        # This also helps filter out duplicate DatasetRef in the request
+        # that will map to the same underlying file transfer.
+        to_transfer: Dict[ButlerURI, ButlerURI] = {}
+
+        for ref in refs:
+            locations = self._get_dataset_locations_info(ref)
+            for location, _ in locations:
+                source_uri = location.uri
+                target_path: Union[str, ButlerURI]
+                if preserve_path:
+                    target_path = location.pathInStore
+                    if target_path.isabs():
+                        # This is an absolute path to an external file.
+                        # Use the full path.
+                        target_path = target_path.relativeToPathRoot
+                else:
+                    target_path = source_uri.basename()
+                target_uri = destination.join(target_path)
+                to_transfer[source_uri] = target_uri
+
+        # In theory can now parallelize the transfer
+        log.debug("Number of artifacts to transfer to %s: %d",
+                  str(destination), len(to_transfer))
+        for source_uri, target_uri in to_transfer.items():
+            target_uri.transfer_from(source_uri, transfer=transfer)
+
+        return list(to_transfer.values())
+
     def get(self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None) -> Any:
         """Load an InMemoryDataset from the store.
 

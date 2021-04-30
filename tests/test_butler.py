@@ -236,6 +236,42 @@ class ButlerPutGetTests:
                                              ("summary", "data", "output"), metric,
                                              collections=this_run)
 
+                # Can the artifacts themselves be retrieved?
+                if not butler.datastore.isEphemeral:
+                    root_uri = ButlerURI(self.root)
+
+                    for preserve_path in (True, False):
+                        destination = root_uri.join(f"artifacts/{preserve_path}_{counter}/")
+                        transferred = butler.retrieveArtifacts([ref], destination,
+                                                               preserve_path=preserve_path)
+                        self.assertGreater(len(transferred), 0)
+                        artifacts = list(ButlerURI.findFileResources([destination]))
+                        self.assertEqual(set(transferred), set(artifacts))
+
+                        for artifact in transferred:
+                            path_in_destination = artifact.relative_to(destination)
+                            self.assertIsNotNone(path_in_destination)
+
+                            # when path is not preserved there should not be
+                            # any path separators.
+                            num_seps = path_in_destination.count("/")
+                            if preserve_path:
+                                self.assertGreater(num_seps, 0)
+                            else:
+                                self.assertEqual(num_seps, 0)
+
+                        primary_uri, secondary_uris = butler.datastore.getURIs(ref)
+                        n_uris = len(secondary_uris)
+                        if primary_uri:
+                            n_uris += 1
+                        self.assertEqual(len(artifacts), n_uris, "Comparing expected artifacts vs actual:"
+                                         f" {artifacts} vs {primary_uri} and {secondary_uris}")
+
+                        if preserve_path:
+                            # No need to run this twice
+                            with self.assertRaises(ValueError):
+                                butler.retrieveArtifacts([ref], destination, transfer="move")
+
                 # Now remove the dataset completely.
                 butler.pruneDatasets([ref], purge=True, unstore=True, run=this_run)
                 # Lookup with original args should still fail.

@@ -1131,6 +1131,43 @@ class Butler:
                                "Use Butler.getURIs() instead.")
         return primary
 
+    def retrieveArtifacts(self, refs: Iterable[DatasetRef],
+                          destination: Union[str, ButlerURI], transfer: str = "auto",
+                          preserve_path: Optional[bool] = True) -> List[ButlerURI]:
+        """Retrieve the artifacts associated with the supplied refs.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets for which artifacts are to be retrieved.
+            A single ref can result in multiple artifacts. The refs must
+            be resolved.
+        destination : `ButlerURI` or `str`
+            Location to write the artifacts.
+        transfer : `str`, optional
+            Method to use to transfer the artifacts. Must be one of the options
+            supported by `ButlerURI.transfer_from()`. "move" is not allowed.
+        preserve_path : `bool`, optional
+            If `True` the full path of the artifact within the datastore
+            is preserved. If `False` the final file component of the path
+            is used.
+
+        Returns
+        -------
+        targets : `list` of `ButlerURI`
+            URIs of file artifacts in destination location. Order is not
+            preserved.
+
+        Notes
+        -----
+        For non-file datastores the artifacts written to the destination
+        may not match the representation inside the datastore. For example
+        a hierarchical data structure in a NoSQL database may well be stored
+        as a JSON file.
+        """
+        return self.datastore.retrieveArtifacts(refs, ButlerURI(destination), transfer=transfer,
+                                                preserve_path=preserve_path)
+
     def datasetExists(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                       dataId: Optional[DataId] = None, *,
                       collections: Any = None,
