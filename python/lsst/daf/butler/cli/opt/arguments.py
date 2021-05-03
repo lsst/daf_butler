@@ -50,3 +50,5 @@ locations_argument = MWArgumentDecorator("locations",
                                          nargs=-1)
 
 repo_argument = MWArgumentDecorator("repo")
+
+destination_argument = MWArgumentDecorator("destination")
