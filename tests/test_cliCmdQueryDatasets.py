@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Unit tests for daf_butler CLI query-collections command.
+"""Unit tests for daf_butler CLI query-datasets command.
 """
 
 from astropy.table import Table as AstropyTable
@@ -48,7 +48,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
         self.testRepo = MetricTestRepo(self.root,
-                                       configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+                                       configFile=self.configFile)
 
     def tearDown(self):
         removeTestTempDir(self.root)
