@@ -137,7 +137,7 @@ storageClasses:
                 #
                 # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
 
-      - amp     # Amplifier whose subimage to load (`int` ID or
+      - amp     # Amplifier whose subimage to load (`int` ID, `str` name, or
                 # `lsst.afw.cameraGeom.Amplifier`).
                 #
                 # If the on-disk dataset does not have a detector associated
@@ -153,10 +153,10 @@ storageClasses:
                 # amplifiers have fundamentally inconsistent geometry (i.e.
                 # cannot be reconciled by flipping).
                 #
-                # If an `int` amplifier ID is given, the orientation of the
-                # image is implementation-defined, but will be reflected in the
-                # "raw flip" attributes of the only amplifier in its attached
-                # detector.
+                # If an `int` amplifier ID or `str` name is given, the
+                # orientation of the image is implementation-defined, but will
+                # be reflected in the "raw flip" attributes of the only
+                # amplifier in its attached detector.
                 #
                 # In all cases the trim state of the returned image is exactly
                 # the same as how the image was saved (raws are untrimmed).
