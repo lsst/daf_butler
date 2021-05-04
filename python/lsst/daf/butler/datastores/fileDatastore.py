@@ -1284,7 +1284,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def retrieveArtifacts(self, refs: Iterable[DatasetRef],
                           destination: ButlerURI, transfer: str = "auto",
-                          preserve_path: Optional[bool] = True,
+                          preserve_path: bool = True,
                           overwrite: bool = False) -> List[ButlerURI]:
         """Retrieve the file artifacts associated with the supplied refs.
 

@@ -1133,7 +1133,7 @@ class Butler:
 
     def retrieveArtifacts(self, refs: Iterable[DatasetRef],
                           destination: Union[str, ButlerURI], transfer: str = "auto",
-                          preserve_path: Optional[bool] = True,
+                          preserve_path: bool = True,
                           overwrite: bool = False) -> List[ButlerURI]:
         """Retrieve the artifacts associated with the supplied refs.
 
