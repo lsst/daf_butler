@@ -433,7 +433,7 @@ def globToRegex(expressions: Union[str, EllipsisType, None,
     if not expressions or "*" in expressions:
         return Ellipsis
 
-    nomagic = re.compile("^[A-Za-z_/]+$")
+    nomagic = re.compile(r"^[\w/]+$", re.ASCII)
 
     # Try not to convert simple string to a regex.
     results: List[Union[str, Pattern]] = []
