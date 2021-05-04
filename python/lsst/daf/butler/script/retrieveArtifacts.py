@@ -66,8 +66,7 @@ def retrieveArtifacts(repo, destination, dataset_type, collections, where, find_
     if not dataset:
         dataset = ...
 
-    if not find_first:
-        collections = globToRegex(collections)
+    collections = globToRegex(collections)
 
     butler = Butler(repo, writeable=False)
 
