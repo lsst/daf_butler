@@ -83,6 +83,21 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
             artifacts = self.find_files(destdir)
             self.assertEqual(len(artifacts), 3, f"Expected 3 artifacts: {artifacts}")
 
+    def testClobber(self):
+        runner = LogCliRunner()
+        with runner.isolated_filesystem():
+            destdir = "tmp2/"
+            result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+            # Running again should fail
+            result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir])
+            self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
+
+            # But with clobber should pass
+            result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir, "--clobber"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
 
 if __name__ == "__main__":
     unittest.main()

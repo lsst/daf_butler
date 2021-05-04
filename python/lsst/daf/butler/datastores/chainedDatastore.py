@@ -532,7 +532,8 @@ class ChainedDatastore(Datastore):
 
     def retrieveArtifacts(self, refs: Iterable[DatasetRef],
                           destination: ButlerURI, transfer: str = "auto",
-                          preserve_path: Optional[bool] = True) -> List[ButlerURI]:
+                          preserve_path: Optional[bool] = True,
+                          overwrite: bool = False) -> List[ButlerURI]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -550,6 +551,9 @@ class ChainedDatastore(Datastore):
             If `True` the full path of the file artifact within the datastore
             is preserved. If `False` the final file component of the path
             is used.
+        overwrite : `bool`, optional
+            If `True` allow transfers to overwrite existing files at the
+            destination.
 
         Returns
         -------
@@ -595,7 +599,8 @@ class ChainedDatastore(Datastore):
         for number, datastore_refs in grouped_by_datastore.items():
             targets.extend(self.datastores[number].retrieveArtifacts(datastore_refs, destination,
                                                                      transfer=transfer,
-                                                                     preserve_path=preserve_path))
+                                                                     preserve_path=preserve_path,
+                                                                     overwrite=overwrite))
 
         return targets
 

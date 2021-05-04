@@ -268,9 +268,17 @@ class ButlerPutGetTests:
                                          f" {artifacts} vs {primary_uri} and {secondary_uris}")
 
                         if preserve_path:
-                            # No need to run this twice
+                            # No need to run these twice
                             with self.assertRaises(ValueError):
                                 butler.retrieveArtifacts([ref], destination, transfer="move")
+
+                            with self.assertRaises(FileExistsError):
+                                butler.retrieveArtifacts([ref], destination)
+
+                            transferred_again = butler.retrieveArtifacts([ref], destination,
+                                                                         preserve_path=preserve_path,
+                                                                         overwrite=True)
+                            self.assertEqual(set(transferred_again), set(transferred))
 
                 # Now remove the dataset completely.
                 butler.pruneDatasets([ref], purge=True, unstore=True, run=this_run)

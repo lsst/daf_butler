@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 
 
 def retrieveArtifacts(repo, destination, dataset_type, collections, where, find_first,
-                      transfer, preserve_path):
+                      transfer, preserve_path, clobber):
     """Parameters are those required for querying datasets plus a destination
     URI.
 
@@ -54,6 +54,8 @@ def retrieveArtifacts(repo, destination, dataset_type, collections, where, find_
     preserve_path : `bool`
         If `True` the full datastore path will be retained within the
         destination directory, else only the filename will be used.
+    clobber : `bool`
+        If `True` allow transfers to overwrite files at the destination.
 
     Returns
     -------
@@ -79,5 +81,5 @@ def retrieveArtifacts(repo, destination, dataset_type, collections, where, find_
     log.info("Number of datasets matching query: %d", len(refs))
 
     transferred = butler.retrieveArtifacts(refs, destination=destination, transfer=transfer,
-                                           preserve_path=preserve_path)
+                                           preserve_path=preserve_path, overwrite=clobber)
     return transferred

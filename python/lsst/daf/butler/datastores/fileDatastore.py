@@ -1284,7 +1284,8 @@ class FileDatastore(GenericBaseDatastore):
 
     def retrieveArtifacts(self, refs: Iterable[DatasetRef],
                           destination: ButlerURI, transfer: str = "auto",
-                          preserve_path: Optional[bool] = True) -> List[ButlerURI]:
+                          preserve_path: Optional[bool] = True,
+                          overwrite: bool = False) -> List[ButlerURI]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -1302,6 +1303,9 @@ class FileDatastore(GenericBaseDatastore):
             If `True` the full path of the file artifact within the datastore
             is preserved. If `False` the final file component of the path
             is used.
+        overwrite : `bool`, optional
+            If `True` allow transfers to overwrite existing files at the
+            destination.
 
         Returns
         -------
@@ -1340,7 +1344,7 @@ class FileDatastore(GenericBaseDatastore):
         log.debug("Number of artifacts to transfer to %s: %d",
                   str(destination), len(to_transfer))
         for source_uri, target_uri in to_transfer.items():
-            target_uri.transfer_from(source_uri, transfer=transfer)
+            target_uri.transfer_from(source_uri, transfer=transfer, overwrite=overwrite)
 
         return list(to_transfer.values())
 

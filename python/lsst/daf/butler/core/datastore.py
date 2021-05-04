@@ -641,7 +641,8 @@ class Datastore(metaclass=ABCMeta):
     @abstractmethod
     def retrieveArtifacts(self, refs: Iterable[DatasetRef],
                           destination: ButlerURI, transfer: str = "auto",
-                          preserve_path: Optional[bool] = True) -> List[ButlerURI]:
+                          preserve_path: Optional[bool] = True,
+                          overwrite: bool = False) -> List[ButlerURI]:
         """Retrieve the artifacts associated with the supplied refs.
 
         Parameters
@@ -659,6 +660,9 @@ class Datastore(metaclass=ABCMeta):
             If `True` the full path of the artifact within the datastore
             is preserved. If `False` the final file component of the path
             is used.
+        overwrite : `bool`, optional
+            If `True` allow transfers to overwrite existing files at the
+            destination.
 
         Returns
         -------

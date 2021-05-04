@@ -1133,7 +1133,8 @@ class Butler:
 
     def retrieveArtifacts(self, refs: Iterable[DatasetRef],
                           destination: Union[str, ButlerURI], transfer: str = "auto",
-                          preserve_path: Optional[bool] = True) -> List[ButlerURI]:
+                          preserve_path: Optional[bool] = True,
+                          overwrite: bool = False) -> List[ButlerURI]:
         """Retrieve the artifacts associated with the supplied refs.
 
         Parameters
@@ -1151,6 +1152,9 @@ class Butler:
             If `True` the full path of the artifact within the datastore
             is preserved. If `False` the final file component of the path
             is used.
+        overwrite : `bool`, optional
+            If `True` allow transfers to overwrite existing files at the
+            destination.
 
         Returns
         -------
@@ -1166,7 +1170,7 @@ class Butler:
         as a JSON file.
         """
         return self.datastore.retrieveArtifacts(refs, ButlerURI(destination), transfer=transfer,
-                                                preserve_path=preserve_path)
+                                                preserve_path=preserve_path, overwrite=overwrite)
 
     def datasetExists(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                       dataId: Optional[DataId] = None, *,

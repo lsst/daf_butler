@@ -465,6 +465,8 @@ def query_dimension_records(**kwargs):
 @transfer_option()
 @click.option("--preserve-path/--no-preserve-path", is_flag=True, default=True,
               help="Preserve the datastore path to the artifact at the destination.")
+@click.option("--clobber/--no-clobber", is_flag=True, default=False,
+              help="If clobber, overwrite files if they exist locally.")
 @options_file_option()
 def retrieve_artifacts(**kwargs):
     """Retrieve file artifacts associated with datasets in a repository."""
