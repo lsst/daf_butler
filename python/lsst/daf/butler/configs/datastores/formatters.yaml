@@ -57,6 +57,10 @@ PropertySet:
   formatter: lsst.daf.butler.formatters.yaml.YamlFormatter
   parameters:
     unsafe_dump: true
+TaskMetadata:
+  formatter: lsst.daf.butler.formatters.yaml.YamlFormatter
+  parameters:
+    unsafe_dump: true
 NumpyArray: lsst.daf.butler.formatters.pickle.PickleFormatter
 Plot: lsst.daf.butler.formatters.matplotlib.MatplotlibFormatter
 MetricValue:

@@ -99,6 +99,8 @@ storageClasses:
     pytype: lsst.daf.base.PropertySet
   PropertyList:
     pytype: lsst.daf.base.PropertyList
+  TaskMetadata:
+    pytype: lsst.pipe.base.task_metadata.TaskMetadata
   Defects:
     pytype: lsst.ip.isr.Defects
   QECurve:
