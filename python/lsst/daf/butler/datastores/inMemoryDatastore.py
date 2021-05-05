@@ -462,6 +462,20 @@ class InMemoryDatastore(GenericBaseDatastore):
             raise AssertionError(f"Unexpectedly got no URI for in-memory datastore for {ref}")
         return primary
 
+    def retrieveArtifacts(self, refs: Iterable[DatasetRef],
+                          destination: ButlerURI, transfer: str = "auto",
+                          preserve_path: bool = True,
+                          overwrite: Optional[bool] = False) -> List[ButlerURI]:
+        """Retrieve the file artifacts associated with the supplied refs.
+
+        Notes
+        -----
+        Not implemented by this datastore.
+        """
+        # Could conceivably launch a FileDatastore to use formatters to write
+        # the data but this is fraught with problems.
+        raise NotImplementedError("Can not write artifacts to disk from in-memory datastore.")
+
     def forget(self, refs: Iterable[DatasetRef]) -> None:
         # Docstring inherited.
         refs = list(refs)

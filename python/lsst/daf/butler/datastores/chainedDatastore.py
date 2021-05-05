@@ -530,6 +530,80 @@ class ChainedDatastore(Datastore):
                                "Use Dataastore.getURIs() instead.")
         return primary
 
+    def retrieveArtifacts(self, refs: Iterable[DatasetRef],
+                          destination: ButlerURI, transfer: str = "auto",
+                          preserve_path: bool = True,
+                          overwrite: bool = False) -> List[ButlerURI]:
+        """Retrieve the file artifacts associated with the supplied refs.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets for which file artifacts are to be retrieved.
+            A single ref can result in multiple files. The refs must
+            be resolved.
+        destination : `ButlerURI`
+            Location to write the file artifacts.
+        transfer : `str`, optional
+            Method to use to transfer the artifacts. Must be one of the options
+            supported by `ButlerURI.transfer_from()`. "move" is not allowed.
+        preserve_path : `bool`, optional
+            If `True` the full path of the file artifact within the datastore
+            is preserved. If `False` the final file component of the path
+            is used.
+        overwrite : `bool`, optional
+            If `True` allow transfers to overwrite existing files at the
+            destination.
+
+        Returns
+        -------
+        targets : `list` of `ButlerURI`
+            URIs of file artifacts in destination location. Order is not
+            preserved.
+        """
+        if not destination.isdir():
+            raise ValueError(f"Destination location must refer to a directory. Given {destination}")
+
+        # Using getURIs is not feasible since it becomes difficult to
+        # determine the path within the datastore later on. For now
+        # follow getURIs implementation approach.
+
+        pending = set(refs)
+
+        # There is a question as to whether an exception should be raised
+        # early if some of the refs are missing, or whether files should be
+        # transferred until a problem is hit. Prefer to complain up front.
+        # Use the datastore integer as primary key.
+        grouped_by_datastore: Dict[int, Set[DatasetRef]] = {}
+
+        for number, datastore in enumerate(self.datastores):
+            if datastore.isEphemeral:
+                # In the future we will want to distinguish in-memory from
+                # caching datastore since using an on-disk local
+                # cache is exactly what we should be doing.
+                continue
+            datastore_refs = {ref for ref in pending if datastore.exists(ref)}
+
+            if datastore_refs:
+                grouped_by_datastore[number] = datastore_refs
+
+                # Remove these from the pending list so that we do not bother
+                # looking for them any more.
+                pending = pending - datastore_refs
+
+        if pending:
+            raise RuntimeError(f"Some datasets were not found in any datastores: {pending}")
+
+        # Now do the transfer.
+        targets: List[ButlerURI] = []
+        for number, datastore_refs in grouped_by_datastore.items():
+            targets.extend(self.datastores[number].retrieveArtifacts(datastore_refs, destination,
+                                                                     transfer=transfer,
+                                                                     preserve_path=preserve_path,
+                                                                     overwrite=overwrite))
+
+        return targets
+
     def remove(self, ref: DatasetRef) -> None:
         """Indicate to the datastore that a dataset can be removed.
 

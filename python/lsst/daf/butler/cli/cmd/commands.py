@@ -29,6 +29,7 @@ from ..opt import (
     components_option,
     dataset_type_option,
     datasets_option,
+    destination_argument,
     dimensions_argument,
     directory_argument,
     element_argument,
@@ -455,3 +456,26 @@ def query_dimension_records(**kwargs):
         table.pprint_all()
     else:
         print("No results. Try --help for more information.")
+
+
+@click.command(cls=ButlerCommand)
+@repo_argument(required=True)
+@query_datasets_options(showUri=False, useArguments=False, repo=False)
+@destination_argument(help="Destination URI of folder to receive file artifacts.")
+@transfer_option()
+@verbose_option(help="Report destination location of all transferred artifacts.")
+@click.option("--preserve-path/--no-preserve-path", is_flag=True, default=True,
+              help="Preserve the datastore path to the artifact at the destination.")
+@click.option("--clobber/--no-clobber", is_flag=True, default=False,
+              help="If clobber, overwrite files if they exist locally.")
+@options_file_option()
+def retrieve_artifacts(**kwargs):
+    """Retrieve file artifacts associated with datasets in a repository."""
+    verbose = kwargs.pop("verbose")
+    transferred = script.retrieveArtifacts(**kwargs)
+    if verbose and transferred:
+        print(f"Transferred the following to {kwargs['destination']}:")
+        for uri in transferred:
+            print(uri)
+        print()
+    print(f"Number of artifacts retrieved into destination {kwargs['destination']}: {len(transferred)}")

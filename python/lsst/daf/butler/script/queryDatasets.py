@@ -157,8 +157,7 @@ class QueryDatasets:
         if not dataset:
             dataset = ...
 
-        if not find_first:
-            collections = globToRegex(collections)
+        collections = globToRegex(collections)
 
         self.datasets = self.butler.registry.queryDatasets(datasetType=dataset,
                                                            collections=collections,
