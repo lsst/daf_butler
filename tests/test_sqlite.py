@@ -30,7 +30,6 @@ import sqlalchemy
 
 from lsst.daf.butler import ddl
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
-from lsst.daf.butler.registry.attributes import MissingAttributesTableError
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.registry import Registry
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
@@ -272,7 +271,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
         # dropped (DM-27373).
         config = self.makeRegistryConfig()
         config["db"] = "sqlite://"
-        with self.assertRaises(MissingAttributesTableError):
+        with self.assertRaises(sqlalchemy.exc.OperationalError):
             Registry.fromConfig(config)
 
 
