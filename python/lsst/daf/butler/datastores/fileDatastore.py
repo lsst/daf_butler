@@ -89,9 +89,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# String to use when a Python None is encountered
-NULLSTR = "__NULL_STRING__"
-
 
 class _IngestPrepData(Datastore.IngestPrepData):
     """Helper class for FileDatastore ingest implementation.
@@ -350,21 +347,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore
-        records = []
-        for ref, info in zip(refs, infos):
-            # Component should come from ref and fall back on info
-            component = ref.datasetType.component()
-            if component is None and info.component is not None:
-                component = info.component
-            if component is None:
-                # Use empty string since we want this to be part of the
-                # primary key.
-                component = NULLSTR
-            records.append(
-                dict(dataset_id=ref.id, formatter=info.formatter, path=info.path,
-                     storage_class=info.storageClass.name, component=component,
-                     checksum=info.checksum, file_size=info.file_size)
-            )
+        records = [info.to_record(ref) for ref, info in zip(refs, infos)]
         self._table.insert(*records)
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredFileInfo]:
@@ -373,23 +356,7 @@ class FileDatastore(GenericBaseDatastore):
         # Look for the dataset_id -- there might be multiple matches
         # if we have disassembled the dataset.
         records = list(self._table.fetch(dataset_id=ref.id))
-
-        results = []
-        for record in records:
-            # Convert name of StorageClass to instance
-            storageClass = self.storageClassFactory.getStorageClass(record["storage_class"])
-            component = record["component"] if (record["component"]
-                                                and record["component"] != NULLSTR) else None
-
-            info = StoredFileInfo(formatter=record["formatter"],
-                                  path=record["path"],
-                                  storageClass=storageClass,
-                                  component=component,
-                                  checksum=record["checksum"],
-                                  file_size=record["file_size"])
-            results.append(info)
-
-        return results
+        return [StoredFileInfo.from_record(record) for record in records]
 
     def _registered_refs_per_artifact(self, pathInStore: ButlerURI) -> Set[DatasetId]:
         """Return all dataset refs associated with the supplied path.
@@ -432,15 +399,7 @@ class FileDatastore(GenericBaseDatastore):
 
         # Use the path to determine the location -- we need to take
         # into account absolute URIs in the datastore record
-        locations: List[Tuple[Location, StoredFileInfo]] = []
-        for r in records:
-            uriInStore = ButlerURI(r.path, forceAbsolute=False)
-            if uriInStore.isabs():
-                location = Location(None, uriInStore)
-            else:
-                location = self.locationFactory.fromPath(r.path)
-            locations.append((location, r))
-        return locations
+        return [(r.file_location(self.locationFactory), r) for r in records]
 
     def _can_remove_dataset_artifact(self, ref: DatasetIdRef, location: Location) -> bool:
         """Check that there is only one dataset associated with the
