@@ -358,7 +358,18 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
             records.append(record)
         self._setRecordCache(records)
         for chain in chains:
-            chain.refresh(self)
+            try:
+                chain.refresh(self)
+            except MissingCollectionError:
+                # This indicates a race condition in which some other client
+                # created a new collection and added it as a child of this
+                # (pre-existing) chain between the time we fetched all
+                # collections and the time we queried for parent-child
+                # relationships.
+                # Because that's some other unrelated client, we shouldn't care
+                # about that parent collection anyway, so we just drop it on
+                # the floor (a manual refresh can be used to get it back).
+                self._removeCachedRecord(chain)
 
     def register(self, name: str, type: CollectionType, doc: Optional[str] = None) -> CollectionRecord:
         # Docstring inherited from CollectionManager.
