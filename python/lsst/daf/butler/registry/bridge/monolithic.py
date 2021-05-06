@@ -25,11 +25,11 @@ __all__ = ("MonolithicDatastoreRegistryBridgeManager", "MonolithicDatastoreRegis
 from collections import namedtuple
 from contextlib import contextmanager
 import copy
-from typing import cast, Dict, Iterable, Iterator, List, Optional, Type, TYPE_CHECKING
+from typing import cast, Any, Dict, Iterable, Iterator, List, Optional, Tuple, Type, TYPE_CHECKING
 
 import sqlalchemy
 
-from lsst.daf.butler import DatasetRef, ddl, NamedValueSet
+from lsst.daf.butler import DatasetRef, ddl, NamedValueSet, StoredDatastoreItemInfo
 from lsst.daf.butler.registry.interfaces import (
     DatasetIdRef,
     DatastoreRegistryBridge,
@@ -47,7 +47,6 @@ if TYPE_CHECKING:
         OpaqueTableStorageManager,
         StaticTablesContext,
     )
-
 
 _TablesTuple = namedtuple(
     "_TablesTuple",
@@ -185,24 +184,54 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             yield byId[row["dataset_id"]]
 
     @contextmanager
-    def emptyTrash(self) -> Iterator[Iterable[DatasetIdRef]]:
+    def emptyTrash(self, records_table: Optional[Any] = None,
+                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None
+                   ) -> Iterator[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]]]:
         # Docstring inherited from DatastoreRegistryBridge
-        sql = sqlalchemy.sql.select(
-            [self._tables.dataset_location_trash.columns.dataset_id]
+
+        if records_table is None:
+            raise ValueError("This implementation requires a records table.")
+
+        if record_class is None:
+            raise ValueError("Record class must be provided if records table is given.")
+
+        # SELECT records.dataset_id, records.path FROM records
+        #    JOIN records on dataset_location.dataset_id == records.dataset_id
+        #    WHERE dataset_location.datastore_name = datastoreName
+
+        # It's possible that we may end up with a ref listed in the trash
+        # table that is not listed in the records table. Such an
+        # inconsistency would be missed by this query.
+        sql = records_table._table.select(
         ).select_from(
             self._tables.dataset_location_trash
         ).where(
-            self._tables.dataset_location_trash.columns.datastore_name == self.datastoreName
+            sqlalchemy.sql.and_(
+                self._tables.dataset_location_trash.columns.dataset_id
+                == records_table._table.columns.dataset_id,
+                self._tables.dataset_location_trash.columns.datastore_name == self.datastoreName
+            )
         )
         # Run query, transform results into a list of dicts that we can later
         # use to delete.
-        rows = [{"dataset_id": row["dataset_id"], "datastore_name": self.datastoreName}
+        rows = [dict(**row, datastore_name=self.datastoreName)
                 for row in self._db.query(sql).fetchall()]
+
         # Start contextmanager, returning generator expression to iterate over.
-        yield (FakeDatasetRef(row["dataset_id"]) for row in rows)
-        # No exception raised in context manager block.  Delete those rows
-        # from the trash table.
-        self._db.delete(self._tables.dataset_location_trash, ["dataset_id", "datastore_name"], *rows)
+        yield ((FakeDatasetRef(row["dataset_id"]), record_class.from_record(row)) for row in rows)
+
+        # No exception raised in context manager block.
+        if not rows:
+            return
+
+        # Delete the rows from the records table
+        records_table.delete(["dataset_id"],
+                             *[{"dataset_id": row["dataset_id"]} for row in rows])
+
+        # Delete those rows from the trash table.
+        self._db.delete(self._tables.dataset_location_trash, ["dataset_id", "datastore_name"],
+                        *[{"dataset_id": row["dataset_id"], "datastore_name": row["datastore_name"]}
+                          for row in rows])
 
 
 class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):

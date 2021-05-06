@@ -540,7 +540,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         """
         log.debug("Emptying trash in datastore %s", self.name)
         with self._bridge.emptyTrash() as trashed:
-            for ref in trashed:
+            for ref, _ in trashed:
                 try:
                     realID, _ = self._get_dataset_info(ref)
                 except Exception as e:

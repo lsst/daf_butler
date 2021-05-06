@@ -1607,59 +1607,43 @@ class FileDatastore(GenericBaseDatastore):
         """
         log.debug("Emptying trash in datastore %s", self.name)
         # Context manager will empty trash iff we finish it without raising.
-        with self.bridge.emptyTrash() as trashed:
-            for ref in trashed:
-                fileLocations = self._get_dataset_locations_info(ref)
+        # It will also automatically delete the relevant rows from the
+        # trash table and the records table.
+        with self.bridge.emptyTrash(self._table, record_class=StoredFileInfo) as trashed:
+            for ref, info in trashed:
 
-                if not fileLocations:
-                    err_msg = f"Requested dataset ({ref}) does not exist in datastore {self.name}"
-                    if ignore_errors:
-                        log.warning(err_msg)
-                        continue
-                    else:
-                        raise FileNotFoundError(err_msg)
+                if info is None:
+                    # Should not happen for this implementation but need
+                    # to keep mypy happy.
+                    raise RuntimeError(f"Internal logic error in emptyTrash with ref {ref}.")
 
-                for location, _ in fileLocations:
+                # Only trashed refs still known to datastore will be returned.
+                location = info.file_location(self.locationFactory)
 
-                    if not self._artifact_exists(location):
-                        err_msg = f"Dataset {location.uri} no longer present in datastore {self.name}"
+                # If the file itself has been deleted there is nothing we
+                # can do about it. It is possible that trash has been run
+                # in parallel in another process or someone decided to delete
+                # the file. It is unlikely to come back and so we should still
+                # continue with the removal of the entry from the trash
+                # table.
+                if not self._artifact_exists(location):
+                    log.debug("Dataset at %s with id %s no longer present in datastore %s. Continuing.",
+                              location.uri, str(ref.id), self.name)
+                    continue
+
+                # Can only delete the artifact if there are no references
+                # to the file from untrashed dataset refs.
+                if self._can_remove_dataset_artifact(ref, location):
+                    # Point of no return for this artifact
+                    log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
+                    try:
+                        self._delete_artifact(location)
+                    except Exception as e:
                         if ignore_errors:
-                            log.warning(err_msg)
-                            continue
+                            log.critical("Encountered error removing artifact %s from datastore %s: %s",
+                                         location.uri, self.name, e)
                         else:
-                            raise FileNotFoundError(err_msg)
-
-                    # Can only delete the artifact if there are no references
-                    # to the file from untrashed dataset refs.
-                    if self._can_remove_dataset_artifact(ref, location):
-                        # Point of no return for this artifact
-                        log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
-                        try:
-                            self._delete_artifact(location)
-                        except Exception as e:
-                            if ignore_errors:
-                                log.critical("Encountered error removing artifact %s from datastore %s: %s",
-                                             location.uri, self.name, e)
-                            else:
-                                raise
-
-                # Now must remove the entry from the internal registry even if
-                # the artifact removal failed and was ignored,
-                # otherwise the removal check above will never be true
-                try:
-                    # There may be multiple rows associated with this ref
-                    # depending on disassembly
-                    self.removeStoredItemInfo(ref)
-                except Exception as e:
-                    if ignore_errors:
-                        log.warning("Error removing dataset %s (%s) from internal registry of %s: %s",
-                                    ref.id, location.uri, self.name, e)
-                        continue
-                    else:
-                        raise FileNotFoundError(
-                            f"Error removing dataset {ref.id} ({location.uri}) from internal registry "
-                            f"of {self.name}"
-                        ) from e
+                            raise
 
     @transactional
     def forget(self, refs: Iterable[DatasetRef]) -> None:
