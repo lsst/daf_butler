@@ -428,7 +428,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         butler.pruneDatasets:
         disassociate=True, tags=<tags>
         and if COLLECTIONS is not passed then <tags> gets used as the value
-        of COLLETIONS.
+        of COLLECTIONS.
 
         Use the --no-confirm flag instead of invokeInput="yes", and check for
         the associated output.

@@ -216,7 +216,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         Returns
         -------
         realID : `int`
-            The dataset ID associated with this ref that shoul be used. This
+            The dataset ID associated with this ref that should be used. This
             could either be the ID of the supplied `DatasetRef` or the parent.
         storageInfo : `StoredMemoryItemInfo`
             Associated storage information.
