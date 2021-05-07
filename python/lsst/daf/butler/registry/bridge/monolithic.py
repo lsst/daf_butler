@@ -25,7 +25,7 @@ __all__ = ("MonolithicDatastoreRegistryBridgeManager", "MonolithicDatastoreRegis
 from collections import namedtuple
 from contextlib import contextmanager
 import copy
-from typing import cast, Any, Dict, Iterable, Iterator, List, Optional, Tuple, Type, TYPE_CHECKING
+from typing import cast, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TYPE_CHECKING
 
 import sqlalchemy
 
@@ -185,7 +185,8 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
     @contextmanager
     def emptyTrash(self, records_table: Optional[Any] = None,
-                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None
+                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
+                   record_column: Optional[str] = None,
                    ) -> Iterator[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]]]:
         # Docstring inherited from DatastoreRegistryBridge
 
@@ -195,6 +196,18 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         if record_class is None:
             raise ValueError("Record class must be provided if records table is given.")
 
+        # Helper closure to generate the common join+where clause.
+        def join_records(select: sqlalchemy.sql.Select, location_table: sqlalchemy.schema.Table
+                         ) -> sqlalchemy.sql.FromClause:
+            return select.select_from(
+                records_table._table.join(
+                    location_table,
+                    onclause=records_table._table.columns.dataset_id == location_table.columns.dataset_id,
+                )
+            ).where(
+                location_table.columns.datastore_name == self.datastoreName
+            )
+
         # SELECT records.dataset_id, records.path FROM records
         #    JOIN records on dataset_location.dataset_id == records.dataset_id
         #    WHERE dataset_location.datastore_name = datastoreName
@@ -202,20 +215,45 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # It's possible that we may end up with a ref listed in the trash
         # table that is not listed in the records table. Such an
         # inconsistency would be missed by this query.
-        sql = records_table._table.select(
-        ).select_from(
-            self._tables.dataset_location_trash
-        ).where(
-            sqlalchemy.sql.and_(
-                self._tables.dataset_location_trash.columns.dataset_id
-                == records_table._table.columns.dataset_id,
-                self._tables.dataset_location_trash.columns.datastore_name == self.datastoreName
-            )
-        )
+        info_in_trash = join_records(records_table._table.select(), self._tables.dataset_location_trash)
+
         # Run query, transform results into a list of dicts that we can later
         # use to delete.
         rows = [dict(**row, datastore_name=self.datastoreName)
-                for row in self._db.query(sql).fetchall()]
+                for row in self._db.query(info_in_trash).fetchall()]
+
+        # It is possible for trashed refs to be linked to artifacts that
+        # are still associated with refs that are not to be trashed. We
+        # need to be careful to consider those and indicate to the caller
+        # that those artifacts should be retained. Can only do this check
+        # if the caller provides a column name that can map to multiple
+        # refs.
+        preserved: Optional[Set[str]] = None
+        if record_column is not None:
+            # Some helper subqueries
+            items_not_in_trash = join_records(
+                sqlalchemy.sql.select([records_table._table.columns[record_column]]),
+                self._tables.dataset_location,
+            ).alias("items_not_in_trash")
+            items_in_trash = join_records(
+                sqlalchemy.sql.select([records_table._table.columns[record_column]]),
+                self._tables.dataset_location_trash,
+            ).alias("items_in_trash")
+
+            # A query for paths that are referenced by datasets in the trash
+            # and datasets not in the trash.
+            items_to_preserve = sqlalchemy.sql.select(
+                [items_in_trash.columns[record_column]]
+            ).select_from(
+                items_not_in_trash.join(
+                    items_in_trash,
+                    onclause=items_in_trash.columns[record_column]
+                    == items_not_in_trash.columns[record_column]
+                )
+            )
+            preserved = {row[record_column]
+                         for row in self._db.query(items_to_preserve).fetchall()}
+            print("Will have to preserve:", preserved)
 
         # Start contextmanager, returning generator expression to iterate over.
         yield ((FakeDatasetRef(row["dataset_id"]), record_class.from_record(row)) for row in rows)
