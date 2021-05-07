@@ -31,6 +31,7 @@ import tempfile
 
 from sqlalchemy import BigInteger, String
 
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -361,6 +362,26 @@ class FileDatastore(GenericBaseDatastore):
         # if we have disassembled the dataset.
         records = list(self._table.fetch(dataset_id=ref.id))
         return [StoredFileInfo.from_record(record) for record in records]
+
+    def _refs_associated_with_artifacts(self, paths: List[Union[str, ButlerURI]]) -> Dict[str,
+                                                                                          Set[DatasetId]]:
+        """Return paths and associated dataset refs.
+
+        Parameters
+        ----------
+        paths : `list` of `str` or `ButlerURI`
+            All the paths to include in search.
+
+        Returns
+        -------
+        mapping : `dict` of [`str`, `set` [`DatasetId`]]
+            Mapping of each path to a set of associated database IDs.
+        """
+        records = list(self._table.fetch(path=[str(path) for path in paths]))
+        result = defaultdict(set)
+        for row in records:
+            result[row["path"]].add(row["dataset_id"])
+        return result
 
     def _registered_refs_per_artifact(self, pathInStore: ButlerURI) -> Set[DatasetId]:
         """Return all dataset refs associated with the supplied path.
@@ -1610,16 +1631,36 @@ class FileDatastore(GenericBaseDatastore):
             to delete.
         """
         log.debug("Emptying trash in datastore %s", self.name)
+
         # Context manager will empty trash iff we finish it without raising.
         # It will also automatically delete the relevant rows from the
         # trash table and the records table.
         with self.bridge.emptyTrash(self._table, record_class=StoredFileInfo) as trashed:
+            # Removing the artifacts themselves requires that the files are
+            # not also associated with refs that are not to be trashed.
+            # Therefore need to do a query with the file paths themselves
+            # and return all the refs associated with them. Can only delete
+            # a file if the refs to be trashed are the only refs associated
+            # with the file.
+            # This requires multiple copies of the trashed items
+            trashed = list(trashed)
+
+            # The instance check is for mypy since up to this point it
+            # does not know the type of info.
+            path_map = self._refs_associated_with_artifacts([info.path for _, info in trashed
+                                                             if isinstance(info, StoredFileInfo)])
+
             for ref, info in trashed:
 
-                if info is None:
-                    # Should not happen for this implementation but need
-                    # to keep mypy happy.
-                    raise RuntimeError(f"Internal logic error in emptyTrash with ref {ref}.")
+                # Should not happen for this implementation but need
+                # to keep mypy happy.
+                assert info is not None, f"Internal logic error in emptyTrash with ref {ref}."
+
+                # Mypy needs to know this is not the base class
+                assert isinstance(info, StoredFileInfo), f"Unexpectedly got info of class {type(info)}"
+
+                # Check for mypy
+                assert ref.id is not None, f"Internal logic error in emptyTrash with ref {ref}/{info}"
 
                 # Only trashed refs still known to datastore will be returned.
                 location = info.file_location(self.locationFactory)
@@ -1637,7 +1678,9 @@ class FileDatastore(GenericBaseDatastore):
 
                 # Can only delete the artifact if there are no references
                 # to the file from untrashed dataset refs.
-                if self._can_remove_dataset_artifact(ref, location):
+                path_map[info.path].remove(ref.id)
+
+                if not path_map[info.path]:
                     # Point of no return for this artifact
                     log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
                     try:
