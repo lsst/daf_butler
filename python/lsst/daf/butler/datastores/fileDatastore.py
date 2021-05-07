@@ -341,8 +341,12 @@ class FileDatastore(GenericBaseDatastore):
         """
         if location.pathInStore.isabs():
             raise RuntimeError(f"Cannot delete artifact with absolute uri {location.uri}.")
-        log.debug("Deleting file: %s", location.uri)
-        location.uri.remove()
+
+        try:
+            location.uri.remove()
+        except Exception:
+            log.critical("Failed to delete file: %s", location.uri)
+            raise
         log.debug("Successfully deleted file: %s", location.uri)
 
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
