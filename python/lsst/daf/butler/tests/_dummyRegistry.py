@@ -61,9 +61,27 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
 
     def fetch(self, **where: Any) -> Iterator[dict]:
         # Docstring inherited from OpaqueTableStorage.
+        where = where.copy()  # May need to modify it.
+
+        # Can support an IN operator if given list.
+        wherein = {}
+        for k in list(where):
+            if isinstance(where[k], (tuple, list, set)):
+                wherein[k] = set(where[k])
+                del where[k]
+
         for d in self._rows:
             if all(d[k] == v for k, v in where.items()):
-                yield d
+                if wherein:
+                    match = True
+                    for k, v in wherein.items():
+                        if d[k] not in v:
+                            match = False
+                            break
+                    if match:
+                        yield d
+                else:
+                    yield d
 
     def delete(self, columns: Iterable[str], *rows: dict):
         # Docstring inherited from OpaqueTableStorage.

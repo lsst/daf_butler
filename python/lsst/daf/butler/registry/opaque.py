@@ -81,8 +81,16 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         # Docstring inherited from OpaqueTableStorage.
         sql = self._table.select()
         if where:
+            clauses = []
+            for k, v in where.items():
+                column = self._table.columns[k]
+                if isinstance(v, (list, tuple, set)):
+                    clause = column.in_(v)
+                else:
+                    clause = column == v
+                clauses.append(clause)
             sql = sql.where(
-                sqlalchemy.sql.and_(*[self._table.columns[k] == v for k, v in where.items()])
+                sqlalchemy.sql.and_(*clauses)
             )
         for row in self._db.query(sql):
             yield dict(row)
