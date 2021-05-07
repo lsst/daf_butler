@@ -539,7 +539,8 @@ class InMemoryDatastore(GenericBaseDatastore):
         the registry only changes rows associated with this process.
         """
         log.debug("Emptying trash in datastore %s", self.name)
-        with self._bridge.emptyTrash() as trashed:
+        with self._bridge.emptyTrash() as trash_data:
+            trashed, _ = trash_data
             for ref, _ in trashed:
                 try:
                     realID, _ = self._get_dataset_info(ref)

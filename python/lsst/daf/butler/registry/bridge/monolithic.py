@@ -25,7 +25,7 @@ __all__ = ("MonolithicDatastoreRegistryBridgeManager", "MonolithicDatastoreRegis
 from collections import namedtuple
 from contextlib import contextmanager
 import copy
-from typing import cast, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TYPE_CHECKING
+from typing import cast, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TYPE_CHECKING
 
 import sqlalchemy
 
@@ -35,8 +35,10 @@ from lsst.daf.butler.registry.interfaces import (
     DatastoreRegistryBridge,
     DatastoreRegistryBridgeManager,
     FakeDatasetRef,
+    OpaqueTableStorage,
     VersionTuple,
 )
+from lsst.daf.butler.registry.opaque import ByNameOpaqueTableStorage
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 
 if TYPE_CHECKING:
@@ -184,14 +186,19 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             yield byId[row["dataset_id"]]
 
     @contextmanager
-    def emptyTrash(self, records_table: Optional[Any] = None,
+    def emptyTrash(self, records_table: Optional[OpaqueTableStorage] = None,
                    record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
                    record_column: Optional[str] = None,
-                   ) -> Iterator[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]]]:
+                   ) -> Iterator[Tuple[Iterable[Tuple[DatasetIdRef,
+                                                      Optional[StoredDatastoreItemInfo]]],
+                                       Set[str]]]:
         # Docstring inherited from DatastoreRegistryBridge
 
         if records_table is None:
             raise ValueError("This implementation requires a records table.")
+
+        if not isinstance(records_table, ByNameOpaqueTableStorage):
+            raise ValueError(f"Records table must support hidden attributes. Got {type(records_table)}.")
 
         if record_class is None:
             raise ValueError("Record class must be provided if records table is given.")
@@ -253,10 +260,15 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             )
             preserved = {row[record_column]
                          for row in self._db.query(items_to_preserve).fetchall()}
-            print("Will have to preserve:", preserved)
 
-        # Start contextmanager, returning generator expression to iterate over.
-        yield ((FakeDatasetRef(row["dataset_id"]), record_class.from_record(row)) for row in rows)
+        # Convert results to a tuple of id+info and a record of the artifacts
+        # that should not be deleted from datastore. The id+info tuple is
+        # solely to allow logging to report the relevant ID.
+        id_info = ((FakeDatasetRef(row["dataset_id"]), record_class.from_record(row))
+                   for row in rows)
+
+        # Start contextmanager, return results
+        yield ((id_info, preserved))
 
         # No exception raised in context manager block.
         if not rows:

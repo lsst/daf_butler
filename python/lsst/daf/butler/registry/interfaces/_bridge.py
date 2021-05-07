@@ -28,6 +28,7 @@ from typing import (
     ContextManager,
     Iterable,
     Optional,
+    Set,
     Tuple,
     Type,
     TYPE_CHECKING,
@@ -195,8 +196,11 @@ class DatastoreRegistryBridge(ABC):
 
     @abstractmethod
     def emptyTrash(self, records_table: Optional[OpaqueTableStorage] = None,
-                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None
-                   ) -> ContextManager[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]]]:
+                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
+                   record_column: Optional[str] = None,
+                   ) -> ContextManager[Tuple[Iterable[Tuple[DatasetIdRef,
+                                                      Optional[StoredDatastoreItemInfo]]],
+                                       Set[str]]]:
         """Retrieve all the dataset ref IDs that are in the trash
         associated for this datastore, and then remove them if the context
         exists without an exception being raised.
@@ -207,6 +211,8 @@ class DatastoreRegistryBridge(ABC):
             Table of records to query with the trash records.
         record_class : `type` of `StoredDatastoreItemInfo`, optional
             Class to use when reading records from ``records_table``.
+        record_column : `str`, optional
+            Name of the column in records_table that refers to the artifact.
 
         Yields
         ------
@@ -214,14 +220,18 @@ class DatastoreRegistryBridge(ABC):
             The IDs of datasets that can be safely removed from this datastore
             and the corresponding information from the records table.
             Can be empty.
+        artifacts_to_keep : `set` of `str`, optional
+            Any external artifacts that are known to the table but which should
+            not be deleted. If `None`, the caller should check themselves.
 
         Examples
         --------
         Typical usage by a Datastore is something like::
 
-            with self.bridge.emptyTrash() as iter:
+            with self.bridge.emptyTrash() as trashed:
+                iter, to_keep = trashed
                 for ref, info in iter:
-                    # Remove artifacts associated with ref.id,
+                    # Remove artifacts associated with id,
                     # raise an exception if something goes wrong.
 
         Notes

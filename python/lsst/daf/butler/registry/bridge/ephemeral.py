@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ("EphemeralDatastoreRegistryBridge",)
 
 from contextlib import contextmanager
-from typing import Iterable, Iterator, Set, Tuple, TYPE_CHECKING, Optional, Any, Type
+from typing import Iterable, Iterator, Set, Tuple, TYPE_CHECKING, Optional, Type
 
 from lsst.daf.butler import DatasetId
 from lsst.daf.butler.registry.interfaces import (
@@ -78,17 +78,24 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
         return ref.getCheckedId() in self._datasetIds and ref.getCheckedId() not in self._trashedIds
 
     @contextmanager
-    def emptyTrash(self, records_table: Optional[Any] = None,
-                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None
-                   ) -> Iterator[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]]]:
+    def emptyTrash(self, records_table: Optional[OpaqueTableStorage] = None,
+                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
+                   record_column: Optional[str] = None,
+                   ) -> Iterator[Tuple[Iterable[Tuple[DatasetIdRef,
+                                                      Optional[StoredDatastoreItemInfo]]],
+                                       Set[str]]]:
         # Docstring inherited from DatastoreRegistryBridge
         if isinstance(records_table, OpaqueTableStorage):
             if record_class is None:
                 raise ValueError("Record class must be provided if records table is given.")
-            yield (((FakeDatasetRef(id), record_class.from_record(record))
-                    for id in self._trashedIds for record in records_table.fetch(dataset_id=id)))
+            matches = ((FakeDatasetRef(id), record_class.from_record(record))
+                       for id in self._trashedIds for record in records_table.fetch(dataset_id=id))
         else:
-            yield ((FakeDatasetRef(id), None) for id in self._trashedIds)
+            matches = ((FakeDatasetRef(id), None) for id in self._trashedIds)
+
+        # Indicate to caller that we do not know about artifacts that
+        # should be retained.
+        yield ((matches, None))
 
         if isinstance(records_table, OpaqueTableStorage):
             # Remove the records entries

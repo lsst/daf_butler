@@ -1635,7 +1635,8 @@ class FileDatastore(GenericBaseDatastore):
         # Context manager will empty trash iff we finish it without raising.
         # It will also automatically delete the relevant rows from the
         # trash table and the records table.
-        with self.bridge.emptyTrash(self._table, record_class=StoredFileInfo) as trashed:
+        with self.bridge.emptyTrash(self._table, record_class=StoredFileInfo,
+                                    record_column="path") as trash_data:
             # Removing the artifacts themselves requires that the files are
             # not also associated with refs that are not to be trashed.
             # Therefore need to do a query with the file paths themselves
@@ -1643,12 +1644,24 @@ class FileDatastore(GenericBaseDatastore):
             # a file if the refs to be trashed are the only refs associated
             # with the file.
             # This requires multiple copies of the trashed items
-            trashed = list(trashed)
+            trashed, artifacts_to_keep = trash_data
 
-            # The instance check is for mypy since up to this point it
-            # does not know the type of info.
-            path_map = self._refs_associated_with_artifacts([info.path for _, info in trashed
-                                                             if isinstance(info, StoredFileInfo)])
+            if artifacts_to_keep is None:
+                # The bridge is not helping us so have to work it out
+                # ourselves. This is not going to be as efficient.
+                trashed = list(trashed)
+
+                # The instance check is for mypy since up to this point it
+                # does not know the type of info.
+                path_map = self._refs_associated_with_artifacts([info.path for _, info in trashed
+                                                                 if isinstance(info, StoredFileInfo)])
+
+                for ref, info in trashed:
+                    path_map[info.path].remove(ref.id)
+                    if not path_map[info.path]:
+                        del path_map[info.path]
+
+                artifacts_to_keep = set(path_map)
 
             for ref, info in trashed:
 
@@ -1673,14 +1686,10 @@ class FileDatastore(GenericBaseDatastore):
                 # table.
                 if not self._artifact_exists(location):
                     log.debug("Dataset at %s with id %s no longer present in datastore %s. Continuing.",
-                              location.uri, str(ref.id), self.name)
+                              location.uri, ref.id, self.name)
                     continue
 
-                # Can only delete the artifact if there are no references
-                # to the file from untrashed dataset refs.
-                path_map[info.path].remove(ref.id)
-
-                if not path_map[info.path]:
+                if info.path not in artifacts_to_keep:
                     # Point of no return for this artifact
                     log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
                     try:
