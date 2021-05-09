@@ -1697,8 +1697,15 @@ class FileDatastore(GenericBaseDatastore):
                         self._delete_artifact(location)
                     except Exception as e:
                         if ignore_errors:
-                            log.critical("Encountered error removing artifact %s from datastore %s: %s",
-                                         location.uri, self.name, e)
+                            # Use a debug message here even though it's not
+                            # a good situation. In some cases this can be
+                            # caused by a race between user A and user B
+                            # and neither of them has permissions for the
+                            # other's files. Butler does not know about users
+                            # and trash has no idea what collections these
+                            # files were in (without guessing from a path).
+                            log.debug("Encountered error removing artifact %s from datastore %s: %s",
+                                      location.uri, self.name, e)
                         else:
                             raise
 
