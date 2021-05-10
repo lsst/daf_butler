@@ -346,8 +346,11 @@ class FileDatastore(GenericBaseDatastore):
 
         try:
             location.uri.remove()
-        except Exception:
-            log.critical("Failed to delete file: %s", location.uri)
+        except FileNotFoundError:
+            log.debug("File %s did not exist and so could not be deleted.", location.uri)
+            raise
+        except Exception as e:
+            log.critical("Failed to delete file: %s (%s)", location.uri, e)
             raise
         log.debug("Successfully deleted file: %s", location.uri)
 
@@ -1676,38 +1679,46 @@ class FileDatastore(GenericBaseDatastore):
                 # Check for mypy
                 assert ref.id is not None, f"Internal logic error in emptyTrash with ref {ref}/{info}"
 
+                if info.path in artifacts_to_keep:
+                    # This is a multi-dataset artifact and we are not
+                    # removing all associated refs.
+                    continue
+
                 # Only trashed refs still known to datastore will be returned.
                 location = info.file_location(self.locationFactory)
 
-                # If the file itself has been deleted there is nothing we
-                # can do about it. It is possible that trash has been run
-                # in parallel in another process or someone decided to delete
-                # the file. It is unlikely to come back and so we should still
-                # continue with the removal of the entry from the trash
-                # table.
-                if not self._artifact_exists(location):
-                    log.debug("Dataset at %s with id %s no longer present in datastore %s. Continuing.",
-                              location.uri, ref.id, self.name)
-                    continue
-
-                if info.path not in artifacts_to_keep:
-                    # Point of no return for this artifact
-                    log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
-                    try:
-                        self._delete_artifact(location)
-                    except Exception as e:
-                        if ignore_errors:
-                            # Use a debug message here even though it's not
-                            # a good situation. In some cases this can be
-                            # caused by a race between user A and user B
-                            # and neither of them has permissions for the
-                            # other's files. Butler does not know about users
-                            # and trash has no idea what collections these
-                            # files were in (without guessing from a path).
-                            log.debug("Encountered error removing artifact %s from datastore %s: %s",
-                                      location.uri, self.name, e)
-                        else:
-                            raise
+                # Point of no return for this artifact
+                log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
+                try:
+                    self._delete_artifact(location)
+                except FileNotFoundError:
+                    # If the file itself has been deleted there is nothing
+                    # we can do about it. It is possible that trash has
+                    # been run in parallel in another process or someone
+                    # decided to delete the file. It is unlikely to come
+                    # back and so we should still continue with the removal
+                    # of the entry from the trash table. It is also possible
+                    # we removed it in a previous iteration if it was
+                    # a multi-dataset artifact. The delete artifact method
+                    # will log a debug message in this scenario.
+                    # Distinguishing file missing before trash started and
+                    # file already removed previously as part of this trash
+                    # is not worth the distinction with regards to potential
+                    # memory cost.
+                    pass
+                except Exception as e:
+                    if ignore_errors:
+                        # Use a debug message here even though it's not
+                        # a good situation. In some cases this can be
+                        # caused by a race between user A and user B
+                        # and neither of them has permissions for the
+                        # other's files. Butler does not know about users
+                        # and trash has no idea what collections these
+                        # files were in (without guessing from a path).
+                        log.debug("Encountered error removing artifact %s from datastore %s: %s",
+                                  location.uri, self.name, e)
+                    else:
+                        raise
 
     @transactional
     def forget(self, refs: Iterable[DatasetRef]) -> None:
