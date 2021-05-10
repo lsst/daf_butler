@@ -83,8 +83,9 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
                    record_column: Optional[str] = None,
                    ) -> Iterator[Tuple[Iterable[Tuple[DatasetIdRef,
                                                       Optional[StoredDatastoreItemInfo]]],
-                                       Set[str]]]:
+                                       Optional[Set[str]]]]:
         # Docstring inherited from DatastoreRegistryBridge
+        matches: Iterable[Tuple[FakeDatasetRef, Optional[StoredDatastoreItemInfo]]] = ()
         if isinstance(records_table, OpaqueTableStorage):
             if record_class is None:
                 raise ValueError("Record class must be provided if records table is given.")

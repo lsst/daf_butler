@@ -1661,6 +1661,13 @@ class FileDatastore(GenericBaseDatastore):
                                                                  if isinstance(info, StoredFileInfo)])
 
                 for ref, info in trashed:
+
+                    # Mypy needs to know this is not the base class
+                    assert isinstance(info, StoredFileInfo), f"Unexpectedly got info of class {type(info)}"
+
+                    # Check for mypy
+                    assert ref.id is not None, f"Internal logic error in emptyTrash with ref {ref}/{info}"
+
                     path_map[info.path].remove(ref.id)
                     if not path_map[info.path]:
                         del path_map[info.path]

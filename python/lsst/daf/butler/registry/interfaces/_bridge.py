@@ -199,8 +199,8 @@ class DatastoreRegistryBridge(ABC):
                    record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
                    record_column: Optional[str] = None,
                    ) -> ContextManager[Tuple[Iterable[Tuple[DatasetIdRef,
-                                                      Optional[StoredDatastoreItemInfo]]],
-                                       Set[str]]]:
+                                                            Optional[StoredDatastoreItemInfo]]],
+                                             Optional[Set[str]]]]:
         """Retrieve all the dataset ref IDs that are in the trash
         associated for this datastore, and then remove them if the context
         exists without an exception being raised.

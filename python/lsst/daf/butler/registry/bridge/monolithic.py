@@ -191,14 +191,14 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                    record_column: Optional[str] = None,
                    ) -> Iterator[Tuple[Iterable[Tuple[DatasetIdRef,
                                                       Optional[StoredDatastoreItemInfo]]],
-                                       Set[str]]]:
+                                       Optional[Set[str]]]]:
         # Docstring inherited from DatastoreRegistryBridge
 
         if records_table is None:
             raise ValueError("This implementation requires a records table.")
 
-        if not isinstance(records_table, ByNameOpaqueTableStorage):
-            raise ValueError(f"Records table must support hidden attributes. Got {type(records_table)}.")
+        assert isinstance(records_table, ByNameOpaqueTableStorage),\
+            f"Records table must support hidden attributes. Got {type(records_table)}."
 
         if record_class is None:
             raise ValueError("Record class must be provided if records table is given.")
@@ -206,6 +206,8 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # Helper closure to generate the common join+where clause.
         def join_records(select: sqlalchemy.sql.Select, location_table: sqlalchemy.schema.Table
                          ) -> sqlalchemy.sql.FromClause:
+            # mypy needs to be sure
+            assert isinstance(records_table, ByNameOpaqueTableStorage)
             return select.select_from(
                 records_table._table.join(
                     location_table,
