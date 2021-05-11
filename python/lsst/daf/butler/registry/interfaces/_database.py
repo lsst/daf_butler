@@ -1430,10 +1430,17 @@ class Database(ABC):
             # while reporting that no rows were affected.
             return 0
         sql = table.delete()
-        whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
-        if whereTerms:
-            sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
-        return self._connection.execute(sql, *rows).rowcount
+        columns = list(columns)  # Force iterators to list
+        if len(columns) == 1:
+            # Special-case delete on single column
+            name = columns.pop()
+            sql = sql.where(table.columns[name].in_([row[name] for row in rows]))
+            return self._connection.execute(sql).rowcount
+        else:
+            whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
+            if whereTerms:
+                sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
+            return self._connection.execute(sql, *rows).rowcount
 
     def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
         """Update one or more rows in a table.
