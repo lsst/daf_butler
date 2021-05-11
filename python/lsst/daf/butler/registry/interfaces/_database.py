@@ -29,6 +29,7 @@ __all__ = [
 ]
 
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from contextlib import contextmanager
 from typing import (
     Any,
@@ -1431,10 +1432,37 @@ class Database(ABC):
             return 0
         sql = table.delete()
         columns = list(columns)  # Force iterators to list
+
+        # More efficient to use IN operator if there is only one
+        # variable changing across all rows.
+        content: Dict[str, Set] = defaultdict(set)
         if len(columns) == 1:
-            # Special-case delete on single column
-            name = columns.pop()
-            sql = sql.where(table.columns[name].in_([row[name] for row in rows]))
+            # Nothing to calculate since we can always use IN
+            column = columns[0]
+            changing_columns = [column]
+            content[column] = set(row[column] for row in rows)
+        else:
+            for row in rows:
+                for k, v in row.items():
+                    content[k].add(v)
+            changing_columns = [col for col, values in content.items() if len(values) > 1]
+
+        if len(changing_columns) == 1:
+            name = changing_columns.pop()
+
+            # Simple where clause for the unchanging columns
+            clauses = []
+            for k, v in content.items():
+                if k == name:
+                    continue
+                column = table.columns[k]
+                # The set only has one element
+                clauses.append(column == v.pop())
+
+            # Now the IN operator
+            clauses.append(table.columns[name].in_(content[name]))
+
+            sql = sql.where(sqlalchemy.sql.and_(*clauses))
             return self._connection.execute(sql).rowcount
         else:
             whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
