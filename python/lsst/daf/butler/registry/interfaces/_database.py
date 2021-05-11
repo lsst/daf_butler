@@ -1459,11 +1459,21 @@ class Database(ABC):
                 # The set only has one element
                 clauses.append(column == v.pop())
 
-            # Now the IN operator
-            clauses.append(table.columns[name].in_(content[name]))
+            # The IN operator will not work for "infinite" numbers of
+            # rows so must batch it up into distinct calls.
+            in_content = list(content[name])
+            n_elements = len(in_content)
 
-            sql = sql.where(sqlalchemy.sql.and_(*clauses))
-            return self._connection.execute(sql).rowcount
+            rowcount = 0
+            iposn = 0
+            n_per_loop = 1_000  # Controls how many items to put in IN clause
+            for iposn in range(0, n_elements, n_per_loop):
+                endpos = iposn + n_per_loop
+                in_clause = table.columns[name].in_(in_content[iposn:endpos])
+
+                newsql = sql.where(sqlalchemy.sql.and_(*clauses, in_clause))
+                rowcount += self._connection.execute(newsql).rowcount
+            return rowcount
         else:
             whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
             if whereTerms:
