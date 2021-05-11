@@ -164,7 +164,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         if uriInStore.isabs():
             location = Location(None, uriInStore)
         else:
-            location = factory.fromPath(self.path)
+            location = factory.fromPath(uriInStore)
         return location
 
     @classmethod
