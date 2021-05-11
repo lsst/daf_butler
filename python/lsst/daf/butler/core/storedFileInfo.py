@@ -25,10 +25,18 @@ __all__ = ("StoredFileInfo", "StoredDatastoreItemInfo")
 
 import inspect
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any, Dict, TYPE_CHECKING, Type
 
+from ._butlerUri import ButlerURI
+from .location import Location, LocationFactory
 from .formatter import Formatter, FormatterParameter
-from .storageClass import StorageClass
+from .storageClass import StorageClass, StorageClassFactory
+
+if TYPE_CHECKING:
+    from .datasets import DatasetRef
+
+# String to use when a Python None is encountered
+NULLSTR = "__NULL_STRING__"
 
 
 class StoredDatastoreItemInfo:
@@ -40,6 +48,37 @@ class StoredDatastoreItemInfo:
 
     __slots__ = ()
 
+    def file_location(self, factory: LocationFactory) -> Location:
+        """Return the location of artifact.
+
+        Parameters
+        ----------
+        factory : `LocationFactory`
+            Factory relevant to the datastore represented by this item.
+
+        Returns
+        -------
+        location : `Location`
+            The location of the item within this datastore.
+        """
+        raise NotImplementedError("The base class does not know how to locate an item in a datastore.")
+
+    @classmethod
+    def from_record(cls: Type[StoredDatastoreItemInfo], record: Dict[str, Any]) -> StoredDatastoreItemInfo:
+        """Create instance from database record.
+
+        Parameters
+        ----------
+        record : `dict`
+            The record associated with this item.
+
+        Returns
+        -------
+        info : instance of the relevant type.
+            The newly-constructed item corresponding to the record.
+        """
+        raise NotImplementedError()
+
 
 @dataclass(frozen=True)
 class StoredFileInfo(StoredDatastoreItemInfo):
@@ -47,6 +86,8 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
     __slots__ = {"formatter", "path", "storageClass", "component",
                  "checksum", "file_size"}
+
+    storageClassFactory = StorageClassFactory()
 
     def __init__(self, formatter: FormatterParameter,
                  path: str,
@@ -91,3 +132,64 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
     file_size: int
     """Size of the serialized dataset in bytes."""
+
+    def to_record(self, ref: DatasetRef) -> Dict[str, Any]:
+        """Convert the supplied ref to a database record."""
+        component = ref.datasetType.component()
+        if component is None and self.component is not None:
+            component = self.component
+        if component is None:
+            # Use empty string since we want this to be part of the
+            # primary key.
+            component = NULLSTR
+
+        return dict(dataset_id=ref.id, formatter=self.formatter, path=self.path,
+                    storage_class=self.storageClass.name, component=component,
+                    checksum=self.checksum, file_size=self.file_size)
+
+    def file_location(self, factory: LocationFactory) -> Location:
+        """Return the location of artifact.
+
+        Parameters
+        ----------
+        factory : `LocationFactory`
+            Factory relevant to the datastore represented by this item.
+
+        Returns
+        -------
+        location : `Location`
+            The location of the item within this datastore.
+        """
+        uriInStore = ButlerURI(self.path, forceAbsolute=False)
+        if uriInStore.isabs():
+            location = Location(None, uriInStore)
+        else:
+            location = factory.fromPath(uriInStore)
+        return location
+
+    @classmethod
+    def from_record(cls: Type[StoredFileInfo], record: Dict[str, Any]) -> StoredFileInfo:
+        """Create instance from database record.
+
+        Parameters
+        ----------
+        record : `dict`
+            The record associated with this item.
+
+        Returns
+        -------
+        info : `StoredFileInfo`
+            The newly-constructed item corresponding to the record.
+        """
+        # Convert name of StorageClass to instance
+        storageClass = cls.storageClassFactory.getStorageClass(record["storage_class"])
+        component = record["component"] if (record["component"]
+                                            and record["component"] != NULLSTR) else None
+
+        info = StoredFileInfo(formatter=record["formatter"],
+                              path=record["path"],
+                              storageClass=storageClass,
+                              component=component,
+                              checksum=record["checksum"],
+                              file_size=record["file_size"])
+        return info

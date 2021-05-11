@@ -25,18 +25,20 @@ __all__ = ("MonolithicDatastoreRegistryBridgeManager", "MonolithicDatastoreRegis
 from collections import namedtuple
 from contextlib import contextmanager
 import copy
-from typing import cast, Dict, Iterable, Iterator, List, Optional, Type, TYPE_CHECKING
+from typing import cast, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TYPE_CHECKING
 
 import sqlalchemy
 
-from lsst.daf.butler import DatasetRef, ddl, NamedValueSet
+from lsst.daf.butler import DatasetRef, ddl, NamedValueSet, StoredDatastoreItemInfo
 from lsst.daf.butler.registry.interfaces import (
     DatasetIdRef,
     DatastoreRegistryBridge,
     DatastoreRegistryBridgeManager,
     FakeDatasetRef,
+    OpaqueTableStorage,
     VersionTuple,
 )
+from lsst.daf.butler.registry.opaque import ByNameOpaqueTableStorage
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 
 if TYPE_CHECKING:
@@ -47,7 +49,6 @@ if TYPE_CHECKING:
         OpaqueTableStorageManager,
         StaticTablesContext,
     )
-
 
 _TablesTuple = namedtuple(
     "_TablesTuple",
@@ -185,24 +186,104 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             yield byId[row["dataset_id"]]
 
     @contextmanager
-    def emptyTrash(self) -> Iterator[Iterable[DatasetIdRef]]:
+    def emptyTrash(self, records_table: Optional[OpaqueTableStorage] = None,
+                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
+                   record_column: Optional[str] = None,
+                   ) -> Iterator[Tuple[Iterable[Tuple[DatasetIdRef,
+                                                      Optional[StoredDatastoreItemInfo]]],
+                                       Optional[Set[str]]]]:
         # Docstring inherited from DatastoreRegistryBridge
-        sql = sqlalchemy.sql.select(
-            [self._tables.dataset_location_trash.columns.dataset_id]
-        ).select_from(
-            self._tables.dataset_location_trash
-        ).where(
-            self._tables.dataset_location_trash.columns.datastore_name == self.datastoreName
-        )
+
+        if records_table is None:
+            raise ValueError("This implementation requires a records table.")
+
+        assert isinstance(records_table, ByNameOpaqueTableStorage),\
+            f"Records table must support hidden attributes. Got {type(records_table)}."
+
+        if record_class is None:
+            raise ValueError("Record class must be provided if records table is given.")
+
+        # Helper closure to generate the common join+where clause.
+        def join_records(select: sqlalchemy.sql.Select, location_table: sqlalchemy.schema.Table
+                         ) -> sqlalchemy.sql.FromClause:
+            # mypy needs to be sure
+            assert isinstance(records_table, ByNameOpaqueTableStorage)
+            return select.select_from(
+                records_table._table.join(
+                    location_table,
+                    onclause=records_table._table.columns.dataset_id == location_table.columns.dataset_id,
+                )
+            ).where(
+                location_table.columns.datastore_name == self.datastoreName
+            )
+
+        # SELECT records.dataset_id, records.path FROM records
+        #    JOIN records on dataset_location.dataset_id == records.dataset_id
+        #    WHERE dataset_location.datastore_name = datastoreName
+
+        # It's possible that we may end up with a ref listed in the trash
+        # table that is not listed in the records table. Such an
+        # inconsistency would be missed by this query.
+        info_in_trash = join_records(records_table._table.select(), self._tables.dataset_location_trash)
+
         # Run query, transform results into a list of dicts that we can later
         # use to delete.
-        rows = [{"dataset_id": row["dataset_id"], "datastore_name": self.datastoreName}
-                for row in self._db.query(sql).fetchall()]
-        # Start contextmanager, returning generator expression to iterate over.
-        yield (FakeDatasetRef(row["dataset_id"]) for row in rows)
-        # No exception raised in context manager block.  Delete those rows
-        # from the trash table.
-        self._db.delete(self._tables.dataset_location_trash, ["dataset_id", "datastore_name"], *rows)
+        rows = [dict(**row, datastore_name=self.datastoreName)
+                for row in self._db.query(info_in_trash).fetchall()]
+
+        # It is possible for trashed refs to be linked to artifacts that
+        # are still associated with refs that are not to be trashed. We
+        # need to be careful to consider those and indicate to the caller
+        # that those artifacts should be retained. Can only do this check
+        # if the caller provides a column name that can map to multiple
+        # refs.
+        preserved: Optional[Set[str]] = None
+        if record_column is not None:
+            # Some helper subqueries
+            items_not_in_trash = join_records(
+                sqlalchemy.sql.select([records_table._table.columns[record_column]]),
+                self._tables.dataset_location,
+            ).alias("items_not_in_trash")
+            items_in_trash = join_records(
+                sqlalchemy.sql.select([records_table._table.columns[record_column]]),
+                self._tables.dataset_location_trash,
+            ).alias("items_in_trash")
+
+            # A query for paths that are referenced by datasets in the trash
+            # and datasets not in the trash.
+            items_to_preserve = sqlalchemy.sql.select(
+                [items_in_trash.columns[record_column]]
+            ).select_from(
+                items_not_in_trash.join(
+                    items_in_trash,
+                    onclause=items_in_trash.columns[record_column]
+                    == items_not_in_trash.columns[record_column]
+                )
+            )
+            preserved = {row[record_column]
+                         for row in self._db.query(items_to_preserve).fetchall()}
+
+        # Convert results to a tuple of id+info and a record of the artifacts
+        # that should not be deleted from datastore. The id+info tuple is
+        # solely to allow logging to report the relevant ID.
+        id_info = ((FakeDatasetRef(row["dataset_id"]), record_class.from_record(row))
+                   for row in rows)
+
+        # Start contextmanager, return results
+        yield ((id_info, preserved))
+
+        # No exception raised in context manager block.
+        if not rows:
+            return
+
+        # Delete the rows from the records table
+        records_table.delete(["dataset_id"],
+                             *[{"dataset_id": row["dataset_id"]} for row in rows])
+
+        # Delete those rows from the trash table.
+        self._db.delete(self._tables.dataset_location_trash, ["dataset_id", "datastore_name"],
+                        *[{"dataset_id": row["dataset_id"], "datastore_name": row["datastore_name"]}
+                          for row in rows])
 
 
 class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):

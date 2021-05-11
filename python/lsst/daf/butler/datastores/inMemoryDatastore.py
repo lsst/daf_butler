@@ -216,7 +216,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         Returns
         -------
         realID : `int`
-            The dataset ID associated with this ref that shoul be used. This
+            The dataset ID associated with this ref that should be used. This
             could either be the ID of the supplied `DatasetRef` or the parent.
         storageInfo : `StoredMemoryItemInfo`
             Associated storage information.
@@ -539,8 +539,9 @@ class InMemoryDatastore(GenericBaseDatastore):
         the registry only changes rows associated with this process.
         """
         log.debug("Emptying trash in datastore %s", self.name)
-        with self._bridge.emptyTrash() as trashed:
-            for ref in trashed:
+        with self._bridge.emptyTrash() as trash_data:
+            trashed, _ = trash_data
+            for ref, _ in trashed:
                 try:
                     realID, _ = self._get_dataset_info(ref)
                 except Exception as e:

@@ -27,6 +27,9 @@ from typing import (
     Any,
     ContextManager,
     Iterable,
+    Optional,
+    Set,
+    Tuple,
     Type,
     TYPE_CHECKING,
     Union,
@@ -37,10 +40,10 @@ from ...core import DatasetId, DatasetRef
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
-    from ...core import DatasetType, DimensionUniverse
+    from ...core import DatasetType, DimensionUniverse, StoredDatastoreItemInfo
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
-    from ._opaque import OpaqueTableStorageManager
+    from ._opaque import OpaqueTableStorageManager, OpaqueTableStorage
 
 
 @immutable
@@ -192,24 +195,43 @@ class DatastoreRegistryBridge(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def emptyTrash(self) -> ContextManager[Iterable[DatasetIdRef]]:
+    def emptyTrash(self, records_table: Optional[OpaqueTableStorage] = None,
+                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
+                   record_column: Optional[str] = None,
+                   ) -> ContextManager[Tuple[Iterable[Tuple[DatasetIdRef,
+                                                            Optional[StoredDatastoreItemInfo]]],
+                                             Optional[Set[str]]]]:
         """Retrieve all the dataset ref IDs that are in the trash
         associated for this datastore, and then remove them if the context
         exists without an exception being raised.
 
-        Returns
-        -------
-        ids : `set` of `DatasetIdRef`
-            The IDs of datasets that can be safely removed from this datastore.
+        Parameters
+        ----------
+        records_table : `OpaqueTableStorage`, optional
+            Table of records to query with the trash records.
+        record_class : `type` of `StoredDatastoreItemInfo`, optional
+            Class to use when reading records from ``records_table``.
+        record_column : `str`, optional
+            Name of the column in records_table that refers to the artifact.
+
+        Yields
+        ------
+        matches : iterable of (`DatasetIdRef`, `StoredDatastoreItemInfo`)
+            The IDs of datasets that can be safely removed from this datastore
+            and the corresponding information from the records table.
             Can be empty.
+        artifacts_to_keep : `set` of `str`, optional
+            Any external artifacts that are known to the table but which should
+            not be deleted. If `None`, the caller should check themselves.
 
         Examples
         --------
         Typical usage by a Datastore is something like::
 
-            with self.bridge.emptyTrash() as iter:
-                for ref in iter:
-                    # Remove artifacts associated with ref.id,
+            with self.bridge.emptyTrash() as trashed:
+                iter, to_keep = trashed
+                for ref, info in iter:
+                    # Remove artifacts associated with id,
                     # raise an exception if something goes wrong.
 
         Notes
@@ -222,6 +244,9 @@ class DatastoreRegistryBridge(ABC):
         artifact cannot be removed only because it is already gone - this
         condition is an unavoidable outcome of concurrent delete operations,
         and must not be considered and error for those to be safe.
+
+        If a table record is provided the trashed records will be deleted
+        when the context manager completes.
         """
         raise NotImplementedError()
 

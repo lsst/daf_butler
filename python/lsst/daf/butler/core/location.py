@@ -23,9 +23,6 @@ from __future__ import annotations
 
 __all__ = ("Location", "LocationFactory")
 
-import os
-import os.path
-
 from typing import (
     Optional,
     Union,
@@ -214,19 +211,21 @@ class LocationFactory:
         """Return the network location of root location of the `Datastore`."""
         return self._datastoreRootUri.netloc
 
-    def fromPath(self, path: str) -> Location:
+    def fromPath(self, path: Union[str, ButlerURI]) -> Location:
         """Create a `Location` from a POSIX path.
 
         Parameters
         ----------
-        path : `str`
+        path : `str` or `ButlerURI`
             A standard POSIX path, relative to the `Datastore` root.
+            If it is a `ButlerURI` it must not be absolute.
 
         Returns
         -------
         location : `Location`
             The equivalent `Location`.
         """
-        if os.path.isabs(path):
+        path = ButlerURI(path, forceAbsolute=False)
+        if path.isabs():
             raise ValueError("LocationFactory path must be relative to datastore, not absolute.")
         return Location(self._datastoreRootUri, path)
