@@ -29,6 +29,7 @@ __all__ = [
 ]
 
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from contextlib import contextmanager
 from typing import (
     Any,
@@ -1430,10 +1431,59 @@ class Database(ABC):
             # while reporting that no rows were affected.
             return 0
         sql = table.delete()
-        whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
-        if whereTerms:
-            sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
-        return self._connection.execute(sql, *rows).rowcount
+        columns = list(columns)  # Force iterators to list
+
+        # More efficient to use IN operator if there is only one
+        # variable changing across all rows.
+        content: Dict[str, Set] = defaultdict(set)
+        if len(columns) == 1:
+            # Nothing to calculate since we can always use IN
+            column = columns[0]
+            changing_columns = [column]
+            content[column] = set(row[column] for row in rows)
+        else:
+            for row in rows:
+                for k, v in row.items():
+                    content[k].add(v)
+            changing_columns = [col for col, values in content.items() if len(values) > 1]
+
+        if len(changing_columns) != 1:
+            # More than one column changes each time so do explicit bind
+            # parameters and have each row processed separately.
+            whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
+            if whereTerms:
+                sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
+            return self._connection.execute(sql, *rows).rowcount
+        else:
+            # One of the columns has changing values but any others are
+            # fixed. In this case we can use an IN operator and be more
+            # efficient.
+            name = changing_columns.pop()
+
+            # Simple where clause for the unchanging columns
+            clauses = []
+            for k, v in content.items():
+                if k == name:
+                    continue
+                column = table.columns[k]
+                # The set only has one element
+                clauses.append(column == v.pop())
+
+            # The IN operator will not work for "infinite" numbers of
+            # rows so must batch it up into distinct calls.
+            in_content = list(content[name])
+            n_elements = len(in_content)
+
+            rowcount = 0
+            iposn = 0
+            n_per_loop = 1_000  # Controls how many items to put in IN clause
+            for iposn in range(0, n_elements, n_per_loop):
+                endpos = iposn + n_per_loop
+                in_clause = table.columns[name].in_(in_content[iposn:endpos])
+
+                newsql = sql.where(sqlalchemy.sql.and_(*clauses, in_clause))
+                rowcount += self._connection.execute(newsql).rowcount
+            return rowcount
 
     def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
         """Update one or more rows in a table.
