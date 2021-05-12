@@ -1578,7 +1578,7 @@ class FileDatastore(GenericBaseDatastore):
             log.debug("Doing multi-dataset trash in datastore %s", self.name)
             # Assumed to be an iterable of refs so bulk mode enabled.
             try:
-                self._move_to_trash_in_registry(ref)
+                self.bridge.moveToTrash(ref)
             except Exception as e:
                 if ignore_errors:
                     log.warning("Unexpected issue moving multiple datasets to trash: %s", e)
@@ -1610,7 +1610,7 @@ class FileDatastore(GenericBaseDatastore):
 
         # Mark dataset as trashed
         try:
-            self._move_to_trash_in_registry([ref])
+            self.bridge.moveToTrash([ref])
         except Exception as e:
             if ignore_errors:
                 log.warning(f"Attempted to mark dataset ({ref}) to be trashed in datastore {self.name} "

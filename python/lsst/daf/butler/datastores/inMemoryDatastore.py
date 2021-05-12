@@ -507,7 +507,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         """
         if not isinstance(ref, DatasetRef):
             log.debug("Bulk trashing of datasets in datastore %s", self.name)
-            self._move_to_trash_in_registry(ref)
+            self.bridge.moveToTrash(ref)
             return
 
         log.debug("Trash %s in datastore %s", ref, self.name)
@@ -517,7 +517,7 @@ class InMemoryDatastore(GenericBaseDatastore):
             self._get_dataset_info(ref)
 
             # Move datasets to trash table
-            self._move_to_trash_in_registry([ref])
+            self.bridge.moveToTrash([ref])
         except Exception as e:
             if ignore_errors:
                 log.warning("Error encountered moving dataset %s to trash in datastore %s: %s",
