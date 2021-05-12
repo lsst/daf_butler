@@ -1447,7 +1447,17 @@ class Database(ABC):
                     content[k].add(v)
             changing_columns = [col for col, values in content.items() if len(values) > 1]
 
-        if len(changing_columns) == 1:
+        if len(changing_columns) != 1:
+            # More than one column changes each time so do explicit bind
+            # parameters and have each row processed separately.
+            whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
+            if whereTerms:
+                sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
+            return self._connection.execute(sql, *rows).rowcount
+        else:
+            # One of the columns has changing values but any others are
+            # fixed. In this case we can use an IN operator and be more
+            # efficient.
             name = changing_columns.pop()
 
             # Simple where clause for the unchanging columns
@@ -1474,11 +1484,6 @@ class Database(ABC):
                 newsql = sql.where(sqlalchemy.sql.and_(*clauses, in_clause))
                 rowcount += self._connection.execute(newsql).rowcount
             return rowcount
-        else:
-            whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
-            if whereTerms:
-                sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
-            return self._connection.execute(sql, *rows).rowcount
 
     def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
         """Update one or more rows in a table.
