@@ -132,14 +132,14 @@ class GenericBaseDatastore(Datastore):
         self.bridge.insert(registryRefs.values())
         self.addStoredItemInfo(expandedRefs, expandedItemInfos)
 
-    def _move_to_trash_in_registry(self, ref: DatasetRef) -> None:
-        """Tell registry that this dataset and associated components
+    def _move_to_trash_in_registry(self, refs: Iterable[DatasetRef]) -> None:
+        """Tell registry that these datasets and associated components
         are to be trashed.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            Dataset to mark for removal from registry.
+        ref : iterable of `DatasetRef`
+            Datasets to mark for removal from registry.
 
         Notes
         -----
@@ -148,7 +148,7 @@ class GenericBaseDatastore(Datastore):
         # Note that a ref can point to component dataset refs that
         # have been deleted already from registry but are still in
         # the python object. moveToTrash will deal with that.
-        self.bridge.moveToTrash([ref])
+        self.bridge.moveToTrash(refs)
 
     def _post_process_get(self, inMemoryDataset: Any, readStorageClass: StorageClass,
                           assemblerParams: Optional[Mapping[str, Any]] = None,
