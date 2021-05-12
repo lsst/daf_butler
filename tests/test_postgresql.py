@@ -25,6 +25,7 @@ import itertools
 import secrets
 import unittest
 import gc
+import warnings
 
 import astropy.time
 try:
@@ -186,10 +187,23 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
             sq1.columns.timespan.overlaps(sq2.columns.timespan).label("overlaps"),
         ])
 
-        dbResults = {
-            (row[query.columns.n1], row[query.columns.n2]): row[query.columns.overlaps]
-            for row in db.query(query)
-        }
+        # `columns` is deprecated since 1.4, but
+        # `selected_columns` method did not exist in 1.3.
+        if hasattr(query, "selected_columns"):
+            columns = query.selected_columns
+        else:
+            columns = query.columns
+
+        # SQLAlchemy issues a warning about cartesian product of two tables,
+        # which we do intentionally. Disable that warning temporarily.
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*cartesian product",
+                                    category=sqlalchemy.exc.SAWarning)
+            dbResults = {
+                (row[columns.n1], row[columns.n2]): row[columns.overlaps]
+                for row in db.query(query)
+            }
+
         pyResults = {
             (n1, n2): t1.overlaps(t2)
             for (n1, t1), (n2, t2) in itertools.product(enumerate(timespans), enumerate(timespans))

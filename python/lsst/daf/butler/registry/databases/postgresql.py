@@ -192,6 +192,8 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
 
     impl = sqlalchemy.dialects.postgresql.INT8RANGE
 
+    cache_ok = True
+
     def process_bind_param(self, value: Optional[Timespan],
                            dialect: sqlalchemy.engine.Dialect
                            ) -> Optional[psycopg2.extras.NumericRange]:
