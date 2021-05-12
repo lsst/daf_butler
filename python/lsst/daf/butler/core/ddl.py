@@ -99,6 +99,8 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
 
     impl = sqlalchemy.Text
 
+    cache_ok = True
+
     def __init__(self, nbytes: int, *args: Any, **kwargs: Any):
         length = 4*ceil(nbytes/3) if self.impl == sqlalchemy.String else None
         super().__init__(*args, length=length, **kwargs)
@@ -153,6 +155,8 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
 
     impl = sqlalchemy.BigInteger
 
+    cache_ok = True
+
     def process_bind_param(self, value: Optional[astropy.time.Time], dialect: sqlalchemy.engine.Dialect
                            ) -> Optional[int]:
         if value is None:
@@ -179,6 +183,8 @@ class GUID(sqlalchemy.TypeDecorator):
     """
 
     impl = sqlalchemy.CHAR
+
+    cache_ok = True
 
     def load_dialect_impl(self, dialect: sqlalchemy.Dialect) -> sqlalchemy.TypeEngine:
         if dialect.name == 'postgresql':
