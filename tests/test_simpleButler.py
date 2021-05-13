@@ -26,6 +26,7 @@ import tempfile
 from typing import Any
 import unittest
 import uuid
+import re
 
 try:
     import numpy as np
@@ -542,6 +543,37 @@ class SimpleButlerTestCase(unittest.TestCase):
                     self.assertEqual(r_json, r)
                     # Also check equality of each of the components as dicts
                     self.assertEqual(r_json.toDict(), r.toDict())
+
+    def testWildcardQueries(self):
+        """Test that different collection type queries work."""
+
+        # Import data to play with.
+        butler = self.makeButler(writeable=True)
+        butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+
+        # Create some collections
+        created = {"collection", "u/user/test", "coll3"}
+        for collection in created:
+            butler.registry.registerCollection(collection, type=CollectionType.RUN)
+
+        collections = butler.registry.queryCollections()
+        self.assertEqual(set(collections), created)
+
+        expressions = (
+            ("collection", {"collection"}),
+            (..., created),
+            ("*", created),
+            (("collection", "*"), created),
+            ("u/*", {"u/user/test"}),
+            (re.compile("u.*"), {"u/user/test"}),
+            (re.compile(".*oll.*"), {"collection", "coll3"}),
+            ("*oll*", {"collection", "coll3"}),
+            ((re.compile(r".*\d$"), "u/user/test"), {"coll3", "u/user/test"}),
+            ("*[0-9]", {"coll3"}),
+        )
+        for expression, expected in expressions:
+            result = butler.registry.queryCollections(expression)
+            self.assertEqual(set(result), expected)
 
 
 class SimpleButlerUUIDTestCase(SimpleButlerTestCase):
