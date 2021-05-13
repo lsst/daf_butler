@@ -45,10 +45,10 @@ from typing import (
 
 from lsst.utils import doImport
 from lsst.daf.butler import ButlerURI, Datastore, DatastoreConfig, DatasetTypeNotSupportedError, \
-    DatastoreValidationError, Constraints, FileDataset
+    DatastoreValidationError, Constraints, FileDataset, DatasetRef
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import Config, DatasetRef, DatasetType, LookupKey, StorageClass
+    from lsst.daf.butler import Config, DatasetType, LookupKey, StorageClass
     from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
@@ -629,8 +629,13 @@ class ChainedDatastore(Datastore):
         for datastore in tuple(self.datastores):
             datastore.forget(refs)
 
-    def trash(self, ref: DatasetRef, ignore_errors: bool = True) -> None:
-        log.debug("Trashing %s", ref)
+    def trash(self, ref: Union[DatasetRef, Iterable[DatasetRef]], ignore_errors: bool = True) -> None:
+        if isinstance(ref, DatasetRef):
+            ref_label = str(ref)
+        else:
+            ref_label = "bulk datasets"
+
+        log.debug("Trashing %s", ref_label)
 
         counter = 0
         for datastore in self.datastores:
@@ -641,7 +646,7 @@ class ChainedDatastore(Datastore):
                 pass
 
         if counter == 0:
-            err_msg = f"Could not mark for removal from any child datastore: {ref}"
+            err_msg = f"Could not mark for removal from any child datastore: {ref_label}"
             if ignore_errors:
                 log.warning(err_msg)
             else:

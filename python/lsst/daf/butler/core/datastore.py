@@ -718,20 +718,22 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def trash(self, datasetRef: DatasetRef, ignore_errors: bool = True) -> None:
+    def trash(self, ref: Union[DatasetRef, Iterable[DatasetRef]], ignore_errors: bool = True) -> None:
         """Indicate to the Datastore that a Dataset can be moved to the trash.
 
         Parameters
         ----------
-        datasetRef : `DatasetRef`
-            Reference to the required Dataset.
+        ref : `DatasetRef` or iterable thereof
+            Reference(s) to the required Dataset.
         ignore_errors : `bool`, optional
-            Determine whether errors should be ignored.
+            Determine whether errors should be ignored. When multiple
+            refs are being trashed there will be no per-ref check.
 
         Raises
         ------
         FileNotFoundError
-            When Dataset does not exist.
+            When Dataset does not exist and errors are not ignored. Only
+            checked if a single ref is supplied (and not in a list).
 
         Notes
         -----

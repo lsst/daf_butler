@@ -1241,9 +1241,7 @@ class Butler:
             refs.extend(self.registry.queryDatasets(..., collections=name, findFirst=True))
         with self.registry.transaction():
             if unstore:
-                for ref in refs:
-                    if self.datastore.exists(ref):
-                        self.datastore.trash(ref)
+                self.datastore.trash(refs)
             else:
                 self.datastore.forget(refs)
             for name in names:
@@ -1283,7 +1281,6 @@ class Butler:
             Raised if the butler is read-only or arguments are mutually
             inconsistent.
         """
-
         # See pruneDatasets comments for more information about the logic here;
         # the cases are almost the same, but here we can rely on Registry to
         # take care everything but Datastore deletion when we remove the
@@ -1313,10 +1310,10 @@ class Butler:
                 for parent in unlink:
                     remove(name, parent)
             if unstore:
-                for ref in self.registry.queryDatasets(..., collections=name, findFirst=True):
-                    if self.datastore.exists(ref):
-                        self.datastore.trash(ref)
+                refs = self.registry.queryDatasets(..., collections=name, findFirst=True)
+                self.datastore.trash(refs)
             self.registry.removeCollection(name)
+
         if unstore:
             # Point of no return for removing artifacts
             self.datastore.emptyTrash()
@@ -1396,20 +1393,7 @@ class Butler:
         # Registry operations.
         with self.registry.transaction():
             if unstore:
-                for ref in refs:
-                    # There is a difference between a concrete composite
-                    # and virtual composite. In a virtual composite the
-                    # datastore is never given the top level DatasetRef. In
-                    # the concrete composite the datastore knows all the
-                    # refs and will clean up itself if asked to remove the
-                    # parent ref.  We can not check configuration for this
-                    # since we can not trust that the configuration is the
-                    # same. We therefore have to ask if the ref exists or
-                    # not.  This is consistent with the fact that we want
-                    # to ignore already-removed-from-datastore datasets
-                    # anyway.
-                    if self.datastore.exists(ref):
-                        self.datastore.trash(ref)
+                self.datastore.trash(refs)
             if purge:
                 self.registry.removeDatasets(refs)
             elif disassociate:

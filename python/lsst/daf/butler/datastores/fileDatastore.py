@@ -1572,25 +1572,21 @@ class FileDatastore(GenericBaseDatastore):
         self._register_datasets(artifacts)
 
     @transactional
-    def trash(self, ref: DatasetRef, ignore_errors: bool = True) -> None:
-        """Indicate to the datastore that a dataset can be removed.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the required Dataset.
-        ignore_errors : `bool`
-            If `True` return without error even if something went wrong.
-            Problems could occur if another process is simultaneously trying
-            to delete.
-
-        Raises
-        ------
-        FileNotFoundError
-            Attempt to remove a dataset that does not exist.
-        """
+    def trash(self, ref: Union[DatasetRef, Iterable[DatasetRef]], ignore_errors: bool = True) -> None:
         # Get file metadata and internal metadata
-        log.debug("Trashing %s in datastore %s", ref, self.name)
+        if not isinstance(ref, DatasetRef):
+            log.debug("Doing multi-dataset trash in datastore %s", self.name)
+            # Assumed to be an iterable of refs so bulk mode enabled.
+            try:
+                self.bridge.moveToTrash(ref)
+            except Exception as e:
+                if ignore_errors:
+                    log.warning("Unexpected issue moving multiple datasets to trash: %s", e)
+                else:
+                    raise
+            return
+
+        log.debug("Trashing dataset %s in datastore %s", ref, self.name)
 
         fileLocations = self._get_dataset_locations_info(ref)
 
@@ -1614,7 +1610,7 @@ class FileDatastore(GenericBaseDatastore):
 
         # Mark dataset as trashed
         try:
-            self._move_to_trash_in_registry(ref)
+            self.bridge.moveToTrash([ref])
         except Exception as e:
             if ignore_errors:
                 log.warning(f"Attempted to mark dataset ({ref}) to be trashed in datastore {self.name} "

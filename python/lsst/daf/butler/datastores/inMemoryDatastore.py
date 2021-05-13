@@ -42,12 +42,12 @@ from typing import (
     Union,
 )
 
-from lsst.daf.butler import DatasetId, StoredDatastoreItemInfo, StorageClass, ButlerURI
+from lsst.daf.butler import DatasetId, DatasetRef, StoredDatastoreItemInfo, StorageClass, ButlerURI
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import (Config, DatasetRef, DatasetType,
+    from lsst.daf.butler import (Config, DatasetType,
                                  LookupKey)
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
@@ -483,20 +483,21 @@ class InMemoryDatastore(GenericBaseDatastore):
         for ref in refs:
             self.removeStoredItemInfo(ref)
 
-    def trash(self, ref: DatasetRef, ignore_errors: bool = False) -> None:
+    def trash(self, ref: Union[DatasetRef, Iterable[DatasetRef]], ignore_errors: bool = False) -> None:
         """Indicate to the Datastore that a dataset can be removed.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            Reference to the required Dataset.
+        ref : `DatasetRef` or iterable thereof
+            Reference to the required Dataset(s).
         ignore_errors: `bool`, optional
             Indicate that errors should be ignored.
 
         Raises
         ------
         FileNotFoundError
-            Attempt to remove a dataset that does not exist.
+            Attempt to remove a dataset that does not exist. Only relevant
+            if a single dataset ref is given.
 
         Notes
         -----
@@ -504,6 +505,10 @@ class InMemoryDatastore(GenericBaseDatastore):
         since all internal changes are isolated to solely this process and
         the registry only changes rows associated with this process.
         """
+        if not isinstance(ref, DatasetRef):
+            log.debug("Bulk trashing of datasets in datastore %s", self.name)
+            self.bridge.moveToTrash(ref)
+            return
 
         log.debug("Trash %s in datastore %s", ref, self.name)
 
@@ -512,7 +517,7 @@ class InMemoryDatastore(GenericBaseDatastore):
             self._get_dataset_info(ref)
 
             # Move datasets to trash table
-            self._move_to_trash_in_registry(ref)
+            self.bridge.moveToTrash([ref])
         except Exception as e:
             if ignore_errors:
                 log.warning("Error encountered moving dataset %s to trash in datastore %s: %s",
@@ -544,6 +549,9 @@ class InMemoryDatastore(GenericBaseDatastore):
             for ref, _ in trashed:
                 try:
                     realID, _ = self._get_dataset_info(ref)
+                except FileNotFoundError:
+                    # Dataset already removed so ignore it
+                    continue
                 except Exception as e:
                     if ignore_errors:
                         log.warning("Emptying trash in datastore %s but encountered an "
