@@ -22,12 +22,11 @@ from __future__ import annotations
 
 from astropy.table import Table as AstropyTable
 from collections import defaultdict, namedtuple
-from typing import Any, Dict
+from typing import Dict
 import numpy as np
 import uuid
 
 from .. import Butler
-from ..core.utils import globToRegex
 from ..cli.utils import sortAstropyTable
 
 
@@ -153,13 +152,12 @@ class QueryDatasets:
         self.showUri = show_uri
 
     def _getDatasets(self, glob, collections, where, find_first):
-        dataset: Any = globToRegex(glob)
-        if not dataset:
-            dataset = ...
+        if not glob:
+            glob = ...
+        if not collections:
+            collections = ...
 
-        collections = globToRegex(collections)
-
-        self.datasets = self.butler.registry.queryDatasets(datasetType=dataset,
+        self.datasets = self.butler.registry.queryDatasets(datasetType=glob,
                                                            collections=collections,
                                                            where=where,
                                                            findFirst=find_first)

@@ -24,7 +24,6 @@ __all__ = ("retrieveArtifacts",)
 import logging
 
 from .. import Butler
-from ..core.utils import globToRegex
 
 log = logging.getLogger(__name__)
 
@@ -62,17 +61,17 @@ def retrieveArtifacts(repo, destination, dataset_type, collections, where, find_
     transferred : `list` of `ButlerURI`
         The destination URIs of every transferred artifact.
     """
-    dataset = globToRegex(dataset_type)
-    if not dataset:
-        dataset = ...
+    if not dataset_type:
+        dataset_type = ...
 
-    collections = globToRegex(collections)
+    if not collections:
+        collections = ...
 
     butler = Butler(repo, writeable=False)
 
     # Need to store in list so we can count the number to give some feedback
     # to caller.
-    refs = list(butler.registry.queryDatasets(datasetType=dataset,
+    refs = list(butler.registry.queryDatasets(datasetType=dataset_type,
                                               collections=collections,
                                               where=where,
                                               findFirst=find_first))
