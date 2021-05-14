@@ -19,6 +19,7 @@ Arguments that specify one or more dataset types can generally take any of the f
 
  - `DatasetType` instances;
  - `str` values (corresponding to `DatasetType.name`);
+ - `str` values using glob wildcard syntax which will be converted to `re.Pattern`;
  - `re.Pattern` values (matched to `DatasetType.name` strings, via `~re.Pattern.fullmatch`);
  - iterables of any of the above;
  - the special value "``...``", which matches all dataset types.
@@ -33,6 +34,7 @@ Collection expressions
 Arguments that specify one or more collections are similar to those for dataset types; they can take:
 
  - `str` values (the full collection name);
+ - `str` values using glob wildcard syntax which will be converted to `re.Pattern`;
  - `re.Pattern` values (matched to the collection name, via `~re.Pattern.fullmatch`);
  - iterables of any of the above;
  - the special value "``...``", which matches all collections;
