@@ -479,3 +479,21 @@ def retrieve_artifacts(**kwargs):
             print(uri)
         print()
     print(f"Number of artifacts retrieved into destination {kwargs['destination']}: {len(transferred)}")
+
+
+@click.command(cls=ButlerCommand)
+@click.argument("source", required=True)
+@click.argument("dest", required=True)
+@query_datasets_options(showUri=False, useArguments=False, repo=False)
+@transfer_option()
+@options_file_option()
+def transfer_datasets(**kwargs):
+    """Transfer datasets from a source butler to a destination butler.
+
+    SOURCE is a URI to the Butler repository containing the RUN dataset.
+
+    DEST is a URI to the Butler repository that will receive copies of the
+    datasets.
+    """
+    number = script.transferDatasets(**kwargs)
+    print(f"Number of datasets transferred: {number}")

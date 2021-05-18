@@ -34,3 +34,4 @@ from .queryDatasetTypes import queryDatasetTypes
 from .queryDimensionRecords import queryDimensionRecords
 from .removeDatasetType import removeDatasetType
 from .retrieveArtifacts import retrieveArtifacts
+from .transferDatasets import transferDatasets
