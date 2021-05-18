@@ -58,7 +58,7 @@ from lsst.utils import doImport
 from lsst.daf.butler.core.utils import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
 from lsst.daf.butler import StorageClassFactory
-from lsst.daf.butler import DatasetType, DatasetRef
+from lsst.daf.butler import DatasetType, DatasetRef, DatasetIdGenEnum
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from lsst.daf.butler import FileDataset
 from lsst.daf.butler import CollectionSearch, CollectionType
@@ -767,7 +767,7 @@ class ButlerTests(ButlerPutGetTests):
 
         # Now that we have some dataset types registered, validate them
         butler.validateConfiguration(ignore=["test_metric_comp", "metric3", "calexp", "DummySC",
-                                             "datasetType.component"])
+                                             "datasetType.component", "random_data", "random_data_2"])
 
         # Add a new datasetType that will fail template validation
         self.addDatasetType("test_metric_comp", dimensions, storageClass, butler.registry)
@@ -780,7 +780,7 @@ class ButlerTests(ButlerPutGetTests):
 
         # Rerun validation but ignore the bad datasetType
         butler.validateConfiguration(ignore=["test_metric_comp", "metric3", "calexp", "DummySC",
-                                             "datasetType.component"])
+                                             "datasetType.component", "random_data", "random_data_2"])
 
     def testTransaction(self):
         butler = Butler(self.tmpConfigFile, run="ingest")
@@ -1485,6 +1485,146 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         port = free_socket.getsockname()[1]
         free_socket.close()
         return port
+
+
+class PosixDatastoreTransfers(unittest.TestCase):
+    """Test data transfers between butlers.
+
+    Test for different managers. UUID to UUID and integer to integer are
+    tested. UUID to integer is not supported since we do not currently
+    want to allow that.  Integer to UUID is supported with the caveat
+    that UUID4 will be generated and this will be incorrect for raw
+    dataset types. The test ignores that.
+    """
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.storageClassFactory = StorageClassFactory()
+        cls.storageClassFactory.addFromConfig(cls.configFile)
+
+    def setUp(self):
+        self.root = makeTestTempDir(TESTDIR)
+        self.config = Config(self.configFile)
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def create_butler(self, manager, label):
+        config = Config(self.configFile)
+        config["registry", "managers", "datasets"] = manager
+        return Butler(Butler.makeRepo(f"{self.root}/butler{label}", config=config),
+                      writeable=True)
+
+    def create_butlers(self, manager1, manager2):
+        self.source_butler = self.create_butler(manager1, "1")
+        self.target_butler = self.create_butler(manager2, "2")
+
+    def testTransferUuidToUuid(self):
+        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            "lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            )
+        # Setting id_gen_map should have no effect here
+        self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
+
+    def testTransferIntToInt(self):
+        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManager",
+                            "lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManager",
+                            )
+        # int dataset ID only allows UNIQUE
+        self.assertButlerTransfers()
+
+    def testTransferIntToUuid(self):
+        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManager",
+                            "lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            )
+        self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
+
+    def assertButlerTransfers(self, id_gen_map=None):
+        """Test that a run can be transferred to another butler."""
+
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
+        datasetTypeName = "random_data"
+
+        # Test will create 3 collections and we will want to transfer
+        # two of those three.
+        runs = ["run1", "run2", "other"]
+
+        # Also want to use two different dataset types to ensure that
+        # grouping works.
+        datasetTypeNames = ["random_data", "random_data_2"]
+
+        # Create the run collections in the source butler.
+        for run in runs:
+            self.source_butler.registry.registerCollection(run, CollectionType.RUN)
+
+        # Create dimensions in both butlers (transfer will not create them).
+        n_exposures = 30
+        for butler in (self.source_butler, self.target_butler):
+            butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
+            butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
+                                                                    "name": "d-r",
+                                                                    "band": "R"})
+            butler.registry.insertDimensionData("detector", {"instrument": "DummyCamComp",
+                                                             "id": 1, "full_name": "det1"})
+
+            dimensions = butler.registry.dimensions.extract(["instrument", "exposure"])
+            for datasetTypeName in datasetTypeNames:
+                datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+                butler.registry.registerDatasetType(datasetType)
+
+            for i in range(n_exposures):
+                butler.registry.insertDimensionData("exposure", {"instrument": "DummyCamComp",
+                                                                 "id": i, "obs_id": f"exp{i}",
+                                                                 "physical_filter": "d-r"})
+
+        # Write a dataset to an unrelated run -- this will ensure that
+        # we are rewriting integer dataset ids in the target if necessary.
+        # Will not be relevant for UUID.
+        run = "distraction"
+        butler = Butler(butler=self.source_butler, run=run)
+        butler.put({"unrelated": 5, "dataset": "test"}, datasetTypeName,
+                   exposure=1, detector=1, instrument="DummyCamComp", physical_filter="d-r")
+
+        # Write some example metrics to the source
+        butler = Butler(butler=self.source_butler)
+
+        source_refs = []
+        for i in range(n_exposures):
+            # Put a third of datasets into each collection, only retain
+            # two thirds.
+            index = i % 3
+            run = runs[index]
+            datasetTypeName = datasetTypeNames[i % 2]
+
+            metric = {"something": i,
+                      "other": "metric",
+                      "list": [2*x for x in range(i)]}
+            dataId = {"exposure": i, "detector": 1, "instrument": "DummyCamComp", "physical_filter": "d-r"}
+            ref = butler.put(metric, datasetTypeName, dataId=dataId, run=run)
+            if index < 2:
+                source_refs.append(ref)
+            new_metric = butler.get(ref.unresolved(), collections=run)
+            self.assertEqual(new_metric, metric)
+
+        # Now transfer them to the second butler
+        transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
+                                                       id_gen_map=id_gen_map)
+        self.assertEqual(len(transferred), 20)
+
+        # Now try to get the same refs from the new butler.
+        for ref in source_refs:
+            unresolved_ref = ref.unresolved()
+            new_metric = self.target_butler.get(unresolved_ref, collections=ref.run)
+            old_metric = self.source_butler.get(unresolved_ref, collections=ref.run)
+            self.assertEqual(new_metric, old_metric)
 
 
 if __name__ == "__main__":

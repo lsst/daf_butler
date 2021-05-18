@@ -367,6 +367,31 @@ class FileDatastore(GenericBaseDatastore):
         records = self._table.fetch(dataset_id=ref.id)
         return [StoredFileInfo.from_record(record) for record in records]
 
+    def _get_stored_records_associated_with_refs(self,
+                                                 refs: Iterable[DatasetIdRef]
+                                                 ) -> Dict[DatasetId, List[StoredFileInfo]]:
+        """Retrieve all records associated with the provided refs.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetIdRef`
+            The refs for which records are to be retrieved.
+
+        Returns
+        -------
+        records : `dict` of [`DatasetId`, `list` of `StoredFileInfo`]
+            The matching records indexed by the ref ID.  The number of entries
+            in the dict can be smaller than the number of requested refs.
+        """
+        records = self._table.fetch(dataset_id=[ref.id for ref in refs])
+
+        # Uniqueness is dataset_id + component so can have multiple records
+        # per ref.
+        records_by_ref = defaultdict(list)
+        for record in records:
+            records_by_ref[record["dataset_id"]].append(StoredFileInfo.from_record(record))
+        return records_by_ref
+
     def _refs_associated_with_artifacts(self, paths: List[Union[str, ButlerURI]]) -> Dict[str,
                                                                                           Set[DatasetId]]:
         """Return paths and associated dataset refs.
@@ -1722,6 +1747,131 @@ class FileDatastore(GenericBaseDatastore):
                                   location.uri, self.name, e)
                     else:
                         raise
+
+    @transactional
+    def transfer_from(self, source_datastore: Datastore, refs: Iterable[DatasetRef],
+                      local_refs: Optional[Iterable[DatasetRef]] = None,
+                      transfer: str = "auto") -> None:
+        # Docstring inherited
+        if type(self) is not type(source_datastore):
+            raise TypeError(f"Datastore mismatch between this datastore ({type(self)}) and the "
+                            f"source datastore ({type(source_datastore)}).")
+
+        # Be explicit for mypy
+        if not isinstance(source_datastore, FileDatastore):
+            raise TypeError("Can only transfer to a FileDatastore from another FileDatastore, not"
+                            f" {type(source_datastore)}")
+
+        # Stop early if "direct" transfer mode is requested. That would
+        # require that the URI inside the source datastore should be stored
+        # directly in the target datastore, which seems unlikely to be useful
+        # since at any moment the source datastore could delete the file.
+        if transfer == "direct":
+            raise ValueError("Can not transfer from a source datastore using direct mode since"
+                             " those files are controlled by the other datastore.")
+
+        # We will go through the list multiple times so must convert
+        # generators to lists.
+        refs = list(refs)
+
+        if local_refs is None:
+            local_refs = refs
+        else:
+            local_refs = list(local_refs)
+
+        # In order to handle disassembled composites the code works
+        # at the records level since it can assume that internal APIs
+        # can be used.
+        # - If the record already exists in the destination this is assumed
+        #   to be okay.
+        # - If there is no record but the source and destination URIs are
+        #   identical no transfer is done but the record is added.
+        # - If the source record refers to an absolute URI currently assume
+        #   that that URI should remain absolute and will be visible to the
+        #   destination butler. May need to have a flag to indicate whether
+        #   the dataset should be transferred. This will only happen if
+        #   the detached Butler has had a local ingest.
+
+        # What we really want is all the records in the source datastore
+        # associated with these refs. Or derived ones if they don't exist
+        # in the source.
+        source_records = source_datastore._get_stored_records_associated_with_refs(refs)
+
+        # The source dataset_ids are the keys in these records
+        source_ids = set(source_records)
+        log.debug("Number of datastore records found in source: %d", len(source_ids))
+
+        # The not None check is to appease mypy
+        requested_ids = set(ref.id for ref in refs if ref.id is not None)
+        missing_ids = requested_ids - source_ids
+
+        # Missing IDs can be okay if that datastore has allowed
+        # gets based on file existence. Should we transfer what we can
+        # or complain about it and warn?
+        if missing_ids and not source_datastore.trustGetRequest:
+            raise ValueError(f"Some datasets are missing from source datastore {source_datastore}:"
+                             f" {missing_ids}")
+
+        # Need to map these missing IDs to a DatasetRef so we can guess
+        # the details.
+        if missing_ids:
+            log.info("Number of expected datasets missing from source datastore records: %d",
+                     len(missing_ids))
+            id_to_ref = {ref.id: ref for ref in refs if ref.id in missing_ids}
+
+            for missing in missing_ids:
+                expected = self._get_expected_dataset_locations_info(id_to_ref[missing])
+                source_records[missing].extend(info for _, info in expected)
+
+        # See if we already have these records
+        target_records = self._get_stored_records_associated_with_refs(local_refs)
+
+        # The artifacts to register
+        artifacts = []
+
+        # Refs that already exist
+        already_present = []
+
+        # Now can transfer the artifacts
+        for source_ref, target_ref in zip(refs, local_refs):
+            if target_ref.id in target_records:
+                # Already have an artifact for this.
+                already_present.append(target_ref)
+                continue
+
+            # mypy needs to know these are always resolved refs
+            for info in source_records[source_ref.getCheckedId()]:
+                source_location = info.file_location(source_datastore.locationFactory)
+                target_location = info.file_location(self.locationFactory)
+                if source_location == target_location:
+                    # Either the dataset is already in the target datastore
+                    # (which is how execution butler currently runs) or
+                    # it is an absolute URI.
+                    if source_location.pathInStore.isabs():
+                        # Just because we can see the artifact when running
+                        # the transfer doesn't mean it will be generally
+                        # accessible to a user of this butler. For now warn
+                        # but assume it will be accessible.
+                        log.warning("Transfer request for an outside-datastore artifact has been found at %s",
+                                    source_location)
+                else:
+                    # Need to transfer it to the new location.
+                    # Assume we should always overwrite. If the artifact
+                    # is there this might indicate that a previous transfer
+                    # was interrupted but was not able to be rolled back
+                    # completely (eg pre-emption) so follow Datastore default
+                    # and overwrite.
+                    target_location.uri.transfer_from(source_location.uri, transfer=transfer,
+                                                      overwrite=True, transaction=self._transaction)
+
+                artifacts.append((target_ref, info))
+
+        self._register_datasets(artifacts)
+
+        if already_present:
+            n_skipped = len(already_present)
+            log.info("Skipped transfer of %d dataset%s already present in datastore", n_skipped,
+                     "" if n_skipped == 1 else "s")
 
     @transactional
     def forget(self, refs: Iterable[DatasetRef]) -> None:
