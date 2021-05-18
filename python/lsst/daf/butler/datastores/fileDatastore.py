@@ -364,7 +364,7 @@ class FileDatastore(GenericBaseDatastore):
 
         # Look for the dataset_id -- there might be multiple matches
         # if we have disassembled the dataset.
-        records = list(self._table.fetch(dataset_id=ref.id))
+        records = self._table.fetch(dataset_id=ref.id)
         return [StoredFileInfo.from_record(record) for record in records]
 
     def _refs_associated_with_artifacts(self, paths: List[Union[str, ButlerURI]]) -> Dict[str,
@@ -381,7 +381,7 @@ class FileDatastore(GenericBaseDatastore):
         mapping : `dict` of [`str`, `set` [`DatasetId`]]
             Mapping of each path to a set of associated database IDs.
         """
-        records = list(self._table.fetch(path=[str(path) for path in paths]))
+        records = self._table.fetch(path=[str(path) for path in paths])
         result = defaultdict(set)
         for row in records:
             result[row["path"]].add(row["dataset_id"])
