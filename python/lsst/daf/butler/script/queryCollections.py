@@ -26,7 +26,6 @@ import itertools
 from numpy import array
 
 from .. import Butler
-from ..core.utils import globToRegex
 
 
 def queryCollections(repo, glob, collection_type, chains):
@@ -54,9 +53,12 @@ def queryCollections(repo, glob, collection_type, chains):
     """
     butler = Butler(repo)
 
+    if not glob:
+        glob = ...
+
     if chains == "TABLE":
         collectionNames = list(butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
-                                                                expression=globToRegex(glob)))
+                                                                expression=glob))
         collectionTypes = [butler.registry.getCollectionType(c).name for c in collectionNames]
         collectionDefinitions = [str(butler.registry.getCollectionChain(name)) if colType == "CHAINED" else ""
                                  for name, colType in zip(collectionNames, collectionTypes)]
@@ -108,13 +110,13 @@ def queryCollections(repo, glob, collection_type, chains):
                 return [(nested(collectionName), collectionType)]
 
         collectionNameIter = butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
-                                                              expression=globToRegex(glob))
+                                                              expression=glob)
         collections = list(itertools.chain(*[getCollections(name) for name in collectionNameIter]))
         return Table(array(collections), names=("Name", "Type"))
     elif chains == "FLATTEN":
         collectionNames = list(butler.registry.queryCollections(collectionTypes=frozenset(collection_type),
                                                                 flattenChains=True,
-                                                                expression=globToRegex(glob)))
+                                                                expression=glob))
         collectionTypes = [butler.registry.getCollectionType(c).name for c in collectionNames]
         return Table((collectionNames,
                       collectionTypes),

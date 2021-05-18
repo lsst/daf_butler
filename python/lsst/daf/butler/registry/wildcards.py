@@ -46,7 +46,7 @@ from typing import (
 import sqlalchemy
 
 from ..core import DatasetType
-from ..core.utils import iterable
+from ..core.utils import iterable, globToRegex
 from ._collectionType import CollectionType
 
 if TYPE_CHECKING:
@@ -98,7 +98,7 @@ class CategorizedWildcard:
         ----------
         expression
             The expression to categorize.  May be any of:
-             - `str`;
+             - `str` (including glob patterns if ``allowPatterns`` is `True`);
              - `re.Pattern` (only if ``allowPatterns`` is `True`);
              - objects recognized by ``coerceUnrecognized`` (if provided);
              - two-element tuples of (`str`, value) where value is recognized
@@ -198,16 +198,25 @@ class CategorizedWildcard:
         # process scalars or an iterable.  We put the body of the loop inside
         # a local function so we can recurse after coercion.
 
-        def process(element: Any, alreadyCoerced: bool = False) -> None:
+        def process(element: Any, alreadyCoerced: bool = False) -> Union[EllipsisType, None]:
             if isinstance(element, str):
                 if defaultItemValue is not None:
                     self.items.append((element, defaultItemValue))
+                    return None
                 else:
-                    self.strings.append(element)
-                return
+                    # This returns a list but we know we only passed in
+                    # single value.
+                    converted = globToRegex(element)
+                    if converted is Ellipsis:
+                        return Ellipsis
+                    element = converted[0]
+                    # Let regex and ... go through to the next check
+                    if isinstance(element, str):
+                        self.strings.append(element)
+                        return None
             if allowPatterns and isinstance(element, re.Pattern):
                 self.patterns.append(element)
-                return
+                return None
             if coerceItemValue is not None:
                 try:
                     k, v = element
@@ -223,19 +232,28 @@ class CategorizedWildcard:
                             raise TypeError(f"Could not coerce tuple item value '{v}' for key '{k}'."
                                             ) from err
                     self.items.append((k, v))
-                    return
+                    return None
             if alreadyCoerced:
-                raise TypeError(f"Object '{element}' returned by coercion function is still unrecognized.")
+                raise TypeError(f"Object '{element!r}' returned by coercion function is still unrecognized.")
             if coerceUnrecognized is not None:
                 try:
                     process(coerceUnrecognized(element), alreadyCoerced=True)
                 except Exception as err:
-                    raise TypeError(f"Could not coerce expression element '{element}'.") from err
+                    raise TypeError(f"Could not coerce expression element '{element!r}'.") from err
             else:
-                raise TypeError(f"Unsupported object in wildcard expression: '{element}'.")
+                extra = "."
+                if isinstance(element, re.Pattern):
+                    extra = " and patterns are not allowed."
+                raise TypeError(f"Unsupported object in wildcard expression: '{element!r}'{extra}")
+            return None
 
         for element in iterable(expression):
-            process(element)
+            retval = process(element)
+            if retval is Ellipsis:
+                # One of the globs matched everything
+                if not allowAny:
+                    raise TypeError("This expression may not be unconstrained.")
+                return Ellipsis
         return self
 
     def makeWhereExpression(self, column: sqlalchemy.sql.ColumnElement

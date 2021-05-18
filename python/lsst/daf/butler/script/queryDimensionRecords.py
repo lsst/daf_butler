@@ -23,7 +23,6 @@ from astropy.table import Table
 
 from .. import Butler
 from ..core import Timespan
-from ..core.utils import globToRegex
 
 
 def queryDimensionRecords(repo, element, datasets, collections, where, no_check):
@@ -31,7 +30,8 @@ def queryDimensionRecords(repo, element, datasets, collections, where, no_check)
     # Registry.queryDimensionRecords except for ``no_check``, which is the
     # inverse of ``check``.
 
-    collections = globToRegex(collections)
+    if not collections:
+        collections = ...
 
     butler = Butler(repo)
 
