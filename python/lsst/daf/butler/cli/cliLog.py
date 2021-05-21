@@ -231,6 +231,9 @@ class CliLog:
         numericValue : `int`
             The python `logging` numeric value for the log level.
         """
+        if level == "VERBOSE":
+            from .. import VERBOSE
+            return VERBOSE
         return getattr(logging, level, None)
 
     @staticmethod
@@ -262,6 +265,9 @@ class CliLog:
             level = "FATAL"
         elif level == "WARNING":
             level = "WARN"
+        elif level == "VERBOSE":
+            # LSST log does not yet have verbose defined
+            return (lsstLog.Log.DEBUG + lsstLog.Log.INFO) // 2
         return getattr(lsstLog.Log, level, None)
 
     class ComponentSettings:
