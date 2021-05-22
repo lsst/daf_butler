@@ -1,0 +1,55 @@
+[tool.towncrier]
+    package = "lsst.daf.butler"
+    package_dir = "python"
+    filename = "doc/lsst.daf.butler/CHANGES.rst"
+    directory = "doc/changes"
+    title_format = "Butler {version} {project_date}"
+    issue_format = "`{issue} <https://jira.lsstcorp.org/browse/{issue}>`_"
+
+
+    [[tool.towncrier.type]]
+        directory = "feature"
+        name = "New Features"
+        showcontent = true
+
+    [[tool.towncrier.type]]
+        directory = "api"
+        name = "API Changes"
+        showcontent = true
+
+    [[tool.towncrier.type]]
+        directory = "bugfix"
+        name = "Bug Fixes"
+        showcontent = true
+
+    [[tool.towncrier.type]]
+        directory = "perf"
+        name = "Performance Enhancement"
+        showcontent = true
+
+    [[tool.towncrier.type]]
+        directory = "other"
+        name = "Other Changes and Additions"
+        showcontent = false
+
+    [[tool.towncrier.type]]
+        directory = "misc"
+        name = "Miscellaneous Changes of Minor Interest"
+        showcontent = false
+
+    [[tool.towncrier.type]]
+        directory = "removal"
+        name = "An API Removal or Deprecation"
+        showcontent = false
+
+    [[tool.towncrier.section]]
+        name = ""
+        path = ""
+
+    [[tool.towncrier.section]]
+        name = "Butler Datastores"
+        path = "datastore"
+
+    [[tool.towncrier.section]]
+        name = "Butler Registry"
+        path = "registry"
