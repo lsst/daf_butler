@@ -1,0 +1,1 @@
+Allow registry methods such as ``queryDatasets`` to use a glob-style string when specifying collection or dataset type names.
