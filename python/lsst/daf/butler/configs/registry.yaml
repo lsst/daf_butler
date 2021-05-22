@@ -9,5 +9,5 @@ registry:
     opaque: lsst.daf.butler.registry.opaque.ByNameOpaqueTableStorageManager
     dimensions: lsst.daf.butler.registry.dimensions.static.StaticDimensionRecordStorageManager
     collections: lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager
-    datasets: lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager
+    datasets: lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID
     datastores: lsst.daf.butler.registry.bridge.monolithic.MonolithicDatastoreRegistryBridgeManager
