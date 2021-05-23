@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["AmbiguousDatasetError", "DatasetId", "DatasetRef", "SerializedDatasetRef"]
+__all__ = ["AmbiguousDatasetError", "DatasetId", "DatasetRef", "SerializedDatasetRef", "SerializedDatasetId"]
 
 import uuid
 from typing import (
@@ -60,11 +60,14 @@ class PositiveInt(ConstrainedInt):
     strict = True
 
 
+# DO NOT change order in the Union, pydantic is sensitive to that!
+SerializedDatasetId = Union[uuid.UUID, PositiveInt]
+
+
 class SerializedDatasetRef(BaseModel):
     """Simplified model of a `DatasetRef` suitable for serialization."""
 
-    # DO NOT change order in the Union, pydantic is sensitive to that!
-    id: Optional[Union[uuid.UUID, PositiveInt]] = None
+    id: Optional[SerializedDatasetId] = None
     datasetType: Optional[SerializedDatasetType] = None
     dataId: Optional[SerializedDataCoordinate] = None
     run: Optional[StrictStr] = None
