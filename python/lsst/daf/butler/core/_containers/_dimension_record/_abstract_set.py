@@ -229,6 +229,8 @@ class HomogeneousDimensionRecordAbstractSet(HomogeneousDimensionRecordIterable):
 
     @property
     def data_ids(self) -> DataCoordinateAbstractSet:
+        """Set view of the data IDs that identify these records.
+        """
         return DataCoordinateSetView(
             self.by_data_id.keys(),
             self.definition.graph,

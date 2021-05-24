@@ -23,114 +23,44 @@ from __future__ import annotations
 
 __all__ = ("DataCoordinateSequence",)
 
-from typing import Any, Optional, Sequence, overload
+from abc import abstractmethod
+from typing import Any, Sequence, overload
 
-from ...dimensions import DataCoordinate, DimensionGraph
-from ._collection import _DataCoordinateCollectionBase
+from ...dimensions import DataCoordinate
+from ._collection import DataCoordinateCollection
 
 
-class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordinate]):
-    """Iterable supporting the full Sequence interface.
-
-    A `DataCoordinateIterable` implementation that supports the full
-    `collections.abc.Sequence` interface.
-
-    Parameters
-    ----------
-    dataIds : `collections.abc.Sequence` [ `DataCoordinate` ]
-        A sequence of `DataCoordinate` instances, with dimensions equal to
-        ``graph``.
-    graph : `DimensionGraph`
-        Dimensions identified by all data IDs in the set.
-    has_full : `bool`, optional
-        If `True`, the caller guarantees that `DataCoordinate.has_full` is
-        `True` for all given data IDs.  If `False`, no such guarantee is made,
-        and `DataCoordinateSet.has_full` will always be `False`.  If `None`
-        (default), `DataCoordinateSet.has_full` will be computed from the given
-        data IDs, immediately if ``check`` is `True`, or on first use if
-        ``check`` is `False`.
-    has_records : `bool`, optional
-        If `True`, the caller guarantees that `DataCoordinate.has_records` is
-        `True` for all given data IDs.  If `False`, no such guarantee is made
-        and `DataCoordinateSet.has_records` will always be `False`.  If `None`
-        (default), `DataCoordinateSet.has_records` will be computed from the
-        given data IDs, immediately if ``check`` is `True`, or on first use if
-        ``check`` is `False`.
-    check: `bool`, optional
-        If `True` (default) check that all data IDs are consistent with the
-        given ``graph`` and state flags at construction.  If `False`, no
-        checking will occur.
+class DataCoordinateSequence(DataCoordinateCollection, Sequence[DataCoordinate]):
+    """An abstract base class for homogeneous sequence-like containers of data
+    IDs.
     """
-
-    def __init__(
-        self,
-        dataIds: Sequence[DataCoordinate],
-        graph: DimensionGraph,
-        *,
-        has_full: Optional[bool] = None,
-        has_records: Optional[bool] = None,
-        check: bool = True,
-    ):
-        super().__init__(tuple(dataIds), graph, has_full=has_full, has_records=has_records, check=check)
-
-    _dataIds: Sequence[DataCoordinate]
 
     __slots__ = ()
 
-    def __str__(self) -> str:
-        return str(tuple(self._dataIds))
+    @abstractmethod
+    def _unwrap(self) -> Sequence[DataCoordinate]:
+        # Docstring inherited.
+        raise NotImplementedError()
 
-    def __repr__(self) -> str:
-        return (
-            f"DataCoordinateSequence({tuple(self._dataIds)}, {self._graph!r}, "
-            f"has_full={self._has_full}, has_records={self._has_records})"
-        )
+    def to_sequence(self) -> DataCoordinateSequence:
+        # Docstring inherited from DataCoordinateIterable.
+        return self
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, DataCoordinateSequence):
-            return self._graph == other._graph and self._dataIds == other._dataIds
+            return self.graph == other.graph and self._unwrap() == other._unwrap()
         return False
 
     @overload
     def __getitem__(self, index: int) -> DataCoordinate:
         pass
 
-    @overload  # noqa: F811 (FIXME: remove for py 3.8+)
+    @overload
     def __getitem__(self, index: slice) -> DataCoordinateSequence:  # noqa: F811
         pass
 
     def __getitem__(self, index: Any) -> Any:  # noqa: F811
-        r = self._dataIds[index]
+        r = self._unwrap()[index]
         if isinstance(index, slice):
-            return DataCoordinateSequence(
-                r, self._graph, has_full=self._has_full, has_records=self._has_records, check=False
-            )
+            return self._wrap(r, self._common_state)
         return r
-
-    def toSequence(self) -> DataCoordinateSequence:
-        # Docstring inherited from DataCoordinateIterable.
-        return self
-
-    def subset(self, graph: DimensionGraph) -> DataCoordinateSequence:
-        """Return a sequence whose data IDs identify a subset.
-
-        Parameters
-        ----------
-        graph : `DimensionGraph`
-            Dimensions to be identified by the data IDs in the returned
-            iterable.  Must be a subset of ``self.graph``.
-
-        Returns
-        -------
-        set : `DataCoordinateSequence`
-            A `DataCoordinateSequence` with ``set.graph == graph``.
-            Will be ``self`` if ``graph == self.graph``.  Elements are
-            equivalent to those that would be created by calling
-            `DataCoordinate.subset` on all elements in ``self``, in the same
-            order and with no deduplication.
-        """
-        if graph == self.graph:
-            return self
-        return DataCoordinateSequence(
-            tuple(dataId.subset(graph) for dataId in self._dataIds), graph, **self._subsetKwargs(graph)
-        )

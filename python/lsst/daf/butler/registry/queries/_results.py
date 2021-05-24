@@ -47,6 +47,8 @@ import sqlalchemy
 
 from ...core import (
     DataCoordinate,
+    DataCoordinateCommonState,
+    DataCoordinateFrozenSet,
     DataCoordinateIterable,
     DatasetRef,
     DatasetType,
@@ -106,13 +108,33 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         # Docstring inherited from DataCoordinateIterable.
         return self._query.graph
 
+    @property
     def has_full(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
         return True
 
+    @property
     def has_records(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
         return self._records is not None or not self._query.graph
+
+    @property
+    def _common_state(self) -> DataCoordinateCommonState:
+        # Docstring inherited from DataCoordinateIterable.
+        return DataCoordinateCommonState(self.graph, has_full=self.has_full, has_records=self.has_records)
+
+    @classmethod
+    def _wrap(  # type: ignore
+        cls,
+        iterable: Iterable[DataCoordinate],
+        common: DataCoordinateCommonState,
+    ) -> DataCoordinateFrozenSet:
+        # Docstring inherited.
+        # Operations on database-backed iterables can't generally return a
+        # database-backed iterable; we return a new frozenset instead.
+        # See the similar comment in DataCoordinateSetView._wrap for why mypy
+        # doesn't like this.
+        return DataCoordinateFrozenSet._wrap(iterable, common)
 
     @contextmanager
     def materialize(self) -> Iterator[DataCoordinateQueryResults]:
@@ -196,8 +218,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             If `True` (`False` is default), the query should only return unique
             data IDs.  This is implemented in the database; to obtain unique
             results via Python-side processing (which may be more efficient in
-            some cases), use `toSet` to construct a `DataCoordinateSet` from
-            this results object instead.
+            some cases), use `to_set` to construct a
+            `DataCoordinateAbstractSet` from this results object instead.
 
         Returns
         -------

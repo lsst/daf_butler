@@ -44,6 +44,7 @@ from ...core import (
     addDimensionForeignKey,
     DatabaseDimensionElement,
     DataCoordinate,
+    DataCoordinateFrozenSet,
     DataCoordinateIterable,
     ddl,
     DimensionElement,
@@ -561,7 +562,7 @@ class _SkyPixOverlapStorage:
         overlapRecords: List[dict] = []
         governorDataId = DataCoordinate.standardize({self._governor.element.name: governorValue},
                                                     graph=self._governor.element.graph)
-        for record in storage._fetch_flexible(DataCoordinateIterable.fromScalar(governorDataId)):
+        for record in storage._fetch_flexible(DataCoordinateFrozenSet.from_scalar(governorDataId)):
             if record.region is None:
                 continue
             baseOverlapRecord = record.dataId.byName()

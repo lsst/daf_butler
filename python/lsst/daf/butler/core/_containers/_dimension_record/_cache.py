@@ -25,14 +25,19 @@ __all__ = ("HeterogeneousDimensionRecordCache", "HomogeneousDimensionRecordCache
 
 from typing import Any, Callable, DefaultDict, Iterable, MutableMapping
 
-from ...dimensions import DataCoordinate, DimensionElement, DimensionRecord, DimensionUniverse
+from ...dimensions import (
+    DataCoordinate,
+    DimensionElement,
+    DimensionRecord,
+    DimensionUniverse,
+)
 from ...named import NamedKeyDict, NamedKeyMapping, NameLookupMapping
-from .._data_coordinate import DataCoordinateIterable, DataCoordinateSet
+from .._data_coordinate import DataCoordinateFrozenSet, DataCoordinateIterable
+from ._iterable import HomogeneousDimensionRecordIterable
 from ._mutable_set import (
     HeterogeneousDimensionRecordMutableSet,
     HomogeneousDimensionRecordMutableSet,
 )
-from ._iterable import HomogeneousDimensionRecordIterable
 
 FetchRecordCallback = Callable[[DataCoordinateIterable], HomogeneousDimensionRecordIterable]
 
@@ -108,7 +113,7 @@ class _ByDataIdDict(DefaultDict[DataCoordinate, DimensionRecord]):
             raise KeyError(key)
         # Keep this out of the try block because we want any ValueError it
         # raises to propagate up.
-        records = self._callback(DataCoordinateIterable.fromScalar(key))
+        records = self._callback(DataCoordinateFrozenSet.from_scalar(key))
         try:
             (record,) = records
         except ValueError:
@@ -166,8 +171,8 @@ class HomogeneousDimensionRecordCache(HomogeneousDimensionRecordMutableSet):
                 f"Invalid dimensions for dimension record lookup; expected {self.definition.graph}, "
                 f"got {data_ids.graph}."
             )
-        desired = data_ids.toSet()
-        missing = desired - DataCoordinateSet(self.by_data_id.keys(), self.definition.graph)
+        desired = data_ids.to_set()
+        missing = desired - self.data_ids
         if missing:
             self.update(self._by_data_id._callback(missing))
         result = HomogeneousDimensionRecordCache(self.definition, self._by_data_id._callback)

@@ -484,6 +484,94 @@ class DataCoordinateCommonState:
             result = result.expanded(records_by_name)
         return result
 
+    def downgrade(self, data_id: DataCoordinate) -> DataCoordinate:
+        """Downgrade a data ID by removing optional information from it.
+
+        Parameters
+        ----------
+        data_id : `DataCoordinate`
+            Data ID to downgrade.  Must have a state with the same dimensions
+            that is a superset of ``self``.
+
+        Returns
+        -------
+        downgraded : `DataCoordinate`
+            A data ID with the same state as ``self``.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the desired output state (``self``) actually has more
+            information than the input data ID.
+        """
+        if self.graph != data_id.graph:
+            raise RuntimeError(
+                f"Incorrect data ID dimensions; expected {self.graph}, got data ID {data_id}."
+            )
+        if self.has_records:
+            if not data_id.has_records:
+                raise RuntimeError(f"Data ID {data_id} does not satisfy has_records=True.")
+            else:
+                # Nothing to do; we were asked to 'downgrade' to a state that
+                # actually has the most possible information.
+                return data_id
+        elif self.has_full:
+            if not data_id.has_full:
+                raise RuntimeError(f"Data ID {data_id} does not satisfy has_full=True.")
+            elif data_id.has_records:
+                return DataCoordinate.fromFullValues(self.graph, tuple(data_id.full.values()))
+            else:
+                # Already in the right state.
+                return data_id
+        else:
+            return DataCoordinate.fromRequiredValues(self.graph, tuple(data_id.values()))
+
+    def require_same_dimensions(self, other: DataCoordinateCommonState) -> None:
+        """Check whether two states have the same `graph`, and raise an
+        exception if they do not.
+
+        Parameters
+        ----------
+        other : `DataCoordinateCommonState`
+            State for the other container in the binary operation.
+
+        Raises
+        ------
+        ValueError
+            Raised if dimensions are not the same.
+        """
+        if self.graph != other.graph:
+            raise ValueError(
+                f"Inconsistent dimensions between data IDs: {self.graph} != {other.graph}."
+            )
+
+    def common_dimensions_intersection(self, other: DataCoordinateCommonState) -> DataCoordinateCommonState:
+        """Check that two states have the same `graph`, and return a new state
+        object that is a subset of both.
+
+        Parameters
+        ----------
+        other : `DataCoordinateCommonState`
+            State to combine with.
+
+        Returns
+        -------
+        target : `DataCoordinateCommonState`
+            State that is a subset of both operands with the same `graph` as
+            both operands.
+
+        Raises
+        ------
+        ValueError
+            Raised if dimensions are not the same.
+        """
+        self.require_same_dimensions(other)
+        return DataCoordinateCommonState(
+            graph=self.graph,
+            has_full=self.has_full and other.has_full,
+            has_records=self.has_records and other.has_records,
+        )
+
 
 class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     """Data ID dictionary.
@@ -491,7 +579,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     An immutable data ID dictionary that guarantees that its key-value pairs
     identify at least all required dimensions in a `DimensionGraph`.
 
-    `DataCoordinateSet` itself is an ABC, but provides `staticmethod` factory
+    `DataCoordinate` itself is an ABC, but provides `staticmethod` factory
     functions for private concrete implementations that should be sufficient
     for most purposes.  `standardize` is the most flexible and safe of these;
     the others (`makeEmpty`, `fromRequiredValues`, and `fromFullValues`) are

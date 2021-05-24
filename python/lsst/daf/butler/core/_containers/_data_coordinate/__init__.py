@@ -20,7 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from ._iterable import *
-from ._scalar import *
 from ._collection import *
-from ._set import *
+from ._abstract_set import *
 from ._sequence import *
+from ._frozen_set import *
+from ._tuple import *
+from ._set_view import *

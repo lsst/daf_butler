@@ -30,8 +30,9 @@ from typing import Iterator, Optional
 
 from lsst.daf.butler import (
     DataCoordinate,
+    DataCoordinateFrozenSet,
     DataCoordinateSequence,
-    DataCoordinateSet,
+    DataCoordinateTuple,
     Dimension,
     DimensionConfig,
     DimensionGraph,
@@ -54,7 +55,7 @@ def loadDimensionData() -> DataCoordinateSequence:
 
     Returns
     -------
-    dataIds : `DataCoordinateSet`
+    dataIds : `DataCoordinateSequence`
         A set containing all data IDs in the export file.
     """
     # Create an in-memory SQLite database and Registry just to import the YAML
@@ -67,7 +68,7 @@ def loadDimensionData() -> DataCoordinateSequence:
     backend.register()
     backend.load(datastore=None)
     dimensions = DimensionGraph(registry.dimensions, names=["visit", "detector", "tract", "patch"])
-    return registry.queryDataIds(dimensions).expanded().toSequence()
+    return registry.queryDataIds(dimensions).expanded().to_sequence()
 
 
 class DimensionTestCase(unittest.TestCase):
@@ -262,7 +263,7 @@ class SplitByStateFlags:
     values.
     """
 
-    minimal: Optional[DataCoordinateSequence] = None
+    minimal: Optional[DataCoordinateTuple] = None
     """Data IDs that only contain values for required dimensions.
 
     `DataCoordinateSequence.has_full` will return `True` for this if and only
@@ -270,14 +271,14 @@ class SplitByStateFlags:
     `DataCoordinate.has_records` will always return `False`.
     """
 
-    complete: Optional[DataCoordinateSequence] = None
+    complete: Optional[DataCoordinateTuple] = None
     """Data IDs that contain values for all dimensions.
 
     `DataCoordinateSequence.has_full` will always `True` and
     `DataCoordinate.has_records` will always return `True` for this attribute.
     """
 
-    expanded: Optional[DataCoordinateSequence] = None
+    expanded: Optional[DataCoordinateTuple] = None
     """Data IDs that contain values for all dimensions as well as records.
 
     `DataCoordinateSequence.has_full` and `DataCoordinate.has_records` will
@@ -333,16 +334,16 @@ class DataCoordinateTestCase(unittest.TestCase):
 
         Returns
         -------
-        selected : `DataCoordinateSequence`
+        selected : `DataCoordinateTuple`
             ``n`` Data IDs randomly selected from ``dataIds`` with replacement.
         """
         if dataIds is None:
             dataIds = self.allDataIds
-        return DataCoordinateSequence(self.rng.sample(dataIds, n),
-                                      graph=dataIds.graph,
-                                      has_full=dataIds.has_full,
-                                      has_records=dataIds.has_records,
-                                      check=False)
+        return DataCoordinateTuple(self.rng.sample(dataIds, n),
+                                   graph=dataIds.graph,
+                                   has_full=dataIds.has_full,
+                                   has_records=dataIds.has_records,
+                                   conform=False)
 
     def randomDimensionSubset(self, n: int = 3, graph: Optional[DimensionGraph] = None) -> DimensionGraph:
         """Generate a random `DimensionGraph` that has a subset of the
@@ -403,16 +404,20 @@ class DataCoordinateTestCase(unittest.TestCase):
         assert dataIds.has_full and dataIds.has_records
         result = SplitByStateFlags(expanded=dataIds)
         if complete:
-            result.complete = DataCoordinateSequence(
+            result.complete = DataCoordinateTuple(
                 [DataCoordinate.standardize(e.full.byName(), graph=dataIds.graph) for e in result.expanded],
-                graph=dataIds.graph
+                graph=dataIds.graph,
+                has_full=True,
+                has_records=False,
             )
             self.assertTrue(result.complete.has_full)
             self.assertFalse(result.complete.has_records)
         if minimal:
-            result.minimal = DataCoordinateSequence(
+            result.minimal = DataCoordinateTuple(
                 [DataCoordinate.standardize(e.byName(), graph=dataIds.graph) for e in result.expanded],
-                graph=dataIds.graph
+                graph=dataIds.graph,
+                has_full=False,
+                has_records=False,
             )
             self.assertEqual(result.minimal.has_full, not dataIds.graph.implied)
             self.assertFalse(result.minimal.has_records)
@@ -664,41 +669,13 @@ class DataCoordinateTestCase(unittest.TestCase):
             self.assertEqual(dataId.graph.temporal.names, {"observation_timespans"})
             self.assertEqual(dataId.timespan, dataId.records["visit"].timespan)
 
-    def testIterableStatusFlags(self):
-        """Test that DataCoordinateSet and DataCoordinateSequence compute
-        their has_full and has_records flags correctly from their elements.
-        """
-        dataIds = self.randomDataIds(n=10)
-        split = self.splitByStateFlags(dataIds)
-        for cls in (DataCoordinateSet, DataCoordinateSequence):
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=True).has_full)
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=False).has_full)
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=True).has_records)
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=False).has_records)
-            self.assertTrue(cls(split.complete, graph=dataIds.graph, check=True).has_full)
-            self.assertTrue(cls(split.complete, graph=dataIds.graph, check=False).has_full)
-            self.assertFalse(cls(split.complete, graph=dataIds.graph, check=True).has_records)
-            self.assertFalse(cls(split.complete, graph=dataIds.graph, check=False).has_records)
-            with self.assertRaises(ValueError):
-                cls(split.complete, graph=dataIds.graph, has_records=True, check=True)
-            self.assertEqual(cls(split.minimal, graph=dataIds.graph, check=True).has_full,
-                             not dataIds.graph.implied)
-            self.assertEqual(cls(split.minimal, graph=dataIds.graph, check=False).has_full,
-                             not dataIds.graph.implied)
-            self.assertFalse(cls(split.minimal, graph=dataIds.graph, check=True).has_records)
-            self.assertFalse(cls(split.minimal, graph=dataIds.graph, check=False).has_records)
-            with self.assertRaises(ValueError):
-                cls(split.minimal, graph=dataIds.graph, has_records=True, check=True)
-            if dataIds.graph.implied:
-                with self.assertRaises(ValueError):
-                    cls(split.minimal, graph=dataIds.graph, has_full=True, check=True)
-
     def testSetOperations(self):
-        """Test for self-consistency across DataCoordinateSet's operations.
+        """Test for self-consistency across DataCoordinateAbstractSet's
+        operations.
         """
-        c = self.randomDataIds(n=10).toSet()
-        a = self.randomDataIds(n=20).toSet() | c
-        b = self.randomDataIds(n=20).toSet() | c
+        c = self.randomDataIds(n=10).to_set()
+        a = self.randomDataIds(n=20).to_set() | c
+        b = self.randomDataIds(n=20).to_set() | c
         # Make sure we don't have a particularly unlucky random seed, since
         # that would make a lot of this test uninteresting.
         self.assertNotEqual(a, b)
@@ -706,23 +683,28 @@ class DataCoordinateTestCase(unittest.TestCase):
         self.assertGreater(len(b), 0)
         # The rest of the tests should not depend on the random seed.
         self.assertEqual(a, a)
-        self.assertNotEqual(a, a.toSequence())
-        self.assertEqual(a, a.toSequence().toSet())
-        self.assertEqual(a, a.toSequence().toSet())
+        self.assertNotEqual(a, a.to_sequence())
+        self.assertEqual(a, a.to_sequence().to_set())
+        self.assertEqual(a, a.to_sequence().to_set())
         self.assertEqual(b, b)
-        self.assertNotEqual(b, b.toSequence())
-        self.assertEqual(b, b.toSequence().toSet())
-        self.assertEqual(a & b, a.intersection(b))
+        self.assertNotEqual(b, b.to_sequence())
+        self.assertEqual(b, b.to_sequence().to_set())
         self.assertLessEqual(a & b, a)
         self.assertLessEqual(a & b, b)
-        self.assertEqual(a | b, a.union(b))
         self.assertGreaterEqual(a | b, a)
         self.assertGreaterEqual(a | b, b)
-        self.assertEqual(a - b, a.difference(b))
         self.assertLessEqual(a - b, a)
         self.assertLessEqual(b - a, b)
-        self.assertEqual(a ^ b, a.symmetric_difference(b))
         self.assertGreaterEqual(a ^ b, (a | b) - (a & b))
+
+    def testSerialization(self):
+        a = self.randomDataIds(n=3).to_set()
+        s1 = a.to_simple()
+        b1 = DataCoordinateFrozenSet.from_simple(s1, universe=self.allDataIds.universe)
+        self.assertEqual(a, b1)
+        s2 = a.to_json()
+        b2 = DataCoordinateFrozenSet.from_json(s2, universe=self.allDataIds.universe)
+        self.assertEqual(a, b2)
 
 
 if __name__ == "__main__":
