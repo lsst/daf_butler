@@ -19,23 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-# Many classes in this package have circular dependencies.  We hope to slowly
-# detangle those, but in the meantime we've been careful to avoid actual cycle
-# problems at import time, via a combination of typing.TYPE_CHECKING guards and
-# function-scope imports.  The order below is one that is consistent with the
-# unguarded dependencies.
-"""Butler dimensions."""
-
-from ._elements import *
-from ._schema import *
-from ._graph import *
-from . import construction
-from . _records import *
-from ._packer import *
-from ._skypix import *
-from ._governor import *
-from ._database import *
-from ._config import *
-from ._universe import *
-from ._coordinate import *
+from ._iterable import *
+from ._scalar import *
+from ._collection import *
+from ._set import *
+from ._sequence import *
