@@ -80,6 +80,7 @@ from .core import (
     StorageClassFactory,
     Timespan,
     ValidationError,
+    VERBOSE,
 )
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional, getClassOf
@@ -401,6 +402,8 @@ class Butler:
         registryConfig = RegistryConfig(config.get("registry"))
         dimensionConfig = DimensionConfig(dimensionConfig)
         Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root)
+
+        log.log(VERBOSE, "Wrote new Butler configuration file to %s", configURI)
 
         return config
 

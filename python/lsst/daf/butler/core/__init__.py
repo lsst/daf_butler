@@ -30,3 +30,4 @@ from ._topology import *
 from .timespan import *
 from .progress import Progress
 from . import progress  # most symbols are only used by handler implementors
+from .logging import *

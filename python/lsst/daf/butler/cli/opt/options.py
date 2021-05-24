@@ -94,7 +94,7 @@ dataset_type_option = MWOptionDecorator("-d", "--dataset-type",
 datasets_option = MWOptionDecorator("--datasets")
 
 
-logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
+logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "VERBOSE", "DEBUG"]
 log_level_option = MWOptionDecorator("--log-level",
                                      callback=partial(split_kv,
                                                       choice=click.Choice(logLevelChoices,
