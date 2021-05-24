@@ -61,7 +61,7 @@ They always contain at least the key-value pairs that correspond to its `Dimensi
 They can also contain key-value pairs for the `~DimensionGraph.implied` subset (a state indicated by `DataCoordinate.hasFull()` returning `True`).
 And if `DataCoordinate.hasRecords` returns `True`, the data ID also holds all of the metadata records associated with its dimensions.
 
-`DataCoordinate` objects can of course be used with standard Python built-in containers, but an interface (`DataCoordinateIterable`) and a few simple adapters (`DataCoordinateSet`, `DataCoordinateSequence`) also exist to provide a bit more functionality for homogenous collections of data IDs (in which all data IDs identify the same dimensions, and generally have the same `~DataCoordinate.hasFull` / `~DataCoordinate.hasRecords` state).
+`DataCoordinate` objects can of course be used with standard Python built-in containers, but an interface (`DataCoordinateIterable`) and a few concrete adapters (`DataCoordinateFrozenSet`, `DataCoordinateTuple`) also exist to provide a bit more functionality for homogenous collections of data IDs (in which all data IDs identify the same dimensions, and generally have the same `~DataCoordinate.hasFull` / `~DataCoordinate.hasRecords` state).
 
 .. _lsst.daf.butler-dimensions_spatial_and_temporal:
 

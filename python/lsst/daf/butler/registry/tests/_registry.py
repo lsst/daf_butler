@@ -45,7 +45,7 @@ except ImportError:
 import lsst.sphgeom
 from ...core import (
     DataCoordinate,
-    DataCoordinateSet,
+    DataCoordinateFrozenSet,
     DatasetAssociation,
     DatasetRef,
     DatasetType,
@@ -629,7 +629,7 @@ class RegistryTests(ABC):
         ).toSet()
         self.assertEqual(
             dataIds,
-            DataCoordinateSet(
+            DataCoordinateFrozenSet(
                 {
                     DataCoordinate.standardize(instrument="Cam1", detector=d, graph=parentType.dimensions)
                     for d in (1, 2, 3)
@@ -1312,7 +1312,7 @@ class RegistryTests(ABC):
         # - the dimensions of some other data IDs we'll extract from that:
         expectedSubsetGraph = DimensionGraph(registry.dimensions, names=["detector"])
         # - the data IDs we expect to obtain from the first queries:
-        expectedDataIds = DataCoordinateSet(
+        expectedDataIds = DataCoordinateFrozenSet(
             {
                 DataCoordinate.standardize(instrument="Cam1", detector=d, physical_filter=p,
                                            universe=registry.dimensions)

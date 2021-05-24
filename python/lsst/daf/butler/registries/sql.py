@@ -48,7 +48,6 @@ from ..core import (
     ButlerURI,
     Config,
     DataCoordinate,
-    DataCoordinateIterable,
     DataId,
     DatasetAssociation,
     DatasetId,
@@ -64,6 +63,7 @@ from ..core import (
     NamedKeyMapping,
     NameLookupMapping,
     Progress,
+    ScalarDataCoordinateSet,
     StorageClassFactory,
     Timespan,
 )
@@ -652,7 +652,7 @@ class SqlRegistry(Registry):
                     record = None
                 else:
                     storage = self._managers.dimensions[element]
-                    dataIdSet = DataCoordinateIterable.fromScalar(
+                    dataIdSet = ScalarDataCoordinateSet(
                         DataCoordinate.standardize(keys, graph=element.graph)
                     )
                     fetched = tuple(storage.fetch(dataIdSet))
