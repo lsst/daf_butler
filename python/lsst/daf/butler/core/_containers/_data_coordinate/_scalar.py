@@ -21,26 +21,17 @@
 
 from __future__ import annotations
 
-__all__ = ()
+__all__ = ("ScalarDataCoordinateSet",)
 
-from typing import (
-    Any,
-    Iterator,
-)
+from typing import AbstractSet, Any, Iterator
 
 from ...dimensions import DataCoordinate, DimensionGraph
-from ._iterable import DataCoordinateIterable
+from ._abstract_set import DataCoordinateAbstractSet, DataCoordinateCommonState
+from ._frozen_set import DataCoordinateFrozenSet
 
 
-class _ScalarDataCoordinateIterable(DataCoordinateIterable):
-    """An iterable for a single `DataCoordinate`.
-
-    A `DataCoordinateIterable` implementation that adapts a single
-    `DataCoordinate` instance.
-
-    This class should only be used directly by other code in the module in
-    which it is defined; all other code should interact with it only through
-    the `DataCoordinateIterable` interface.
+class ScalarDataCoordinateSet(DataCoordinateAbstractSet):
+    """A `DataCoordinateAbstractSet` wrapper for a single `DataCoordinate`.
 
     Parameters
     ----------
@@ -52,6 +43,17 @@ class _ScalarDataCoordinateIterable(DataCoordinateIterable):
         self._dataId = dataId
 
     __slots__ = ("_dataId",)
+
+    @classmethod
+    def _wrap(
+        cls,
+        native: AbstractSet[DataCoordinate],
+        common: DataCoordinateCommonState,
+    ) -> DataCoordinateAbstractSet:
+        # Docstring inherited.
+        # Operations on scalars can't necessary return scalars; return a new
+        # frozenset instead.
+        return DataCoordinateFrozenSet(native, check=False, **common.to_dict())
 
     def __iter__(self) -> Iterator[DataCoordinate]:
         yield self._dataId
@@ -70,6 +72,19 @@ class _ScalarDataCoordinateIterable(DataCoordinateIterable):
         # Docstring inherited from DataCoordinateIterable.
         return self._dataId.graph
 
+    def _unwrap(self) -> AbstractSet[DataCoordinate]:
+        # Docstring inherited from DataCoordinateIterable.
+        return {self._dataId}
+
+    @property
+    def _common_state(self) -> DataCoordinateCommonState:
+        # Docstring inherited from DataCoordinateIterable.
+        return DataCoordinateCommonState(
+            graph=self.graph,
+            hasFull=self._dataId.hasFull(),
+            hasRecords=self._dataId.hasRecords(),
+        )
+
     def hasFull(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
         return self._dataId.hasFull()
@@ -78,6 +93,6 @@ class _ScalarDataCoordinateIterable(DataCoordinateIterable):
         # Docstring inherited from DataCoordinateIterable.
         return self._dataId.hasRecords()
 
-    def subset(self, graph: DimensionGraph) -> _ScalarDataCoordinateIterable:
+    def subset(self, graph: DimensionGraph) -> ScalarDataCoordinateSet:
         # Docstring inherited from DataCoordinateIterable.
-        return _ScalarDataCoordinateIterable(self._dataId.subset(graph))
+        return ScalarDataCoordinateSet(self._dataId.subset(graph))

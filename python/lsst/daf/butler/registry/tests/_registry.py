@@ -41,8 +41,8 @@ except ImportError:
 
 from ...core import (
     DataCoordinate,
-    DataCoordinateSequence,
-    DataCoordinateSet,
+    DataCoordinateTuple,
+    DataCoordinateFrozenSet,
     DatasetAssociation,
     DatasetRef,
     DatasetType,
@@ -492,7 +492,7 @@ class RegistryTests(ABC):
         ).toSet()
         self.assertEqual(
             dataIds,
-            DataCoordinateSet(
+            DataCoordinateFrozenSet(
                 {
                     DataCoordinate.standardize(instrument="Cam1", detector=d, graph=parentType.dimensions)
                     for d in (1, 2, 3)
@@ -1168,7 +1168,7 @@ class RegistryTests(ABC):
         # - the dimensions of some other data IDs we'll extract from that:
         expectedSubsetGraph = DimensionGraph(registry.dimensions, names=["detector"])
         # - the data IDs we expect to obtain from the first queries:
-        expectedDataIds = DataCoordinateSet(
+        expectedDataIds = DataCoordinateFrozenSet(
             {
                 DataCoordinate.standardize(instrument="Cam1", detector=d, physical_filter=p,
                                            universe=registry.dimensions)
@@ -1392,7 +1392,7 @@ class RegistryTests(ABC):
         dataIds = registry.queryDataIds([])
         self.assertEqual(
             dataIds.toSequence(),
-            DataCoordinateSequence([dataId], registry.dimensions.empty)
+            DataCoordinateTuple([dataId], registry.dimensions.empty)
         )
         # Use queried data IDs to find the datasets.
         self.assertCountEqual(
@@ -1411,7 +1411,7 @@ class RegistryTests(ABC):
         with dataIds.materialize() as dataIds:
             self.assertEqual(
                 dataIds.toSequence(),
-                DataCoordinateSequence([dataId], registry.dimensions.empty)
+                DataCoordinateTuple([dataId], registry.dimensions.empty)
             )
             self.assertCountEqual(
                 list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
@@ -1430,7 +1430,7 @@ class RegistryTests(ABC):
         dataIds = registry.queryDataIds(["instrument"]).subset(registry.dimensions.empty, unique=True)
         self.assertEqual(
             dataIds.toSequence(),
-            DataCoordinateSequence([dataId], registry.dimensions.empty)
+            DataCoordinateTuple([dataId], registry.dimensions.empty)
         )
         self.assertCountEqual(
             list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
@@ -1447,7 +1447,7 @@ class RegistryTests(ABC):
         with dataIds.materialize() as dataIds:
             self.assertEqual(
                 dataIds.toSequence(),
-                DataCoordinateSequence([dataId], registry.dimensions.empty)
+                DataCoordinateTuple([dataId], registry.dimensions.empty)
             )
             self.assertCountEqual(
                 list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
@@ -1467,7 +1467,7 @@ class RegistryTests(ABC):
             dataIds = nonEmptyDataIds.subset(registry.dimensions.empty, unique=True)
             self.assertEqual(
                 dataIds.toSequence(),
-                DataCoordinateSequence([dataId], registry.dimensions.empty)
+                DataCoordinateTuple([dataId], registry.dimensions.empty)
             )
             self.assertCountEqual(
                 list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
@@ -1484,7 +1484,7 @@ class RegistryTests(ABC):
             with dataIds.materialize() as dataIds:
                 self.assertEqual(
                     dataIds.toSequence(),
-                    DataCoordinateSequence([dataId], registry.dimensions.empty)
+                    DataCoordinateTuple([dataId], registry.dimensions.empty)
                 )
                 self.assertCountEqual(
                     list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),

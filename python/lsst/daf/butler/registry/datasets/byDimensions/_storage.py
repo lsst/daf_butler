@@ -21,7 +21,8 @@ import sqlalchemy
 from lsst.daf.butler import (
     CollectionType,
     DataCoordinate,
-    DataCoordinateSet,
+    DataCoordinateFrozenSet,
+    DataCoordinateIterable,
     DatasetId,
     DatasetRef,
     DatasetType,
@@ -156,7 +157,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                         *rows)
 
     def _buildCalibOverlapQuery(self, collection: CollectionRecord,
-                                dataIds: Optional[DataCoordinateSet],
+                                dataIds: Optional[DataCoordinateIterable],
                                 timespan: Timespan) -> SimpleQuery:
         assert self._calibs is not None
         # Start by building a SELECT query for any rows that would overlap
@@ -230,7 +231,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # this one.
             query = self._buildCalibOverlapQuery(
                 collection,
-                DataCoordinateSet(dataIds, graph=self.datasetType.dimensions),  # type: ignore
+                DataCoordinateFrozenSet(dataIds, graph=self.datasetType.dimensions),  # type: ignore
                 timespan
             )
             query.columns.append(sqlalchemy.sql.func.count())
@@ -262,9 +263,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                             f"of type {collection.type.name}; must be CALIBRATION.")
         TimespanReprClass = self._db.getTimespanRepresentation()
         # Construct a SELECT query to find all rows that overlap our inputs.
-        dataIdSet: Optional[DataCoordinateSet]
+        dataIdSet: Optional[DataCoordinateFrozenSet]
         if dataIds is not None:
-            dataIdSet = DataCoordinateSet(set(dataIds), graph=self.datasetType.dimensions)
+            dataIdSet = DataCoordinateFrozenSet(dataIds, graph=self.datasetType.dimensions)
         else:
             dataIdSet = None
         query = self._buildCalibOverlapQuery(collection, dataIdSet, timespan)

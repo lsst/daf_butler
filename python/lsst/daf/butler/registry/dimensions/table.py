@@ -52,6 +52,7 @@ from ...core import (
     NamedKeyDict,
     NamedKeyMapping,
     NamedValueSet,
+    ScalarDataCoordinateSet,
     SimpleQuery,
     SkyPixDimension,
     SkyPixSystem,
@@ -567,7 +568,7 @@ class _SkyPixOverlapStorage:
         # what we want.
         governorDataId = DataCoordinate.standardize({self._governor.element.name: governorValue},
                                                     graph=self._governor.element.graph)
-        for record in storage.fetch(DataCoordinateIterable.fromScalar(governorDataId)):
+        for record in storage.fetch(ScalarDataCoordinateSet(governorDataId)):
             if record.region is None:
                 continue
             baseOverlapRecord = record.dataId.byName()

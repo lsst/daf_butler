@@ -32,7 +32,7 @@ from ...core import (
     DatabaseDimensionElement,
     DataCoordinate,
     DataCoordinateIterable,
-    DataCoordinateSet,
+    DataCoordinateSetView,
     DimensionElement,
     DimensionRecord,
     GovernorDimension,
@@ -125,7 +125,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 # thinks it's still a possibility.
                 yield record  # type: ignore
         if missing:
-            toFetch = DataCoordinateSet(missing, graph=self.element.graph)
+            toFetch = DataCoordinateSetView(missing, graph=self.element.graph)
             for record in self._nested.fetch(toFetch):
                 self._cache[record.dataId] = record
                 yield record

@@ -45,7 +45,7 @@ from ..core import (
     ButlerURI,
     Config,
     DataCoordinate,
-    DataCoordinateSequence,
+    DataCoordinateTuple,
     DataId,
     DatasetAssociation,
     DatasetId,
@@ -447,7 +447,7 @@ class RemoteRegistry(Registry):
                      components: Optional[bool] = None,
                      bind: Optional[Mapping[str, Any]] = None,
                      check: bool = True,
-                     **kwargs: Any) -> DataCoordinateSequence:
+                     **kwargs: Any) -> DataCoordinateTuple:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         cleaned_dimensions = [str(d) for d in iterable(dimensions)]
 
@@ -475,8 +475,8 @@ class RemoteRegistry(Registry):
         simple = response.json()
         dataIds = [DataCoordinate.from_simple(SerializedDataCoordinate(**d), universe=self.dimensions)
                    for d in simple]
-        return DataCoordinateSequence(dataIds=dataIds, graph=DimensionGraph(self.dimensions,
-                                                                            names=cleaned_dimensions))
+        return DataCoordinateTuple(dataIds=dataIds, graph=DimensionGraph(self.dimensions,
+                                                                         names=cleaned_dimensions))
 
     def queryDimensionRecords(self, element: Union[DimensionElement, str], *,
                               dataId: Optional[DataId] = None,

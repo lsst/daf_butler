@@ -192,8 +192,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             If `True` (`False` is default), the query should only return unique
             data IDs.  This is implemented in the database; to obtain unique
             results via Python-side processing (which may be more efficient in
-            some cases), use `toSet` to construct a `DataCoordinateSet` from
-            this results object instead.
+            some cases), use `toSet` to construct a `DataCoordinateAbstractSet`
+            from this results object instead.
 
         Returns
         -------
