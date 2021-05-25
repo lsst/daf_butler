@@ -44,7 +44,7 @@ _K = TypeVar("_K")
 _V = TypeVar("_V", bound=Collection)
 
 
-class ProgressBar(Protocol, Iterable[_T]):
+class ProgressBar(Iterable[_T], Protocol):
     """A structural interface for progress bars that wrap iterables.
 
     An object conforming to this interface can be obtained from the
