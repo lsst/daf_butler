@@ -60,6 +60,7 @@ from ..core import (
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
+    HomogeneousDimensionRecordIterable,
     NameLookupMapping,
     StorageClassFactory,
     Timespan,
@@ -1381,7 +1382,7 @@ class Registry(ABC):
                               components: Optional[bool] = None,
                               bind: Optional[Mapping[str, Any]] = None,
                               check: bool = True,
-                              **kwargs: Any) -> Iterator[DimensionRecord]:
+                              **kwargs: Any) -> HomogeneousDimensionRecordIterable:
         """Query for dimension information matching user-provided criteria.
 
         Parameters
@@ -1428,8 +1429,8 @@ class Registry(ABC):
 
         Returns
         -------
-        dataIds : `DataCoordinateQueryResults`
-            Data IDs matching the given query parameters.
+        records : `HomogeneousDimensionRecordIterable`
+            Iterable of dimension records.  May be a single-pass iterator.
         """
         raise NotImplementedError()
 

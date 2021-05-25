@@ -30,6 +30,7 @@ from ...core import (
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
+    HomogeneousDimensionRecordSet,
     NamedKeyDict,
     SkyPixDimension,
     SpatialRegionDatabaseRepresentation,
@@ -90,12 +91,14 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.sync.
         raise TypeError(f"Cannot sync SkyPixdimension {self._dimension.name}.")
 
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
+    def fetch(self, dataIds: DataCoordinateIterable) -> HomogeneousDimensionRecordSet:
         # Docstring inherited from DimensionRecordStorage.fetch.
+        result = HomogeneousDimensionRecordSet(definition=self.element)
         RecordClass = self._dimension.RecordClass
         for dataId in dataIds:
             index = dataId[self._dimension.name]
-            yield RecordClass(id=index, region=self._dimension.pixelization.pixel(index))
+            result.add(RecordClass(id=index, region=self._dimension.pixelization.pixel(index)))
+        return result
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
