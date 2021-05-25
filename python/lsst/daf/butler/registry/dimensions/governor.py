@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["BasicGovernorDimensionRecordStorage"]
 
-from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Optional
+from typing import AbstractSet, Any, Callable, Iterable, List, Mapping, Optional
 
 import sqlalchemy
 
@@ -31,7 +31,9 @@ from ...core import (
     DimensionElement,
     DimensionRecord,
     GovernorDimension,
+    HomogeneousDimensionRecordCache,
     NamedKeyDict,
+    SimpleQuery,
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import (
@@ -39,7 +41,7 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
-from ..queries import QueryBuilder
+from ..queries import DimensionRecordQueryResults, QueryBuilder
 
 
 class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
@@ -60,7 +62,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         self._db = db
         self._dimension = dimension
         self._table = table
-        self._cache: Dict[str, DimensionRecord] = {}
+        self._cache = HomogeneousDimensionRecordCache(dimension, self._fetch_from_db)
         self._callbacks: List[Callable[[DimensionRecord], None]] = []
 
     @classmethod
@@ -85,20 +87,14 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
 
     def refresh(self) -> None:
         # Docstring inherited from GovernorDimensionRecordStorage.
-        RecordClass = self._dimension.RecordClass
-        sql = sqlalchemy.sql.select(
-            [self._table.columns[name] for name in RecordClass.fields.standard.names]
-        ).select_from(self._table)
-        cache: Dict[str, DimensionRecord] = {}
-        for row in self._db.query(sql):
-            record = RecordClass(**dict(row))
-            cache[getattr(record, self._dimension.primaryKey.name)] = record
+        cache = HomogeneousDimensionRecordCache(self.element, self._fetch_from_db)
+        cache.update(self._fetch_from_db(None))
         self._cache = cache
 
     @property
     def values(self) -> AbstractSet[str]:
         # Docstring inherited from GovernorDimensionRecordStorage.
-        return self._cache.keys()
+        return {data_id[self.element] for data_id in self._cache.data_ids}  # type: ignore
 
     @property
     def table(self) -> sqlalchemy.schema.Table:
@@ -130,7 +126,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         with self._db.transaction():
             self._db.insert(self._table, *elementRows)
         for record in records:
-            self._cache[getattr(record, self.element.primaryKey.name)] = record
+            self._cache.add(record)
             for callback in self._callbacks:
                 callback(record)
 
@@ -147,24 +143,40 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
                 compared=compared,
             )
         if inserted:
-            self._cache[getattr(record, self.element.primaryKey.name)] = record
+            self._cache.add(record)
             for callback in self._callbacks:
                 callback(record)
         return inserted
 
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
+    def fetch(self, dataIds: DataCoordinateIterable) -> HomogeneousDimensionRecordCache:
         # Docstring inherited from DimensionRecordStorage.fetch.
-        dataIds = dataIds.toSet()  # make sure this isn't a single-pass iterator
-        try:
-            return [self._cache[dataId[self.element]] for dataId in dataIds]  # type: ignore
-        except KeyError:
-            pass
-        # If at first we don't succeed, refresh and try again, skipping any we
-        # still can't find.
-        self.refresh()
-        return [self._cache[dataId[self.element]] for dataId in dataIds  # type: ignore
-                if dataId[self.element] in self._cache]
+        return self._cache.extract(dataIds)
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return [self._table]
+
+    def _fetch_from_db(self, data_ids: Optional[DataCoordinateIterable]) -> DimensionRecordQueryResults:
+        """Fetch records directly from the database, bypassing the cache.
+
+        Parameters
+        ----------
+        data_ids : `DataCoordinateIterable`, optional
+            Data IDs of the records to fetch.  If `None`, fetch all records
+            for this dimension.
+
+        Returns
+        -------
+        records : `DimensionRecordQueryResults`
+            Fetched records, as a lazily-evaluated iterable.
+        """
+        RecordClass = self._dimension.RecordClass
+        query = SimpleQuery()
+        query.join(self._table)
+        query.columns.extend(self._table.columns[name] for name in RecordClass.fields.standard.names)
+        if data_ids is not None:
+            # GovernorDimensions never have dependencies, so the callable that
+            # below extracts compound-primary-key columns can always just
+            # return the table's single primary-key column.
+            data_ids.constrain(query, lambda _: self._table.columns[self.element.primaryKey.name])
+        return DimensionRecordQueryResults(self._db, query.combine(), self.element, data_ids)

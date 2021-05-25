@@ -66,21 +66,11 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
-from ..queries import QueryBuilder
+from ..queries import DimensionRecordQueryResults, QueryBuilder
 from ..wildcards import Ellipsis, EllipsisType
 
 
 _LOG = logging.getLogger(__name__)
-
-
-MAX_FETCH_CHUNK = 1000
-"""Maximum number of data IDs we fetch records at a time.
-
-Barring something database-engine-specific, this sets the size of the actual
-SQL query, not just the number of result rows, because the only way to query
-for multiple data IDs in a single SELECT query via SQLAlchemy is to have an OR
-term in the WHERE clause for each one.
-"""
 
 
 class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
@@ -193,7 +183,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         builder.finishJoin(self._table, joinOn)
         return self._table
 
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
+    def fetch(self, dataIds: DataCoordinateIterable) -> DimensionRecordQueryResults:
         # Docstring inherited from DimensionRecordStorage.fetch.
         RecordClass = self.element.RecordClass
         query = SimpleQuery()
@@ -205,11 +195,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             query.columns.extend(self._table.columns[name] for name in TimespanReprClass.getFieldNames())
         query.join(self._table)
         dataIds.constrain(query, lambda name: self._fetchColumns[name])
-        for row in self._db.query(query.combine()):
-            values = dict(row)
-            if self.element.temporal is not None:
-                values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
-            yield RecordClass(**values)
+        return DimensionRecordQueryResults(self._db, query.combine(), self.element, dataIds)
 
     def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

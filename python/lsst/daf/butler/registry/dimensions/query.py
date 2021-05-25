@@ -32,6 +32,7 @@ from ...core import (
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
+    HomogeneousDimensionRecordSet,
     GovernorDimension,
     NamedKeyDict,
     NamedKeyMapping,
@@ -166,13 +167,15 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         raise TypeError(f"Cannot sync {self.element.name} records, "
                         f"define as part of {self._viewOf} instead.")
 
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
+    def fetch(self, dataIds: DataCoordinateIterable) -> HomogeneousDimensionRecordSet:
         # Docstring inherited from DimensionRecordStorage.fetch.
         RecordClass = self.element.RecordClass
-        for dataId in dataIds:
-            # Given the restrictions imposed at construction, we know there's
-            # nothing to actually fetch: everything we need is in the data ID.
-            yield RecordClass(**dataId.byName())
+        # Given the restrictions imposed at construction, we know there's
+        # nothing to actually fetch: everything we need is in the data ID.
+        return HomogeneousDimensionRecordSet(
+            self.element,
+            (RecordClass(**dataId.byName()) for dataId in dataIds)
+        )
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.

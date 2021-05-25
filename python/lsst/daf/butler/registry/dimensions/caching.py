@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["CachingDimensionRecordStorage"]
 
-from typing import Any, Dict, Iterable, Mapping, Optional, Set
+from typing import Any, Iterable, Mapping, Optional
 
 import sqlalchemy
 
@@ -30,12 +30,11 @@ from lsst.utils import doImport
 
 from ...core import (
     DatabaseDimensionElement,
-    DataCoordinate,
     DataCoordinateIterable,
-    DataCoordinateSetView,
     DimensionElement,
     DimensionRecord,
     GovernorDimension,
+    HomogeneousDimensionRecordCache,
     NamedKeyDict,
     NamedKeyMapping,
     SpatialRegionDatabaseRepresentation,
@@ -62,7 +61,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
     """
     def __init__(self, nested: DatabaseDimensionRecordStorage):
         self._nested = nested
-        self._cache: Dict[DataCoordinate, DimensionRecord] = {}
+        self._cache = HomogeneousDimensionRecordCache(self.element, self._nested.fetch)
 
     @classmethod
     def initialize(
@@ -101,29 +100,18 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         self._nested.insert(*records)
-        for record in records:
-            self._cache[record.dataId] = record
+        self._cache.update(records)
 
     def sync(self, record: DimensionRecord) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
         inserted = self._nested.sync(record)
         if inserted:
-            self._cache[record.dataId] = record
+            self._cache.add(record)
         return inserted
 
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
+    def fetch(self, dataIds: DataCoordinateIterable) -> HomogeneousDimensionRecordCache:
         # Docstring inherited from DimensionRecordStorage.fetch.
-        missing: Set[DataCoordinate] = set()
-        for dataId in dataIds:
-            if (record := self._cache.get(dataId)) is None:
-                missing.add(dataId)
-            else:
-                yield record
-        if missing:
-            toFetch = DataCoordinateSetView(missing, graph=self.element.graph)
-            for record in self._nested.fetch(toFetch):
-                self._cache[record.dataId] = record
-                yield record
+        return self._cache.extract(dataIds)
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
