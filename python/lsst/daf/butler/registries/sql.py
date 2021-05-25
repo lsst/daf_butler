@@ -493,7 +493,8 @@ class SqlRegistry(Registry):
 
         runRecord = self._managers.collections.find(run)
         if runRecord.type is not CollectionType.RUN:
-            raise TypeError(f"Given collection is of type {runRecord.type.name}; RUN collection required.")
+            raise TypeError(f"Given collection '{runRecord.name}' is of type {runRecord.type.name};"
+                            " RUN collection required.")
         assert isinstance(runRecord, RunRecord)
 
         progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)

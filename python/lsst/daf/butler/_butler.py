@@ -33,7 +33,7 @@ __all__ = (
     "PurgeUnsupportedPruneCollectionsError",
 )
 
-
+import collections.abc
 from collections import defaultdict
 import contextlib
 import logging
@@ -1672,6 +1672,120 @@ class Butler:
                 doImport(stream)
         else:
             doImport(filename)
+
+    @transactional
+    def transfer_from(self, source_butler: Butler, source_refs: Iterable[DatasetRef],
+                      transfer: str = "auto",
+                      id_gen_map: Dict[str, DatasetIdGenEnum] = None) -> List[DatasetRef]:
+        """Transfer datasets to this Butler from a run in another Butler.
+
+        Parameters
+        ----------
+        source_butler : `Butler`
+            Butler from which the datasets are to be transferred.
+        source_refs : iterable of `DatasetRef`
+            Datasets defined in the source butler that should be transferred to
+            this butler.
+        transfer : `str`, optional
+            Transfer mode passed to `~lsst.daf.butler.Datastore.transfer_from`.
+        id_gen_map : `dict` of [`str`, `DatasetIdGenEnum`], optional
+            A mapping of dataset type to ID generation mode. Only used if
+            the source butler is using integer IDs. Should not be used
+            if this receiving butler uses integer IDs. Without this dataset
+            import always uses unique.
+
+        Returns
+        -------
+        refs : `list` of `DatasetRef`
+            The refs added to this Butler.
+
+        Notes
+        -----
+        Requires that any dimension definitions are already present in the
+        receiving Butler. The datastore artifact has to exist for a transfer
+        to be made but non-existence is not an error.
+
+        Datasets that already exist in this run will be skipped.
+        """
+        if not self.isWriteable():
+            raise TypeError("Butler is read-only.")
+        progress = Progress("lsst.daf.butler.Butler.transfer_from", level=VERBOSE)
+
+        # Will iterate through the refs multiple times so need to convert
+        # to a list if this isn't a collection.
+        if not isinstance(source_refs, collections.abc.Collection):
+            source_refs = list(source_refs)
+
+        log.info("Transferring %d datasets into %s", len(source_refs), str(self))
+
+        if id_gen_map is None:
+            id_gen_map = {}
+
+        # Importing requires that we group the refs by dataset type and run
+        # before doing the import.
+        grouped_refs = defaultdict(list)
+        grouped_indices = defaultdict(list)
+        for i, ref in enumerate(source_refs):
+            grouped_refs[ref.datasetType, ref.run].append(ref)
+            grouped_indices[ref.datasetType, ref.run].append(i)
+
+        # The returned refs should be identical for UUIDs.
+        # For now must also support integers and so need to retain the
+        # newly-created refs from this registry.
+        # Pre-size it so we can assign refs into the correct slots
+        transferred_refs_tmp: List[Optional[DatasetRef]] = [None] * len(source_refs)
+        default_id_gen = DatasetIdGenEnum.UNIQUE
+
+        for (datasetType, run), refs_to_import in progress.iter_item_chunks(grouped_refs.items(),
+                                                                            desc="Importing to registry by "
+                                                                            "run and dataset type"):
+            run_doc = source_butler.registry.getCollectionDocumentation(run)
+            self.registry.registerCollection(run, CollectionType.RUN, doc=run_doc)
+
+            id_generation_mode = default_id_gen
+            if isinstance(refs_to_import[0].id, int):
+                # ID generation mode might need to be overridden when
+                # targetting UUID
+                id_generation_mode = id_gen_map.get(datasetType.name, default_id_gen)
+
+            n_refs = len(refs_to_import)
+            log.log(VERBOSE, "Importing %d ref%s of dataset type %s into run %s",
+                    n_refs, "" if n_refs == 1 else "s", datasetType.name, run)
+
+            # No way to know if this butler's registry uses UUID.
+            # We have to trust the caller on this. If it fails they will have
+            # to change their approach. We can't catch the exception and
+            # retry with unique because that will mess up the transaction
+            # handling. We aren't allowed to ask the registry manager what
+            # type of ID it is using.
+            imported_refs = self.registry._importDatasets(refs_to_import,
+                                                          idGenerationMode=id_generation_mode,
+                                                          expand=False)
+
+            # Map them into the correct slots to match the initial order
+            for i, ref in zip(grouped_indices[datasetType, run], imported_refs):
+                transferred_refs_tmp[i] = ref
+
+        # Mypy insists that we might have None in here so we have to make
+        # that explicit by assigning to a new variable and filtering out
+        # something that won't be there.
+        transferred_refs = [ref for ref in transferred_refs_tmp if ref is not None]
+
+        # Check consistency
+        assert len(source_refs) == len(transferred_refs), "Different number of refs imported than given"
+
+        log.log(VERBOSE, "Imported %d datasets into destination butler", len(transferred_refs))
+
+        # The transferred refs need to be reordered to match the original
+        # ordering given by the caller. Without this the datastore transfer
+        # will be broken.
+
+        # Ask the datastore to transfer. The datastore has to check that
+        # the source datastore is compatible with the target datastore.
+        self.datastore.transfer_from(source_butler.datastore, source_refs,
+                                     local_refs=transferred_refs, transfer=transfer)
+
+        return transferred_refs
 
     def validateConfiguration(self, logFailures: bool = False,
                               datasetTypeNames: Optional[Iterable[str]] = None,

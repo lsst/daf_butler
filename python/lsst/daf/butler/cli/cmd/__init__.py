@@ -34,6 +34,7 @@ __all__ = ("associate",
            "query_dimension_records",
            "retrieve_artifacts",
            "remove_dataset_type",
+           "transfer_datasets",
 )
 
 
@@ -52,4 +53,5 @@ from .commands import (associate,
                        query_dimension_records,
                        retrieve_artifacts,
                        remove_dataset_type,
+                       transfer_datasets,
 )

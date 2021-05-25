@@ -584,6 +584,46 @@ class Datastore(metaclass=ABCMeta):
             )
         self._finishIngest(prepData, transfer=transfer)
 
+    def transfer_from(self, source_datastore: Datastore, refs: Iterable[DatasetRef],
+                      local_refs: Optional[Iterable[DatasetRef]] = None,
+                      transfer: str = "auto") -> None:
+        """Transfer dataset artifacts from another datastore to this one.
+
+        Parameters
+        ----------
+        source_datastore : `Datastore`
+            The datastore from which to transfer artifacts. That datastore
+            must be compatible with this datastore receiving the artifacts.
+        refs : iterable of `DatasetRef`
+            The datasets to transfer from the source datastore.
+        local_refs : iterable of `DatasetRef`, optional
+            The dataset refs associated with the registry associated with
+            this datastore. Can be `None` if the source and target datastore
+            are using UUIDs.
+        transfer : `str`, optional
+            How (and whether) the dataset should be added to the datastore.
+            Choices include "move", "copy",
+            "link", "symlink", "relsymlink", and "hardlink". "link" is a
+            special transfer mode that will first try to make a hardlink and
+            if that fails a symlink will be used instead.  "relsymlink" creates
+            a relative symlink rather than use an absolute path.
+            Most datastores do not support all transfer modes.
+            "auto" (the default) is a special option that will let the
+            data store choose the most natural option for itself.
+            If the source location and transfer location are identical the
+            transfer mode will be ignored.
+
+        Raises
+        ------
+        TypeError
+            Raised if the two datastores are not compatible.
+        """
+        if type(self) is not type(source_datastore):
+            raise TypeError(f"Datastore mismatch between this datastore ({type(self)}) and the "
+                            f"source datastore ({type(source_datastore)}).")
+
+        raise NotImplementedError(f"Datastore {type(self)} must implement a transfer_from method.")
+
     @abstractmethod
     def getURIs(self, datasetRef: DatasetRef,
                 predict: bool = False) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
