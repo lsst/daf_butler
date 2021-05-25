@@ -23,3 +23,4 @@ from ._iterable import *
 from ._abstract_set import *
 from ._mutable_set import *
 from ._set import *
+from ._cache import *
