@@ -1,0 +1,1 @@
+Enable serialization of ``DatasetRef`` and related classes to JSON format.

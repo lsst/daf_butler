@@ -1,0 +1,1 @@
+Add a new ``butler retrieve-artifacts`` command to copy file artifacts from a Butler datastore.
