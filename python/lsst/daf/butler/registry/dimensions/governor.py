@@ -154,14 +154,16 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
+        dataIds = dataIds.toSet()  # make sure this isn't a single-pass iterator
         try:
             return [self._cache[dataId[self.element]] for dataId in dataIds]  # type: ignore
         except KeyError:
             pass
-        # If at first we don't succeed, refresh and try again.  But this time
-        # we use dict.get to return None if we don't find something.
+        # If at first we don't succeed, refresh and try again, skipping any we
+        # still can't find.
         self.refresh()
-        return [self._cache.get(dataId[self.element]) for dataId in dataIds]  # type: ignore
+        return [self._cache[dataId[self.element]] for dataId in dataIds  # type: ignore
+                if dataId[self.element] in self._cache]
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
