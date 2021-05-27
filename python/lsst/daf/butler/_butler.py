@@ -245,6 +245,7 @@ class Butler:
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
             self._config: ButlerConfig = butler._config
+            self._allow_put_of_predefined_dataset = butler._allow_put_of_predefined_dataset
         else:
             self._config = ButlerConfig(config, searchPaths=searchPaths)
             if "root" in self._config:
@@ -259,6 +260,7 @@ class Butler:
                                                   butlerRoot=butlerRoot)
             self.storageClasses = StorageClassFactory()
             self.storageClasses.addFromConfig(self._config)
+            self._allow_put_of_predefined_dataset = self._config.get("allow_put_of_predefined_dataset", False)
         if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
 
@@ -855,9 +857,39 @@ class Butler:
 
         # Add Registry Dataset entry.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
-        ref, = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
 
-        # Add Datastore entry.
+        # For an execution butler the datasets will be pre-defined.
+        # If the butler is configured that way datasets should only be inserted
+        # if they do not already exist in registry. Trying and catching
+        # ConflictingDefinitionError will not work because the transaction
+        # will be corrupted. Instead, in this mode always check first.
+        ref = None
+        ref_is_predefined = False
+        if self._allow_put_of_predefined_dataset:
+            # Get the matching ref for this run.
+            ref = self.registry.findDataset(datasetType, collections=run,
+                                            dataId=dataId)
+
+            if ref:
+                # Must be expanded form for datastore templating
+                dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions)
+                ref = ref.expanded(dataId)
+                ref_is_predefined = True
+
+        if not ref:
+            ref, = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
+
+        # If the ref is predefined it is possible that the datastore also
+        # has the record. Asking datastore to put it again will result in
+        # the artifact being recreated, overwriting previous, then will cause
+        # a failure in writing the record which will cause the artifact
+        # to be removed. Much safer to ask first before attempting to
+        # overwrite. Race conditions should not be an issue for the
+        # execution butler environment.
+        if ref_is_predefined:
+            if self.datastore.knows(ref):
+                raise ConflictingDefinitionError(f"Dataset associated {ref} already exists.")
+
         self.datastore.put(obj, ref)
 
         return ref
@@ -1953,3 +1985,7 @@ class Butler:
     """An object that maps known storage class names to objects that fully
     describe them (`StorageClassFactory`).
     """
+
+    _allow_put_of_predefined_dataset: bool
+    """Allow a put to succeed even if there is already a registry entry for it
+    but not a datastore record. (`bool`)."""

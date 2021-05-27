@@ -1,0 +1,2 @@
+A new method ``Datastore.knows()`` has been added to allow a user to ask the datastore whether it knows about a specific dataset but without requiring a check to see if the artifact itself exists.
+Use ``Datastore.exists()`` to check that the datastore knows about a dataset and the artifact exists.

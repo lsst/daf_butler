@@ -64,7 +64,7 @@ from lsst.daf.butler import FileDataset
 from lsst.daf.butler import CollectionSearch, CollectionType
 from lsst.daf.butler import ButlerURI
 from lsst.daf.butler import script
-from lsst.daf.butler.registry import MissingCollectionError
+from lsst.daf.butler.registry import MissingCollectionError, ConflictingDefinitionError
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core._butlerUri.s3utils import (setAwsEnvCredentials,
                                                      unsetAwsEnvCredentials)
@@ -369,9 +369,36 @@ class ButlerPutGetTests:
         # already had a component removed
         butler.pruneDatasets([ref], unstore=True, purge=True)
 
-        # Add a dataset back in since some downstream tests require
-        # something to be present
+        # Check that we can configure a butler to accept a put even
+        # if it already has the dataset in registry.
         ref = butler.put(metric, refIn)
+
+        # Repeat put will fail.
+        with self.assertRaises(ConflictingDefinitionError):
+            butler.put(metric, refIn)
+
+        # Remove the datastore entry.
+        butler.pruneDatasets([ref], unstore=True, purge=False, disassociate=False)
+
+        # Put will still fail
+        with self.assertRaises(ConflictingDefinitionError):
+            butler.put(metric, refIn)
+
+        # Allow the put to succeed
+        butler._allow_put_of_predefined_dataset = True
+        ref2 = butler.put(metric, refIn)
+        self.assertEqual(ref2.id, ref.id)
+
+        # A second put will still fail but with a different exception
+        # than before.
+        with self.assertRaises(ConflictingDefinitionError):
+            butler.put(metric, refIn)
+
+        # Reset the flag to avoid confusion
+        butler._allow_put_of_predefined_dataset = False
+
+        # Leave the dataset in place since some downstream tests require
+        # something to be present
 
         return butler
 

@@ -1,0 +1,3 @@
+Add a Butler configuration for an execution butler that has pre-defined registry entries but no datastore records.
+
+The `Butler.put()` will return the pre-existing dataset ref but will still fail if a datastore record is found.

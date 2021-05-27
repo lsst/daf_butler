@@ -230,6 +230,27 @@ class ChainedDatastore(Datastore):
         chainName = ", ".join(str(ds) for ds in self.datastores)
         return chainName
 
+    def knows(self, ref: DatasetRef) -> bool:
+        """Check if the dataset is known to any of the datastores.
+
+        Does not check for existence of any artifact.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+
+        Returns
+        -------
+        exists : `bool`
+            `True` if the dataset is known to the datastore.
+        """
+        for datastore in self.datastores:
+            if datastore.knows(ref):
+                log.debug("%s known to datastore %s", ref, datastore.name)
+                return True
+        return False
+
     def exists(self, ref: DatasetRef) -> bool:
         """Check if the dataset exists in one of the datastores.
 

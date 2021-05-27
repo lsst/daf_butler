@@ -239,6 +239,24 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         return realID, storedItemInfo
 
+    def knows(self, ref: DatasetRef) -> bool:
+        """Check if the dataset is known to the datastore.
+
+        This datastore does not distinguish dataset existence from knowledge
+        of a dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+
+        Returns
+        -------
+        exists : `bool`
+            `True` if the dataset is known to the datastore.
+        """
+        return self.exists(ref)
+
     def exists(self, ref: DatasetRef) -> bool:
         """Check if the dataset exists in the datastore.
 
