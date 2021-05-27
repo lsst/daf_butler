@@ -1146,6 +1146,26 @@ class FileDatastore(GenericBaseDatastore):
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
                                       isComponent=isComponent)
 
+    def knows(self, ref: DatasetRef) -> bool:
+        """Check if the dataset is known to the datastore.
+
+        Does not check for existence of any artifact.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+
+        Returns
+        -------
+        exists : `bool`
+            `True` if the dataset is known to the datastore.
+        """
+        fileLocations = self._get_dataset_locations_info(ref)
+        if fileLocations:
+            return True
+        return False
+
     def exists(self, ref: DatasetRef) -> bool:
         """Check if the dataset exists in the datastore.
 

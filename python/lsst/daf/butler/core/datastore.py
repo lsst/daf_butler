@@ -339,6 +339,24 @@ class Datastore(metaclass=ABCMeta):
         self._transaction = self._transaction.parent
 
     @abstractmethod
+    def knows(self, ref: DatasetRef) -> bool:
+        """Check if the dataset is known to the datastore.
+
+        Does not check for existence of any artifact.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+
+        Returns
+        -------
+        exists : `bool`
+            `True` if the dataset is known to the datastore.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def exists(self, datasetRef: DatasetRef) -> bool:
         """Check if the dataset exists in the datastore.
 
