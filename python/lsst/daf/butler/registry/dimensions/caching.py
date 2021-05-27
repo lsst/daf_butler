@@ -62,7 +62,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
     """
     def __init__(self, nested: DatabaseDimensionRecordStorage):
         self._nested = nested
-        self._cache: Dict[DataCoordinate, Optional[DimensionRecord]] = {}
+        self._cache: Dict[DataCoordinate, DimensionRecord] = {}
 
     @classmethod
     def initialize(
@@ -115,23 +115,15 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.fetch.
         missing: Set[DataCoordinate] = set()
         for dataId in dataIds:
-            # Use ... as sentinal value so we can also cache None == "no such
-            # record exists".
-            record = self._cache.get(dataId, ...)
-            if record is ...:
+            if (record := self._cache.get(dataId)) is None:
                 missing.add(dataId)
-            elif record is not None:
-                # Unclear why MyPy can't tell that this isn't ..., but it
-                # thinks it's still a possibility.
-                yield record  # type: ignore
+            else:
+                yield record
         if missing:
             toFetch = DataCoordinateSetView(missing, graph=self.element.graph)
             for record in self._nested.fetch(toFetch):
                 self._cache[record.dataId] = record
                 yield record
-            missing -= self._cache.keys()
-            for dataId in missing:
-                self._cache[dataId] = None
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
