@@ -28,3 +28,4 @@ from ._frozen_set import *
 from ._tuple import *
 from ._set_view import *
 from ._iterator_adaptor import *
+from ._table import *
