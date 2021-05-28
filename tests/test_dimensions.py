@@ -478,30 +478,84 @@ class DataCoordinateTestCase(unittest.TestCase):
             for m, dataId in enumerate(split.chain()):
                 # Test constructing a new data ID from this one with a
                 # subset of the dimensions.
-                # This is not possible for some combinations of
-                # dimensions if has_full is False (see
-                # `DataCoordinate.subset` docs).
                 newDimensions = self.randomDimensionSubset(n=1, graph=dataId.graph)
-                if dataId.has_full or dataId.graph.required.issuperset(newDimensions.required):
-                    newDataIds = [
-                        dataId.subset(newDimensions),
-                        DataCoordinate.standardize(dataId, graph=newDimensions),
-                        DataCoordinate.standardize(dataId, graph=newDimensions, htm7=12),
-                    ]
-                    for newDataId in newDataIds:
-                        with self.subTest(newDataId=newDataId, type=type(dataId)):
-                            commonKeys = dataId.keys() & newDataId.keys()
-                            self.assertTrue(commonKeys)
-                            self.assertEqual(
-                                [newDataId[k] for k in commonKeys],
-                                [dataId[k] for k in commonKeys],
-                            )
-                            # This should never "downgrade" from
-                            # Complete to Minimal or Expanded to Complete.
-                            if dataId.has_records:
-                                self.assertTrue(newDataId.has_records)
-                            if dataId.has_full:
-                                self.assertTrue(newDataId.has_full)
+                # Check bad-arguments errors that should always occur,
+                # regardless of whether operation might be possible: can't
+                # demand records without demanding full.
+                with self.assertRaises(TypeError):
+                    DataCoordinate.standardize(dataId, graph=newDimensions, has_full=False, has_records=True)
+                can_have_basic = dataId.has_full or dataId.graph.required.issuperset(newDimensions.required)
+                can_have_full = (
+                    dataId.graph.required.issuperset(newDimensions.dimensions)
+                    or (dataId.has_full and dataId.graph.dimensions.issuperset(newDimensions.dimensions))
+                )
+                can_have_records = can_have_full and dataId.has_records
+                if not can_have_records:
+                    with self.assertRaises(KeyError):
+                        DataCoordinate.standardize(dataId, graph=newDimensions,
+                                                   has_full=True, has_records=True)
+                if not can_have_full:
+                    with self.assertRaises(KeyError):
+                        DataCoordinate.standardize(dataId, graph=newDimensions, has_full=True)
+                    with self.assertRaises(KeyError):
+                        DataCoordinate.standardize(dataId, graph=newDimensions,
+                                                   has_full=True, has_records=True)
+                    with self.assertRaises(KeyError):
+                        DataCoordinate.standardize(dataId, graph=newDimensions,
+                                                   has_full=True, has_records=False)
+                if not can_have_basic:
+                    # subset is not possible for some combinations of
+                    # dimensions if has_full is False (see
+                    # `DataCoordinate.subset` docs); just check exceptions.
+                    with self.assertRaises(KeyError):
+                        dataId.subset(newDimensions)
+                    with self.assertRaises(KeyError):
+                        DataCoordinate.standardize(dataId, graph=newDimensions)
+                    with self.assertRaises(KeyError):
+                        DataCoordinate.standardize(dataId, graph=newDimensions, htm7=12)
+                    # Nothing left to test for this combination of dimensions.
+                    continue
+
+                def check(newDataId, expect_has_full=can_have_full, expect_has_records=can_have_records):
+                    """Local function that tests a successful subset or
+                    equivalent standardize operation to have the expected
+                    values and state flags.
+                    """
+                    commonKeys = dataId.keys() & newDataId.keys()
+                    self.assertTrue(commonKeys)
+                    self.assertEqual(
+                        [newDataId[k] for k in commonKeys],
+                        [dataId[k] for k in commonKeys],
+                    )
+                    self.assertEqual(newDataId.has_full, expect_has_full)
+                    self.assertEqual(newDataId.has_records, expect_has_records)
+
+                check(dataId.subset(newDimensions))
+                check(DataCoordinate.standardize(dataId, graph=newDimensions))
+                check(DataCoordinate.standardize(dataId, graph=newDimensions, has_full=can_have_full))
+                check(DataCoordinate.standardize(dataId, graph=newDimensions, has_full=can_have_full,
+                                                 has_records=can_have_records))
+                check(DataCoordinate.standardize(dataId, graph=newDimensions, htm7=12))
+                check(DataCoordinate.standardize(dataId, graph=newDimensions, htm7=12,
+                                                 has_full=can_have_full))
+                check(DataCoordinate.standardize(dataId, graph=newDimensions, htm7=12,
+                                                 has_full=can_have_full, has_records=can_have_records))
+                if can_have_full:
+                    # Test not asking for full dimensions even if we could.
+                    # But if there are no implied dimensions, the data ID must
+                    # be full no matter what we ask for.
+                    must_have_full = not newDimensions.implied
+                    check(DataCoordinate.standardize(dataId, graph=newDimensions, has_full=False),
+                          must_have_full, False)
+                    check(DataCoordinate.standardize(dataId, graph=newDimensions,
+                                                     has_full=False, has_records=False),
+                          must_have_full, False)
+                    if can_have_records:
+                        # Test not asking for records even if we could.
+                        check(DataCoordinate.standardize(dataId, graph=newDimensions, has_full=True,
+                                                         has_records=False),
+                              True, False)
+
             # Start from a complete data ID, and pass its values in via several
             # different ways that should be equivalent.
             for dataId in split.complete:

@@ -26,9 +26,18 @@
 
 from __future__ import annotations
 
-__all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue", "SerializedDataCoordinate")
+__all__ = (
+    "DataCoordinate",
+    "DataCoordinateCommonState",
+    "DataId",
+    "DataIdKey",
+    "DataIdValue",
+    "InconsistentDataIdError",
+    "SerializedDataCoordinate",
+)
 
 from abc import abstractmethod
+from dataclasses import dataclass
 from typing import (
     AbstractSet,
     Any,
@@ -36,6 +45,7 @@ from typing import (
     Iterator,
     Mapping,
     Optional,
+    Set,
     Tuple,
     TYPE_CHECKING,
     Union,
@@ -52,6 +62,7 @@ from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
+    from .._containers import HeterogeneousDimensionRecordAbstractSet
     from ...registry import Registry
 
 DataIdKey = Union[str, Dimension]
@@ -64,6 +75,12 @@ DataIdValue = Union[int, str, None]
 """Type annotation alias for the values that can be present in a
 DataCoordinate or other data ID.
 """
+
+
+class InconsistentDataIdError(ValueError):
+    """Exception raised when a data ID contains contradictory key-value pairs,
+    according to dimension relationships.
+    """
 
 
 class SerializedDataCoordinate(BaseModel):
@@ -93,6 +110,376 @@ def _intersectRegions(*args: Region) -> Optional[Region]:
         return args[0]
     else:
         return NotImplemented
+
+
+@dataclass(frozen=True)
+class DataCoordinateCommonState:
+    """Helper struct for `DataCoordinate` and containers of `DataCoordinate`.
+
+    Notes
+    -----
+    Containers of data IDs generally require that their elements have the same
+    common state - both the dimensions identified and the `has_full` /
+    `has_records` flags.  This structure is both a convenient way to pass
+    around that combination and a place to put the algorithms that transform
+    data IDs between states.  It should rarely be used directly outside of
+    the `lsst.daf.butler` package.
+
+    `DataCoordinateCommonState` defines the ``<=`` and ``>=`` operators as
+    subset/superset relations: ``a <= b`` if and only if a `DataCoordinate`
+    with state ``a`` has all information necessary to construct a
+    `DataCoordinate` with state ``b``.  Strict subset (``<``) and superset
+    (``>``) are *not* defined, as they seem more likely to be used
+    accidentally than intentionally.
+    """
+
+    __slots__ = ("graph", "has_full", "has_records")
+
+    graph: DimensionGraph
+    """Dimensions that the data ID or data IDs identify."""
+
+    has_full: bool
+    """`True` if all data IDs satisfy `DataCoordinate.has_full`; `False` if
+    none do (mixed containers are not permitted).
+    """
+
+    has_records: bool
+    """Like ``has_full``, but for `DataCoordinate.has_records`."""
+
+    def __post_init__(self) -> None:
+        if not self.graph.implied and not self.has_full:
+            # If there are no implied dimensions, we always have values for
+            # them.  We use object.__setattr__ because this is a frozen
+            # dataclass (it's okay because this is still part of
+            # initialization).
+            object.__setattr__(self, "has_full", True)
+        if not self.graph.elements:
+            object.__setattr__(self, "has_records", True)
+
+    def __le__(self, other: DataCoordinateCommonState) -> bool:
+        return self.known <= other.known and (
+            not self.has_records
+            or (other.has_records and self.graph.elements <= other.graph.elements)
+        )
+
+    def __ge__(self, other: DataCoordinateCommonState) -> bool:
+        return other <= self
+
+    @property
+    def known(self) -> NamedValueAbstractSet[Dimension]:
+        """The set of dimensions whose values are identified by a
+        DataCoordinate with this state.
+
+        This has the same iteration order as `DataCoordinate` (required
+        dimensions followed by implied dimensions, if present).
+        """
+        if self.has_full:
+            return self.graph._dataCoordinateIndices.keys()
+        else:
+            return self.graph.required
+
+    @classmethod
+    def from_data_coordinate(
+        cls,
+        data_id: DataCoordinate,
+    ) -> DataCoordinateCommonState:
+        """Extract common state from a `DataCoordinate` instance.
+
+        Parameters
+        ----------
+        data_id : `DataCoordinate`
+            Data ID to extract state from.
+
+        Returns
+        -------
+        common_state : `DataCoordinateCommonState`
+            Common state for the given data ID.
+        """
+        return cls(data_id.graph, has_full=data_id.has_full, has_records=data_id.has_records)
+
+    @classmethod
+    def calculate(
+        cls,
+        input_state: Optional[DataCoordinateCommonState] = None,
+        input_keys: Optional[AbstractSet[str]] = None,
+        target_graph: Optional[DimensionGraph] = None,
+        defaults: Optional[DimensionGraph] = None,
+        records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
+        has_full: Optional[bool] = None,
+        has_records: Optional[bool] = None,
+        universe: Optional[DimensionUniverse] = None,
+    ) -> DataCoordinateCommonState:
+        """Calculate state from common arguments used to construct data IDs.
+
+        This is an internal interface that should rarely be used outside
+        `lsst.daf.butler`.  Most callers should use `DataCoordinate` methods
+        (e.g. `~DataCoordinate.standardize`, `~DataCoordinate.subset`) or
+        `Registry.expandDataId` instead.
+
+        Parameters
+        ----------
+        input_state : `DataCoordinateCommonState`, optional
+            Common state for an existing input `DataCoordinate`.
+        input_keys : `collections.abc.Set` [ `str` ], optional
+            Set-like object of `str` dimension names for all input data ID
+            key-value pairs come from regular dictionaries and/or keyword
+            arguments.
+        target_graph : `DimensionGraph`, optional
+            Dimensions the output data ID should identify.  If provided, this
+            directly sets `DataCoordinateCommonState.graph`. If not provided,
+            it is inferred from ``input_state`` and ``input_keys`` as the
+            `DimensionGraph` that includes all of the dimensions they
+            reference.  This may also include dimensions they do not reference,
+            which means that there may not always be enough information
+            provided to populate the `DataCoordinate` (resulting in `KeyError`
+            being raised).
+        defaults : `DataCoordinate`, optional
+            A fully-expanded data ID with default key-value pairs and records
+            for governor dimensions.
+        records : `HeterogeneousDimensionRecordAbstractSet`, optional
+            An external container of `DimensionRecord` objects that can be used
+            to attach records and fill in implied dimension values.  If
+            provided, it must include records for everything in
+            `DimensionGraph.elements`, except those that do not actually exist
+            in the `Registry`.
+        has_full : `bool`, optional
+            If not `None`, force `DataCoordinateCommonState.has_full` to this
+            value on the returned object.  If `True`, this means `KeyError`
+            will be raised if implied dimension values are not available from
+            these inputs.  If `False`, this means implied dimension values
+            will not be included in the `DataCoordinate` objects returned by
+            `conform` even if they are available from the inputs.  If `None`,
+            implied dimension values are included if they are available.
+        has_records : `bool`, optional
+            If not `None`, force `DataCoordinateCommonState.has_records` to
+            this value on the returned object.  If `True`, this means
+            `KeyError` will be raised if external ``records`` is not provided
+            and ``input_state`` either has no records or does not have records
+            for all elements.  If `False`, records will not be included in the
+            `DataCoordinate` objects returned by `conform` even they are
+            available from the inputs.  If `None`, records are included if they
+            are available.
+        universe : `DimensionUniverse`, optional
+            Object that defines all dimensions.  Must be provided explicitly
+            unless at least one of ``input_graph``, ``target_graph``,
+            ``defaults``, or ``records`` is.
+
+        Returns
+        -------
+        target_state : `DataCoordinateCommonState`
+            Common state object consistent with the given inputs.
+
+        Raises
+        ------
+        TypeError
+            Raised if arguments are fundamentally inconsistent, e.g.
+            ``has_full=False`` but ``has_records=True``.
+        KeyError
+            Raised if these inputs are not sufficient to construct data IDs
+            with the requested state.  This can occur if:
+
+            - there are no values for required dimensions;
+
+            - if ``has_full=True`` and there are no values for one or
+              more implied dimensions;
+
+            - if ``has_records=True`` and no records for one or more elements
+              were provided.
+
+        Notes
+        -----
+        This method is tightly coupled to `conform`; `calculate` is called once
+        to determine the state for the output `DataCoordinate` instance or
+        instances, and then `conform` is called one more times to transform
+        those arguments into one or more `DataCoordinate` instances.
+        """
+        if has_records and not has_full:
+            raise TypeError("has_records=True without has_full=True is an invalid combination.")
+        # Gather the data ID keys we know from the inputs.
+        keys_known: Set[str] = set()
+        if input_keys is not None:
+            keys_known.update(input_keys)
+        if input_state is not None:
+            keys_known.update(input_state.known.names)
+            universe = input_state.graph.universe
+        if target_graph is None:
+            if universe is None:
+                if defaults is None:
+                    if records is None:
+                        raise TypeError(
+                            "Universe must be provided, either directly or "
+                            "passing another argument that has one."
+                        )
+                    else:
+                        universe = records.universe
+                else:
+                    universe = defaults.universe
+            target_graph = DimensionGraph(universe, names=keys_known)
+        else:
+            universe = target_graph.universe
+        assert universe is not None, "Should be guaranteed by earlier logic."
+        assert target_graph is not None, "Should be guaranteed by earlier logic."
+        if input_keys is not None and not (input_keys <= universe.getStaticDimensions().names):
+            # We silently ignore keys that aren't relevant for this particular
+            # data ID, but keys that aren't relevant for any possible data ID
+            # are a bug that we want to report to the user.  This is especially
+            # important because other code frequently forwards unrecognized
+            # kwargs here.
+            raise ValueError(
+                f"Unrecognized key(s) for data ID: {input_keys - universe.getStaticDimensions().names}."
+            )
+        # We also might have known keys from defaults, but we can't merge those
+        # in earlier because they shouldn't be used to infer target_graph.
+        if defaults is not None:
+            keys_known.update(defaults.names)
+        # Do we have enough keys to identify just the required dimensions?
+        if not keys_known.issuperset(target_graph.required.names):
+            raise KeyError(
+                f"Missing dimensions {target_graph.required.names - keys_known} in {keys_known} for "
+                f"minimal data ID with dimensions {target_graph}."
+            )
+        # Figure out whether we can identify implied dimensions, too.
+        if not target_graph.implied:
+            # There are no implied dimensions, so has_full must be true,
+            # even if caller said has_full=False.
+            full_known = True
+            has_full = True
+        else:
+            full_known = records is not None or keys_known.issuperset(target_graph.implied.names)
+            if has_full is None:
+                has_full = full_known
+            elif has_full and not full_known:
+                raise KeyError(
+                    f"Missing dimensions {target_graph.names - keys_known} in {keys_known} for "
+                    f"full data ID with dimensions {target_graph}; ."
+                )
+        # Figure out whether we can attach records for all identified dimension
+        # elements.
+        records_known = (
+            records is not None or (
+                input_state is not None
+                and input_state.has_records
+                and input_state.graph.issuperset(target_graph)
+            )
+        )
+        if has_records is None:
+            has_records = has_full and records_known
+        elif has_records and not records_known:
+            raise KeyError(
+                f"No records or not enough records for data ID with dimensions {target_graph}."
+            )
+        return cls(target_graph, has_full=has_full, has_records=has_records)
+
+    def conform(
+        self,
+        input_state: Optional[DataCoordinateCommonState] = None,
+        mapping: Optional[NameLookupMapping[Dimension, DataIdValue]] = None,
+        defaults: Optional[DataCoordinate] = None,
+        records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
+        **kwargs: DataIdValue,
+    ) -> DataCoordinate:
+        """Create new `DataCoordinate` instances with the state defined by this
+        object.
+
+        This method is usually called only after first calling
+        `DataCoordinateCommonState.calculate` with consistent arguments.
+
+        Parameters
+        ----------
+        input_state : `DataCoordinateCommonState`, optional
+            Common state for an existing input `DataCoordinate`.  Must be a
+            superset of the object passed as the `calculate` argument of the
+            same name.  Should be not `None` only if ``mapping`` is a
+            `DataCoordinate` instance.
+        mapping : `Mapping`, optional
+            Input dimension key-value pairs: a `DataCoordinate` instance (if
+            and only if ``input_state`` is not `None`, with state a superset
+            of ``input_state``), or a mapping with `str` or `Dimension` keys
+            (in which case these keys should have been included in the
+            ``input_keys`` argument to `calculate`).
+        defaults : `DataCoordinate`, optional
+            A fully-expanded data ID with default key-value pairs and records
+            for governor dimensions.  Must be the same object passed as the
+            `calculate` argument of the same name.
+        records : `HeterogeneousDimensionRecordAbstractSet`, optional
+            An external container of `DimensionRecord` objects that can be used
+            to attach records and fill in implied dimension values.  Must be
+            the same object passed as the `calculate` argument of the same
+            name.
+        **kwargs
+            Additional dimension key-value pairs.  Keys must have been included
+            in the ``input_keys`` argument to `calculate`.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the parameters are inconsistent with those of the call to
+            `calculate` that constructed ``self``.  This is always a logic bug
+            somewhere, but it may be in user code that should be passing a
+            homogeneous list of data IDs to a `lsst.daf.butler` interface but
+            isn't, where "homogenenous" is defined as:
+
+            - all `DataCoordinate` objects with the same
+              `DataCoordinateCommonState`
+
+            - all mapping objects of some other (consistent) type, with the
+              same keys.
+        """
+        # Extract key-value pairs are records from various sources.
+        values_by_name = {} if defaults is None else defaults.full.byName()
+        records_by_name: Dict[str, Optional[DimensionRecord]] = {}
+        if input_state is not None:
+            if not isinstance(mapping, DataCoordinate):
+                raise RuntimeError(
+                    "Inconsistency detected while processing data IDs; "
+                    "a true DataCoordinate instance was expected, but "
+                    f"{mapping} of type {type(mapping).__name__} was given.  "
+                    "This can occur if an interface that expects a "
+                    "homogeneous iterable of data IDs was instead passed "
+                    "a mix of objects."
+                )
+            if input_state == self:
+                # Shortcut: input mapping is already standardized exactly as
+                # desired.
+                return mapping
+            elif input_state.has_full:
+                values_by_name.update(mapping.full.byName())
+                if input_state.has_records:
+                    records_by_name.update(mapping.records.byName())
+            else:
+                values_by_name.update(mapping.byName())
+        elif isinstance(mapping, NamedKeyMapping):
+            values_by_name.update(mapping.byName())
+        elif mapping is not None:
+            values_by_name.update(mapping)
+        values_by_name.update(kwargs)
+        # If we are expecting to return records and don't have the ones we need
+        # yet, or we need to use records to find implied key-value pairs,
+        # delegate to the external records container to get the records we need
+        # and expand values_by_name.
+        if (
+            self.has_records and not (records_by_name.keys() >= self.graph.elements.names)
+            or not (values_by_name.keys() >= self.known.names)
+        ):
+            if records is None:
+                raise RuntimeError(
+                    "Inconsistency detected while processing data IDs; "
+                    "external records are needed to transform data ID "
+                    f"{values_by_name} to state {self}.  "
+                    "This can occur if an interface that expects a "
+                    "homogeneous iterable of data IDs was instead passed "
+                    "a mix of objects or dictionaries with different keys."
+                )
+            records.expand_data_id_dict(values_by_name, self.graph, related_records=records_by_name)
+        # Put values into tuple, since that's what actually backs our
+        # DataCoordinate implementations.
+        values = tuple(
+            dimension.validated(values_by_name[dimension.name]) for dimension in self.known
+        )
+        result: DataCoordinate = _BasicTupleDataCoordinate(self.graph, values)
+        if self.has_records:
+            result = result.expanded(records_by_name)
+        return result
 
 
 class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
@@ -147,8 +534,11 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         *,
         graph: Optional[DimensionGraph] = None,
         universe: Optional[DimensionUniverse] = None,
+        has_full: Optional[bool] = None,
+        has_records: Optional[bool] = None,
         defaults: Optional[DataCoordinate] = None,
-        **kwargs: Any
+        records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
+        **kwargs: DataIdValue,
     ) -> DataCoordinate:
         """Standardize the supplied dataId.
 
@@ -168,13 +558,23 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         universe : `DimensionUniverse`
             All known dimensions and their relationships; used to expand
             and validate dependencies when ``graph`` is not provided.
+        has_full : `bool`
+            `True` if the result must satisfy `DataCoordinate.has_full`;
+            `False` if it must not.
+        has_records : `bool`
+            Like ``has_full``, but for `DataCoordinate.has_records`.
         defaults : `DataCoordinate`, optional
             Default dimension key-value pairs to use when needed.  These are
             never used to infer ``graph``, and are ignored if a different value
             is provided for the same key in ``mapping`` or `**kwargs``.
+        records : `HeterogeneousDimensionRecordAbstractSet`, optional
+            Container of `DimensionRecord` instances that may be used to
+            fill in missing keys and/or attach records.  If provided, the
+            returned object is guaranteed to have `has_records` is `True`
+            unless ``has_records=False`` was passed explicitly.
         **kwargs
             Additional keyword arguments are treated like additional key-value
-            pairs in ``mapping``.
+            pairs in ``mapping``, overriding those present.
 
         Returns
         -------
@@ -188,56 +588,31 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         KeyError
             Raised if a key-value pair for a required dimension is missing.
         """
-        d: Dict[str, DataIdValue] = {}
+        input_state = None
+        input_keys = set(kwargs.keys())
         if isinstance(mapping, DataCoordinate):
-            if graph is None:
-                if not kwargs:
-                    # Already standardized to exactly what we want.
-                    return mapping
-            elif kwargs.keys().isdisjoint(graph.dimensions.names):
-                # User provided kwargs, but told us not to use them by
-                # passing in dimensions that are disjoint from those kwargs.
-                # This is not necessarily user error - it's a useful pattern
-                # to pass in all of the key-value pairs you have and let the
-                # code here pull out only what it needs.
-                return mapping.subset(graph)
-            assert universe is None or universe == mapping.universe
-            universe = mapping.universe
-            d.update((name, mapping[name]) for name in mapping.graph.required.names)
-            if mapping.has_full:
-                d.update((name, mapping[name]) for name in mapping.graph.implied.names)
+            input_state = DataCoordinateCommonState.from_data_coordinate(mapping)
         elif isinstance(mapping, NamedKeyMapping):
-            d.update(mapping.byName())
+            input_keys.update(mapping.names)
         elif mapping is not None:
-            d.update(mapping)
-        d.update(kwargs)
-        if graph is None:
-            if defaults is not None:
-                universe = defaults.universe
-            elif universe is None:
-                raise TypeError("universe must be provided if graph is not.")
-            graph = DimensionGraph(universe, names=d.keys())
-        if not graph.dimensions:
-            return DataCoordinate.makeEmpty(graph.universe)
-        if defaults is not None:
-            if defaults.has_full:
-                for k, v in defaults.full.items():
-                    d.setdefault(k.name, v)
-            else:
-                for k, v in defaults.items():
-                    d.setdefault(k.name, v)
-        if d.keys() >= graph.dimensions.names:
-            values = tuple(
-                dimension.validated(d[dimension.name]) for dimension in graph._dataCoordinateIndices.keys()
-            )
-        else:
-            try:
-                values = tuple(
-                    dimension.validated(d[dimension.name]) for dimension in graph.required
-                )
-            except KeyError as err:
-                raise KeyError(f"No value in data ID ({mapping}) for required dimension {err}.") from err
-        return _BasicTupleDataCoordinate(graph, values)
+            input_keys.update(mapping.keys())
+        common_state = DataCoordinateCommonState.calculate(
+            input_state=input_state,
+            input_keys=input_keys,
+            target_graph=graph,
+            defaults=defaults.graph if defaults is not None else None,
+            records=records,
+            universe=universe,
+            has_full=has_full,
+            has_records=has_records,
+        )
+        return common_state.conform(
+            input_state,
+            mapping,
+            defaults=defaults,
+            records=records,
+            **kwargs,
+        )
 
     @staticmethod
     def makeEmpty(universe: DimensionUniverse) -> DataCoordinate:
@@ -334,7 +709,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
     def __lt__(self, other: Any) -> bool:
         # Allow DataCoordinate to be sorted
-        if not isinstance(other, type(self)):
+        if not isinstance(other, DataCoordinate):
             return NotImplemented
         # Form tuple of tuples for each DataCoordinate:
         # Unlike repr() we only use required keys here to ensure that
@@ -362,7 +737,6 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         """
         return self.keys().names
 
-    @abstractmethod
     def subset(self, graph: DimensionGraph) -> DataCoordinate:
         """Return a `DataCoordinate` whose graph is a subset of ``self.graph``.
 
@@ -375,29 +749,26 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         -------
         coordinate : `DataCoordinate`
             A `DataCoordinate` instance that identifies only the given
-            dimensions.  May be ``self`` if ``graph == self.graph``.
+            dimensions.  May be ``self`` if ``graph == self.graph`` and state
+            flags are unchanged.
 
         Raises
         ------
         KeyError
-            Raised if the primary key value for one or more required dimensions
-            is unknown.  This may happen if ``graph.issubset(self.graph)`` is
-            `False`, or even if ``graph.issubset(self.graph)`` is `True`, if
-            ``self.has_full`` is `False` and
+            Raised if needed information (dimension values or records) are not
+            present.  This will always happen if ``graph.issubset(self.graph)``
+            is `False`. it may also happen even if only a minimal data ID is
+            requested and ``graph.issubset(self.graph)`` is `True`, if
             ``graph.required.issubset(self.graph.required)`` is `False`.  As an
             example of the latter case, consider trying to go from a data ID
             with dimensions {instrument, physical_filter, band} to just
             {instrument, band}; band is implied by physical_filter and hence
             would have no value in the original data ID if ``self.has_full`` is
             `False`.
-
-        Notes
-        -----
-        If `has_full` and `has_records` are `True` on ``self``, they will be
-        `True` (respectively) on the returned `DataCoordinate` as well.  The
-        converse does not hold.
         """
-        raise NotImplementedError()
+        current_state = DataCoordinateCommonState.from_data_coordinate(self)
+        target_state = DataCoordinateCommonState.calculate(current_state, target_graph=graph,)
+        return target_state.conform(current_state, self)
 
     @abstractmethod
     def union(self, other: DataCoordinate) -> DataCoordinate:
@@ -431,7 +802,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
                  ) -> DataCoordinate:
         """Return a `DataCoordinate` that holds the given records.
 
-        Guarantees that  `True`.
+        Guarantees that `has_records` is `True`.
 
         This is a low-level interface with at most assertion-level checking of
         inputs.  Most callers should use `Registry.expandDataId` instead.
@@ -837,8 +1208,6 @@ class _BasicTupleDataCoordinate(DataCoordinate):
 
     def __getitem__(self, key: DataIdKey) -> DataIdValue:
         # Docstring inherited from DataCoordinate.
-        if isinstance(key, Dimension):
-            key = key.name
         index = self._graph._dataCoordinateIndices[key]
         try:
             return self._values[index]
@@ -846,18 +1215,6 @@ class _BasicTupleDataCoordinate(DataCoordinate):
             # Caller asked for an implied dimension, but this object only has
             # values for the required ones.
             raise KeyError(key) from None
-
-    def subset(self, graph: DimensionGraph) -> DataCoordinate:
-        # Docstring inherited from DataCoordinate.
-        if self._graph == graph:
-            return self
-        elif self.has_full or self._graph.required >= graph.dimensions:
-            return _BasicTupleDataCoordinate(
-                graph,
-                tuple(self[k] for k in graph._dataCoordinateIndices.keys()),
-            )
-        else:
-            return _BasicTupleDataCoordinate(graph, tuple(self[k] for k in graph.required.names))
 
     def union(self, other: DataCoordinate) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
@@ -917,7 +1274,8 @@ class _BasicTupleDataCoordinate(DataCoordinate):
 
 
 class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
-    """A `DataCoordinate` implementation that can hold `DimensionRecord`.
+    """A `DataCoordinate` implementation that can hold `DimensionRecord`
+    objects.
 
     This class should only be accessed outside this module via the
     `DataCoordinate` interface, and should only be constructed via calls to
@@ -947,14 +1305,6 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
         self._records = records
 
     __slots__ = ("_records",)
-
-    def subset(self, graph: DimensionGraph) -> DataCoordinate:
-        # Docstring inherited from DataCoordinate.
-        if self._graph == graph:
-            return self
-        return _ExpandedTupleDataCoordinate(graph,
-                                            tuple(self[k] for k in graph._dataCoordinateIndices.keys()),
-                                            records=self._records)
 
     def expanded(self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
                  ) -> DataCoordinate:

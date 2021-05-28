@@ -21,18 +21,33 @@
 
 from __future__ import annotations
 
-__all__ = ("HeterogeneousDimensionRecordAbstractSet", "HomogeneousDimensionRecordAbstractSet")
+__all__ = (
+    "HeterogeneousDimensionRecordAbstractSet",
+    "HomogeneousDimensionRecordAbstractSet",
+)
 
 from abc import abstractmethod
-from typing import Any, Iterator, Mapping, TypeVar, overload
+from typing import Any, Dict, Iterator, Mapping, Optional, TypeVar, overload
 
-from ...dimensions import DataCoordinate, DimensionElement, DimensionRecord
+from ...dimensions import (
+    DataCoordinate,
+    DataIdValue,
+    Dimension,
+    DimensionElement,
+    DimensionGraph,
+    DimensionRecord,
+    InconsistentDataIdError,
+)
 from ...named import NamedKeyMapping
 from .._data_coordinate import (
+    DataCoordinateAbstractSet,
     DataCoordinateIterable,
+    DataCoordinateSetView,
 )
-from ._iterable import HeterogeneousDimensionRecordIterable, HomogeneousDimensionRecordIterable
-
+from ._iterable import (
+    HeterogeneousDimensionRecordIterable,
+    HomogeneousDimensionRecordIterable,
+)
 
 _S = TypeVar("_S", bound="HomogeneousDimensionRecordAbstractSet")
 
@@ -86,6 +101,86 @@ class HeterogeneousDimensionRecordAbstractSet(HeterogeneousDimensionRecordIterab
         """
         raise NotImplementedError()
 
+    def expand_data_id_dict(
+        self,
+        data_id: Dict[str, DataIdValue],
+        graph: DimensionGraph,
+        *,
+        related_records: Optional[Dict[str, Optional[DimensionRecord]]] = None,
+    ) -> None:
+        """Expand a data ID dictionary to include values for implied dimensions
+        by looking them up in `DimensionRecord` objects.
+
+        This is a low-level interface that should not generally be called
+        outside `lsst.daf.butler`; external code should use
+        `DataCoordinate.standardize` or `Registry.expandDataIds` instead.
+
+        Parameters
+        ----------
+        data_id : `dict`
+            Dictionary data ID with keys that are a superset of
+            ``graph.required.names``.
+        graph : `DimensionGraph`
+            Target dimensions that this data ID should identify.
+        related_records : `dict`, optional
+            `DimensionRecord` objects already associated with this data ID.  If
+            provided, new records associated with the data ID will be added to
+            it, and those present will not need to be fetched from ``self``.
+
+        Raises
+        ------
+        KeyError
+            Raised if a record for a required dimension could not be found.
+        """
+        if related_records is None:
+            related_records = {}
+        for element in graph.primaryKeyTraversalOrder:
+            # Use ... to mean "not in related_records yet"; we use None for
+            # "we already looked for that record and didn't find it."
+            if (record := related_records.get(element.name, ...)) is ...:
+                if isinstance(element, Dimension) and data_id.get(element.name) is None:
+                    if element in graph.required:
+                        raise KeyError(f"No value or null value for required dimension {element.name}.")
+                    data_id[element.name] = None
+                    record = None
+                else:
+                    subset_data_id = DataCoordinate.fromRequiredValues(
+                        element.graph,
+                        tuple(
+                            dimension.validated(data_id[dimension.name])
+                            for dimension in element.graph.required
+                        ),
+                    )
+                    try:
+                        record = self.by_definition[element].by_data_id[subset_data_id]
+                    except KeyError:
+                        record = None
+                related_records[element.name] = record
+            if record is not None:
+                # Use record to fill out data_id.
+                for dimension in element.implied:
+                    value = getattr(record, dimension.name)
+                    if data_id.setdefault(dimension.name, value) != value:
+                        raise InconsistentDataIdError(
+                            f"Data ID {data_id} has "
+                            f"{dimension.name}={data_id[dimension.name]!r}, "
+                            f"but {element.name} implies {dimension.name}={value!r}."
+                        )
+            else:
+                if element in graph.required:
+                    raise LookupError(
+                        f"Could not find record for required dimension {element.name} " f"via {data_id}."
+                    )
+                if element.alwaysJoin:
+                    raise InconsistentDataIdError(
+                        f"Could not fetch record for element {element.name} via {data_id}, ",
+                        "but it is marked alwaysJoin=True; this means one or more dimensions are not "
+                        "related.",
+                    )
+                for dimension in element.implied:
+                    data_id.setdefault(dimension.name, None)
+                    related_records.setdefault(dimension.name, None)
+
 
 class HomogeneousDimensionRecordAbstractSet(HomogeneousDimensionRecordIterable):
     """An abstract base class for homogeneous containers of unique dimension
@@ -131,6 +226,15 @@ class HomogeneousDimensionRecordAbstractSet(HomogeneousDimensionRecordIterable):
     def by_data_id(self) -> Mapping[DataCoordinate, DimensionRecord]:
         """A mapping view keyed by data ID."""
         raise NotImplementedError()
+
+    @property
+    def data_ids(self) -> DataCoordinateAbstractSet:
+        return DataCoordinateSetView(
+            self.by_data_id.keys(),
+            self.definition.graph,
+            has_full=(not self.definition.graph.implied),
+            has_records=False,
+        )
 
     @overload
     def __getitem__(self, key: DataCoordinate) -> DimensionRecord:
