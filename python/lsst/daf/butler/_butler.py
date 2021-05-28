@@ -388,7 +388,7 @@ class Butler:
             # allowed to change anymore.  Note that in the standalone=True
             # branch, _everything_ in the config is expanded, so there's no
             # need to special case this.
-            Config.updateParameters(RegistryConfig, config, full, toCopy=("managers",), overwrite=False)
+            Config.updateParameters(RegistryConfig, config, full, toMerge=("managers",), overwrite=False)
         configURI: Union[str, ButlerURI]
         if outfile is not None:
             # When writing to a separate location we must include
