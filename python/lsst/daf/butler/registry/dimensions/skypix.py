@@ -93,6 +93,11 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
 
     def fetch(self, dataIds: DataCoordinateIterable) -> HomogeneousDimensionRecordSet:
         # Docstring inherited from DimensionRecordStorage.fetch.
+        if dataIds.graph != self.element.graph:
+            raise ValueError(
+                f"Invalid dimensions for dimension record lookup; expected {self.element.graph}, "
+                f"got {dataIds.graph}."
+            )
         result = HomogeneousDimensionRecordSet(definition=self.element)
         RecordClass = self._dimension.RecordClass
         for dataId in dataIds:
