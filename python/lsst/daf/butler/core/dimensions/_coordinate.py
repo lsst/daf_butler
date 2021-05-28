@@ -36,6 +36,7 @@ __all__ = (
 )
 
 from abc import abstractmethod
+import logging
 import numbers
 from typing import (
     AbstractSet,
@@ -62,6 +63,8 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
     from .._containers import HeterogeneousDimensionRecordAbstractSet
     from ...registry import Registry
+
+log = logging.getLogger(__name__)
 
 DataIdKey = Union[str, Dimension]
 """Type annotation alias for the keys that can be used to index a
@@ -164,6 +167,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         universe: Optional[DimensionUniverse] = None,
         defaults: Optional[DataCoordinate] = None,
         records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
+        unused_dimensions: Optional[Dict[str, DataIdValue]] = None,
+        unused_constraints: Optional[NameLookupMapping[DimensionElement, Dict[str, Any]]] = None,
+        check_types: Optional[bool] = None,
         **kwargs: Any
     ) -> DataCoordinate:
         """Standardize the supplied dataId.
@@ -192,6 +198,44 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             Container of `DimensionRecord` instances that may be used to
             fill in missing keys and/or attach records.  If provided, the
             returned object is guaranteed to have `hasRecords` return `True`.
+        unused_dimensions : `dict`, optional
+            A mapping that will be populated with any given key-value pairs
+            that identify unrelated dimensions or implied dimensions that could
+            not be returned (i.e. when some implied dimensions are missing, and
+            hence `hasFull` cannot be `True` on the returned object).
+        unused_constraints : `dict`, optional
+            A mapping that will be populated with any given key-value pairs
+            that cannot be included in the returned `DataCoordinate`.  These
+            fall into trhee categories:
+
+            - Fully-qualified constraints on `DimensionRecord` fields (e.g.
+              ``exposure.day_obs=20250101``).
+
+            - Unqualified constraints on `DimensionRecord` fields (e.g.
+              ``day_obs=20250101``).  These are expanded to constraints on
+              all matching elements in the dimension universe.
+
+            - Values for dimensions that have the wrong type for the primary
+              key, but can be transformed into constraints on an alternate key
+              (e.g. ``detector='S11R11'`` ->
+              ``detector.full_name='S11R11'``).  These are only considered if
+              ``check_types`` is `True`.
+
+            If this argument is not `None`, it should be a mapping that
+            supports lookups for all `DimensionElement` names in the universe,
+            returning a `dict` to be populated with ``field: value``
+            constraints.  ``defaultdict(dict)`` is a convenient way to
+            construct such a mapping.
+
+            If this argument is `None` (the default), it is assumed that
+            calling code cannot handle make use of attribute constraints, and
+            `ValueError` will be raised if they appear.  Key-value pairs for
+            dimensions that are not part of the graph are silently ignored,
+            as are those for implied dimensions when some implied dimensions
+            are missing.
+        check_types : `bool`, optional
+            If `True` (default) check value types against the expected types
+            for that key, and transform ``numpy`` integer types to `int`.
         **kwargs
             Additional keyword arguments are treated like additional key-value
             pairs in ``mapping``.
@@ -204,7 +248,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         Raises
         ------
         TypeError
-            Raised if the set of optional arguments provided is not supported.
+            Raised if the set of optional arguments provided is not supported,
+            or if a value has the wrong type and cannot be transformed to an
+            alternate constraint.
         KeyError
             Raised if a key-value pair for a required dimension is missing.
         """
@@ -234,15 +280,75 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
                 universe = defaults.universe
             else:
                 raise TypeError("universe must be provided if graph and defaults are not.")
-        if not (d.keys() <= universe.getStaticDimensions().names):
+        non_dimension_keys = set(d.keys() - universe.getStaticDimensions().names)
+        if non_dimension_keys and unused_constraints is not None:
+            for key in non_dimension_keys:
+                element_name, sep, attr_name = key.partition(".")
+                if sep:
+                    try:
+                        element = universe[element_name]
+                        if attr_name in element.RecordClass.fields.names:
+                            unused_constraints[element_name][attr_name] = d.pop(key)
+                    except LookupError:
+                        # If this doesn't work, we just leave this key in
+                        # non_dimension_keys, and later exception-raising code
+                        # will take care of it.
+                        pass
+                else:
+                    # This isn't a dimension name, and it isn't something like
+                    # 'element.attribute'; maybe it's an element attribute
+                    # where we have to infer the element(s).
+                    value = d[key]
+                    for element in universe.getStaticElements():
+                        if key in element.RecordClass.fields.names:
+                            unused_constraints[element.name][key] = value
+                            log.debug("Creating constraint %s.%s=%s from data ID key %s.",
+                                      element.name, key, value, key)
+                            d.pop(key, None)  # drop from dict the first time we use it.
+            # Drop keys that we put into `unused` and dropped from `d`.
+            non_dimension_keys.intersection_update(d.keys())
+        if non_dimension_keys:
+            # We still have some keys we don't recognize.
             # We silently ignore keys that aren't relevant for this particular
             # data ID, but keys that aren't relevant for any possible data ID
             # are a bug that we want to report to the user.  This is especially
             # important because other code frequently forwards unrecognized
             # kwargs here.
             raise ValueError(
-                f"Unrecognized key(s) for data ID: {d.keys() - universe.getStaticDimensions().names}."
+                f"Unrecognized key(s) for data ID: {non_dimension_keys}. "
+                "Note that non-dimension column constraints may only appear "
+                "without the table/dimension name if it can be inferred from "
+                "the set of dimensions to be constrained."
             )
+        if check_types:
+            for key, value in list(d.items()):  # copy so we can remove in loop
+                if isinstance(value, numbers.Integral):   # type: ignore
+                    d[key] = value     # type: ignore
+                dimension = universe.getStaticDimensions()[key]
+                if not isinstance(value, dimension.primaryKey.getPythonType()):
+                    if unused_constraints is not None:
+                        for alternate in dimension.alternateKeys:
+                            if isinstance(value, alternate.getPythonType()):
+                                unused_constraints[key][alternate.name] = value
+                                del d[key]
+                                log.debug("Converting dimension %s to %s.%s=%s",
+                                          key, key, alternate.name, value)
+                                break
+                        else:
+                            expected = [str(dimension.primaryKey.getPythonType())]
+                            expected.extend(
+                                f"{alternate.getPythonType()} ({alternate.name})"
+                                for alternate in dimension.alternateKeys
+                            )
+                            raise TypeError(
+                                f"Wrong type for {key}={value}; expected one of "
+                                f"{expected}, got {type(value)}."
+                            )
+                    else:
+                        raise TypeError(
+                            f"Wrong type for {key}={value}; expected "
+                            f"{dimension.primaryKey.getPythonType()}, got {type(value)}."
+                        )
         if graph is None:
             graph = DimensionGraph(universe, names=d.keys())
         if not graph.dimensions:
@@ -295,16 +401,14 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
                         d.setdefault(dimension.name, None)
                         r.setdefault(dimension.name, None)
         if d.keys() >= graph.dimensions.names:
-            values = tuple(d[name] for name in graph._dataCoordinateIndices.keys())
+            values = tuple(d.pop(name) for name in graph._dataCoordinateIndices.keys())
         else:
             try:
-                values = tuple(d[name] for name in graph.required.names)
+                values = tuple(d.pop(name) for name in graph.required.names)
             except KeyError as err:
                 raise KeyError(f"No value in data ID ({mapping}) for required dimension {err}.") from err
-        # Some backends cannot handle numpy.int64 type which is a subclass of
-        # numbers.Integral; convert that to int.
-        values = tuple(int(val) if isinstance(val, numbers.Integral)  # type: ignore
-                       else val for val in values)
+        if unused_dimensions is not None:
+            unused_dimensions.update(d)
         result: DataCoordinate = _BasicTupleDataCoordinate(graph, values)
         if r.keys() >= graph.elements.names:
             result = result.expanded(r)
