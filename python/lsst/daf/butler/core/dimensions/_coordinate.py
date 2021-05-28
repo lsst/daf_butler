@@ -26,7 +26,14 @@
 
 from __future__ import annotations
 
-__all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue", "SerializedDataCoordinate")
+__all__ = (
+    "DataCoordinate",
+    "DataId",
+    "DataIdKey",
+    "DataIdValue",
+    "InconsistentDataIdError",
+    "SerializedDataCoordinate",
+)
 
 from abc import abstractmethod
 import numbers
@@ -53,6 +60,7 @@ from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
+    from .._containers import HeterogeneousDimensionRecordAbstractSet
     from ...registry import Registry
 
 DataIdKey = Union[str, Dimension]
@@ -65,6 +73,12 @@ DataIdValue = Union[int, str, None]
 """Type annotation alias for the values that can be present in a
 DataCoordinate or other data ID.
 """
+
+
+class InconsistentDataIdError(ValueError):
+    """Exception raised when a data ID contains contradictory key-value pairs,
+    according to dimension relationships.
+    """
 
 
 class SerializedDataCoordinate(BaseModel):
@@ -149,6 +163,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         graph: Optional[DimensionGraph] = None,
         universe: Optional[DimensionUniverse] = None,
         defaults: Optional[DataCoordinate] = None,
+        records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
         **kwargs: Any
     ) -> DataCoordinate:
         """Standardize the supplied dataId.
@@ -173,6 +188,10 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             Default dimension key-value pairs to use when needed.  These are
             never used to infer ``graph``, and are ignored if a different value
             is provided for the same key in ``mapping`` or `**kwargs``.
+        records : `HeterogeneousDimensionRecordAbstractSet`, optional
+            Container of `DimensionRecord` instances that may be used to
+            fill in missing keys and/or attach records.  If provided, the
+            returned object is guaranteed to have `hasRecords` return `True`.
         **kwargs
             Additional keyword arguments are treated like additional key-value
             pairs in ``mapping``.
@@ -190,33 +209,41 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             Raised if a key-value pair for a required dimension is missing.
         """
         d: Dict[str, DataIdValue] = {}
+        r: Dict[str, Optional[DimensionRecord]] = {}
         if isinstance(mapping, DataCoordinate):
             if graph is None:
-                if not kwargs:
+                if not kwargs and records is None:
                     # Already standardized to exactly what we want.
                     return mapping
-            elif kwargs.keys().isdisjoint(graph.dimensions.names):
-                # User provided kwargs, but told us not to use them by
-                # passing in dimensions that are disjoint from those kwargs.
-                # This is not necessarily user error - it's a useful pattern
-                # to pass in all of the key-value pairs you have and let the
-                # code here pull out only what it needs.
-                return mapping.subset(graph)
             assert universe is None or universe == mapping.universe
             universe = mapping.universe
             d.update((name, mapping[name]) for name in mapping.graph.required.names)
             if mapping.hasFull():
                 d.update((name, mapping[name]) for name in mapping.graph.implied.names)
+            if mapping.hasRecords():
+                r.update((name, mapping.records[name]) for name in mapping.graph.elements.names)
         elif isinstance(mapping, NamedKeyMapping):
             d.update(mapping.byName())
         elif mapping is not None:
             d.update(mapping)
         d.update(kwargs)
-        if graph is None:
-            if defaults is not None:
+        if universe is None:
+            if graph is not None:
+                universe = graph.universe
+            elif defaults is not None:
                 universe = defaults.universe
-            elif universe is None:
-                raise TypeError("universe must be provided if graph is not.")
+            else:
+                raise TypeError("universe must be provided if graph and defaults are not.")
+        if not (d.keys() <= universe.getStaticDimensions().names):
+            # We silently ignore keys that aren't relevant for this particular
+            # data ID, but keys that aren't relevant for any possible data ID
+            # are a bug that we want to report to the user.  This is especially
+            # important because other code frequently forwards unrecognized
+            # kwargs here.
+            raise ValueError(
+                f"Unrecognized key(s) for data ID: {d.keys() - universe.getStaticDimensions().names}."
+            )
+        if graph is None:
             graph = DimensionGraph(universe, names=d.keys())
         if not graph.dimensions:
             return DataCoordinate.makeEmpty(graph.universe)
@@ -227,6 +254,46 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             else:
                 for k, v in defaults.items():
                     d.setdefault(k.name, v)
+        if records is not None:
+            for element in graph.primaryKeyTraversalOrder:
+                record = r.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
+                if record is ...:
+                    if isinstance(element, Dimension) and d.get(element.name) is None:
+                        if element in graph.required:
+                            raise LookupError(
+                                f"No value or null value for required dimension {element.name}."
+                            )
+                        d[element.name] = None
+                        record = None
+                    else:
+                        subset_data_id = DataCoordinate.standardize(d, graph=element.graph)
+                        try:
+                            record = records.by_definition[element].by_data_id[subset_data_id]
+                        except KeyError:
+                            record = None
+                    r[element.name] = record
+                if record is not None:
+                    for dimension in element.implied:
+                        value = getattr(record, dimension.name)
+                        if d.setdefault(dimension.name, value) != value:
+                            raise InconsistentDataIdError(
+                                f"Data ID {d} has {dimension.name}={d[dimension.name]!r}, "
+                                f"but {element.name} implies {dimension.name}={value!r}."
+                            )
+                else:
+                    if element in graph.required:
+                        raise LookupError(
+                            f"Could not find record for required dimension {element.name} via {d}."
+                        )
+                    if element.alwaysJoin:
+                        raise InconsistentDataIdError(
+                            f"Could not fetch record for element {element.name} via {d}, ",
+                            "but it is marked alwaysJoin=True; this means one or more dimensions are not "
+                            "related.",
+                        )
+                    for dimension in element.implied:
+                        d.setdefault(dimension.name, None)
+                        r.setdefault(dimension.name, None)
         if d.keys() >= graph.dimensions.names:
             values = tuple(d[name] for name in graph._dataCoordinateIndices.keys())
         else:
@@ -238,7 +305,10 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         # numbers.Integral; convert that to int.
         values = tuple(int(val) if isinstance(val, numbers.Integral)  # type: ignore
                        else val for val in values)
-        return _BasicTupleDataCoordinate(graph, values)
+        result: DataCoordinate = _BasicTupleDataCoordinate(graph, values)
+        if r.keys() >= graph.elements.names:
+            result = result.expanded(r)
+        return result
 
     @staticmethod
     def makeEmpty(universe: DimensionUniverse) -> DataCoordinate:
