@@ -21,7 +21,10 @@
 
 from __future__ import annotations
 
-__all__ = ("HeterogeneousDimensionRecordAbstractSet", "HomogeneousDimensionRecordAbstractSet")
+__all__ = (
+    "HeterogeneousDimensionRecordAbstractSet",
+    "HomogeneousDimensionRecordAbstractSet",
+)
 
 from abc import abstractmethod
 from typing import Any, Collection, Iterator, Mapping

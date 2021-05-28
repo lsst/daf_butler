@@ -59,11 +59,10 @@ from ..core import (
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
+    HeterogeneousDimensionRecordCache,
     HomogeneousDimensionRecordIterable,
-    NamedKeyMapping,
     NameLookupMapping,
     Progress,
-    ScalarDataCoordinateSet,
     StorageClassFactory,
     Timespan,
 )
@@ -75,7 +74,6 @@ from ..registry import (
     CollectionType,
     RegistryDefaults,
     ConflictingDefinitionError,
-    InconsistentDataIdError,
     OrphanedRecordError,
     CollectionSearch,
 )
@@ -611,6 +609,14 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.datastores.findDatastores(ref)
 
+    def getDimensionRecordCache(self) -> HeterogeneousDimensionRecordCache:
+        # Docstring inherited.
+        callbacks = {
+            element.name: self._managers.dimensions[element].fetch
+            for element in self.dimensions.getStaticElements()
+        }
+        return HeterogeneousDimensionRecordCache(self.dimensions, callbacks)
+
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
                      records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
                      withDefaults: bool = True,
@@ -620,63 +626,13 @@ class SqlRegistry(Registry):
             defaults = None
         else:
             defaults = self.defaults.dataId
-        standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions,
-                                                  defaults=defaults, **kwargs)
-        if standardized.hasRecords():
-            return standardized
-        if records is None:
-            records = {}
-        elif isinstance(records, NamedKeyMapping):
-            records = records.byName()
-        else:
-            records = dict(records)
-        if isinstance(dataId, DataCoordinate) and dataId.hasRecords():
-            records.update(dataId.records.byName())
-        keys = standardized.byName()
-        for element in standardized.graph.primaryKeyTraversalOrder:
-            record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
-            if record is ...:
-                if isinstance(element, Dimension) and keys.get(element.name) is None:
-                    if element in standardized.graph.required:
-                        raise LookupError(
-                            f"No value or null value for required dimension {element.name}."
-                        )
-                    keys[element.name] = None
-                    record = None
-                else:
-                    storage = self._managers.dimensions[element]
-                    dataIdSet = ScalarDataCoordinateSet(
-                        DataCoordinate.standardize(keys, graph=element.graph)
-                    )
-                    fetched = tuple(storage.fetch(dataIdSet))
-                    try:
-                        (record,) = fetched
-                    except ValueError:
-                        record = None
-                records[element.name] = record
-            if record is not None:
-                for d in element.implied:
-                    value = getattr(record, d.name)
-                    if keys.setdefault(d.name, value) != value:
-                        raise InconsistentDataIdError(
-                            f"Data ID {standardized} has {d.name}={keys[d.name]!r}, "
-                            f"but {element.name} implies {d.name}={value!r}."
-                        )
-            else:
-                if element in standardized.graph.required:
-                    raise LookupError(
-                        f"Could not fetch record for required dimension {element.name} via keys {keys}."
-                    )
-                if element.alwaysJoin:
-                    raise InconsistentDataIdError(
-                        f"Could not fetch record for element {element.name} via keys {keys}, ",
-                        "but it is marked alwaysJoin=True; this means one or more dimensions are not "
-                        "related."
-                    )
-                for d in element.implied:
-                    keys.setdefault(d.name, None)
-                    records.setdefault(d.name, None)
-        return DataCoordinate.standardize(keys, graph=standardized.graph).expanded(records=records)
+        cache = self.getDimensionRecordCache()
+        if records is not None:
+            for record in records.values():
+                if record is not None:
+                    cache.add(record)
+        return DataCoordinate.standardize(dataId, graph=graph, defaults=defaults, records=cache,
+                                          universe=self.dimensions, **kwargs)
 
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[Mapping[str, Any], DimensionRecord],

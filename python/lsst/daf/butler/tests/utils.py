@@ -249,10 +249,6 @@ class MetricTestRepo:
         """Create a new example metric and add it to the named run with the
         given dataId.
 
-        Overwrites tags, so this does not try to associate the new dataset with
-        existing tags. (If/when tags are needed this can be added to the
-        arguments of this function.)
-
         Parameters
         ----------
         dataId : `dict`
@@ -270,5 +266,4 @@ class MetricTestRepo:
         self.butler.put(metric,
                         self.datasetType if datasetType is None else datasetType,
                         dataId,
-                        run=run,
-                        tags=())
+                        run=run)

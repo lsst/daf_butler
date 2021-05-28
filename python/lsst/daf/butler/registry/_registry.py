@@ -59,6 +59,7 @@ from ..core import (
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
+    HeterogeneousDimensionRecordCache,
     HomogeneousDimensionRecordIterable,
     NameLookupMapping,
     StorageClassFactory,
@@ -970,6 +971,36 @@ class Registry(ABC):
         ------
         AmbiguousDatasetError
             Raised if ``ref.id`` is `None`.
+        """
+        raise NotImplementedError()
+
+    def getDimensionRecordCache(self) -> HeterogeneousDimensionRecordCache:
+        """Return a container that fetches and caches `DimensionRecord` objects
+        from the database.
+
+        Returns
+        -------
+        cache : `HeterogeneousDimensionRecordCache`
+            A container that directly holds already-fetched `DimensionRecord`
+            objects and automatically fetches new ones as requested (see class
+            documentation for more information).
+
+        Notes
+        -----
+        This provides a simpler, faster interface for fetching dimension data
+        when the data IDs desired are already known exactly; use
+        `queryDimensionRecords` to return records via a more flexible
+        expression.  One can also use the result of a call to
+        `queryDimensionRecords` to directly populate a cache::
+
+            cache = butler.registry.getDimensionRecordCache()
+            cache.update(butler.registry.queryDimensionRecords(...))
+
+        To obtain a container that does not automatically fetch missing
+        records, construct a `HeterogeneousDimensionRecordSet` from the cache::
+
+            cache = butler.registry.getDimensionRecordCache()
+            set = HeterogeneousDimensionRecordSet(cache.universe, cache)
         """
         raise NotImplementedError()
 

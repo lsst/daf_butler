@@ -28,11 +28,9 @@ __all__ = (
     "UnsupportedIdGeneratorError",
 )
 
-
-class InconsistentDataIdError(ValueError):
-    """Exception raised when a data ID contains contradictory key-value pairs,
-    according to dimension relationships.
-    """
+# This exception moved for intra-daf_butler dependency reasons; import here and
+# re-export for backwards compatibility.
+from ..core import InconsistentDataIdError
 
 
 class ConflictingDefinitionError(Exception):
