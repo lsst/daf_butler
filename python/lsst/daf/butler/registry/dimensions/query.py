@@ -169,6 +169,11 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def fetch(self, dataIds: DataCoordinateIterable) -> HomogeneousDimensionRecordSet:
         # Docstring inherited from DimensionRecordStorage.fetch.
+        if dataIds.graph != self.element.graph:
+            raise ValueError(
+                f"Invalid dimensions for dimension record lookup; expected {self.element.graph}, "
+                f"got {dataIds.graph}."
+            )
         RecordClass = self.element.RecordClass
         # Given the restrictions imposed at construction, we know there's
         # nothing to actually fetch: everything we need is in the data ID.

@@ -175,8 +175,13 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         query.join(self._table)
         query.columns.extend(self._table.columns[name] for name in RecordClass.fields.standard.names)
         if data_ids is not None:
-            # GovernorDimensions never have dependencies, so the callable that
-            # below extracts compound-primary-key columns can always just
+            if data_ids.graph != self.element.graph:
+                raise ValueError(
+                    f"Invalid dimensions for dimension record lookup; expected {self.element.graph}, "
+                    f"got {data_ids.graph}."
+                )
+            # GovernorDimensions never have dependencies, so the callable below
+            # that extracts compound-primary-key columns can always just
             # return the table's single primary-key column.
             data_ids.constrain(query, lambda _: self._table.columns[self.element.primaryKey.name])
         return DimensionRecordQueryResults(self._db, query.combine(), self.element, data_ids)

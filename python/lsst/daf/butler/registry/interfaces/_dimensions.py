@@ -210,6 +210,13 @@ class DimensionRecordStorage(ABC):
             Records retrieved from storage.  Not all data IDs may have
             corresponding records (if there are no records that match a data
             ID), and even if they are, the order of inputs is not preserved.
+
+        Raises
+        ------
+        ValueError
+            Raised if the given data IDs do not have the right dimensions
+            (``self.element.graph``).  This must be raised immediately, not
+            just when the returned object is iterated over.
         """
         raise NotImplementedError()
 
