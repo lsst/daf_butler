@@ -184,6 +184,20 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def fetch(self, dataIds: DataCoordinateIterable) -> DimensionRecordQueryResults:
         # Docstring inherited from DimensionRecordStorage.fetch.
+        if dataIds.graph != self.element.graph:
+            raise ValueError(
+                f"Invalid dimensions for dimension record lookup; expected {self.element.graph}, "
+                f"got {dataIds.graph}."
+            )
+        return self._fetch_flexible(dataIds)
+
+    def _fetch_flexible(self, dataIds: DataCoordinateIterable) -> DimensionRecordQueryResults:
+        """Like `fetch`, but allow the given data IDs to only identify some
+        of ``self.element.graph``.
+
+        This is used to implement `fetch` and just does not provide checking
+        required by the base class interface.
+        """
         RecordClass = self.element.RecordClass
         query = SimpleQuery()
         query.columns.extend(self._table.columns[name] for name in RecordClass.fields.standard.names)
@@ -545,15 +559,9 @@ class _SkyPixOverlapStorage:
             ``patch``, this is a skymap name.
         """
         overlapRecords: List[dict] = []
-        # `DimensionRecordStorage.fetch` as defined by the ABC expects to be
-        # given iterables of data IDs that correspond to that element's graph
-        # (e.g. {instrument, visit, detector}), not just some subset of it
-        # (e.g. {instrument}).  But we know the implementation of `fetch` for
-        # `TableDimensionRecordStorage will use this iterable to do exactly
-        # what we want.
         governorDataId = DataCoordinate.standardize({self._governor.element.name: governorValue},
                                                     graph=self._governor.element.graph)
-        for record in storage.fetch(DataCoordinateIterable.fromScalar(governorDataId)):
+        for record in storage._fetch_flexible(DataCoordinateIterable.fromScalar(governorDataId)):
             if record.region is None:
                 continue
             baseOverlapRecord = record.dataId.byName()
