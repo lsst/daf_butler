@@ -476,14 +476,6 @@ class DataCoordinateTestCase(unittest.TestCase):
             dataIds = self.randomDataIds(n=1).subset(dimensions)
             split = self.splitByStateFlags(dataIds)
             for m, dataId in enumerate(split.chain()):
-                # Passing in any kind of DataCoordinate alone just returns
-                # that object.
-                self.assertIs(dataId, DataCoordinate.standardize(dataId))
-                # Same if we also explicitly pass the dimensions we want.
-                self.assertIs(dataId, DataCoordinate.standardize(dataId, graph=dataId.graph))
-                # Same if we pass the dimensions and some irrelevant
-                # kwargs.
-                self.assertIs(dataId, DataCoordinate.standardize(dataId, graph=dataId.graph, htm7=12))
                 # Test constructing a new data ID from this one with a
                 # subset of the dimensions.
                 # This is not possible for some combinations of
