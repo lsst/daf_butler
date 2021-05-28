@@ -1023,7 +1023,7 @@ class Registry(ABC):
             will be inferred from the keys of ``dataId`` and ``kwargs``.
             Dimensions that are in ``dataId`` or ``kwargs`` but not in
             ``graph`` are silently ignored, providing a way to extract and
-            ``graph`` expand a subset of a data ID.
+            expand a subset of a data ID.
         records : `Mapping` [`str`, `DimensionRecord`], optional
             Dimension record data to use before querying the database for that
             data, keyed by element name.
@@ -1033,13 +1033,13 @@ class Registry(ABC):
             used).
         **kwargs
             Additional keywords are treated like additional key-value pairs for
-            ``dataId``, extending and overriding
+            ``dataId``, extending and overriding those already present.
 
         Returns
         -------
         expanded : `DataCoordinate`
             A data ID that includes full metadata for all of the dimensions it
-            identifieds, i.e. guarantees that ``expanded.hasRecords()`` and
+            identifies, i.e. guarantees that ``expanded.hasRecords()`` and
             ``expanded.hasFull()`` both return `True`.
         """
         raise NotImplementedError()
