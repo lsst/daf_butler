@@ -24,10 +24,13 @@ from __future__ import annotations
 __all__ = ("DataCoordinateCollection",)
 
 from abc import abstractmethod
-from typing import Any, Collection, Iterable, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Collection, Iterable, Iterator, Optional
 
 from ...dimensions import DataCoordinate, DataId, DimensionGraph
 from ._iterable import DataCoordinateIterable
+
+if TYPE_CHECKING:
+    from .._dimension_record import HeterogeneousDimensionRecordAbstractSet
 
 
 class DataCoordinateCollection(Collection[DataCoordinate], DataCoordinateIterable):
@@ -42,6 +45,7 @@ class DataCoordinateCollection(Collection[DataCoordinate], DataCoordinateIterabl
         graph: DimensionGraph,
         *,
         defaults: Optional[DataCoordinate] = None,
+        records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
         **kwargs: Any,
     ) -> DataCoordinateIterable:
         """Return a container with standardized versions of the given data IDs.
@@ -59,6 +63,10 @@ class DataCoordinateCollection(Collection[DataCoordinate], DataCoordinateIterabl
             Default dimension key-value pairs to use when needed.  These are
             ignored if a different value is provided for the same key in
             ``data_ids`` or `**kwargs``.
+        records : `HeterogeneousDimensionRecordAbstractSet`, optional
+            Container of `DimensionRecord` instances that may be used to
+            fill in missing keys and/or attach records.  If provided, the
+            returned object is guaranteed to have `hasRecords` return `True`.
         **kwargs
             Additional keyword arguments are treated like additional key-value
             pairs in the elements of ``data_ids``, and override any already
@@ -75,7 +83,7 @@ class DataCoordinateCollection(Collection[DataCoordinate], DataCoordinateIterabl
             with deduplication and/or reordering (depending on the subclass,
             which may make more specific guarantees).
         """
-        return super().standardize(data_ids, graph, default=defaults, **kwargs).toSequence()
+        return super().standardize(data_ids, graph, default=defaults, records=records, **kwargs).toSequence()
 
     def __iter__(self) -> Iterator[DataCoordinate]:
         return iter(self._unwrap())

@@ -24,11 +24,14 @@ from __future__ import annotations
 __all__ = ("DataCoordinateSequence",)
 
 from abc import abstractmethod
-from typing import Any, Iterable, Optional, Sequence, overload
+from typing import TYPE_CHECKING, Any, Iterable, Optional, Sequence, overload
 
 from ...dimensions import DataCoordinate, DataId, DimensionGraph
 from ._collection import DataCoordinateCollection
 from ._iterable import DataCoordinateCommonState
+
+if TYPE_CHECKING:
+    from .._dimension_record import HeterogeneousDimensionRecordAbstractSet
 
 
 class DataCoordinateSequence(DataCoordinateCollection, Sequence[DataCoordinate]):
@@ -45,6 +48,7 @@ class DataCoordinateSequence(DataCoordinateCollection, Sequence[DataCoordinate])
         graph: DimensionGraph,
         *,
         defaults: Optional[DataCoordinate] = None,
+        records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
         **kwargs: Any,
     ) -> DataCoordinateSequence:
         """Return a container with standardized versions of the given data IDs.
@@ -62,6 +66,10 @@ class DataCoordinateSequence(DataCoordinateCollection, Sequence[DataCoordinate])
             Default dimension key-value pairs to use when needed.  These are
             ignored if a different value is provided for the same key in
             ``data_ids`` or `**kwargs``.
+        records : `HeterogeneousDimensionRecordAbstractSet`, optional
+            Container of `DimensionRecord` instances that may be used to
+            fill in missing keys and/or attach records.  If provided, the
+            returned object is guaranteed to have `hasRecords` return `True`.
         **kwargs
             Additional keyword arguments are treated like additional key-value
             pairs in the elements of ``data_ids``, and override any already
@@ -77,7 +85,7 @@ class DataCoordinateSequence(DataCoordinateCollection, Sequence[DataCoordinate])
             `DataCoordinate.standardize` on all elements in ``self``, with
             with no reordering but no deduplication.
         """
-        return super().standardize(data_ids, graph, default=defaults, **kwargs).toSequence()
+        return super().standardize(data_ids, graph, default=defaults, records=records, **kwargs).toSequence()
 
     @classmethod
     @abstractmethod

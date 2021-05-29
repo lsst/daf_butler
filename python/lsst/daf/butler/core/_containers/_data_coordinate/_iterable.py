@@ -35,6 +35,7 @@ from ...dimensions import DataCoordinate, DataId, DimensionGraph, DimensionUnive
 from ...simpleQuery import SimpleQuery
 
 if TYPE_CHECKING:
+    from .._dimension_record import HeterogeneousDimensionRecordAbstractSet
     from ._abstract_set import DataCoordinateAbstractSet
     from ._sequence import DataCoordinateSequence
 
@@ -56,6 +57,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
         graph: DimensionGraph,
         *,
         defaults: Optional[DataCoordinate] = None,
+        records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
         **kwargs: Any,
     ) -> DataCoordinateIterable:
         """Return a container with standardized versions of the given data IDs.
@@ -73,6 +75,10 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
             Default dimension key-value pairs to use when needed.  These are
             ignored if a different value is provided for the same key in
             ``data_ids`` or `**kwargs``.
+        records : `HeterogeneousDimensionRecordAbstractSet`, optional
+            Container of `DimensionRecord` instances that may be used to
+            fill in missing keys and/or attach records.  If provided, the
+            returned object is guaranteed to have `hasRecords` return `True`.
         **kwargs
             Additional keyword arguments are treated like additional key-value
             pairs in the elements of ``data_ids``, and override any already
@@ -88,12 +94,20 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
             `DataCoordinate.standardize` on all elements in ``self``, possibly
             with deduplication and/or reordering (depending on the subclass,
             which may make more specific guarantees).
+
+        Notes
+        -----
+        Subclasses should return an object of that type, with the exception
+        of concrete classes that provide views into other containers; these
+        should just inherit the implementation of their immediate ABC to
+        return a similar non-view container.
         """
         from ._iterator_adaptor import DataCoordinateIteratorAdapter
 
         def gen() -> Iterator[DataCoordinate]:
             for data_id in data_ids:
-                yield DataCoordinate.standardize(data_id, graph=graph, defaults=defaults, **kwargs)
+                yield DataCoordinate.standardize(data_id, graph=graph, defaults=defaults, records=records,
+                                                 **kwargs)
 
         return DataCoordinateIteratorAdapter(gen, graph=graph)
 
