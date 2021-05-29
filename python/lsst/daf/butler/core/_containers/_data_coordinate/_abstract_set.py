@@ -24,11 +24,14 @@ from __future__ import annotations
 __all__ = ("DataCoordinateAbstractSet",)
 
 from abc import abstractmethod
-from typing import AbstractSet, Any, Iterable, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any, Iterable, Optional
 
 from ...dimensions import DataCoordinate, DataId, DimensionGraph
 from ._collection import DataCoordinateCollection
-from ._iterable import DataCoordinateIterable, DataCoordinateCommonState
+from ._iterable import DataCoordinateCommonState, DataCoordinateIterable
+
+if TYPE_CHECKING:
+    from .._dimension_record import HeterogeneousDimensionRecordAbstractSet
 
 
 class DataCoordinateAbstractSet(DataCoordinateCollection):
@@ -82,6 +85,7 @@ class DataCoordinateAbstractSet(DataCoordinateCollection):
         graph: DimensionGraph,
         *,
         defaults: Optional[DataCoordinate] = None,
+        records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
         **kwargs: Any,
     ) -> DataCoordinateAbstractSet:
         """Return a container with standardized versions of the given data IDs.
@@ -99,6 +103,10 @@ class DataCoordinateAbstractSet(DataCoordinateCollection):
             Default dimension key-value pairs to use when needed.  These are
             ignored if a different value is provided for the same key in
             ``data_ids`` or `**kwargs``.
+        records : `HeterogeneousDimensionRecordAbstractSet`, optional
+            Container of `DimensionRecord` instances that may be used to
+            fill in missing keys and/or attach records.  If provided, the
+            returned object is guaranteed to have `hasRecords` return `True`.
         **kwargs
             Additional keyword arguments are treated like additional key-value
             pairs in the elements of ``data_ids``, and override any already
@@ -114,7 +122,7 @@ class DataCoordinateAbstractSet(DataCoordinateCollection):
             `DataCoordinate.standardize` on all elements in ``self``, with
             with deduplication guaranteed but no ordering guarantees.
         """
-        return super().standardize(data_ids, graph, default=defaults, **kwargs).toSet()
+        return super().standardize(data_ids, graph, default=defaults, records=records, **kwargs).toSet()
 
     @classmethod
     @abstractmethod
