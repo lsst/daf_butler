@@ -78,6 +78,23 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
 
 
+class BytesFromHexStr(bytes):
+    """A pydantic validation type that converts hex `str` values to `bytes`.
+
+    This can be used in a pydantic model to take care of conversion from hex
+    strings to `bytes` when reading.  It does not handle conversion when
+    writing (because that's not something pydantic custom type can do).
+    """
+
+    @classmethod
+    def __get_validators__(cls) -> Any:
+        yield cls.validate_from_hex
+
+    @classmethod
+    def validate_from_hex(cls, hex: str) -> bytes:
+        return bytes.fromhex(hex)
+
+
 class SpecificSerializedDimensionRecord(BaseModel, extra="forbid"):
     """Base model for a specific serialized record content."""
 
@@ -96,11 +113,12 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> Type[SpecificSe
 
     fields = DimensionElementFields(definition)
     members = {}
-    # Prefer strict typing for external data
+    # Prefer strict typing for external data, convert hex str to bytes
     type_map = {str: StrictStr,
                 float: StrictFloat,
                 bool: StrictBool,
                 int: StrictInt,
+                bytes: BytesFromHexStr,
                 }
 
     for field in fields.standard:
@@ -298,6 +316,12 @@ class DimensionRecord:
                     # and also history. Here use a different approach.
                     # This code needs to be migrated to sphgeom
                     mapping[k] = v.encode().hex()
+                elif isinstance(v, bytes):
+                    # Explicit encode to hex outside the pydantic model,
+                    # because pydantic's bytes types seem to assume they're
+                    # really just ASCII strings that be UTF8 encoded directly,
+                    # not blobs.
+                    mapping[k] = v.hex()
 
         definition = self.definition.to_simple(minimal=minimal)
         return SerializedDimensionRecord(definition=definition, record=mapping)
