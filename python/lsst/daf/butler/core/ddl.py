@@ -233,6 +233,13 @@ VALID_CONFIG_COLUMN_TYPES = {
 }
 
 
+CUSTOM_COLUMN_PYTHON_TYPES = {
+    Base64Region: Region,
+    Base64Bytes: bytes,
+    GUID: uuid.UUID,
+}
+
+
 @dataclass
 class FieldSpec:
     """A data class for defining a column in a logical `Registry` table."""
@@ -369,6 +376,8 @@ class FieldSpec:
         type : `type`
             Python type associated with this field's (SQL) `dtype`.
         """
+        if (t := CUSTOM_COLUMN_PYTHON_TYPES.get(self.dtype)) is not None:
+            return t
         return self.dtype().python_type
 
 
