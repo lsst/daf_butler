@@ -153,7 +153,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
         Notes
         -----
-        For very result sets, it may be much more efficient to call
+        For very large result sets, it may be much more efficient to call
         `materialize` before calling `expanded`, to avoid performing the
         original query multiple times (as a subquery) in the follow-up queries
         that fetch dimension records.  For example::
