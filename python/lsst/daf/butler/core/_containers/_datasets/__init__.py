@@ -19,6 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ._data_coordinate import *
-from ._dimension_record import *
-from ._datasets import *
+from ._iterables import *
+from ._iterator_adapter import *
+from ._generic_sets import *
+from ._by_id_abstract_set import *
+from ._by_id_set import *
+from ._by_id_frozen_set import *
+from ._by_coordinate_abstract_set import *
+from ._by_coordinate_set import *
+from ._by_coordinate_frozen_set import *
