@@ -54,7 +54,9 @@ from ..utils import (
     where_help,
 )
 
-from ... import script
+
+# `script` is imported in the command functions
+# Doing this saves loading time when calling `butler --help`
 
 
 willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
@@ -70,6 +72,7 @@ def associate(**kwargs):
     """Add existing datasets to a tagged collection; searches for datasets with
     the options and adds them to the named COLLECTION.
     """
+    import script
     script.associate(**kwargs)
 
 
@@ -95,6 +98,7 @@ def associate(**kwargs):
 @options_file_option()
 def butler_import(*args, **kwargs):
     """Import data into a butler repository."""
+    import script
     script.butlerImport(*args, **kwargs)
 
 
@@ -111,6 +115,7 @@ def butler_import(*args, **kwargs):
 @options_file_option()
 def create(*args, **kwargs):
     """Create an empty Gen3 Butler repository."""
+    import script
     script.createRepo(*args, **kwargs)
 
 
@@ -128,6 +133,7 @@ def create(*args, **kwargs):
 @options_file_option()
 def config_dump(*args, **kwargs):
     """Dump either a subset or full Butler configuration to standard output."""
+    import script
     script.configDump(*args, **kwargs)
 
 
@@ -141,6 +147,7 @@ def config_dump(*args, **kwargs):
 @options_file_option()
 def config_validate(*args, **kwargs):
     """Validate the configuration files for a Gen3 Butler repository."""
+    import script
     is_good = script.configValidate(*args, **kwargs)
     if not is_good:
         raise click.exceptions.Exit(1)
@@ -167,6 +174,7 @@ def config_validate(*args, **kwargs):
 @options_file_option()
 def prune_collection(**kwargs):
     """Remove a collection and possibly prune datasets within it."""
+    import script
     script.pruneCollection(**kwargs)
 
 
@@ -289,6 +297,7 @@ def prune_datasets(**kwargs):
             raise click.ClickException(pruneDatasets_errQuietWithDryRun)
         kwargs["confirm"] = False
 
+    import script
     result = script.pruneDatasets(**kwargs)
 
     if result.errPurgeAndDisassociate:
@@ -346,6 +355,7 @@ def prune_datasets(**kwargs):
 @options_file_option()
 def query_collections(*args, **kwargs):
     """Get the collections whose names match an expression."""
+    import script
     table = script.queryCollections(*args, **kwargs)
     # The unit test that mocks script.queryCollections does not return a table
     # so we need the following `if`.
@@ -365,6 +375,7 @@ def query_collections(*args, **kwargs):
 @options_file_option()
 def query_dataset_types(*args, **kwargs):
     """Get the dataset types in a repository."""
+    import script
     table = script.queryDatasetTypes(*args, **kwargs)
     if table:
         table.pprint_all()
@@ -377,6 +388,7 @@ def query_dataset_types(*args, **kwargs):
 @click.argument('dataset-type-name', nargs=1)
 def remove_dataset_type(*args, **kwargs):
     """Remove a dataset type definition from a repository."""
+    import script
     script.removeDatasetType(*args, **kwargs)
 
 
@@ -385,6 +397,7 @@ def remove_dataset_type(*args, **kwargs):
 @options_file_option()
 def query_datasets(**kwargs):
     """List the datasets in a repository."""
+    import script
     for table in script.QueryDatasets(**kwargs).getTables():
         print("")
         table.pprint_all()
@@ -409,6 +422,7 @@ def query_datasets(**kwargs):
 def certify_calibrations(*args, **kwargs):
     """Certify calibrations in a repository.
     """
+    import script
     script.certifyCalibrations(*args, **kwargs)
 
 
@@ -427,6 +441,7 @@ def certify_calibrations(*args, **kwargs):
 def query_data_ids(**kwargs):
     """List the data IDs in a repository.
     """
+    import script
     table = script.queryDataIds(**kwargs)
     if table:
         table.pprint_all()
