@@ -209,7 +209,10 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             place.)
         """
         for key, val in b.items():
-            a[key].extend(val)
+            try:
+                a[key].extend(val)
+            except KeyError:
+                a[key] = val
         return a
 
     @classmethod
