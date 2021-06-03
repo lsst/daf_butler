@@ -22,7 +22,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys
-from lsst.daf.butler.cli.butler import main
+from lsst.daf.butler_cli.cli.butler import main
 
 if __name__ == '__main__':
     sys.exit(main())
