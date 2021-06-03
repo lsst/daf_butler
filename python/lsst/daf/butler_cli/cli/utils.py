@@ -29,13 +29,18 @@ import logging
 import os
 import textwrap
 import traceback
+from typing import Mapping
 from unittest.mock import patch
 import uuid
 import yaml
 
 from .cliLog import CliLog
-from ..core.utils import iterable
-from ..core.config import Config
+
+
+# `Config` is imported in the command functions.
+# We have a local copy of `iterable` because it needed for loading the help menu.
+# Doing this saves loading time when calling `butler --help`
+
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +61,43 @@ split_kv_separator = "="
 where_help = "A string expression similar to a SQL WHERE clause. May involve any column of a " \
              "dimension table or a dimension name as a shortcut for the primary key column of a " \
              "dimension table."
+
+
+# We keep our own copy of iterable so that it does not have to be loaded
+# when we create the `--help` menu, because loading from _butler adds
+# time (a half second to many seconds) to start up, and leads to long waits
+# when running `butler --help`
+def iterable(a):
+    """Make input iterable.
+
+    There are three cases, when the input is:
+
+    - iterable, but not a `str`  or Mapping -> iterate over elements
+      (e.g. ``[i for i in a]``)
+    - a `str` -> return single element iterable (e.g. ``[a]``)
+    - a Mapping -> return single element iterable
+    - not iterable -> return single element iterable (e.g. ``[a]``).
+
+    Parameters
+    ----------
+    a : iterable or `str` or not iterable
+        Argument to be converted to an iterable.
+
+    Returns
+    -------
+    i : `generator`
+        Iterable version of the input value.
+    """
+    if isinstance(a, str):
+        yield a
+        return
+    if isinstance(a, Mapping):
+        yield a
+        return
+    try:
+        yield from a
+    except Exception:
+        yield a
 
 
 def astropyTablesToStr(tables):
@@ -758,6 +800,7 @@ def _read_yaml_presets(file_uri, cmd_name):
         The relevant command line options read from the override file.
     """
     log.debug("Reading command line overrides for subcommand %s from URI %s", cmd_name, file_uri)
+    from ...butler.core.config import Config
     config = Config(file_uri)
     return config[cmd_name]
 

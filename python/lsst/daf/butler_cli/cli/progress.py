@@ -27,12 +27,10 @@ __all__ = ("ClickProgressHandler",)
 import click
 from typing import Any, ContextManager, Iterable, Optional, TypeVar
 
-from ..core.progress import ProgressBar, ProgressHandler, Progress
-
 _T = TypeVar("_T")
 
 
-class ClickProgressHandler(ProgressHandler):
+class ClickProgressHandler:
     """A `ProgressHandler` implementation that delegates to
     `click.progressbar`.
 
@@ -53,6 +51,7 @@ class ClickProgressHandler(ProgressHandler):
 
         Should usually be called only by the `option` method.
         """
+        from ...butler.core.progress import Progress
         if value:
             Progress.set_handler(cls())
         else:
@@ -69,7 +68,6 @@ class ClickProgressHandler(ProgressHandler):
                             is_flag=True,
                             callback=cls.callback)(cmd)
 
-    def get_progress_bar(self, iterable: Optional[Iterable[_T]], desc: Optional[str],
-                         total: Optional[int], level: int) -> ContextManager[ProgressBar[_T]]:
+    def get_progress_bar(self, iterable, desc, total, level):
         # Docstring inherited.
         return click.progressbar(iterable, length=total, label=desc, **self._kwargs)

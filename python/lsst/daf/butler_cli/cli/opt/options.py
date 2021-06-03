@@ -24,15 +24,13 @@ import click
 from functools import partial
 
 from ..utils import MWOptionDecorator, split_commas, split_kv, unwrap, yaml_presets
-from lsst.daf.butler.registry import CollectionType
 
 
 class CollectionTypeCallback:
 
-    collectionTypes = tuple(collectionType.name for collectionType in CollectionType.all())
-
     @staticmethod
     def makeCollectionTypes(context, param, value):
+        from lsst.daf.butler.registry import CollectionType
         if not value:
             # Click seems to demand that the default be an empty tuple, rather
             # than a sentinal like None.  The behavior that we want is that
@@ -50,7 +48,7 @@ collection_type_option = MWOptionDecorator("--collection-type",
                                            callback=CollectionTypeCallback.makeCollectionTypes,
                                            multiple=True,
                                            help="If provided, only list collections of this type.",
-                                           type=click.Choice(CollectionTypeCallback.collectionTypes,
+                                           type=click.Choice(("RUN", "TAGGED", "CHAINED", "CALIBRATION"),
                                                              case_sensitive=False))
 
 
