@@ -235,7 +235,7 @@ class DatasetRef:
 
         # Convert to a dict form
         as_dict: Dict[str, Any] = {"datasetType": self.datasetType.to_simple(minimal=minimal),
-                                   "dataId": self.dataId.to_simple(),
+                                   "dataId": self.dataId.to_simple(minimal=minimal),
                                    }
 
         # Only include the id entry if it is defined
