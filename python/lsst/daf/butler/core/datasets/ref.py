@@ -204,7 +204,7 @@ class DatasetRef:
         # Compare tuples in the priority order
         return (self_run, self.datasetType, self.dataId) < (other_run, other.datasetType, other.dataId)
 
-    def to_simple(self, minimal: bool = False) -> SerializedDatasetRef:
+    def to_simple(self, minimal: bool = False, normalized: bool = False) -> SerializedDatasetRef:
         """Convert this class to a simple python type.
 
         This makes it suitable for serialization.
@@ -214,6 +214,11 @@ class DatasetRef:
         minimal : `bool`, optional
             Use minimal serialization. Requires Registry to convert
             back to a full type.
+        normalized : `bool`, optional
+            Save in a form appropriate for containers with many datasets of the
+            same `DatasetType`.  This causes the `DatasetType` and any data ID
+            records not to be saved, requiring at least the former to be passed
+            to `from_simple`.
 
         Returns
         -------
@@ -235,9 +240,10 @@ class DatasetRef:
             return SerializedDatasetRef(**simple)
 
         # Convert to a dict form
-        as_dict: Dict[str, Any] = {"datasetType": self.datasetType.to_simple(minimal=minimal),
-                                   "dataId": self.dataId.to_simple(minimal=minimal),
-                                   }
+        as_dict: Dict[str, Any] = {"dataId": self.dataId.to_simple(minimal=(minimal or normalized))}
+
+        if not normalized:
+            as_dict["datasetType"] = self.datasetType.to_simple(minimal=minimal)
 
         # Only include the id entry if it is defined
         if self.id is not None:
@@ -250,7 +256,8 @@ class DatasetRef:
     def from_simple(cls, simple: SerializedDatasetRef,
                     universe: Optional[DimensionUniverse] = None,
                     registry: Optional[Registry] = None,
-                    records: Optional[HeterogeneousDimensionRecordMutableSet] = None) -> DatasetRef:
+                    records: Optional[HeterogeneousDimensionRecordMutableSet] = None,
+                    datasetType: Optional[DatasetType] = None) -> DatasetRef:
         """Construct a new object from simplified form.
 
         Generally this is data returned from the `to_simple` method.
@@ -273,6 +280,9 @@ class DatasetRef:
             If provided and records were also serialized directly with the data
             ID, the serialized records take precedence, and any found are
             inserted into this container.
+        datasetType : `DatasetType`, optional
+            If provided, use this dataset type for reconstruction.  Required if
+            `to_simple` was called with ``normalized=True``.
 
         Returns
         -------
@@ -295,10 +305,11 @@ class DatasetRef:
 
         universe = get_universe_for_deserialize("DatasetRef", universe, registry, records)
 
-        if simple.datasetType is None:
-            # mypy
-            raise ValueError("The DatasetType must be specified to construct a DatasetRef")
-        datasetType = DatasetType.from_simple(simple.datasetType, universe=universe, registry=registry)
+        if datasetType is None:
+            if simple.datasetType is None:
+                # mypy
+                raise ValueError("The DatasetType must be specified to construct a DatasetRef")
+            datasetType = DatasetType.from_simple(simple.datasetType, universe=universe, registry=registry)
 
         if simple.dataId is None:
             # mypy
