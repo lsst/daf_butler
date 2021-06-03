@@ -45,6 +45,7 @@ from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:
     from ...registry import Registry
+    from .._containers import HeterogeneousDimensionRecordMutableSet
 
 
 class AmbiguousDatasetError(Exception):
@@ -248,7 +249,8 @@ class DatasetRef:
     @classmethod
     def from_simple(cls, simple: SerializedDatasetRef,
                     universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None) -> DatasetRef:
+                    registry: Optional[Registry] = None,
+                    records: Optional[HeterogeneousDimensionRecordMutableSet] = None) -> DatasetRef:
         """Construct a new object from simplified form.
 
         Generally this is data returned from the `to_simple` method.
@@ -264,6 +266,13 @@ class DatasetRef:
             Registry to use to convert simple form of a DatasetRef to
             a full `DatasetRef`. Can be `None` if a full description of
             the type is provided along with a universe.
+        records : `HeterogeneousDimensionRecordMutableSet`, optional
+            Container of `DimensionRecord` instances that may be used to fill
+            in missing keys and/or attach records.  If provided, the returned
+            object is guaranteed to have ``dataId.hasRecords`` return `True`.
+            If provided and records were also serialized directly with the data
+            ID, the serialized records take precedence, and any found are
+            inserted into this container.
 
         Returns
         -------
@@ -302,7 +311,7 @@ class DatasetRef:
         if simple.dataId is None:
             # mypy
             raise ValueError("The DataId must be specified to construct a DatasetRef")
-        dataId = DataCoordinate.from_simple(simple.dataId, universe=universe)
+        dataId = DataCoordinate.from_simple(simple.dataId, universe=universe, records=records)
         return cls(datasetType, dataId,
                    id=simple.id, run=simple.run)
 

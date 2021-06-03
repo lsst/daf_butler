@@ -62,7 +62,10 @@ from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
-    from .._containers import HeterogeneousDimensionRecordAbstractSet
+    from .._containers import (
+        HeterogeneousDimensionRecordAbstractSet,
+        HeterogeneousDimensionRecordMutableSet,
+    )
     from ...registry import Registry
 
 DataIdKey = Union[str, Dimension]
@@ -1048,7 +1051,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     @classmethod
     def from_simple(cls, simple: SerializedDataCoordinate,
                     universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None) -> DataCoordinate:
+                    registry: Optional[Registry] = None,
+                    records: Optional[HeterogeneousDimensionRecordMutableSet] = None) -> DataCoordinate:
         """Construct a new object from the simplified form.
 
         The data is assumed to be of the form returned from the `to_simple`
@@ -1063,6 +1067,13 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         registry : `lsst.daf.butler.Registry`, optional
             Registry from which a universe can be extracted. Can be `None`
             if universe is provided explicitly.
+        records : `HeterogeneousDimensionRecordMutableSet`, optional
+            Container of `DimensionRecord` instances that may be used to
+            fill in missing keys and/or attach records.  If provided, the
+            returned object is guaranteed to have `hasRecords` return `True`.
+            If provided and records were also serialized directly with the
+            data ID, the serialized records take precedence, and any found
+            are inserted into this container.
 
         Returns
         -------
@@ -1077,10 +1088,16 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
 
-        dataId = cls.standardize(simple.dataId, universe=universe)
         if simple.records:
-            dataId = dataId.expanded({k: DimensionRecord.from_simple(v, universe=universe)
-                                      for k, v in simple.records.items()})
+            loaded_records = {
+                k: DimensionRecord.from_simple(v, universe=universe)
+                for k, v in simple.records.items()
+            }
+            if records is not None:
+                records.update(loaded_records.values())
+        dataId = cls.standardize(simple.dataId, universe=universe, records=records)
+        if simple.records and records is None:
+            dataId = dataId.expanded(loaded_records)
         return dataId
 
     to_json = to_json_pydantic
