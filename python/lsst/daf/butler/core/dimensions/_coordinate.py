@@ -118,7 +118,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
        `str` names.
 
      - Lookups for implied dimensions (those in ``self.graph.implied``) are
-       supported if and only if `hasFull` returns `True`, and are never
+       supported if and only if `has_full` is `True`, and are never
        included in iteration or `keys`.  The `full` property may be used to
        obtain a mapping whose keys do include implied dimensions.
 
@@ -204,7 +204,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             assert universe is None or universe == mapping.universe
             universe = mapping.universe
             d.update((name, mapping[name]) for name in mapping.graph.required.names)
-            if mapping.hasFull():
+            if mapping.has_full:
                 d.update((name, mapping[name]) for name in mapping.graph.implied.names)
         elif isinstance(mapping, NamedKeyMapping):
             d.update(mapping.byName())
@@ -220,7 +220,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         if not graph.dimensions:
             return DataCoordinate.makeEmpty(graph.universe)
         if defaults is not None:
-            if defaults.hasFull():
+            if defaults.has_full:
                 for k, v in defaults.full.items():
                     d.setdefault(k.name, v)
             else:
@@ -253,8 +253,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         Returns
         -------
         dataId : `DataCoordinate`
-            A data ID object that identifies no dimensions.  `hasFull` and
-            `hasRecords` are guaranteed to return `True`, because both `full`
+            A data ID object that identifies no dimensions.  `has_full` and
+            `has_records` are guaranteed to be `True`, because both `full`
             and `records` are just empty mappings.
         """
         return _ExpandedTupleDataCoordinate(universe.empty, (), {})
@@ -278,9 +278,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         -------
         dataId : `DataCoordinate`
             A data ID object that identifies the given dimensions.
-            ``dataId.hasFull()`` will return `True` if and only if
-            ``graph.implied`` is empty, and ``dataId.hasRecords()`` will never
-            return `True`.
+            ``dataId.has_full`` will be `True` if and only if ``graph.implied``
+            is empty, and ``dataId.has_records`` will never be `True`.
         """
         assert len(graph.required) == len(values), \
             f"Inconsistency between dimensions {graph.required} and required values {values}."
@@ -307,9 +306,8 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         -------
         dataId : `DataCoordinate`
             A data ID object that identifies the given dimensions.
-            ``dataId.hasFull()`` will return `True` if and only if
-            ``graph.implied`` is empty, and ``dataId.hasRecords()`` will never
-            return `True`.
+            ``dataId.has_full`` will be `True` if and only if ``graph.implied``
+            is empty, and ``dataId.has_records`` will never be `True`.
         """
         assert len(graph.dimensions) == len(values), \
             f"Inconsistency between dimensions {graph.dimensions} and full values {values}."
@@ -330,7 +328,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         # quote its keys: that's both more compact and something that can't
         # be mistaken for an actual dict or something that could be exec'd.
         terms = [f"{d}: {self[d]!r}" for d in self.graph.required.names]
-        if self.hasFull() and self.graph.required != self.graph.dimensions:
+        if self.has_full and self.graph.required != self.graph.dimensions:
             terms.append("...")
         return "{{{}}}".format(', '.join(terms))
 
@@ -385,19 +383,19 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             Raised if the primary key value for one or more required dimensions
             is unknown.  This may happen if ``graph.issubset(self.graph)`` is
             `False`, or even if ``graph.issubset(self.graph)`` is `True`, if
-            ``self.hasFull()`` is `False` and
-            ``graph.required.issubset(self.graph.required)`` is `False`.  As
-            an example of the latter case, consider trying to go from a data ID
-            with dimensions {instrument, physical_filter, band} to
-            just {instrument, band}; band is implied by
-            physical_filter and hence would have no value in the original data
-            ID if ``self.hasFull()`` is `False`.
+            ``self.has_full`` is `False` and
+            ``graph.required.issubset(self.graph.required)`` is `False`.  As an
+            example of the latter case, consider trying to go from a data ID
+            with dimensions {instrument, physical_filter, band} to just
+            {instrument, band}; band is implied by physical_filter and hence
+            would have no value in the original data ID if ``self.has_full`` is
+            `False`.
 
         Notes
         -----
-        If `hasFull` and `hasRecords` return `True` on ``self``, they will
-        return `True` (respectively) on the returned `DataCoordinate` as well.
-        The converse does not hold.
+        If `has_full` and `has_records` are `True` on ``self``, they will be
+        `True` (respectively) on the returned `DataCoordinate` as well.  The
+        converse does not hold.
         """
         raise NotImplementedError()
 
@@ -418,7 +416,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         unioned : `DataCoordinate`
             A `DataCoordinate` instance that satisfies
             ``unioned.graph == self.graph.union(other.graph)``.  Will preserve
-            ``hasFull`` and ``hasRecords`` whenever possible.
+            ``has_full`` and ``has_records`` whenever possible.
 
         Notes
         -----
@@ -433,7 +431,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
                  ) -> DataCoordinate:
         """Return a `DataCoordinate` that holds the given records.
 
-        Guarantees that `hasRecords` returns `True`.
+        Guarantees that  `True`.
 
         This is a low-level interface with at most assertion-level checking of
         inputs.  Most callers should use `Registry.expandDataId` instead.
@@ -470,21 +468,28 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         """
         raise NotImplementedError()
 
+    @property
     @abstractmethod
-    def hasFull(self) -> bool:
+    def has_full(self) -> bool:
         """Whether this data ID contains implied and required values.
 
-        Returns
-        -------
-        state : `bool`
-            If `True`, `__getitem__`, `get`, and `__contains__` (but not
-            `keys`!) will act as though the mapping includes key-value pairs
-            for implied dimensions, and the `full` property may be used.  If
-            `False`, these operations only include key-value pairs for required
-            dimensions, and accessing `full` is an error.  Always `True` if
-            there are no implied dimensions.
+        Notes
+        -----
+        If `True`, `__getitem__`, `get`, and `__contains__` (but not
+        `keys`!) will act as though the mapping includes key-value pairs
+        for implied dimensions, and the `full` property may be used.  If
+        `False`, these operations only include key-value pairs for required
+        dimensions, and accessing `full` is an error.  Always `True` if
+        there are no implied dimensions.
         """
         raise NotImplementedError()
+
+    def hasFull(self) -> bool:
+        """Backwards compatibility method getter for `has_full`.
+
+        New code should use the `has_full` property instead.
+        """
+        return self.has_full
 
     @property
     def full(self) -> NamedKeyMapping[Dimension, DataIdValue]:
@@ -493,33 +498,38 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         The mapping includes key-value pairs for all dimensions in
         ``self.graph``, including implied (`NamedKeyMapping`).
 
-        Accessing this attribute if `hasFull` returns `False` is a logic error
+        Accessing this attribute if `has_full` is `False` is a logic error
         that may raise an exception of unspecified type either immediately or
         when implied keys are accessed via the returned mapping, depending on
         the implementation and whether assertions are enabled.
         """
-        assert self.hasFull(), "full may only be accessed if hasFull() returns True."
+        assert self.has_full, "full may only be accessed if has_full is True."
         return _DataCoordinateFullView(self)
 
+    @property
     @abstractmethod
-    def hasRecords(self) -> bool:
+    def has_records(self) -> bool:
         """Whether this data ID contains records.
 
-        These are the records for all of the dimension elements it identifies.
+        Notes
+        -----
+        If `True`, the following attributes may be accessed:
 
-        Returns
-        -------
-        state : `bool`
-            If `True`, the following attributes may be accessed:
+        - `records`
+        - `region`
+        - `timespan`
+        - `pack`
 
-             - `records`
-             - `region`
-             - `timespan`
-             - `pack`
-
-            If `False`, accessing any of these is considered a logic error.
+        If `False`, accessing any of these is considered a logic error.
         """
         raise NotImplementedError()
+
+    def hasRecords(self) -> bool:
+        """Backwards compatibility method getter for `has_records`.
+
+        New code should use the `has_records` property instead.
+        """
+        return self.has_records
 
     @property
     def records(self) -> NamedKeyMapping[DimensionElement, Optional[DimensionRecord]]:
@@ -532,12 +542,12 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         record for that element with these dimensions in the database (which
         means some foreign key field must have a NULL value).
 
-        Accessing this attribute if `hasRecords` returns `False` is a logic
+        Accessing this attribute if `has_records` is `False` is a logic
         error that may raise an exception of unspecified type either
         immediately or when the returned mapping is used, depending on the
         implementation and whether assertions are enabled.
         """
-        assert self.hasRecords(), "records may only be accessed if hasRecords() returns True."
+        assert self.has_records, "records may only be accessed if has_records is True."
         return _DataCoordinateRecordsView(self)
 
     @abstractmethod
@@ -566,11 +576,11 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
         This is `None` if and only if ``self.graph.spatial`` is empty.
 
-        Accessing this attribute if `hasRecords` returns `False` is a logic
+        Accessing this attribute if `has_records` is `False` is a logic
         error that may or may not raise an exception, depending on the
         implementation and whether assertions are enabled.
         """
-        assert self.hasRecords(), "region may only be accessed if hasRecords() returns True."
+        assert self.has_records, "region may only be accessed if has_records is True."
         regions = []
         for family in self.graph.spatial:
             element = family.choose(self.graph.elements)
@@ -589,11 +599,11 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
         This is `None` if and only if ``self.graph.timespan`` is empty.
 
-        Accessing this attribute if `hasRecords` returns `False` is a logic
+        Accessing this attribute if `has_records` is `False` is a logic
         error that may or may not raise an exception, depending on the
         implementation and whether assertions are enabled.
         """
-        assert self.hasRecords(), "timespan may only be accessed if hasRecords() returns True."
+        assert self.has_records, "timespan may only be accessed if has_records is True."
         timespans = []
         for family in self.graph.temporal:
             element = family.choose(self.graph.elements)
@@ -629,11 +639,11 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
         Notes
         -----
-        Accessing this attribute if `hasRecords` returns `False` is a logic
+        Accessing this attribute if `has_records` is `False` is a logic
         error that may or may not raise an exception, depending on the
         implementation and whether assertions are enabled.
         """
-        assert self.hasRecords(), "pack() may only be called if hasRecords() returns True."
+        assert self.has_records, "pack() may only be called if has_records is True."
         return self.universe.makePacker(name, self).pack(self, returnMaxBits=returnMaxBits)
 
     def to_simple(self, minimal: bool = False) -> SerializedDataCoordinate:
@@ -652,12 +662,12 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             The object converted to simple form.
         """
         # Convert to a dict form
-        if self.hasFull():
+        if self.has_full:
             dataId = self.full.byName()
         else:
             dataId = self.byName()
         records: Optional[Dict[str, SerializedDimensionRecord]]
-        if not minimal and self.hasRecords():
+        if not minimal and self.has_records:
             records = {k: v.to_simple() for k, v in self.records.byName().items() if v is not None}
         else:
             records = None
@@ -841,7 +851,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         # Docstring inherited from DataCoordinate.
         if self._graph == graph:
             return self
-        elif self.hasFull() or self._graph.required >= graph.dimensions:
+        elif self.has_full or self._graph.required >= graph.dimensions:
             return _BasicTupleDataCoordinate(
                 graph,
                 tuple(self[k] for k in graph._dataCoordinateIndices.keys()),
@@ -860,11 +870,11 @@ class _BasicTupleDataCoordinate(DataCoordinate):
                 # graph), but may not have the same content.
                 # other might have records; self does not, so try other first.
                 # If it at least has full values, it's no worse than self.
-                if other.hasFull():
+                if other.has_full:
                     return other
                 else:
                     return self
-            elif other.hasFull():
+            elif other.has_full:
                 return other
             # There's some chance that neither self nor other has full values,
             # but together provide enough to the union to.  Let the general
@@ -872,18 +882,18 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         elif self.graph == graph:
             # No chance at returning records.  If self has full values, it's
             # the best we can do.
-            if self.hasFull():
+            if self.has_full:
                 return self
         # General case with actual merging of dictionaries.
-        values = self.full.byName() if self.hasFull() else self.byName()
-        values.update(other.full.byName() if other.hasFull() else other.byName())
+        values = self.full.byName() if self.has_full else self.byName()
+        values.update(other.full.byName() if other.has_full else other.byName())
         return DataCoordinate.standardize(values, graph=graph)
 
     def expanded(self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
                  ) -> DataCoordinate:
         # Docstring inherited from DataCoordinate
         values = self._values
-        if not self.hasFull():
+        if not self.has_full:
             # Extract a complete values tuple from the attributes of the given
             # records.  It's possible for these to be inconsistent with
             # self._values (which is a serious problem, of course), but we've
@@ -891,11 +901,13 @@ class _BasicTupleDataCoordinate(DataCoordinate):
             values += tuple(getattr(records[d.name], d.primaryKey.name) for d in self._graph.implied)
         return _ExpandedTupleDataCoordinate(self._graph, values, records)
 
-    def hasFull(self) -> bool:
+    @property
+    def has_full(self) -> bool:
         # Docstring inherited from DataCoordinate.
         return len(self._values) == len(self._graph._dataCoordinateIndices)
 
-    def hasRecords(self) -> bool:
+    @property
+    def has_records(self) -> bool:
         # Docstring inherited from DataCoordinate.
         return False
 
@@ -931,7 +943,7 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
     def __init__(self, graph: DimensionGraph, values: Tuple[DataIdValue, ...],
                  records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]):
         super().__init__(graph, values)
-        assert super().hasFull(), "This implementation requires full dimension records."
+        assert super().has_full, "This implementation requires full dimension records."
         self._records = records
 
     __slots__ = ("_records",)
@@ -961,7 +973,7 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
         if other.graph == graph:
             # If other has full values, and self does not identify some of
             # those, it's the base we can do.  It may have records, too.
-            if other.hasFull():
+            if other.has_full:
                 return other
             # If other does not have full values, there's a chance self may
             # provide the values needed to complete it.  For example, self
@@ -969,10 +981,10 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
             # {instrument, physical_filter, band}, with band unknown.
         # General case with actual merging of dictionaries.
         values = self.full.byName()
-        values.update(other.full.byName() if other.hasFull() else other.byName())
+        values.update(other.full.byName() if other.has_full else other.byName())
         basic = DataCoordinate.standardize(values, graph=graph)
         # See if we can add records.
-        if self.hasRecords() and other.hasRecords():
+        if self.has_records and other.has_records:
             # Sometimes the elements of a union of graphs can contain elements
             # that weren't in either input graph (because graph unions are only
             # on dimensions).  e.g. {visit} | {detector} brings along
@@ -986,11 +998,13 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
                 return basic.expanded(records.freeze())
         return basic
 
-    def hasFull(self) -> bool:
+    @property
+    def has_full(self) -> bool:
         # Docstring inherited from DataCoordinate.
         return True
 
-    def hasRecords(self) -> bool:
+    @property
+    def has_records(self) -> bool:
         # Docstring inherited from DataCoordinate.
         return True
 

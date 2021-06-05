@@ -300,12 +300,12 @@ class Query(ABC):
             provided, this will be all dimensions in `QuerySummary.requested`.
         records : `Mapping` [ `str`, `Mapping` [ `tuple`, `DimensionRecord` ] ]
             Nested mapping containing records to attach to the returned
-            `DataCoordinate`, for which `~DataCoordinate.hasRecords` will
+            `DataCoordinate`, for which `~DataCoordinate.has_records` will
             return `True`.  If provided, outer keys must include all dimension
             element names in ``graph``, and inner keys should be tuples of
             dimension primary key values in the same order as
             ``element.graph.required``.  If not provided,
-            `DataCoordinate.hasRecords` will return `False` on the returned
+            `DataCoordinate.has_records` will return `False` on the returned
             object.
 
         Returns
@@ -313,7 +313,7 @@ class Query(ABC):
         dataId : `DataCoordinate`
             A data ID that identifies all required and implied dimensions.  If
             ``records is not None``, this is have
-            `~DataCoordinate.hasRecords()` return `True`.
+            `~DataCoordinate.has_records` return `True`.
         """
         if graph is None:
             graph = self.graph

@@ -265,22 +265,22 @@ class SplitByStateFlags:
     minimal: Optional[DataCoordinateSequence] = None
     """Data IDs that only contain values for required dimensions.
 
-    `DataCoordinateSequence.hasFull()` will return `True` for this if and only
+    `DataCoordinateSequence.has_full` will return `True` for this if and only
     if ``minimal.graph.implied`` has no elements.
-    `DataCoordinate.hasRecords()` will always return `False`.
+    `DataCoordinate.has_records` will always return `False`.
     """
 
     complete: Optional[DataCoordinateSequence] = None
     """Data IDs that contain values for all dimensions.
 
-    `DataCoordinateSequence.hasFull()` will always `True` and
-    `DataCoordinate.hasRecords()` will always return `True` for this attribute.
+    `DataCoordinateSequence.has_full` will always `True` and
+    `DataCoordinate.has_records` will always return `True` for this attribute.
     """
 
     expanded: Optional[DataCoordinateSequence] = None
     """Data IDs that contain values for all dimensions as well as records.
 
-    `DataCoordinateSequence.hasFull()` and `DataCoordinate.hasRecords()` will
+    `DataCoordinateSequence.has_full` and `DataCoordinate.has_records` will
     always return `True` for this attribute.
     """
 
@@ -340,8 +340,8 @@ class DataCoordinateTestCase(unittest.TestCase):
             dataIds = self.allDataIds
         return DataCoordinateSequence(self.rng.sample(dataIds, n),
                                       graph=dataIds.graph,
-                                      hasFull=dataIds.hasFull(),
-                                      hasRecords=dataIds.hasRecords(),
+                                      has_full=dataIds.has_full,
+                                      has_records=dataIds.has_records,
                                       check=False)
 
     def randomDimensionSubset(self, n: int = 3, graph: Optional[DimensionGraph] = None) -> DimensionGraph:
@@ -380,17 +380,17 @@ class DataCoordinateTestCase(unittest.TestCase):
         ----------
         dataIds : `DataCoordinateSequence`, optional.
             Data IDs to start from.  Defaults to ``self.allDataIds``.
-            ``dataIds.hasRecords()`` and ``dataIds.hasFull()`` must both return
+            ``dataIds.has_records`` and ``dataIds.has_full`` must both return
             `True`.
         expanded : `bool`, optional
             If `True` (default) include the original data IDs that contain all
             information in the result.
         complete : `bool`, optional
-            If `True` (default) include data IDs for which ``hasFull()``
-            returns `True` but ``hasRecords()`` does not.
+            If `True` (default) include data IDs for which ``has_full``
+            returns `True` but ``has_records`` does not.
         minimal : `bool`, optional
             If `True` (default) include data IDS that only contain values for
-            required dimensions, for which ``hasFull()`` may not return `True`.
+            required dimensions, for which ``has_full`` may not return `True`.
 
         Returns
         -------
@@ -400,22 +400,22 @@ class DataCoordinateTestCase(unittest.TestCase):
         """
         if dataIds is None:
             dataIds = self.allDataIds
-        assert dataIds.hasFull() and dataIds.hasRecords()
+        assert dataIds.has_full and dataIds.has_records
         result = SplitByStateFlags(expanded=dataIds)
         if complete:
             result.complete = DataCoordinateSequence(
                 [DataCoordinate.standardize(e.full.byName(), graph=dataIds.graph) for e in result.expanded],
                 graph=dataIds.graph
             )
-            self.assertTrue(result.complete.hasFull())
-            self.assertFalse(result.complete.hasRecords())
+            self.assertTrue(result.complete.has_full)
+            self.assertFalse(result.complete.has_records)
         if minimal:
             result.minimal = DataCoordinateSequence(
                 [DataCoordinate.standardize(e.byName(), graph=dataIds.graph) for e in result.expanded],
                 graph=dataIds.graph
             )
-            self.assertEqual(result.minimal.hasFull(), not dataIds.graph.implied)
-            self.assertFalse(result.minimal.hasRecords())
+            self.assertEqual(result.minimal.has_full, not dataIds.graph.implied)
+            self.assertFalse(result.minimal.has_records)
         if not expanded:
             result.expanded = None
         return result
@@ -436,7 +436,7 @@ class DataCoordinateTestCase(unittest.TestCase):
                     self.assertEqual(dataId.keys(), dataId.graph.required)
             for dataId in itertools.chain(split.complete, split.expanded):
                 with self.subTest(dataId=dataId):
-                    self.assertTrue(dataId.hasFull())
+                    self.assertTrue(dataId.has_full)
                     self.assertEqual(dataId.graph.dimensions, dataId.full.keys())
                     self.assertEqual(list(dataId.full.values()), [dataId[k] for k in dataId.graph.dimensions])
 
@@ -479,10 +479,10 @@ class DataCoordinateTestCase(unittest.TestCase):
                 # Test constructing a new data ID from this one with a
                 # subset of the dimensions.
                 # This is not possible for some combinations of
-                # dimensions if hasFull is False (see
+                # dimensions if has_full is False (see
                 # `DataCoordinate.subset` docs).
                 newDimensions = self.randomDimensionSubset(n=1, graph=dataId.graph)
-                if dataId.hasFull() or dataId.graph.required.issuperset(newDimensions.required):
+                if dataId.has_full or dataId.graph.required.issuperset(newDimensions.required):
                     newDataIds = [
                         dataId.subset(newDimensions),
                         DataCoordinate.standardize(dataId, graph=newDimensions),
@@ -498,10 +498,10 @@ class DataCoordinateTestCase(unittest.TestCase):
                             )
                             # This should never "downgrade" from
                             # Complete to Minimal or Expanded to Complete.
-                            if dataId.hasRecords():
-                                self.assertTrue(newDataId.hasRecords())
-                            if dataId.hasFull():
-                                self.assertTrue(newDataId.hasFull())
+                            if dataId.has_records:
+                                self.assertTrue(newDataId.has_records)
+                            if dataId.has_full:
+                                self.assertTrue(newDataId.has_full)
             # Start from a complete data ID, and pass its values in via several
             # different ways that should be equivalent.
             for dataId in split.complete:
@@ -533,7 +533,7 @@ class DataCoordinateTestCase(unittest.TestCase):
                 for newDataId in newCompleteDataIds:
                     with self.subTest(dataId=dataId, newDataId=newDataId, type=type(dataId)):
                         self.assertEqual(dataId, newDataId)
-                        self.assertTrue(newDataId.hasFull())
+                        self.assertTrue(newDataId.has_full)
 
     def testUnion(self):
         """Test `DataCoordinate.union`.
@@ -556,24 +556,24 @@ class DataCoordinateTestCase(unittest.TestCase):
                 with self.subTest(lhs=lhs, rhs=rhs, unioned=unioned):
                     self.assertEqual(unioned.graph, graph1.union(graph2))
                     self.assertEqual(unioned, parentDataId.subset(unioned.graph))
-                    if unioned.hasFull():
+                    if unioned.has_full:
                         self.assertEqual(unioned.subset(lhs.graph), lhs)
                         self.assertEqual(unioned.subset(rhs.graph), rhs)
-                    if lhs.hasFull() and rhs.hasFull():
-                        self.assertTrue(unioned.hasFull())
-                    if lhs.graph >= unioned.graph and lhs.hasFull():
-                        self.assertTrue(unioned.hasFull())
-                        if lhs.hasRecords():
-                            self.assertTrue(unioned.hasRecords())
-                    if rhs.graph >= unioned.graph and rhs.hasFull():
-                        self.assertTrue(unioned.hasFull())
-                        if rhs.hasRecords():
-                            self.assertTrue(unioned.hasRecords())
+                    if lhs.has_full and rhs.has_full:
+                        self.assertTrue(unioned.has_full)
+                    if lhs.graph >= unioned.graph and lhs.has_full:
+                        self.assertTrue(unioned.has_full)
+                        if lhs.has_records:
+                            self.assertTrue(unioned.has_records)
+                    if rhs.graph >= unioned.graph and rhs.has_full:
+                        self.assertTrue(unioned.has_full)
+                        if rhs.has_records:
+                            self.assertTrue(unioned.has_records)
                     if lhs.graph.required | rhs.graph.required >= unioned.graph.dimensions:
-                        self.assertTrue(unioned.hasFull())
-                    if lhs.hasRecords() and rhs.hasRecords():
+                        self.assertTrue(unioned.has_full)
+                    if lhs.has_records and rhs.has_records:
                         if lhs.graph.elements | rhs.graph.elements >= unioned.graph.elements:
-                            self.assertTrue(unioned.hasRecords())
+                            self.assertTrue(unioned.has_records)
 
     def testRegions(self):
         """Test that data IDs for a few known dimensions have the expected
@@ -612,32 +612,32 @@ class DataCoordinateTestCase(unittest.TestCase):
 
     def testIterableStatusFlags(self):
         """Test that DataCoordinateSet and DataCoordinateSequence compute
-        their hasFull and hasRecords flags correctly from their elements.
+        their has_full and has_records flags correctly from their elements.
         """
         dataIds = self.randomDataIds(n=10)
         split = self.splitByStateFlags(dataIds)
         for cls in (DataCoordinateSet, DataCoordinateSequence):
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=True).hasFull())
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=False).hasFull())
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=True).hasRecords())
-            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=False).hasRecords())
-            self.assertTrue(cls(split.complete, graph=dataIds.graph, check=True).hasFull())
-            self.assertTrue(cls(split.complete, graph=dataIds.graph, check=False).hasFull())
-            self.assertFalse(cls(split.complete, graph=dataIds.graph, check=True).hasRecords())
-            self.assertFalse(cls(split.complete, graph=dataIds.graph, check=False).hasRecords())
+            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=True).has_full)
+            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=False).has_full)
+            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=True).has_records)
+            self.assertTrue(cls(split.expanded, graph=dataIds.graph, check=False).has_records)
+            self.assertTrue(cls(split.complete, graph=dataIds.graph, check=True).has_full)
+            self.assertTrue(cls(split.complete, graph=dataIds.graph, check=False).has_full)
+            self.assertFalse(cls(split.complete, graph=dataIds.graph, check=True).has_records)
+            self.assertFalse(cls(split.complete, graph=dataIds.graph, check=False).has_records)
             with self.assertRaises(ValueError):
-                cls(split.complete, graph=dataIds.graph, hasRecords=True, check=True)
-            self.assertEqual(cls(split.minimal, graph=dataIds.graph, check=True).hasFull(),
+                cls(split.complete, graph=dataIds.graph, has_records=True, check=True)
+            self.assertEqual(cls(split.minimal, graph=dataIds.graph, check=True).has_full,
                              not dataIds.graph.implied)
-            self.assertEqual(cls(split.minimal, graph=dataIds.graph, check=False).hasFull(),
+            self.assertEqual(cls(split.minimal, graph=dataIds.graph, check=False).has_full,
                              not dataIds.graph.implied)
-            self.assertFalse(cls(split.minimal, graph=dataIds.graph, check=True).hasRecords())
-            self.assertFalse(cls(split.minimal, graph=dataIds.graph, check=False).hasRecords())
+            self.assertFalse(cls(split.minimal, graph=dataIds.graph, check=True).has_records)
+            self.assertFalse(cls(split.minimal, graph=dataIds.graph, check=False).has_records)
             with self.assertRaises(ValueError):
-                cls(split.minimal, graph=dataIds.graph, hasRecords=True, check=True)
+                cls(split.minimal, graph=dataIds.graph, has_records=True, check=True)
             if dataIds.graph.implied:
                 with self.assertRaises(ValueError):
-                    cls(split.minimal, graph=dataIds.graph, hasFull=True, check=True)
+                    cls(split.minimal, graph=dataIds.graph, has_full=True, check=True)
 
     def testSetOperations(self):
         """Test for self-consistency across DataCoordinateSet's operations.

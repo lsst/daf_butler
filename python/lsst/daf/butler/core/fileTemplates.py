@@ -446,7 +446,7 @@ class FileTemplate:
         # Extra information that can be included using . syntax
         extras = {}
         if isinstance(ref.dataId, DataCoordinate):
-            if ref.dataId.hasRecords():
+            if ref.dataId.has_records:
                 extras = ref.dataId.records.byName()
             skypix_alias = self._determine_skypix_alias(ref)
             if skypix_alias is not None:

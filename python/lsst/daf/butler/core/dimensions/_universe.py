@@ -395,7 +395,7 @@ class DimensionUniverse:
             Fully-expanded data ID that identfies the at least the "fixed"
             dimensions of the packer (i.e. those that are assumed/given,
             setting the space over which packed integer IDs are unique).
-            ``dataId.hasRecords()`` must return `True`.
+            ``dataId.has_records`` must return `True`.
         """
         return self._packers[name](self, dataId)
 

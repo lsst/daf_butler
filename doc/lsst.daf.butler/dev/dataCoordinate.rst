@@ -68,15 +68,15 @@ What really killed version three in the end was realizing that my clever "I'll m
 That meant that splitting the interface into four different ABCs was really only useful as a way to get MyPy to tell us when we didn't have the type we thought.
 But that same strong typing was a lot of what made the containers a mess, so it wasn't really a net win.
 Hence version four (what's below, unless this comment has gotten out of date).
-I've kept what I liked about version three - putting the interface in an ABC and the implementations in private classes, and an intermediate "all dimension key-value pairs, but no records" state - but moved the state checking from the type system to runtime flags (``hasFull`` and ``hasRecords``).
-It's ``hasFull`` instead of (say) `isComplete` because we can now keep the `full` attribute from version 2 and break a lot less code.
+I've kept what I liked about version three - putting the interface in an ABC and the implementations in private classes, and an intermediate "all dimension key-value pairs, but no records" state - but moved the state checking from the type system to runtime flags (``has_full`` and ``has_records``).
+It's ``has_full`` instead of (say) `isComplete` because we can now keep the `full` attribute from version 2 and break a lot less code.
 So, version four has single `DataCoordinate` ABC that can be in any of three states:
 
- - ``hasFull() is False``, ``hasRecords() is False`` - like ``MinimalDataCoordinate``, has only required dimension key-value pairs;
+ - ``has_full is False``, ``has_records is False`` - like ``MinimalDataCoordinate``, has only required dimension key-value pairs;
 
- - ``hasFull() is True``, ``hasRecords() is False`` - like ``CompleteDataCoordinate``, has all dimension key-value pairs but no records;
+ - ``has_full is True``, ``has_records is False`` - like ``CompleteDataCoordinate``, has all dimension key-value pairs but no records;
 
- - ``hasFull() is True``, ``hasRecords() is True`` - like ``ExpandedDataCoordinate``, has everything.
+ - ``has_full is True``, ``has_records is True`` - like ``ExpandedDataCoordinate``, has everything.
 
 We happen to have two implementation classes - the first and second cases can use the same - but that's not really central to the design.
 The only real messiness here is the fact that `DataCoordinate` defines a lot of operations that are only valid when the right status flags are set, and MyPy can't help us catch problems with that.

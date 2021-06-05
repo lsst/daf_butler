@@ -1175,8 +1175,8 @@ class RegistryTests(ABC):
                 for d, p in itertools.product({1, 2, 3}, {"Cam1-G", "Cam1-R1", "Cam1-R2"})
             },
             graph=expectedGraph,
-            hasFull=False,
-            hasRecords=False,
+            has_full=False,
+            has_records=False,
         )
         # - the flat datasets we expect to find from those data IDs, in just
         #   one collection (so deduplication is irrelevant):

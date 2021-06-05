@@ -1004,8 +1004,8 @@ class Registry(ABC):
         -------
         expanded : `DataCoordinate`
             A data ID that includes full metadata for all of the dimensions it
-            identifies, i.e. guarantees that ``expanded.hasRecords()`` and
-            ``expanded.hasFull()`` both return `True`.
+            identifies, i.e. guarantees that ``expanded.has_records`` and
+            ``expanded.has_full`` both return `True`.
         """
         raise NotImplementedError()
 
@@ -1205,8 +1205,8 @@ class Registry(ABC):
         refs : `queries.DatasetQueryResults`
             Dataset references matching the given query criteria.  Nested data
             IDs are guaranteed to include values for all implied dimensions
-            (i.e. `DataCoordinate.hasFull` will return `True`), but will not
-            include dimension records (`DataCoordinate.hasRecords` will be
+            (i.e. `DataCoordinate.has_full` will return `True`), but will not
+            include dimension records (`DataCoordinate.has_records` will be
             `False`) unless `~queries.DatasetQueryResults.expanded` is called
             on the result object (which returns a new one).
 
@@ -1305,9 +1305,9 @@ class Registry(ABC):
         -------
         dataIds : `DataCoordinateQueryResults`
             Data IDs matching the given query parameters.  These are guaranteed
-            to identify all dimensions (`DataCoordinate.hasFull` returns
+            to identify all dimensions (`DataCoordinate.has_full` returns
             `True`), but will not contain `DimensionRecord` objects
-            (`DataCoordinate.hasRecords` returns `False`).  Call
+            (`DataCoordinate.has_records` returns `False`).  Call
             `DataCoordinateQueryResults.expanded` on the returned object to
             fetch those (and consider using
             `DataCoordinateQueryResults.materialize` on the returned object

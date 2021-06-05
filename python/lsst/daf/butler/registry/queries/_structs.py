@@ -102,7 +102,7 @@ class QueryWhereExpression:
         dataId : `DataCoordinate`, optional
             A fully-expanded data ID identifying dimensions known in advance.
             If not provided, will be set to an empty data ID.
-            ``dataId.hasRecords()`` must return `True`.
+            ``dataId.has_records`` must return `True`.
         region : `lsst.sphgeom.Region`, optional
             A spatial region that all rows must overlap.  If `None` and
             ``dataId`` is not `None`, ``dataId.region`` will be used.
@@ -198,7 +198,7 @@ class QueryWhereClause:
     """A data ID identifying dimensions known before query construction
     (`DataCoordinate`).
 
-    ``dataId.hasRecords()`` is guaranteed to return `True`.
+    ``dataId.has_records`` is guaranteed to return `True`.
     """
 
     dimensions: NamedValueAbstractSet[Dimension]
@@ -254,7 +254,7 @@ class QuerySummary:
         of the query.
     dataId : `DataCoordinate`, optional
         A fully-expanded data ID identifying dimensions known in advance.  If
-        not provided, will be set to an empty data ID.  ``dataId.hasRecords()``
+        not provided, will be set to an empty data ID.  ``dataId.has_records``
         must return `True`.
     expression : `str` or `QueryWhereExpression`, optional
         A user-provided string WHERE expression.

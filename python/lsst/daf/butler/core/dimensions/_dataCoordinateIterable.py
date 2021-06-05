@@ -55,7 +55,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
 
     All elements of a `DataCoordinateIterable` identify the same set of
     dimensions (given by the `graph` property) and generally have the same
-    `DataCoordinate.hasFull` and `DataCoordinate.hasRecords` flag values.
+    `DataCoordinate.has_full` and `DataCoordinate.has_records` flag values.
     """
 
     __slots__ = ()
@@ -95,31 +95,40 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
         """
         return self.graph.universe
 
+    @property
     @abstractmethod
+    def has_full(self) -> bool:
+        """Whether all data IDs in this iterable identify all dimensions, not
+        just required dimensions.
+
+        If `True`, ``all(d.has_full for d in iterable)`` is guaranteed.  If
+        `False`, no guarantees are made.
+        """
+        raise NotImplementedError()
+
     def hasFull(self) -> bool:
-        """Indicate if all data IDs in this iterable identify all dimensions.
+        """Backwards compatibility method getter for `has_full`.
 
-        Not just required dimensions.
-
-        Returns
-        -------
-        state : `bool`
-            If `True`, ``all(d.hasFull() for d in iterable)`` is guaranteed.
-            If `False`, no guarantees are made.
+        New code should use the `has_full` property instead.
         """
-        raise NotImplementedError()
+        return self.has_full
 
+    @property
     @abstractmethod
-    def hasRecords(self) -> bool:
-        """Return whether all data IDs in this iterable contain records.
+    def has_records(self) -> bool:
+        """Whether all data IDs in this iterable contain records.
 
-        Returns
-        -------
-        state : `bool`
-            If `True`, ``all(d.hasRecords() for d in iterable)`` is guaranteed.
-            If `False`, no guarantees are made.
+        If `True`, ``all(d.has_records for d in iterable)`` is guaranteed. If
+        `False`, no guarantees are made.
         """
         raise NotImplementedError()
+
+    def hasRecords(self) -> bool:
+        """Backwards compatibility method getter for `has_records`.
+
+        New code should use the `has_records` property instead.
+        """
+        return self.has_records
 
     def toSet(self) -> DataCoordinateSet:
         """Transform this iterable into a `DataCoordinateSet`.
@@ -132,8 +141,8 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
             already a `DataCoordinateSet`.
         """
         return DataCoordinateSet(frozenset(self), graph=self.graph,
-                                 hasFull=self.hasFull(),
-                                 hasRecords=self.hasRecords(),
+                                 has_full=self.has_full,
+                                 has_records=self.has_records,
                                  check=False)
 
     def toSequence(self) -> DataCoordinateSequence:
@@ -147,8 +156,8 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
             `DataCoordinateSequence`.
         """
         return DataCoordinateSequence(tuple(self), graph=self.graph,
-                                      hasFull=self.hasFull(),
-                                      hasRecords=self.hasRecords(),
+                                      has_full=self.has_full,
+                                      has_records=self.has_records,
                                       check=False)
 
     def constrain(self, query: SimpleQuery, columns: Callable[[str], sqlalchemy.sql.ColumnElement]) -> None:
@@ -239,13 +248,15 @@ class _ScalarDataCoordinateIterable(DataCoordinateIterable):
         # Docstring inherited from DataCoordinateIterable.
         return self._dataId.graph
 
-    def hasFull(self) -> bool:
+    @property
+    def has_full(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
-        return self._dataId.hasFull()
+        return self._dataId.has_full
 
-    def hasRecords(self) -> bool:
+    @property
+    def has_records(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
-        return self._dataId.hasRecords()
+        return self._dataId.has_records
 
     def subset(self, graph: DimensionGraph) -> _ScalarDataCoordinateIterable:
         # Docstring inherited from DataCoordinateIterable.
@@ -269,19 +280,18 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         ``graph``.
     graph : `DimensionGraph`
         Dimensions identified by all data IDs in the set.
-    hasFull : `bool`, optional
-        If `True`, the caller guarantees that `DataCoordinate.hasFull` returns
+    has_full : `bool`, optional
+        If `True`, the caller guarantees that `DataCoordinate.has_full` is
         `True` for all given data IDs.  If `False`, no such guarantee is made,
-        and `hasFull` will always return `False`.  If `None` (default),
-        `hasFull` will be computed from the given data IDs, immediately if
+        and `has_full` will always be `False`.  If `None` (default),
+        `has_full` will be computed from the given data IDs, immediately if
         ``check`` is `True`, or on first use if ``check`` is `False`.
-    hasRecords : `bool`, optional
-        If `True`, the caller guarantees that `DataCoordinate.hasRecords`
-        returns `True` for all given data IDs.  If `False`, no such guarantee
-        is made and `hasRecords` will always return `False`.  If `None`
-        (default), `hasRecords` will be computed from the given data IDs,
-        immediately if ``check`` is `True`, or on first use if ``check`` is
-        `False`.
+    has_records : `bool`, optional
+         If `True`, the caller guarantees that `DataCoordinate.has_records` is
+         `True` for all given data IDs.  If `False`, no such guarantee is made
+         and `has_records` will always be `False`.  If `None` (default),
+         `has_records` will be computed from the given data IDs, immediately if
+         ``check`` is `True`, or on first use if ``check`` is `False`.
     check: `bool`, optional
         If `True` (default) check that all data IDs are consistent with the
         given ``graph`` and state flags at construction.  If `False`, no
@@ -289,62 +299,64 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
     """
 
     def __init__(self, dataIds: Collection[DataCoordinate], graph: DimensionGraph, *,
-                 hasFull: Optional[bool] = None, hasRecords: Optional[bool] = None,
+                 has_full: Optional[bool] = None, has_records: Optional[bool] = None,
                  check: bool = True):
         self._dataIds = dataIds
         self._graph = graph
         if check:
             for dataId in self._dataIds:
-                if hasFull and not dataId.hasFull():
+                if has_full and not dataId.has_full:
                     raise ValueError(f"{dataId} is not complete, but is required to be.")
-                if hasRecords and not dataId.hasRecords():
+                if has_records and not dataId.has_records:
                     raise ValueError(f"{dataId} has no records, but is required to.")
                 if dataId.graph != self._graph:
                     raise ValueError(f"Bad dimensions {dataId.graph}; expected {self._graph}.")
-            if hasFull is None:
-                hasFull = all(dataId.hasFull() for dataId in self._dataIds)
-            if hasRecords is None:
-                hasRecords = all(dataId.hasRecords() for dataId in self._dataIds)
-        self._hasFull = hasFull
-        self._hasRecords = hasRecords
+            if has_full is None:
+                has_full = all(dataId.has_full for dataId in self._dataIds)
+            if has_records is None:
+                has_records = all(dataId.has_records for dataId in self._dataIds)
+        self._has_full = has_full
+        self._has_records = has_records
 
-    __slots__ = ("_graph", "_dataIds", "_hasFull", "_hasRecords")
+    __slots__ = ("_graph", "_dataIds", "_has_full", "_has_records")
 
     @property
     def graph(self) -> DimensionGraph:
         # Docstring inherited from DataCoordinateIterable.
         return self._graph
 
-    def hasFull(self) -> bool:
+    @property
+    def has_full(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
-        if self._hasFull is None:
-            self._hasFull = all(dataId.hasFull() for dataId in self._dataIds)
-        return self._hasFull
+        if self._has_full is None:
+            self._has_full = all(dataId.has_full for dataId in self._dataIds)
+        return self._has_full
 
-    def hasRecords(self) -> bool:
+    @property
+    def has_records(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
-        if self._hasRecords is None:
-            self._hasRecords = all(dataId.hasRecords() for dataId in self._dataIds)
-        return self._hasRecords
+        if self._has_records is None:
+            self._has_records = all(dataId.has_records for dataId in self._dataIds)
+        return self._has_records
 
     def toSet(self) -> DataCoordinateSet:
         # Docstring inherited from DataCoordinateIterable.
         # Override base class to pass in attributes instead of results of
-        # method calls for _hasFull and _hasRecords - those can be None,
+        # method calls for _has_full and _has_records - those can be None,
         # and hence defer checking if that's what the user originally wanted.
         return DataCoordinateSet(frozenset(self._dataIds), graph=self._graph,
-                                 hasFull=self._hasFull,
-                                 hasRecords=self._hasRecords,
+                                 has_full=self._has_full,
+                                 has_records=self._has_records,
                                  check=False)
 
     def toSequence(self) -> DataCoordinateSequence:
         # Docstring inherited from DataCoordinateIterable.
         # Override base class to pass in attributes instead of results of
-        # method calls for _hasFull and _hasRecords - those can be None,
+        # method calls for _has_full and _has_records - those can be None,
         # and hence defer checking if that's what the user originally wanted.
         return DataCoordinateSequence(tuple(self._dataIds), graph=self._graph,
-                                      hasFull=self._hasFull,
-                                      hasRecords=self._hasRecords,
+                                      has_full=self._has_full,
+                                      has_records=self._has_records,
                                       check=False)
 
     def __iter__(self) -> Iterator[DataCoordinate]:
@@ -368,16 +380,16 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         Returns
         -------
         kwargs : `dict`
-            A dict with `hasFull`, `hasRecords`, and `check` keys, associated
+            A dict with `has_full`, `has_records`, and `check` keys, associated
             with the appropriate values for a `subset` operation with the given
             dimensions.
         """
-        hasFull: Optional[bool]
+        has_full: Optional[bool]
         if graph.dimensions <= self.graph.required:
-            hasFull = True
+            has_full = True
         else:
-            hasFull = self._hasFull
-        return dict(hasFull=hasFull, hasRecords=self._hasRecords, check=False)
+            has_full = self._has_full
+        return dict(has_full=has_full, has_records=self._has_records, check=False)
 
 
 class DataCoordinateSet(_DataCoordinateCollectionBase):
@@ -394,20 +406,20 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         guarantee that it will not be modified by any other holders.
     graph : `DimensionGraph`
         Dimensions identified by all data IDs in the set.
-    hasFull : `bool`, optional
-        If `True`, the caller guarantees that `DataCoordinate.hasFull` returns
+    has_full : `bool`, optional
+        If `True`, the caller guarantees that `DataCoordinate.has_full` is
         `True` for all given data IDs.  If `False`, no such guarantee is made,
-        and `DataCoordinateSet.hasFull` will always return `False`.  If `None`
-        (default), `DataCoordinateSet.hasFull` will be computed from the given
+        and `DataCoordinateSet.has_full` will always be `False`.  If `None`
+        (default), `DataCoordinateSet.has_full` will be computed from the given
         data IDs, immediately if ``check`` is `True`, or on first use if
         ``check`` is `False`.
-    hasRecords : `bool`, optional
-        If `True`, the caller guarantees that `DataCoordinate.hasRecords`
-        returns `True` for all given data IDs.  If `False`, no such guarantee
-        is made and `DataCoordinateSet.hasRecords` will always return `False`.
-        If `None` (default), `DataCoordinateSet.hasRecords` will be computed
-        from the given data IDs, immediately if ``check`` is `True`, or on
-        first use if ``check`` is `False`.
+    has_records : `bool`, optional
+        If `True`, the caller guarantees that `DataCoordinate.has_records` is
+        `True` for all given data IDs.  If `False`, no such guarantee is made
+        and `DataCoordinateSet.has_records` will always be `False`.  If `None`
+        (default), `DataCoordinateSet.has_records` will be computed from the
+        given data IDs, immediately if ``check`` is `True`, or on first use if
+        ``check`` is `False`.
     check: `bool`, optional
         If `True` (default) check that all data IDs are consistent with the
         given ``graph`` and state flags at construction.  If `False`, no
@@ -443,17 +455,17 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
       `DataCoordinateIterable` with the same dimensions _and_ the same
       ``dtype``.
 
-    In addition, when the two operands differ in the return values of `hasFull`
-    and/or `hasRecords`, we make no guarantees about what those methods will
+    In addition, when the two operands differ in the values of `has_full`
+    and/or `has_records`, we make no guarantees about what those methods will
     return on the new `DataCoordinateSet` (other than that they will accurately
     reflect what elements are in the new set - we just don't control which
     elements are contributed by each operand).
     """
 
     def __init__(self, dataIds: AbstractSet[DataCoordinate], graph: DimensionGraph, *,
-                 hasFull: Optional[bool] = None, hasRecords: Optional[bool] = None,
+                 has_full: Optional[bool] = None, has_records: Optional[bool] = None,
                  check: bool = True):
-        super().__init__(dataIds, graph, hasFull=hasFull, hasRecords=hasRecords, check=check)
+        super().__init__(dataIds, graph, has_full=has_full, has_records=has_records, check=check)
 
     _dataIds: AbstractSet[DataCoordinate]
 
@@ -464,7 +476,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
 
     def __repr__(self) -> str:
         return (f"DataCoordinateSet({set(self._dataIds)}, {self._graph!r}, "
-                f"hasFull={self._hasFull}, hasRecords={self._hasRecords})")
+                f"has_full={self._has_full}, has_records={self._has_records})")
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, DataCoordinateSet):
@@ -680,20 +692,20 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         ``graph``.
     graph : `DimensionGraph`
         Dimensions identified by all data IDs in the set.
-    hasFull : `bool`, optional
-        If `True`, the caller guarantees that `DataCoordinate.hasFull` returns
+    has_full : `bool`, optional
+        If `True`, the caller guarantees that `DataCoordinate.has_full` is
         `True` for all given data IDs.  If `False`, no such guarantee is made,
-        and `DataCoordinateSet.hasFull` will always return `False`.  If `None`
-        (default), `DataCoordinateSet.hasFull` will be computed from the given
+        and `DataCoordinateSet.has_full` will always be `False`.  If `None`
+        (default), `DataCoordinateSet.has_full` will be computed from the given
         data IDs, immediately if ``check`` is `True`, or on first use if
         ``check`` is `False`.
-    hasRecords : `bool`, optional
-        If `True`, the caller guarantees that `DataCoordinate.hasRecords`
-        returns `True` for all given data IDs.  If `False`, no such guarantee
-        is made and `DataCoordinateSet.hasRecords` will always return `False`.
-        If `None` (default), `DataCoordinateSet.hasRecords` will be computed
-        from the given data IDs, immediately if ``check`` is `True`, or on
-        first use if ``check`` is `False`.
+    has_records : `bool`, optional
+        If `True`, the caller guarantees that `DataCoordinate.has_records` is
+        `True` for all given data IDs.  If `False`, no such guarantee is made
+        and `DataCoordinateSet.has_records` will always be `False`.  If `None`
+        (default), `DataCoordinateSet.has_records` will be computed from the
+        given data IDs, immediately if ``check`` is `True`, or on first use if
+        ``check`` is `False`.
     check: `bool`, optional
         If `True` (default) check that all data IDs are consistent with the
         given ``graph`` and state flags at construction.  If `False`, no
@@ -701,9 +713,9 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
     """
 
     def __init__(self, dataIds: Sequence[DataCoordinate], graph: DimensionGraph, *,
-                 hasFull: Optional[bool] = None, hasRecords: Optional[bool] = None,
+                 has_full: Optional[bool] = None, has_records: Optional[bool] = None,
                  check: bool = True):
-        super().__init__(tuple(dataIds), graph, hasFull=hasFull, hasRecords=hasRecords, check=check)
+        super().__init__(tuple(dataIds), graph, has_full=has_full, has_records=has_records, check=check)
 
     _dataIds: Sequence[DataCoordinate]
 
@@ -714,7 +726,7 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
 
     def __repr__(self) -> str:
         return (f"DataCoordinateSequence({tuple(self._dataIds)}, {self._graph!r}, "
-                f"hasFull={self._hasFull}, hasRecords={self._hasRecords})")
+                f"has_full={self._has_full}, has_records={self._has_records})")
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, DataCoordinateSequence):
@@ -736,7 +748,7 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         r = self._dataIds[index]
         if isinstance(index, slice):
             return DataCoordinateSequence(r, self._graph,
-                                          hasFull=self._hasFull, hasRecords=self._hasRecords,
+                                          has_full=self._has_full, has_records=self._has_records,
                                           check=False)
         return r
 

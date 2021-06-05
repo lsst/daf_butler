@@ -70,7 +70,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
     records : `Mapping`, optional
         A nested mapping containing `DimensionRecord` objects for all
         dimensions and all data IDs this query will yield.  If `None`
-        (default), `DataCoordinateIterable.hasRecords` will return `False`.
+        (default), `DataCoordinateIterable.has_records` will return `False`.
         The outer mapping has `str` keys (the names of dimension elements).
         The inner mapping has `tuple` keys representing data IDs (tuple
         conversions of `DataCoordinate.values()`) and `DimensionRecord` values.
@@ -102,11 +102,11 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         # Docstring inherited from DataCoordinateIterable.
         return self._query.graph
 
-    def hasFull(self) -> bool:
+    def has_full(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
         return True
 
-    def hasRecords(self) -> bool:
+    def has_records(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
         return self._records is not None or not self._query.graph
 
@@ -140,7 +140,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             yield DataCoordinateQueryResults(self._db, materialized, records=self._records)
 
     def expanded(self) -> DataCoordinateQueryResults:
-        """Return a results object for which `hasRecords` returns `True`.
+        """Return a results object for which `has_records` is `True`.
 
         This method may involve actually executing database queries to fetch
         `DimensionRecord` objects.
@@ -148,7 +148,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         Returns
         -------
         results : `DataCoordinateQueryResults`
-            A results object for which `hasRecords` returns `True`.  May be
+            A results object for which `has_records` is `True`.  May be
             ``self`` if that is already the case.
 
         Notes
@@ -278,7 +278,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         -------
         datasets : `ParentDatasetQueryResults`
             A lazy-evaluation object representing dataset query results,
-            iterable over `DatasetRef` objects.  If ``self.hasRecords()``, all
+            iterable over `DatasetRef` objects.  If ``self.has_records``, all
             nested data IDs in those dataset references will have records as
             well.
 
@@ -353,8 +353,9 @@ class DatasetQueryResults(Iterable[DatasetRef]):
 
     @abstractmethod
     def expanded(self) -> DatasetQueryResults:
-        """Return a `DatasetQueryResults` for which `DataCoordinate.hasRecords`
-        returns `True` for all data IDs in returned `DatasetRef` objects.
+        """Return a `DatasetQueryResults` for which
+        `DataCoordinate.has_records` is `True` for all data IDs in returned
+        `DatasetRef` objects.
 
         Returns
         -------
@@ -388,7 +389,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
     records : `Mapping`, optional
         Mapping containing `DimensionRecord` objects for all dimensions and
         all data IDs this query will yield.  If `None` (default),
-        `DataCoordinate.hasRecords` will return `False` for all nested data
+        `DataCoordinate.has_records` will return `False` for all nested data
         IDs.  This is a nested mapping with `str` names of dimension elements
         as outer keys, `DimensionRecord` instances as inner values, and
         ``tuple(record.dataId.values())`` for the inner keys / outer values

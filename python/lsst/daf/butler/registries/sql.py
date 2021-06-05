@@ -621,7 +621,7 @@ class SqlRegistry(Registry):
             defaults = self.defaults.dataId
         standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions,
                                                   defaults=defaults, **kwargs)
-        if standardized.hasRecords():
+        if standardized.has_records:
             return standardized
         if records is None:
             records = {}
@@ -629,7 +629,7 @@ class SqlRegistry(Registry):
             records = records.byName()
         else:
             records = dict(records)
-        if isinstance(dataId, DataCoordinate) and dataId.hasRecords():
+        if isinstance(dataId, DataCoordinate) and dataId.has_records:
             records.update(dataId.records.byName())
         keys = standardized.byName()
         for element in standardized.graph.primaryKeyTraversalOrder:

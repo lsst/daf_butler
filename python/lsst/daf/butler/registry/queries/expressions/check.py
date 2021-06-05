@@ -447,7 +447,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         if summary.defaultsNeeded:
             defaultsNeededGraph = DimensionGraph(self.graph.universe, summary.defaultsNeeded)
             self.dataId = self.dataId.union(self.defaults.subset(defaultsNeededGraph))
-            assert self.dataId.hasRecords(), (
+            assert self.dataId.has_records, (
                 "Should be a union of two data IDs with records, "
                 "in which one only adds governor dimension values."
             )

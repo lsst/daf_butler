@@ -57,7 +57,7 @@ class DimensionPacker(metaclass=ABCMeta):
     fixed : `DataCoordinate`
         Expanded data ID for the dimensions whose values must remain fixed
         (to these values) in all calls to `pack`, and are used in the results
-        of calls to `unpack`.  ``fixed.hasRecords()`` must return `True`.
+        of calls to `unpack`.  ``fixed.has_records`` must return `True`.
     dimensions : `DimensionGraph`
         The dimensions of data IDs packed by this instance.
     """
@@ -168,7 +168,7 @@ class DimensionPacker(metaclass=ABCMeta):
     (`DataCoordinate`)
 
     The packed ID values are only unique and reversible with these
-    dimensions held fixed.  ``fixed.hasRecords() is True`` is guaranteed.
+    dimensions held fixed.  ``fixed.has_records is True`` is guaranteed.
     """
 
     dimensions: DimensionGraph
@@ -219,7 +219,7 @@ class DimensionPackerFactory:
         fixed : `DataCoordinate`
             Data ID that provides values for the "fixed" dimensions of the
             packer.  Must be expanded with all metadata known to the
-            `Registry`.  ``fixed.hasRecords()`` must return `True`.
+            `Registry`.  ``fixed.has_records`` must return `True`.
         """
         # Construct DimensionGraph instances if necessary on first use.
         # See related comment in __init__.

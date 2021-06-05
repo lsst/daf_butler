@@ -148,7 +148,7 @@ class RepoExportContext:
             Data IDs to export.  For large numbers of data IDs obtained by
             calls to `Registry.queryDataIds`, it will be much more efficient if
             these are expanded to include records (i.e.
-            `DataCoordinate.hasRecords` returns `True`) prior to the call to
+            `DataCoordinate.has_records` returns `True`) prior to the call to
             `saveDataIds` via e.g. ``Registry.queryDataIds(...).expanded()``.
         elements : iterable of `DimensionElement` or `str`, optional
             Dimension elements whose records should be exported.  If `None`,
@@ -188,7 +188,7 @@ class RepoExportContext:
         refs : iterable of `DatasetRef`
             References to the datasets to export.  Their `DatasetRef.id`
             attributes must not be `None`.  Duplicates are automatically
-            ignored.  Nested data IDs must have `DataCoordinate.hasRecords`
+            ignored.  Nested data IDs must have `DataCoordinate.has_records`
             return `True`.
         elements : iterable of `DimensionElement` or `str`, optional
             Dimension elements whose records should be exported; this is

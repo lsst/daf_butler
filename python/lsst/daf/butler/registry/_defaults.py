@@ -140,6 +140,6 @@ class RegistryDefaults:
     dimensions are ever included in defaults.
 
     This attribute may not be accessed before the defaults struct is
-    attached to a `Registry` instance.  It always satisfies both ``hasFull``
-    and ``hasRecords``.
+    attached to a `Registry` instance.  It always satisfies both ``has_full``
+    and ``has_records``.
     """
