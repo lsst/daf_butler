@@ -24,6 +24,7 @@ __all__ = (
     "ChainedDatasetQueryResults",
     "DataCoordinateQueryResults",
     "DatasetQueryResults",
+    "DimensionRecordQueryResults",
     "ParentDatasetQueryResults",
 )
 
@@ -49,9 +50,12 @@ from ...core import (
     DataCoordinateIterable,
     DatasetRef,
     DatasetType,
+    DimensionElement,
     DimensionGraph,
     DimensionRecord,
+    HomogeneousDimensionRecordIterable,
     SimpleQuery,
+    TimespanDatabaseRepresentation,
 )
 from ..interfaces import Database
 from ._query import Query
@@ -506,3 +510,48 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
     def expanded(self) -> ChainedDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
         return ChainedDatasetQueryResults([r.expanded() for r in self._chain])
+
+
+class DimensionRecordQueryResults(HomogeneousDimensionRecordIterable):
+    """A `HomogeneousDimensionRecordIterable` that queries the database each
+    time it is iterated over.
+
+    Parameters
+    ----------
+    db : `Database`
+        Interface to the database engine and namespace to query.
+    sql : `sqlalchemy.sql.Select`
+        Query to execute.
+    definition : `DimensionElement`
+        The element whose records will be queried.
+    data_ids : `DataCoordinateIterable`, optional
+        Data IDs that constrain the query.
+    """
+
+    def __init__(
+        self,
+        db: Database,
+        sql: sqlalchemy.sql.Select,
+        definition: DimensionElement,
+        data_ids: Optional[DataCoordinateIterable],
+    ):
+        self._db = db
+        self._sql = sql
+        self._definition = definition
+        self._data_ids = data_ids
+
+    __slots__ = ("_db", "_sql", "_definition", "_data_ids")
+
+    def __iter__(self) -> Iterator[DimensionRecord]:
+        RecordClass = self._definition.RecordClass
+        TimespanReprClass = self._db.getTimespanRepresentation()
+        for row in self._db.query(self._sql):
+            values = dict(row)
+            if self._definition.temporal is not None:
+                values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
+            yield RecordClass(**values)
+
+    @property
+    def definition(self) -> DimensionElement:
+        # Docstring inherited.
+        return self._definition

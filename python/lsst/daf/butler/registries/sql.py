@@ -60,6 +60,7 @@ from ..core import (
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
+    HomogeneousDimensionRecordIterable,
     NamedKeyMapping,
     NameLookupMapping,
     Progress,
@@ -968,7 +969,7 @@ class SqlRegistry(Registry):
                               components: Optional[bool] = None,
                               bind: Optional[Mapping[str, Any]] = None,
                               check: bool = True,
-                              **kwargs: Any) -> Iterator[DimensionRecord]:
+                              **kwargs: Any) -> HomogeneousDimensionRecordIterable:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if not isinstance(element, DimensionElement):
             try:
@@ -978,7 +979,7 @@ class SqlRegistry(Registry):
                                + str(self.dimensions.getStaticElements())) from e
         dataIds = self.queryDataIds(element.graph, dataId=dataId, datasets=datasets, collections=collections,
                                     where=where, components=components, bind=bind, check=check, **kwargs)
-        return iter(self._managers.dimensions[element].fetch(dataIds))
+        return self._managers.dimensions[element].fetch(dataIds)
 
     def queryDatasetAssociations(
         self,

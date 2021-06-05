@@ -57,6 +57,7 @@ from ..core import (
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
+    HomogeneousDimensionRecordSet,
     NameLookupMapping,
     SerializedDataCoordinate,
     SerializedDatasetRef,
@@ -486,7 +487,7 @@ class RemoteRegistry(Registry):
                               components: Optional[bool] = None,
                               bind: Optional[Mapping[str, Any]] = None,
                               check: bool = True,
-                              **kwargs: Any) -> Iterator[DimensionRecord]:
+                              **kwargs: Any) -> HomogeneousDimensionRecordSet:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if collections is not None:
             collections = ExpressionQueryParameter.from_expression(collections)
@@ -508,8 +509,13 @@ class RemoteRegistry(Registry):
 
         simple_records = response.json()
 
-        return (DimensionRecord.from_simple(SerializedDimensionRecord(**r), universe=self.dimensions)
-                for r in simple_records)
+        return HomogeneousDimensionRecordSet(
+            self.dimensions.getStaticElements()[element],
+            (
+                DimensionRecord.from_simple(SerializedDimensionRecord(**r), universe=self.dimensions)
+                for r in simple_records
+            )
+        )
 
     def queryDatasetAssociations(
         self,

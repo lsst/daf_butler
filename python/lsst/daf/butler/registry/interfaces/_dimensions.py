@@ -51,6 +51,7 @@ if TYPE_CHECKING:
         DimensionElement,
         DimensionRecord,
         DimensionUniverse,
+        HomogeneousDimensionRecordIterable,
         NamedKeyDict,
         NamedKeyMapping,
         TimespanDatabaseRepresentation,
@@ -195,7 +196,7 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
+    def fetch(self, dataIds: DataCoordinateIterable) -> HomogeneousDimensionRecordIterable:
         """Retrieve records from storage.
 
         Parameters
@@ -205,8 +206,8 @@ class DimensionRecordStorage(ABC):
 
         Returns
         -------
-        records : `Iterable` [ `DimensionRecord` ]
-            Record retrieved from storage.  Not all data IDs may have
+        records : HomogeneousDimensionRecordIterable
+            Records retrieved from storage.  Not all data IDs may have
             corresponding records (if there are no records that match a data
             ID), and even if they are, the order of inputs is not preserved.
         """
