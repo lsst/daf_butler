@@ -29,7 +29,6 @@ from __future__ import annotations
 __all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue", "SerializedDataCoordinate")
 
 from abc import abstractmethod
-import numbers
 from typing import (
     AbstractSet,
     Any,
@@ -228,16 +227,16 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
                 for k, v in defaults.items():
                     d.setdefault(k.name, v)
         if d.keys() >= graph.dimensions.names:
-            values = tuple(d[name] for name in graph._dataCoordinateIndices.keys())
+            values = tuple(
+                dimension.validated(d[dimension.name]) for dimension in graph._dataCoordinateIndices.keys()
+            )
         else:
             try:
-                values = tuple(d[name] for name in graph.required.names)
+                values = tuple(
+                    dimension.validated(d[dimension.name]) for dimension in graph.required
+                )
             except KeyError as err:
                 raise KeyError(f"No value in data ID ({mapping}) for required dimension {err}.") from err
-        # Some backends cannot handle numpy.int64 type which is a subclass of
-        # numbers.Integral; convert that to int.
-        values = tuple(int(val) if isinstance(val, numbers.Integral)  # type: ignore
-                       else val for val in values)
         return _BasicTupleDataCoordinate(graph, values)
 
     @staticmethod

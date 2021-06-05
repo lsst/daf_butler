@@ -29,7 +29,6 @@ from types import MappingProxyType
 from typing import (
     AbstractSet,
     Any,
-    Dict,
     Iterable,
     Iterator,
     List,
@@ -41,7 +40,7 @@ from typing import (
     Union,
 )
 
-from ..named import NamedValueAbstractSet, NamedValueSet
+from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
 from ..utils import cached_getter, immutable
 from .._topology import TopologicalSpace, TopologicalFamily
 from ..json import from_json_pydantic, to_json_pydantic
@@ -181,9 +180,9 @@ class DimensionGraph:
         # we want them to be lightweight.  The order here is what's convenient
         # for DataCoordinate: all required dimensions before all implied
         # dimensions.
-        self._dataCoordinateIndices: Dict[str, int] = {
-            name: i for i, name in enumerate(itertools.chain(self.required.names, self.implied.names))
-        }
+        self._dataCoordinateIndices: NamedKeyMapping[Dimension, int] = NamedKeyDict({
+            dimension: i for i, dimension in enumerate(itertools.chain(self.required, self.implied))
+        }).freeze()
 
     def __getnewargs__(self) -> tuple:
         return (self.universe, None, tuple(self.dimensions.names), False)

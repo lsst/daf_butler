@@ -28,11 +28,12 @@ __all__ = (
 )
 
 from abc import abstractmethod
-
+import numbers
 from typing import (
     Any,
     Optional,
     Type,
+    Union,
     TYPE_CHECKING,
 )
 
@@ -379,6 +380,50 @@ class Dimension(DimensionElement):
         """
         _, *alternateKeys = self.uniqueKeys
         return NamedValueSet(alternateKeys).freeze()
+
+    @property  # type: ignore
+    @cached_getter
+    def value_type(self) -> Union[Type[int], Type[str]]:
+        """The Python type expected for this dimension's data ID values.
+        """
+        return self.primaryKey.getPythonType()
+
+    def validated(self, value: Any) -> Optional[Union[int, str]]:
+        """Validate/convert a data ID / primary key value for this dimension.
+
+        Parameters
+        ----------
+        value
+            Candidate data ID value.
+
+        Returns
+        -------
+        value
+            A valid data ID value.
+
+        Raises
+        ------
+        TypeError
+            Raised if the given value is not of a conceptually equivalent type
+            (such as `numbers.Integral` vs. `int`).
+        """
+        # TODO: We really should not permit None here, but we have a lot of
+        # test code that isn't sufficiently rigorous about satisfying the
+        # dimensions data model (including test utility code in
+        # tests/_testRepo.py).  DM-21840 will require us to finally deal with
+        # that.
+        if value is None:
+            return None
+        # Some backends cannot handle numpy.int64 type which is a subclass of
+        # numbers.Integral; convert that to int.
+        if self.value_type is int and isinstance(value, numbers.Integral):
+            return int(value)
+        elif type(value) is not self.value_type:
+            raise TypeError(
+                f"{value!r} is not a valid value for dimension {self.name}; "
+                f"expected {self.value_type.__name__}."
+            )
+        return value
 
 
 class DimensionCombination(DimensionElement):
