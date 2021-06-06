@@ -23,9 +23,15 @@ from __future__ import annotations
 
 __all__ = ("HeterogeneousDimensionRecordSet", "HomogeneousDimensionRecordSet")
 
-from typing import Dict, Iterable, MutableMapping
+from typing import Dict, Iterable, MutableMapping, Optional
 
-from ...dimensions import DataCoordinate, DimensionElement, DimensionRecord, DimensionUniverse
+from ...dimensions import (
+    DataCoordinate,
+    DimensionElement,
+    DimensionRecord,
+    DimensionUniverse,
+    SerializedDimensionRecord,
+)
 from ...named import NamedKeyDict, NamedKeyMapping
 from .._data_coordinate import DataCoordinateIterable
 from ._mutable_set import (
@@ -70,6 +76,39 @@ class HeterogeneousDimensionRecordSet(HeterogeneousDimensionRecordMutableSet):
     ) -> NamedKeyMapping[DimensionElement, HomogeneousDimensionRecordSet]:
         # Docstring inherited.
         return self._by_definition
+
+    @classmethod
+    def deserialize_and_merge(
+        cls,
+        universe: DimensionUniverse,
+        serialized: Optional[Iterable[SerializedDimensionRecord]] = None,
+        records: Optional[HeterogeneousDimensionRecordMutableSet] = None,
+    ) -> Optional[HeterogeneousDimensionRecordMutableSet]:
+        """Load `SerializedDimensionRecord` objects into a set.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            Definitions of all dimensions.
+        serialized : `Iterable` [ `SerializedDimensionRecord` ], optional
+            Serialized records to load.  If `None` (default`), nothing is done
+            and `None` is done.  This behavior is provided as a convenience to
+            other objects that can be saved with or without records.
+        records : `HeterogeneousDimesnionRecordMutableSet`, optional
+            A container to load the serialized records into and return.  If not
+            provided, a new set is created and returned.
+
+        Returns
+        -------
+        records : `HeterogeneousDimensionRecordMutableSet` or `None`
+            Loaded records merged with any given records.
+        """
+        if serialized:
+            if records is None:
+                records = cls(universe)
+            for serialized_record in serialized:
+                records.add(DimensionRecord.from_simple(serialized_record, universe=universe))
+        return records
 
 
 class HomogeneousDimensionRecordSet(HomogeneousDimensionRecordMutableSet):
