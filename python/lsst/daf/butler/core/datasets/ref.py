@@ -41,7 +41,7 @@ from ..configSupport import LookupKey
 from ..utils import immutable
 from ..named import NamedKeyDict
 from .type import DatasetType, SerializedDatasetType
-from ..json import from_json_pydantic, to_json_pydantic
+from ..json import from_json_pydantic, to_json_pydantic, get_universe_for_deserialize
 
 if TYPE_CHECKING:
     from ...registry import Registry
@@ -293,15 +293,7 @@ class DatasetRef:
                 ref = ref.makeComponentRef(simple.component)
             return ref
 
-        if universe is None and registry is None:
-            raise ValueError("One of universe or registry must be provided.")
-
-        if universe is None and registry is not None:
-            universe = registry.dimensions
-
-        if universe is None:
-            # this is for mypy
-            raise ValueError("Unable to determine a usable universe")
+        universe = get_universe_for_deserialize("DatasetRef", universe, registry, records)
 
         if simple.datasetType is None:
             # mypy

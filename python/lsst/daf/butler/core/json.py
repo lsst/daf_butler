@@ -21,7 +21,13 @@
 
 from __future__ import annotations
 
-__all__ = ("to_json_generic", "from_json_generic", "to_json_pydantic", "from_json_pydantic")
+__all__ = (
+    "to_json_generic",
+    "from_json_generic",
+    "to_json_pydantic",
+    "from_json_pydantic",
+    "get_universe_for_deserialize",
+)
 
 from typing import (
     TYPE_CHECKING,
@@ -36,6 +42,48 @@ import json
 if TYPE_CHECKING:
     from .dimensions import DimensionUniverse
     from ..registry import Registry
+    from ._containers import HeterogeneousDimensionRecordMutableSet
+
+
+def get_universe_for_deserialize(
+    type_str: str,
+    universe: Optional[DimensionUniverse] = None,
+    registry: Optional[Registry] = None,
+    records: Optional[HeterogeneousDimensionRecordMutableSet] = None,
+) -> DimensionUniverse:
+    """Process the usual optional arguments to `from_simple` to extract a
+    `DimensionUniverse`.
+
+    Parameters
+    ----------
+    type_str : `str`
+        Name of the class being deserialized, to include in any error messages.
+    universe : `DimensionUniverse`, optional
+        Definitions for all dimensions.
+    registry : `lsst.daf.butler.Registry`, optional
+        Registry from which a universe can be extracted.
+    records : `HeterogeneousDimensionRecordMutableSet`, optional
+        Container of normalized `DimensionRecord` instances.
+
+    Returns
+    -------
+    universe : `DimensionUniverse`
+        Definitions for all dimensions.
+
+    Raises
+    ------
+    TypeError
+        Raised if none of the optional arguments are provided.
+    """
+    if universe is not None:
+        return universe
+    if registry is not None:
+        return registry.dimensions
+    if records is not None:
+        return records.universe
+    raise TypeError(
+        f"One of universe, registry, or records is required to load serialized {type_str} objects"
+    )
 
 
 class SupportsSimple(Protocol):
