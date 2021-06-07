@@ -311,6 +311,23 @@ class SqliteDatabase(Database):
             kwargs = dict(kwargs, sqlite_autoincrement=True)
         return super()._convertTableSpec(name, spec, metadata, **kwargs)
 
+    def getExistingTable(self, name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
+        # Docstring inherited.
+        if self.isWriteable():
+            with self.transaction():
+                # In general we shouldn't have to do this in a transaction -
+                # it's supposed to be a read-only operation - but we have
+                # observed SQLite deadlocking inside the sqlalchemy inspection
+                # logic, and that usually means some code acquired a shared
+                # lock on the database file and then later tried to upgrade it
+                # into a lock that could do writes.  The only way to
+                # consistently work around that it is to acquire an exclusive
+                # lock from the beginning (blocking), and that's what starting
+                # a transaction does.
+                return super().getExistingTable(name, spec)
+        else:
+            return super().getExistingTable(name, spec)
+
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
         self.assertTableWriteable(table, f"Cannot replace into read-only table {table}.")
         if not rows:
