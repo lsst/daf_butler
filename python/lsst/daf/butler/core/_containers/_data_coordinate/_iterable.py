@@ -362,6 +362,29 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
 
         return DataCoordinateTuple._wrap(self._unwrap(), self._common_state)
 
+    def expect_one(self) -> DataCoordinate:
+        """Assume that this container has exactly one data ID, and return it.
+
+        Returns
+        -------
+        record : `DataCoordinate`
+            The only data ID in this container.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the container has zero data IDs, or more than one.
+
+        Notes
+        -----
+        This may exhaust ``self`` if it is a single-pass iterator.
+        """
+        try:
+            (result,) = self
+        except ValueError as err:
+            raise RuntimeError("Expected exactly one record.") from err
+        return result
+
     def constrain(self, query: SimpleQuery, columns: Callable[[str], sqlalchemy.sql.ColumnElement]) -> None:
         """Constrain a SQL query to include or relate to only known data IDs.
 
