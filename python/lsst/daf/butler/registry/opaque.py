@@ -175,13 +175,16 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
         # Docstring inherited from OpaqueTableStorageManager.
         result = self._storage.get(name)
         if result is None:
-            # Create the table itself.  If it already exists but wasn't in
-            # the dict because it was added by another client since this one
-            # was initialized, that's fine.
-            table = self._db.ensureTableExists(name, spec)
             # Add a row to the meta table so we can find this table in the
-            # future.  Also okay if that already exists, so we use sync.
-            self._db.sync(self._metaTable, keys={"table_name": name})
+            # future.  Okay if that already exists, so we use sync.
+            _, inserted = self._db.sync(self._metaTable, keys={"table_name": name})
+            if inserted:
+                # Create the table itself.  If it already exists but wasn't in
+                # the dict because it was added by another client since this
+                # one was initialized, that's fine.
+                table = self._db.ensureTableExists(name, spec)
+            else:
+                table = self._db.getExistingTable(name, spec)
             result = ByNameOpaqueTableStorage(name=name, table=table, db=self._db)
             self._storage[name] = result
         return result
