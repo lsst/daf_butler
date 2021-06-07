@@ -895,7 +895,7 @@ class Config(collections.abc.MutableMapping):
         self.configFile = uri
 
     @staticmethod
-    def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):
+    def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True, toMerge=None):
         """Update specific config parameters.
 
         Allows for named parameters to be set to new values in bulk, and
@@ -936,14 +936,18 @@ class Config(collections.abc.MutableMapping):
         overwrite : `bool`, optional
             If `False`, do not modify a value in ``config`` if the key
             already exists.  Default is always to overwrite.
+        toMerge : `tuple`, optional
+            Keys to merge content from full to config without overwriting
+            pre-existing values. Only works if the key refers to a hierarchy.
+            The ``overwrite`` flag is ignored.
 
         Raises
         ------
         ValueError
-            Neither ``toUpdate`` not ``toCopy`` were defined.
+            Neither ``toUpdate``, ``toCopy`` nor ``toMerge`` were defined.
         """
-        if toUpdate is None and toCopy is None:
-            raise ValueError("One of toUpdate or toCopy parameters must be set.")
+        if toUpdate is None and toCopy is None and toMerge is None:
+            raise ValueError("At least one of toUpdate, toCopy, or toMerge parameters must be set.")
 
         # If this is a parent configuration then we need to ensure that
         # the supplied config has the relevant component key in it.
@@ -964,14 +968,26 @@ class Config(collections.abc.MutableMapping):
                 else:
                     localConfig[key] = value
 
-        if toCopy:
+        if toCopy or toMerge:
             localFullConfig = configType(full, mergeDefaults=False)
-            for key in toCopy:
-                if key in localConfig and not overwrite:
-                    log.debug("Not overriding key '%s' from defaults in config %s",
-                              key, localConfig.__class__.__name__)
-                else:
-                    localConfig[key] = localFullConfig[key]
+
+            if toCopy:
+                for key in toCopy:
+                    if key in localConfig and not overwrite:
+                        log.debug("Not overriding key '%s' from defaults in config %s",
+                                  key, localConfig.__class__.__name__)
+                    else:
+                        localConfig[key] = localFullConfig[key]
+            if toMerge:
+                for key in toMerge:
+                    if key in localConfig:
+                        # Get the node from the config to do the merge
+                        # but then have to reattach to the config.
+                        subset = localConfig[key]
+                        subset.merge(localFullConfig[key])
+                        localConfig[key] = subset
+                    else:
+                        localConfig[key] = localFullConfig[key]
 
         # Reattach to parent if this is a child config
         if configType.component in config:
