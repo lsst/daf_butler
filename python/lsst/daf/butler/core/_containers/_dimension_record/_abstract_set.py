@@ -88,6 +88,10 @@ class HeterogeneousDimensionRecordAbstractSet(HeterogeneousDimensionRecordIterab
         except AttributeError:
             return NotImplemented
 
+    def to_set(self) -> HeterogeneousDimensionRecordAbstractSet:
+        # Docstring inherited.
+        return self
+
     @property
     @abstractmethod
     def by_definition(
@@ -220,6 +224,10 @@ class HomogeneousDimensionRecordAbstractSet(HomogeneousDimensionRecordIterable):
             return self.by_data_id.keys() == other.by_data_id.keys()
         except AttributeError:
             return NotImplemented
+
+    def to_set(self) -> HomogeneousDimensionRecordAbstractSet:
+        # Docstring inherited
+        return self
 
     @property
     @abstractmethod

@@ -24,9 +24,15 @@ from __future__ import annotations
 __all__ = ("HomogeneousDimensionRecordIterable", "HeterogeneousDimensionRecordIterable")
 
 from abc import abstractmethod
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
 from ...dimensions import DimensionElement, DimensionRecord, DimensionUniverse
+
+if TYPE_CHECKING:
+    from ._abstract_set import (
+        HeterogeneousDimensionRecordAbstractSet,
+        HomogeneousDimensionRecordAbstractSet,
+    )
 
 
 class HeterogeneousDimensionRecordIterable(Iterable[DimensionRecord]):
@@ -43,6 +49,47 @@ class HeterogeneousDimensionRecordIterable(Iterable[DimensionRecord]):
         (`DimensionUniverse`).
         """
         raise NotImplementedError()
+
+    def to_set(self) -> HeterogeneousDimensionRecordAbstractSet:
+        """Return a heterogeneous set-like object with the same contents as
+        ``self``.
+
+        Returns
+        -------
+        set : `HeterogeneousDimensionRecordAbstractSet`
+            Set-like container.  This may be ``self`` if it is already a
+            set-like object.
+
+        Notes
+        -----
+        This may exhaust ``self`` if it is a single-pass iterator.
+        """
+        from ._set import HeterogeneousDimensionRecordSet
+
+        return HeterogeneousDimensionRecordSet(self.universe, self)
+
+    def expect_one(self) -> DimensionRecord:
+        """Assume that this container has exactly one record, and return it.
+
+        Returns
+        -------
+        record : `DimensionRecord`
+            The only record in this container.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the container has zero records, or more than one.
+
+        Notes
+        -----
+        This may exhaust ``self`` if it is a single-pass iterator.
+        """
+        try:
+            (result,) = self
+        except ValueError as err:
+            raise RuntimeError("Expected exactly one record.") from err
+        return result
 
 
 class HomogeneousDimensionRecordIterable(Iterable[DimensionRecord]):
@@ -66,3 +113,44 @@ class HomogeneousDimensionRecordIterable(Iterable[DimensionRecord]):
     def definition(self) -> DimensionElement:
         """The `DimensionElement` whose records this iterable contains."""
         raise NotImplementedError()
+
+    def to_set(self) -> HomogeneousDimensionRecordAbstractSet:
+        """Return a heterogeneous set-like object with the same contents as
+        ``self``.
+
+        Returns
+        -------
+        set : `HomogeneousDimensionRecordAbstractSet`
+            Set-like container.  This may be ``self`` if it is already a
+            set-like object.
+
+        Notes
+        -----
+        This may exhaust ``self`` if it is a single-pass iterator.
+        """
+        from ._set import HomogeneousDimensionRecordSet
+
+        return HomogeneousDimensionRecordSet(self.definition, self)
+
+    def expect_one(self) -> DimensionRecord:
+        """Assume that this container has exactly one record, and return it.
+
+        Returns
+        -------
+        record : `DimensionRecord`
+            The only record in this container.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the container has zero records, or more than one.
+
+        Notes
+        -----
+        This may exhaust ``self`` if it is a single-pass iterator.
+        """
+        try:
+            (result,) = self
+        except ValueError as err:
+            raise RuntimeError("Expected exactly one record.") from err
+        return result
