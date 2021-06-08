@@ -31,7 +31,6 @@ from typing import (
     Dict,
     Iterable,
     Iterator,
-    Mapping,
     Optional,
     Tuple,
     TYPE_CHECKING,
@@ -50,8 +49,8 @@ from ...core import (
     Dimension,
     DimensionElement,
     DimensionGraph,
-    DimensionRecord,
     DimensionUniverse,
+    HeterogeneousDimensionRecordAbstractSet,
     SpatialRegionDatabaseRepresentation,
     SimpleQuery,
 )
@@ -286,7 +285,7 @@ class Query(ABC):
 
     def extractDataId(self, row: Optional[sqlalchemy.engine.RowProxy], *,
                       graph: Optional[DimensionGraph] = None,
-                      records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+                      records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
                       ) -> DataCoordinate:
         """Extract a data ID from a result row.
 
@@ -298,15 +297,8 @@ class Query(ABC):
         graph : `DimensionGraph`, optional
             The dimensions the returned data ID should identify.  If not
             provided, this will be all dimensions in `QuerySummary.requested`.
-        records : `Mapping` [ `str`, `Mapping` [ `tuple`, `DimensionRecord` ] ]
-            Nested mapping containing records to attach to the returned
-            `DataCoordinate`, for which `~DataCoordinate.has_records` will
-            return `True`.  If provided, outer keys must include all dimension
-            element names in ``graph``, and inner keys should be tuples of
-            dimension primary key values in the same order as
-            ``element.graph.required``.  If not provided,
-            `DataCoordinate.has_records` will return `False` on the returned
-            object.
+        records : `HeterogeneousDimensionRecordAbstractSet`, optional
+            Container of `DimensionRecord` objects to attach to data IDs.
 
         Returns
         -------
@@ -326,15 +318,15 @@ class Query(ABC):
         if records is not None:
             recordsForRow = {}
             for element in graph.elements:
-                key = tuple(dataId.subset(element.graph).values())
-                recordsForRow[element.name] = records[element.name].get(key)
+                recordsForRow[element.name] = \
+                    records.by_definition[element].by_data_id.get(dataId.subset(element.graph))
             return dataId.expanded(recordsForRow)
         else:
             return dataId
 
     def extractDatasetRef(self, row: sqlalchemy.engine.RowProxy,
                           dataId: Optional[DataCoordinate] = None,
-                          records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+                          records: Optional[HeterogeneousDimensionRecordAbstractSet] = None,
                           ) -> DatasetRef:
         """Extract a `DatasetRef` from a result row.
 
@@ -345,11 +337,8 @@ class Query(ABC):
         dataId : `DataCoordinate`
             Data ID to attach to the `DatasetRef`.  A minimal (i.e. base class)
             `DataCoordinate` is constructed from ``row`` if `None`.
-        records : `Mapping` [ `str`, `Mapping` [ `tuple`, `DimensionRecord` ] ]
-            Records to use to return an `ExpandedDataCoordinate`.  If provided,
-            outer keys must include all dimension element names in ``graph``,
-            and inner keys should be tuples of dimension primary key values
-            in the same order as ``element.graph.required``.
+        records : `HeterogeneousDimensionRecordAbstractSet`, optional
+            Container of `DimensionRecord` objects to attach to data IDs.
 
         Returns
         -------

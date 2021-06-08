@@ -37,7 +37,6 @@ from typing import (
     ContextManager,
     Iterable,
     Iterator,
-    Mapping,
     Optional,
     Sequence,
     Union,
@@ -55,6 +54,8 @@ from ...core import (
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
+    HeterogeneousDimensionRecordAbstractSet,
+    HeterogeneousDimensionRecordSet,
     HomogeneousDimensionRecordIterable,
     SimpleQuery,
     TimespanDatabaseRepresentation,
@@ -73,13 +74,10 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         Database engine used to execute queries.
     query : `Query`
         Low-level representation of the query that backs this result object.
-    records : `Mapping`, optional
-        A nested mapping containing `DimensionRecord` objects for all
-        dimensions and all data IDs this query will yield.  If `None`
-        (default), `DataCoordinateIterable.has_records` will return `False`.
-        The outer mapping has `str` keys (the names of dimension elements).
-        The inner mapping has `tuple` keys representing data IDs (tuple
-        conversions of `DataCoordinate.values()`) and `DimensionRecord` values.
+    records : `HeterogeneousDimensionRecordAbstractSet`, optional
+        A container of `DimensionRecord` objects for all dimensions and all
+        data IDs this query will yield.  If `None` (default),
+        `DataCoordinateIterable.has_records` will return `False`.
 
     Notes
     -----
@@ -91,7 +89,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
     methods of other query result objects.
     """
     def __init__(self, db: Database, query: Query, *,
-                 records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None):
+                 records: Optional[HeterogeneousDimensionRecordAbstractSet] = None):
         self._db = db
         self._query = query
         self._records = records
@@ -190,13 +188,10 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                     ...
         """
         if self._records is None:
-            records = {}
+            records = HeterogeneousDimensionRecordSet(self.universe)
             for element in self.graph.elements:
                 subset = self.subset(graph=element.graph, unique=True)
-                records[element.name] = {
-                    tuple(record.dataId.values()): record
-                    for record in self._query.managers.dimensions[element].fetch(subset)
-                }
+                records.update(self._query.managers.dimensions[element].fetch(subset))
             return DataCoordinateQueryResults(self._db, self._query, records=records)
         else:
             return self
@@ -255,15 +250,10 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             raise ValueError(f"{graph} is not a subset of {self.graph}")
         if graph == self.graph and (not unique or self._query.isUnique()):
             return self
-        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]]
-        if self._records is not None:
-            records = {element.name: self._records[element.name] for element in graph.elements}
-        else:
-            records = None
         return DataCoordinateQueryResults(
             self._db,
             self._query.subset(graph=graph, datasets=False, unique=unique),
-            records=records,
+            records=self._records,
         )
 
     def constrain(self, query: SimpleQuery, columns: Callable[[str], sqlalchemy.sql.ColumnElement]) -> None:
@@ -387,7 +377,8 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         -------
         expanded : `DatasetQueryResults`
             Either a new `DatasetQueryResults` instance or ``self``, if it is
-            already expanded.
+            already expanded.  If `None` (default),
+            `DataCoordinateIterable.has_records` will return `False`.
 
         Notes
         -----
@@ -412,18 +403,15 @@ class ParentDatasetQueryResults(DatasetQueryResults):
     components : `Sequence` [ `str` or `None` ]
         Names of components to include in iteration.  `None` may be included
         (at most once) to include the parent dataset type.
-    records : `Mapping`, optional
-        Mapping containing `DimensionRecord` objects for all dimensions and
+    records : `HeterogeneousDimensionRecordAbstractSet`, optional
+        Container of `DimensionRecord` objects for all dimensions and
         all data IDs this query will yield.  If `None` (default),
         `DataCoordinate.has_records` will return `False` for all nested data
-        IDs.  This is a nested mapping with `str` names of dimension elements
-        as outer keys, `DimensionRecord` instances as inner values, and
-        ``tuple(record.dataId.values())`` for the inner keys / outer values
-        (where ``record`` is the innermost `DimensionRecord` instance).
+        IDs.
     """
     def __init__(self, db: Database, query: Query, *,
                  components: Sequence[Optional[str]],
-                 records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None):
+                 records: Optional[HeterogeneousDimensionRecordAbstractSet] = None):
         self._db = db
         self._query = query
         self._components = components
