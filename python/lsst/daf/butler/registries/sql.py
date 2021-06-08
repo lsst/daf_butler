@@ -59,7 +59,6 @@ from ..core import (
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
-    HeterogeneousDimensionRecordCache,
     HomogeneousDimensionRecordIterable,
     NameLookupMapping,
     Progress,
@@ -609,14 +608,6 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.datastores.findDatastores(ref)
 
-    def getDimensionRecordCache(self) -> HeterogeneousDimensionRecordCache:
-        # Docstring inherited.
-        callbacks = {
-            element.name: self._managers.dimensions[element].fetch
-            for element in self.dimensions.getStaticElements()
-        }
-        return HeterogeneousDimensionRecordCache(self.dimensions, callbacks)
-
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
                      records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
                      withDefaults: bool = True,
@@ -626,7 +617,7 @@ class SqlRegistry(Registry):
             defaults = None
         else:
             defaults = self.defaults.dataId
-        cache = self.getDimensionRecordCache()
+        cache = self._managers.dimensions.makeDimensionRecordCache()
         if records is not None:
             for record in records.values():
                 if record is not None:

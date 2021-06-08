@@ -42,7 +42,13 @@ from typing import (
 
 import sqlalchemy
 
-from ...core import DatabaseDimensionElement, DimensionGraph, GovernorDimension, SkyPixDimension
+from ...core import (
+    DatabaseDimensionElement,
+    DimensionGraph,
+    GovernorDimension,
+    HeterogeneousDimensionRecordCache,
+    SkyPixDimension,
+)
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -611,6 +617,23 @@ class DimensionRecordStorageManager(VersionedExtension):
         present in persistent storage.
         """
         raise NotImplementedError()
+
+    def makeDimensionRecordCache(self) -> HeterogeneousDimensionRecordCache:
+        """Return a container that fetches and caches `DimensionRecord` objects
+        from the database.
+
+        Returns
+        -------
+        cache : `HeterogeneousDimensionRecordCache`
+            A container that directly holds already-fetched `DimensionRecord`
+            objects and automatically fetches new ones as requested (see class
+            documentation for more information).
+        """
+        callbacks = {
+            element.name: self[element].fetch
+            for element in self.universe.getStaticElements()
+        }
+        return HeterogeneousDimensionRecordCache(self.universe, callbacks)
 
     universe: DimensionUniverse
     """Universe of all dimensions and dimension elements known to the
