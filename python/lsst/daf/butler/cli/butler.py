@@ -72,7 +72,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         commandsLocation = self._importPlugin(self.localCmdPkg)
         if commandsLocation is None:
             # _importPlugins logs an error, don't need to do it again here.
-            return {}
+            return defaultdict(list)
         return defaultdict(list, {self._funcNameToCmdName(f):
                                   [self.localCmdPkg] for f in commandsLocation.__all__})
 
