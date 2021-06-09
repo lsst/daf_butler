@@ -22,6 +22,7 @@
 from .butlerImport import butlerImport
 from .certifyCalibrations import certifyCalibrations
 from .createRepo import createRepo
+from .collectionChain import collectionChain
 from .configDump import configDump
 from .configValidate import configValidate
 from .pruneCollection import pruneCollection

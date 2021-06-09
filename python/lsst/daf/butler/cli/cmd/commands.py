@@ -497,3 +497,22 @@ def transfer_datasets(**kwargs):
     """
     number = script.transferDatasets(**kwargs)
     print(f"Number of datasets transferred: {number}")
+
+
+@click.command(cls=ButlerCommand)
+@repo_argument(required=True)
+@click.argument("parent", required=True, nargs=1)
+@click.argument("children", required=True, nargs=-1)
+@click.option("--doc", default="",
+              help="Documentation string associated with this collection. "
+              "Only relevant if the collection is newly created.")
+@click.option("--flatten/--no-flatten", default=False,
+              help="If `True` recursively flatten out any nested chained collections in children first.")
+def collection_chain(**kwargs):
+    """Define a collection chain.
+
+    PARENT is the name of the chained collection to create. If the collection
+    already exists the chain associated with it will be updated.
+    CHILDREN are the collections to be included in the chain in order.
+    """
+    script.collectionChain(**kwargs)

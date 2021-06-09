@@ -135,10 +135,12 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             registry1.registerRun("run1")
             registry1.registerCollection("tag1", CollectionType.TAGGED)
             registry1.registerCollection("calibration1", CollectionType.CALIBRATION)
-            registry1.registerCollection("chain1", CollectionType.CHAINED)
-            registry1.registerCollection("chain2", CollectionType.CHAINED)
-            registry1.setCollectionChain("chain1", ["tag1", "run1", "chain2"])
-            registry1.setCollectionChain("chain2", ["calibration1", "run1"])
+
+            # Create the collection chain
+            result = self.runner.invoke(cli, ["collection-chain", "here", "chain2", "calibration1", "run1"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            result = self.runner.invoke(cli, ["collection-chain", "here", "chain1", "tag1", "run1", "chain2"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
             # Use the script function to test the query-collections TREE
             # option, because the astropy.table.Table.read method, which we are
@@ -154,15 +156,15 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
                                     ("run1", "RUN"),
                                     ("tag1", "TAGGED"),
                                     ("calibration1", "CALIBRATION"),
+                                    ("chain2", "CHAINED"),
+                                    ("  calibration1", "CALIBRATION"),
+                                    ("  run1", "RUN"),
                                     ("chain1", "CHAINED"),
                                     ("  tag1", "TAGGED"),
                                     ("  run1", "RUN"),
                                     ("  chain2", "CHAINED"),
                                     ("    calibration1", "CALIBRATION"),
-                                    ("    run1", "RUN"),
-                                    ("chain2", "CHAINED"),
-                                    ("  calibration1", "CALIBRATION"),
-                                    ("  run1", "RUN"))),
+                                    ("    run1", "RUN"))),
                              names=("Name", "Type"))
             self.assertAstropyTablesEqual(table, expected)
 
@@ -174,8 +176,8 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
                 ("run1", "RUN", ""),
                 ("tag1", "TAGGED", ""),
                 ("calibration1", "CALIBRATION", ""),
-                ("chain1", "CHAINED", "[tag1, run1, chain2]"),
-                ("chain2", "CHAINED", "[calibration1, run1]"))),
+                ("chain2", "CHAINED", "[calibration1, run1]"),
+                ("chain1", "CHAINED", "[tag1, run1, chain2]"))),
                 names=("Name", "Type", "Definition"))
             table = readTable(result.output)
             self.assertAstropyTablesEqual(readTable(result.output), expected)
@@ -188,11 +190,11 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
                 ("run1", "RUN"),
                 ("tag1", "TAGGED"),
                 ("calibration1", "CALIBRATION"),
+                ("calibration1", "CALIBRATION"),
+                ("run1", "RUN"),
                 ("tag1", "TAGGED"),
                 ("run1", "RUN"),
-                ("calibration1", "CALIBRATION"),
-                ("calibration1", "CALIBRATION"),
-                ("run1", "RUN"))),
+                ("calibration1", "CALIBRATION"))),
                 names=("Name", "Type"))
             self.assertAstropyTablesEqual(readTable(result.output), expected)
 
