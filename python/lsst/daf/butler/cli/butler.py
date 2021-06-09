@@ -22,6 +22,7 @@
 import abc
 import click
 from collections import defaultdict
+import functools
 import logging
 import os
 import traceback
@@ -34,6 +35,35 @@ from lsst.utils import doImport
 
 
 log = logging.getLogger(__name__)
+
+
+@functools.lru_cache
+def _importPlugin(pluginName):
+    """Import a plugin that contains Click commands.
+
+    Parameters
+    ----------
+    pluginName : `str`
+        An importable module whose __all__ parameter contains the commands
+        that can be called.
+
+    Returns
+    -------
+    An imported module or None
+        The imported module, or None if the module could not be imported.
+
+    Notes
+    -----
+    A cache is used in order to prevent repeated reports of failure
+    to import a module that can be triggered by ``butler --help``.
+    """
+    try:
+        return doImport(pluginName)
+    except Exception as err:
+        log.warning("Could not import plugin from %s, skipping.", pluginName)
+        log.debug("Plugin import exception: %s\nTraceback:\n%s", err,
+                  "".join(traceback.format_tb(err.__traceback__)))
+        return None
 
 
 class LoaderCLI(click.MultiCommand, abc.ABC):
@@ -69,7 +99,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             The key is the command name. The value is a list of package(s) that
             contains the command.
         """
-        commandsLocation = self._importPlugin(self.localCmdPkg)
+        commandsLocation = _importPlugin(self.localCmdPkg)
         if commandsLocation is None:
             # _importPlugins logs an error, don't need to do it again here.
             return defaultdict(list)
@@ -115,7 +145,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         if name not in commands:
             return None
         self._raiseIfDuplicateCommands(commands)
-        return self._importPlugin(commands[name][0] + "." + self._cmdNameToFuncName(name))
+        return _importPlugin(commands[name][0] + "." + self._cmdNameToFuncName(name))
 
     def _setupLogging(self, ctx):
         """Init the logging system and config it for the command.
@@ -166,29 +196,6 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         commands names that conflict with python keywords, change the local,
         legal, function name to the command name."""
         return commandName.replace("-", "_")
-
-    @staticmethod
-    def _importPlugin(pluginName):
-        """Import a plugin that contains Click commands.
-
-        Parameters
-        ----------
-        pluginName : `str`
-            An importable module whose __all__ parameter contains the commands
-            that can be called.
-
-        Returns
-        -------
-        An imported module or None
-            The imported module, or None if the module could not be imported.
-        """
-        try:
-            return doImport(pluginName)
-        except Exception as err:
-            log.warning("Could not import plugin from %s, skipping.", pluginName)
-            log.debug("Plugin import exception: %s\nTraceback:\n%s", err,
-                      "".join(traceback.format_tb(err.__traceback__)))
-            return None
 
     @staticmethod
     def _mergeCommandLists(a, b):
