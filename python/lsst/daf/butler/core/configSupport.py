@@ -93,13 +93,28 @@ class LookupKey:
                 raise ValueError(f"Supplied name must be str not: '{name}'")
 
             if "+" in name:
+                if universe is None:
+                    raise ValueError(f"Cannot construct LookupKey for {name} without dimension universe.")
+
                 # If we are given a single dimension we use the "+" to
                 # indicate this but have to filter out the empty value
                 dimension_names = [n for n in name.split("+") if n]
-                if universe is None:
-                    raise ValueError(f"Cannot construct LookupKey for {name} without dimension universe.")
-                else:
+                try:
                     self._dimensions = universe.extract(dimension_names)
+                except KeyError:
+                    # One or more of the dimensions is not known to the
+                    # universe. This could be a typo or it could be that
+                    # a config is being used that is not compatible with
+                    # this universe. Use the name directly as a lookup key
+                    # but issue a warning. This will be potentially annoying
+                    # in the scenario where a lookup key comes from a
+                    # default config but the users are using an external
+                    # universe.
+                    unknown = [name for name in dimension_names if universe.get(name) is None]
+                    log.warning("A LookupKey '%s' uses unknown dimensions: %s. Possible typo?"
+                                " Using the name explicitly.",
+                                name, unknown)
+                    self._name = name
             else:
                 self._name = name
 
