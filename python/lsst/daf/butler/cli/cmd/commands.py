@@ -502,17 +502,28 @@ def transfer_datasets(**kwargs):
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
 @click.argument("parent", required=True, nargs=1)
-@click.argument("children", required=True, nargs=-1)
+@click.argument("children", required=False, nargs=-1)
+@click.option("--pop", is_flag=True, default=False,
+              help="Pop the first collection off the chain. Can not be used if CHILDREN are given.")
 @click.option("--doc", default="",
               help="Documentation string associated with this collection. "
               "Only relevant if the collection is newly created.")
 @click.option("--flatten/--no-flatten", default=False,
               help="If `True` recursively flatten out any nested chained collections in children first.")
+@click.option("--mode",
+              type=click.Choice(["redefine", "extend", "remove"]),
+              default="redefine",
+              help="Update mode: "
+              "'redefine': Create new chain or redefine existing chain with the supplied CHILDREN. "
+              "'remove': Modify existing chain to remove the supplied CHILDREN. "
+              "'extend': Modify existing chain to extend it with the supplied CHILDREN.")
 def collection_chain(**kwargs):
     """Define a collection chain.
 
     PARENT is the name of the chained collection to create. If the collection
     already exists the chain associated with it will be updated.
-    CHILDREN are the collections to be included in the chain in order.
+
+    CHILDREN are the collections to be used to modify the chain. The exact
+    usage depends on the MODE option.
     """
     script.collectionChain(**kwargs)

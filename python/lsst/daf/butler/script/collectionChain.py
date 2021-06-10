@@ -25,7 +25,7 @@ from .. import Butler, CollectionType
 from ..registry import MissingCollectionError
 
 
-def collectionChain(repo, parent, children, doc, flatten):
+def collectionChain(repo, mode, parent, children, doc, flatten, pop):
     """Get the collections whose names match an expression.
 
     Parameters
@@ -33,6 +33,13 @@ def collectionChain(repo, parent, children, doc, flatten):
     repo : `str`
         URI to the location of the repo or URI to a config file describing the
         repo and its location.
+    mode : `str`
+        Update mode for this chain. Options are:
+        'redefine': Create or modify ``parent`` to be defined by the supplied
+        ``children``.
+        'remove': Modify existing chain to remove ``children`` from it.
+        'extend': Modify existing chain to add ``children`` to the end of it.
+        This is the same as 'redefine' if the chain does not exist.
     parent: `str`
         Name of the chained collection to update. Will be created if it
         does not exist already.
@@ -44,16 +51,49 @@ def collectionChain(repo, parent, children, doc, flatten):
     flatten : `str`
         If `True`, recursively flatten out any nested
         `~CollectionType.CHAINED` collections in ``children`` first.
+    pop : `bool`
+        Pop the first collection off the chain. Can not be used if ``children``
+        are given. The ``parent`` collection must exist.
     """
-
     butler = Butler(repo, writeable=True)
+
+    if pop:
+        if children:
+            raise RuntimeError("Can not provide children if using 'pop'")
+
+        children = butler.registry.getCollectionChain(parent)[1:]
+        butler.registry.setCollectionChain(parent, children)
+        return
+
+    # All other options require children.
+    if not children:
+        raise RuntimeError("Must provide children when defining a collection chain.")
 
     try:
         butler.registry.getCollectionType(parent)
     except MissingCollectionError:
-        # Create it
-        if not doc:
-            doc = None
-        butler.registry.registerCollection(parent, CollectionType.CHAINED, doc)
+        # Create it -- but only if mode is redefine or extend
+        if mode in ("redefine", "extend"):
+            if not doc:
+                doc = None
+            butler.registry.registerCollection(parent, CollectionType.CHAINED, doc)
+        else:
+            raise RuntimeError(f"Mode '{mode}' requires that the collection exists "
+                               f"but collection '{parent}' is not known to this registry") from None
+
+    current = list(butler.registry.getCollectionChain(parent))
+
+    if mode == "redefine":
+        # Given children are what we want.
+        pass
+    elif mode == "extend":
+        current.extend(children)
+        children = current
+    elif mode == "remove":
+        for child in children:
+            current.remove(child)
+        children = current
+    else:
+        raise ValueError(f"Unrecognized update mode: '{mode}'")
 
     butler.registry.setCollectionChain(parent, children, flatten=flatten)
