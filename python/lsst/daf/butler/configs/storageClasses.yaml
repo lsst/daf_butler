@@ -35,11 +35,13 @@ storageClasses:
     pytype: lsst.afw.image.Image
     delegate: lsst.obs.base.exposureAssembler.ExposureAssembler
     parameters:
-      - bbox    # Load a subimage defined by this box (`lsst.afw.geom.Box2I`).
+      # Load a subimage defined by this box (`lsst.afw.geom.Box2I`).
+      - bbox
 
-      - origin  # Coordinate system for ``bbox`` (`lsst.afw.image.ImageOrigin`)
-                #
-                # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
+      # Coordinate system for ``bbox`` (`lsst.afw.image.ImageOrigin`)
+      #
+      # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
+      - origin
 
   ImageF:
     inheritsFrom: Image
@@ -59,11 +61,13 @@ storageClasses:
     pytype: lsst.afw.image.Mask
     delegate: lsst.obs.base.exposureAssembler.ExposureAssembler
     parameters:
-      - bbox    # Load a subimage defined by this box (`lsst.afw.geom.Box2I`).
+      # Load a subimage defined by this box (`lsst.afw.geom.Box2I`).
+      - bbox
 
-      - origin  # Coordinate system for ``bbox`` (`lsst.afw.image.ImageOrigin`)
-                #
-                # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
+      # Coordinate system for ``bbox`` (`lsst.afw.image.ImageOrigin`)
+      #
+      # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
+      - origin
   MaskX:
     inheritsFrom: Mask
     pytype: lsst.afw.image.MaskX
@@ -131,44 +135,46 @@ storageClasses:
     pytype: lsst.afw.image.Exposure
     delegate: lsst.obs.base.exposureAssembler.ExposureAssembler
     parameters:
-      - bbox    # Load a subimage defined by this box (`lsst.afw.geom.Box2I`).
 
-      - origin  # Coordinate system for ``bbox`` (`lsst.afw.image.ImageOrigin`)
-                #
-                # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
+      # Load a subimage defined by this box (`lsst.afw.geom.Box2I`).
+      - bbox
 
-      - amp     # Amplifier whose subimage to load (`int` ID, `str` name, or
-                # `lsst.afw.cameraGeom.Amplifier`).
-                #
-                # If the on-disk dataset does not have a detector associated
-                # with it, the ``detector`` parameter must be provided as well.
-                # (raw images should always have their own detector; other
-                # images have a detector if and only if one was attached to
-                # them before they were saved).
-                #
-                # If an `~lsst.afw.cameraGeom.Amplifier` is given, the loaded
-                # image will have a single-amp `lsst.afw.cameraGeom.Detector`
-                # attached, containing exactly that amplifier (with the image
-                # filled accordingly).  `ValueError` is raised if the
-                # amplifiers have fundamentally inconsistent geometry (i.e.
-                # cannot be reconciled by flipping).
-                #
-                # If an `int` amplifier ID or `str` name is given, the
-                # orientation of the image is implementation-defined, but will
-                # be reflected in the "raw flip" attributes of the only
-                # amplifier in its attached detector.
-                #
-                # In all cases the trim state of the returned image is exactly
-                # the same as how the image was saved (raws are untrimmed).
+      # Coordinate system for ``bbox`` (`lsst.afw.image.ImageOrigin`)
+      #
+      # Defaults to ``PARENT``.  Ignored if ``bbox`` is not present.
+      - origin
 
-      - detector  # Full detector to use when loading amplifiers
-                  # (`lsst.afw.cameraGeom.Detector`).
-                  #
-                  # Must be provided when the on-disk dataset does not have its
-                  # own detector and ``amp`` is passed; ignored otherwise.
-                  # When provided, its amplifier orientations (encoded in the
-                  # "raw flip" attributes) must be consistent with the on-disk
-                  # image.
+      # Amplifier whose subimage to load (`int` ID, `str` name, or
+      # `lsst.afw.cameraGeom.Amplifier`).
+      #
+      # If the on-disk dataset does not have a detector associated with it, the
+      # ``detector`` parameter must be provided as well.  (raw images should
+      # always have their own detector; other images have a detector if and
+      # only if one was attached to them before they were saved).
+      #
+      # If an `~lsst.afw.cameraGeom.Amplifier` is given, the loaded image will
+      # have a single-amp `lsst.afw.cameraGeom.Detector` attached, containing
+      # exactly that amplifier (with the image filled accordingly).
+      # `ValueError` is raised if the amplifiers have fundamentally
+      # inconsistent geometry (i.e.  cannot be reconciled by flipping).
+      #
+      # If an `int` amplifier ID or `str` name is given, the orientation of the
+      # image is implementation-defined, but will be reflected in the "raw
+      # flip" attributes of the only amplifier in its attached detector.
+      #
+      # In all cases the trim state of the returned image is exactly the same
+      # as how the image was saved (raws are untrimmed).
+      - amp
+
+      # Full detector to use when loading amplifiers
+      # (`lsst.afw.cameraGeom.Detector`).
+      #
+      # Must be provided when the on-disk dataset does not have its own detector
+      # and ``amp`` is passed; ignored otherwise.  When provided, its amplifier
+      # orientations (encoded in the "raw flip" attributes) must be consistent
+      # with the on-disk image.
+      - detector
+
     components:
       image: Image
       mask: Mask
