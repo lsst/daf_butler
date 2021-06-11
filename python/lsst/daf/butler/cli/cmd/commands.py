@@ -503,27 +503,39 @@ def transfer_datasets(**kwargs):
 @repo_argument(required=True)
 @click.argument("parent", required=True, nargs=1)
 @click.argument("children", required=False, nargs=-1)
-@click.option("--pop", is_flag=True, default=False,
-              help="Pop the first collection off the chain. Can not be used if CHILDREN are given.")
 @click.option("--doc", default="",
               help="Documentation string associated with this collection. "
               "Only relevant if the collection is newly created.")
 @click.option("--flatten/--no-flatten", default=False,
               help="If `True` recursively flatten out any nested chained collections in children first.")
 @click.option("--mode",
-              type=click.Choice(["redefine", "extend", "remove"]),
+              type=click.Choice(["redefine", "extend", "remove", "prepend", "pop"]),
               default="redefine",
               help="Update mode: "
               "'redefine': Create new chain or redefine existing chain with the supplied CHILDREN. "
               "'remove': Modify existing chain to remove the supplied CHILDREN. "
+              "'pop': Pop a numbered element off the chain. Defaults to popping "
+              "the first element (0). ``children`` must be integers if given. "
+              "'prepend': Modify existing chain to prepend the supplied CHILDREN to the front. "
               "'extend': Modify existing chain to extend it with the supplied CHILDREN.")
 def collection_chain(**kwargs):
     """Define a collection chain.
 
-    PARENT is the name of the chained collection to create. If the collection
-    already exists the chain associated with it will be updated.
+    PARENT is the name of the chained collection to create or modify. If the
+    collection already exists the chain associated with it will be updated.
 
     CHILDREN are the collections to be used to modify the chain. The exact
-    usage depends on the MODE option.
+    usage depends on the MODE option. When the MODE is 'pop' the CHILDREN
+    should be integer indices indicating collections to be removed from
+    the current chain.
+
+    MODE 'pop' can take negative integers to indicate removal relative to the
+    end of the chain, but when doing that '--' must be given to indicate the
+    end of the options specification.
+
+    $ butler collection-chain REPO --mode=pop PARENT -- -1
+
+    Will remove the final collection from the chain.
     """
-    script.collectionChain(**kwargs)
+    chain = script.collectionChain(**kwargs)
+    print(f"[{', '.join(chain)}]")

@@ -25,7 +25,7 @@ from .. import Butler, CollectionType
 from ..registry import MissingCollectionError
 
 
-def collectionChain(repo, mode, parent, children, doc, flatten, pop):
+def collectionChain(repo, mode, parent, children, doc, flatten):
     """Get the collections whose names match an expression.
 
     Parameters
@@ -38,8 +38,12 @@ def collectionChain(repo, mode, parent, children, doc, flatten, pop):
         'redefine': Create or modify ``parent`` to be defined by the supplied
         ``children``.
         'remove': Modify existing chain to remove ``children`` from it.
+        'prepend': Add the given ``children`` to the beginning of the chain.
         'extend': Modify existing chain to add ``children`` to the end of it.
-        This is the same as 'redefine' if the chain does not exist.
+        'pop': Pop a numbered element off the chain. Defaults to popping
+        the first element (0). ``children`` must be integers if given.
+        Both 'prepend' and 'extend' are the same as 'redefine' if the chain
+        does not exist.
     parent: `str`
         Name of the chained collection to update. Will be created if it
         does not exist already.
@@ -51,29 +55,23 @@ def collectionChain(repo, mode, parent, children, doc, flatten, pop):
     flatten : `str`
         If `True`, recursively flatten out any nested
         `~CollectionType.CHAINED` collections in ``children`` first.
-    pop : `bool`
-        Pop the first collection off the chain. Can not be used if ``children``
-        are given. The ``parent`` collection must exist.
+
+    Returns
+    -------
+    chain : `tuple` of `str`
+        The collections in the chain following this command.
     """
     butler = Butler(repo, writeable=True)
 
-    if pop:
-        if children:
-            raise RuntimeError("Can not provide children if using 'pop'")
-
-        children = butler.registry.getCollectionChain(parent)[1:]
-        butler.registry.setCollectionChain(parent, children)
-        return
-
-    # All other options require children.
-    if not children:
-        raise RuntimeError("Must provide children when defining a collection chain.")
+    # Every mode needs children except pop.
+    if not children and mode != "pop":
+        raise RuntimeError(f"Must provide children when defining a collection chain in mode {mode}.")
 
     try:
         butler.registry.getCollectionType(parent)
     except MissingCollectionError:
-        # Create it -- but only if mode is redefine or extend
-        if mode in ("redefine", "extend"):
+        # Create it -- but only if mode can work with empty chain.
+        if mode in ("redefine", "extend", "prepend"):
             if not doc:
                 doc = None
             butler.registry.registerCollection(parent, CollectionType.CHAINED, doc)
@@ -86,6 +84,8 @@ def collectionChain(repo, mode, parent, children, doc, flatten, pop):
     if mode == "redefine":
         # Given children are what we want.
         pass
+    elif mode == "prepend":
+        children = tuple(children) + tuple(current)
     elif mode == "extend":
         current.extend(children)
         children = current
@@ -93,7 +93,35 @@ def collectionChain(repo, mode, parent, children, doc, flatten, pop):
         for child in children:
             current.remove(child)
         children = current
+    elif mode == "pop":
+        if children:
+            n_current = len(current)
+
+            def convert_index(i):
+                """Convert negative index to positive."""
+                if i >= 0:
+                    return i
+                return n_current + i
+
+            # For this mode the children should be integers.
+            # Convert negative integers to positive ones to allow
+            # sorting.
+            children = [convert_index(int(child)) for child in children]
+
+            # Reverse sort order so we can remove from the end first
+            children = reversed(sorted(children))
+
+        else:
+            # Nothing specified, pop from the front of the chin.
+            children = [0]
+
+        for i in children:
+            current.pop(i)
+
+        children = current
     else:
         raise ValueError(f"Unrecognized update mode: '{mode}'")
 
     butler.registry.setCollectionChain(parent, children, flatten=flatten)
+
+    return tuple(butler.registry.getCollectionChain(parent))
