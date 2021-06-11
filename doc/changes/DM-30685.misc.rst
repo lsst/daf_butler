@@ -1,0 +1,2 @@
+If an unrecognized dimension is used as a look up key in a configuration file (using the ``+`` syntax) a warning is used suggesting a possible typo rather than a confusing `KeyError`.
+This is no longer a fatal error and the key will be treated as a name.
