@@ -26,6 +26,7 @@ from astropy.table import Table
 from numpy import array
 import os
 import unittest
+from typing import List
 
 from lsst.daf.butler import (
     Butler,
@@ -118,6 +119,12 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
     def setUp(self):
         self.runner = LogCliRunner()
 
+    def assertChain(self, args: List[str], expected: str):
+        """Run collection-chain and check the expected result"""
+        result = self.runner.invoke(cli, ["collection-chain", "here", *args])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertEqual(result.output.strip(), expected, clickResultMsg(result))
+
     def testChained(self):
         with self.runner.isolated_filesystem():
 
@@ -135,10 +142,12 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             registry1.registerRun("run1")
             registry1.registerCollection("tag1", CollectionType.TAGGED)
             registry1.registerCollection("calibration1", CollectionType.CALIBRATION)
-            registry1.registerCollection("chain1", CollectionType.CHAINED)
-            registry1.registerCollection("chain2", CollectionType.CHAINED)
-            registry1.setCollectionChain("chain1", ["tag1", "run1", "chain2"])
-            registry1.setCollectionChain("chain2", ["calibration1", "run1"])
+
+            # Create the collection chain
+            self.assertChain(["chain2", "calibration1", "run1"],
+                             "[calibration1, run1]")
+            self.assertChain(["--mode", "redefine", "chain1", "tag1", "run1", "chain2"],
+                             "[tag1, run1, chain2]")
 
             # Use the script function to test the query-collections TREE
             # option, because the astropy.table.Table.read method, which we are
@@ -154,15 +163,15 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
                                     ("run1", "RUN"),
                                     ("tag1", "TAGGED"),
                                     ("calibration1", "CALIBRATION"),
+                                    ("chain2", "CHAINED"),
+                                    ("  calibration1", "CALIBRATION"),
+                                    ("  run1", "RUN"),
                                     ("chain1", "CHAINED"),
                                     ("  tag1", "TAGGED"),
                                     ("  run1", "RUN"),
                                     ("  chain2", "CHAINED"),
                                     ("    calibration1", "CALIBRATION"),
-                                    ("    run1", "RUN"),
-                                    ("chain2", "CHAINED"),
-                                    ("  calibration1", "CALIBRATION"),
-                                    ("  run1", "RUN"))),
+                                    ("    run1", "RUN"))),
                              names=("Name", "Type"))
             self.assertAstropyTablesEqual(table, expected)
 
@@ -174,8 +183,8 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
                 ("run1", "RUN", ""),
                 ("tag1", "TAGGED", ""),
                 ("calibration1", "CALIBRATION", ""),
-                ("chain1", "CHAINED", "[tag1, run1, chain2]"),
-                ("chain2", "CHAINED", "[calibration1, run1]"))),
+                ("chain2", "CHAINED", "[calibration1, run1]"),
+                ("chain1", "CHAINED", "[tag1, run1, chain2]"))),
                 names=("Name", "Type", "Definition"))
             table = readTable(result.output)
             self.assertAstropyTablesEqual(readTable(result.output), expected)
@@ -188,13 +197,38 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
                 ("run1", "RUN"),
                 ("tag1", "TAGGED"),
                 ("calibration1", "CALIBRATION"),
+                ("calibration1", "CALIBRATION"),
+                ("run1", "RUN"),
                 ("tag1", "TAGGED"),
                 ("run1", "RUN"),
-                ("calibration1", "CALIBRATION"),
-                ("calibration1", "CALIBRATION"),
-                ("run1", "RUN"))),
+                ("calibration1", "CALIBRATION"))),
                 names=("Name", "Type"))
             self.assertAstropyTablesEqual(readTable(result.output), expected)
+
+            # Add a couple more run collections for chain testing
+            registry1.registerRun("run2")
+            registry1.registerRun("run3")
+
+            self.assertChain(["--mode", "pop", "chain1"],
+                             "[run1, chain2]")
+
+            self.assertChain(["--mode", "extend", "chain1", "run2", "run3"],
+                             "[run1, chain2, run2, run3]")
+
+            self.assertChain(["--mode", "remove", "chain1", "chain2", "run2"],
+                             "[run1, run3]")
+
+            self.assertChain(["--mode", "prepend", "chain1", "chain2", "run2"],
+                             "[chain2, run2, run1, run3]")
+
+            self.assertChain(["--mode", "pop", "chain1", "1", "3"],
+                             "[chain2, run1]")
+
+            self.assertChain(["--mode", "redefine", "chain1", "chain2", "run2", "run3", "--flatten"],
+                             "[calibration1, run1, run2, run3]")
+
+            self.assertChain(["--mode", "pop", "chain1", "--", "-1", "-3"],
+                             "[calibration1, run2]")
 
 
 if __name__ == "__main__":
