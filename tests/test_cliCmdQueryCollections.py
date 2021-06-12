@@ -26,6 +26,7 @@ from astropy.table import Table
 from numpy import array
 import os
 import unittest
+from typing import List
 
 from lsst.daf.butler import (
     Butler,
@@ -118,6 +119,12 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
     def setUp(self):
         self.runner = LogCliRunner()
 
+    def assertChain(self, args: List[str], expected: str):
+        """Run collection-chain and check the expected result"""
+        result = self.runner.invoke(cli, ["collection-chain", "here", *args])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertEqual(result.output.strip(), expected, clickResultMsg(result))
+
     def testChained(self):
         with self.runner.isolated_filesystem():
 
@@ -137,10 +144,10 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             registry1.registerCollection("calibration1", CollectionType.CALIBRATION)
 
             # Create the collection chain
-            result = self.runner.invoke(cli, ["collection-chain", "here", "chain2", "calibration1", "run1"])
-            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            result = self.runner.invoke(cli, ["collection-chain", "here", "chain1", "tag1", "run1", "chain2"])
-            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertChain(["chain2", "calibration1", "run1"],
+                             "[calibration1, run1]")
+            self.assertChain(["--mode", "redefine", "chain1", "tag1", "run1", "chain2"],
+                             "[tag1, run1, chain2]")
 
             # Use the script function to test the query-collections TREE
             # option, because the astropy.table.Table.read method, which we are
@@ -197,6 +204,31 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
                 ("calibration1", "CALIBRATION"))),
                 names=("Name", "Type"))
             self.assertAstropyTablesEqual(readTable(result.output), expected)
+
+            # Add a couple more run collections for chain testing
+            registry1.registerRun("run2")
+            registry1.registerRun("run3")
+
+            self.assertChain(["--mode", "pop", "chain1"],
+                             "[run1, chain2]")
+
+            self.assertChain(["--mode", "extend", "chain1", "run2", "run3"],
+                             "[run1, chain2, run2, run3]")
+
+            self.assertChain(["--mode", "remove", "chain1", "chain2", "run2"],
+                             "[run1, run3]")
+
+            self.assertChain(["--mode", "prepend", "chain1", "chain2", "run2"],
+                             "[chain2, run2, run1, run3]")
+
+            self.assertChain(["--mode", "pop", "chain1", "1", "3"],
+                             "[chain2, run1]")
+
+            self.assertChain(["--mode", "redefine", "chain1", "chain2", "run2", "run3", "--flatten"],
+                             "[calibration1, run1, run2, run3]")
+
+            self.assertChain(["--mode", "pop", "chain1", "--", "-1", "-3"],
+                             "[calibration1, run2]")
 
 
 if __name__ == "__main__":
