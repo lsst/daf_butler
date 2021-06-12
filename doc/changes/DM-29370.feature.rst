@@ -1,0 +1,1 @@
+Add ``amp`` parameter to the Exposure StorageClass, allowing single-amplifier subimage reads.
