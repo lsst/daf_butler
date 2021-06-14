@@ -31,6 +31,8 @@ from lsst.utils import doImport
 from lsst.daf.butler import StorageClassFactory, StorageClass, DimensionUniverse, FileDataset
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError, DatastoreValidationError
 from lsst.daf.butler.formatters.yaml import YamlFormatter
+from lsst.daf.butler import (DatastoreCacheManager, DatastoreDisabledCacheManager,
+                             DatastoreCacheManagerConfig, Config, ButlerURI)
 
 from lsst.daf.butler.tests import (DatasetTestHelper, DatastoreTestHelper, BadWriteFormatter,
                                    BadNoWriteFormatter, MetricsExample, DummyRegistry)
@@ -1023,6 +1025,110 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
                     with self.assertRaises(DatasetTypeNotSupportedError):
                         datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
                     self.assertFalse(datastore.exists(ref))
+
+
+class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
+    """Tests for datastore caching infrastructure."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.storageClassFactory = StorageClassFactory()
+        cls.universe = DimensionUniverse()
+
+    def setUp(self):
+        self.id = 0
+
+        # Create a root that we can use for caching tests.
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+
+        # Create some test dataset refs and associated test files
+        sc = self.storageClassFactory.getStorageClass("StructuredDataDict")
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V"}
+
+        # Create list of refs and list of temporary files
+        n_datasets = 2
+        self.refs = [self.makeDatasetRef(f"metric{n}", dimensions, sc, dataId,
+                                         conform=False) for n in range(n_datasets)]
+
+        root_uri = ButlerURI(self.root, forceDirectory=True)
+        self.files = [root_uri.join(f"file{n}.txt") for n in range(n_datasets)]
+
+        # Create empty files
+        for uri in self.files:
+            uri.write(b"")
+
+    def tearDown(self):
+        if self.root is not None and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
+
+    def _make_cache_manager(self, config_str: str) -> DatastoreCacheManager:
+        config = Config.fromYaml(config_str)
+        return DatastoreCacheManager(DatastoreCacheManagerConfig(config), universe=self.universe)
+
+    def testNoCacheDir(self):
+        config_str = """
+cached:
+  root: null
+  cacheable:
+    metric0: true
+        """
+        cache_manager = self._make_cache_manager(config_str)
+
+        # Look inside to check we don't have a cache directory
+        self.assertIsNone(cache_manager._cache_directory)
+
+        self.assertCache(cache_manager)
+
+        # Test that the cache directory is marked temporary
+        self.assertTrue(cache_manager.cache_directory.isTemporary)
+
+    def testExplicitCacheDir(self):
+        config_str = f"""
+cached:
+  root: '{self.root}'
+  cacheable:
+    metric0: true
+        """
+        cache_manager = self._make_cache_manager(config_str)
+
+        # Look inside to check we do have a cache directory.
+        self.assertEqual(cache_manager.cache_directory,
+                         ButlerURI(self.root, forceDirectory=True))
+
+        self.assertCache(cache_manager)
+
+        # Test that the cache directory is not marked temporary
+        self.assertFalse(cache_manager.cache_directory.isTemporary)
+
+    def assertCache(self, cache_manager):
+        self.assertTrue(cache_manager.should_be_cached(self.refs[0]))
+        self.assertFalse(cache_manager.should_be_cached(self.refs[1]))
+
+        uri = cache_manager.move_to_cache(self.files[0], self.refs[0])
+        self.assertIsInstance(uri, ButlerURI)
+        self.assertIsNone(cache_manager.move_to_cache(self.files[1], self.refs[1]))
+
+        # Cached file should no longer exist but uncached file should be
+        # unaffectted.
+        self.assertFalse(self.files[0].exists())
+        self.assertTrue(self.files[1].exists())
+
+        # Should find this file and it should be within the cache directory.
+        found = cache_manager.find_in_cache(self.refs[0], ".txt")
+        self.assertTrue(found.exists())
+        self.assertIsNotNone(found.relative_to(cache_manager.cache_directory))
+
+        # Should not be able to find these in cache
+        self.assertIsNone(cache_manager.find_in_cache(self.refs[0], ".fits"))
+        self.assertIsNone(cache_manager.find_in_cache(self.refs[1], ".fits"))
+
+    def testNoCache(self):
+        cache_manager = DatastoreDisabledCacheManager("", universe=self.universe)
+        for uri, ref in zip(self.files, self.refs):
+            self.assertFalse(cache_manager.should_be_cached(ref))
+            self.assertIsNone(cache_manager.move_to_cache(uri, ref))
+            self.assertIsNone(cache_manager.find_in_cache(ref, ".txt"))
 
 
 if __name__ == "__main__":
