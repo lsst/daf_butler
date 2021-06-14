@@ -55,6 +55,9 @@ log = logging.getLogger(__name__)
 class DatastoreCacheManagerConfig(ConfigSubset):
     """Configuration information for `DatastoreCacheManager`."""
 
+    component = "cached"
+    requiredKeys = ("cacheable",)
+
 
 class AbstractDatastoreCacheManager(ABC):
     """An abstract base class for managing caching in a Datastore.
