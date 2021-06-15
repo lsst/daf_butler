@@ -870,6 +870,7 @@ class SqlRegistry(Registry):
                     dimensions=dimensions,
                     dataId=standardizedDataId,
                     where=where,
+                    bind=bind,
                     findFirst=findFirst,
                     check=check,
                 )

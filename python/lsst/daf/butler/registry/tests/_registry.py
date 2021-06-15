@@ -1888,3 +1888,17 @@ class RegistryTests(ABC):
             set(registry.queryDataIds(["visit", "detector"],
                                       where="instrument='Cam1' AND skymap='not_here' AND tract=0")),
         )
+
+    def testBindInQueryDatasets(self):
+        """Test that the bind parameter is correctly forwarded in
+        queryDatasets recursion.
+        """
+        registry = self.makeRegistry()
+        # Importing datasets from yaml should go through the code path where
+        # we update collection summaries as we insert datasets.
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        self.assertEqual(
+            set(registry.queryDatasets("flat", band="r", collections=...)),
+            set(registry.queryDatasets("flat", where="band=my_band", bind={"my_band": "r"}, collections=...)),
+        )
