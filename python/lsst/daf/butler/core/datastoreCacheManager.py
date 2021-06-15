@@ -55,6 +55,9 @@ log = logging.getLogger(__name__)
 class DatastoreCacheManagerConfig(ConfigSubset):
     """Configuration information for `DatastoreCacheManager`."""
 
+    component = "cached"
+    requiredKeys = ("cacheable",)
+
 
 class AbstractDatastoreCacheManager(ABC):
     """An abstract base class for managing caching in a Datastore.
@@ -156,14 +159,21 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
                  universe: DimensionUniverse):
         super().__init__(config, universe)
 
-        if (root := self.config.get("root")):
-            self.cache_directory = ButlerURI(root, forceAbsolute=True)
-        else:
-            self.cache_directory = ButlerURI(tempfile.mkdtemp(prefix="butler-"), forceDirectory=True,
-                                             isTemporary=True)
+        # Set cache directory if it pre-exists, else defer creation until
+        # requested.
+        root = self.config.get("root")
+        self._cache_directory = ButlerURI(root, forceAbsolute=True) if root is not None else None
 
         # Calculate the caching lookup table.
         self._lut = processLookupConfigs(self.config["cacheable"], universe=universe)
+
+    @property
+    def cache_directory(self) -> ButlerURI:
+        if self._cache_directory is None:
+            # Create on demand.
+            self._cache_directory = ButlerURI(tempfile.mkdtemp(prefix="butler-"), forceDirectory=True,
+                                              isTemporary=True)
+        return self._cache_directory
 
     def should_be_cached(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
         # Docstring inherited
