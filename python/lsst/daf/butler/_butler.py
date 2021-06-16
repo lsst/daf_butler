@@ -1705,7 +1705,6 @@ class Butler:
         else:
             doImport(filename)
 
-    @transactional
     def transfer_from(self, source_butler: Butler, source_refs: Iterable[DatasetRef],
                       transfer: str = "auto",
                       id_gen_map: Dict[str, DatasetIdGenEnum] = None) -> List[DatasetRef]:
@@ -1738,6 +1737,11 @@ class Butler:
         to be made but non-existence is not an error.
 
         Datasets that already exist in this run will be skipped.
+
+        The datasets are imported as part of a transaction, although
+        dataset types are registered before the transaction is started.
+        This means that it is possible for a dataset type to be registered
+        even though transfer has failed.
         """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
@@ -1761,6 +1765,11 @@ class Butler:
             grouped_refs[ref.datasetType, ref.run].append(ref)
             grouped_indices[ref.datasetType, ref.run].append(i)
 
+        # Register any dataset types we need. This has to be done outside
+        # of a transaction and so will not be rolled back on failure.
+        for datasetType, _ in grouped_refs:
+            self.registry.registerDatasetType(datasetType)
+
         # The returned refs should be identical for UUIDs.
         # For now must also support integers and so need to retain the
         # newly-created refs from this registry.
@@ -1768,54 +1777,56 @@ class Butler:
         transferred_refs_tmp: List[Optional[DatasetRef]] = [None] * len(source_refs)
         default_id_gen = DatasetIdGenEnum.UNIQUE
 
-        for (datasetType, run), refs_to_import in progress.iter_item_chunks(grouped_refs.items(),
-                                                                            desc="Importing to registry by "
-                                                                            "run and dataset type"):
-            run_doc = source_butler.registry.getCollectionDocumentation(run)
-            self.registry.registerCollection(run, CollectionType.RUN, doc=run_doc)
+        # Do all the importing in a single transaction.
+        with self.transaction():
+            for (datasetType, run), refs_to_import in progress.iter_item_chunks(grouped_refs.items(),
+                                                                                desc="Importing to registry"
+                                                                                " by run and dataset type"):
+                run_doc = source_butler.registry.getCollectionDocumentation(run)
+                self.registry.registerCollection(run, CollectionType.RUN, doc=run_doc)
 
-            id_generation_mode = default_id_gen
-            if isinstance(refs_to_import[0].id, int):
-                # ID generation mode might need to be overridden when
-                # targetting UUID
-                id_generation_mode = id_gen_map.get(datasetType.name, default_id_gen)
+                id_generation_mode = default_id_gen
+                if isinstance(refs_to_import[0].id, int):
+                    # ID generation mode might need to be overridden when
+                    # targetting UUID
+                    id_generation_mode = id_gen_map.get(datasetType.name, default_id_gen)
 
-            n_refs = len(refs_to_import)
-            log.log(VERBOSE, "Importing %d ref%s of dataset type %s into run %s",
-                    n_refs, "" if n_refs == 1 else "s", datasetType.name, run)
+                n_refs = len(refs_to_import)
+                log.log(VERBOSE, "Importing %d ref%s of dataset type %s into run %s",
+                        n_refs, "" if n_refs == 1 else "s", datasetType.name, run)
 
-            # No way to know if this butler's registry uses UUID.
-            # We have to trust the caller on this. If it fails they will have
-            # to change their approach. We can't catch the exception and
-            # retry with unique because that will mess up the transaction
-            # handling. We aren't allowed to ask the registry manager what
-            # type of ID it is using.
-            imported_refs = self.registry._importDatasets(refs_to_import,
-                                                          idGenerationMode=id_generation_mode,
-                                                          expand=False)
+                # No way to know if this butler's registry uses UUID.
+                # We have to trust the caller on this. If it fails they will
+                # have to change their approach. We can't catch the exception
+                # and retry with unique because that will mess up the
+                # transaction handling. We aren't allowed to ask the registry
+                # manager what type of ID it is using.
+                imported_refs = self.registry._importDatasets(refs_to_import,
+                                                              idGenerationMode=id_generation_mode,
+                                                              expand=False)
 
-            # Map them into the correct slots to match the initial order
-            for i, ref in zip(grouped_indices[datasetType, run], imported_refs):
-                transferred_refs_tmp[i] = ref
+                # Map them into the correct slots to match the initial order
+                for i, ref in zip(grouped_indices[datasetType, run], imported_refs):
+                    transferred_refs_tmp[i] = ref
 
-        # Mypy insists that we might have None in here so we have to make
-        # that explicit by assigning to a new variable and filtering out
-        # something that won't be there.
-        transferred_refs = [ref for ref in transferred_refs_tmp if ref is not None]
+            # Mypy insists that we might have None in here so we have to make
+            # that explicit by assigning to a new variable and filtering out
+            # something that won't be there.
+            transferred_refs = [ref for ref in transferred_refs_tmp if ref is not None]
 
-        # Check consistency
-        assert len(source_refs) == len(transferred_refs), "Different number of refs imported than given"
+            # Check consistency
+            assert len(source_refs) == len(transferred_refs), "Different number of refs imported than given"
 
-        log.log(VERBOSE, "Imported %d datasets into destination butler", len(transferred_refs))
+            log.log(VERBOSE, "Imported %d datasets into destination butler", len(transferred_refs))
 
-        # The transferred refs need to be reordered to match the original
-        # ordering given by the caller. Without this the datastore transfer
-        # will be broken.
+            # The transferred refs need to be reordered to match the original
+            # ordering given by the caller. Without this the datastore transfer
+            # will be broken.
 
-        # Ask the datastore to transfer. The datastore has to check that
-        # the source datastore is compatible with the target datastore.
-        self.datastore.transfer_from(source_butler.datastore, source_refs,
-                                     local_refs=transferred_refs, transfer=transfer)
+            # Ask the datastore to transfer. The datastore has to check that
+            # the source datastore is compatible with the target datastore.
+            self.datastore.transfer_from(source_butler.datastore, source_refs,
+                                         local_refs=transferred_refs, transfer=transfer)
 
         return transferred_refs
 
