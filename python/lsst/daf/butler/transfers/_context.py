@@ -189,7 +189,8 @@ class RepoExportContext:
             References to the datasets to export.  Their `DatasetRef.id`
             attributes must not be `None`.  Duplicates are automatically
             ignored.  Nested data IDs must have `DataCoordinate.hasRecords`
-            return `True`.
+            return `True`.  If any reference is to a component dataset, the
+            parent will be exported instead.
         elements : iterable of `DimensionElement` or `str`, optional
             Dimension elements whose records should be exported; this is
             forwarded to `saveDataIds` when exporting the data IDs of the
@@ -213,6 +214,8 @@ class RepoExportContext:
             # convenience.
             if ref.id in self._dataset_ids:
                 continue
+            if ref.isComponent():
+                ref = ref.makeCompositeRef()
             dataIds.add(ref.dataId)
             # `exports` is a single-element list here, because we anticipate
             # a future where more than just Datastore.export has a vectorized
