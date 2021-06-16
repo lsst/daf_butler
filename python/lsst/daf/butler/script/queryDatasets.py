@@ -160,7 +160,7 @@ class QueryDatasets:
         self.datasets = self.butler.registry.queryDatasets(datasetType=glob,
                                                            collections=collections,
                                                            where=where,
-                                                           findFirst=find_first)
+                                                           findFirst=find_first).expanded()
 
     def getTables(self):
         """Get the datasets as a list of astropy tables.
@@ -175,7 +175,8 @@ class QueryDatasets:
             if not self.showUri:
                 tables[datasetRef.datasetType.name].add(datasetRef)
             else:
-                primaryURI, componentURIs = self.butler.getURIs(datasetRef, collections=datasetRef.run)
+                primaryURI, componentURIs = self.butler.getURIs(datasetRef, collections=datasetRef.run,
+                                                                predict=True)
                 if primaryURI:
                     tables[datasetRef.datasetType.name].add(datasetRef, primaryURI)
                 for name, uri in componentURIs.items():
