@@ -1707,7 +1707,8 @@ class Butler:
 
     def transfer_from(self, source_butler: Butler, source_refs: Iterable[DatasetRef],
                       transfer: str = "auto",
-                      id_gen_map: Dict[str, DatasetIdGenEnum] = None) -> List[DatasetRef]:
+                      id_gen_map: Dict[str, DatasetIdGenEnum] = None,
+                      skip_missing: bool = True) -> List[DatasetRef]:
         """Transfer datasets to this Butler from a run in another Butler.
 
         Parameters
@@ -1724,6 +1725,9 @@ class Butler:
             the source butler is using integer IDs. Should not be used
             if this receiving butler uses integer IDs. Without this dataset
             import always uses unique.
+        skip_missing : `bool`
+            If `True`, datasets with no datastore artifact associated with
+            them are not transferred.
 
         Returns
         -------
@@ -1756,6 +1760,15 @@ class Butler:
 
         if id_gen_map is None:
             id_gen_map = {}
+
+        # In some situations the datastore artifact may be missing
+        # and we do not want that registry entry to be imported.
+        # Asking datastore is not sufficient, the records may have been
+        # purged, we have to ask for the (predicted) URI and check
+        # existence explicitly. Execution butler is set up exactly like
+        # this with no datastore records.
+        if skip_missing:
+            source_refs = [ref for ref in source_refs if source_butler.datastore.exists(ref)]
 
         # Importing requires that we group the refs by dataset type and run
         # before doing the import.
