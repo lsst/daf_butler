@@ -584,6 +584,20 @@ class FileDatastore(GenericBaseDatastore):
 
         if len(fileLocations) > 1:
             disassembled = True
+
+            # If trust is involved it is possible that there will be
+            # components listed here that do not exist in the datastore.
+            # Explicitly check for file artifact existence and filter out any
+            # that are missing.
+            if self.trustGetRequest:
+                fileLocations = [loc for loc in fileLocations if loc[0].uri.exists()]
+
+                # For now complain only if we have no components at all. One
+                # component is probably a problem but we can punt that to the
+                # assembler.
+                if not fileLocations:
+                    raise FileNotFoundError(f"None of the component files for dataset {ref} exist.")
+
         else:
             disassembled = False
 
