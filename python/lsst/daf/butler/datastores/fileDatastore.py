@@ -1864,7 +1864,10 @@ class FileDatastore(GenericBaseDatastore):
             id_to_ref = {ref.id: ref for ref in refs if ref.id in missing_ids}
 
             for missing in missing_ids:
-                expected = self._get_expected_dataset_locations_info(id_to_ref[missing])
+                # Ask the source datastore where the missing artifacts
+                # should be.  An execution butler might not know about the
+                # artifacts even if they are there.
+                expected = source_datastore._get_expected_dataset_locations_info(id_to_ref[missing])
 
                 # Not all components can be guaranteed to exist so this
                 # list has to filter those by checking to see if the
