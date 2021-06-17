@@ -1849,13 +1849,22 @@ class FileDatastore(GenericBaseDatastore):
         # Need to map these missing IDs to a DatasetRef so we can guess
         # the details.
         if missing_ids:
-            log.info("Number of expected datasets missing from source datastore records: %d",
-                     len(missing_ids))
+            log.info("Number of expected datasets missing from source datastore records: %d out of %d",
+                     len(missing_ids), len(requested_ids))
             id_to_ref = {ref.id: ref for ref in refs if ref.id in missing_ids}
 
             for missing in missing_ids:
                 expected = self._get_expected_dataset_locations_info(id_to_ref[missing])
-                source_records[missing].extend(info for _, info in expected)
+
+                # Not all components can be guaranteed to exist so this
+                # list has to filter those by checking to see if the
+                # artifact is really there.
+                records = [info for location, info in expected if location.uri.exists()]
+                if records:
+                    source_records[missing].extend(records)
+                else:
+                    log.warning("Asked to transfer dataset %s but no file artifacts exist for it.",
+                                id_to_ref[missing])
 
         # See if we already have these records
         target_records = self._get_stored_records_associated_with_refs(local_refs)
