@@ -1200,7 +1200,17 @@ class FileDatastore(GenericBaseDatastore):
         if not fileLocations:
             if not self.trustGetRequest:
                 return False
-            fileLocations = self._get_expected_dataset_locations_info(ref)
+
+            # When we are guessing a dataset location we can not check
+            # for the existence of every component since we can not
+            # know if every component was written. Instead we check
+            # for the existence of any of the expected locations.
+            for location, _ in self._get_expected_dataset_locations_info(ref):
+                if self._artifact_exists(location):
+                    return True
+            return False
+
+        # All listed artifacts must exist.
         for location, _ in fileLocations:
             if not self._artifact_exists(location):
                 return False
