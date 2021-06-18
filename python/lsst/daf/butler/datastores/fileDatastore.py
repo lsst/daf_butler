@@ -1200,7 +1200,17 @@ class FileDatastore(GenericBaseDatastore):
         if not fileLocations:
             if not self.trustGetRequest:
                 return False
-            fileLocations = self._get_expected_dataset_locations_info(ref)
+
+            # When we are guessing a dataset location we can not check
+            # for the existence of every component since we can not
+            # know if every component was written. Instead we check
+            # for the existence of any of the expected locations.
+            for location, _ in self._get_expected_dataset_locations_info(ref):
+                if self._artifact_exists(location):
+                    return True
+            return False
+
+        # All listed artifacts must exist.
         for location, _ in fileLocations:
             if not self._artifact_exists(location):
                 return False
@@ -1849,13 +1859,25 @@ class FileDatastore(GenericBaseDatastore):
         # Need to map these missing IDs to a DatasetRef so we can guess
         # the details.
         if missing_ids:
-            log.info("Number of expected datasets missing from source datastore records: %d",
-                     len(missing_ids))
+            log.info("Number of expected datasets missing from source datastore records: %d out of %d",
+                     len(missing_ids), len(requested_ids))
             id_to_ref = {ref.id: ref for ref in refs if ref.id in missing_ids}
 
             for missing in missing_ids:
-                expected = self._get_expected_dataset_locations_info(id_to_ref[missing])
-                source_records[missing].extend(info for _, info in expected)
+                # Ask the source datastore where the missing artifacts
+                # should be.  An execution butler might not know about the
+                # artifacts even if they are there.
+                expected = source_datastore._get_expected_dataset_locations_info(id_to_ref[missing])
+
+                # Not all components can be guaranteed to exist so this
+                # list has to filter those by checking to see if the
+                # artifact is really there.
+                records = [info for location, info in expected if location.uri.exists()]
+                if records:
+                    source_records[missing].extend(records)
+                else:
+                    log.warning("Asked to transfer dataset %s but no file artifacts exist for it.",
+                                id_to_ref[missing])
 
         # See if we already have these records
         target_records = self._get_stored_records_associated_with_refs(local_refs)
