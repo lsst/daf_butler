@@ -114,6 +114,7 @@ class ButlerConfig(Config):
         configFile = butlerConfig.configFile
         if configFile is not None:
             uri = ButlerURI(configFile)
+            self.configFile = uri
             self.configDir = uri.dirname()
 
         # A Butler config contains defaults defined by each of the component
