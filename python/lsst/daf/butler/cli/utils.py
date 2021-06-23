@@ -490,7 +490,7 @@ class MWPath(click.Path):
         """Called by click.ParamType to "convert values through types".
         `click.Path` uses this step to verify Path conditions."""
         if self.mustNotExist and os.path.exists(value):
-            self.fail(f'{self.path_type} "{value}" should not exist.')
+            self.fail(f'Path "{value}" should not exist.')
         return super().convert(value, param, ctx)
 
 

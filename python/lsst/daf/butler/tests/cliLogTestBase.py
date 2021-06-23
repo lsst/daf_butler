@@ -63,10 +63,10 @@ def hasLsstLogHandler(logger):
 
 
 @click.command()
-@click.option("--expected-pyroot-level")
-@click.option("--expected-pybutler-level")
-@click.option("--expected-lsstroot-level")
-@click.option("--expected-lsstbutler-level")
+@click.option("--expected-pyroot-level", type=int)
+@click.option("--expected-pybutler-level", type=int)
+@click.option("--expected-lsstroot-level", type=int)
+@click.option("--expected-lsstbutler-level", type=int)
 def command_log_settings_test(expected_pyroot_level,
                               expected_pybutler_level,
                               expected_lsstroot_level,
@@ -92,7 +92,7 @@ def command_log_settings_test(expected_pyroot_level,
                                    "lsstButler")])
     for expected, actual, name in logLevels:
         if expected != actual:
-            raise(click.ClickException(f"expected {name} level to be {expected}, actual:{actual}"))
+            raise(click.ClickException(f"expected {name} level to be {expected!r}, actual:{actual!r}"))
 
 
 class CliLogTestBase():

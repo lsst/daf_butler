@@ -162,14 +162,11 @@ class SplitKvCmdTestCase(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with({"lsst.daf.butler": "BAR"})
 
-        # check invalid choices with and wihtout kv separators
+        # check that invalid choices with and wihtout kv separators fail &
+        # return a non-zero exit code.
         for val in ("BOZ", "lsst.daf.butler=BOZ"):
             result = self.runner.invoke(cli, ["--metasyntactic-var", val])
             self.assertNotEqual(result.exit_code, 0, msg=clickResultMsg(result))
-            self.assertRegex(result.output,
-                             r"Error: Invalid value for ['\"]\-\-metasyntactic-var['\"]:")
-            self.assertIn(f" invalid choice: BOZ. (choose from {', '.join(choices)})",
-                          result.output)
 
         # check value normalization (lower case "foo" should become "FOO")
         result = self.runner.invoke(cli, ["--metasyntactic-var", "lsst.daf.butler=foo"])
