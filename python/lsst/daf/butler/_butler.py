@@ -736,19 +736,14 @@ class Butler:
                                 dimensionName, newDataId[dimensionName], str(values))
                     continue
 
-                # Build up a WHERE expression -- use single quotes
-                def quote(s: Any) -> str:
-                    if isinstance(s, str):
-                        return f"'{s}'"
-                    else:
-                        return s
-
-                where = " AND ".join(f"{dimensionName}.{k} = {quote(v)}"
-                                     for k, v in values.items())
+                # Build up a WHERE expression
+                bind = {k: v for k, v in values.items()}
+                where = " AND ".join(f"{dimensionName}.{k} = {k}"
+                                     for k in bind)
 
                 # Hopefully we get a single record that matches
                 records = set(self.registry.queryDimensionRecords(dimensionName, dataId=newDataId,
-                                                                  where=where, **kwds))
+                                                                  where=where, bind=bind, **kwds))
 
                 if len(records) != 1:
                     if len(records) > 1:
