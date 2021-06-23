@@ -361,6 +361,7 @@ class SimpleButlerTestCase(unittest.TestCase):
             ({"detector.full_name": "Ab"}, {"instrument": "Cam1", "physical_filter": "Cam1-G"}),
             ({"full_name": "Ab"}, {"instrument": "Cam1", "physical_filter": "Cam1-G"}),
             (None, {"full_name": "Ab", "instrument": "Cam1", "physical_filter": "Cam1-G"}),
+            (None, {"detector": "Ab", "instrument": "Cam1", "physical_filter": "Cam1-G"}),
             ({"name_in_raft": "b", "raft": "A"}, {"instrument": "Cam1", "physical_filter": "Cam1-G"}),
             ({"name_in_raft": "b"}, {"raft": "A", "instrument": "Cam1", "physical_filter": "Cam1-G"}),
             (None, {"name_in_raft": "b", "raft": "A", "instrument": "Cam1", "physical_filter": "Cam1-G"}),

@@ -533,56 +533,52 @@ class Butler:
         assert internalDatasetType is not None
         return internalDatasetType, dataId
 
-    def _findDatasetRef(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
-                        dataId: Optional[DataId] = None, *,
-                        collections: Any = None,
-                        allowUnresolved: bool = False,
-                        **kwds: Any) -> DatasetRef:
-        """Shared logic for methods that start with a search for a dataset in
-        the registry.
+    def _rewrite_data_id(self, dataId: Optional[DataId], datasetType: DatasetType,
+                         **kwds: Any) -> Tuple[Optional[DataId], Dict[str, Any]]:
+        """Rewrite a data ID taking into account dimension records.
+
+        Take a Data ID and keyword args and rewrite it if necessary to
+        allow the user to specify dimension records rather than dimension
+        primary values.
+
+        This allows a user to include a dataId dict with keys of
+        ``exposure.day_obs`` and ``exposure.seq_num`` instead of giving
+        the integer exposure ID.  It also allows a string to be given
+        for a dimension value rather than the integer ID if that is more
+        convenient. For example, rather than having to specifyin the
+        detector with ``detector.full_name``, a string given for ``detector``
+        will be interpreted as the full name and converted to the integer
+        value.
+
+        Keyword arguments can also use strings for dimensions like detector
+        and exposure but python does not allow them to include ``.`` and
+        so the ``exposure.day_obs`` syntax can not be used in a keyword
+        argument.
 
         Parameters
         ----------
-        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
-            When `DatasetRef` the `dataId` should be `None`.
-            Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataCoordinate`, optional
-            A `dict` of `Dimension` link name, value pairs that label the
-            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the first argument.
-        collections : Any, optional
-            Collections to be searched, overriding ``self.collections``.
-            Can be any of the types supported by the ``collections`` argument
-            to butler construction.
-        allowUnresolved : `bool`, optional
-            If `True`, return an unresolved `DatasetRef` if finding a resolved
-            one in the `Registry` fails.  Defaults to `False`.
+        dataId : `dict` or `DataCoordinate`
+            A `dict` of `Dimension` link name, value pairs that will label the
+            `DatasetRef` within a Collection.
+        datasetType : `DatasetType`
+            The dataset type associated with this dataId. Required to
+            determine the relevant dimensions.
         kwds
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
 
         Returns
         -------
-        ref : `DatasetRef`
-            A reference to the dataset identified by the given arguments.
-
-        Raises
-        ------
-        LookupError
-            Raised if no matching dataset exists in the `Registry` (and
-            ``allowUnresolved is False``).
-        ValueError
-            Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry.
-        TypeError
-            Raised if no collections were provided.
+        dataId : `dict` or `DataCoordinate`
+            The, possibly rewritten, dataId. If given a `DataCoordinate` and
+            no keyword arguments, the orginal dataId will be returned
+            unchanged.
+        kwds : `dict`
+            Any unused keyword arguments.
         """
-        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        if isinstance(datasetRefOrType, DatasetRef):
-            idNumber = datasetRefOrType.id
-        else:
-            idNumber = None
-        timespan: Optional[Timespan] = None
+        # Do nothing if we have a standalone DataCoordinate.
+        if isinstance(dataId, DataCoordinate) and not kwds:
+            return dataId, kwds
 
         # Process dimension records that are using record information
         # rather than ids
@@ -775,6 +771,61 @@ class Butler:
 
             # We have modified the dataId so need to switch to it
             dataId = newDataId
+
+        return dataId, kwds
+
+    def _findDatasetRef(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+                        dataId: Optional[DataId] = None, *,
+                        collections: Any = None,
+                        allowUnresolved: bool = False,
+                        **kwds: Any) -> DatasetRef:
+        """Shared logic for methods that start with a search for a dataset in
+        the registry.
+
+        Parameters
+        ----------
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataCoordinate`, optional
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the first argument.
+        collections : Any, optional
+            Collections to be searched, overriding ``self.collections``.
+            Can be any of the types supported by the ``collections`` argument
+            to butler construction.
+        allowUnresolved : `bool`, optional
+            If `True`, return an unresolved `DatasetRef` if finding a resolved
+            one in the `Registry` fails.  Defaults to `False`.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A reference to the dataset identified by the given arguments.
+
+        Raises
+        ------
+        LookupError
+            Raised if no matching dataset exists in the `Registry` (and
+            ``allowUnresolved is False``).
+        ValueError
+            Raised if a resolved `DatasetRef` was passed as an input, but it
+            differs from the one found in the registry.
+        TypeError
+            Raised if no collections were provided.
+        """
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
+        if isinstance(datasetRefOrType, DatasetRef):
+            idNumber = datasetRefOrType.id
+        else:
+            idNumber = None
+        timespan: Optional[Timespan] = None
+
+        dataId, kwds = self._rewrite_data_id(dataId, datasetType, **kwds)
 
         if datasetType.isCalibration():
             # Because this is a calibration dataset, first try to make a
