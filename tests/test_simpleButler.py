@@ -172,6 +172,36 @@ class SimpleButlerTestCase(unittest.TestCase):
             [self.comparableRef(ref) for ref in datasets2],
         )
 
+    def testComponentExport(self):
+        """Test exporting component datasets and then importing them.
+
+        This test intentionally does not depend on whether just the component
+        is exported and then imported vs. the full composite dataset, because
+        I don't want it to assume more than it needs to about the
+        implementation.
+        """
+        # Import data to play with.
+        butler1 = self.makeButler(writeable=True)
+        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+        butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
+        with tempfile.NamedTemporaryFile(mode='w', suffix=".yaml") as file:
+            # Export all datasets.
+            with butler1.export(filename=file.name) as exporter:
+                exporter.saveDatasets(
+                    butler1.registry.queryDatasets("flat.psf", collections=...)
+                )
+            # Import it all again.
+            butler2 = self.makeButler(writeable=True)
+            butler2.import_(filename=file.name)
+        datasets1 = list(butler1.registry.queryDatasets("flat.psf", collections=...))
+        datasets2 = list(butler2.registry.queryDatasets("flat.psf", collections=...))
+        self.assertTrue(all(isinstance(ref.id, self.datasetsIdType) for ref in datasets1))
+        self.assertTrue(all(isinstance(ref.id, self.datasetsIdType) for ref in datasets2))
+        self.assertCountEqual(
+            [self.comparableRef(ref) for ref in datasets1],
+            [self.comparableRef(ref) for ref in datasets2],
+        )
+
     def testDatasetImportTwice(self):
         """Test exporting all datasets from a repo and then importing them all
         back in again twice.
