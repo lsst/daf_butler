@@ -367,7 +367,7 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
 
         Returns
         -------
-        kwargs : `dict`
+        **kwargs
             A dict with `hasFull`, `hasRecords`, and `check` keys, associated
             with the appropriate values for a `subset` operation with the given
             dimensions.

@@ -345,7 +345,7 @@ class CollectionManager(VersionedExtension):
         constraint: `bool`, optional
             If `False` (`True` is default), add a field that can be joined to
             the run primary key, but do not add a foreign key constraint.
-        **kwds
+        **kwargs
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are
             otherwise provided).

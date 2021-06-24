@@ -226,7 +226,7 @@ class QueryBaseModel(BaseModel):
 
         Returns
         -------
-        kwargs : `dict`
+        **kwargs
             The keword arguments stored in the model. `None` is converted
             to an empty dict. Returns empty dict if the ``keyword_args``
             property is not defined.

@@ -134,7 +134,7 @@ class DatastoreTransaction:
             Function to undo this event.
         args : `tuple`
             Positional arguments to `undoFunc`.
-        kwargs : `dict`
+        **kwargs
             Keyword arguments to `undoFunc`.
         """
         self._log.append(self.Event(name, undoFunc, args, kwargs))

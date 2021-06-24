@@ -56,7 +56,7 @@ class DeferredDatasetHandle:
             It defaults to None. If the value is not None,  this dict will
             be merged with the parameters dict used to construct the
             `DeferredDatasetHandle` class.
-        kwargs : `dict`
+        **kwargs
             This argument is deprecated and only exists to support legacy
             gen2 butler code during migration. It is completely ignored
             and will be removed in the future.

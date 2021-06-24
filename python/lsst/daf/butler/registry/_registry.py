@@ -982,13 +982,13 @@ class Registry(ABC):
         Parameters
         ----------
         dataId : `DataCoordinate` or `dict`, optional
-            Data ID to be expanded; augmented and overridden by ``kwds``.
+            Data ID to be expanded; augmented and overridden by ``kwargs``.
         graph : `DimensionGraph`, optional
             Set of dimensions for the expanded ID.  If `None`, the dimensions
-            will be inferred from the keys of ``dataId`` and ``kwds``.
-            Dimensions that are in ``dataId`` or ``kwds`` but not in ``graph``
-            are silently ignored, providing a way to extract and expand a
-            subset of a data ID.
+            will be inferred from the keys of ``dataId`` and ``kwargs``.
+            Dimensions that are in ``dataId`` or ``kwargs`` but not in
+            ``graph`` are silently ignored, providing a way to extract and
+            ``graph`` expand a subset of a data ID.
         records : `Mapping` [`str`, `DimensionRecord`], optional
             Dimension record data to use before querying the database for that
             data, keyed by element name.

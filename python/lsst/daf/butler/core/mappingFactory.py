@@ -168,7 +168,7 @@ class MappingFactory:
             Items with `None` value are skipped.
         args : `tuple`
             Positional arguments to use pass to the object constructor.
-        kwargs : `dict`
+        **kwargs
             Keyword arguments to pass to object constructor.
 
         Returns
@@ -207,7 +207,7 @@ class MappingFactory:
             Items with `None` value are skipped.
         args : `tuple`
             Positional arguments to use pass to the object constructor.
-        kwargs : `dict`
+        **kwargs
             Keyword arguments to pass to object constructor.
 
         Returns
@@ -239,7 +239,7 @@ class MappingFactory:
             If `True`, an existing entry will be overwritten.  This option
             is expected to be used to simplify test suites.
             Default is `False`.
-        kwargs : `dict`
+        **kwargs
             Keyword arguments to always pass to object constructor when
             retrieved.
 

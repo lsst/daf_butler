@@ -215,7 +215,7 @@ def getInstanceOf(typeOrName: Union[Type, str], *args: Any, **kwargs: Any) -> An
         A string describing the Python class to load or a Python type.
     args : `tuple`
         Positional arguments to use pass to the object constructor.
-    kwargs : `dict`
+    **kwargs
         Keyword arguments to pass to object constructor.
 
     Returns
