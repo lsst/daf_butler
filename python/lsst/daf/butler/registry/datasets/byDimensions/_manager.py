@@ -287,7 +287,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 raise ConflictingDefinitionError(f"Given dataset type {datasetType} is inconsistent "
                                                  f"with database definition {storage.datasetType}.")
             inserted = False
-        return storage, inserted
+        return storage, bool(inserted)
 
     def __iter__(self) -> Iterator[DatasetType]:
         for storage in self._byName.values():

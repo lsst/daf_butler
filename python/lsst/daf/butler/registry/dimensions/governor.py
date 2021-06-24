@@ -150,7 +150,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
             self._cache[getattr(record, self.element.primaryKey.name)] = record
             for callback in self._callbacks:
                 callback(record)
-        return inserted
+        return bool(inserted)
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.

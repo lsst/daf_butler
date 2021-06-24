@@ -1082,7 +1082,8 @@ class Database(ABC):
              compared: Optional[Dict[str, Any]] = None,
              extra: Optional[Dict[str, Any]] = None,
              returning: Optional[Sequence[str]] = None,
-             ) -> Tuple[Optional[Dict[str, Any]], bool]:
+             update: bool = False,
+             ) -> Tuple[Optional[Dict[str, Any]], Union[bool, Dict[str, Any]]]:
         """Insert into a table as necessary to ensure database contains
         values equivalent to the given ones.
 
@@ -1104,14 +1105,21 @@ class Database(ABC):
             but used in an insert if one is necessary.
         returning : `~collections.abc.Sequence` of `str`, optional
             The names of columns whose values should be returned.
+        update : `bool`, optional
+            If `True` (`False` is default), update the existing row with the
+            values in ``compared`` instead of raising `DatabaseConflictError`.
 
         Returns
         -------
         row : `dict`, optional
             The value of the fields indicated by ``returning``, or `None` if
             ``returning`` is `None`.
-        inserted : `bool`
-            If `True`, a new row was inserted.
+        inserted_or_updated : `bool` or `dict`
+            If `True`, a new row was inserted; if `False`, a matching row
+            already existed.  If a `dict` (only possible if ``update=True``),
+            then an existing row was updated, and the dict maps the names of
+            the updated columns to their *old* values (new values can be
+            obtained from ``compared``).
 
         Raises
         ------
@@ -1131,7 +1139,7 @@ class Database(ABC):
         does in fact already exist.
         """
 
-        def check() -> Tuple[int, Optional[List[str]], Optional[List]]:
+        def check() -> Tuple[int, Optional[Dict[str, Any]], Optional[List]]:
             """Query for a row that matches the ``key`` argument, and compare
             to what was given by the caller.
 
@@ -1141,11 +1149,11 @@ class Database(ABC):
                 Number of matching rows.  ``n != 1`` is always an error, but
                 it's a different kind of error depending on where `check` is
                 being called.
-            bad : `list` of `str`, or `None`
+            bad : `dict` or `None`
                 The subset of the keys of ``compared`` for which the existing
-                values did not match the given one.  Once again, ``not bad``
-                is always an error, but a different kind on context.  `None`
-                if ``n != 1``
+                values did not match the given one, mapped to the existing
+                values in the database.  Once again, ``not bad`` is always an
+                error, but a different kind on context.  `None` if ``n != 1``
             result : `list` or `None`
                 Results in the database that correspond to the columns given
                 in ``returning``, or `None` if ``returning is None``.
@@ -1175,16 +1183,25 @@ class Database(ABC):
                         return not time_utils.TimeConverter().times_equal(a, b)
                     return a != b
 
-                inconsistencies = [f"{k}: {existing[k]!r} != {v!r}"
-                                   for k, v in compared.items()
-                                   if safeNotEqual(existing[k], v)]
+                inconsistencies = {
+                    k: existing[k]
+                    for k, v in compared.items()
+                    if safeNotEqual(existing[k], v)
+                }
             else:
-                inconsistencies = []
+                inconsistencies = {}
             if returning is not None:
                 toReturn: Optional[list] = [existing[k] for k in returning]
             else:
                 toReturn = None
             return 1, inconsistencies, toReturn
+
+        def format_bad(inconsistencies: Dict[str, Any]) -> str:
+            """Format the 'bad' dictionary of existing values returned by
+            ``check`` into a string suitable for an error message.
+            """
+            assert compared is not None, "Should not be able to get inconsistencies without comparing."
+            return ", ".join(f"{k}: {v!r} != {compared[k]!r}" for k, v in inconsistencies.items())
 
         if self.isTableWriteable(table):
             # Try an insert first, but allow it to fail (in only specific
@@ -1196,6 +1213,7 @@ class Database(ABC):
                 row.update(extra)
             with self.transaction(lock=[table]):
                 inserted = bool(self.ensure(table, row))
+                inserted_or_updated: Union[bool, Dict[str, Any]]
                 # Need to perform check() for this branch inside the
                 # transaction, so we roll back an insert that didn't do
                 # what we expected.  That limits the extent to which we
@@ -1214,6 +1232,8 @@ class Database(ABC):
                     raise RuntimeError(f"Keys passed to sync {keys.keys()} do not comprise a "
                                        f"unique constraint for table {table.name}.")
                 elif bad:
+                    assert compared is not None, \
+                        "Should not be able to get inconsistencies without comparing."
                     if inserted:
                         raise RuntimeError(
                             f"Conflict ({bad}) in sync after successful insert; this is "
@@ -1221,10 +1241,21 @@ class Database(ABC):
                             "process that isn't using sync, but it may also be a bug in "
                             "daf_butler."
                         )
+                    elif update:
+                        self._connection.execute(
+                            table.update().where(
+                                sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()])
+                            ).values(
+                                **{k: compared[k] for k in bad.keys()}
+                            )
+                        )
+                        inserted_or_updated = bad
                     else:
                         raise DatabaseConflictError(
-                            f"Conflict in sync for table {table.name} on column(s) {bad}."
+                            f"Conflict in sync for table {table.name} on column(s) {format_bad(bad)}."
                         )
+                else:
+                    inserted_or_updated = inserted
         else:
             # Database is not writeable; just see if the row exists.
             n, bad, result = check()
@@ -1233,15 +1264,18 @@ class Database(ABC):
             elif n > 1:
                 raise RuntimeError("Keys passed to sync do not comprise a unique constraint.")
             elif bad:
-                raise DatabaseConflictError(
-                    f"Conflict in sync for table {table.name} on column(s) {bad}."
-                )
-            inserted = False
+                if update:
+                    raise ReadOnlyDatabaseError("sync needs to update, but database is read-only.")
+                else:
+                    raise DatabaseConflictError(
+                        f"Conflict in sync for table {table.name} on column(s) {format_bad(bad)}."
+                    )
+            inserted_or_updated = False
         if returning is None:
-            return None, inserted
+            return None, inserted_or_updated
         else:
             assert result is not None
-            return {k: v for k, v in zip(returning, result)}, inserted
+            return {k: v for k, v in zip(returning, result)}, inserted_or_updated
 
     def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
                select: Optional[sqlalchemy.sql.Select] = None,

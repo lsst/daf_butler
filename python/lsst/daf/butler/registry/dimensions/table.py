@@ -241,7 +241,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             )
             if inserted and self._skyPixOverlap is not None:
                 self._skyPixOverlap.insert([record])
-        return inserted
+        return bool(inserted)
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
