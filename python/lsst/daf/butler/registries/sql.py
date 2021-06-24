@@ -679,7 +679,8 @@ class SqlRegistry(Registry):
 
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[Mapping[str, Any], DimensionRecord],
-                            conform: bool = True) -> None:
+                            conform: bool = True,
+                            replace: bool = False) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if conform:
             if isinstance(element, str):
@@ -690,11 +691,12 @@ class SqlRegistry(Registry):
             # Ignore typing since caller said to trust them with conform=False.
             records = data  # type: ignore
         storage = self._managers.dimensions[element]  # type: ignore
-        storage.insert(*records)
+        storage.insert(*records, replace=replace)
 
     def syncDimensionData(self, element: Union[DimensionElement, str],
                           row: Union[Mapping[str, Any], DimensionRecord],
-                          conform: bool = True) -> bool:
+                          conform: bool = True,
+                          update: bool = False) -> Union[bool, Dict[str, Any]]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if conform:
             if isinstance(element, str):
@@ -704,7 +706,7 @@ class SqlRegistry(Registry):
             # Ignore typing since caller said to trust them with conform=False.
             record = row  # type: ignore
         storage = self._managers.dimensions[element]  # type: ignore
-        return storage.sync(record)
+        return storage.sync(record, update=update)
 
     def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None
                           ) -> Iterator[DatasetType]:

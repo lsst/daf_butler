@@ -156,12 +156,12 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         builder.finishJoin(self._query, joinOn)
         return self._query
 
-    def insert(self, *records: DimensionRecord) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         raise TypeError(f"Cannot insert {self.element.name} records, "
                         f"define as part of {self._viewOf} instead.")
 
-    def sync(self, record: DimensionRecord) -> bool:
+    def sync(self, record: DimensionRecord, update: bool = False) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
         raise TypeError(f"Cannot sync {self.element.name} records, "
                         f"define as part of {self._viewOf} instead.")

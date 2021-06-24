@@ -23,6 +23,7 @@ from __future__ import annotations
 __all__ = ["TableDimensionRecordStorage"]
 
 from collections import defaultdict
+import itertools
 import logging
 from typing import (
     AbstractSet,
@@ -210,7 +211,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
             yield RecordClass(**values)
 
-    def insert(self, *records: DimensionRecord) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         elementRows = [record.toDict() for record in records]
         if self.element.temporal is not None:
@@ -219,11 +220,14 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 timespan = row.pop(TimespanDatabaseRepresentation.NAME)
                 TimespanReprClass.update(timespan, result=row)
         with self._db.transaction():
-            self._db.insert(self._table, *elementRows)
+            if replace:
+                self._db.replace(self._table, *elementRows)
+            else:
+                self._db.insert(self._table, *elementRows)
             if self._skyPixOverlap is not None:
-                self._skyPixOverlap.insert(records)
+                self._skyPixOverlap.insert(records, replace=replace)
 
-    def sync(self, record: DimensionRecord) -> bool:
+    def sync(self, record: DimensionRecord, update: bool = False) -> Union[bool, Dict[str, Any]]:
         # Docstring inherited from DimensionRecordStorage.sync.
         compared = record.toDict()
         keys = {}
@@ -234,14 +238,25 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             timespan = compared.pop(TimespanDatabaseRepresentation.NAME)
             TimespanReprClass.update(timespan, result=compared)
         with self._db.transaction():
-            _, inserted = self._db.sync(
+            _, inserted_or_updated = self._db.sync(
                 self._table,
                 keys=keys,
                 compared=compared,
+                update=update,
             )
-            if inserted and self._skyPixOverlap is not None:
-                self._skyPixOverlap.insert([record])
-        return bool(inserted)
+            if inserted_or_updated and self._skyPixOverlap is not None:
+                if inserted_or_updated is True:
+                    # Inserted a new row, so we just need to insert new overlap
+                    # rows.
+                    self._skyPixOverlap.insert([record])
+                elif "region" in inserted_or_updated:  # type: ignore
+                    # Updated the region, so we need to delete old overlap rows
+                    # and insert new ones.
+                    # (mypy should be able to tell that inserted_or_updated
+                    # must be a dict if we get to this clause, but it can't)
+                    self._skyPixOverlap.insert([record], replace=True)
+                # We updated something other than a region.
+        return inserted_or_updated
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
@@ -587,7 +602,7 @@ class _SkyPixOverlapStorage:
         )
         self._db.insert(self._overlapTable, *overlapRecords)
 
-    def insert(self, records: Sequence[DimensionRecord]) -> None:
+    def insert(self, records: Sequence[DimensionRecord], replace: bool = False) -> None:
         """Insert overlaps for a sequence of ``self.element`` records that
         have just been inserted.
 
@@ -600,6 +615,10 @@ class _SkyPixOverlapStorage:
         records : `Sequence` [ `DimensionRecord` ]
             Records for ``self.element``.  Records with `None` regions are
             ignored.
+        replace : `bool`, optional
+            If `True` (`False` is default) one or more of the given records may
+            already exist and is being updated, so we need to delete any
+            existing overlap records first.
         """
         # Group records by family.governor value.
         grouped: Dict[str, List[DimensionRecord]] = defaultdict(list)
@@ -634,6 +653,26 @@ class _SkyPixOverlapStorage:
             for summaryRow in self._db.query(query):
                 system = self.element.universe.skypix[summaryRow[sysCol]]
                 skypix[summaryRow[gvCol]].setdefault(system, []).append(summaryRow[lvlCol])
+            if replace:
+                # Construct constraints for a DELETE query as a list of dicts.
+                # We include the skypix_system and skypix_level column values
+                # explicitly instead of just letting the query search for all
+                # of those related to the given records, because they are the
+                # first columns in the primary key, and hence searching with
+                # them will be way faster (and we don't want to add a new index
+                # just for this operation).
+                to_delete: List[Dict[str, Any]] = []
+                for gv, skypix_systems in skypix.items():
+                    for system, skypix_levels in skypix_systems.items():
+                        to_delete.extend(
+                            {"skypix_system": system.name, "skypix_level": level, **record.dataId.byName()}
+                            for record, level in itertools.product(grouped[gv], skypix_levels)
+                        )
+                self._db.delete(
+                    self._overlapTable,
+                    ["skypix_system", "skypix_level"] + list(self.element.graph.required.names),
+                    *to_delete,
+                )
             overlapRecords: List[dict] = []
             # Compute overlaps for one governor value at a time, but gather
             # them all up for one insert.

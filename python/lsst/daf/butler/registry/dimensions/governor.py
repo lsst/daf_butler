@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["BasicGovernorDimensionRecordStorage"]
 
-from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Optional
+from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Optional, Union
 
 import sqlalchemy
 
@@ -124,33 +124,37 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         builder.finishJoin(self._table, joinOn)
         return self._table
 
-    def insert(self, *records: DimensionRecord) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         elementRows = [record.toDict() for record in records]
         with self._db.transaction():
-            self._db.insert(self._table, *elementRows)
+            if replace:
+                self._db.replace(self._table, *elementRows)
+            else:
+                self._db.insert(self._table, *elementRows)
         for record in records:
             self._cache[getattr(record, self.element.primaryKey.name)] = record
             for callback in self._callbacks:
                 callback(record)
 
-    def sync(self, record: DimensionRecord) -> bool:
+    def sync(self, record: DimensionRecord, update: bool = False) -> Union[bool, Dict[str, Any]]:
         # Docstring inherited from DimensionRecordStorage.sync.
         compared = record.toDict()
         keys = {}
         for name in record.fields.required.names:
             keys[name] = compared.pop(name)
         with self._db.transaction():
-            _, inserted = self._db.sync(
+            _, inserted_or_updated = self._db.sync(
                 self._table,
                 keys=keys,
                 compared=compared,
+                update=update,
             )
-        if inserted:
+        if inserted_or_updated:
             self._cache[getattr(record, self.element.primaryKey.name)] = record
             for callback in self._callbacks:
                 callback(record)
-        return bool(inserted)
+        return inserted_or_updated
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.

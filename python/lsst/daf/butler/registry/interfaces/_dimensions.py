@@ -33,6 +33,7 @@ from abc import ABC, abstractmethod
 from typing import (
     AbstractSet, Any,
     Callable,
+    Dict,
     Iterable, Mapping,
     Optional,
     Tuple,
@@ -139,7 +140,7 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def insert(self, *records: DimensionRecord) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         """Insert one or more records into storage.
 
         Parameters
@@ -147,6 +148,9 @@ class DimensionRecordStorage(ABC):
         records
             One or more instances of the `DimensionRecord` subclass for the
             element this storage is associated with.
+        replace: `bool`, optional
+            If `True` (`False` is default), replace existing records in the
+            database if there is a conflict.
 
         Raises
         ------
@@ -166,7 +170,7 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def sync(self, record: DimensionRecord) -> bool:
+    def sync(self, record: DimensionRecord, update: bool = False) -> Union[bool, Dict[str, Any]]:
         """Synchronize a record with the database, inserting it only if it does
         not exist and comparing values if it does.
 
@@ -175,11 +179,17 @@ class DimensionRecordStorage(ABC):
         record : `DimensionRecord`.
             An instance of the `DimensionRecord` subclass for the
             element this storage is associated with.
+        update: `bool`, optional
+            If `True` (`False` is default), update the existing record in the
+            database if there is a conflict.
 
         Returns
         -------
-        inserted : `bool`
-            `True` if a new row was inserted, `False` otherwise.
+        inserted_or_updated : `bool` or `dict`
+            `True` if a new row was inserted, `False` if no changes were
+            needed, or a `dict` mapping updated column names to their old
+            values if an update was performed (only possible if
+            ``update=True``).
 
         Raises
         ------
