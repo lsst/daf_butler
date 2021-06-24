@@ -746,7 +746,7 @@ class Database(ABC):
         return []
 
     def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
-                          **kwds: Any) -> sqlalchemy.schema.Column:
+                          **kwargs: Any) -> sqlalchemy.schema.Column:
         """Convert a `FieldSpec` to a `sqlalchemy.schema.Column`.
 
         Parameters
@@ -758,7 +758,7 @@ class Database(ABC):
         metadata : `sqlalchemy.MetaData`
             SQLAlchemy representation of the DDL schema this field's table is
             being added to.
-        **kwds
+        **kwargs
             Additional keyword arguments to forward to the
             `sqlalchemy.schema.Column` constructor.  This is provided to make
             it easier for derived classes to delegate to ``super()`` while
@@ -778,10 +778,10 @@ class Database(ABC):
                                             metadata=metadata))
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {table}.{spec.name}."
         return sqlalchemy.schema.Column(*args, nullable=spec.nullable, primary_key=spec.primaryKey,
-                                        comment=spec.doc, server_default=spec.default, **kwds)
+                                        comment=spec.doc, server_default=spec.default, **kwargs)
 
     def _convertForeignKeySpec(self, table: str, spec: ddl.ForeignKeySpec, metadata: sqlalchemy.MetaData,
-                               **kwds: Any) -> sqlalchemy.schema.ForeignKeyConstraint:
+                               **kwargs: Any) -> sqlalchemy.schema.ForeignKeyConstraint:
         """Convert a `ForeignKeySpec` to a
         `sqlalchemy.schema.ForeignKeyConstraint`.
 
@@ -794,7 +794,7 @@ class Database(ABC):
         metadata : `sqlalchemy.MetaData`
             SQLAlchemy representation of the DDL schema this constraint is
             being added to.
-        **kwds
+        **kwargs
             Additional keyword arguments to forward to the
             `sqlalchemy.schema.ForeignKeyConstraint` constructor.  This is
             provided to make it easier for derived classes to delegate to
@@ -848,7 +848,7 @@ class Database(ABC):
         raise NotImplementedError(f"Database {self} does not support exclusion constraints.")
 
     def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
-                          **kwds: Any) -> sqlalchemy.schema.Table:
+                          **kwargs: Any) -> sqlalchemy.schema.Table:
         """Convert a `TableSpec` to a `sqlalchemy.schema.Table`.
 
         Parameters
@@ -858,7 +858,7 @@ class Database(ABC):
         metadata : `sqlalchemy.MetaData`
             SQLAlchemy representation of the DDL schema this table is being
             added to.
-        **kwds
+        **kwargs
             Additional keyword arguments to forward to the
             `sqlalchemy.schema.Table` constructor.  This is provided to make it
             easier for derived classes to delegate to ``super()`` while making
@@ -914,7 +914,7 @@ class Database(ABC):
         args.extend(self._convertExclusionConstraintSpec(name, excl, metadata) for excl in spec.exclusion)
 
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {name}."
-        return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwds)
+        return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwargs)
 
     def ensureTableExists(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table:
         """Ensure that a table with the given name and specification exists,
@@ -1531,7 +1531,7 @@ class Database(ABC):
         return self._connection.execute(sql, *rows).rowcount
 
     def query(self, sql: sqlalchemy.sql.FromClause,
-              *args: Any, **kwds: Any) -> sqlalchemy.engine.ResultProxy:
+              *args: Any, **kwargs: Any) -> sqlalchemy.engine.ResultProxy:
         """Run a SELECT query against the database.
 
         Parameters
@@ -1541,7 +1541,7 @@ class Database(ABC):
         *args
             Additional positional arguments are forwarded to
             `sqlalchemy.engine.Connection.execute`.
-        **kwds
+        **kwargs
             Additional keyword arguments are forwarded to
             `sqlalchemy.engine.Connection.execute`.
 
@@ -1556,7 +1556,7 @@ class Database(ABC):
         classes.
         """
         # TODO: should we guard against non-SELECT queries here?
-        return self._connection.execute(sql, *args, **kwds)
+        return self._connection.execute(sql, *args, **kwargs)
 
     origin: int
     """An integer ID that should be used as the default for any datasets,

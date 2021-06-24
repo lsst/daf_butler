@@ -82,9 +82,9 @@ class SchemaValidationError(ValidationError):
             the decorated function.
         """
         def decorate(func: Callable) -> Callable:
-            def decorated(self: Any, config: Config, *args: Any, **kwds: Any) -> Any:
+            def decorated(self: Any, config: Config, *args: Any, **kwargs: Any) -> Any:
                 try:
-                    return func(self, config, *args, **kwds)
+                    return func(self, config, *args, **kwargs)
                 except caught as err:
                     raise cls(message.format(config=str(config), err=err))
             return decorated
@@ -287,7 +287,7 @@ class FieldSpec:
 
     @classmethod
     @SchemaValidationError.translate(KeyError, "Missing key {err} in column config '{config}'.")
-    def fromConfig(cls, config: Config, **kwds: Any) -> FieldSpec:
+    def fromConfig(cls, config: Config, **kwargs: Any) -> FieldSpec:
         """Create a `FieldSpec` from a subset of a `SchemaConfig`.
 
         Parameters
@@ -295,7 +295,7 @@ class FieldSpec:
         config: `Config`
             Configuration describing the column.  Nested configuration keys
             correspond to `FieldSpec` attributes.
-        kwds
+        **kwargs
             Additional keyword arguments that provide defaults for values
             not present in config.
 
@@ -314,7 +314,7 @@ class FieldSpec:
             raise SchemaValidationError(f"Invalid field type string: '{config['type']}'.")
         if not config["name"].islower():
             raise SchemaValidationError(f"Column name '{config['name']}' is not all lowercase.")
-        self = cls(name=config["name"], dtype=dtype, **kwds)
+        self = cls(name=config["name"], dtype=dtype, **kwargs)
         self.length = config.get("length", self.length)
         self.nbytes = config.get("nbytes", self.nbytes)
         if self.length is not None and self.nbytes is not None:

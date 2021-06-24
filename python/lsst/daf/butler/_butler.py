@@ -470,7 +470,7 @@ class Butler:
                 yield
 
     def _standardizeArgs(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
-                         dataId: Optional[DataId] = None, **kwds: Any
+                         dataId: Optional[DataId] = None, **kwargs: Any
                          ) -> Tuple[DatasetType, Optional[DataId]]:
         """Standardize the arguments passed to several Butler APIs.
 
@@ -483,7 +483,7 @@ class Butler:
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the second argument.
-        kwds
+        **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
             parameters.
@@ -493,7 +493,7 @@ class Butler:
         datasetType : `DatasetType`
             A `DatasetType` instance extracted from ``datasetRefOrType``.
         dataId : `dict` or `DataId`, optional
-            Argument that can be used (along with ``kwds``) to construct a
+            Argument that can be used (along with ``kwargs``) to construct a
             `DataId`.
 
         Notes
@@ -505,13 +505,13 @@ class Butler:
         and a `DataId` or `dict`.
 
         Standardization of `dict` vs `DataId` is best handled by passing the
-        returned ``dataId`` (and ``kwds``) to `Registry` APIs, which are
+        returned ``dataId`` (and ``kwargs``) to `Registry` APIs, which are
         generally similarly flexible.
         """
         externalDatasetType: Optional[DatasetType] = None
         internalDatasetType: Optional[DatasetType] = None
         if isinstance(datasetRefOrType, DatasetRef):
-            if dataId is not None or kwds:
+            if dataId is not None or kwargs:
                 raise ValueError("DatasetRef given, cannot use dataId as well")
             externalDatasetType = datasetRefOrType.datasetType
             dataId = datasetRefOrType.dataId
@@ -533,56 +533,52 @@ class Butler:
         assert internalDatasetType is not None
         return internalDatasetType, dataId
 
-    def _findDatasetRef(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
-                        dataId: Optional[DataId] = None, *,
-                        collections: Any = None,
-                        allowUnresolved: bool = False,
-                        **kwds: Any) -> DatasetRef:
-        """Shared logic for methods that start with a search for a dataset in
-        the registry.
+    def _rewrite_data_id(self, dataId: Optional[DataId], datasetType: DatasetType,
+                         **kwargs: Any) -> Tuple[Optional[DataId], Dict[str, Any]]:
+        """Rewrite a data ID taking into account dimension records.
+
+        Take a Data ID and keyword args and rewrite it if necessary to
+        allow the user to specify dimension records rather than dimension
+        primary values.
+
+        This allows a user to include a dataId dict with keys of
+        ``exposure.day_obs`` and ``exposure.seq_num`` instead of giving
+        the integer exposure ID.  It also allows a string to be given
+        for a dimension value rather than the integer ID if that is more
+        convenient. For example, rather than having to specifyin the
+        detector with ``detector.full_name``, a string given for ``detector``
+        will be interpreted as the full name and converted to the integer
+        value.
+
+        Keyword arguments can also use strings for dimensions like detector
+        and exposure but python does not allow them to include ``.`` and
+        so the ``exposure.day_obs`` syntax can not be used in a keyword
+        argument.
 
         Parameters
         ----------
-        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
-            When `DatasetRef` the `dataId` should be `None`.
-            Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataCoordinate`, optional
-            A `dict` of `Dimension` link name, value pairs that label the
-            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the first argument.
-        collections : Any, optional
-            Collections to be searched, overriding ``self.collections``.
-            Can be any of the types supported by the ``collections`` argument
-            to butler construction.
-        allowUnresolved : `bool`, optional
-            If `True`, return an unresolved `DatasetRef` if finding a resolved
-            one in the `Registry` fails.  Defaults to `False`.
-        kwds
+        dataId : `dict` or `DataCoordinate`
+            A `dict` of `Dimension` link name, value pairs that will label the
+            `DatasetRef` within a Collection.
+        datasetType : `DatasetType`
+            The dataset type associated with this dataId. Required to
+            determine the relevant dimensions.
+        **kwargs
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
 
         Returns
         -------
-        ref : `DatasetRef`
-            A reference to the dataset identified by the given arguments.
-
-        Raises
-        ------
-        LookupError
-            Raised if no matching dataset exists in the `Registry` (and
-            ``allowUnresolved is False``).
-        ValueError
-            Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry.
-        TypeError
-            Raised if no collections were provided.
+        dataId : `dict` or `DataCoordinate`
+            The, possibly rewritten, dataId. If given a `DataCoordinate` and
+            no keyword arguments, the orginal dataId will be returned
+            unchanged.
+        **kwargs : `dict`
+            Any unused keyword arguments.
         """
-        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        if isinstance(datasetRefOrType, DatasetRef):
-            idNumber = datasetRefOrType.id
-        else:
-            idNumber = None
-        timespan: Optional[Timespan] = None
+        # Do nothing if we have a standalone DataCoordinate.
+        if isinstance(dataId, DataCoordinate) and not kwargs:
+            return dataId, kwargs
 
         # Process dimension records that are using record information
         # rather than ids
@@ -612,7 +608,7 @@ class Butler:
 
         # Will need to look in the dataId and the keyword arguments
         # and will remove them if they need to be fixed or are unrecognized.
-        for dataIdDict in (newDataId, kwds):
+        for dataIdDict in (newDataId, kwargs):
             # Use a list so we can adjust the dict safely in the loop
             for dimensionName in list(dataIdDict):
                 value = dataIdDict[dimensionName]
@@ -652,7 +648,7 @@ class Butler:
         # axis.
         if not_dimensions:
             # Calculate missing dimensions
-            provided = set(newDataId) | set(kwds) | set(byRecord)
+            provided = set(newDataId) | set(kwargs) | set(byRecord)
             missingDimensions = datasetType.dimensions.names - provided
 
             # For calibrations we may well be needing temporal dimensions
@@ -740,19 +736,14 @@ class Butler:
                                 dimensionName, newDataId[dimensionName], str(values))
                     continue
 
-                # Build up a WHERE expression -- use single quotes
-                def quote(s: Any) -> str:
-                    if isinstance(s, str):
-                        return f"'{s}'"
-                    else:
-                        return s
-
-                where = " AND ".join(f"{dimensionName}.{k} = {quote(v)}"
-                                     for k, v in values.items())
+                # Build up a WHERE expression
+                bind = {k: v for k, v in values.items()}
+                where = " AND ".join(f"{dimensionName}.{k} = {k}"
+                                     for k in bind)
 
                 # Hopefully we get a single record that matches
                 records = set(self.registry.queryDimensionRecords(dimensionName, dataId=newDataId,
-                                                                  where=where, **kwds))
+                                                                  where=where, bind=bind, **kwargs))
 
                 if len(records) != 1:
                     if len(records) > 1:
@@ -776,6 +767,61 @@ class Butler:
             # We have modified the dataId so need to switch to it
             dataId = newDataId
 
+        return dataId, kwargs
+
+    def _findDatasetRef(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+                        dataId: Optional[DataId] = None, *,
+                        collections: Any = None,
+                        allowUnresolved: bool = False,
+                        **kwargs: Any) -> DatasetRef:
+        """Shared logic for methods that start with a search for a dataset in
+        the registry.
+
+        Parameters
+        ----------
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataCoordinate`, optional
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the first argument.
+        collections : Any, optional
+            Collections to be searched, overriding ``self.collections``.
+            Can be any of the types supported by the ``collections`` argument
+            to butler construction.
+        allowUnresolved : `bool`, optional
+            If `True`, return an unresolved `DatasetRef` if finding a resolved
+            one in the `Registry` fails.  Defaults to `False`.
+        **kwargs
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A reference to the dataset identified by the given arguments.
+
+        Raises
+        ------
+        LookupError
+            Raised if no matching dataset exists in the `Registry` (and
+            ``allowUnresolved is False``).
+        ValueError
+            Raised if a resolved `DatasetRef` was passed as an input, but it
+            differs from the one found in the registry.
+        TypeError
+            Raised if no collections were provided.
+        """
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwargs)
+        if isinstance(datasetRefOrType, DatasetRef):
+            idNumber = datasetRefOrType.id
+        else:
+            idNumber = None
+        timespan: Optional[Timespan] = None
+
+        dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
+
         if datasetType.isCalibration():
             # Because this is a calibration dataset, first try to make a
             # standardize the data ID without restricting the dimensions to
@@ -783,7 +829,7 @@ class Butler:
             # dimensions that provide temporal information for a validity-range
             # lookup.
             dataId = DataCoordinate.standardize(dataId, universe=self.registry.dimensions,
-                                                defaults=self.registry.defaults.dataId, **kwds)
+                                                defaults=self.registry.defaults.dataId, **kwargs)
             if dataId.graph.temporal:
                 dataId = self.registry.expandDataId(dataId)
                 timespan = dataId.timespan
@@ -792,7 +838,7 @@ class Butler:
             # type instead of letting registry.findDataset do it, so we get the
             # result even if no dataset is found.
             dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions,
-                                                defaults=self.registry.defaults.dataId, **kwds)
+                                                defaults=self.registry.defaults.dataId, **kwargs)
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
         ref = self.registry.findDataset(datasetType, dataId, collections=collections, timespan=timespan)
@@ -815,7 +861,7 @@ class Butler:
     def put(self, obj: Any, datasetRefOrType: Union[DatasetRef, DatasetType, str],
             dataId: Optional[DataId] = None, *,
             run: Optional[str] = None,
-            **kwds: Any) -> DatasetRef:
+            **kwargs: Any) -> DatasetRef:
         """Store and register a dataset.
 
         Parameters
@@ -832,7 +878,7 @@ class Butler:
         run : `str`, optional
             The name of the run the dataset should be added to, overriding
             ``self.run``.
-        kwds
+        **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
             parameters.
@@ -851,12 +897,12 @@ class Butler:
         log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwargs)
         if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
             raise ValueError("DatasetRef must not be in registry, must have None id")
 
         # Add Registry Dataset entry.
-        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
+        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
 
         # For an execution butler the datasets will be pre-defined.
         # If the butler is configured that way datasets should only be inserted
@@ -949,7 +995,7 @@ class Butler:
                     dataId: Optional[DataId] = None, *,
                     parameters: Union[dict, None] = None,
                     collections: Any = None,
-                    **kwds: Any) -> DeferredDatasetHandle:
+                    **kwargs: Any) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset,
         after an immediate registry lookup.
 
@@ -969,7 +1015,7 @@ class Butler:
             Collections to be searched, overriding ``self.collections``.
             Can be any of the types supported by the ``collections`` argument
             to butler construction.
-        kwds
+        **kwargs
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
 
@@ -989,14 +1035,14 @@ class Butler:
         TypeError
             Raised if no collections were provided.
         """
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
+        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters)
 
     def get(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
             dataId: Optional[DataId] = None, *,
             parameters: Optional[Dict[str, Any]] = None,
             collections: Any = None,
-            **kwds: Any) -> Any:
+            **kwargs: Any) -> Any:
         """Retrieve a stored dataset.
 
         Parameters
@@ -1015,7 +1061,7 @@ class Butler:
             Collections to be searched, overriding ``self.collections``.
             Can be any of the types supported by the ``collections`` argument
             to butler construction.
-        kwds
+        **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
             parameters.
@@ -1046,7 +1092,7 @@ class Butler:
         ``exposure`` is a temporal dimension.
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
+        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         return self.getDirect(ref, parameters=parameters)
 
     def getURIs(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
@@ -1054,7 +1100,7 @@ class Butler:
                 predict: bool = False,
                 collections: Any = None,
                 run: Optional[str] = None,
-                **kwds: Any) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+                **kwargs: Any) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
         """Returns the URIs associated with the dataset.
 
         Parameters
@@ -1075,7 +1121,7 @@ class Butler:
             to butler construction.
         run : `str`, optional
             Run to use for predictions, overriding ``self.run``.
-        kwds
+        **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
             parameters.
@@ -1091,7 +1137,7 @@ class Butler:
             Can be empty if there are no components.
         """
         ref = self._findDatasetRef(datasetRefOrType, dataId, allowUnresolved=predict,
-                                   collections=collections, **kwds)
+                                   collections=collections, **kwargs)
         if ref.id is None:  # only possible if predict is True
             if run is None:
                 run = self.run
@@ -1107,7 +1153,7 @@ class Butler:
                predict: bool = False,
                collections: Any = None,
                run: Optional[str] = None,
-               **kwds: Any) -> ButlerURI:
+               **kwargs: Any) -> ButlerURI:
         """Return the URI to the Dataset.
 
         Parameters
@@ -1128,7 +1174,7 @@ class Butler:
             to butler construction.
         run : `str`, optional
             Run to use for predictions, overriding ``self.run``.
-        kwds
+        **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
             parameters.
@@ -1159,7 +1205,7 @@ class Butler:
             multiple artifacts.
         """
         primary, components = self.getURIs(datasetRefOrType, dataId=dataId, predict=predict,
-                                           collections=collections, run=run, **kwds)
+                                           collections=collections, run=run, **kwargs)
 
         if primary is None or components:
             raise RuntimeError(f"Dataset ({datasetRefOrType}) includes distinct URIs for components. "
@@ -1210,7 +1256,7 @@ class Butler:
     def datasetExists(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                       dataId: Optional[DataId] = None, *,
                       collections: Any = None,
-                      **kwds: Any) -> bool:
+                      **kwargs: Any) -> bool:
         """Return True if the Dataset is actually present in the Datastore.
 
         Parameters
@@ -1226,7 +1272,7 @@ class Butler:
             Collections to be searched, overriding ``self.collections``.
             Can be any of the types supported by the ``collections`` argument
             to butler construction.
-        kwds
+        **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
             parameters.
@@ -1241,7 +1287,7 @@ class Butler:
         TypeError
             Raised if no collections were provided.
         """
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
+        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwargs)
         return self.datastore.exists(ref)
 
     def removeRuns(self, names: Iterable[str], unstore: bool = True) -> None:
