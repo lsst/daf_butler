@@ -89,7 +89,7 @@ def getHttpSession() -> requests.Session:
         ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
     except KeyError:
         log.debug("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
-                  "If you would like to trust additional CAs, please consider"
+                  "If you would like to trust additional CAs, please consider "
                   "exporting this variable.")
     session.verify = ca_bundle
 
