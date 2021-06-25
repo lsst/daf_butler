@@ -26,6 +26,7 @@ import os.path
 import requests
 import tempfile
 import logging
+import functools
 
 __all__ = ('ButlerHttpURI', )
 
@@ -176,6 +177,7 @@ def refreshToken(session: requests.Session) -> None:
     session.headers.update({'Authorization': 'Bearer ' + bearer_token})
 
 
+@functools.lru_cache
 def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
     """Check whether the remote HTTP endpoint implements Webdav features.
 
@@ -183,6 +185,8 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
     ----------
     path : `Location`, `ButlerURI` or `str`
         Location or ButlerURI containing the bucket name and filepath.
+        Should preferably refer to the root since the status is shared
+        by all paths in that server.
 
     Returns
     -------
@@ -194,7 +198,7 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
         ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
     except KeyError:
         log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
-                    "HTTPS requests will fail. If you intend to use HTTPS, please "
+                    "some HTTPS requests will fail. If you intend to use HTTPS, please "
                     "export this variable.")
     filepath = _getFileURL(path)
 
@@ -254,6 +258,7 @@ class ButlerHttpURI(ButlerURI):
 
     _session = requests.Session()
     _sessionInitialized = False
+    _is_webdav: Optional[bool] = None
 
     @property
     def session(self) -> requests.Session:
@@ -270,13 +275,16 @@ class ButlerHttpURI(ButlerURI):
 
     @property
     def is_webdav_endpoint(self) -> bool:
-        """Check if the current endpoint implements WebDAV features"""
-        try:
-            return ButlerHttpURI._is_webdav
-        except AttributeError:
-            pass
-        ButlerHttpURI._is_webdav = isWebdavEndpoint(self.root_uri())
-        return ButlerHttpURI._is_webdav
+        """Check if the current endpoint implements WebDAV features.
+
+        This is stored per URI but cached by root so there is
+        only one check per hostname.
+        """
+        if self._is_webdav is not None:
+            return self._is_webdav
+
+        self._is_webdav = isWebdavEndpoint(self.root_uri())
+        return self._is_webdav
 
     def exists(self) -> bool:
         """Check that a remote HTTP resource exists."""
