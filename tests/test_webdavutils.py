@@ -24,9 +24,8 @@ import requests
 import responses
 import os
 
-from lsst.daf.butler.core._butlerUri.http import (isTokenAuth, _getFileURL,
+from lsst.daf.butler.core._butlerUri.http import (isTokenAuth,
                                                   isWebdavEndpoint, finalurl)
-from lsst.daf.butler import Location, ButlerURI
 
 
 class WebdavUtilsTestCase(unittest.TestCase):
@@ -63,17 +62,6 @@ class WebdavUtilsTestCase(unittest.TestCase):
 
         self.assertTrue(isWebdavEndpoint(f"https://{self.serverRoot}"))
         self.assertFalse(isWebdavEndpoint(f"https://{self.wrongRoot}"))
-
-    @responses.activate
-    def testGetFileURL(self):
-
-        s = f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}"
-        buri = ButlerURI(f"https://{self.serverRoot}/{self.existingfolderName}/{self.existingfileName}")
-        loc = Location(f"https://{self.serverRoot}/", f"{self.existingfolderName}/{self.existingfileName}")
-
-        self.assertEqual(_getFileURL(s), s)
-        self.assertEqual(_getFileURL(buri), s)
-        self.assertEqual(_getFileURL(loc), s)
 
     def testIsTokenAuth(self):
         with unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN"}):

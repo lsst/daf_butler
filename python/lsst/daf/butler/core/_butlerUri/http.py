@@ -42,7 +42,6 @@ from typing import (
 
 from .utils import NoTransaction
 from ._butlerUri import ButlerURI
-from ..location import Location
 
 if TYPE_CHECKING:
     from ..datastore import DatastoreTransaction
@@ -178,13 +177,13 @@ def refreshToken(session: requests.Session) -> None:
 
 
 @functools.lru_cache
-def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
+def isWebdavEndpoint(path: Union[ButlerURI, str]) -> bool:
     """Check whether the remote HTTP endpoint implements Webdav features.
 
     Parameters
     ----------
-    path : `Location`, `ButlerURI` or `str`
-        Location or ButlerURI containing the bucket name and filepath.
+    path : `ButlerURI` or `str`
+        URL to the resource to be checked.
         Should preferably refer to the root since the status is shared
         by all paths in that server.
 
@@ -200,10 +199,9 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
         log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
                     "some HTTPS requests will fail. If you intend to use HTTPS, please "
                     "export this variable.")
-    filepath = _getFileURL(path)
 
-    log.debug("Detecting HTTP endpoint type...")
-    r = requests.options(filepath, verify=ca_bundle)
+    log.debug("Detecting HTTP endpoint type for '%s'...", path)
+    r = requests.options(str(path), verify=ca_bundle)
     return True if 'DAV' in r.headers else False
 
 
@@ -231,26 +229,6 @@ def finalurl(r: requests.Response) -> str:
         destination_url = r.headers['Location']
         log.debug("Request redirected to %s", destination_url)
     return destination_url
-
-
-def _getFileURL(path: Union[Location, ButlerURI, str]) -> str:
-    """Return the absolute URL of the resource as a string.
-
-    Parameters
-    ----------
-    path : `Location`, `ButlerURI` or `str`
-        Location or ButlerURI containing the bucket name and filepath.
-
-    Returns
-    -------
-    filepath : `str`
-        The fully qualified URL of the resource.
-    """
-    if isinstance(path, Location):
-        filepath = path.uri.geturl()
-    else:
-        filepath = ButlerURI(path).geturl()
-    return filepath
 
 
 class ButlerHttpURI(ButlerURI):
