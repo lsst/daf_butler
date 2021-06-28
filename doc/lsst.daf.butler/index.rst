@@ -6,6 +6,17 @@
 lsst.daf.butler
 ###############
 
+.. _lsst.daf.butler-changes:
+
+Changes
+=======
+
+.. toctree::
+   :maxdepth: 1
+
+   CHANGES.rst
+
+
 .. _lsst.daf.butler-using:
 
 Using the Butler

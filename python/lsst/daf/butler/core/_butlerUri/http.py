@@ -26,6 +26,7 @@ import os.path
 import requests
 import tempfile
 import logging
+import functools
 
 __all__ = ('ButlerHttpURI', )
 
@@ -41,7 +42,6 @@ from typing import (
 
 from .utils import NoTransaction
 from ._butlerUri import ButlerURI
-from ..location import Location
 
 if TYPE_CHECKING:
     from ..datastore import DatastoreTransaction
@@ -84,11 +84,22 @@ def getHttpSession() -> requests.Session:
 
     log.debug("Creating new HTTP session...")
 
+    ca_bundle = None
+    try:
+        ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
+    except KeyError:
+        log.debug("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
+                  "If you would like to trust additional CAs, please consider "
+                  "exporting this variable.")
+    session.verify = ca_bundle
+
     try:
         env_auth_method = os.environ['LSST_BUTLER_WEBDAV_AUTH']
     except KeyError:
-        raise KeyError("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, "
-                       "please use values X509 or TOKEN")
+        log.debug("Environment variable LSST_BUTLER_WEBDAV_AUTH is not set, "
+                  "no authentication configured.")
+        log.debug("Unauthenticated session configured and ready.")
+        return session
 
     if env_auth_method == "X509":
         log.debug("... using x509 authentication.")
@@ -103,17 +114,7 @@ def getHttpSession() -> requests.Session:
     else:
         raise ValueError("Environment variable LSST_BUTLER_WEBDAV_AUTH must be set to X509 or TOKEN")
 
-    ca_bundle = None
-    try:
-        ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
-    except KeyError:
-        log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
-                    "HTTPS requests will fail. If you intend to use HTTPS, please "
-                    "export this variable.")
-
-    session.verify = ca_bundle
-    log.debug("Session configured and ready.")
-
+    log.debug("Authenticated session configured and ready.")
     return session
 
 
@@ -175,96 +176,16 @@ def refreshToken(session: requests.Session) -> None:
     session.headers.update({'Authorization': 'Bearer ' + bearer_token})
 
 
-def webdavCheckFileExists(path: Union[Location, ButlerURI, str],
-                          session: Optional[requests.Session] = None) -> Tuple[bool, int]:
-    """Check that a remote HTTP resource exists.
-
-    Parameters
-    ----------
-    path : `Location`, `ButlerURI` or `str`
-        Location or ButlerURI containing the bucket name and filepath.
-    session : `requests.Session`, optional
-        Session object to query.
-
-    Returns
-    -------
-    exists : `bool`
-        True if resource exists, False otherwise.
-    size : `int`
-        Size of the resource, if it exists, in bytes, otherwise -1
-    """
-    if session is None:
-        session = getHttpSession()
-
-    filepath = _getFileURL(path)
-
-    log.debug("Checking if file exists: %s", filepath)
-
-    r = session.head(filepath, timeout=TIMEOUT)
-    return (True, int(r.headers['Content-Length'])) if r.status_code == 200 else (False, -1)
-
-
-def webdavDeleteFile(path: Union[Location, ButlerURI, str],
-                     session: Optional[requests.Session] = None) -> None:
-    """Remove a remote HTTP resource.
-
-    Parameters
-    ----------
-    path : `Location`, `ButlerURI` or `str`
-        Location or ButlerURI containing the bucket name and filepath.
-    session : `requests.Session`, optional
-        Session object to query.
-
-    Raises
-    ------
-    FileNotFoundError
-        Raises a FileNotFoundError if the resource does not exist or on
-        failure.
-    """
-    if session is None:
-        session = getHttpSession()
-
-    filepath = _getFileURL(path)
-
-    log.debug("Removing file: %s", filepath)
-    r = session.delete(filepath, timeout=TIMEOUT)
-    if r.status_code not in [200, 202, 204]:
-        raise FileNotFoundError(f"Unable to delete resource {filepath}; status code: {r.status_code}")
-
-
-def folderExists(path: Union[Location, ButlerURI, str],
-                 session: Optional[requests.Session] = None) -> bool:
-    """Check if the Webdav repository at a given URL actually exists.
-
-    Parameters
-    ----------
-    path : `Location`, `ButlerURI` or `str`
-        Location or ButlerURI containing the bucket name and filepath.
-    session : `requests.Session`, optional
-        Session object to query.
-
-    Returns
-    -------
-    exists : `bool`
-        True if it exists, False if no folder is found.
-    """
-    if session is None:
-        session = getHttpSession()
-
-    filepath = _getFileURL(path)
-
-    log.debug("Checking if folder exists: %s", filepath)
-    r = session.head(filepath, timeout=TIMEOUT)
-    return True if r.status_code == 200 else False
-
-
-def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
+@functools.lru_cache
+def isWebdavEndpoint(path: Union[ButlerURI, str]) -> bool:
     """Check whether the remote HTTP endpoint implements Webdav features.
 
     Parameters
     ----------
-    path : `Location`, `ButlerURI` or `str`
-        Location or ButlerURI containing the bucket name and filepath.
+    path : `ButlerURI` or `str`
+        URL to the resource to be checked.
+        Should preferably refer to the root since the status is shared
+        by all paths in that server.
 
     Returns
     -------
@@ -276,12 +197,11 @@ def isWebdavEndpoint(path: Union[Location, ButlerURI, str]) -> bool:
         ca_bundle = os.environ['LSST_BUTLER_WEBDAV_CA_BUNDLE']
     except KeyError:
         log.warning("Environment variable LSST_BUTLER_WEBDAV_CA_BUNDLE is not set: "
-                    "HTTPS requests will fail. If you intend to use HTTPS, please "
+                    "some HTTPS requests will fail. If you intend to use HTTPS, please "
                     "export this variable.")
-    filepath = _getFileURL(path)
 
-    log.debug("Detecting HTTP endpoint type...")
-    r = requests.options(filepath, verify=ca_bundle)
+    log.debug("Detecting HTTP endpoint type for '%s'...", path)
+    r = requests.options(str(path), verify=ca_bundle)
     return True if 'DAV' in r.headers else False
 
 
@@ -311,31 +231,12 @@ def finalurl(r: requests.Response) -> str:
     return destination_url
 
 
-def _getFileURL(path: Union[Location, ButlerURI, str]) -> str:
-    """Return the absolute URL of the resource as a string.
-
-    Parameters
-    ----------
-    path : `Location`, `ButlerURI` or `str`
-        Location or ButlerURI containing the bucket name and filepath.
-
-    Returns
-    -------
-    filepath : `str`
-        The fully qualified URL of the resource.
-    """
-    if isinstance(path, Location):
-        filepath = path.uri.geturl()
-    else:
-        filepath = ButlerURI(path).geturl()
-    return filepath
-
-
 class ButlerHttpURI(ButlerURI):
     """General HTTP(S) resource."""
 
     _session = requests.Session()
     _sessionInitialized = False
+    _is_webdav: Optional[bool] = None
 
     @property
     def session(self) -> requests.Session:
@@ -345,17 +246,23 @@ class ButlerHttpURI(ButlerURI):
                 refreshToken(ButlerHttpURI._session)
             return ButlerHttpURI._session
 
-        baseURL = self.scheme + "://" + self.netloc
-
-        if isWebdavEndpoint(baseURL):
-            log.debug("%s looks like a Webdav endpoint.", baseURL)
-            s = getHttpSession()
-        else:
-            s = requests.Session()
-
+        s = getHttpSession()
         ButlerHttpURI._session = s
         ButlerHttpURI._sessionInitialized = True
         return s
+
+    @property
+    def is_webdav_endpoint(self) -> bool:
+        """Check if the current endpoint implements WebDAV features.
+
+        This is stored per URI but cached by root so there is
+        only one check per hostname.
+        """
+        if self._is_webdav is not None:
+            return self._is_webdav
+
+        self._is_webdav = isWebdavEndpoint(self.root_uri())
+        return self._is_webdav
 
     def exists(self) -> bool:
         """Check that a remote HTTP resource exists."""
@@ -376,6 +283,10 @@ class ButlerHttpURI(ButlerURI):
 
     def mkdir(self) -> None:
         """Create the directory resource if it does not already exist."""
+        # Only available on WebDAV backends
+        if not self.is_webdav_endpoint:
+            raise NotImplementedError("Endpoint does not implement WebDAV functionality")
+
         if not self.dirLike:
             raise ValueError(f"Can not create a 'directory' for file-like URI {self}")
 
@@ -489,6 +400,10 @@ class ButlerHttpURI(ButlerURI):
             transfer = self.transferDefault
 
         if isinstance(src, type(self)):
+            # Only available on WebDAV backends
+            if not self.is_webdav_endpoint:
+                raise NotImplementedError("Endpoint does not implement WebDAV functionality")
+
             if transfer == "move":
                 r = self.session.request("MOVE", src.geturl(),
                                          headers={"Destination": self.geturl()},

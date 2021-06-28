@@ -1,0 +1,2 @@
+`ButlerURI` ``http`` schemes can now handle non-WebDAV endpoints.
+Warnings are only issued if WebDAV functionality is requested.
