@@ -336,13 +336,15 @@ class RemoteRegistry(Registry):
 
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[Mapping[str, Any], DimensionRecord],
-                            conform: bool = True) -> None:
+                            conform: bool = True,
+                            replace: bool = False) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
     def syncDimensionData(self, element: Union[DimensionElement, str],
                           row: Union[Mapping[str, Any], DimensionRecord],
-                          conform: bool = True) -> bool:
+                          conform: bool = True,
+                          update: bool = False) -> Union[bool, Dict[str, Any]]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 

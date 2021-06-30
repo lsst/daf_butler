@@ -486,6 +486,12 @@ class DatabaseTests(ABC):
                              [dict(r) for r in rodb.query(tables.b.select()).fetchall()])
             with self.assertRaises(ReadOnlyDatabaseError):
                 rodb.sync(tables.b, keys={"name": "b2"}, extra={"value": 20})
+        # Repeat the operation with a different value in 'compared' and ask to
+        # update.
+        _, updated = db.sync(tables.b, keys={"name": "b1"}, compared={"value": 20}, update=True)
+        self.assertEqual(updated, {"value": 10})
+        self.assertEqual([{"id": values["id"], "name": "b1", "value": 20}],
+                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
 
     def testReplace(self):
         """Tests for `Database.replace`.

@@ -28,6 +28,7 @@ import itertools
 import logging
 import os
 import re
+from typing import Iterator
 import unittest
 
 import astropy.time
@@ -39,6 +40,7 @@ try:
 except ImportError:
     np = None
 
+import lsst.sphgeom
 from ...core import (
     DataCoordinate,
     DataCoordinateSequence,
@@ -1498,6 +1500,239 @@ class RegistryTests(ABC):
                     list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
                     [dataset2],
                 )
+
+    def testDimensionDataModifications(self):
+        """Test that modifying dimension records via:
+        syncDimensionData(..., update=True) and
+        insertDimensionData(..., replace=True) works as expected, even in the
+        presence of datasets using those dimensions and spatial overlap
+        relationships.
+        """
+
+        def unpack_range_set(ranges: lsst.sphgeom.RangeSet) -> Iterator[int]:
+            """Unpack a sphgeom.RangeSet into the integers it contains.
+            """
+            for begin, end in ranges:
+                yield from range(begin, end)
+
+        def range_set_hull(
+            ranges: lsst.sphgeom.RangeSet,
+            pixelization: lsst.sphgeom.HtmPixelization,
+        ) -> lsst.sphgeom.ConvexPolygon:
+            """Create a ConvexPolygon hull of the region defined by a set of
+            HTM pixelization index ranges.
+            """
+            points = []
+            for index in unpack_range_set(ranges):
+                points.extend(pixelization.triangle(index).getVertices())
+            return lsst.sphgeom.ConvexPolygon(points)
+
+        # Use HTM to set up an initial parent region (one arbitrary trixel)
+        # and four child regions (the trixels within the parent at the next
+        # level.  We'll use the parent as a tract/visit region and the children
+        # as its patch/visit_detector regions.
+        registry = self.makeRegistry()
+        htm6 = registry.dimensions.skypix["htm"][6].pixelization
+        commonSkyPix = registry.dimensions.commonSkyPix.pixelization
+        index = 12288
+        child_ranges_small = lsst.sphgeom.RangeSet(index).scaled(4)
+        assert htm6.universe().contains(child_ranges_small)
+        child_regions_small = [htm6.triangle(i) for i in unpack_range_set(child_ranges_small)]
+        parent_region_small = lsst.sphgeom.ConvexPolygon(
+            list(itertools.chain.from_iterable(c.getVertices() for c in child_regions_small))
+        )
+        assert all(parent_region_small.contains(c) for c in child_regions_small)
+        # Make a larger version of each child region, defined to be the set of
+        # htm6 trixels that overlap the original's bounding circle.  Make a new
+        # parent that's the convex hull of the new children.
+        child_regions_large = [
+            range_set_hull(htm6.envelope(c.getBoundingCircle()), htm6)
+            for c in child_regions_small
+        ]
+        assert all(large.contains(small) for large, small in zip(child_regions_large, child_regions_small))
+        parent_region_large = lsst.sphgeom.ConvexPolygon(
+            list(itertools.chain.from_iterable(c.getVertices() for c in child_regions_large))
+        )
+        assert all(parent_region_large.contains(c) for c in child_regions_large)
+        assert parent_region_large.contains(parent_region_small)
+        assert not parent_region_small.contains(parent_region_large)
+        assert not all(parent_region_small.contains(c) for c in child_regions_large)
+        # Find some commonSkyPix indices that overlap the large regions but not
+        # overlap the small regions.  We use commonSkyPix here to make sure the
+        # real tests later involve what's in the database, not just post-query
+        # region filtering.
+        child_difference_indices = []
+        for large, small in zip(child_regions_large, child_regions_small):
+            difference = list(unpack_range_set(commonSkyPix.envelope(large) - commonSkyPix.envelope(small)))
+            assert difference, "if this is empty, we can't test anything useful with these regions"
+            assert all(
+                not commonSkyPix.triangle(d).isDisjointFrom(large)
+                and commonSkyPix.triangle(d).isDisjointFrom(small)
+                for d in difference
+            )
+            child_difference_indices.append(difference)
+        parent_difference_indices = list(
+            unpack_range_set(
+                commonSkyPix.envelope(parent_region_large) - commonSkyPix.envelope(parent_region_small)
+            )
+        )
+        assert parent_difference_indices, "if this is empty, we can't test anything useful with these regions"
+        assert all(
+            (
+                not commonSkyPix.triangle(d).isDisjointFrom(parent_region_large)
+                and commonSkyPix.triangle(d).isDisjointFrom(parent_region_small)
+            )
+            for d in parent_difference_indices
+        )
+        # Now that we've finally got those regions, we'll insert the large ones
+        # as tract/patch dimension records.
+        skymap_name = "testing_v1"
+        registry.insertDimensionData(
+            "skymap", {
+                "name": skymap_name,
+                "hash": bytes([42]),
+                "tract_max": 1,
+                "patch_nx_max": 2,
+                "patch_ny_max": 2,
+            }
+        )
+        registry.insertDimensionData(
+            "tract",
+            {"skymap": skymap_name, "id": 0, "region": parent_region_large}
+        )
+        registry.insertDimensionData(
+            "patch",
+            *[{
+                "skymap": skymap_name,
+                "tract": 0,
+                "id": n,
+                "cell_x": n % 2,
+                "cell_y": n // 2,
+                "region": c
+            } for n, c in enumerate(child_regions_large)]
+        )
+        # Add at dataset that uses these dimensions to make sure that modifying
+        # them doesn't disrupt foreign keys (need to make sure DB doesn't
+        # implement insert with replace=True as delete-then-insert).
+        dataset_type = DatasetType(
+            "coadd",
+            dimensions=["tract", "patch"],
+            universe=registry.dimensions,
+            storageClass="Exposure",
+        )
+        registry.registerDatasetType(dataset_type)
+        registry.registerCollection("the_run", CollectionType.RUN)
+        registry.insertDatasets(
+            dataset_type,
+            [{"skymap": skymap_name, "tract": 0, "patch": 2}],
+            run="the_run",
+        )
+        # Query for tracts and patches that overlap some "difference" htm9
+        # pixels; there should be overlaps, because the database has
+        # the "large" suite of regions.
+        self.assertEqual(
+            {0},
+            {
+                data_id["tract"] for data_id in registry.queryDataIds(
+                    ["tract"],
+                    skymap=skymap_name,
+                    dataId={registry.dimensions.commonSkyPix.name: parent_difference_indices[0]},
+                )
+            }
+        )
+        for patch_id, patch_difference_indices in enumerate(child_difference_indices):
+            self.assertIn(
+                patch_id,
+                {
+                    data_id["patch"] for data_id in registry.queryDataIds(
+                        ["patch"],
+                        skymap=skymap_name,
+                        dataId={registry.dimensions.commonSkyPix.name: patch_difference_indices[0]},
+                    )
+                }
+            )
+        # Use sync to update the tract region and insert to update the patch
+        # regions, to the "small" suite.
+        updated = registry.syncDimensionData(
+            "tract",
+            {"skymap": skymap_name, "id": 0, "region": parent_region_small},
+            update=True,
+        )
+        self.assertEqual(updated, {"region": parent_region_large})
+        registry.insertDimensionData(
+            "patch",
+            *[{
+                "skymap": skymap_name,
+                "tract": 0,
+                "id": n,
+                "cell_x": n % 2,
+                "cell_y": n // 2,
+                "region": c
+            } for n, c in enumerate(child_regions_small)],
+            replace=True
+        )
+        # Query again; there now should be no such overlaps, because the
+        # database has the "small" suite of regions.
+        self.assertFalse(
+            set(
+                registry.queryDataIds(
+                    ["tract"],
+                    skymap=skymap_name,
+                    dataId={registry.dimensions.commonSkyPix.name: parent_difference_indices[0]},
+                )
+            )
+        )
+        for patch_id, patch_difference_indices in enumerate(child_difference_indices):
+            self.assertNotIn(
+                patch_id,
+                {
+                    data_id["patch"] for data_id in registry.queryDataIds(
+                        ["patch"],
+                        skymap=skymap_name,
+                        dataId={registry.dimensions.commonSkyPix.name: patch_difference_indices[0]},
+                    )
+                }
+            )
+        # Update back to the large regions and query one more time.
+        updated = registry.syncDimensionData(
+            "tract",
+            {"skymap": skymap_name, "id": 0, "region": parent_region_large},
+            update=True,
+        )
+        self.assertEqual(updated, {"region": parent_region_small})
+        registry.insertDimensionData(
+            "patch",
+            *[{
+                "skymap": skymap_name,
+                "tract": 0,
+                "id": n,
+                "cell_x": n % 2,
+                "cell_y": n // 2,
+                "region": c
+            } for n, c in enumerate(child_regions_large)],
+            replace=True
+        )
+        self.assertEqual(
+            {0},
+            {
+                data_id["tract"] for data_id in registry.queryDataIds(
+                    ["tract"],
+                    skymap=skymap_name,
+                    dataId={registry.dimensions.commonSkyPix.name: parent_difference_indices[0]},
+                )
+            }
+        )
+        for patch_id, patch_difference_indices in enumerate(child_difference_indices):
+            self.assertIn(
+                patch_id,
+                {
+                    data_id["patch"] for data_id in registry.queryDataIds(
+                        ["patch"],
+                        skymap=skymap_name,
+                        dataId={registry.dimensions.commonSkyPix.name: patch_difference_indices[0]},
+                    )
+                }
+            )
 
     def testCalibrationCollections(self):
         """Test operations on `~CollectionType.CALIBRATION` collections,

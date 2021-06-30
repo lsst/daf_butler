@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["CachingDimensionRecordStorage"]
 
-from typing import Any, Dict, Iterable, Mapping, Optional, Set
+from typing import Any, Dict, Iterable, Mapping, Optional, Set, Union
 
 import sqlalchemy
 
@@ -98,18 +98,18 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.
         return self._nested.join(builder, regions=regions, timespans=timespans)
 
-    def insert(self, *records: DimensionRecord) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
-        self._nested.insert(*records)
+        self._nested.insert(*records, replace=replace)
         for record in records:
             self._cache[record.dataId] = record
 
-    def sync(self, record: DimensionRecord) -> bool:
+    def sync(self, record: DimensionRecord, update: bool = False) -> Union[bool, Dict[str, Any]]:
         # Docstring inherited from DimensionRecordStorage.sync.
-        inserted = self._nested.sync(record)
-        if inserted:
+        inserted_or_updated = self._nested.sync(record, update=update)
+        if inserted_or_updated:
             self._cache[record.dataId] = record
-        return inserted
+        return inserted_or_updated
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.

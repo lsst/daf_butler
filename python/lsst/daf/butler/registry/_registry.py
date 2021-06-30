@@ -30,6 +30,7 @@ import contextlib
 import logging
 from typing import (
     Any,
+    Dict,
     Iterable,
     Iterator,
     List,
@@ -1012,7 +1013,8 @@ class Registry(ABC):
     @abstractmethod
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[Mapping[str, Any], DimensionRecord],
-                            conform: bool = True) -> None:
+                            conform: bool = True,
+                            replace: bool = False) -> None:
         """Insert one or more dimension records into the database.
 
         Parameters
@@ -1027,13 +1029,17 @@ class Registry(ABC):
             and assume that ``element`` is a `DimensionElement` instance and
             ``data`` is a one or more `DimensionRecord` instances of the
             appropriate subclass.
+        replace: `bool`, optional
+            If `True` (`False` is default), replace existing records in the
+            database if there is a conflict.
         """
         raise NotImplementedError()
 
     @abstractmethod
     def syncDimensionData(self, element: Union[DimensionElement, str],
                           row: Union[Mapping[str, Any], DimensionRecord],
-                          conform: bool = True) -> bool:
+                          conform: bool = True,
+                          update: bool = False) -> Union[bool, Dict[str, Any]]:
         """Synchronize the given dimension record with the database, inserting
         if it does not already exist and comparing values if it does.
 
@@ -1049,11 +1055,17 @@ class Registry(ABC):
             and assume that ``element`` is a `DimensionElement` instance and
             ``data`` is a one or more `DimensionRecord` instances of the
             appropriate subclass.
+        update: `bool`, optional
+            If `True` (`False` is default), update the existing record in the
+            database if there is a conflict.
 
         Returns
         -------
-        inserted : `bool`
-            `True` if a new row was inserted, `False` otherwise.
+        inserted_or_updated : `bool` or `dict`
+            `True` if a new row was inserted, `False` if no changes were
+            needed, or a `dict` mapping updated column names to their old
+            values if an update was performed (only possible if
+            ``update=True``).
 
         Raises
         ------
