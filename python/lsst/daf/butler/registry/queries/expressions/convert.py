@@ -732,6 +732,34 @@ class DispatchTable:
         table.registerBinary("*", (int, float), operator.__mul__)
         table.registerBinary("/", (int, float), operator.__truediv__)
         table.registerBinary("%", (int, float), operator.__mod__)
+        table.registerBinary(
+            "=",
+            lhs=(int, float, str, Time, type(None)),
+            rhs=(type(None),),
+            func=sqlalchemy.sql.expression.ColumnOperators.is_,
+            result=bool,
+        )
+        table.registerBinary(
+            "=",
+            lhs=(type(None),),
+            rhs=(int, float, str, Time, type(None)),
+            func=sqlalchemy.sql.expression.ColumnOperators.is_,
+            result=bool,
+        )
+        table.registerBinary(
+            "!=",
+            lhs=(int, float, str, Time, type(None)),
+            rhs=(type(None),),
+            func=sqlalchemy.sql.expression.ColumnOperators.is_not,
+            result=bool,
+        )
+        table.registerBinary(
+            "!=",
+            lhs=(type(None),),
+            rhs=(int, float, str, Time, type(None)),
+            func=sqlalchemy.sql.expression.ColumnOperators.is_not,
+            result=bool,
+        )
         # Construct Timespan literals from 2-element tuples (A, B), where A and
         # B are each either Time or None.
         table.registerBinary(
