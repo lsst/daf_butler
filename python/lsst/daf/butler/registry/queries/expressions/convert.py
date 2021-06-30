@@ -27,6 +27,7 @@ __all__ = (
 )
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 import operator
 from typing import (
     Any,
@@ -42,10 +43,13 @@ from typing import (
     TypeVar,
     Union,
 )
+import warnings
 
 from astropy.time import Time
+import astropy.utils.exceptions
 import sqlalchemy
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.expression import func
 
 from ....core import (
     ddl,
@@ -59,6 +63,13 @@ from ....core import (
 from ....core.utils import iterable
 from .parser import Node, TreeVisitor
 from .categorize import categorizeElementId, categorizeConstant, ExpressionConstant
+
+# As of astropy 4.2, the erfa interface is shipped independently and
+# ErfaWarning is no longer an AstropyWarning
+try:
+    import erfa
+except ImportError:
+    erfa = None
 
 if TYPE_CHECKING:
     from .._structs import QueryColumns
@@ -115,22 +126,23 @@ class ExpressionTypeError(TypeError):
 
 
 class _TimestampColumnElement(sqlalchemy.sql.ColumnElement):
-    """Special ColumnElement type used for TIMESTAMP columns in expressions.
+    """Special ColumnElement type used for TIMESTAMP columns or literals in
+    expressions.
 
-    TIMESTAMP columns in expressions are usually compared to time literals
-    which are `astropy.time.Time` instances that are converted to integer
-    nanoseconds since Epoch. For comparison we need to convert TIMESTAMP
-    column value to the same type. This type is a wrapper for actual column
-    that has special dialect-specific compilation methods defined below
-    transforming column in that common type.
+    SQLite stores timestamps as strings which sometimes can cause issues when
+    comparing strings. For more reliable comparison SQLite needs DATETIME()
+    wrapper for those strings. For PostgreSQL it works better if we add
+    TIMESTAMP to string literals.
 
     This mechanism is only used for expressions in WHERE clause, values of the
     TIMESTAMP columns returned from queries are still handled by standard
     mechanism and they are converted to `datetime` instances.
     """
-    def __init__(self, column: sqlalchemy.sql.ColumnElement):
+    def __init__(self, column: Optional[sqlalchemy.sql.ColumnElement] = None,
+                 literal: Optional[datetime] = None):
         super().__init__()
         self._column = column
+        self._literal = literal
 
 
 @compiles(_TimestampColumnElement, "sqlite")
@@ -140,7 +152,11 @@ def compile_timestamp_sqlite(element: Any, compiler: Any, **kw: Mapping[str, Any
     SQLite defines ``strftime`` function that can be used to convert timestamp
     value to Unix seconds.
     """
-    return f"STRFTIME('%s', {element._column.name})*1000000000"
+    assert element._column is not None or element._literal is not None, "Must have column or literal"
+    if element._column is not None:
+        return compiler.process(func.datetime(element._column), **kw)
+    else:
+        return compiler.process(func.datetime(sqlalchemy.sql.literal(element._literal)), **kw)
 
 
 @compiles(_TimestampColumnElement, "postgresql")
@@ -149,7 +165,12 @@ def compile_timestamp_pg(element: Any, compiler: Any, **kw: Mapping[str, Any]) -
 
     PostgreSQL can use `EXTRACT(epoch FROM timestamp)` function.
     """
-    return f"EXTRACT(epoch FROM {element._column.name})*1000000000"
+    assert element._column is not None or element._literal is not None, "Must have column or literal"
+    if element._column is not None:
+        return compiler.process(element._column, **kw)
+    else:
+        literal = element._literal.isoformat(sep=" ", timespec="microseconds")
+        return "TIMESTAMP " + compiler.process(sqlalchemy.sql.literal(literal), **kw)
 
 
 class WhereClauseConverter(ABC):
@@ -298,7 +319,10 @@ class ScalarWhereClauseConverter(WhereClauseConverter):
             Converter instance that wraps ``value``.
         """
         dtype = type(value)
-        column = sqlalchemy.sql.literal(value, type_=ddl.AstropyTimeNsecTai if dtype is Time else None)
+        if dtype is datetime:
+            column = _TimestampColumnElement(literal=value)
+        else:
+            column = sqlalchemy.sql.literal(value, type_=ddl.AstropyTimeNsecTai if dtype is Time else None)
         return cls(column, value, dtype)
 
     def finish(self, node: Node) -> sqlalchemy.sql.ColumnElement:
@@ -528,6 +552,61 @@ def adaptBinaryColumnFunc(func: BinaryColumnFunc, result: type) -> BinaryFunc:
     return adapted
 
 
+class TimeBinaryOperator:
+
+    def __init__(self, operator: Callable, dtype: type):
+        self.operator = operator
+        self.dtype = dtype
+
+    def __call__(self, lhs: WhereClauseConverter, rhs: WhereClauseConverter) -> WhereClauseConverter:
+        assert isinstance(lhs, ScalarWhereClauseConverter)
+        assert isinstance(rhs, ScalarWhereClauseConverter)
+        operands = [arg.column for arg in self.coerceTimes(lhs, rhs)]
+        return ScalarWhereClauseConverter.fromExpression(self.operator(*operands), dtype=self.dtype)
+
+    @classmethod
+    def coerceTimes(cls, *args: ScalarWhereClauseConverter) -> List[ScalarWhereClauseConverter]:
+        """Coerce one or more ScalarWhereClauseConverters to datetime type if
+        necessary.
+
+        If any of the arguments has `datetime` type then all other arguments
+        are converted to `datetime` type as well.
+
+        Parameters
+        ----------
+        *args : `ScalarWhereClauseConverter`
+            Instances which represent time objects, their type can be one of
+            `Time` or `datetime`. If coercion happens that `Time` objects can
+            only be literals, not expressions.
+
+        Returns
+        -------
+        converters : `list` [ `ScalarWhereClauseConverter` ]
+            List of converters in the same order as they appera in argument
+            list, some of them can be coerced to `datetime` type, non-coerced
+            arguments are returned without any change.
+        """
+
+        def _coerce(arg: ScalarWhereClauseConverter) -> ScalarWhereClauseConverter:
+            """Coerce singe ScalarWhereClauseConverter to datetime literal.
+            """
+            if arg.dtype is not datetime:
+                assert arg.value is not None, "Cannot coerce non-literals"
+                assert arg.dtype is Time, "Cannot coerce non-Time literals"
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
+                    if erfa is not None:
+                        warnings.simplefilter("ignore", category=erfa.ErfaWarning)
+                    dt = arg.value.to_datetime()
+                arg = ScalarWhereClauseConverter.fromLiteral(dt)
+            return arg
+
+        if any(arg.dtype is datetime for arg in args):
+            return [_coerce(arg) for arg in args]
+        else:
+            return list(args)
+
+
 class DispatchTable:
     """An object that manages unary- and binary-operator type-dispatch tables
     for `WhereClauseConverter`.
@@ -721,17 +800,29 @@ class DispatchTable:
         table.registerUnary("-", (int, float), operator.__neg__)
         table.registerBinary("AND", bool, sqlalchemy.sql.and_)
         table.registerBinary("OR", bool, sqlalchemy.sql.or_)
-        table.registerBinary("=", (int, float, str, Time), operator.__eq__, result=bool)
-        table.registerBinary("!=", (int, float, str, Time), operator.__ne__, result=bool)
-        table.registerBinary("<", (int, float, str, Time), operator.__lt__, result=bool)
-        table.registerBinary(">", (int, float, str, Time), operator.__gt__, result=bool)
-        table.registerBinary("<=", (int, float, str, Time), operator.__le__, result=bool)
-        table.registerBinary(">=", (int, float, str, Time), operator.__ge__, result=bool)
+        table.registerBinary("=", (int, float, str), operator.__eq__, result=bool)
+        table.registerBinary("!=", (int, float, str), operator.__ne__, result=bool)
+        table.registerBinary("<", (int, float, str), operator.__lt__, result=bool)
+        table.registerBinary(">", (int, float, str), operator.__gt__, result=bool)
+        table.registerBinary("<=", (int, float, str), operator.__le__, result=bool)
+        table.registerBinary(">=", (int, float, str), operator.__ge__, result=bool)
         table.registerBinary("+", (int, float), operator.__add__)
         table.registerBinary("-", (int, float), operator.__sub__)
         table.registerBinary("*", (int, float), operator.__mul__)
         table.registerBinary("/", (int, float), operator.__truediv__)
         table.registerBinary("%", (int, float), operator.__mod__)
+        table.registerBinary("=", (Time, datetime), TimeBinaryOperator(operator.__eq__, bool),
+                             rhs=(Time, datetime), adapt=False)
+        table.registerBinary("!=", (Time, datetime), TimeBinaryOperator(operator.__ne__, bool),
+                             rhs=(Time, datetime), adapt=False)
+        table.registerBinary("<", (Time, datetime), TimeBinaryOperator(operator.__lt__, bool),
+                             rhs=(Time, datetime), adapt=False)
+        table.registerBinary(">", (Time, datetime), TimeBinaryOperator(operator.__gt__, bool),
+                             rhs=(Time, datetime), adapt=False)
+        table.registerBinary("<=", (Time, datetime), TimeBinaryOperator(operator.__le__, bool),
+                             rhs=(Time, datetime), adapt=False)
+        table.registerBinary(">=", (Time, datetime), TimeBinaryOperator(operator.__ge__, bool),
+                             rhs=(Time, datetime), adapt=False)
         table.registerBinary(
             "=",
             lhs=(int, float, str, Time, type(None)),
@@ -906,8 +997,8 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
             assert self.columns.datasets is not None
             assert self.columns.datasets.ingestDate is not None, "dataset.ingest_date is not in the query"
             return ScalarWhereClauseConverter.fromExpression(
-                _TimestampColumnElement(self.columns.datasets.ingestDate),
-                Time,
+                _TimestampColumnElement(column=self.columns.datasets.ingestDate),
+                datetime,
             )
         elif constant is ExpressionConstant.NULL:
             return ScalarWhereClauseConverter.fromLiteral(None)
