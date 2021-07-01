@@ -1504,7 +1504,7 @@ class Butler:
         ----------
         datasets : `FileDataset`
             Each positional argument is a struct containing information about
-            a file to be ingested, including its path (either absolute or
+            a file to be ingested, including its URI (either absolute or
             relative to the datastore root, if applicable), a `DatasetRef`,
             and optionally a formatter class or its fully-qualified string
             name.  If a formatter is not provided, the formatter that would be
