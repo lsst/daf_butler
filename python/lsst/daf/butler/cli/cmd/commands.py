@@ -554,9 +554,10 @@ def collection_chain(**kwargs):
 @click.option("--id-generation-mode",
               default="UNIQUE",
               help="Mode to use for generating dataset IDs. The default creates a unique ID. Other options"
-              " are: 'DATAID_TYPE' for creating a reproducible ID from the dataID;"
-              " 'DATAID_TYPE_RUN' for creating a reproducible ID from the dataID and run.  The latter is"
-              " usually used for 'raw'-type data.",
+              " are: 'DATAID_TYPE' for creating a reproducible ID from the dataID and dataset type;"
+              " 'DATAID_TYPE_RUN' for creating a reproducible ID from the dataID, dataset type and run."
+              " The latter is usually used for 'raw'-type data that will be ingested in multiple."
+              " repositories.",
               callback=to_upper,
               type=click.Choice(("UNIQUE", "DATAID_TYPE", "DATAID_TYPE_RUN"), case_sensitive=False))
 @click.option("--data-id",
@@ -574,8 +575,9 @@ def collection_chain(**kwargs):
 def ingest_files(**kwargs):
     """Ingest files from table file.
 
-    DATASET_TYPE is the name of the dataset type to associated with these
-    files. There can only be one dataset type per invocation of this
+    DATASET_TYPE is the name of the dataset type to be associated with these
+    files. This dataset type must already exist and will not be created by
+    this command. There can only be one dataset type per invocation of this
     command.
 
     RUN is the run to use for the file ingest.
@@ -591,5 +593,9 @@ def ingest_files(**kwargs):
     type. Relative file URI by default is assumed to be relative to the
     current working directory but can be overridden using the ``--prefix``
     option.
+
+    This command does not create dimension records and so any records must
+    be created by other means. This command should not be used to ingest
+    raw camera exposures.
     """
     script.ingest_files(**kwargs)
