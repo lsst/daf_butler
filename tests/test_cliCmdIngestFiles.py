@@ -43,63 +43,72 @@ class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
-        self.root2 = makeTestTempDir(TESTDIR)
+        self.addCleanup(removeTestTempDir, self.root)
+
         self.testRepo = MetricTestRepo(self.root,
                                        configFile=self.configFile)
 
-    def tearDown(self):
-        removeTestTempDir(self.root)
+        self.root2 = makeTestTempDir(TESTDIR)
+        self.addCleanup(removeTestTempDir, self.root2)
 
-    def testSimpleIngest(self):
-
-        # Create a couple of test JSON files.
-        files = []
-        datasets = []
+        # Create some test output files to be ingested
+        self.files = []
+        self.datasets = []
         for i in range(2):
-            data = MetricsExample(summary={"int": i, "string": f"{i}"})
+            data = MetricsExample(summary={"int": i, "string": f"{self.id()}_{i}"})
             outfile = f"test{i}.json"
             with open(os.path.join(self.root2, outfile), "w") as fd:
                 json.dump(data._asdict(), fd)
-            datasets.append(data)
-            files.append(outfile)
+            self.datasets.append(data)
+            self.files.append(outfile)
 
-        # Create some Astropy tables with ingest options.
-        tables = (
-            # Everything in the table with relative path.
-            (Table([files, [423, 424], ["DummyCamComp", "DummyCamComp"]],
-                   names=["Files", "visit", "instrument"]),
-             ("--prefix", self.root2)),
-            # Relative path with instrument factored out.
-            (Table([files, [423, 424]],
-                   names=["Files", "visit"]),
-             ("--data-id", "instrument=DummyCamComp", "--prefix", self.root2)),
-            # Absolute path with instrument factored out.
-            (Table([[os.path.join(self.root2, f) for f in files], [423, 424]],
-                   names=["Files", "visit"]),
-             ("--data-id", "instrument=DummyCamComp")),
-        )
+        # The values for the visit and instrument dimensions must correspond
+        # to values in the test repo that was created for this test.
+        self.visits = [423, 424]
+        self.instruments = ["DummyCamComp"] * 2
 
+    def testIngestRelativePath(self):
+        """Ingest using relative path with prefix."""
+        table = Table([self.files, self.visits, self.instruments],
+                      names=["Files", "visit", "instrument"])
+        options = ("--prefix", self.root2)
+        self.assertIngest(table, options)
+
+    def testIngestAbsoluteWithDataId(self):
+        """Ingest with absolute path and factored out dataId override."""
+        table = Table([[os.path.join(self.root2, f) for f in self.files], self.visits],
+                      names=["Files", "visit"])
+        options = ("--data-id", f"instrument={self.instruments[0]}")
+        self.assertIngest(table, options)
+
+    def testIngestRelativeWithDataId(self):
+        """Ingest with relative path and factored out dataId override."""
+        table = Table([self.files, self.visits],
+                      names=["Files", "visit"])
+        options = ("--data-id", f"instrument={self.instruments[0]}", "--prefix", self.root2)
+        self.assertIngest(table, options)
+
+    def assertIngest(self, table, options):
         runner = LogCliRunner()
         with runner.isolated_filesystem():
 
-            for i, (table, options) in enumerate(tables):
+            table_file = os.path.join(self.root2, f"table_{self.id()}.csv")
+            table.write(table_file)
 
-                table_file = os.path.join(self.root2, f"table{i}.csv")
-                table.write(table_file)
+            run = f"u/user/{self.id()}"
+            result = runner.invoke(cli, ["ingest-files", *options,
+                                         self.root, "test_metric_comp", run, table_file])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-                run = f"u/user/test{i}"
-                result = runner.invoke(cli, ["ingest-files", *options,
-                                             self.root, "test_metric_comp", run, table_file])
-                self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            butler = Butler(self.root)
+            refs = list(butler.registry.queryDatasets("test_metric_comp", collections=run))
+            self.assertEqual(len(refs), 2)
 
-                butler = Butler(self.root)
-                refs = list(butler.registry.queryDatasets("test_metric_comp", collections=run))
-                self.assertEqual(len(refs), 2)
-
-                for i, data in enumerate(datasets):
-                    butler_data = butler.get("test_metric_comp", visit=423+i, instrument="DummyCamComp",
-                                             collections=run)
-                    self.assertEqual(butler_data, data)
+            for i, data in enumerate(self.datasets):
+                butler_data = butler.get("test_metric_comp", visit=self.visits[i],
+                                         instrument=self.instruments[i],
+                                         collections=run)
+                self.assertEqual(butler_data, data)
 
 
 if __name__ == "__main__":
