@@ -576,7 +576,7 @@ class TimeBinaryOperator:
         ----------
         *args : `ScalarWhereClauseConverter`
             Instances which represent time objects, their type can be one of
-            `Time` or `datetime`. If coercion happens that `Time` objects can
+            `Time` or `datetime`. If coercion happens, then `Time` objects can
             only be literals, not expressions.
 
         Returns
@@ -588,7 +588,7 @@ class TimeBinaryOperator:
         """
 
         def _coerce(arg: ScalarWhereClauseConverter) -> ScalarWhereClauseConverter:
-            """Coerce singe ScalarWhereClauseConverter to datetime literal.
+            """Coerce single ScalarWhereClauseConverter to datetime literal.
             """
             if arg.dtype is not datetime:
                 assert arg.value is not None, "Cannot coerce non-literals"
