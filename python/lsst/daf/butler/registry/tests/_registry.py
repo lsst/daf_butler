@@ -24,6 +24,7 @@ __all__ = ["RegistryTests"]
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from datetime import datetime, timedelta
 import itertools
 import logging
 import os
@@ -1972,7 +1973,9 @@ class RegistryTests(ABC):
 
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
+        dt0 = datetime.utcnow()
         self.loadData(registry, "datasets.yaml")
+        dt1 = datetime.utcnow()
 
         datasets = list(registry.queryDatasets(..., collections=...))
         len0 = len(datasets)
@@ -1988,6 +1991,34 @@ class RegistryTests(ABC):
         datasets = list(registry.queryDatasets(..., collections=..., where=where))
         len2 = len(datasets)
         self.assertEqual(len2, 0)
+
+        # Check more exact timing to make sure there is no 37 seconds offset
+        # (after fixing DM-30124). SQLite time precision is 1 second, make
+        # sure that we don't test with higher precision.
+        tests = [
+            # format: (timestamp, operator, expected_len)
+            (dt0 - timedelta(seconds=1), ">", len0),
+            (dt0 - timedelta(seconds=1), "<", 0),
+            (dt1 + timedelta(seconds=1), "<", len0),
+            (dt1 + timedelta(seconds=1), ">", 0),
+        ]
+        for dt, op, expect_len in tests:
+            dt_str = dt.isoformat(sep=" ")
+
+            where = f"ingest_date {op} T'{dt_str}'"
+            datasets = list(registry.queryDatasets(..., collections=..., where=where))
+            self.assertEqual(len(datasets), expect_len)
+
+            # same with bind using datetime or astropy Time
+            where = f"ingest_date {op} ingest_time"
+            datasets = list(registry.queryDatasets(..., collections=..., where=where,
+                                                   bind={"ingest_time": dt}))
+            self.assertEqual(len(datasets), expect_len)
+
+            dt_astropy = astropy.time.Time(dt, format="datetime")
+            datasets = list(registry.queryDatasets(..., collections=..., where=where,
+                                                   bind={"ingest_time": dt_astropy}))
+            self.assertEqual(len(datasets), expect_len)
 
     def testTimespanQueries(self):
         """Test query expressions involving timespans.

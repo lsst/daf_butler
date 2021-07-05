@@ -229,8 +229,8 @@ Here are few examples for checking containment in a time range:
 .. code-block:: sql
 
     -- using literals for both timestamp and time range
-    T'2020-01-01' IN (T'2019-01-01', '2020-01-01')
-    (T'2020-01-01', T'2020-02-01') NOT IN (T'2019-01-01', '2020-01-01')
+    T'2020-01-01' IN (T'2019-01-01', T'2020-01-01')
+    (T'2020-01-01', T'2020-02-01') NOT IN (T'2019-01-01', T'2020-01-01')
 
     -- using identifiers for each timestamp in a time range
     T'2020-01-01' IN (interval.begin, interval.end)
@@ -255,7 +255,7 @@ OVERLAPS operator
 ^^^^^^^^^^^^^^^^^
 
 The ``OVERLAPS`` operator checks for overlapping time ranges or regions, its
-argument have to have consistent types. Like with ``IN`` operator time ranges
+arguments have to have consistent types. Like with ``IN`` operator time ranges
 can be represented with a tuple of two timestamps (literals or identifiers) or
 with a single identifier. Regions can only be used as identifiers.
 ``OVERLAPS`` syntax is similar to ``IN`` but it does not require  parentheses
@@ -266,7 +266,7 @@ Few examples of the syntax:
 
 .. code-block:: sql
 
-    (T'2020-01-01', T'2022-01-01') OVERLAPS (T'2019-01-01', '2021-01-01')
+    (T'2020-01-01', T'2022-01-01') OVERLAPS (T'2019-01-01', T'2021-01-01')
     (interval.begin, interval.end) OVERLAPS interval_2
     interval_1 OVERLAPS interval_2
 
