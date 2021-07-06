@@ -1,0 +1,1 @@
+Add ``butler ingest-files`` subcommand to simplify ingest of any external file.

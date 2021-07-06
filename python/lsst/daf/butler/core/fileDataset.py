@@ -60,7 +60,7 @@ class FileDataset:
     """A `Formatter` class or fully-qualified name.
     """
 
-    def __init__(self, path: str, refs: Union[DatasetRef, List[DatasetRef]], *,
+    def __init__(self, path: Union[str, ButlerURI], refs: Union[DatasetRef, List[DatasetRef]], *,
                  formatter: Optional[FormatterParameter] = None):
         self.path = path
         if isinstance(refs, DatasetRef):

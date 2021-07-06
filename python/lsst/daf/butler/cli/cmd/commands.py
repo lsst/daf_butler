@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ()
+
 import click
 
 from ..opt import (
@@ -539,3 +541,61 @@ def collection_chain(**kwargs):
     """
     chain = script.collectionChain(**kwargs)
     print(f"[{', '.join(chain)}]")
+
+
+@click.command(cls=ButlerCommand)
+@repo_argument(required=True)
+@click.argument("dataset_type", required=True)
+@click.argument("run", required=True)
+@click.argument("table_file", required=True)
+@click.option("--formatter", type=str,
+              help="Fully-qualified python class to use as the Formatter. If not specified the formatter"
+              " will be determined from the dataset type and datastore configuration.")
+@click.option("--id-generation-mode",
+              default="UNIQUE",
+              help="Mode to use for generating dataset IDs. The default creates a unique ID. Other options"
+              " are: 'DATAID_TYPE' for creating a reproducible ID from the dataID and dataset type;"
+              " 'DATAID_TYPE_RUN' for creating a reproducible ID from the dataID, dataset type and run."
+              " The latter is usually used for 'raw'-type data that will be ingested in multiple."
+              " repositories.",
+              callback=to_upper,
+              type=click.Choice(("UNIQUE", "DATAID_TYPE", "DATAID_TYPE_RUN"), case_sensitive=False))
+@click.option("--data-id",
+              type=str,
+              multiple=True, callback=split_commas,
+              help="Keyword=value string with an additional dataId value that is fixed for all ingested"
+              " files. This can be used to simplify the table file by removing repeated entries that are"
+              " fixed for all files to be ingested.  Multiple key/values can be given either by using"
+              " comma separation or multiple command line options.")
+@click.option("--prefix",
+              type=str,
+              help="For relative paths in the table file, specify a prefix to use. The default is to"
+              " use the current working directory.")
+@transfer_option()
+def ingest_files(**kwargs):
+    """Ingest files from table file.
+
+    DATASET_TYPE is the name of the dataset type to be associated with these
+    files. This dataset type must already exist and will not be created by
+    this command. There can only be one dataset type per invocation of this
+    command.
+
+    RUN is the run to use for the file ingest.
+
+    TABLE_FILE refers to a file that can be read by astropy.table with
+    columns of:
+
+    file URI, dimension1, dimension2, ..., dimensionN
+
+    where the first column is the URI to the file to be ingested and the
+    remaining columns define the dataId to associate with that file.
+    The column names should match the dimensions for the specified dataset
+    type. Relative file URI by default is assumed to be relative to the
+    current working directory but can be overridden using the ``--prefix``
+    option.
+
+    This command does not create dimension records and so any records must
+    be created by other means. This command should not be used to ingest
+    raw camera exposures.
+    """
+    script.ingest_files(**kwargs)

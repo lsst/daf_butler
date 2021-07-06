@@ -31,6 +31,7 @@ from typing import (
     Optional,
 )
 
+import json
 import yaml
 
 from ..core import Formatter
@@ -96,8 +97,12 @@ class MetricsExampleFormatter(Formatter):
     """A specialist test formatter for metrics that supports components
     directly without assembler delegate."""
 
-    extension = ".yaml"
-    """Always write YAML"""
+    supportedExtensions = frozenset({".yaml", ".json"})
+
+    @property
+    def extension(self) -> str:
+        """Always write yaml by default."""
+        return ".yaml"
 
     def read(self, component=None):
         """Read data from a file.
@@ -126,10 +131,16 @@ class MetricsExampleFormatter(Formatter):
         """
 
         # This formatter can not read a subset from disk because it
-        # uses yaml.
+        # uses yaml or json.
         path = self.fileDescriptor.location.path
+
         with open(path, "r") as fd:
-            data = yaml.load(fd, Loader=yaml.SafeLoader)
+            if path.endswith(".yaml"):
+                data = yaml.load(fd, Loader=yaml.SafeLoader)
+            elif path.endswith(".json"):
+                data = json.load(fd)
+            else:
+                raise RuntimeError(f"Unsupported file extension found in path '{path}'")
 
         # We can slice up front if required
         parameters = self.fileDescriptor.parameters
