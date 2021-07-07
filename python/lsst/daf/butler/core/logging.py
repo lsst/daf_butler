@@ -21,12 +21,20 @@
 
 from __future__ import annotations
 
-__all__ = ("VERBOSE", "ButlerMDC")
+__all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler")
 
 import logging
+import datetime
+from typing import List, Union, Optional, ClassVar, Iterable, Iterator
+
+from logging import LogRecord, StreamHandler
+from pydantic import BaseModel, ValidationError
 
 VERBOSE = (logging.INFO + logging.DEBUG) // 2
 """Verbose log level"""
+
+_LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
+"""Default format for log records."""
 
 logging.addLevelName(VERBOSE, "VERBOSE")
 
@@ -94,3 +102,173 @@ class ButlerMDC:
         Can be called even if the key is not known to MDC.
         """
         cls._MDC.pop(key, None)
+
+
+class ButlerLogRecord(BaseModel):
+    """A model representing a `logging.LogRecord`.
+
+    A `~logging.LogRecord` always uses the current time in its record
+    when recreated and that makes it impossible to use it as a
+    serialization format. Instead have a local representation of a
+    `~logging.LogRecord` that matches Butler needs.
+    """
+
+    _log_format: ClassVar[str] = _LONG_LOG_FORMAT
+
+    name: str
+    asctime: datetime.datetime
+    message: str
+    levelno: int
+    levelname: str
+    filename: str
+    pathname: str
+    lineno: int
+    funcName: Optional[str]
+    process: int
+    processName: str
+
+    class Config:
+        """Pydantic model configuration."""
+
+        allow_mutation = False
+
+    @classmethod
+    def from_record(cls, record: LogRecord) -> ButlerLogRecord:
+        """Create a new instance from a `~logging.LogRecord`.
+
+        Parameters
+        ----------
+        record : `logging.LogRecord`
+            The record from which to extract the relevant information.
+        """
+        # The properties that are one-to-one mapping.
+        simple = ("name", "levelno", "levelname", "filename", "pathname",
+                  "lineno", "funcName", "process", "processName")
+
+        record_dict = {k: getattr(record, k) for k in simple}
+
+        record_dict["message"] = record.getMessage()
+
+        # Always use UTC because in distributed systems we can't be sure
+        # what timezone localtime is and it's easier to compare logs if
+        # every system is using the same time.
+        record_dict["asctime"] = datetime.datetime.fromtimestamp(record.created,
+                                                                 tz=datetime.timezone.utc)
+
+        return cls(**record_dict)
+
+    def format(self, log_format: Optional[str] = None) -> str:
+        """Format this record.
+
+        Parameters
+        ----------
+        log_format : `str`, optional
+            The format string to use. This string follows the standard
+            f-style use for formatting log messages. If `None`
+            the class default will be used.
+
+        Returns
+        -------
+        text : `str`
+            The formatted log message.
+        """
+        if log_format is None:
+            log_format = self._log_format
+
+        as_dict = self.dict()
+
+        as_dict["asctime"] = as_dict["asctime"].isoformat()
+        formatted = log_format.format(**as_dict)
+        return formatted
+
+    def __str__(self) -> str:
+        return self.format()
+
+
+# The class below can convert LogRecord to ButlerLogRecord if needed.
+Record = Union[LogRecord, ButlerLogRecord]
+
+
+# Do not inherit from MutableSequence since mypy insists on the values
+# being Any even though we wish to constrain them to Record.
+class ButlerLogRecords(BaseModel):
+    """Class representing a collection of `ButlerLogRecord`.
+    """
+
+    __root__: List[ButlerLogRecord]
+    _log_format: Optional[str] = None
+
+    @property
+    def log_format(self) -> str:
+        if self._log_format is None:
+            return _LONG_LOG_FORMAT
+        return self._log_format
+
+    @log_format.setter
+    def log_format(self, format: str) -> None:
+        self._log_format = format
+
+    def __len__(self) -> int:
+        return len(self.__root__)
+
+    # The signature does not match the one in BaseModel but that is okay
+    # if __root__ is being used.
+    # See https://pydantic-docs.helpmanual.io/usage/models/#custom-root-types
+    def __iter__(self) -> Iterator[ButlerLogRecord]:  # type: ignore
+        return iter(self.__root__)
+
+    def __setitem__(self, index: int, value: Record) -> None:
+        self.__root__[index] = self._validate_record(value)
+
+    def __getitem__(self, index: int) -> ButlerLogRecord:
+        return self.__root__[index]
+
+    def __reversed__(self) -> Iterator[ButlerLogRecord]:
+        return self.__root__.__reversed__()
+
+    def __delitem__(self, index: int) -> None:
+        del self.__root__[index]
+
+    def __str__(self) -> str:
+        # Ensure that every record uses the same format string.
+        return "\n".join(record.format(self.log_format) for record in self.__root__)
+
+    def _validate_record(self, record: Record) -> ButlerLogRecord:
+        if isinstance(record, ButlerLogRecord):
+            pass
+        elif isinstance(record, LogRecord):
+            record = ButlerLogRecord.from_record(record)
+        else:
+            raise ValidationError(f"Can only append item of type {type(record)}")
+        return record
+
+    def insert(self, index: int, value: Record) -> None:
+        self.__root__.insert(index, self._validate_record(value))
+
+    def append(self, value: Record) -> None:
+        value = self._validate_record(value)
+        self.__root__.append(value)
+
+    def clear(self) -> None:
+        self.__root__.clear()
+
+    def extend(self, records: Iterable[Record]) -> None:
+        self.__root__.extend(self._validate_record(record) for record in records)
+
+    def pop(self, index: int = -1) -> ButlerLogRecord:
+        return self.__root__.pop(index)
+
+    def reverse(self) -> None:
+        self.__root__.reverse()
+
+
+class ButlerLogRecordHandler(StreamHandler):
+    """Python log handler that accumulates records.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records = ButlerLogRecords(__root__=[])
+
+    def emit(self, record: LogRecord) -> None:
+        self.records.append(record)
