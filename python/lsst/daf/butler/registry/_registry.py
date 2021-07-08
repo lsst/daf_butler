@@ -603,6 +603,23 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def supportsIdGenerationMode(self, mode: DatasetIdGenEnum) -> bool:
+        """Test whether the given dataset ID generation mode is supported by
+        `insertDatasets`.
+
+        Parameters
+        ----------
+        mode : `DatasetIdGenEnum`
+            Enum value for the mode to test.
+
+        Returns
+        -------
+        supported : `bool`
+            Whether the given mode is supported.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
                     collections: Any = None, timespan: Optional[Timespan] = None,
                     **kwargs: Any) -> Optional[DatasetRef]:

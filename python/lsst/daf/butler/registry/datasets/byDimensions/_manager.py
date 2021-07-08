@@ -27,6 +27,7 @@ from lsst.daf.butler import (
 )
 from lsst.daf.butler.registry import ConflictingDefinitionError, OrphanedRecordError
 from lsst.daf.butler.registry.interfaces import (
+    DatasetIdGenEnum,
     DatasetRecordStorage,
     DatasetRecordStorageManager,
     VersionTuple
@@ -350,6 +351,12 @@ class ByDimensionsDatasetRecordStorageManager(ByDimensionsDatasetRecordStorageMa
     _autoincrement: bool = True
     _idColumnType: type = sqlalchemy.BigInteger
 
+    @classmethod
+    def supportsIdGenerationMode(cls, mode: DatasetIdGenEnum) -> bool:
+        # Docstring inherited from DatasetRecordStorageManager.
+        # MyPy seems confused about enum value types here.
+        return mode is mode.UNIQUE  # type: ignore
+
 
 class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStorageManagerBase):
     """Implementation of ByDimensionsDatasetRecordStorageManagerBase which uses
@@ -359,3 +366,8 @@ class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStora
     _recordStorageType: Type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageUUID
     _autoincrement: bool = False
     _idColumnType: type = ddl.GUID
+
+    @classmethod
+    def supportsIdGenerationMode(cls, mode: DatasetIdGenEnum) -> bool:
+        # Docstring inherited from DatasetRecordStorageManager.
+        return True
