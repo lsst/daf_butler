@@ -266,6 +266,10 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
+    def supportsIdGenerationMode(self, mode: DatasetIdGenEnum) -> bool:
+        # Docstring inherited from lsst.daf.butler.registry.Registry
+        raise NotImplementedError()
+
     def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
                     collections: Any = None, timespan: Optional[Timespan] = None,
                     **kwargs: Any) -> Optional[DatasetRef]:
