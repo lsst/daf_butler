@@ -323,7 +323,10 @@ class Database(ABC):
         # Rather than try to reproduce all the parameters used to create
         # the object, instead report the more useful information of the
         # connection URL.
-        uri = str(self._engine.url)
+        if self._engine.url.password is not None:
+            uri = str(self._engine.url.set(password="***"))
+        else:
+            uri = str(self._engine.url)
         if self.namespace:
             uri += f"#{self.namespace}"
         return f'{type(self).__name__}("{uri}")'
