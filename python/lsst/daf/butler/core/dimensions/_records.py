@@ -159,6 +159,30 @@ class SerializedDimensionRecord(BaseModel):
             }
         }
 
+    @classmethod
+    def direct(cls, *, definition: str, record: Dict[str, Union[None, StrictFloat, StrictStr, StrictBool,
+                                                                StrictInt, Tuple[int, int]]]
+               ) -> SerializedDimensionRecord:
+        """Construct a `SerializedDimensionRecord` directly without validators.
+
+        This differs from the pydantic "construct" method in that the arguments
+        are explicitly what the model requires, and it will recurse through
+        members, constructing them from their corresponding `direct` methods.
+
+        This method should only be called when the inputs are trusted.
+        """
+        node = cls.construct(definition=definition, record=record)
+        node = SerializedDimensionRecord.__new__(cls)
+        setter = object.__setattr__
+        setter(node, 'definition', definition)
+        # This method requires tuples as values of the mapping, but JSON
+        # readers will read things in as lists. Be kind and transparently
+        # transform to tuples
+        setter(node, 'record', {k: v if type(v) != list else tuple(v)  # type: ignore
+                                for k, v in record.items()})
+        setter(node, '__fields_set__', {'definition', 'record'})
+        return node
+
 
 @immutable
 class DimensionRecord:
@@ -298,7 +322,10 @@ class DimensionRecord:
                     # and also history. Here use a different approach.
                     # This code needs to be migrated to sphgeom
                     mapping[k] = v.encode().hex()
-
+                if isinstance(v, bytes):
+                    # We actually can't handle serializing out to bytes for
+                    # hash objects, encode it here to a hex string
+                    mapping[k] = v.hex()
         definition = self.definition.to_simple(minimal=minimal)
         return SerializedDimensionRecord(definition=definition, record=mapping)
 
@@ -353,6 +380,8 @@ class DimensionRecord:
         if (reg := "region") in rec:
             encoded = bytes.fromhex(rec[reg])
             rec[reg] = lsst.sphgeom.Region.decode(encoded)
+        if (hsh := "hash") in rec:
+            rec[hsh] = bytes.fromhex(rec[hsh].decode())
 
         return _reconstructDimensionRecord(definition, rec)
 

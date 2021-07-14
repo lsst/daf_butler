@@ -69,6 +69,31 @@ class SerializedDatasetType(BaseModel):
     parentStorageClass: Optional[StrictStr] = None
     isCalibration: StrictBool = False
 
+    @classmethod
+    def direct(cls, *, name: str, storageClass: Optional[str] = None,
+               dimensions: Optional[Dict] = None,
+               parentStorageClass: Optional[str] = None, isCalibration: bool = False
+               ) -> SerializedDatasetType:
+        """Construct a `SerializedDatasetType` directly without validators.
+
+        This differs from PyDantics construct method in that the arguments are
+        explicitly what the model requires, and it will recurse through
+        members, constructing them from their corresponding `direct` methods.
+
+        This method should only be called when the inputs are trusted.
+        """
+        node = SerializedDatasetType.__new__(cls)
+        setter = object.__setattr__
+        setter(node, 'name', name)
+        setter(node, 'storageClass', storageClass)
+        setter(node, 'dimensions',
+               dimensions if dimensions is None else SerializedDimensionGraph.direct(**dimensions))
+        setter(node, 'parentStorageClass', parentStorageClass)
+        setter(node, 'isCalibration', isCalibration)
+        setter(node, '__fields_set__', {'name', 'storageClass', 'dimensions', 'parentStorageClass',
+                                        'isCalibration'})
+        return node
+
 
 class DatasetType:
     r"""A named category of Datasets.
