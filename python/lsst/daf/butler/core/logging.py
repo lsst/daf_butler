@@ -25,7 +25,7 @@ __all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler")
 
 import logging
 import datetime
-from typing import List, Union, Optional, ClassVar, Iterable, Iterator
+from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict
 
 from logging import LogRecord, StreamHandler
 from pydantic import BaseModel, ValidationError
@@ -126,6 +126,7 @@ class ButlerLogRecord(BaseModel):
     funcName: Optional[str]
     process: int
     processName: str
+    MDC: Dict[str, str]
 
     class Config:
         """Pydantic model configuration."""
@@ -148,6 +149,10 @@ class ButlerLogRecord(BaseModel):
         record_dict = {k: getattr(record, k) for k in simple}
 
         record_dict["message"] = record.getMessage()
+
+        # MDC -- ensure the contents are copied to prevent any confusion
+        # over the MDC global being updated later.
+        record_dict["MDC"] = dict(getattr(record, "MDC", {}))
 
         # Always use UTC because in distributed systems we can't be sure
         # what timezone localtime is and it's easier to compare logs if
