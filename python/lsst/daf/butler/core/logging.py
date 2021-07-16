@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("VERBOSE",)
+__all__ = ("VERBOSE", "ButlerMDC")
 
 import logging
 
@@ -29,3 +29,68 @@ VERBOSE = (logging.INFO + logging.DEBUG) // 2
 """Verbose log level"""
 
 logging.addLevelName(VERBOSE, "VERBOSE")
+
+
+class MDCDict(dict):
+    """Dictionary for MDC data.
+
+    This is internal class used for better formatting of MDC in Python logging
+    output. It behaves like `defaultdict(str)` but overrides ``__str__`` and
+    ``__repr__`` method to produce output better suited for logging records.
+    """
+
+    def __getitem__(self, name: str) -> str:
+        """Return value for a given key or empty string for missing key.
+        """
+        return self.get(name, "")
+
+    def __str__(self) -> str:
+        """Return string representation, strings are interpolated without
+        quotes.
+        """
+        items = (f"{k}={self[k]}" for k in sorted(self))
+        return "{" + ", ".join(items) + "}"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+
+class ButlerMDC:
+    """Handle setting and unsetting of global MDC records.
+
+    The Mapped Diagnostic Context (MDC) can be used to set context
+    for log messages.
+
+    Currently there is one global MDC dict. Per-thread MDC is not
+    yet supported.
+    """
+
+    _MDC = MDCDict()
+
+    @classmethod
+    def MDC(cls, key: str, value: str) -> str:
+        """Set MDC for this key to the supplied value.
+
+        Parameters
+        ----------
+        key : `str`
+            Key to modify.
+        value : `str`
+            New value to use.
+
+        Returns
+        -------
+        old : `str`
+            The previous value for this key.
+        """
+        old_value = cls._MDC[key]
+        cls._MDC[key] = value
+        return old_value
+
+    @classmethod
+    def MDCRemove(cls, key: str) -> None:
+        """Clear the MDC value associated with this key.
+
+        Can be called even if the key is not known to MDC.
+        """
+        cls._MDC.pop(key, None)
