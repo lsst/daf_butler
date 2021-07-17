@@ -1,0 +1,2 @@
+Switch logging such that all logging messages are now forwarded to Python ``logging`` from ``lsst.log``.
+Previously all Python ``logging`` messages were being forwarded to ``lsst.log``.
