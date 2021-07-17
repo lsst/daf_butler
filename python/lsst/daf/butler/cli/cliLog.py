@@ -19,38 +19,44 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import datetime
 import logging
-import os
 
 try:
     import lsst.log as lsstLog
 except ModuleNotFoundError:
     lsstLog = None
 
+from lsst.daf.butler import ButlerMDC
+from ..core.logging import MDCDict
 
-# logging properties
-_LOG_PROP = """\
-log4j.rootLogger=INFO, A1
-log4j.appender.A1=ConsoleAppender
-log4j.appender.A1.Target=System.err
-log4j.appender.A1.layout=PatternLayout
-log4j.appender.A1.layout.ConversionPattern={}
-"""
+
+class PrecisionLogFormatter(logging.Formatter):
+    """A log formatter that issues accurate timezone-aware timestamps."""
+
+    converter = datetime.datetime.fromtimestamp
+
+    use_local = True
+    """Control whether local time is displayed instead of UTC."""
+
+    def formatTime(self, record, datefmt=None):
+        """Format the time as an aware datetime."""
+        ct = self.converter(record.created, tz=datetime.timezone.utc)
+        if self.use_local:
+            ct = ct.astimezone()
+        if datefmt:
+            s = ct.strftime(datefmt)
+        else:
+            s = ct.isoformat(sep='T', timespec='milliseconds')
+        return s
 
 
 class CliLog:
     """Interface for managing python logging and ``lsst.log``.
 
-    .. warning::
-
-       When ``lsst.log`` is importable it is the primary logger, and
-       ``lsst.log`` is set up to be a handler for python logging - so python
-       logging will be processed by ``lsst.log``.
-
     This class defines log format strings for the log output and timestamp
-    formats, for both ``lsst.log`` and python logging. If lsst.log is
-    importable then the ``lsstLog_`` format strings will be used, otherwise
-    the ``pylog_`` format strings will be used.
+    formats. It also configures ``lsst.log`` to forward all messages to
+    Python `logging`.
 
     This class can perform log uninitialization, which allows command line
     interface code that initializes logging to run unit tests that execute in
@@ -58,23 +64,11 @@ class CliLog:
 
     defaultLsstLogLevel = lsstLog.FATAL if lsstLog is not None else None
 
-    lsstLog_longLogFmt = "%-5p %d{yyyy-MM-ddTHH:mm:ss.SSSZ} %c (%X{LABEL})(%F:%L)- %m%n"
-    """The log format used when the lsst.log package is importable and the log
-    is initialized with longlog=True."""
-
-    lsstLog_normalLogFmt = "%c %p: %m%n"
-    """The log format used when the lsst.log package is importable and the log
-    is initialized with longlog=False."""
-
-    pylog_longLogFmt = "%(levelname)s %(asctime)s %(name)s %(filename)s:%(lineno)s - %(message)s"
+    pylog_longLogFmt = "{levelname} {asctime} {name} ({MDC[LABEL]})({filename}:{lineno}) - {message}"
     """The log format used when the lsst.log package is not importable and the
     log is initialized with longlog=True."""
 
-    pylog_longLogDateFmt = "%Y-%m-%dT%H:%M:%S%z"
-    """The log date format used when the lsst.log package is not importable and
-    the log is initialized with longlog=True."""
-
-    pylog_normalFmt = "%(name)s %(levelname)s: %(message)s"
+    pylog_normalFmt = "{name} {levelname}: {message}"
     """The log format used when the lsst.log package is not importable and the
     log is initialized with longlog=False."""
 
@@ -84,7 +78,6 @@ class CliLog:
     """
 
     _initialized = False
-    _lsstLogHandler = None
     _componentSettings = []
 
     @classmethod
@@ -109,48 +102,58 @@ class CliLog:
             log.debug("Log is already initialized, returning without re-initializing.")
             return
         cls._initialized = True
+        cls._recordComponentSetting(None)
 
         if lsstLog is not None:
-            # Initialize global logging config. Skip if the env var
-            # LSST_LOG_CONFIG exists. The file it points to would already
-            # configure lsst.log.
-            if not os.path.isfile(os.environ.get("LSST_LOG_CONFIG", "")):
-                lsstLog.configure_prop(_LOG_PROP.format(
-                    cls.lsstLog_longLogFmt if longlog else cls.lsstLog_normalLogFmt))
-            cls._recordComponentSetting(None)
-            pythonLogger = logging.getLogger()
-            pythonLogger.setLevel(logging.INFO)
-            cls._lsstLogHandler = lsstLog.LogHandler()
-            # Forward all Python logging to lsstLog
-            pythonLogger.addHandler(cls._lsstLogHandler)
+            # Ensure that log messages are forwarded back to python.
+            # Disable use of lsst.log MDC -- we expect butler uses to
+            # use ButlerMDC.
+            lsstLog.configure_pylog_MDC("DEBUG", MDC_class=None)
+
+            # Forward python lsst.log messages directly to python logging.
+            # This can bypass the C++ layer entirely but requires that
+            # MDC is set via ButlerMDC, rather than in lsst.log.
+            lsstLog.usePythonLogging()
+
+        if longlog:
+
+            # Want to create our own Formatter so that we can get high
+            # precision timestamps. This requires we attach our own
+            # default stream handler.
+            defaultHandler = logging.StreamHandler()
+            formatter = PrecisionLogFormatter(fmt=cls.pylog_longLogFmt, style="{")
+            defaultHandler.setFormatter(formatter)
+
+            logging.basicConfig(level=logging.INFO,
+                                force=True,
+                                handlers=[defaultHandler],
+                                )
+
         else:
-            cls._recordComponentSetting(None)
-            if longlog:
-                logging.basicConfig(level=logging.INFO,
-                                    format=cls.pylog_longLogFmt,
-                                    datefmt=cls.pylog_longLogDateFmt)
-            else:
-                logging.basicConfig(level=logging.INFO, format=cls.pylog_normalFmt)
+            logging.basicConfig(level=logging.INFO, format=cls.pylog_normalFmt, style="{")
+
+        # Initialize root logger level.
+        cls._setLogLevel(None, "INFO")
 
         # also capture warnings and send them to logging
         logging.captureWarnings(True)
 
+        # Create a record factory that ensures that an MDC is attached
+        # to the records. By default this is only used for long-log
+        # but always enable it for when someone adds a new handler
+        # that needs it.
+        old_factory = logging.getLogRecordFactory()
+
+        def record_factory(*args, **kwargs):
+            record = old_factory(*args, **kwargs)
+            # Make sure we send a copy of the global dict in the record.
+            record.MDC = MDCDict(ButlerMDC._MDC)
+            return record
+
+        logging.setLogRecordFactory(record_factory)
+
         # remember this call
         cls.configState.append((cls.initLog, longlog))
-
-    @classmethod
-    def getHandlerId(cls):
-        """Get the id of the lsst.log handler added to the python logger.
-
-        Used for unit testing to verify addition & removal of the lsst.log
-        handler.
-
-        Returns
-        -------
-        `id` or `None`
-            The id of the handler that was added if one was added, or None.
-        """
-        return id(cls._lsstLogHandler)
 
     @classmethod
     def resetLog(cls):
@@ -166,8 +169,8 @@ class CliLog:
         `Log.defaultLsstLogLevel` because there is no log4cxx api to set a
         component back to an uninitialized state.
         """
-        if cls._lsstLogHandler is not None:
-            logging.getLogger().removeHandler(cls._lsstLogHandler)
+        if lsstLog:
+            lsstLog.doNotUsePythonLogging()
         for componentSetting in reversed(cls._componentSettings):
             if lsstLog is not None and componentSetting.lsstLogLevel is not None:
                 lsstLog.setLevel(componentSetting.component or "", componentSetting.lsstLogLevel)

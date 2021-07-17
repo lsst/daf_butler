@@ -42,26 +42,6 @@ except ModuleNotFoundError:
     lsstLog = None
 
 
-def hasLsstLogHandler(logger):
-    """Check if a python logger has an lsst.log.LogHandler installed.
-
-    Parameters
-    ----------
-    logger : `logging.logger`
-        A python logger.
-
-    Returns
-    ------
-    `bool`
-        True if the logger has an lsst.log.LogHander installed, else False.
-    """
-    if lsstLog is None:
-        return False
-    for handler in logging.getLogger().handlers:
-        if isinstance(handler, lsstLog.LogHandler):
-            return True
-
-
 @click.command()
 @click.option("--expected-pyroot-level", type=int)
 @click.option("--expected-pybutler-level", type=int)
@@ -71,9 +51,6 @@ def command_log_settings_test(expected_pyroot_level,
                               expected_pybutler_level,
                               expected_lsstroot_level,
                               expected_lsstbutler_level):
-    if lsstLog is not None and not hasLsstLogHandler(logging.getLogger()):
-        raise click.ClickException("Expected to find an lsst.log handler in the python root logger's "
-                                   "handlers.")
 
     LogLevel = namedtuple("LogLevel", ("expected", "actual", "name"))
 
@@ -136,9 +113,6 @@ class CliLogTestBase():
             result = cmd()
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-        if lsstLog is not None:
-            self.assertFalse(hasLsstLogHandler(logging.getLogger()),
-                             msg="CliLog should remove the lsst.log handler it added to the root logger.")
         self.assertEqual(pyRoot.logger.level, logging.INFO)
         self.assertEqual(pyButler.logger.level, pyButler.initialLevel)
         if lsstLog is not None:
@@ -178,28 +152,15 @@ class CliLogTestBase():
         # When longlog=True, loglines start with the log level and a
         # timestamp with the following format:
         # "year-month-day T hour-minute-second.millisecond-zoneoffset"
-        # If lsst.log is importable then the timestamp will have
-        # milliseconds, as described above. If lsst.log is NOT
-        # importable then milliseconds (and the preceding ".") are
-        # omitted (the python `time` module does not support
-        # milliseconds in its format string). Examples of expected
-        # strings follow:
-        # lsst.log:   "DEBUG 2020-10-29T10:20:31.518-0700 ..."
-        # pure python "DEBUG 2020-10-28T10:20:31-0700 ...""
+        # For example: "DEBUG 2020-10-28T10:20:31-07:00 ...""
         # The log level name can change, we verify there is an all
         # caps word there but do not verify the word. We do not verify
         # the rest of the log string, assume that if the timestamp is
         # in the string that the rest of the string will appear as
         # expected.
-        # N.B. this test is defined in daf_butler which does not depend
-        # on lsst.log. However, CliLog may be used in packages that do
-        # depend on lsst.log and so both forms of timestamps must be
-        # supported. These packages should have a test (the file is
-        # usually called test_cliLog.py) that subclasses CliLogTestBase
-        # and unittest.TestCase so that these tests are run in that
-        # package.
         timestampRegex = re.compile(
-            r".*[A-Z]+ [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(.[0-9]{3})?([-,+][0-9]{4}|Z) .*")
+            r".*[A-Z]+ [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(.[0-9]{3})"
+            "?([-,+][01][0-9]:[034][05]|Z) .*")
 
         # When longlog=False, log lines start with the module name and
         # log level, for example:
