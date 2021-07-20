@@ -247,8 +247,14 @@ class ButlerLogRecords(BaseModel):
     def __setitem__(self, index: int, value: Record) -> None:
         self.__root__[index] = self._validate_record(value)
 
-    def __getitem__(self, index: int) -> ButlerLogRecord:
-        return self.__root__[index]
+    def __getitem__(self, index: Union[slice, int]) -> Union[ButlerLogRecords, ButlerLogRecord]:
+        # Handles slices and returns a new collection in that
+        # case.
+        item = self.__root__[index]
+        if isinstance(item, list):
+            return type(self)(__root__=item)
+        else:
+            return item
 
     def __reversed__(self) -> Iterator[ButlerLogRecord]:
         return self.__root__.__reversed__()
