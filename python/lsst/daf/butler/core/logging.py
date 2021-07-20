@@ -21,14 +21,15 @@
 
 from __future__ import annotations
 
-__all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler")
+__all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
+           "ButlerLogRecord", "JsonFormatter")
 
 import logging
 import datetime
 import traceback
 from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict
 
-from logging import LogRecord, StreamHandler
+from logging import LogRecord, StreamHandler, Formatter
 from pydantic import BaseModel, ValidationError
 
 VERBOSE = (logging.INFO + logging.DEBUG) // 2
@@ -213,6 +214,17 @@ class ButlerLogRecords(BaseModel):
     __root__: List[ButlerLogRecord]
     _log_format: Optional[str] = None
 
+    @classmethod
+    def from_records(cls, records: Iterable[ButlerLogRecord]) -> ButlerLogRecords:
+        """Create collection from iterable.
+
+        Parameters
+        ----------
+        records : iterable of `ButlerLogRecord`
+            The records to seed this class with.
+        """
+        return cls(__root__=list(records))
+
     @property
     def log_format(self) -> str:
         if self._log_format is None:
@@ -287,3 +299,11 @@ class ButlerLogRecordHandler(StreamHandler):
 
     def emit(self, record: LogRecord) -> None:
         self.records.append(record)
+
+
+class JsonFormatter(Formatter):
+    """Format a `LogRecord` in JSON format."""
+
+    def format(self, record: LogRecord) -> str:
+        butler_record = ButlerLogRecord.from_record(record)
+        return butler_record.json()

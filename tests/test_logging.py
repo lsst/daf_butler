@@ -20,9 +20,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
+import io
 import logging
+from logging import StreamHandler
 
-from lsst.daf.butler import ButlerLogRecordHandler, ButlerLogRecords, VERBOSE
+from lsst.daf.butler import ButlerLogRecordHandler, ButlerLogRecords, VERBOSE, JsonFormatter, ButlerLogRecord
 
 
 class LoggingTestCase(unittest.TestCase):
@@ -87,6 +89,29 @@ class LoggingTestCase(unittest.TestCase):
             self.log.debug("A problem", exc_info=1)
 
         self.assertIn("Debug exception", self.handler.records[-1].exc_info)
+
+
+class TestJsonLogging(unittest.TestCase):
+
+    def testJsonLogStream(self):
+        log = logging.getLogger(self.id())
+        log.setLevel(logging.INFO)
+
+        stream = io.StringIO()
+
+        handler = StreamHandler(stream)
+        formatter = JsonFormatter()
+        handler.setFormatter(formatter)
+        log.addHandler(handler)
+
+        log.info("A message")
+        log.warning("A warning")
+
+        # Rewind the stream and pull messages out of it.
+        stream.seek(0)
+        records = [ButlerLogRecord.parse_raw(line) for line in stream]
+        self.assertEqual(records[0].message, "A message")
+        self.assertEqual(records[1].levelname, "WARNING")
 
 
 if __name__ == "__main__":
