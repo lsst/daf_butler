@@ -25,6 +25,7 @@ __all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler")
 
 import logging
 import datetime
+import traceback
 from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict
 
 from logging import LogRecord, StreamHandler
@@ -126,6 +127,7 @@ class ButlerLogRecord(BaseModel):
     funcName: Optional[str]
     process: int
     processName: str
+    exc_info: Optional[str]
     MDC: Dict[str, str]
 
     class Config:
@@ -159,6 +161,14 @@ class ButlerLogRecord(BaseModel):
         # every system is using the same time.
         record_dict["asctime"] = datetime.datetime.fromtimestamp(record.created,
                                                                  tz=datetime.timezone.utc)
+
+        # Sometimes exception information is included so must be
+        # extracted.
+        if record.exc_info:
+            etype = record.exc_info[0]
+            evalue = record.exc_info[1]
+            tb = record.exc_info[2]
+            record_dict["exc_info"] = "\n".join(traceback.format_exception(etype, evalue, tb))
 
         return cls(**record_dict)
 

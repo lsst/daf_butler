@@ -28,12 +28,19 @@ from lsst.daf.butler import ButlerLogRecordHandler, ButlerLogRecords, VERBOSE
 class LoggingTestCase(unittest.TestCase):
     """Test we can capture log messages."""
 
-    def testRecordCapture(self):
-        handler = ButlerLogRecordHandler()
+    def setUp(self):
+        self.handler = ButlerLogRecordHandler()
 
-        log = logging.getLogger(self.id())
-        log.setLevel(VERBOSE)
-        log.addHandler(handler)
+        self.log = logging.getLogger(self.id())
+        self.log.addHandler(self.handler)
+
+    def tearDown(self):
+        if self.handler and self.log:
+            self.log.removeHandler(self.handler)
+
+    def testRecordCapture(self):
+
+        self.log.setLevel(VERBOSE)
 
         test_messages = (
             (logging.INFO, "This is a log message", True),
@@ -43,23 +50,43 @@ class LoggingTestCase(unittest.TestCase):
         )
 
         for level, message, _ in test_messages:
-            log.log(level, message)
+            self.log.log(level, message)
 
         expected = [info for info in test_messages if info[2]]
 
-        self.assertEqual(len(handler.records), len(expected))
+        self.assertEqual(len(self.handler.records), len(expected))
 
-        for given, record in zip(expected, handler.records):
+        for given, record in zip(expected, self.handler.records):
             self.assertEqual(given[0], record.levelno)
             self.assertEqual(given[1], record.message)
 
         # Check that we can serialize the records
-        json = handler.records.json()
+        json = self.handler.records.json()
 
         records = ButlerLogRecords.parse_raw(json)
-        for original_record, new_record in zip(handler.records, records):
+        for original_record, new_record in zip(self.handler.records, records):
             self.assertEqual(new_record, original_record)
-        self.assertEqual(str(records), str(handler.records))
+        self.assertEqual(str(records), str(self.handler.records))
+
+    def testExceptionInfo(self):
+
+        self.log.setLevel(logging.DEBUG)
+        try:
+            raise RuntimeError("A problem has been encountered.")
+        except RuntimeError:
+            self.log.exception("Caught")
+
+        self.assertIn("A problem has been encountered", self.handler.records[0].exc_info)
+
+        self.log.warning("No exc_info")
+        self.assertIsNone(self.handler.records[-1].exc_info)
+
+        try:
+            raise RuntimeError("Debug exception log")
+        except RuntimeError:
+            self.log.debug("A problem", exc_info=1)
+
+        self.assertIn("Debug exception", self.handler.records[-1].exc_info)
 
 
 if __name__ == "__main__":
