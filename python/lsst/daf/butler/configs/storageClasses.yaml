@@ -260,3 +260,5 @@ storageClasses:
     parameters:
       - pixels
       - degrade_nside
+  ButlerLogRecords:
+    pytype: lsst.daf.butler.ButlerLogRecords
