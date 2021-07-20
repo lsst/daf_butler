@@ -27,7 +27,7 @@ from typing import (
     Type,
 )
 
-from lsst.daf.butler import ButlerLogRecords
+from lsst.daf.butler import ButlerLogRecords, ButlerLogRecord
 from .json import JsonFormatter
 
 
@@ -40,6 +40,50 @@ class ButlerLogRecordsFormatter(JsonFormatter):
     of records given some filtering parameters.
     """
 
+    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
+        """Read a file from the path in JSON format.
+
+        Parameters
+        ----------
+        path : `str`
+            Path to use to open JSON format file.
+        pytype : `class`, optional
+            Python type being read. Should be a `ButlerLogRecords` or
+            subclass.
+
+        Returns
+        -------
+        data : `object`
+            Data as Python object read from JSON file.
+
+        Notes
+        -----
+        Can read two forms of JSON log file. It can read a full JSON
+        document created from `ButlerLogRecords`, or a stream of standalone
+        JSON documents with a log record per line.
+        """
+        if pytype is None:
+            pytype = ButlerLogRecords
+        elif not issubclass(pytype, ButlerLogRecords):
+            raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
+
+        with open(path, "r") as fd:
+            first = fd.readline()
+            if first.startswith("["):
+                # This is a ButlerLogRecords serialization.
+                all = first + fd.read()
+                return pytype.parse_raw(all)
+
+            # A stream of records with one record per line.
+            if not first.startswith("{"):
+                raise RuntimeError(f"Unrecognized JSON log format. First lines is '{first}'")
+            records = [ButlerLogRecord.parse_raw(first)]
+            for line in fd:
+                if line:  # Filter out blank lines.
+                    records.append(ButlerLogRecord.parse_raw(line))
+
+            return pytype.from_records(records)
+
     def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
         """Read the bytes object as a python object.
 
@@ -48,7 +92,8 @@ class ButlerLogRecordsFormatter(JsonFormatter):
         serializedDataset : `bytes`
             Bytes object to unserialize.
         pytype : `class`, optional
-            Not used by this implementation.
+            Python type being read. Should be a `ButlerLogRecords` or
+            subclass.
 
         Returns
         -------
@@ -56,11 +101,25 @@ class ButlerLogRecordsFormatter(JsonFormatter):
             The requested data as a Python object or None if the string could
             not be read.
         """
+        # Duplicates some of the logic from readFile above.
         if pytype is None:
             pytype = ButlerLogRecords
         elif not issubclass(pytype, ButlerLogRecords):
             raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
-        return pytype.parse_raw(serializedDataset)
+
+        if not serializedDataset:
+            # No records to return
+            return pytype.from_records([])
+
+        if serializedDataset.startswith(b"["):
+            return pytype.parse_raw(serializedDataset)
+
+        if not serializedDataset.startswith(b"{"):
+            raise RuntimeError(f"These bytes do not look like JSON -- starts with '{serializedDataset[0]}'")
+
+        # Filter out blank lines.
+        records = [ButlerLogRecord.parse_raw(line) for line in serializedDataset.split(b"\n") if line]
+        return pytype.from_records(records)
 
     def _toBytes(self, inMemoryDataset: Any) -> bytes:
         """Write the in memory dataset to a bytestring.
