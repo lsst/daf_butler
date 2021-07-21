@@ -28,7 +28,7 @@ except ModuleNotFoundError:
     lsstLog = None
 
 from lsst.daf.butler import ButlerMDC
-from ..core.logging import MDCDict
+from ..core.logging import MDCDict, JsonFormatter
 
 
 class PrecisionLogFormatter(logging.Formatter):
@@ -80,8 +80,12 @@ class CliLog:
     _initialized = False
     _componentSettings = []
 
+    _fileHandlers = []
+    """Any FileHandler classes attached to the root logger by this class
+    that need to be closed on reset."""
+
     @classmethod
-    def initLog(cls, longlog):
+    def initLog(cls, longlog, log_file=None):
         """Initialize logging. This should only be called once per program
         execution. After the first call this will log a warning and return.
 
@@ -92,6 +96,11 @@ class CliLog:
         ----------
         longlog : `bool`
             If True, make log messages appear in long format, by default False.
+        log_file : `str`
+            Path to file to write log records. If ends in ``.json`` the
+            records will be written in JSON format. Else they will be written
+            in text format. If `None` no log file will be created. Records
+            will be appended to this file if it exists.
         """
         if cls._initialized:
             # Unit tests that execute more than one command do end up
@@ -152,8 +161,22 @@ class CliLog:
 
         logging.setLogRecordFactory(record_factory)
 
+        # Set up the file logger
+        if log_file:
+            handler = logging.FileHandler(log_file)
+            if log_file.endswith(".json"):
+                formatter = JsonFormatter()
+            else:
+                if longlog:
+                    formatter = PrecisionLogFormatter(fmt=cls.pylog_longLogFmt, style="{")
+                else:
+                    formatter = logging.Formatter(fmt=cls.pylog_normalFmt, style="{")
+            handler.setFormatter(formatter)
+            logging.getLogger().addHandler(handler)
+            cls._fileHandlers.append(handler)
+
         # remember this call
-        cls.configState.append((cls.initLog, longlog))
+        cls.configState.append((cls.initLog, longlog, log_file))
 
     @classmethod
     def resetLog(cls):
@@ -177,6 +200,14 @@ class CliLog:
             logger = logging.getLogger(componentSetting.component)
             logger.setLevel(componentSetting.pythonLogLevel)
         cls._setLogLevel(None, "INFO")
+
+        # Remove the FileHandler we may have attached.
+        root = logging.getLogger()
+        for handler in cls._fileHandlers:
+            handler.close()
+            root.removeHandler(handler)
+
+        cls._fileHandlers.clear()
         cls._initialized = False
         cls.configState = []
 

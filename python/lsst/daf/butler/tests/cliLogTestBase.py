@@ -32,10 +32,12 @@ import logging
 import re
 import subprocess
 import unittest
+import tempfile
 
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cliLog import CliLog
 from lsst.daf.butler.cli.utils import clickResultMsg, command_test_env, LogCliRunner
+from lsst.daf.butler import ButlerLogRecords
 try:
     import lsst.log as lsstLog
 except ModuleNotFoundError:
@@ -195,6 +197,37 @@ class CliLogTestBase():
                                      msg=f"found timestamp in: \n{output.getvalue()}")
                     self.assertTrue(startedWithModule,
                                     msg=f"did not find lines starting with module in: \n{output.getvalue()}")
+
+    def testFileLogging(self):
+        """Test --file-log option."""
+        with self.runner.isolated_filesystem():
+            for i, suffix in enumerate([".json", ".log"]):
+                # Get a temporary file name and immediately close it
+                fd = tempfile.NamedTemporaryFile(suffix=suffix)
+                filename = fd.name
+                fd.close()
+
+                args = ("--log-level", "DEBUG", "--log-file", filename, "create", f"here{i}")
+
+                result = self.runner.invoke(butlerCli, args)
+                self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+                # Record to test. Test one in the middle that we know is
+                # a DEBUG message. The first message might come from
+                # python itself since warnings are redirected to log
+                # messages.
+                num = 4
+
+                if suffix == ".json":
+                    records = ButlerLogRecords.from_file(filename)
+                    self.assertEqual(records[num].levelname, "DEBUG", str(records[num]))
+                else:
+                    with open(filename) as fd:
+                        records = fd.readlines()
+                    self.assertIn("DEBUG", records[num], str(records[num]))
+                    self.assertNotIn("{", records[num], str(records[num]))
+
+                self.assertGreater(len(records), 5)
 
 
 if __name__ == "__main__":
