@@ -170,8 +170,9 @@ class CliLogTestBase():
 
         with self.runner.isolated_filesystem():
             for longlog in (True, False):
-                # The click test does not capture logging emitted from lsst.log
-                # so use subprocess to run the test instead.
+                # The pytest log handler interferes with the log configuration
+                # settings set up by initLog -- therefore test by using
+                # a subprocess.
                 if longlog:
                     args = ("butler", "--log-level", "DEBUG", "--long-log", "create", "here")
                 else:
