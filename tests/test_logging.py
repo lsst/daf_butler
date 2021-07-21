@@ -109,7 +109,8 @@ class TestJsonLogging(unittest.TestCase):
 
         # Rewind the stream and pull messages out of it.
         stream.seek(0)
-        records = [ButlerLogRecord.parse_raw(line) for line in stream]
+        records = ButlerLogRecords.from_stream(stream)
+        self.assertIsInstance(records[0], ButlerLogRecord)
         self.assertEqual(records[0].message, "A message")
         self.assertEqual(records[1].levelname, "WARNING")
 

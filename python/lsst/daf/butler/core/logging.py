@@ -27,7 +27,7 @@ __all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
 import logging
 import datetime
 import traceback
-from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict
+from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO
 
 from logging import LogRecord, StreamHandler, Formatter
 from pydantic import BaseModel, ValidationError
@@ -224,6 +224,60 @@ class ButlerLogRecords(BaseModel):
             The records to seed this class with.
         """
         return cls(__root__=list(records))
+
+    @classmethod
+    def from_file(cls, filename: str) -> ButlerLogRecords:
+        """Read records from file.
+
+        Parameters
+        ----------
+        filename : `str`
+            Name of file containing the JSON records.
+
+        Notes
+        -----
+        Works with one-record-per-line format JSON files and a direct
+        serialization of the Pydantic model.
+        """
+        with open(filename, "r") as fd:
+            return cls.from_stream(fd)
+
+    @classmethod
+    def from_stream(cls, stream: IO) -> ButlerLogRecords:
+        """Read records from I/O stream.
+
+        Parameters
+        ----------
+        stream : `typing.IO`
+            Stream from which to read JSON records.
+
+        Notes
+        -----
+        Works with one-record-per-line format JSON files and a direct
+        serialization of the Pydantic model.
+        """
+        first_line = stream.readline()
+
+        if not first_line:
+            # Empty file, return zero records.
+            return cls.from_records([])
+
+        # Allow byte or str streams since pydantic supports either.
+        first_char = str(first_line[0])
+        if first_char == "[":
+            # This is a ButlerLogRecords model serialization.
+            all = first_line + stream.read()
+            return cls.parse_raw(all)
+
+        # A stream of records with one record per line.
+        if first_char != "{":
+            raise RuntimeError(f"Unrecognized JSON log format. First line is '{first_line}'")
+        records = [ButlerLogRecord.parse_raw(first_line)]
+        for line in stream:
+            if line:  # Filter out blank lines.
+                records.append(ButlerLogRecord.parse_raw(line))
+
+        return cls.from_records(records)
 
     @property
     def log_format(self) -> str:

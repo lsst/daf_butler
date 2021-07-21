@@ -67,22 +67,7 @@ class ButlerLogRecordsFormatter(JsonFormatter):
         elif not issubclass(pytype, ButlerLogRecords):
             raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
 
-        with open(path, "r") as fd:
-            first = fd.readline()
-            if first.startswith("["):
-                # This is a ButlerLogRecords serialization.
-                all = first + fd.read()
-                return pytype.parse_raw(all)
-
-            # A stream of records with one record per line.
-            if not first.startswith("{"):
-                raise RuntimeError(f"Unrecognized JSON log format. First lines is '{first}'")
-            records = [ButlerLogRecord.parse_raw(first)]
-            for line in fd:
-                if line:  # Filter out blank lines.
-                    records.append(ButlerLogRecord.parse_raw(line))
-
-            return pytype.from_records(records)
+        return pytype.from_file(path)
 
     def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
         """Read the bytes object as a python object.
@@ -101,7 +86,7 @@ class ButlerLogRecordsFormatter(JsonFormatter):
             The requested data as a Python object or None if the string could
             not be read.
         """
-        # Duplicates some of the logic from readFile above.
+        # Duplicates some of the logic from ButlerLogRecords.from_file
         if pytype is None:
             pytype = ButlerLogRecords
         elif not issubclass(pytype, ButlerLogRecords):
