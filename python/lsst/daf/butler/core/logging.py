@@ -312,4 +312,4 @@ class JsonFormatter(Formatter):
 
     def format(self, record: LogRecord) -> str:
         butler_record = ButlerLogRecord.from_record(record)
-        return butler_record.json()
+        return butler_record.json(exclude_unset=True, exclude_defaults=True)
