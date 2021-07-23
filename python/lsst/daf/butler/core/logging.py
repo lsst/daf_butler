@@ -242,6 +242,58 @@ class ButlerLogRecords(BaseModel):
         with open(filename, "r") as fd:
             return cls.from_stream(fd)
 
+    @staticmethod
+    def _detect_model(startdata: Union[str, bytes]) -> bool:
+        """Given some representative data, determine if this is a serialized
+        model or a streaming format.
+
+        Parameters
+        ----------
+        startdata : `bytes` or `str`
+            Representative characters or bytes from the start of a serialized
+            collection of log records.
+
+        Returns
+        -------
+        is_model : `bool`
+            Returns `True` if the data look like a serialized pydantic model.
+            Returns `False` if it looks like a streaming format. Returns
+            `False` also if an empty string is encountered since this
+            is not understood by `ButlerLogRecords.parse_raw()`.
+
+        Raises
+        ------
+        ValueError
+            Raised if the sentinel doesn't look like either of the supported
+            log record formats.
+        """
+        if not startdata:
+            return False
+
+        # Allow byte or str streams since pydantic supports either.
+        # We don't want to convert the entire input to unicode unnecessarily.
+        error_type = "str"
+        if isinstance(startdata, bytes):
+            first_char = chr(startdata[0])
+            error_type = "byte"
+        else:
+            first_char = startdata[0]
+
+        if first_char == "[":
+            # This is an array of records.
+            return True
+        if first_char != "{":
+            # Limit the length of string reported in error message in case
+            # this is an enormous file.
+            max = 32
+            if len(startdata) > max:
+                startdata = f"{startdata[:max]!r}..."
+            raise ValueError("Unrecognized JSON log format. Expected '{' or '[' but got"
+                             f" {first_char!r} from {error_type} content starting with {startdata!r}")
+
+        # Assume a record per line.
+        return False
+
     @classmethod
     def from_stream(cls, stream: IO) -> ButlerLogRecords:
         """Read records from I/O stream.
@@ -262,21 +314,48 @@ class ButlerLogRecords(BaseModel):
             # Empty file, return zero records.
             return cls.from_records([])
 
-        # Allow byte or str streams since pydantic supports either.
-        first_char = str(first_line[0])
-        if first_char == "[":
-            # This is a ButlerLogRecords model serialization.
+        is_model = cls._detect_model(first_line)
+
+        if is_model:
+            # This is a ButlerLogRecords model serialization so all the
+            # content must be read first.
             all = first_line + stream.read()
             return cls.parse_raw(all)
 
         # A stream of records with one record per line.
-        if first_char != "{":
-            raise RuntimeError(f"Unrecognized JSON log format. First line is '{first_line}'")
         records = [ButlerLogRecord.parse_raw(first_line)]
         for line in stream:
             if line:  # Filter out blank lines.
                 records.append(ButlerLogRecord.parse_raw(line))
 
+        return cls.from_records(records)
+
+    @classmethod
+    def from_raw(cls, serialized: Union[str, bytes]) -> ButlerLogRecords:
+        """Parse raw serialized form and return records.
+
+        Parameters
+        ----------
+        serialized : `bytes` or `str`
+            Either the serialized JSON of the model created using
+            ``.json()`` or a streaming format of one JSON `ButlerLogRecord`
+            per line. This can also support a zero-length string.
+        """
+        if not serialized:
+            # No records to return
+            return cls.from_records([])
+
+        # Only send the first character for analysis.
+        is_model = cls._detect_model(serialized)
+
+        if is_model:
+            return cls.parse_raw(serialized)
+
+        # Filter out blank lines -- mypy is confused by the newline
+        # argument to split().
+        newline = "\n" if isinstance(serialized, str) else b"\n"
+        records = [ButlerLogRecord.parse_raw(line) for line in serialized.split(newline)  # type: ignore
+                   if line]
         return cls.from_records(records)
 
     @property

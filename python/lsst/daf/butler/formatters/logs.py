@@ -27,7 +27,7 @@ from typing import (
     Type,
 )
 
-from lsst.daf.butler import ButlerLogRecords, ButlerLogRecord
+from lsst.daf.butler import ButlerLogRecords
 from .json import JsonFormatter
 
 
@@ -36,7 +36,7 @@ class ButlerLogRecordsFormatter(JsonFormatter):
 
     This is a naive implementation that treats everything as a pydantic.
     model.  In the future this may be changed to be able to read
-    ``ButlerLogRecord`` one at time from the file and return a subset
+    `ButlerLogRecord` one at time from the file and return a subset
     of records given some filtering parameters.
     """
 
@@ -92,19 +92,7 @@ class ButlerLogRecordsFormatter(JsonFormatter):
         elif not issubclass(pytype, ButlerLogRecords):
             raise RuntimeError(f"Python type {pytype} does not seem to be a ButlerLogRecords type")
 
-        if not serializedDataset:
-            # No records to return
-            return pytype.from_records([])
-
-        if serializedDataset.startswith(b"["):
-            return pytype.parse_raw(serializedDataset)
-
-        if not serializedDataset.startswith(b"{"):
-            raise RuntimeError(f"These bytes do not look like JSON -- starts with '{serializedDataset[0]}'")
-
-        # Filter out blank lines.
-        records = [ButlerLogRecord.parse_raw(line) for line in serializedDataset.split(b"\n") if line]
-        return pytype.from_records(records)
+        return pytype.from_raw(serializedDataset)
 
     def _toBytes(self, inMemoryDataset: Any) -> bytes:
         """Write the in memory dataset to a bytestring.
