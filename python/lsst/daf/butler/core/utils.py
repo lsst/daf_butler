@@ -26,6 +26,7 @@ __all__ = (
     "getFullTypeName",
     "getInstanceOf",
     "immutable",
+    "isplit",
     "iterable",
     "safeMakeDir",
     "Singleton",
@@ -445,3 +446,32 @@ def globToRegex(expressions: Union[str, EllipsisType, None,
             res = re.compile(fnmatch.translate(e))
         results.append(res)
     return results
+
+
+T = TypeVar('T', str, bytes)
+
+
+def isplit(string: T, sep: T) -> Iterator[T]:
+    """Split a string or bytes by separator returning a generator.
+
+    Parameters
+    ----------
+    string : `str` or `bytes`
+        The string to split into substrings.
+    sep : `str` or `bytes`
+        The separator to use to split the string. Must be the same
+        type as ``string``. Must always be given.
+
+    Yields
+    ------
+    subset : `str` or `bytes`
+        The next subset extracted from the input until the next separator.
+    """
+    begin = 0
+    while True:
+        end = string.find(sep, begin)
+        if end == -1:
+            yield string[begin:]
+            return
+        yield string[begin:end]
+        begin = end + 1

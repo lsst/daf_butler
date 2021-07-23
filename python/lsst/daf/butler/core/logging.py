@@ -32,6 +32,8 @@ from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO
 from logging import LogRecord, StreamHandler, Formatter
 from pydantic import BaseModel, ValidationError
 
+from .utils import isplit
+
 VERBOSE = (logging.INFO + logging.DEBUG) // 2
 """Verbose log level"""
 
@@ -354,7 +356,7 @@ class ButlerLogRecords(BaseModel):
         # Filter out blank lines -- mypy is confused by the newline
         # argument to split().
         newline = "\n" if isinstance(serialized, str) else b"\n"
-        records = [ButlerLogRecord.parse_raw(line) for line in serialized.split(newline)  # type: ignore
+        records = [ButlerLogRecord.parse_raw(line) for line in isplit(serialized, newline)  # type: ignore
                    if line]
         return cls.from_records(records)
 

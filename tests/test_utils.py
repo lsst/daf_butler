@@ -28,7 +28,7 @@ import unittest
 from lsst.daf.butler.core.utils import findFileResources, getFullTypeName, globToRegex, iterable, Singleton
 from lsst.daf.butler import Formatter, Registry
 from lsst.daf.butler import NamedKeyDict, NamedValueSet, StorageClass
-
+from lsst.daf.butler.core.utils import isplit
 
 TESTDIR = os.path.dirname(__file__)
 
@@ -216,6 +216,18 @@ class TestButlerUtils(unittest.TestCase):
 
         for item, typeName in tests:
             self.assertEqual(getFullTypeName(item), typeName)
+
+    def testIsplit(self):
+        # Test compatibility with str.split
+        seps = ("\n", " ", "d")
+        input_str = "ab\ncd ef\n"
+
+        for sep in seps:
+            for input in (input_str, input_str.encode()):
+                test_sep = sep.encode() if isinstance(input, bytes) else sep
+                isp = list(isplit(input, sep=test_sep))
+                ssp = input.split(test_sep)
+                self.assertEqual(isp, ssp)
 
 
 class FindFileResourcesTestCase(unittest.TestCase):
