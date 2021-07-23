@@ -22,7 +22,8 @@
 import unittest
 import io
 import logging
-from logging import StreamHandler
+import tempfile
+from logging import StreamHandler, FileHandler
 
 from lsst.daf.butler import ButlerLogRecordHandler, ButlerLogRecords, VERBOSE, JsonFormatter, ButlerLogRecord
 
@@ -41,6 +42,7 @@ class LoggingTestCase(unittest.TestCase):
             self.log.removeHandler(self.handler)
 
     def testRecordCapture(self):
+        """Test basic log capture and serialization."""
 
         self.log.setLevel(VERBOSE)
 
@@ -70,7 +72,33 @@ class LoggingTestCase(unittest.TestCase):
             self.assertEqual(new_record, original_record)
         self.assertEqual(str(records), str(self.handler.records))
 
+        # Create stream form of serialization.
+        json_stream = "\n".join(record.json() for record in records)
+
+        # Also check we can autodetect the format.
+        for raw in (json, json.encode(), json_stream, json_stream.encode()):
+            records = ButlerLogRecords.from_raw(json)
+            self.assertEqual(records, self.handler.records)
+
+        for raw in ("", b""):
+            self.assertEqual(len(ButlerLogRecords.from_raw(raw)), 0)
+        self.assertEqual(len(ButlerLogRecords.from_stream(io.StringIO())), 0)
+
+        # Send bad text to the parser and it should fail (both bytes and str).
+        bad_text = "x" * 100
+
+        # Include short and long values to trigger different code paths
+        # in error message creation.
+        for trim in (True, False):
+            for bad in (bad_text, bad_text.encode()):
+                bad = bad[:10] if trim else bad
+                with self.assertRaises(ValueError) as cm:
+                    ButlerLogRecords.from_raw(bad)
+                if not trim:
+                    self.assertIn("...", str(cm.exception))
+
     def testButlerLogRecords(self):
+        """Test the list-like methods of ButlerLogRecords."""
 
         self.log.setLevel(logging.INFO)
 
@@ -90,12 +118,39 @@ class LoggingTestCase(unittest.TestCase):
         self.assertEqual(len(subset), end - start)
         self.assertIn(f"#{start}", subset[0].message)
 
+        # Reverse the collection.
+        backwards = list(reversed(records))
+        self.assertEqual(len(backwards), len(records))
+        self.assertEqual(records[0], backwards[-1])
+
+        # Test some of the collection manipulation methods.
+        record_0 = records[0]
+        records.reverse()
+        self.assertEqual(records[-1], record_0)
+        self.assertEqual(records.pop(), record_0)
+        records[0] = record_0
+        self.assertEqual(records[0], record_0)
+        len_records = len(records)
+        records.insert(2, record_0)
+        self.assertEqual(len(records), len_records + 1)
+        self.assertEqual(records[0], records[2])
+
+        # Put the subset records back onto the end of the original.
+        records.extend(subset)
+        self.assertEqual(len(records), n_messages + len(subset))
+
         # Test slice for deleting
-        initial_length = len(subset)
+        initial_length = len(records)
         start_del = 1
         end_del = 3
-        del subset[start_del:end_del]
-        self.assertEqual(len(subset), initial_length - (end_del - start_del))
+        del records[start_del:end_del]
+        self.assertEqual(len(records), initial_length - (end_del - start_del))
+
+        records.clear()
+        self.assertEqual(len(records), 0)
+
+        with self.assertRaises(ValueError):
+            records.append({})
 
     def testExceptionInfo(self):
 
@@ -124,12 +179,21 @@ class TestJsonLogging(unittest.TestCase):
         log = logging.getLogger(self.id())
         log.setLevel(logging.INFO)
 
-        stream = io.StringIO()
-
-        handler = StreamHandler(stream)
+        # Log to a stream and also to a file.
         formatter = JsonFormatter()
-        handler.setFormatter(formatter)
-        log.addHandler(handler)
+
+        stream = io.StringIO()
+        stream_handler = StreamHandler(stream)
+        stream_handler.setFormatter(formatter)
+        log.addHandler(stream_handler)
+
+        file = tempfile.NamedTemporaryFile(suffix=".json")
+        filename = file.name
+        file.close()
+
+        file_handler = FileHandler(filename)
+        file_handler.setFormatter(formatter)
+        log.addHandler(file_handler)
 
         log.info("A message")
         log.warning("A warning")
@@ -140,6 +204,27 @@ class TestJsonLogging(unittest.TestCase):
         self.assertIsInstance(records[0], ButlerLogRecord)
         self.assertEqual(records[0].message, "A message")
         self.assertEqual(records[1].levelname, "WARNING")
+
+        # Now read from the file.
+        file_handler.close()
+        file_records = ButlerLogRecords.from_file(filename)
+        self.assertEqual(file_records, records)
+
+        # And read the file again in bytes and text.
+        for mode in ("rb", "r"):
+            with open(filename, mode) as fd:
+                file_records = ButlerLogRecords.from_stream(fd)
+                self.assertEqual(file_records, records)
+                fd.seek(0)
+                file_records = ButlerLogRecords.from_raw(fd.read())
+                self.assertEqual(file_records, records)
+
+        # Serialize this model to stream.
+        stream2 = io.StringIO()
+        print(records.json(), file=stream2)
+        stream2.seek(0)
+        stream_records = ButlerLogRecords.from_stream(stream2)
+        self.assertEqual(stream_records, records)
 
 
 if __name__ == "__main__":

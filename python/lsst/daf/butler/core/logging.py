@@ -30,7 +30,7 @@ import traceback
 from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO
 
 from logging import LogRecord, StreamHandler, Formatter
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from .utils import isplit
 
@@ -407,7 +407,7 @@ class ButlerLogRecords(BaseModel):
         elif isinstance(record, LogRecord):
             record = ButlerLogRecord.from_record(record)
         else:
-            raise ValidationError(f"Can only append item of type {type(record)}")
+            raise ValueError(f"Can only append item of type {type(record)}")
         return record
 
     def insert(self, index: int, value: Record) -> None:
