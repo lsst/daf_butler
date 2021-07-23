@@ -313,7 +313,7 @@ class ButlerLogRecords(BaseModel):
     def __reversed__(self) -> Iterator[ButlerLogRecord]:
         return self.__root__.__reversed__()
 
-    def __delitem__(self, index: int) -> None:
+    def __delitem__(self, index: Union[slice, int]) -> None:
         del self.__root__[index]
 
     def __str__(self) -> str:

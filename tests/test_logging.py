@@ -70,6 +70,33 @@ class LoggingTestCase(unittest.TestCase):
             self.assertEqual(new_record, original_record)
         self.assertEqual(str(records), str(self.handler.records))
 
+    def testButlerLogRecords(self):
+
+        self.log.setLevel(logging.INFO)
+
+        n_messages = 10
+        message = "Message #%d"
+        for counter in range(n_messages):
+            self.log.info(message, counter)
+
+        records = self.handler.records
+        self.assertEqual(len(records), n_messages)
+
+        # Test slicing.
+        start = 2
+        end = 6
+        subset = records[start:end]
+        self.assertIsInstance(subset, ButlerLogRecords)
+        self.assertEqual(len(subset), end - start)
+        self.assertIn(f"#{start}", subset[0].message)
+
+        # Test slice for deleting
+        initial_length = len(subset)
+        start_del = 1
+        end_del = 3
+        del subset[start_del:end_del]
+        self.assertEqual(len(subset), initial_length - (end_del - start_del))
+
     def testExceptionInfo(self):
 
         self.log.setLevel(logging.DEBUG)
