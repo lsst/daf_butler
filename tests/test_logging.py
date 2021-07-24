@@ -25,7 +25,14 @@ import logging
 import tempfile
 from logging import StreamHandler, FileHandler
 
-from lsst.daf.butler import ButlerLogRecordHandler, ButlerLogRecords, VERBOSE, JsonFormatter, ButlerLogRecord
+from lsst.daf.butler import (
+    ButlerLogRecordHandler,
+    ButlerLogRecords,
+    VERBOSE,
+    JsonFormatter,
+    ButlerLogRecord,
+    ButlerMDC,
+)
 
 
 class LoggingTestCase(unittest.TestCase):
@@ -40,6 +47,7 @@ class LoggingTestCase(unittest.TestCase):
     def tearDown(self):
         if self.handler and self.log:
             self.log.removeHandler(self.handler)
+        ButlerMDC.restore_log_record_factory()
 
     def testRecordCapture(self):
         """Test basic log capture and serialization."""
@@ -171,6 +179,39 @@ class LoggingTestCase(unittest.TestCase):
             self.log.debug("A problem", exc_info=1)
 
         self.assertIn("Debug exception", self.handler.records[-1].exc_info)
+
+    def testMDC(self):
+        """Test that MDC information appears in messages."""
+        self.log.setLevel(logging.INFO)
+
+        i = 0
+        self.log.info("Message %d", i)
+        i += 1
+        self.assertEqual(self.handler.records[-1].MDC, {})
+
+        ButlerMDC.add_mdc_log_record_factory()
+        label = "MDC value"
+        ButlerMDC.MDC("LABEL", label)
+        self.log.info("Message %d", i)
+        self.assertEqual(self.handler.records[-1].MDC["LABEL"], label)
+
+        # Change the label and check that the previous record does not
+        # itself change.
+        ButlerMDC.MDC("LABEL", "dataId")
+        self.assertEqual(self.handler.records[-1].MDC["LABEL"], label)
+
+        # Format a record with MDC.
+        record = self.handler.records[-1]
+
+        # By default the MDC label should not be involved.
+        self.assertNotIn(label, str(record))
+
+        # But it can be included.
+        fmt = "x{MDC[LABEL]}"
+        self.assertEqual(record.format(fmt), "x" + label)
+
+        # But can be optional on a record that didn't set it.
+        self.assertEqual(self.handler.records[0].format(fmt), "x")
 
 
 class TestJsonLogging(unittest.TestCase):

@@ -223,6 +223,10 @@ class ButlerLogRecord(BaseModel):
 
         as_dict = self.dict()
 
+        # Special case MDC content. Convert it to an MDCDict
+        # so that missing items do not break formatting.
+        as_dict["MDC"] = MDCDict(as_dict["MDC"])
+
         as_dict["asctime"] = as_dict["asctime"].isoformat()
         formatted = log_format.format(**as_dict)
         return formatted
