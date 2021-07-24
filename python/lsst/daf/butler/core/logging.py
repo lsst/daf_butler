@@ -27,7 +27,7 @@ __all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
 import logging
 import datetime
 import traceback
-from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO
+from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO, Any
 
 from logging import LogRecord, StreamHandler, Formatter
 from pydantic import BaseModel
@@ -79,6 +79,9 @@ class ButlerMDC:
 
     _MDC = MDCDict()
 
+    _old_factory = None
+    """Old log record factory."""
+
     @classmethod
     def MDC(cls, key: str, value: str) -> str:
         """Set MDC for this key to the supplied value.
@@ -106,6 +109,31 @@ class ButlerMDC:
         Can be called even if the key is not known to MDC.
         """
         cls._MDC.pop(key, None)
+
+    @classmethod
+    def add_mdc_log_record_factory(cls) -> None:
+        """Add a log record factory that adds a MDC record to `LogRecord`.
+        """
+        old_factory = logging.getLogRecordFactory()
+
+        def record_factory(*args: Any, **kwargs: Any) -> LogRecord:
+            record = old_factory(*args, **kwargs)
+            # Make sure we send a copy of the global dict in the record.
+            record.MDC = MDCDict(cls._MDC)  # type: ignore
+            return record
+
+        cls._old_factory = old_factory
+        logging.setLogRecordFactory(record_factory)
+
+    @classmethod
+    def restore_log_record_factory(cls) -> None:
+        """Restores the log record factory to the original form.
+
+        Does nothing if there has not been a call to
+        `add_mdc_log_record_factory`.
+        """
+        if cls._old_factory:
+            logging.setLogRecordFactory(cls._old_factory)
 
 
 class ButlerLogRecord(BaseModel):

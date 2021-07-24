@@ -28,7 +28,7 @@ except ModuleNotFoundError:
     lsstLog = None
 
 from lsst.daf.butler import ButlerMDC
-from ..core.logging import MDCDict, JsonFormatter
+from ..core.logging import JsonFormatter
 
 
 class PrecisionLogFormatter(logging.Formatter):
@@ -151,15 +151,7 @@ class CliLog:
         # to the records. By default this is only used for long-log
         # but always enable it for when someone adds a new handler
         # that needs it.
-        old_factory = logging.getLogRecordFactory()
-
-        def record_factory(*args, **kwargs):
-            record = old_factory(*args, **kwargs)
-            # Make sure we send a copy of the global dict in the record.
-            record.MDC = MDCDict(ButlerMDC._MDC)
-            return record
-
-        logging.setLogRecordFactory(record_factory)
+        ButlerMDC.add_mdc_log_record_factory()
 
         # Set up the file logger
         if log_file:
@@ -200,6 +192,8 @@ class CliLog:
             logger = logging.getLogger(componentSetting.component)
             logger.setLevel(componentSetting.pythonLogLevel)
         cls._setLogLevel(None, "INFO")
+
+        ButlerMDC.restore_log_record_factory()
 
         # Remove the FileHandler we may have attached.
         root = logging.getLogger()
