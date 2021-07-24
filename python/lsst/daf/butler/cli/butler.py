@@ -153,7 +153,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         Subcommands may further configure the log settings."""
         if isinstance(ctx, click.Context):
             CliLog.initLog(longlog=ctx.params.get(long_log_option.name(), False),
-                           log_file=ctx.params.get(log_file_option.name(), None))
+                           log_file=ctx.params.get(log_file_option.name(), ()))
             if log_level_option.name() in ctx.params:
                 CliLog.setLogLevels(ctx.params[log_level_option.name()])
         else:

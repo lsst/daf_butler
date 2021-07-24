@@ -199,7 +199,7 @@ class CliLogTestBase():
                                     msg=f"did not find lines starting with module in: \n{output.getvalue()}")
 
     def testFileLogging(self):
-        """Test --file-log option."""
+        """Test --log-file option."""
         with self.runner.isolated_filesystem():
             for i, suffix in enumerate([".json", ".log"]):
                 # Get a temporary file name and immediately close it

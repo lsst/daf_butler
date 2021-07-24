@@ -115,9 +115,11 @@ long_log_option = MWOptionDecorator("--long-log",
 
 log_file_option = MWOptionDecorator("--log-file",
                                     default=None,
+                                    multiple=True,
+                                    callback=split_commas,
                                     type=MWPath(file_okay=True, dir_okay=False, writable=True),
-                                    help="File to write log messages. If the path ends with '.json' then JSON"
-                                    " log records will be written, else formatted text log records"
+                                    help="File(s) to write log messages. If the path ends with '.json' then"
+                                    " JSON log records will be written, else formatted text log records"
                                     " will be written. This file can exist and records will be appended.")
 
 options_file_option = MWOptionDecorator("--options-file", "-@",
