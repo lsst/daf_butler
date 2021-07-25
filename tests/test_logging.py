@@ -213,6 +213,25 @@ class LoggingTestCase(unittest.TestCase):
         # But can be optional on a record that didn't set it.
         self.assertEqual(self.handler.records[0].format(fmt), "x")
 
+        # Set an extra MDC entry and include all content.
+        extra = "extra"
+        ButlerMDC.MDC("EXTRA", extra)
+
+        i += 1
+        self.log.info("Message %d", i)
+        formatted = self.handler.records[-1].format("x{MDC} - {message}")
+        self.assertIn(f"EXTRA={extra}", formatted)
+        self.assertIn("LABEL=dataId", formatted)
+        self.assertIn(f"Message {i}", formatted)
+
+        # Clear the MDC and ensure that it does not continue to appear
+        # in messages.
+        ButlerMDC.MDCRemove("LABEL")
+        i += 1
+        self.log.info("Message %d", i)
+        self.assertEqual(self.handler.records[-1].format(fmt), "x")
+        self.assertEqual(self.handler.records[-1].format("{message}"), f"Message {i}")
+
 
 class TestJsonLogging(unittest.TestCase):
 
