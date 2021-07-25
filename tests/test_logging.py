@@ -281,6 +281,9 @@ class TestJsonLogging(unittest.TestCase):
         log.info("A message")
         log.warning("A warning")
 
+        # Add a blank line to the stream to check the parser ignores it.
+        print(file=stream)
+
         # Rewind the stream and pull messages out of it.
         stream.seek(0)
         records = ButlerLogRecords.from_stream(stream)
@@ -288,8 +291,14 @@ class TestJsonLogging(unittest.TestCase):
         self.assertEqual(records[0].message, "A message")
         self.assertEqual(records[1].levelname, "WARNING")
 
-        # Now read from the file.
+        # Now read from the file. Add two blank lines to test the parser
+        # will filter them out.
         file_handler.close()
+
+        with open(filename, "a") as fd:
+            print(file=fd)
+            print(file=fd)
+
         file_records = ButlerLogRecords.from_file(filename)
         self.assertEqual(file_records, records)
 

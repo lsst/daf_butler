@@ -359,6 +359,7 @@ class ButlerLogRecords(BaseModel):
         # A stream of records with one record per line.
         records = [ButlerLogRecord.parse_raw(first_line)]
         for line in stream:
+            line = line.rstrip()
             if line:  # Filter out blank lines.
                 records.append(ButlerLogRecord.parse_raw(line))
 
