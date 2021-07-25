@@ -30,7 +30,7 @@ import traceback
 from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO, Any
 
 from logging import LogRecord, StreamHandler, Formatter
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 
 from .utils import isplit
 
@@ -246,7 +246,7 @@ class ButlerLogRecords(BaseModel):
     """
 
     __root__: List[ButlerLogRecord]
-    _log_format: Optional[str] = None
+    _log_format: Optional[str] = PrivateAttr(None)
 
     @classmethod
     def from_records(cls, records: Iterable[ButlerLogRecord]) -> ButlerLogRecords:
@@ -398,9 +398,26 @@ class ButlerLogRecords(BaseModel):
             return _LONG_LOG_FORMAT
         return self._log_format
 
-    @log_format.setter
-    def log_format(self, format: str) -> None:
+    # Pydantic does not allow a property setter to be given for
+    # public properties of a model that is not based on a dict.
+    def set_log_format(self, format: Optional[str]) -> Optional[str]:
+        """Set the log format string for these records.
+
+        Parameters
+        ----------
+        format : `str`, optional
+            The new format string to use for converting this collection
+            of records into a string. If `None` the default format will be
+            used.
+
+        Returns
+        -------
+        old_format : `str`, optional
+            The previous log format.
+        """
+        previous = self._log_format
         self._log_format = format
+        return previous
 
     def __len__(self) -> int:
         return len(self.__root__)

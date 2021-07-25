@@ -105,6 +105,29 @@ class LoggingTestCase(unittest.TestCase):
                 if not trim:
                     self.assertIn("...", str(cm.exception))
 
+    def testRecordsFormatting(self):
+
+        self.log.setLevel(logging.DEBUG)
+        self.log.debug("debug message")
+        self.log.warning("warning message")
+        self.log.critical("critical message")
+        self.log.log(VERBOSE, "verbose message")
+
+        self.assertEqual(len(self.handler.records), 4)
+
+        format_default = str(self.handler.records)
+
+        # Set the format for these records.
+        self.handler.records.set_log_format("{levelname}")
+        format_override = str(self.handler.records)
+
+        self.assertNotEqual(format_default, format_override)
+        self.assertEqual(format_override, "DEBUG\nWARNING\nCRITICAL\nVERBOSE")
+
+        # Reset the log format and it should match the original text.
+        self.handler.records.set_log_format(None)
+        self.assertEqual(str(self.handler.records), format_default)
+
     def testButlerLogRecords(self):
         """Test the list-like methods of ButlerLogRecords."""
 
