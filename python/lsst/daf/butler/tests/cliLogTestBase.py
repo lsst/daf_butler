@@ -229,6 +229,26 @@ class CliLogTestBase():
 
                 self.assertGreater(len(records), 5)
 
+    def testLogTty(self):
+        """Verify that log output to terminal can be suppressed."""
+
+        with self.runner.isolated_filesystem():
+            for log_tty in (True, False):
+                # The pytest log handler interferes with the log configuration
+                # settings set up by initLog -- therefore test by using
+                # a subprocess.
+                if log_tty:
+                    args = ("butler", "--log-level", "DEBUG", "--log-tty", "create", "here")
+                else:
+                    args = ("butler", "--log-level", "DEBUG", "--no-log-tty", "create", "here2")
+                result = subprocess.run(args, capture_output=True)
+
+                output = result.stderr.decode()
+                if log_tty:
+                    self.assertIn("DEBUG", output)
+                else:
+                    self.assertNotIn("DEBUG", output)
+
 
 if __name__ == "__main__":
     unittest.main()

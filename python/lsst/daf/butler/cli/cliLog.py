@@ -85,7 +85,7 @@ class CliLog:
     that need to be closed on reset."""
 
     @classmethod
-    def initLog(cls, longlog, log_file=()):
+    def initLog(cls, longlog: bool, log_tty: bool = True, log_file=()):
         """Initialize logging. This should only be called once per program
         execution. After the first call this will log a warning and return.
 
@@ -96,6 +96,9 @@ class CliLog:
         ----------
         longlog : `bool`
             If True, make log messages appear in long format, by default False.
+        log_tty : `bool`
+            Control whether a default stream handler is enabled that logs
+            to the terminal.
         log_file : `tuple` of `str`
             Path to files to write log records. If path ends in ``.json`` the
             records will be written in JSON format. Else they will be written
@@ -124,7 +127,9 @@ class CliLog:
             # MDC is set via ButlerMDC, rather than in lsst.log.
             lsstLog.usePythonLogging()
 
-        if longlog:
+        if not log_tty:
+            logging.basicConfig(force=True, handlers=[logging.NullHandler()])
+        elif longlog:
 
             # Want to create our own Formatter so that we can get high
             # precision timestamps. This requires we attach our own

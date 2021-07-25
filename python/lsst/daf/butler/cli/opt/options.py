@@ -122,6 +122,11 @@ log_file_option = MWOptionDecorator("--log-file",
                                     " JSON log records will be written, else formatted text log records"
                                     " will be written. This file can exist and records will be appended.")
 
+log_tty_option = MWOptionDecorator("--log-tty/--no-log-tty",
+                                   default=True,
+                                   help="Log to terminal (default). If false logging to terminal is"
+                                   " disabled.")
+
 options_file_option = MWOptionDecorator("--options-file", "-@",
                                         expose_value=False,  # This option should not be forwarded
                                         help=unwrap("""URI to YAML file containing overrides
