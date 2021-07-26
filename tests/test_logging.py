@@ -255,6 +255,17 @@ class LoggingTestCase(unittest.TestCase):
         self.assertEqual(self.handler.records[-1].format(fmt), "x")
         self.assertEqual(self.handler.records[-1].format("{message}"), f"Message {i}")
 
+        # MDC context manager
+        fmt = "x{MDC[LABEL]} - {message}"
+        ButlerMDC.MDC("LABEL", "original")
+        with ButlerMDC.set_mdc({"LABEL": "test"}):
+            i += 1
+            self.log.info("Message %d", i)
+        self.assertEqual(self.handler.records[-1].format(fmt), f"xtest - Message {i}")
+        i += 1
+        self.log.info("Message %d", i)
+        self.assertEqual(self.handler.records[-1].format(fmt), f"xoriginal - Message {i}")
+
 
 class TestJsonLogging(unittest.TestCase):
 

@@ -27,7 +27,8 @@ __all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
 import logging
 import datetime
 import traceback
-from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO, Any
+from contextlib import contextmanager
+from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO, Any, Generator
 
 from logging import LogRecord, StreamHandler, Formatter
 from pydantic import BaseModel, PrivateAttr
@@ -109,6 +110,34 @@ class ButlerMDC:
         Can be called even if the key is not known to MDC.
         """
         cls._MDC.pop(key, None)
+
+    @classmethod
+    @contextmanager
+    def set_mdc(cls, mdc: Dict[str, str]) -> Generator[None, None, None]:
+        """Set the MDC key for this context.
+
+        Parameters
+        ----------
+        mdc : `dict` of `str`, `str`
+            MDC keys to update temporarily.
+
+        Notes
+        -----
+        Other MDC keys are not modified. The previous values are restored
+        on exit (removing them if the were unset previously).
+        """
+        previous = {}
+        for k, v in mdc.items():
+            previous[k] = cls.MDC(k, v)
+
+        try:
+            yield
+        finally:
+            for k, v in previous.items():
+                if not v:
+                    cls.MDCRemove(k)
+                else:
+                    cls.MDC(k, v)
 
     @classmethod
     def add_mdc_log_record_factory(cls) -> None:
