@@ -27,7 +27,7 @@ from typing import (
     Type,
 )
 
-from lsst.daf.butler import ButlerLogRecords
+from lsst.daf.butler.core.logging import ButlerLogRecords
 from .json import JsonFormatter
 
 

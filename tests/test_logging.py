@@ -25,11 +25,11 @@ import logging
 import tempfile
 from logging import StreamHandler, FileHandler
 
-from lsst.daf.butler import (
+from lsst.daf.butler.core.logging import (
     ButlerLogRecordHandler,
     ButlerLogRecords,
     VERBOSE,
-    JsonFormatter,
+    JsonLogFormatter,
     ButlerLogRecord,
     ButlerMDC,
 )
@@ -263,7 +263,7 @@ class TestJsonLogging(unittest.TestCase):
         log.setLevel(logging.INFO)
 
         # Log to a stream and also to a file.
-        formatter = JsonFormatter()
+        formatter = JsonLogFormatter()
 
         stream = io.StringIO()
         stream_handler = StreamHandler(stream)

@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 __all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
-           "ButlerLogRecord", "JsonFormatter")
+           "ButlerLogRecord", "JsonLogFormatter")
 
 import logging
 import datetime
@@ -492,7 +492,7 @@ class ButlerLogRecordHandler(StreamHandler):
         self.records.append(record)
 
 
-class JsonFormatter(Formatter):
+class JsonLogFormatter(Formatter):
     """Format a `LogRecord` in JSON format."""
 
     def format(self, record: LogRecord) -> str:

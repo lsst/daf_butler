@@ -29,7 +29,7 @@ import tempfile
 from logging import FileHandler
 
 from lsst.daf.butler import Butler, DatasetType, FileDataset, DatasetRef
-from lsst.daf.butler import ButlerLogRecordHandler, JsonFormatter
+from lsst.daf.butler.core.logging import ButlerLogRecordHandler, JsonLogFormatter
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -80,7 +80,7 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
                                           delete=False)
 
         handler = FileHandler(tmp.name)
-        handler.setFormatter(JsonFormatter())
+        handler.setFormatter(JsonLogFormatter())
         log.addHandler(handler)
 
         log.info("An INFO message")

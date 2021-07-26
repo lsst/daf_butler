@@ -37,7 +37,7 @@ import tempfile
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cliLog import CliLog
 from lsst.daf.butler.cli.utils import clickResultMsg, command_test_env, LogCliRunner
-from lsst.daf.butler import ButlerLogRecords
+from lsst.daf.butler.core.logging import ButlerLogRecords
 try:
     import lsst.log as lsstLog
 except ModuleNotFoundError:

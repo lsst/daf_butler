@@ -27,8 +27,7 @@ try:
 except ModuleNotFoundError:
     lsstLog = None
 
-from lsst.daf.butler import ButlerMDC
-from ..core.logging import JsonFormatter
+from ..core.logging import JsonLogFormatter, ButlerMDC
 
 
 class PrecisionLogFormatter(logging.Formatter):
@@ -162,7 +161,7 @@ class CliLog:
         for file in log_file:
             handler = logging.FileHandler(file)
             if file.endswith(".json"):
-                formatter = JsonFormatter()
+                formatter = JsonLogFormatter()
             else:
                 if longlog:
                     formatter = PrecisionLogFormatter(fmt=cls.pylog_longLogFmt, style="{")
