@@ -488,7 +488,7 @@ class Datastore(metaclass=ABCMeta):
         instead of `_finishIngest`.
         """
         raise NotImplementedError(
-            "Datastore does not support direct file-based ingest."
+            f"Datastore {self} does not support direct file-based ingest."
         )
 
     def _finishIngest(self, prepData: IngestPrepData, *, transfer: Optional[str] = None) -> None:
@@ -518,7 +518,7 @@ class Datastore(metaclass=ABCMeta):
         directly.
         """
         raise NotImplementedError(
-            "Datastore does not support direct file-based ingest."
+            f"Datastore {self} does not support direct file-based ingest."
         )
 
     def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> None:

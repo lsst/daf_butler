@@ -23,7 +23,7 @@
 import click
 from functools import partial
 
-from ..utils import MWOptionDecorator, split_commas, split_kv, unwrap, yaml_presets
+from ..utils import MWOptionDecorator, MWPath, split_commas, split_kv, unwrap, yaml_presets
 from lsst.daf.butler.registry import CollectionType
 
 
@@ -113,6 +113,19 @@ long_log_option = MWOptionDecorator("--long-log",
                                     help="Make log messages appear in long format.",
                                     is_flag=True)
 
+log_file_option = MWOptionDecorator("--log-file",
+                                    default=None,
+                                    multiple=True,
+                                    callback=split_commas,
+                                    type=MWPath(file_okay=True, dir_okay=False, writable=True),
+                                    help="File(s) to write log messages. If the path ends with '.json' then"
+                                    " JSON log records will be written, else formatted text log records"
+                                    " will be written. This file can exist and records will be appended.")
+
+log_tty_option = MWOptionDecorator("--log-tty/--no-log-tty",
+                                   default=True,
+                                   help="Log to terminal (default). If false logging to terminal is"
+                                   " disabled.")
 
 options_file_option = MWOptionDecorator("--options-file", "-@",
                                         expose_value=False,  # This option should not be forwarded

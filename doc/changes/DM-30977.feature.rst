@@ -1,0 +1,5 @@
+* Add class representing a collection of log records (``ButlerLogRecords``).
+* Allow this class to be stored and retrieved from a Butler datastore.
+* Add special log handler to allow JSON log records to be stored.
+* Add ``--log-file`` option to command lines to redirect log output to file.
+* Add ``--no-log-tty`` to disable log output to terminal.

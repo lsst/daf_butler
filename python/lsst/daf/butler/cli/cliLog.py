@@ -27,8 +27,7 @@ try:
 except ModuleNotFoundError:
     lsstLog = None
 
-from lsst.daf.butler import ButlerMDC
-from ..core.logging import MDCDict
+from ..core.logging import JsonLogFormatter, ButlerMDC
 
 
 class PrecisionLogFormatter(logging.Formatter):
@@ -80,8 +79,12 @@ class CliLog:
     _initialized = False
     _componentSettings = []
 
+    _fileHandlers = []
+    """Any FileHandler classes attached to the root logger by this class
+    that need to be closed on reset."""
+
     @classmethod
-    def initLog(cls, longlog):
+    def initLog(cls, longlog: bool, log_tty: bool = True, log_file=()):
         """Initialize logging. This should only be called once per program
         execution. After the first call this will log a warning and return.
 
@@ -92,6 +95,14 @@ class CliLog:
         ----------
         longlog : `bool`
             If True, make log messages appear in long format, by default False.
+        log_tty : `bool`
+            Control whether a default stream handler is enabled that logs
+            to the terminal.
+        log_file : `tuple` of `str`
+            Path to files to write log records. If path ends in ``.json`` the
+            records will be written in JSON format. Else they will be written
+            in text format. If empty no log file will be created. Records
+            will be appended to this file if it exists.
         """
         if cls._initialized:
             # Unit tests that execute more than one command do end up
@@ -115,7 +126,9 @@ class CliLog:
             # MDC is set via ButlerMDC, rather than in lsst.log.
             lsstLog.usePythonLogging()
 
-        if longlog:
+        if not log_tty:
+            logging.basicConfig(force=True, handlers=[logging.NullHandler()])
+        elif longlog:
 
             # Want to create our own Formatter so that we can get high
             # precision timestamps. This requires we attach our own
@@ -142,18 +155,24 @@ class CliLog:
         # to the records. By default this is only used for long-log
         # but always enable it for when someone adds a new handler
         # that needs it.
-        old_factory = logging.getLogRecordFactory()
+        ButlerMDC.add_mdc_log_record_factory()
 
-        def record_factory(*args, **kwargs):
-            record = old_factory(*args, **kwargs)
-            # Make sure we send a copy of the global dict in the record.
-            record.MDC = MDCDict(ButlerMDC._MDC)
-            return record
-
-        logging.setLogRecordFactory(record_factory)
+        # Set up the file logger
+        for file in log_file:
+            handler = logging.FileHandler(file)
+            if file.endswith(".json"):
+                formatter = JsonLogFormatter()
+            else:
+                if longlog:
+                    formatter = PrecisionLogFormatter(fmt=cls.pylog_longLogFmt, style="{")
+                else:
+                    formatter = logging.Formatter(fmt=cls.pylog_normalFmt, style="{")
+            handler.setFormatter(formatter)
+            logging.getLogger().addHandler(handler)
+            cls._fileHandlers.append(handler)
 
         # remember this call
-        cls.configState.append((cls.initLog, longlog))
+        cls.configState.append((cls.initLog, longlog, log_tty, log_file))
 
     @classmethod
     def resetLog(cls):
@@ -177,6 +196,16 @@ class CliLog:
             logger = logging.getLogger(componentSetting.component)
             logger.setLevel(componentSetting.pythonLogLevel)
         cls._setLogLevel(None, "INFO")
+
+        ButlerMDC.restore_log_record_factory()
+
+        # Remove the FileHandler we may have attached.
+        root = logging.getLogger()
+        for handler in cls._fileHandlers:
+            handler.close()
+            root.removeHandler(handler)
+
+        cls._fileHandlers.clear()
         cls._initialized = False
         cls.configState = []
 

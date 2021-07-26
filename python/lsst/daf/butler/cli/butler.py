@@ -29,7 +29,7 @@ import traceback
 import yaml
 
 from .cliLog import CliLog
-from .opt import log_level_option, long_log_option
+from .opt import log_level_option, long_log_option, log_file_option, log_tty_option
 from .progress import ClickProgressHandler
 from lsst.utils import doImport
 
@@ -152,7 +152,9 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
 
         Subcommands may further configure the log settings."""
         if isinstance(ctx, click.Context):
-            CliLog.initLog(longlog=ctx.params.get(long_log_option.name(), False))
+            CliLog.initLog(longlog=ctx.params.get(long_log_option.name(), False),
+                           log_tty=ctx.params.get(log_tty_option.name(), True),
+                           log_file=ctx.params.get(log_file_option.name(), ()))
             if log_level_option.name() in ctx.params:
                 CliLog.setLogLevels(ctx.params[log_level_option.name()])
         else:
@@ -316,8 +318,10 @@ class ButlerCLI(LoaderCLI):
 @click.command(cls=ButlerCLI, context_settings=dict(help_option_names=["-h", "--help"]))
 @log_level_option()
 @long_log_option()
+@log_file_option()
+@log_tty_option()
 @ClickProgressHandler.option
-def cli(log_level, long_log, progress):
+def cli(log_level, long_log, log_file, log_tty, progress):
     # log_level is handled by get_command and list_commands, and is called in
     # one of those functions before this is called. long_log is handled by
     # setup_logging.

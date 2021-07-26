@@ -32,10 +32,12 @@ import logging
 import re
 import subprocess
 import unittest
+import tempfile
 
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cliLog import CliLog
 from lsst.daf.butler.cli.utils import clickResultMsg, command_test_env, LogCliRunner
+from lsst.daf.butler.core.logging import ButlerLogRecords
 try:
     import lsst.log as lsstLog
 except ModuleNotFoundError:
@@ -170,8 +172,9 @@ class CliLogTestBase():
 
         with self.runner.isolated_filesystem():
             for longlog in (True, False):
-                # The click test does not capture logging emitted from lsst.log
-                # so use subprocess to run the test instead.
+                # The pytest log handler interferes with the log configuration
+                # settings set up by initLog -- therefore test by using
+                # a subprocess.
                 if longlog:
                     args = ("butler", "--log-level", "DEBUG", "--long-log", "create", "here")
                 else:
@@ -194,6 +197,57 @@ class CliLogTestBase():
                                      msg=f"found timestamp in: \n{output.getvalue()}")
                     self.assertTrue(startedWithModule,
                                     msg=f"did not find lines starting with module in: \n{output.getvalue()}")
+
+    def testFileLogging(self):
+        """Test --log-file option."""
+        with self.runner.isolated_filesystem():
+            for i, suffix in enumerate([".json", ".log"]):
+                # Get a temporary file name and immediately close it
+                fd = tempfile.NamedTemporaryFile(suffix=suffix)
+                filename = fd.name
+                fd.close()
+
+                args = ("--log-level", "DEBUG", "--log-file", filename, "create", f"here{i}")
+
+                result = self.runner.invoke(butlerCli, args)
+                self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+                # Record to test. Test one in the middle that we know is
+                # a DEBUG message. The first message might come from
+                # python itself since warnings are redirected to log
+                # messages.
+                num = 4
+
+                if suffix == ".json":
+                    records = ButlerLogRecords.from_file(filename)
+                    self.assertEqual(records[num].levelname, "DEBUG", str(records[num]))
+                else:
+                    with open(filename) as fd:
+                        records = fd.readlines()
+                    self.assertIn("DEBUG", records[num], str(records[num]))
+                    self.assertNotIn("{", records[num], str(records[num]))
+
+                self.assertGreater(len(records), 5)
+
+    def testLogTty(self):
+        """Verify that log output to terminal can be suppressed."""
+
+        with self.runner.isolated_filesystem():
+            for log_tty in (True, False):
+                # The pytest log handler interferes with the log configuration
+                # settings set up by initLog -- therefore test by using
+                # a subprocess.
+                if log_tty:
+                    args = ("butler", "--log-level", "DEBUG", "--log-tty", "create", "here")
+                else:
+                    args = ("butler", "--log-level", "DEBUG", "--no-log-tty", "create", "here2")
+                result = subprocess.run(args, capture_output=True)
+
+                output = result.stderr.decode()
+                if log_tty:
+                    self.assertIn("DEBUG", output)
+                else:
+                    self.assertNotIn("DEBUG", output)
 
 
 if __name__ == "__main__":
