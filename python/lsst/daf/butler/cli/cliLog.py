@@ -172,7 +172,7 @@ class CliLog:
             cls._fileHandlers.append(handler)
 
         # remember this call
-        cls.configState.append((cls.initLog, longlog, log_file))
+        cls.configState.append((cls.initLog, longlog, log_tty, log_file))
 
     @classmethod
     def resetLog(cls):
