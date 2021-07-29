@@ -551,19 +551,37 @@ class ButlerURI:
         may be this never becomes a problem but datastore templates assume
         POSIX separator is being used.
 
-        Currently, if the join path is given as an absolute scheme-less
-        URI it will be returned as an absolute ``file:`` URI even if the
-        URI it is being joined to is non-file.
+        If an absolute `ButlerURI` is given for ``path`` is is assumed that
+        this should be returned directly. Giving a ``path`` of an absolute
+        scheme-less URI is not allowed for safety reasons as it may indicate
+        a mistake in the calling code.
+
+        Raises
+        ------
+        ValueError
+            Raised if the ``path`` is an absolute scheme-less URI. In that
+            situation it is unclear whether the intent is to return a
+            ``file`` URI or it was a mistake and a relative scheme-less URI
+            was meant.
         """
         # If we have a full URI in path we will use it directly
         # but without forcing to absolute so that we can trap the
         # expected option of relative path.
         path_uri = ButlerURI(path, forceAbsolute=False)
         if path_uri.scheme:
+            # Check for scheme so can distinguish explicit URIs from
+            # absolute scheme-less URIs.
             return path_uri
 
-        # Force back to string
-        path = path_uri.path
+        if path_uri.isabs():
+            # Absolute scheme-less path.
+            raise ValueError(f"Can not join absolute scheme-less {path_uri!r} to another URI.")
+
+        # If this was originally a ButlerURI extract the unquoted path from it.
+        # Otherwise we use the string we were given to allow "#" to appear
+        # in the filename if given as a plain string.
+        if not isinstance(path, str):
+            path = path_uri.unquoted_path
 
         new = self.dirname()  # By definition a directory URI
 
