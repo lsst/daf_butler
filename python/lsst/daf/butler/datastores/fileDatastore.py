@@ -1292,6 +1292,11 @@ class FileDatastore(GenericBaseDatastore):
                     raise RuntimeError(f"Unexpectedly got no component name for a component at {location}")
                 uri = location.uri
                 if guessing and not uri.exists():
+                    # If we are trusting then it is entirely possible for
+                    # some components to be missing. In that case we skip
+                    # to the next component.
+                    if self.trustGetRequest:
+                        continue
                     raise FileNotFoundError(f"Expected URI ({uri}) does not exist")
                 components[storedFileInfo.component] = uri
 
