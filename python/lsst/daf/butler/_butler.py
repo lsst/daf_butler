@@ -1577,7 +1577,6 @@ class Butler:
                 groupedData[ref.datasetType][ref.dataId] = (dataset, resolvedRefs)
 
         # Now we can bulk-insert into Registry for each DatasetType.
-        allResolvedRefs: List[DatasetRef] = []
         for datasetType, groupForType in progress.iter_item_chunks(groupedData.items(),
                                                                    desc="Bulk-inserting datasets by type"):
             refs = self.registry.insertDatasets(
@@ -1593,13 +1592,11 @@ class Butler:
                 resolvedRefs.append(ref)
 
         # Go back to the original FileDatasets to replace their refs with the
-        # new resolved ones, and also build a big list of all refs.
-        allResolvedRefs = []
+        # new resolved ones.
         for groupForType in progress.iter_chunks(groupedData.values(),
                                                  desc="Reassociating resolved dataset refs with files"):
             for dataset, resolvedRefs in groupForType.values():
                 dataset.refs = resolvedRefs
-                allResolvedRefs.extend(resolvedRefs)
 
         # Bulk-insert everything into Datastore.
         self.datastore.ingest(*datasets, transfer=transfer)
