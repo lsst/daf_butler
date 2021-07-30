@@ -1516,8 +1516,8 @@ class Butler:
             standardized form.
         transfer : `str`, optional
             If not `None`, must be one of 'auto', 'move', 'copy', 'direct',
-            'hardlink', 'relsymlink' or 'symlink', indicating how to transfer
-            the file.
+            'split', 'hardlink', 'relsymlink' or 'symlink', indicating how to
+            transfer the file.
         run : `str`, optional
             The name of the run ingested datasets should be added to,
             overriding ``self.run``.
