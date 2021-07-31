@@ -377,6 +377,31 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(uri.root_uri().geturl(), "https://www.notexist.com:8080/")
         self.assertEqual(uri2.root_uri().geturl(), "s3://www.notexist.com/")
 
+    def testJoin(self):
+        """Test .join method."""
+
+        root_str = "s3://bucket/hsc/payload/"
+        root = ButlerURI(root_str)
+
+        self.assertEqual(root.join("b/test.txt").geturl(), f"{root_str}b/test.txt")
+        add_dir = root.join("b/c/d/")
+        self.assertTrue(add_dir.isdir())
+        self.assertEqual(add_dir.geturl(), f"{root_str}b/c/d/")
+
+        quote_example = "b&c.t@x#t"
+        needs_quote = root.join(quote_example)
+        self.assertEqual(needs_quote.unquoted_path, f"/hsc/payload/{quote_example}")
+
+        other = ButlerURI("file://localhost/test.txt")
+        self.assertEqual(root.join(other), other)
+        self.assertEqual(other.join("b/new.txt").geturl(), "file://localhost/b/new.txt")
+
+        joined = ButlerURI("s3://bucket/hsc/payload/").join(ButlerURI("test.qgraph", forceAbsolute=False))
+        self.assertEqual(joined, ButlerURI("s3://bucket/hsc/payload/test.qgraph"))
+
+        with self.assertRaises(ValueError):
+            ButlerURI("s3://bucket/hsc/payload/").join(ButlerURI("test.qgraph"))
+
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
