@@ -723,8 +723,16 @@ class FileDatastore(GenericBaseDatastore):
             # Allow ButlerURI to use its own knowledge
             transfer = "auto"
         else:
-            raise ValueError("Some datasets are inside the datastore and some are outside."
-                             " Please use an explicit transfer mode and not 'auto'.")
+            # This can happen when importing from a datastore that
+            # has had some datasets ingested using "direct" mode.
+            # Also allow ButlerURI to sort it out but warn about it.
+            # This can happen if you are importing from a datastore
+            # that had some direct transfer datasets.
+            log.warning("Some datasets are inside the datastore and some are outside. Using 'split' "
+                        "transfer mode. This assumes that the files outside the datastore are "
+                        "still accessible to the new butler since they will not be copied into "
+                        "the target datastore.")
+            transfer = "split"
 
         return transfer
 
@@ -783,7 +791,7 @@ class FileDatastore(GenericBaseDatastore):
         FileNotFoundError
             Raised if one of the given files does not exist.
         """
-        if transfer not in (None, "direct") + self.root.transferModes:
+        if transfer not in (None, "direct", "split") + self.root.transferModes:
             raise NotImplementedError(f"Transfer mode {transfer} not supported.")
 
         # A relative URI indicates relative to datastore root
@@ -852,7 +860,7 @@ class FileDatastore(GenericBaseDatastore):
         have_sized = False
 
         tgtLocation: Optional[Location]
-        if transfer is None:
+        if transfer is None or transfer == "split":
             # A relative path is assumed to be relative to the datastore
             # in this context
             if not srcUri.isabs():
@@ -861,10 +869,18 @@ class FileDatastore(GenericBaseDatastore):
                 # Work out the path in the datastore from an absolute URI
                 # This is required to be within the datastore.
                 pathInStore = srcUri.relative_to(self.root)
-                if pathInStore is None:
+                if pathInStore is None and transfer is None:
                     raise RuntimeError(f"Unexpectedly learned that {srcUri} is "
                                        f"not within datastore {self.root}")
-                tgtLocation = self.locationFactory.fromPath(pathInStore)
+                if pathInStore:
+                    tgtLocation = self.locationFactory.fromPath(pathInStore)
+                elif transfer == "split":
+                    # Outside the datastore but treat that as a direct ingest
+                    # instead.
+                    tgtLocation = None
+                else:
+                    raise RuntimeError(f"Unexpected transfer mode encountered: {transfer} for"
+                                       f" URI {srcUri}")
         elif transfer == "direct":
             # Want to store the full URI to the resource directly in
             # datastore. This is useful for referring to permanent archive
@@ -1292,6 +1308,11 @@ class FileDatastore(GenericBaseDatastore):
                     raise RuntimeError(f"Unexpectedly got no component name for a component at {location}")
                 uri = location.uri
                 if guessing and not uri.exists():
+                    # If we are trusting then it is entirely possible for
+                    # some components to be missing. In that case we skip
+                    # to the next component.
+                    if self.trustGetRequest:
+                        continue
                     raise FileNotFoundError(f"Expected URI ({uri}) does not exist")
                 components[storedFileInfo.component] = uri
 
@@ -1810,7 +1831,7 @@ class FileDatastore(GenericBaseDatastore):
         # require that the URI inside the source datastore should be stored
         # directly in the target datastore, which seems unlikely to be useful
         # since at any moment the source datastore could delete the file.
-        if transfer == "direct":
+        if transfer in ("direct", "split"):
             raise ValueError("Can not transfer from a source datastore using direct mode since"
                              " those files are controlled by the other datastore.")
 

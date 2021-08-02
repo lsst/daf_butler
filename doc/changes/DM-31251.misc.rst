@@ -1,0 +1,2 @@
+Add ``split`` transfer mode that can be used when some files are inside the datastore and some files are outside the datastore.
+This is equivalent to using `None` and ``direct`` mode dynamically.
