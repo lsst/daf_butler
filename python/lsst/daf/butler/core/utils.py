@@ -31,6 +31,7 @@ __all__ = (
     "safeMakeDir",
     "Singleton",
     "stripIfNotNone",
+    "time_this",
     "transactional",
 )
 
@@ -40,7 +41,9 @@ import builtins
 import fnmatch
 import functools
 import logging
+import time
 import re
+from contextlib import contextmanager
 from typing import (
     Any,
     Callable,
@@ -475,3 +478,58 @@ def isplit(string: T, sep: T) -> Iterator[T]:
             return
         yield string[begin:end]
         begin = end + 1
+
+
+@contextmanager
+def time_this(log: Optional[logging.Logger] = None, msg: Optional[str] = None,
+              log_level: int = logging.DEBUG, log_prefix: Optional[str] = None,
+              args: Iterable[Any] = ()) -> Iterator[None]:
+    """Time the enclosed block and issue a log message.
+
+    Parameters
+    ----------
+    log : `logging.Logger`, optional
+        Logger to use to report the timer message. The root logger will
+        be used if none is given.
+    msg : `str`, optional
+        Context to include in log message.
+    log_level : `int`, optional
+        Python logging level to use to issue the log message. If the
+        code block raises an exception the log message will automatically
+        switch to level ERROR.
+    log_prefix : `str`, optional
+        Prefix to use to prepend to the supplied logger to
+        create a new logger to use instead.
+    args : iterable of any
+        Additional parameters passed to the log command that should be
+        written to ``msg``.
+    """
+    if log is None:
+        log = logging.getLogger()
+    if log_prefix:
+        log_name = f"{log_prefix}.{log.name}" if not isinstance(log, logging.RootLogger) else log_prefix
+        log = logging.getLogger(log_name)
+
+    success = False
+    start = time.time()
+    try:
+        yield
+        success = True
+    finally:
+        end = time.time()
+
+        # The message is pre-inserted to allow the logger to expand
+        # the additional args provided. Make that easier by converting
+        # the None message to empty string.
+        if msg is None:
+            msg = ""
+
+        if not success:
+            # Something went wrong so change the log level to indicate
+            # this.
+            log_level = logging.ERROR
+
+        # Specify stacklevel to ensure the message is reported from the
+        # caller (1 is this file, 2 is contextlib, 3 is user)
+        log.log(log_level, msg + "%sTook %.4f seconds", *args,
+                ": " if msg else "", end - start, stacklevel=3)

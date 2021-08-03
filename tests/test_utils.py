@@ -24,11 +24,12 @@ from glob import glob
 import os
 import re
 import unittest
+import logging
 
 from lsst.daf.butler.core.utils import findFileResources, getFullTypeName, globToRegex, iterable, Singleton
 from lsst.daf.butler import Formatter, Registry
 from lsst.daf.butler import NamedKeyDict, NamedValueSet, StorageClass
-from lsst.daf.butler.core.utils import isplit
+from lsst.daf.butler.core.utils import isplit, time_this
 
 TESTDIR = os.path.dirname(__file__)
 
@@ -292,6 +293,62 @@ class GlobToRegexTestCase(unittest.TestCase):
         self.assertTrue(bool(re.fullmatch(patterns[1], "bar.fits")))
         self.assertTrue(re.fullmatch(patterns[1], "boz.fits"))
         self.assertIsNone(re.fullmatch(patterns[1], "boz.hdf5"))
+
+
+class TimerTestCase(unittest.TestCase):
+
+    def testTimer(self):
+        with self.assertLogs(level="DEBUG") as cm:
+            with time_this():
+                pass
+        self.assertEqual(cm.records[0].name, "root")
+        self.assertEqual(cm.records[0].levelname, "DEBUG")
+        self.assertIn("Took", cm.output[0])
+        self.assertEqual(cm.records[0].filename, "test_utils.py")
+
+        # Change logging level
+        with self.assertLogs(level="INFO") as cm:
+            with time_this(log_level=logging.INFO):
+                pass
+        self.assertEqual(cm.records[0].name, "root")
+        self.assertIn("Took", cm.output[0])
+        self.assertIn("seconds", cm.output[0])
+
+        # Use a new logger with a message.
+        msg = "Test message %d"
+        test_num = 42
+        logname = "test"
+        with self.assertLogs(level="DEBUG") as cm:
+            with time_this(log=logging.getLogger(logname),
+                           msg=msg, args=(42,)):
+                pass
+        self.assertEqual(cm.records[0].name, logname)
+        self.assertIn("Took", cm.output[0])
+        self.assertIn(msg % test_num, cm.output[0])
+
+        # Prefix the logger.
+        prefix = "prefix"
+        with self.assertLogs(level="DEBUG") as cm:
+            with time_this(log_prefix=prefix):
+                pass
+        self.assertEqual(cm.records[0].name, prefix)
+        self.assertIn("Took", cm.output[0])
+
+        # Prefix explicit logger.
+        with self.assertLogs(level="DEBUG") as cm:
+            with time_this(log=logging.getLogger(logname),
+                           log_prefix=prefix):
+                pass
+        self.assertEqual(cm.records[0].name, f"{prefix}.{logname}")
+
+        # Trigger a problem.
+        with self.assertLogs(level="ERROR") as cm:
+            with self.assertRaises(RuntimeError):
+                with time_this(log=logging.getLogger(logname),
+                               log_prefix=prefix):
+                    raise RuntimeError("A problem")
+        self.assertEqual(cm.records[0].name, f"{prefix}.{logname}")
+        self.assertEqual(cm.records[0].levelname, "ERROR")
 
 
 if __name__ == "__main__":
