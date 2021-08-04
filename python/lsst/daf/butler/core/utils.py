@@ -482,7 +482,7 @@ def isplit(string: T, sep: T) -> Iterator[T]:
 
 @contextmanager
 def time_this(log: Optional[logging.Logger] = None, msg: Optional[str] = None,
-              log_level: int = logging.DEBUG, log_prefix: Optional[str] = None,
+              level: int = logging.DEBUG, prefix: Optional[str] = "timer",
               args: Iterable[Any] = ()) -> Iterator[None]:
     """Time the enclosed block and issue a log message.
 
@@ -493,21 +493,22 @@ def time_this(log: Optional[logging.Logger] = None, msg: Optional[str] = None,
         be used if none is given.
     msg : `str`, optional
         Context to include in log message.
-    log_level : `int`, optional
+    level : `int`, optional
         Python logging level to use to issue the log message. If the
         code block raises an exception the log message will automatically
         switch to level ERROR.
-    log_prefix : `str`, optional
+    prefix : `str`, optional
         Prefix to use to prepend to the supplied logger to
-        create a new logger to use instead.
+        create a new logger to use instead. No prefix is used if the value
+        is set to `None`. Defaults to "timer".
     args : iterable of any
         Additional parameters passed to the log command that should be
         written to ``msg``.
     """
     if log is None:
         log = logging.getLogger()
-    if log_prefix:
-        log_name = f"{log_prefix}.{log.name}" if not isinstance(log, logging.RootLogger) else log_prefix
+    if prefix:
+        log_name = f"{prefix}.{log.name}" if not isinstance(log, logging.RootLogger) else prefix
         log = logging.getLogger(log_name)
 
     success = False
@@ -527,9 +528,9 @@ def time_this(log: Optional[logging.Logger] = None, msg: Optional[str] = None,
         if not success:
             # Something went wrong so change the log level to indicate
             # this.
-            log_level = logging.ERROR
+            level = logging.ERROR
 
         # Specify stacklevel to ensure the message is reported from the
         # caller (1 is this file, 2 is contextlib, 3 is user)
-        log.log(log_level, msg + "%sTook %.4f seconds", *args,
+        log.log(level, msg + "%sTook %.4f seconds", *args,
                 ": " if msg else "", end - start, stacklevel=3)

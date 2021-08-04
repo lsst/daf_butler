@@ -140,8 +140,7 @@ class ButlerS3URI(ButlerURI):
                                               **args)
         except (self.client.exceptions.NoSuchKey, self.client.exceptions.NoSuchBucket) as err:
             raise FileNotFoundError(f"No such resource: {self}") from err
-        with time_this(log, log_prefix="timer",
-                       msg="Read from %s", args=(self,)):
+        with time_this(log, msg="Read from %s", args=(self,)):
             body = response["Body"].read()
         response["Body"].close()
         return body
@@ -152,8 +151,7 @@ class ButlerS3URI(ButlerURI):
         if not overwrite:
             if self.exists():
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
-        with time_this(log, log_prefix="timer",
-                       msg="Write to %s", args=(self,)):
+        with time_this(log, msg="Write to %s", args=(self,)):
             self.client.put_object(Bucket=self.netloc, Key=self.relativeToPathRoot,
                                    Body=data)
 
@@ -182,8 +180,7 @@ class ButlerS3URI(ButlerURI):
             Always returns `True`. This is always a temporary file.
         """
         with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
-            with time_this(log, log_prefix="timer", msg="Downloading %s to local file",
-                           args=(self,)):
+            with time_this(log, msg="Downloading %s to local file", args=(self,)):
                 self.client.download_fileobj(self.netloc, self.relativeToPathRoot, tmpFile)
         return tmpFile.name, True
 
@@ -232,7 +229,7 @@ class ButlerS3URI(ButlerURI):
                 "Bucket": src.netloc,
                 "Key": src.relativeToPathRoot,
             }
-            with time_this(log, log_prefix="timer", msg=timer_msg, args=timer_args):
+            with time_this(log, msg=timer_msg, args=timer_args):
                 self.client.copy_object(CopySource=copy_source, Bucket=self.netloc,
                                         Key=self.relativeToPathRoot)
         else:
@@ -241,7 +238,7 @@ class ButlerS3URI(ButlerURI):
 
                 # resource.meta.upload_file seems like the right thing
                 # but we have a low level client
-                with time_this(log, log_prefix="timer", msg=timer_msg, args=timer_args):
+                with time_this(log, msg=timer_msg, args=timer_args):
                     with open(local_uri.ospath, "rb") as fh:
                         self.client.put_object(Bucket=self.netloc,
                                                Key=self.relativeToPathRoot, Body=fh)

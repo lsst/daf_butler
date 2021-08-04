@@ -1116,7 +1116,7 @@ class FileDatastore(GenericBaseDatastore):
         formatter = getInfo.formatter
         nbytes_max = 10_000_000  # Arbitrary number that we can tune
         if resource_size <= nbytes_max and formatter.can_read_bytes():
-            with time_this(log, msg=f"Reading bytes from {uri}", log_prefix="timer"):
+            with time_this(log, msg="Reading bytes from %s", args=(uri,)):
                 serializedDataset = uri.read()
             log.debug("Deserializing %s from %d bytes from location %s with formatter %s",
                       f"component {getInfo.component}" if isComponent else "",
@@ -1169,8 +1169,7 @@ class FileDatastore(GenericBaseDatastore):
                           uri, msg, formatter.name())
                 try:
                     with formatter._updateLocation(newLocation):
-                        with time_this(log, log_prefix="timer",
-                                       msg="Reading%s from location %s %s with formatter %s",
+                        with time_this(log, msg="Reading%s from location %s %s with formatter %s",
                                        args=(f" component {getInfo.component}" if isComponent else "",
                                              uri, msg, formatter.name())):
                             result = formatter.read(component=getInfo.component if isComponent else None)
