@@ -773,7 +773,7 @@ class Config(collections.abc.MutableMapping):
             # works.
             ntries = 0
             while delimiter in combined:
-                log.debug(f"Delimiter '{delimiter}' could not be used. Trying another.")
+                log.debug("Delimiter '%s' could not be used. Trying another.", delimiter)
                 ntries += 1
 
                 if ntries > 100:
@@ -785,7 +785,7 @@ class Config(collections.abc.MutableMapping):
                     if not delimiter.isalnum():
                         break
 
-        log.debug(f"Using delimiter {delimiter!r}")
+        log.debug("Using delimiter %r", delimiter)
 
         # Form the keys, escaping the delimiter if necessary
         strings = [delimiter + delimiter.join(str(s).replace(delimiter, f"\\{delimiter}") for s in k)

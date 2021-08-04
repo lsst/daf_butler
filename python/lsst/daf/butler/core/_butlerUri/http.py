@@ -390,8 +390,11 @@ class ButlerHttpURI(ButlerURI):
         if transfer not in self.transferModes:
             raise ValueError(f"Transfer mode {transfer} not supported by URI scheme {self.scheme}")
 
-        log.debug(f"Transferring {src} [exists: {src.exists()}] -> "
-                  f"{self} [exists: {self.exists()}] (transfer={transfer})")
+        # Existence checks cost time so do not call this unless we know
+        # that debugging is enabled.
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Transferring %s [exists: %s] -> %s [exists: %s] (transfer=%s)",
+                      src, src.exists(), self, self.exists(), transfer)
 
         if self.exists():
             raise FileExistsError(f"Destination path {self} already exists.")

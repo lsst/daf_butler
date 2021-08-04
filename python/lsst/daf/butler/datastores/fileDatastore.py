@@ -1703,8 +1703,8 @@ class FileDatastore(GenericBaseDatastore):
             self.bridge.moveToTrash([ref])
         except Exception as e:
             if ignore_errors:
-                log.warning(f"Attempted to mark dataset ({ref}) to be trashed in datastore {self.name} "
-                            f"but encountered an error: {e}")
+                log.warning("Attempted to mark dataset (%s) to be trashed in datastore %s "
+                            "but encountered an error: %s", ref, self.name, e)
                 pass
             else:
                 raise
