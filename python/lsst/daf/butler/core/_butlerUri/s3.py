@@ -38,6 +38,7 @@ from typing import (
     Union,
 )
 
+from ..utils import time_this
 from .utils import NoTransaction
 from ._butlerUri import ButlerURI
 from .s3utils import getS3Client, s3CheckFileExists, bucketExists
@@ -139,7 +140,8 @@ class ButlerS3URI(ButlerURI):
                                               **args)
         except (self.client.exceptions.NoSuchKey, self.client.exceptions.NoSuchBucket) as err:
             raise FileNotFoundError(f"No such resource: {self}") from err
-        body = response["Body"].read()
+        with time_this(log, msg="Read from %s", args=(self,)):
+            body = response["Body"].read()
         response["Body"].close()
         return body
 
@@ -149,8 +151,9 @@ class ButlerS3URI(ButlerURI):
         if not overwrite:
             if self.exists():
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
-        self.client.put_object(Bucket=self.netloc, Key=self.relativeToPathRoot,
-                               Body=data)
+        with time_this(log, msg="Write to %s", args=(self,)):
+            self.client.put_object(Bucket=self.netloc, Key=self.relativeToPathRoot,
+                                   Body=data)
 
     @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def mkdir(self) -> None:
@@ -177,7 +180,8 @@ class ButlerS3URI(ButlerURI):
             Always returns `True`. This is always a temporary file.
         """
         with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
-            self.client.download_fileobj(self.netloc, self.relativeToPathRoot, tmpFile)
+            with time_this(log, msg="Downloading %s to local file", args=(self,)):
+                self.client.download_fileobj(self.netloc, self.relativeToPathRoot, tmpFile)
         return tmpFile.name, True
 
     @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
@@ -202,14 +206,20 @@ class ButlerS3URI(ButlerURI):
         if transfer not in self.transferModes:
             raise ValueError(f"Transfer mode '{transfer}' not supported by URI scheme {self.scheme}")
 
-        log.debug(f"Transferring {src} [exists: {src.exists()}] -> "
-                  f"{self} [exists: {self.exists()}] (transfer={transfer})")
+        # Existence checks cost time so do not call this unless we know
+        # that debugging is enabled.
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("Transferring %s [exists: %s] -> %s [exists: %s] (transfer=%s)",
+                      src, src.exists(), self, self.exists(), transfer)
 
         if not overwrite and self.exists():
             raise FileExistsError(f"Destination path '{self}' already exists.")
 
         if transfer == "auto":
             transfer = self.transferDefault
+
+        timer_msg = "Transfer from %s to %s"
+        timer_args = (src, self)
 
         if isinstance(src, type(self)):
             # Looks like an S3 remote uri so we can use direct copy
@@ -219,16 +229,19 @@ class ButlerS3URI(ButlerURI):
                 "Bucket": src.netloc,
                 "Key": src.relativeToPathRoot,
             }
-            self.client.copy_object(CopySource=copy_source, Bucket=self.netloc, Key=self.relativeToPathRoot)
+            with time_this(log, msg=timer_msg, args=timer_args):
+                self.client.copy_object(CopySource=copy_source, Bucket=self.netloc,
+                                        Key=self.relativeToPathRoot)
         else:
             # Use local file and upload it
             with src.as_local() as local_uri:
 
                 # resource.meta.upload_file seems like the right thing
                 # but we have a low level client
-                with open(local_uri.ospath, "rb") as fh:
-                    self.client.put_object(Bucket=self.netloc,
-                                           Key=self.relativeToPathRoot, Body=fh)
+                with time_this(log, msg=timer_msg, args=timer_args):
+                    with open(local_uri.ospath, "rb") as fh:
+                        self.client.put_object(Bucket=self.netloc,
+                                               Key=self.relativeToPathRoot, Body=fh)
 
         # This was an explicit move requested from a remote resource
         # try to remove that resource

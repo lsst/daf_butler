@@ -24,6 +24,7 @@ from __future__ import annotations
 __all__ = ("getS3Client", "s3CheckFileExists", "bucketExists", "setAwsEnvCredentials",
            "unsetAwsEnvCredentials")
 
+import functools
 import os
 
 from typing import (
@@ -70,6 +71,12 @@ def getS3Client() -> boto3.client:
     if not endpoint:
         endpoint = None  # Handle ""
 
+    return _get_s3_client(endpoint)
+
+
+@functools.lru_cache()
+def _get_s3_client(endpoint: str) -> boto3.client:
+    # Helper function to cache the client for this endpoint
     config = botocore.config.Config(
         read_timeout=180,
         retries={

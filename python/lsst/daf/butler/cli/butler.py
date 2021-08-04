@@ -237,10 +237,10 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
                 with open(pluginName, "r") as resourceFile:
                     resources = defaultdict(list, yaml.safe_load(resourceFile))
             except Exception as err:
-                log.warning(f"Error loading commands from {pluginName}, skipping. {err}")
+                log.warning("Error loading commands from %s, skipping. %s", pluginName, err)
                 continue
             if "cmd" not in resources:
-                log.warning(f"No commands found in {pluginName}, skipping.")
+                log.warning("No commands found in %s, skipping.", pluginName)
                 continue
             pluginCommands = {cmd: [resources["cmd"]["import"]] for cmd in resources["cmd"]["commands"]}
             cls._mergeCommandLists(commands, defaultdict(list, pluginCommands))

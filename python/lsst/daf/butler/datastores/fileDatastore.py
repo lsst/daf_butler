@@ -81,7 +81,7 @@ from lsst.daf.butler.registry.interfaces import (
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
-from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional
+from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional, time_this
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
@@ -1116,7 +1116,8 @@ class FileDatastore(GenericBaseDatastore):
         formatter = getInfo.formatter
         nbytes_max = 10_000_000  # Arbitrary number that we can tune
         if resource_size <= nbytes_max and formatter.can_read_bytes():
-            serializedDataset = uri.read()
+            with time_this(log, msg="Reading bytes from %s", args=(uri,)):
+                serializedDataset = uri.read()
             log.debug("Deserializing %s from %d bytes from location %s with formatter %s",
                       f"component {getInfo.component}" if isComponent else "",
                       len(serializedDataset), uri, formatter.name())
@@ -1168,7 +1169,10 @@ class FileDatastore(GenericBaseDatastore):
                           uri, msg, formatter.name())
                 try:
                     with formatter._updateLocation(newLocation):
-                        result = formatter.read(component=getInfo.component if isComponent else None)
+                        with time_this(log, msg="Reading%s from location %s %s with formatter %s",
+                                       args=(f" component {getInfo.component}" if isComponent else "",
+                                             uri, msg, formatter.name())):
+                            result = formatter.read(component=getInfo.component if isComponent else None)
                 except Exception as e:
                     raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
                                      f" ({ref.datasetType.name} from {uri}): {e}") from e
@@ -1703,8 +1707,8 @@ class FileDatastore(GenericBaseDatastore):
             self.bridge.moveToTrash([ref])
         except Exception as e:
             if ignore_errors:
-                log.warning(f"Attempted to mark dataset ({ref}) to be trashed in datastore {self.name} "
-                            f"but encountered an error: {e}")
+                log.warning("Attempted to mark dataset (%s) to be trashed in datastore %s "
+                            "but encountered an error: %s", ref, self.name, e)
                 pass
             else:
                 raise

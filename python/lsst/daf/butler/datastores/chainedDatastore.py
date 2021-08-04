@@ -642,7 +642,7 @@ class ChainedDatastore(Datastore):
             Attempt to remove a dataset that does not exist.  Raised if none
             of the child datastores removed the dataset.
         """
-        log.debug(f"Removing {ref}")
+        log.debug("Removing %s", ref)
         self.trash(ref, ignore_errors=False)
         self.emptyTrash(ignore_errors=False)
 
