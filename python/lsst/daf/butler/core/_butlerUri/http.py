@@ -40,6 +40,7 @@ from typing import (
     Union,
 )
 
+from ..utils import time_this
 from .utils import NoTransaction
 from ._butlerUri import ButlerURI
 
@@ -327,8 +328,10 @@ class ButlerHttpURI(ButlerURI):
         if r.status_code != 200:
             raise FileNotFoundError(f"Unable to download resource {self}; status code: {r.status_code}")
         with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
-            for chunk in r.iter_content():
-                tmpFile.write(chunk)
+            with time_this(log, log_prefix="timer", msg="Downloading %s to local file",
+                           args=(self,)):
+                for chunk in r.iter_content():
+                    tmpFile.write(chunk)
         return tmpFile.name, True
 
     def read(self, size: int = -1) -> bytes:
@@ -342,7 +345,9 @@ class ButlerHttpURI(ButlerURI):
         """
         log.debug("Reading from remote resource: %s", self.geturl())
         stream = True if size > 0 else False
-        r = self.session.get(self.geturl(), stream=stream, timeout=TIMEOUT)
+        with time_this(log, log_prefix="timer",
+                       msg="Read from remote resource %s", args=(self,)):
+            r = self.session.get(self.geturl(), stream=stream, timeout=TIMEOUT)
         if r.status_code != 200:
             raise FileNotFoundError(f"Unable to read resource {self}; status code: {r.status_code}")
         if not stream:
@@ -367,7 +372,8 @@ class ButlerHttpURI(ButlerURI):
             if self.exists():
                 raise FileExistsError(f"Remote resource {self} exists and overwrite has been disabled")
         dest_url = finalurl(self._emptyPut())
-        r = self.session.put(dest_url, data=data, timeout=TIMEOUT)
+        with time_this(log, log_prefix="timer", msg="Write data to remote %s", args=(self,)):
+            r = self.session.put(dest_url, data=data, timeout=TIMEOUT)
         if r.status_code not in [201, 202, 204]:
             raise ValueError(f"Can not write file {self}, status code: {r.status_code}")
 
@@ -407,23 +413,26 @@ class ButlerHttpURI(ButlerURI):
             if not self.is_webdav_endpoint:
                 raise NotImplementedError("Endpoint does not implement WebDAV functionality")
 
-            if transfer == "move":
-                r = self.session.request("MOVE", src.geturl(),
-                                         headers={"Destination": self.geturl()},
-                                         timeout=TIMEOUT)
-                log.debug("Running move via MOVE HTTP request.")
-            else:
-                r = self.session.request("COPY", src.geturl(),
-                                         headers={"Destination": self.geturl()},
-                                         timeout=TIMEOUT)
-                log.debug("Running copy via COPY HTTP request.")
+            with time_this(log, log_prefix="timer",
+                           msg="Transfer from %s to %s directly", args=(src, self)):
+                if transfer == "move":
+                    r = self.session.request("MOVE", src.geturl(),
+                                             headers={"Destination": self.geturl()},
+                                             timeout=TIMEOUT)
+                    log.debug("Running move via MOVE HTTP request.")
+                else:
+                    r = self.session.request("COPY", src.geturl(),
+                                             headers={"Destination": self.geturl()},
+                                             timeout=TIMEOUT)
+                    log.debug("Running copy via COPY HTTP request.")
         else:
             # Use local file and upload it
             with src.as_local() as local_uri:
                 with open(local_uri.ospath, "rb") as f:
                     dest_url = finalurl(self._emptyPut())
-                    r = self.session.put(dest_url, data=f, timeout=TIMEOUT)
-            log.debug("Uploading URI %s to %s via local file", src, self)
+                    with time_this(log, log_prefix="timer",
+                                   msg="Transfer from %s to %s via local file", args=(src, self)):
+                        r = self.session.put(dest_url, data=f, timeout=TIMEOUT)
 
         if r.status_code not in [201, 202, 204]:
             raise ValueError(f"Can not transfer file {self}, status code: {r.status_code}")

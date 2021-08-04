@@ -81,7 +81,7 @@ from lsst.daf.butler.registry.interfaces import (
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
-from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional
+from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional, time_this
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
@@ -1116,7 +1116,8 @@ class FileDatastore(GenericBaseDatastore):
         formatter = getInfo.formatter
         nbytes_max = 10_000_000  # Arbitrary number that we can tune
         if resource_size <= nbytes_max and formatter.can_read_bytes():
-            serializedDataset = uri.read()
+            with time_this(log, msg=f"Reading bytes from {uri}", log_prefix="timer"):
+                serializedDataset = uri.read()
             log.debug("Deserializing %s from %d bytes from location %s with formatter %s",
                       f"component {getInfo.component}" if isComponent else "",
                       len(serializedDataset), uri, formatter.name())
@@ -1168,7 +1169,11 @@ class FileDatastore(GenericBaseDatastore):
                           uri, msg, formatter.name())
                 try:
                     with formatter._updateLocation(newLocation):
-                        result = formatter.read(component=getInfo.component if isComponent else None)
+                        with time_this(log, log_prefix="timer",
+                                       msg="Reading%s from location %s %s with formatter %s",
+                                       args=(f" component {getInfo.component}" if isComponent else "",
+                                             uri, msg, formatter.name())):
+                            result = formatter.read(component=getInfo.component if isComponent else None)
                 except Exception as e:
                     raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
                                      f" ({ref.datasetType.name} from {uri}): {e}") from e
