@@ -129,6 +129,29 @@ class FileURITestCase(unittest.TestCase):
         child = ButlerURI("../c/e/f/g.txt", forceAbsolute=False)
         self.assertEqual(child.relative_to(parent), "e/f/g.txt")
 
+        # Test non-file root with relative path.
+        child = ButlerURI("e/f/g.txt", forceAbsolute=False)
+        parent = ButlerURI("s3://hello/a/b/c/")
+        self.assertEqual(child.relative_to(parent), "e/f/g.txt")
+
+        # Test with different netloc
+        child = ButlerURI("http://my.host/a/b/c.txt")
+        parent = ButlerURI("http://other.host/a/")
+        self.assertIsNone(child.relative_to(parent), f"{child}.relative_to({parent})")
+
+        # Schemeless absolute child.
+        # Schemeless absolute URI is constructed using root= parameter.
+        parent = ButlerURI("file:///a/b/c/")
+        child = ButlerURI("d/e.txt", root=parent)
+        self.assertEqual(child.relative_to(parent), "d/e.txt", f"{child}.relative_to({parent})")
+
+        parent = ButlerURI("c/", root="/a/b/")
+        self.assertEqual(child.relative_to(parent), "d/e.txt", f"{child}.relative_to({parent})")
+
+        # Absolute schemeless child with relative parent will always fail.
+        parent = ButlerURI("d/e.txt", forceAbsolute=False)
+        self.assertIsNone(child.relative_to(parent), f"{child}.relative_to({parent})")
+
     def testParents(self):
         """Test of splitting and parent walking."""
         parent = ButlerURI(self.tmpdir, forceDirectory=True, forceAbsolute=True)
