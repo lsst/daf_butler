@@ -78,6 +78,12 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(uri, uri2)
         self.assertEqual(id(uri), id(uri2))
 
+        with self.assertRaises(ValueError):
+            # Scheme-less URIs are not allowed to support non-file roots
+            # at the present time. This may change in the future to become
+            # equivalent to ButlerURI.join()
+            ButlerURI("a/b.txt", root=ButlerURI("s3://bucket/a/b/"))
+
     def testExtension(self):
         file = ButlerURI(os.path.join(self.tmpdir, "test.txt"))
         self.assertEqual(file.updatedExtension(None), file)

@@ -141,7 +141,7 @@ class ButlerSchemelessURI(ButlerFileURI):
             root = os.path.abspath(os.path.curdir)
         elif isinstance(root, ButlerURI):
             if root.scheme and root.scheme != "file":
-                raise RuntimeError(f"The override root must be a file URI not {root.scheme}")
+                raise ValueError(f"The override root must be a file URI not {root.scheme}")
             root = os.path.abspath(root.ospath)
 
         # this is a local OS file path which can support tilde expansion.
