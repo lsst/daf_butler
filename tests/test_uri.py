@@ -290,10 +290,10 @@ class FileURITestCase(unittest.TestCase):
 
         # Test that children relative to schemeless and file schemes
         # still return the same unquoted name
-        self.assertEqual(fnew2.relative_to(fdir), new2name)
-        self.assertEqual(fnew2.relative_to(dir), new2name)
-        self.assertEqual(new2.relative_to(fdir), new2name, f"{new2} vs {fdir}")
-        self.assertEqual(new2.relative_to(dir), new2name)
+        self.assertEqual(fnew2.relative_to(fdir), new2name, f"{fnew2}.relative_to({fdir})")
+        self.assertEqual(fnew2.relative_to(dir), new2name, f"{fnew2}.relative_to({dir})")
+        self.assertEqual(new2.relative_to(fdir), new2name, f"{new2}.relative_to({fdir})")
+        self.assertEqual(new2.relative_to(dir), new2name, f"{new2}.relative_to({dir})")
 
         # Check for double quoting
         plus_path = "/a/b/c+d/"
