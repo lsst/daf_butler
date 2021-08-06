@@ -1969,6 +1969,55 @@ class RegistryTests(ABC):
                 expected = None
             assertLookup(detector=2, timespan=timespan, expected=expected)
 
+    def testSkipCalibs(self):
+        """Test how queries handle skipping of calibration collections.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+
+        coll_calib = "Cam1/calibs/default"
+        registry.registerCollection(coll_calib, type=CollectionType.CALIBRATION)
+
+        coll_list = [coll_calib, "imported_g", "imported_r"]
+        chain = "Cam1/chain"
+        registry.registerCollection(chain, type=CollectionType.CHAINED)
+        registry.setCollectionChain(chain, coll_list)
+
+        # explicit list will raise
+        with self.assertRaises(NotImplementedError):
+            registry.queryDatasets("bias", collections=coll_list)
+        with self.assertRaises(NotImplementedError):
+            registry.queryDataIds(["instrument", "detector"], datasets="bias", collections=coll_list)
+
+        # chain will skip
+        datasets = list(registry.queryDatasets("bias", collections=chain))
+        self.assertGreater(len(datasets), 0)
+
+        dataIds = list(registry.queryDataIds(["instrument", "detector"], datasets="bias",
+                                             collections=chain))
+        self.assertGreater(len(dataIds), 0)
+
+        # glob will skip too
+        datasets = list(registry.queryDatasets("bias", collections="*d*"))
+        self.assertGreater(len(datasets), 0)
+
+        # regular expression will skip too
+        pattern = re.compile(".*")
+        datasets = list(registry.queryDatasets("bias", collections=pattern))
+        self.assertGreater(len(datasets), 0)
+
+        # ellipsis should work as usual
+        datasets = list(registry.queryDatasets("bias", collections=...))
+        self.assertGreater(len(datasets), 0)
+
+        # few tests with findFirst
+        datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
+        self.assertGreater(len(datasets), 0)
+
+        with self.assertRaises(NotImplementedError):
+            registry.queryDatasets("bias", collections=coll_list, findFirst=True)
+
     def testIngestTimeQuery(self):
 
         registry = self.makeRegistry()

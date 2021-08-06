@@ -143,6 +143,7 @@ class QueryBuilder:
             collections = CollectionSearch.fromExpression(collections)
         else:
             collections = CollectionQuery.fromExpression(collections)
+        explicitCollections = frozenset(collections.explicitNames())
         # If we are searching all collections with no constraints, loop over
         # RUN collections only, because that will include all datasets.
         collectionTypes: AbstractSet[CollectionType]
@@ -163,7 +164,9 @@ class QueryBuilder:
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
                                                                  collectionTypes=collectionTypes)):
             if collectionRecord.type is CollectionType.CALIBRATION:
-                if datasetType.isCalibration():
+                # If collection name was provided explicitly then say sorry,
+                # otherwise collection is a part of chained one and we skip it.
+                if datasetType.isCalibration() and collectionRecord.name in explicitCollections:
                     raise NotImplementedError(
                         f"Query for dataset type '{datasetType.name}' in CALIBRATION-type collection "
                         f"'{collectionRecord.name}' is not yet supported."

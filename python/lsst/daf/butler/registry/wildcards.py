@@ -489,6 +489,11 @@ class CollectionSearch(BaseModel, Sequence[str]):
                     includeChains=includeChains,
                 )
 
+    def explicitNames(self) -> Iterator[str]:
+        """Iterate over collection names that were specified explicitly.
+        """
+        yield from self.__root__
+
     def __iter__(self) -> Iterator[str]:  # type: ignore
         yield from self.__root__
 
@@ -657,6 +662,12 @@ class CollectionQuery:
                         flattenChains=flattenChains,
                         includeChains=includeChains,
                     )
+
+    def explicitNames(self) -> Iterator[str]:
+        """Iterate over collection names that were specified explicitly.
+        """
+        if isinstance(self._search, CollectionSearch):
+            yield from self._search.explicitNames()
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, CollectionQuery):
