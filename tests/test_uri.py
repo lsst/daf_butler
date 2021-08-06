@@ -103,11 +103,11 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(child.relative_to(parent), "dir1/file.txt")
 
         not_child = ButlerURI("/a/b/dir1/file.txt")
-        self.assertFalse(not_child.relative_to(parent))
+        self.assertIsNone(not_child.relative_to(parent))
         self.assertFalse(not_child.isdir())
 
         not_directory = ButlerURI(os.path.join(self.tmpdir, "dir1", "file2.txt"))
-        self.assertFalse(child.relative_to(not_directory))
+        self.assertIsNone(child.relative_to(not_directory))
 
         # Relative URIs
         parent = ButlerURI("a/b/", forceAbsolute=False)
@@ -124,7 +124,7 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(child.relative_to(parent), "e/f/g.txt")
 
         child = ButlerURI("../e/f/g.txt", forceAbsolute=False)
-        self.assertFalse(child.relative_to(parent))
+        self.assertIsNone(child.relative_to(parent))
 
         child = ButlerURI("../c/e/f/g.txt", forceAbsolute=False)
         self.assertEqual(child.relative_to(parent), "e/f/g.txt")
