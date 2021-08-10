@@ -34,7 +34,6 @@ __all__ = ('ButlerFileURI',)
 
 from typing import (
     TYPE_CHECKING,
-    cast,
     Iterator,
     List,
     Optional,
@@ -103,63 +102,6 @@ class ButlerFileURI(ButlerURI):
             Always returns `False` (this is not a temporary file).
         """
         return self.ospath, False
-
-    def relative_to(self, other: ButlerURI) -> Optional[str]:
-        """Return the relative path from this URI to the other URI.
-
-        Parameters
-        ----------
-        other : `ButlerURI`
-            URI to use to calculate the relative path. Must be a parent
-            of this URI.
-
-        Returns
-        -------
-        subpath : `str`
-            The sub path of this URI relative to the supplied other URI.
-            Returns `None` if there is no parent child relationship.
-            Scheme and netloc must match but for file URIs schemeless
-            is also used. If this URI is a relative URI but the other is
-            absolute, it is assumed to be in the parent completely unless it
-            starts with ".." (in which case the path is combined and tested).
-            If both URIs are relative, the relative paths are compared
-            for commonality.
-
-        Notes
-        -----
-        By definition a relative path will be relative to the enclosing
-        absolute parent URI. It will be returned unchanged if it does not
-        use a parent directory specification.
-        """
-        # We know self is a file so check the other. Anything other than
-        # file or schemeless means by definition these have no paths in common
-        if other.scheme and other.scheme != "file":
-            return None
-
-        # for case where both URIs are relative use the normal logic
-        # where a/b/c.txt and a/b/ returns c.txt.
-        if not self.isabs() and not other.isabs():
-            return super().relative_to(other)
-
-        # if we have a relative path convert it to absolute
-        # relative to the supplied parent.  This is solely to handle
-        # the case where the relative path includes ".." but somehow
-        # then goes back inside the directory of the parent
-        if not self.isabs():
-            childUri = other.join(self.path)
-            return childUri.relative_to(other)
-
-        # By this point if the schemes are identical we can use the
-        # base class implementation.
-        if self.scheme == other.scheme:
-            return super().relative_to(other)
-
-        # if one is schemeless and the other is not the base implementation
-        # will fail so we need to fix that -- they are both absolute so
-        # forcing to file is fine.
-        # Use a cast to convince mypy that other has to be a ButlerFileURI
-        # in order to get to this part of the code.
-        return self.abspath().relative_to(cast(ButlerFileURI, other).abspath())
 
     def read(self, size: int = -1) -> bytes:
         """Return the entire content of the file as bytes."""

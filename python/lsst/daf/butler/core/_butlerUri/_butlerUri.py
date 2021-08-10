@@ -612,6 +612,14 @@ class ButlerURI:
             Returns `None` if there is no parent child relationship.
             Scheme and netloc must match.
         """
+        # Scheme-less absolute other is treated as if it's a file scheme.
+        # Scheme-less relative other can only return non-None if self
+        # is also scheme-less relative and that is handled specifically
+        # in a subclass.
+        if not other.scheme and other.isabs():
+            other = other.abspath()
+
+        # Scheme-less self is handled elsewhere.
         if self.scheme != other.scheme or self.netloc != other.netloc:
             return None
 

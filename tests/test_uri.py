@@ -78,6 +78,12 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(uri, uri2)
         self.assertEqual(id(uri), id(uri2))
 
+        with self.assertRaises(ValueError):
+            # Scheme-less URIs are not allowed to support non-file roots
+            # at the present time. This may change in the future to become
+            # equivalent to ButlerURI.join()
+            ButlerURI("a/b.txt", root=ButlerURI("s3://bucket/a/b/"))
+
     def testExtension(self):
         file = ButlerURI(os.path.join(self.tmpdir, "test.txt"))
         self.assertEqual(file.updatedExtension(None), file)
@@ -97,11 +103,11 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(child.relative_to(parent), "dir1/file.txt")
 
         not_child = ButlerURI("/a/b/dir1/file.txt")
-        self.assertFalse(not_child.relative_to(parent))
+        self.assertIsNone(not_child.relative_to(parent))
         self.assertFalse(not_child.isdir())
 
         not_directory = ButlerURI(os.path.join(self.tmpdir, "dir1", "file2.txt"))
-        self.assertFalse(child.relative_to(not_directory))
+        self.assertIsNone(child.relative_to(not_directory))
 
         # Relative URIs
         parent = ButlerURI("a/b/", forceAbsolute=False)
@@ -118,10 +124,33 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(child.relative_to(parent), "e/f/g.txt")
 
         child = ButlerURI("../e/f/g.txt", forceAbsolute=False)
-        self.assertFalse(child.relative_to(parent))
+        self.assertIsNone(child.relative_to(parent))
 
         child = ButlerURI("../c/e/f/g.txt", forceAbsolute=False)
         self.assertEqual(child.relative_to(parent), "e/f/g.txt")
+
+        # Test non-file root with relative path.
+        child = ButlerURI("e/f/g.txt", forceAbsolute=False)
+        parent = ButlerURI("s3://hello/a/b/c/")
+        self.assertEqual(child.relative_to(parent), "e/f/g.txt")
+
+        # Test with different netloc
+        child = ButlerURI("http://my.host/a/b/c.txt")
+        parent = ButlerURI("http://other.host/a/")
+        self.assertIsNone(child.relative_to(parent), f"{child}.relative_to({parent})")
+
+        # Schemeless absolute child.
+        # Schemeless absolute URI is constructed using root= parameter.
+        parent = ButlerURI("file:///a/b/c/")
+        child = ButlerURI("d/e.txt", root=parent)
+        self.assertEqual(child.relative_to(parent), "d/e.txt", f"{child}.relative_to({parent})")
+
+        parent = ButlerURI("c/", root="/a/b/")
+        self.assertEqual(child.relative_to(parent), "d/e.txt", f"{child}.relative_to({parent})")
+
+        # Absolute schemeless child with relative parent will always fail.
+        parent = ButlerURI("d/e.txt", forceAbsolute=False)
+        self.assertIsNone(child.relative_to(parent), f"{child}.relative_to({parent})")
 
     def testParents(self):
         """Test of splitting and parent walking."""
@@ -284,10 +313,10 @@ class FileURITestCase(unittest.TestCase):
 
         # Test that children relative to schemeless and file schemes
         # still return the same unquoted name
-        self.assertEqual(fnew2.relative_to(fdir), new2name)
-        self.assertEqual(fnew2.relative_to(dir), new2name)
-        self.assertEqual(new2.relative_to(fdir), new2name, f"{new2} vs {fdir}")
-        self.assertEqual(new2.relative_to(dir), new2name)
+        self.assertEqual(fnew2.relative_to(fdir), new2name, f"{fnew2}.relative_to({fdir})")
+        self.assertEqual(fnew2.relative_to(dir), new2name, f"{fnew2}.relative_to({dir})")
+        self.assertEqual(new2.relative_to(fdir), new2name, f"{new2}.relative_to({fdir})")
+        self.assertEqual(new2.relative_to(dir), new2name, f"{new2}.relative_to({dir})")
 
         # Check for double quoting
         plus_path = "/a/b/c+d/"

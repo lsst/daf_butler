@@ -90,6 +90,60 @@ class ButlerSchemelessURI(ButlerFileURI):
         return ButlerURI(str(self), forceAbsolute=True, forceDirectory=self.isdir(),
                          isTemporary=self.isTemporary)
 
+    def relative_to(self, other: ButlerURI) -> Optional[str]:
+        """Return the relative path from this URI to the other URI.
+
+        Parameters
+        ----------
+        other : `ButlerURI`
+            URI to use to calculate the relative path.
+
+        Returns
+        -------
+        subpath : `str`
+            The sub path of this URI relative to the supplied other URI.
+            Returns `None` if there is no parent child relationship.
+            If this URI is a relative URI but the other is
+            absolute, it is assumed to be in the parent completely unless it
+            starts with ".." (in which case the path is combined and tested).
+            If both URIs are relative, the relative paths are compared
+            for commonality.
+
+        Notes
+        -----
+        By definition a relative path will be relative to the enclosing
+        absolute parent URI. It will be returned unchanged if it does not
+        use a parent directory specification.
+        """
+        # In some scenarios below a new derived child URI needs to be created
+        # to convert from scheme-less to absolute URI.
+        child = None
+
+        if not self.isabs() and not other.isabs():
+            # Both are schemeless relative. Use parent implementation
+            # rather than trying to convert both to file: first since schemes
+            # match.
+            pass
+        elif not self.isabs() and other.isabs():
+            # Append child to other. This can account for .. in child path.
+            child = other.join(self.path)
+        elif self.isabs() and not other.isabs():
+            # Finding common paths is not possible if the parent is
+            # relative and the child is absolute.
+            return None
+        elif self.isabs() and other.isabs():
+            # Both are absolute so convert schemeless to file
+            # if necessary.
+            child = self.abspath()
+            if not other.scheme:
+                other = other.abspath()
+        else:
+            raise RuntimeError(f"Unexpected combination of {child}.relative_to({other}).")
+
+        if child is None:
+            return super().relative_to(other)
+        return child.relative_to(other)
+
     @classmethod
     def _fixupPathUri(cls, parsed: urllib.parse.ParseResult, root: Optional[Union[str, ButlerURI]] = None,
                       forceAbsolute: bool = False,
@@ -141,7 +195,7 @@ class ButlerSchemelessURI(ButlerFileURI):
             root = os.path.abspath(os.path.curdir)
         elif isinstance(root, ButlerURI):
             if root.scheme and root.scheme != "file":
-                raise RuntimeError(f"The override root must be a file URI not {root.scheme}")
+                raise ValueError(f"The override root must be a file URI not {root.scheme}")
             root = os.path.abspath(root.ospath)
 
         # this is a local OS file path which can support tilde expansion.
