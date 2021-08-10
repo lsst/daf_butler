@@ -132,7 +132,10 @@ class ButlerS3URI(ButlerURI):
         # way of knowing if the file was actually deleted except
         # for checking all the keys again, reponse is  HTTP 204 OK
         # response all the time
-        self.client.delete_object(Bucket=self.netloc, Key=self.relativeToPathRoot)
+        try:
+            self.client.delete_object(Bucket=self.netloc, Key=self.relativeToPathRoot)
+        except (self.client.exceptions.NoSuchKey, self.client.exceptions.NoSuchBucket) as err:
+            raise FileNotFoundError("No such resource: {self}") from err
 
     @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def read(self, size: int = -1) -> bytes:
