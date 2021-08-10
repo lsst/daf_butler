@@ -79,12 +79,18 @@ retryable_io_errors = (
     RequestError, HTTPError,
     # built-ins
     TimeoutError, ConnectionError)
+
+# Client error can include NoSuchKey so retry may not be the right
+# thing. This may require more consideration if it is to be used.
 retryable_client_errors = (
     # botocore.exceptions
     ClientError,
     # built-ins
     PermissionError)
-all_retryable_errors = retryable_client_errors + retryable_io_errors
+
+# Combine all errors into an easy package. For now client errors
+# are not included.
+all_retryable_errors = retryable_io_errors
 max_retry_time = 60
 
 
