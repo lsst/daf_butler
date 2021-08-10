@@ -106,7 +106,7 @@ class ButlerS3URI(ButlerURI):
         # Defer import for circular dependencies
         return getS3Client()
 
-    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
+    @backoff.on_exception(backoff.expo, retryable_io_errors, max_time=max_retry_time)
     def exists(self) -> bool:
         """Check that the S3 resource exists."""
         if self.is_root:
@@ -115,7 +115,7 @@ class ButlerS3URI(ButlerURI):
         exists, _ = s3CheckFileExists(self, client=self.client)
         return exists
 
-    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
+    @backoff.on_exception(backoff.expo, retryable_io_errors, max_time=max_retry_time)
     def size(self) -> int:
         """Return the size of the resource in bytes."""
         if self.dirLike:
@@ -125,7 +125,7 @@ class ButlerS3URI(ButlerURI):
             raise FileNotFoundError(f"Resource {self} does not exist")
         return sz
 
-    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
+    @backoff.on_exception(backoff.expo, retryable_io_errors, max_time=max_retry_time)
     def remove(self) -> None:
         """Remove the resource."""
         # https://github.com/boto/boto3/issues/507 - there is no
