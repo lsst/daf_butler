@@ -207,7 +207,9 @@ class CliLogTestBase():
                 filename = fd.name
                 fd.close()
 
-                args = ("--log-level", "DEBUG", "--log-file", filename, "create", f"here{i}")
+                args = ("--log-level", "DEBUG", "--log-file", filename,
+                        "--log-label", "k1=v1,k2=v2", "--log-label", "k3=v3",
+                        "create", f"here{i}")
 
                 result = self.runner.invoke(butlerCli, args)
                 self.assertEqual(result.exit_code, 0, clickResultMsg(result))
@@ -221,6 +223,7 @@ class CliLogTestBase():
                 if suffix == ".json":
                     records = ButlerLogRecords.from_file(filename)
                     self.assertEqual(records[num].levelname, "DEBUG", str(records[num]))
+                    self.assertEqual(records[0].MDC, dict(K1="v1", K2="v2", K3="v3"))
                 else:
                     with open(filename) as fd:
                         records = fd.readlines()

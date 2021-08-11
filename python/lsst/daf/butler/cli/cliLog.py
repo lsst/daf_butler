@@ -21,6 +21,7 @@
 
 import datetime
 import logging
+from typing import Tuple, Optional, Dict
 
 try:
     import lsst.log as lsstLog
@@ -84,7 +85,8 @@ class CliLog:
     that need to be closed on reset."""
 
     @classmethod
-    def initLog(cls, longlog: bool, log_tty: bool = True, log_file=()):
+    def initLog(cls, longlog: bool, log_tty: bool = True, log_file: Tuple[str, ...] = (),
+                log_label: Optional[Dict[str, str]] = None):
         """Initialize logging. This should only be called once per program
         execution. After the first call this will log a warning and return.
 
@@ -103,6 +105,9 @@ class CliLog:
             records will be written in JSON format. Else they will be written
             in text format. If empty no log file will be created. Records
             will be appended to this file if it exists.
+        log_label : `dict` of `str`
+            Keys and values to be stored in logging MDC for all JSON log
+            records. Keys will be upper-cased.
         """
         if cls._initialized:
             # Unit tests that execute more than one command do end up
@@ -171,8 +176,13 @@ class CliLog:
             logging.getLogger().addHandler(handler)
             cls._fileHandlers.append(handler)
 
+        # Add any requested MDC records.
+        if log_label:
+            for key, value in log_label.items():
+                ButlerMDC.MDC(key.upper(), value)
+
         # remember this call
-        cls.configState.append((cls.initLog, longlog, log_tty, log_file))
+        cls.configState.append((cls.initLog, longlog, log_tty, log_file, log_label))
 
     @classmethod
     def resetLog(cls):
