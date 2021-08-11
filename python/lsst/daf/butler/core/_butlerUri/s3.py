@@ -79,12 +79,18 @@ retryable_io_errors = (
     RequestError, HTTPError,
     # built-ins
     TimeoutError, ConnectionError)
+
+# Client error can include NoSuchKey so retry may not be the right
+# thing. This may require more consideration if it is to be used.
 retryable_client_errors = (
     # botocore.exceptions
     ClientError,
     # built-ins
     PermissionError)
-all_retryable_errors = retryable_client_errors + retryable_io_errors
+
+# Combine all errors into an easy package. For now client errors
+# are not included.
+all_retryable_errors = retryable_io_errors
 max_retry_time = 60
 
 
@@ -100,7 +106,7 @@ class ButlerS3URI(ButlerURI):
         # Defer import for circular dependencies
         return getS3Client()
 
-    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
+    @backoff.on_exception(backoff.expo, retryable_io_errors, max_time=max_retry_time)
     def exists(self) -> bool:
         """Check that the S3 resource exists."""
         if self.is_root:
@@ -109,7 +115,7 @@ class ButlerS3URI(ButlerURI):
         exists, _ = s3CheckFileExists(self, client=self.client)
         return exists
 
-    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
+    @backoff.on_exception(backoff.expo, retryable_io_errors, max_time=max_retry_time)
     def size(self) -> int:
         """Return the size of the resource in bytes."""
         if self.dirLike:
@@ -119,14 +125,17 @@ class ButlerS3URI(ButlerURI):
             raise FileNotFoundError(f"Resource {self} does not exist")
         return sz
 
-    @backoff.on_exception(backoff.expo, retryable_client_errors, max_time=max_retry_time)
+    @backoff.on_exception(backoff.expo, retryable_io_errors, max_time=max_retry_time)
     def remove(self) -> None:
         """Remove the resource."""
         # https://github.com/boto/boto3/issues/507 - there is no
         # way of knowing if the file was actually deleted except
         # for checking all the keys again, reponse is  HTTP 204 OK
         # response all the time
-        self.client.delete_object(Bucket=self.netloc, Key=self.relativeToPathRoot)
+        try:
+            self.client.delete_object(Bucket=self.netloc, Key=self.relativeToPathRoot)
+        except (self.client.exceptions.NoSuchKey, self.client.exceptions.NoSuchBucket) as err:
+            raise FileNotFoundError("No such resource: {self}") from err
 
     @backoff.on_exception(backoff.expo, all_retryable_errors, max_time=max_retry_time)
     def read(self, size: int = -1) -> bytes:
