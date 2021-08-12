@@ -599,3 +599,33 @@ def ingest_files(**kwargs):
     raw camera exposures.
     """
     script.ingest_files(**kwargs)
+
+
+@click.command(cls=ButlerCommand)
+@repo_argument(required=True)
+@click.argument("dataset_type", required=True)
+@click.argument("storage_class", required=True)
+@click.argument("dimensions", required=False, nargs=-1)
+@click.option("--is-calibration/--no-is-calibration", is_flag=True, default=False,
+              help="Indicate that this dataset type can be part of a calibration collection.")
+def register_dataset_type(**kwargs):
+    """Register a new dataset type with this butler repository.
+
+    DATASET_TYPE is the name of the dataset type.
+
+    STORAGE_CLASS is the name of the StorageClass to be associated with
+    this dataset type.
+
+    DIMENSIONS is a list of all the dimensions relevant to this
+    dataset type. It can be an empty list.
+
+    A component dataset type (such as "something.component") is not a
+    real dataset type and so can not be defined by this command. They are
+    automatically derived from the composite dataset type when a composite
+    storage class is specified.
+    """
+    inserted = script.register_dataset_type(**kwargs)
+    if inserted:
+        print("Dataset type successfully registered.")
+    else:
+        print("Dataset type already existed in identical form.")
