@@ -2057,8 +2057,10 @@ class FileDatastore(GenericBaseDatastore):
             pathInStore = location.pathInStore.path
             if transfer is None:
                 # TODO: do we also need to return the readStorageClass somehow?
-                # We will use the path in store directly
-                pass
+                # We will use the path in store directly. If this is an
+                # absolute URI, preserve it.
+                if location.pathInStore.isabs():
+                    pathInStore = str(location.uri)
             elif transfer == "direct":
                 # Use full URIs to the remote store in the export
                 pathInStore = str(location.uri)
