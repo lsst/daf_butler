@@ -29,6 +29,7 @@ from ..opt import (
     collections_argument,
     collections_option,
     components_option,
+    confirm_option,
     dataset_type_option,
     datasets_option,
     destination_argument,
@@ -166,10 +167,22 @@ def config_validate(*args, **kwargs):
               help="Before removing the given `collection` unlink it from from this parent collection.",
               multiple=True,
               callback=split_commas)
+@confirm_option()
 @options_file_option()
 def prune_collection(**kwargs):
     """Remove a collection and possibly prune datasets within it."""
-    script.pruneCollection(**kwargs)
+    result = script.pruneCollection(**kwargs)
+    if result.confirm:
+        print("The following collections will be removed:")
+        result.removeTable.pprint_all(align="<")
+        doContinue = click.confirm("Continue?", default=False)
+    else:
+        doContinue = True
+    if doContinue:
+        result.onConfirmation()
+        print("Removed collections.")
+    else:
+        print("Aborted.")
 
 
 pruneDatasets_wouldRemoveMsg = unwrap("""The following datasets will be removed from any datastores in which
@@ -243,13 +256,6 @@ dry_run_option = MWOptionDecorator(
                 Note that a dataset can be in collections other than its RUN-type collection, and removing it
                 will remove it from all of them, even though the only one this will show is its RUN
                 collection.""")
-)
-
-
-confirm_option = MWOptionDecorator(
-    "--confirm/--no-confirm",
-    default=True,
-    help="Print expected action and a confirmation prompt before executing. Default is --confirm."
 )
 
 

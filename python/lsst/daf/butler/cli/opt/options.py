@@ -85,6 +85,13 @@ config_file_option = MWOptionDecorator("-C", "--config-file",
                                        Instrument config overrides are applied."""))
 
 
+confirm_option = MWOptionDecorator(
+    "--confirm/--no-confirm",
+    default=True,
+    help="Print expected action and a confirmation prompt before executing. Default is --confirm."
+)
+
+
 dataset_type_option = MWOptionDecorator("-d", "--dataset-type",
                                         callback=split_commas,
                                         help="Specific DatasetType(s) to validate.",

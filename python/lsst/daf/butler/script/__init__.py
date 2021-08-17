@@ -25,11 +25,11 @@ from .createRepo import createRepo
 from .collectionChain import collectionChain
 from .configDump import configDump
 from .configValidate import configValidate
-from .pruneCollection import pruneCollection
 from .queryCollections import queryCollections
 from .queryDataIds import queryDataIds
 from .queryDatasets import QueryDatasets
 from ._associate import associate # depends on QueryDatasets
+from .pruneCollection import pruneCollection # depends on QueryDatasets
 from ._pruneDatasets import pruneDatasets # depends on QueryDatasets
 from .queryDatasetTypes import queryDatasetTypes
 from .queryDimensionRecords import queryDimensionRecords
