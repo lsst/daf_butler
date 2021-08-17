@@ -36,7 +36,9 @@ from typing import (
 )
 
 from abc import ABC, abstractmethod
+import atexit
 import logging
+import shutil
 import tempfile
 
 from .configSupport import processLookupConfigs
@@ -50,6 +52,13 @@ if TYPE_CHECKING:
     from .configSupport import LookupKey
 
 log = logging.getLogger(__name__)
+
+
+def remove_cache_directory(directory: str) -> None:
+    """Remove the specified directory and all its contents.
+    """
+    log.debug("Removing temporary cache directory %s", directory)
+    shutil.rmtree(directory, ignore_errors=True)
 
 
 class DatastoreCacheManagerConfig(ConfigSubset):
@@ -173,6 +182,9 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             # Create on demand.
             self._cache_directory = ButlerURI(tempfile.mkdtemp(prefix="butler-"), forceDirectory=True,
                                               isTemporary=True)
+            log.debug("Creating temporary cache directory at %s", self._cache_directory)
+            # Remove when we no longer need it.
+            atexit.register(remove_cache_directory, self._cache_directory.ospath)
         return self._cache_directory
 
     def should_be_cached(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
