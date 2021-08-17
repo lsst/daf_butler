@@ -497,7 +497,8 @@ class DatasetType:
             Tuple of the `DatasetType` name and the `StorageClass` name.
             If the name includes a component the name with the component
             is first, then the name without the component and finally
-            the storage class name.
+            the storage class name and the storage class name of the
+            composite.
         """
         rootName, componentName = self.nameAndComponent()
         lookups: Tuple[LookupKey, ...] = (LookupKey(name=self.name),)
@@ -508,7 +509,11 @@ class DatasetType:
             # Dimensions are a lower priority than dataset type name
             lookups = lookups + (LookupKey(dimensions=self.dimensions),)
 
-        return lookups + self.storageClass._lookupNames()
+        storageClasses = self.storageClass._lookupNames()
+        if componentName is not None and self.parentStorageClass is not None:
+            storageClasses += self.parentStorageClass._lookupNames()
+
+        return lookups + storageClasses
 
     def to_simple(self, minimal: bool = False) -> SerializedDatasetType:
         """Convert this class to a simple python type.
