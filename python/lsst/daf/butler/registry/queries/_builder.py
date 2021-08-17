@@ -188,7 +188,14 @@ class QueryBuilder:
             subsubqueries.append(ssq.combine())
         if not subsubqueries:
             return False
-        subquery = sqlalchemy.sql.union_all(*subsubqueries)
+        # Although one would expect that these subqueries can be
+        # UNION ALL instead of UNION because each subquery is already
+        # distinct, it turns out that with many
+        # subqueries this causes catastrophic performance problems
+        # with both sqlite and postgres.  Using UNION may require
+        # more table scans, but a much simpler query plan given our
+        # table structures.  See DM-31429.
+        subquery = sqlalchemy.sql.union(*subsubqueries)
         columns: Optional[DatasetQueryColumns] = None
         if isResult:
             if findFirst:
