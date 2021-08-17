@@ -70,9 +70,10 @@ class PruneCollectionsTest(unittest.TestCase):
             self.assertIn(taggedName, result.output)
 
             # Verify the tagged collection can be removed:
-            result = self.runner.invoke(butlerCli, ["prune-collection", repoName,
-                                                    taggedName,
-                                                    "--unstore"])
+            result = self.runner.invoke(
+                butlerCli,
+                ["prune-collection", repoName, taggedName, "--unstore"],
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             result = self.runner.invoke(butlerCli, ["query-collections", repoName])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
@@ -80,10 +81,10 @@ class PruneCollectionsTest(unittest.TestCase):
             self.assertNotIn(taggedName, result.output)
 
             # Verify the run can be removed:
-            result = self.runner.invoke(butlerCli, ["prune-collection", repoName,
-                                                    runName,
-                                                    "--purge",
-                                                    "--unstore"])
+            result = self.runner.invoke(
+                butlerCli,
+                ["prune-collection", repoName, runName, "--purge", "--unstore"],
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             self.assertNotIn(runName, result.output)
             self.assertNotIn(taggedName, result.output)
@@ -115,32 +116,47 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
         # Try pruning RUN without purge or unstore, should fail.
-        result = self.runner.invoke(butlerCli, ["prune-collection", self.root, "ingest/run"])
+        result = self.runner.invoke(
+            butlerCli,
+            ["prune-collection", self.root, "ingest/run"]
+        )
         self.assertEqual(result.exit_code, 1, clickResultMsg(result))
 
         # Try pruning RUN without unstore, should fail.
-        result = self.runner.invoke(butlerCli, ["prune-collection", self.root, "ingest/run",
-                                                "--purge"])
+        result = self.runner.invoke(
+            butlerCli,
+            ["prune-collection", self.root, "ingest/run", "--purge"]
+        )
         self.assertEqual(result.exit_code, 1, clickResultMsg(result))
 
         # Try pruning RUN without purge, should fail.
-        result = self.runner.invoke(butlerCli, ["prune-collection", self.root, "ingest/run",
-                                                "--unstore"])
+        result = self.runner.invoke(
+            butlerCli,
+            ["prune-collection", self.root, "ingest/run", "--unstore"]
+        )
         self.assertEqual(result.exit_code, 1, clickResultMsg(result))
 
         # Try pruning RUN with purge and unstore, should succeed.
-        result = self.runner.invoke(butlerCli, ["prune-collection", self.root, "ingest/run",
-                                                "--purge", "--unstore"])
+        result = self.runner.invoke(
+            butlerCli,
+            ["prune-collection", self.root, "ingest/run", "--purge", "--unstore"]
+        )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-        result = self.runner.invoke(butlerCli, ["query-collections", self.root])
+        result = self.runner.invoke(
+            butlerCli,
+            ["query-collections", self.root]
+        )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expected = Table((["ingest"], ["TAGGED"]),
                          names=("Name", "Type"))
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
     def testPruneTagged(self):
-        result = self.runner.invoke(butlerCli, ["query-collections", self.root])
+        result = self.runner.invoke(
+            butlerCli,
+            ["query-collections", self.root]
+        )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expected = Table(array((("ingest/run", "RUN"),
                                 ("ingest", "TAGGED"))),
@@ -148,10 +164,16 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
         # Try pruning TAGGED, should succeed.
-        result = self.runner.invoke(butlerCli, ["prune-collection", self.root, "ingest", "--unstore"])
+        result = self.runner.invoke(
+            butlerCli,
+            ["prune-collection", self.root, "ingest", "--unstore"]
+        )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-        result = self.runner.invoke(butlerCli, ["query-collections", self.root])
+        result = self.runner.invoke(
+            butlerCli,
+            ["query-collections", self.root]
+        )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expected = Table((["ingest/run"], ["RUN"]),
                          names=("Name", "Type"))
