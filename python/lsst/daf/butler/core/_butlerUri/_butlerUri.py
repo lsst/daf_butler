@@ -27,7 +27,9 @@ import posixpath
 import copy
 import logging
 import re
+import tempfile
 
+from random import Random
 from pathlib import Path, PurePath, PurePosixPath
 
 __all__ = ('ButlerURI',)
@@ -403,14 +405,16 @@ class ButlerURI:
         parentPath = originalPath.parent
         return self.replace(path=str(parentPath), forceDirectory=True)
 
-    def replace(self, forceDirectory: bool = False, **kwargs: Any) -> ButlerURI:
+    def replace(self, forceDirectory: bool = False, isTemporary: bool = False, **kwargs: Any) -> ButlerURI:
         """Return new `ButlerURI` with specified components replaced.
 
         Parameters
         ----------
-        forceDirectory : `bool`
+        forceDirectory : `bool`, optional
             Parameter passed to ButlerURI constructor to force this
             new URI to be dir-like.
+        isTemporary : `bool`, optional
+            Indicate that the resulting URI is temporary resource.
         **kwargs
             Components of a `urllib.parse.ParseResult` that should be
             modified for the newly-created `ButlerURI`.
@@ -427,7 +431,8 @@ class ButlerURI:
         # Disallow a change in scheme
         if "scheme" in kwargs:
             raise ValueError(f"Can not use replace() method to change URI scheme for {self}")
-        return self.__class__(self._uri._replace(**kwargs), forceDirectory=forceDirectory)
+        return self.__class__(self._uri._replace(**kwargs), forceDirectory=forceDirectory,
+                              isTemporary=isTemporary)
 
     def updatedFile(self, newfile: str) -> ButlerURI:
         """Return new URI with an updated final component of the path.
@@ -525,7 +530,7 @@ class ButlerURI:
 
         return ext
 
-    def join(self, path: Union[str, ButlerURI]) -> ButlerURI:
+    def join(self, path: Union[str, ButlerURI], isTemporary: bool = False) -> ButlerURI:
         """Return new `ButlerURI` with additional path components.
 
         Parameters
@@ -537,6 +542,8 @@ class ButlerURI:
             referring to an absolute location, it will be returned
             directly (matching the behavior of `os.path.join()`). It can
             also be a `ButlerURI`.
+        isTemporary : `bool`, optional
+            Indicate that the resulting URI represents a temporary resource.
 
         Returns
         -------
@@ -594,7 +601,8 @@ class ButlerURI:
 
         # normpath can strip trailing / so we force directory if the supplied
         # path ended with a /
-        return new.replace(path=newpath, forceDirectory=path.endswith(self._pathModule.sep))
+        return new.replace(path=newpath, forceDirectory=path.endswith(self._pathModule.sep),
+                           isTemporary=isTemporary)
 
     def relative_to(self, other: ButlerURI) -> Optional[str]:
         """Return the relative path from this URI to the other URI.
@@ -723,6 +731,54 @@ class ButlerURI:
             # The caller might have relocated the temporary file
             if is_temporary and local_uri.exists():
                 local_uri.remove()
+
+    @classmethod
+    @contextlib.contextmanager
+    def temporary_uri(cls, prefix: Optional[ButlerURI] = None,
+                      suffix: Optional[str] = None) -> Iterator[ButlerURI]:
+        """Create a temporary URI.
+
+        Parameters
+        ----------
+        prefix : `ButlerURI`, optional
+            Prefix to use. Without this the path will be formed as a local
+            file URI in a temporary directory.
+        suffix : `str`, optional
+            A file suffix to be used.
+
+        Yields
+        ------
+        uri : `ButlerURI`
+            The temporary URI. Will be removed when the context is completed.
+        """
+        if prefix is None or prefix.isLocal:
+            prefix_path = prefix.ospath if prefix else None
+            _, path = tempfile.mkstemp(suffix=suffix, prefix=prefix_path)
+            temporary_uri = ButlerURI(path, isTemporary=True)
+            # To avoid inconsistencies in behavior, delete the file
+            # even though that might result in a name clash later.
+            try:
+                temporary_uri.remove()
+            except FileNotFoundError:
+                pass
+        else:
+            # Remote resource. Need to create a randomized file name.
+            characters = "abcdefghijklmnopqrstuvwxyz0123456789_"
+            rng = Random()
+            tempname = "".join(rng.choice(characters) for _ in range(16))
+            if suffix:
+                tempname += suffix
+            temporary_uri = prefix.join(tempname, isTemporary=True)
+
+        try:
+            yield temporary_uri
+        finally:
+            # It's okay if this does not work because the user removed
+            # the file.
+            try:
+                temporary_uri.remove()
+            except FileNotFoundError:
+                pass
 
     def read(self, size: int = -1) -> bytes:
         """Open the resource and return the contents in bytes.

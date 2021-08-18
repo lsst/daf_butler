@@ -431,6 +431,15 @@ class FileURITestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             ButlerURI("s3://bucket/hsc/payload/").join(ButlerURI("test.qgraph"))
 
+    def testTemporary(self):
+        with ButlerURI.temporary_uri(suffix=".json") as tmp:
+            self.assertEqual(tmp.getExtension(), ".json", f"uri: {tmp}")
+            self.assertTrue(tmp.isabs(), f"uri: {tmp}")
+            self.assertFalse(tmp.exists(), f"uri: {tmp}")
+            tmp.write(b"abcd")
+            self.assertTrue(tmp.exists(), f"uri: {tmp}")
+        self.assertFalse(tmp.exists(), f"uri: {tmp}")
+
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
@@ -587,6 +596,26 @@ class S3URITestCase(unittest.TestCase):
         content = "abcdefghijklmnopqrstuv\n"
         s3write.write(content.encode())
         self.assertEqual(s3write.read().decode(), content)
+
+    def testTemporary(self):
+        s3root = ButlerURI(self.makeS3Uri("rootdir"), forceDirectory=True)
+        with ButlerURI.temporary_uri(prefix=s3root, suffix=".json") as tmp:
+            self.assertEqual(tmp.getExtension(), ".json", f"uri: {tmp}")
+            self.assertEqual(tmp.scheme, "s3", f"uri: {tmp}")
+            self.assertEqual(tmp.parent(), s3root)
+            basename = tmp.basename()
+            content = "abcd"
+            tmp.write(content.encode())
+            self.assertTrue(tmp.exists(), f"uri: {tmp}")
+        self.assertFalse(tmp.exists())
+
+        # Again without writing anything, to check that there is no complaint
+        # on exit of context manager.
+        with ButlerURI.temporary_uri(prefix=s3root, suffix=".json") as tmp:
+            self.assertFalse(tmp.exists())
+            # Check that the file has a different name than before.
+            self.assertNotEqual(tmp.basename(), basename, f"uri: {tmp}")
+        self.assertFalse(tmp.exists())
 
     def testRelative(self):
         """Check that we can get subpaths back from two URIs"""
