@@ -1516,7 +1516,9 @@ class FileDatastore(GenericBaseDatastore):
                 # a component though because it is really reading a
                 # standalone dataset -- always tell reader it is not a
                 # component.
-                components[component] = self._read_artifact_into_memory(getInfo, ref, isComponent=False)
+                components[component] = self._read_artifact_into_memory(getInfo,
+                                                                        ref.makeComponentRef(component),
+                                                                        isComponent=False)
 
             inMemoryDataset = ref.datasetType.storageClass.delegate().assemble(components)
 
