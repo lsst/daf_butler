@@ -248,6 +248,10 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
     def find_in_cache(self, ref: DatasetRef, extension: str) -> Optional[ButlerURI]:
         # Docstring inherited
+        # Short circuit this if the cache directory has not been created yet.
+        if self._cache_directory is None:
+            return None
+
         cached_location = self._construct_cache_name(ref, extension)
         if cached_location.exists():
             log.debug("Retrieved cached file %s for dataset %s.", cached_location, ref)
