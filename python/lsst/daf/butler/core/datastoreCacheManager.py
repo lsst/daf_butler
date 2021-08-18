@@ -209,7 +209,11 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         uri : `ButlerURI`
             URI to use for this dataset in the cache.
         """
-        return self.cache_directory.join(f"{ref.id}{extension}")
+        # Dataset type component is needed in the name if composite
+        # disassembly is happening since the ID is shared for all components.
+        component = ref.datasetType.component()
+        component = f"-{component}" if component else ""
+        return self.cache_directory.join(f"{ref.id}{component}{extension}")
 
     def move_to_cache(self, uri: ButlerURI, ref: DatasetRef) -> Optional[ButlerURI]:
         # Docstring inherited
