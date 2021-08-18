@@ -26,8 +26,6 @@ __all__ = ("FileDatastore", )
 
 import hashlib
 import logging
-import os
-import tempfile
 
 from sqlalchemy import BigInteger, String
 
@@ -1045,22 +1043,21 @@ class FileDatastore(GenericBaseDatastore):
             try:
                 serializedDataset = formatter.toBytes(inMemoryDataset)
             except NotImplementedError:
-                with tempfile.NamedTemporaryFile(suffix=uri.getExtension()) as tmpFile:
+                with ButlerURI.temporary_uri(suffix=uri.getExtension()) as temporary_uri:
                     # Need to configure the formatter to write to a different
                     # location and that needs us to overwrite internals
-                    tmpLocation = Location(*os.path.split(tmpFile.name))
-                    log.debug("Writing dataset to temporary location at %s", tmpLocation.uri)
-                    with formatter._updateLocation(tmpLocation):
+                    log.debug("Writing dataset to temporary location at %s", temporary_uri)
+                    with formatter._updateLocation(Location(None, temporary_uri)):
                         try:
                             formatter.write(inMemoryDataset)
                         except Exception as e:
                             raise RuntimeError(f"Failed to serialize dataset {ref} of type"
                                                f" {type(inMemoryDataset)} to "
-                                               f"temporary location {tmpLocation.uri}") from e
-                    uri.transfer_from(tmpLocation.uri, transfer="copy", overwrite=True)
+                                               f"temporary location {temporary_uri}") from e
+                    uri.transfer_from(temporary_uri, transfer="copy", overwrite=True)
 
                     # Cache if required
-                    self.cacheManager.move_to_cache(tmpLocation.uri, ref)
+                    self.cacheManager.move_to_cache(temporary_uri, ref)
 
                 log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
             except Exception as e:
