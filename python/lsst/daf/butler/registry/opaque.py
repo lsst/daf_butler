@@ -25,12 +25,14 @@ opaque tables for `Registry`.
 
 __all__ = ["ByNameOpaqueTableStorage", "ByNameOpaqueTableStorageManager"]
 
+import itertools
 from typing import (
     Any,
     ClassVar,
     Dict,
     Iterable,
     Iterator,
+    List,
     Optional,
 )
 
@@ -79,21 +81,45 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
 
     def fetch(self, **where: Any) -> Iterator[dict]:
         # Docstring inherited from OpaqueTableStorage.
-        sql = self._table.select()
-        if where:
-            clauses = []
+
+        def _batch_in_clause(column: sqlalchemy.schema.Column, values: Iterable[Any]
+                             ) -> Iterator[sqlalchemy.sql.expression.ClauseElement]:
+            """Split one long IN clause into a series of shorter ones.
+            """
+            in_limit = 1000
+            # We have to remove possible duplicates from values; and in many
+            # cases it should be helpful to order the items in the clause.
+            values = sorted(set(values))
+            for iposn in range(0, len(values), in_limit):
+                in_clause = column.in_(values[iposn:iposn + in_limit])
+                yield in_clause
+
+        def _batch_in_clauses(**where: Any) -> Iterator[sqlalchemy.sql.expression.ClauseElement]:
+            """Generate a sequence of WHERE clauses with a limited number of
+            items in IN clauses.
+            """
+            batches: List[Iterable[Any]] = []
             for k, v in where.items():
                 column = self._table.columns[k]
                 if isinstance(v, (list, tuple, set)):
-                    clause = column.in_(v)
+                    batches.append(_batch_in_clause(column, v))
                 else:
-                    clause = column == v
-                clauses.append(clause)
-            sql = sql.where(
-                sqlalchemy.sql.and_(*clauses)
-            )
-        for row in self._db.query(sql):
-            yield dict(row)
+                    # single "batch" for a regular eq operator
+                    batches.append([column == v])
+
+            for clauses in itertools.product(*batches):
+                yield sqlalchemy.sql.and_(*clauses)
+
+        sql = self._table.select()
+        if where:
+            # Split long IN clauses into shorter batches
+            for clause in _batch_in_clauses(**where):
+                sql_where = sql.where(clause)
+                for row in self._db.query(sql_where):
+                    yield dict(row)
+        else:
+            for row in self._db.query(sql):
+                yield dict(row)
 
     def delete(self, columns: Iterable[str], *rows: dict) -> None:
         # Docstring inherited from OpaqueTableStorage.
