@@ -153,6 +153,19 @@ class RegistryTests(ABC):
         self.assertCountEqual(rows, list(registry.fetchOpaqueData(table)))
         self.assertEqual(rows[0:1], list(registry.fetchOpaqueData(table, id=1)))
         self.assertEqual(rows[1:2], list(registry.fetchOpaqueData(table, name="two")))
+        self.assertEqual(rows[0:1], list(registry.fetchOpaqueData(table, id=(1, 3), name=("one", "two"))))
+        self.assertEqual(rows, list(registry.fetchOpaqueData(table, id=(1, 2, 3))))
+        # Test very long IN clause which exceeds sqlite limit on number of
+        # parameters. SQLite says the limit is 32k but it looks like it is
+        # much higher.
+        self.assertEqual(rows, list(registry.fetchOpaqueData(table, id=list(range(300_000)))))
+        # Two IN clauses, each longer than 1k batch size, first with
+        # duplicates, second has matching elements in different batches (after
+        # sorting).
+        self.assertEqual(rows[0:2], list(registry.fetchOpaqueData(
+            table,
+            id=list(range(1000)) + list(range(100, 0, -1)),
+            name=["one"] + [f"q{i}" for i in range(2200)] + ["two"])))
         self.assertEqual([], list(registry.fetchOpaqueData(table, id=1, name="two")))
         registry.deleteOpaqueData(table, id=3)
         self.assertCountEqual(rows[:2], list(registry.fetchOpaqueData(table)))
