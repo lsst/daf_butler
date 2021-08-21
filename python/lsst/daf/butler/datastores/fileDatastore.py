@@ -1071,7 +1071,8 @@ class FileDatastore(GenericBaseDatastore):
         return self._extractIngestInfo(uri, ref, formatter=formatter)
 
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
-                                   ref: DatasetRef, isComponent: bool = False) -> Any:
+                                   ref: DatasetRef, isComponent: bool = False,
+                                   cache_ref: Optional[DatasetRef] = None) -> Any:
         """Read the artifact from datastore into in memory object.
 
         Parameters
@@ -1082,6 +1083,14 @@ class FileDatastore(GenericBaseDatastore):
             The registry information associated with this artifact.
         isComponent : `bool`
             Flag to indicate if a component is being read from this artifact.
+        cache_ref : `DatasetRef`, optional
+            The DatasetRef to use when looking up the file in the cache.
+            This ref must have the same ID as the supplied ref but can
+            be a parent ref or component ref to indicate to the cache whether
+            a composite file is being requested from the cache or a component
+            file. Without this the cache will default to the suppled ref but
+            it can get confused with read-only derived components for
+            disassembled composites.
 
         Returns
         -------
@@ -1091,6 +1100,12 @@ class FileDatastore(GenericBaseDatastore):
         location = getInfo.location
         uri = location.uri
         log.debug("Accessing data from %s", uri)
+
+        if cache_ref is None:
+            cache_ref = ref
+        if cache_ref.id != ref.id:
+            raise ValueError("The supplied cache dataset ref refers to a different dataset than expected:"
+                             f" {ref.id} != {cache_ref.id}")
 
         # Cannot recalculate checksum but can compare size as a quick check
         # Do not do this if the size is negative since that indicates
@@ -1136,7 +1151,7 @@ class FileDatastore(GenericBaseDatastore):
             # First check in cache for local version.
             # The cache will only be relevant for remote resources.
             if not uri.isLocal:
-                cached_file = self.cacheManager.find_in_cache(ref, uri.getExtension())
+                cached_file = self.cacheManager.find_in_cache(cache_ref, uri.getExtension())
                 if cached_file is not None:
                     msg = f"(via cache read of remote file {uri})"
                     uri = cached_file
@@ -1150,7 +1165,7 @@ class FileDatastore(GenericBaseDatastore):
                     location_updated = True
 
                     # Cache the downloaded file if needed.
-                    cached_uri = self.cacheManager.move_to_cache(local_uri, ref)
+                    cached_uri = self.cacheManager.move_to_cache(local_uri, cache_ref)
                     if cached_uri is not None:
                         local_uri = cached_uri
                         cache_msg = " and cached"
@@ -1558,6 +1573,10 @@ class FileDatastore(GenericBaseDatastore):
             forwardedStorageClass = rwInfo.formatter.fileDescriptor.readStorageClass
             forwardedStorageClass.validateParameters(parameters)
 
+            # The reference to use for the caching must refer to the forwarded
+            # component and not the derived component.
+            cache_ref = ref.makeCompositeRef().makeComponentRef(forwardedComponent)
+
             # Unfortunately the FileDescriptor inside the formatter will have
             # the wrong write storage class so we need to create a new one
             # given the immutability constraint.
@@ -1584,7 +1603,8 @@ class FileDatastore(GenericBaseDatastore):
                                                    rwInfo.info, assemblerParams, {},
                                                    refComponent, refStorageClass)
 
-            return self._read_artifact_into_memory(readInfo, ref, isComponent=True)
+            return self._read_artifact_into_memory(readInfo, ref, isComponent=True,
+                                                   cache_ref=cache_ref)
 
         else:
             # Single file request or component from that composite file
@@ -1602,6 +1622,10 @@ class FileDatastore(GenericBaseDatastore):
             else:
                 isComponent = getInfo.component is not None
 
+            # For a component read of a composite we want the cache to
+            # be looking at the composite ref itself.
+            cache_ref = ref.makeCompositeRef() if isComponent else ref
+
             # For a disassembled component we can validate parametersagainst
             # the component storage class directly
             if isDisassembled:
@@ -1613,7 +1637,8 @@ class FileDatastore(GenericBaseDatastore):
                 # the composite storage class
                 getInfo.formatter.fileDescriptor.storageClass.validateParameters(parameters)
 
-            return self._read_artifact_into_memory(getInfo, ref, isComponent=isComponent)
+            return self._read_artifact_into_memory(getInfo, ref, isComponent=isComponent,
+                                                   cache_ref=cache_ref)
 
     @transactional
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
