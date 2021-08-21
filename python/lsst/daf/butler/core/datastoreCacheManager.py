@@ -56,11 +56,11 @@ from pydantic import BaseModel, PrivateAttr
 from .configSupport import processLookupConfigs
 from .config import ConfigSubset
 from ._butlerUri import ButlerURI
-from .datasets import DatasetId
+from .datasets import DatasetId, DatasetRef
 
 if TYPE_CHECKING:
     from .dimensions import DimensionUniverse
-    from .datasets import DatasetType, DatasetRef
+    from .datasets import DatasetType
     from .storageClass import StorageClass
     from .configSupport import LookupKey
 
@@ -310,6 +310,19 @@ class AbstractDatastoreCacheManager(ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def remove_from_cache(self, ref: Union[DatasetRef, Iterable[DatasetRef]]) -> None:
+        """Remove the specified datasets from the cache.
+
+        It is not an error for these datasets to be missing from the cache.
+
+        Parameters
+        ----------
+        ref : `DatasetRef` or iterable of `DatasetRef`
+            The datasets to remove from the cache.
+        """
+        raise NotImplementedError()
+
 
 class DatastoreCacheManager(AbstractDatastoreCacheManager):
     """A class for managing caching in a Datastore using local files.
@@ -433,6 +446,25 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             return cached_location
         log.debug("Dataset %s not found in cache.", ref)
         return None
+
+    def remove_from_cache(self, refs: Union[DatasetRef, Iterable[DatasetRef]]) -> None:
+        # Docstring inherited.
+
+        # Stop early if there are no cache entries anyhow.
+        if len(self._cache_entries) == 0:
+            return
+
+        if isinstance(refs, DatasetRef):
+            refs = [refs]
+
+        # Create a set of all the IDs
+        all_ids = {ref.getCheckedId() for ref in refs}
+
+        keys_to_remove = []
+        for key, entry in self._cache_entries.items():
+            if entry.ref in all_ids:
+                keys_to_remove.append(key)
+        self._remove_from_cache(keys_to_remove)
 
     def _register_cache_entry(self, cached_location: ButlerURI, can_exist: bool = False) -> str:
         """Record the file in the cache registry.
@@ -640,3 +672,10 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         Never finds a file.
         """
         return None
+
+    def remove_from_cache(self, ref: Union[DatasetRef, Iterable[DatasetRef]]) -> None:
+        """Remove datasets from cache.
+
+        Always does nothing.
+        """
+        return

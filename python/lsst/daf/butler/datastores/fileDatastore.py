@@ -1666,6 +1666,11 @@ class FileDatastore(GenericBaseDatastore):
 
     @transactional
     def trash(self, ref: Union[DatasetRef, Iterable[DatasetRef]], ignore_errors: bool = True) -> None:
+        # At this point can safely remove these datasets from the cache
+        # to avoid confusion later on. If they are not trashed later
+        # the cache will simply be refilled.
+        self.cacheManager.remove_from_cache(ref)
+
         # Get file metadata and internal metadata
         if not isinstance(ref, DatasetRef):
             log.debug("Doing multi-dataset trash in datastore %s", self.name)
