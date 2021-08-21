@@ -428,9 +428,12 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         # item.
         self._expire_cache()
 
-        # Move into the cache. This will complain if something is already
-        # in the cache for this file.
-        cached_location.transfer_from(uri, transfer="move")
+        # Move into the cache. Given that multiple processes might be
+        # sharing a single cache directory, and the file we need might have
+        # been copied in whilst we were checking, allow overwrite without
+        # complaint. Even for a private cache directory it is possible that
+        # a second butler in a subprocess could be writing to it.
+        cached_location.transfer_from(uri, transfer="move", overwrite=True)
         log.debug("Cached dataset %s to %s", ref, cached_location)
 
         self._register_cache_entry(cached_location)
