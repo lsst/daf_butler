@@ -348,6 +348,9 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         # Calculate the caching lookup table.
         self._lut = processLookupConfigs(self.config["cacheable"], universe=universe)
 
+        # Default decision to for whether a dataset should be cached.
+        self._caching_default = self.config.get("default", False)
+
         # Expiration mode.
         self._expiration_mode: Optional[str] = self.config.get(("expiry", "mode"))
         if self._expiration_mode is None:
@@ -376,7 +379,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     def should_be_cached(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
         # Docstring inherited
         matchName: Union[LookupKey, str] = "{} (via default)".format(entity)
-        should_cache = False
+        should_cache = self._caching_default
 
         for key in entity._lookupNames():
             if key in self._lut:

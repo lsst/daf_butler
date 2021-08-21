@@ -19,6 +19,9 @@ datastore:
     # location. This can be left out or null used
     # to indicate a temporary directory.
     root: null
+    # Default cache value. This will be the default decision if no specific
+    # match is found in the "cacheable" section later on.
+    default: false
     # Use a dict over list to simplify merging logic.
     # Later could change it to be the timescale for caching:
     #   - Quantum (clear at end of quantum)
