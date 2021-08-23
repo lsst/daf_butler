@@ -545,13 +545,15 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     def _expire_cache(self) -> None:
         """Expire the files in the cache.
 
-        The expiration modes are defined by the config.
+        Notes
+        -----
+        The expiration modes are defined by the config or can be overridden.
         Available options:
 
-        * Number of files.
-        * Number of datasets
-        * Total size of files.
-        * Age of files.
+        * ``files``: Number of files.
+        * ``datasets``: Number of datasets
+        * ``size``: Total size of files.
+        * ``age``: Age of files.
 
         The first three would remove in reverse time order.
         Number of files is complicated by the possibility of disassembled
