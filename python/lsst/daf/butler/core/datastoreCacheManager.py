@@ -334,6 +334,18 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     universe : `DimensionUniverse`
         Set of all known dimensions, used to expand and validate any used
         in lookup keys.
+
+    Notes
+    -----
+    Two environment variables can be used to override the cache directory
+    and expiration configuration:
+
+    * ``$DAF_BUTLER_CACHE_DIRECTORY``
+    * ``$DAF_BUTLER_CACHE_EXPIRATION_MODE``
+
+    The expiration mode should take the form a ``mode=threshold`` so for
+    example to configure expiration to limit the cache directory to 5 datasets
+    the value would be ``datasets=5``.
     """
 
     def __init__(self, config: Union[str, DatastoreCacheManagerConfig],
@@ -341,9 +353,19 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         super().__init__(config, universe)
 
         # Set cache directory if it pre-exists, else defer creation until
-        # requested.
-        root = self.config.get("root")
-        self._cache_directory = ButlerURI(root, forceAbsolute=True) if root is not None else None
+        # requested. Allow external override from environment.
+        root = os.environ.get("DAF_BUTLER_CACHE_DIRECTORY") or self.config.get("root")
+        self._cache_directory = ButlerURI(root, forceAbsolute=True,
+                                          forceDirectory=True) if root is not None else None
+
+        if self._cache_directory:
+            if not self._cache_directory.isLocal:
+                raise ValueError(f"Cache directory must be a file system. Got: {self._cache_directory}")
+            # Ensure that the cache directory is created. We assume that
+            # someone specifying a permanent cache directory will be expecting
+            # it to always be there. This will also trigger an error
+            # early rather than waiting until the cache is needed.
+            self._cache_directory.mkdir()
 
         # Calculate the caching lookup table.
         self._lut = processLookupConfigs(self.config["cacheable"], universe=universe)
@@ -351,16 +373,29 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         # Default decision to for whether a dataset should be cached.
         self._caching_default = self.config.get("default", False)
 
-        # Expiration mode.
-        self._expiration_mode: Optional[str] = self.config.get(("expiry", "mode"))
-        if self._expiration_mode is None:
+        # Expiration mode. Read from config but allow override from
+        # the environment.
+        expiration_mode = self.config.get(("expiry", "mode"))
+        threshold = self.config.get(("expiry", "threshold"))
+
+        external_mode = os.environ.get("DAF_BUTLER_CACHE_EXPIRATION_MODE")
+        if external_mode and "=" in external_mode:
+            expiration_mode, expiration_threshold = external_mode.split("=", 1)
+            threshold = int(expiration_threshold)
+        if expiration_mode is None:
+            # Force to None to avoid confusion.
             threshold = None
-        else:
-            threshold = self.config["expiry", "threshold"]
+
+        self._expiration_mode: Optional[str] = expiration_mode
         self._expiration_threshold: Optional[int] = threshold
-        if threshold is None and self._expiration_mode is not None:
+        if self._expiration_threshold is None and self._expiration_mode is not None:
             raise ValueError("Cache expiration threshold must be set for expiration mode "
                              f"{self._expiration_mode}")
+
+        log.debug("Cache configuration:\n- root: %s\n- expiration mode: %s",
+                  self._cache_directory if self._cache_directory else "tmpdir",
+                  f"{self._expiration_mode}={self._expiration_threshold}"
+                  if self._expiration_mode else "disabled")
 
         # Files in cache, indexed by path within the cache directory.
         self._cache_entries = CacheRegistry()
