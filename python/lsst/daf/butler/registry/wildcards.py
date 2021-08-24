@@ -237,7 +237,9 @@ class CategorizedWildcard:
                 raise TypeError(f"Object '{element!r}' returned by coercion function is still unrecognized.")
             if coerceUnrecognized is not None:
                 try:
-                    process(coerceUnrecognized(element), alreadyCoerced=True)
+                    # This should be safe but flake8 cant tell that the
+                    # function will be re-declared next function call
+                    process(coerceUnrecognized(element), alreadyCoerced=True)  # noqa: F821
                 except Exception as err:
                     raise TypeError(f"Could not coerce expression element '{element!r}'.") from err
             else:
@@ -254,6 +256,7 @@ class CategorizedWildcard:
                 if not allowAny:
                     raise TypeError("This expression may not be unconstrained.")
                 return Ellipsis
+        del process
         return self
 
     def makeWhereExpression(self, column: sqlalchemy.sql.ColumnElement
