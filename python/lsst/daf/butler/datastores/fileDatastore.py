@@ -1067,6 +1067,14 @@ class FileDatastore(GenericBaseDatastore):
                 uri.write(serializedDataset, overwrite=True)
                 log.debug("Successfully wrote bytes directly to %s", uri)
 
+                # It may be that this dataset should be cached locally
+                # to improve get performance later so see whether
+                # a second write is needed.
+                if self.cacheManager.should_be_cached(ref):
+                    with ButlerURI.temporary_uri(suffix=uri.getExtension()) as temporary_uri:
+                        temporary_uri.write(serializedDataset)
+                        self.cacheManager.move_to_cache(temporary_uri, ref)
+
         # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(uri, ref, formatter=formatter)
 
@@ -1128,8 +1136,14 @@ class FileDatastore(GenericBaseDatastore):
         formatter = getInfo.formatter
         nbytes_max = 10_000_000  # Arbitrary number that we can tune
         if resource_size <= nbytes_max and formatter.can_read_bytes():
-            with time_this(log, msg="Reading bytes from %s", args=(uri,)):
-                serializedDataset = uri.read()
+            cached_file = self.cacheManager.find_in_cache(cache_ref, uri.getExtension())
+            if cached_file is not None:
+                with time_this(log, msg="Reading bytes from %s (cached version of %s)",
+                               args=(cached_file, uri)):
+                    serializedDataset = cached_file.read()
+            else:
+                with time_this(log, msg="Reading bytes from %s", args=(uri,)):
+                    serializedDataset = uri.read()
             log.debug("Deserializing %s from %d bytes from location %s with formatter %s",
                       f"component {getInfo.component}" if isComponent else "",
                       len(serializedDataset), uri, formatter.name())
