@@ -323,6 +323,10 @@ class AbstractDatastoreCacheManager(ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def __str__(self) -> str:
+        raise NotImplementedError()
+
 
 class DatastoreCacheManager(AbstractDatastoreCacheManager):
     """A class for managing caching in a Datastore using local files.
@@ -681,6 +685,12 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
         return sorted(self._cache_entries, key=sort_by_time)
 
+    def __str__(self) -> str:
+        cachedir = self._cache_directory if self._cache_directory else "<tempdir>"
+        return f"{type(self).__name__}@{cachedir} ({self._expiration_mode}={self._expiration_threshold}," \
+            f"default={self._caching_default}) " \
+            f"n_files={len(self._cache_entries)}, n_bytes={self._cache_entries.cache_size}"
+
 
 class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
     """A variant of the datastore cache where no cache is enabled.
@@ -722,3 +732,6 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         Always does nothing.
         """
         return
+
+    def __str__(self) -> str:
+        return f"{type(self).__name__}()"
