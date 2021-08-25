@@ -4,3 +4,8 @@ datastore:
   templates: !include templates.yaml
   formatters: !include formatters.yaml
   composites: !include composites.yaml
+  cached:
+    default: true
+    expiry:
+      mode: age
+      threshold: 60

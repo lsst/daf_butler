@@ -1136,14 +1136,15 @@ class FileDatastore(GenericBaseDatastore):
         formatter = getInfo.formatter
         nbytes_max = 10_000_000  # Arbitrary number that we can tune
         if resource_size <= nbytes_max and formatter.can_read_bytes():
-            cached_file = self.cacheManager.find_in_cache(cache_ref, uri.getExtension())
-            if cached_file is not None:
-                with time_this(log, msg="Reading bytes from %s (cached version of %s)",
-                               args=(cached_file, uri)):
-                    serializedDataset = cached_file.read()
-            else:
-                with time_this(log, msg="Reading bytes from %s", args=(uri,)):
-                    serializedDataset = uri.read()
+            with self.cacheManager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
+                if cached_file is not None:
+                    desired_uri = cached_file
+                    msg = f" (cached version of {uri})"
+                else:
+                    desired_uri = uri
+                    msg = ""
+                with time_this(log, msg="Reading bytes from %s%s", args=(desired_uri, msg)):
+                    serializedDataset = desired_uri.read()
             log.debug("Deserializing %s from %d bytes from location %s with formatter %s",
                       f"component {getInfo.component}" if isComponent else "",
                       len(serializedDataset), uri, formatter.name())
@@ -1163,45 +1164,46 @@ class FileDatastore(GenericBaseDatastore):
             msg = ""
 
             # First check in cache for local version.
-            # The cache will only be relevant for remote resources.
-            if not uri.isLocal:
-                cached_file = self.cacheManager.find_in_cache(cache_ref, uri.getExtension())
+            # The cache will only be relevant for remote resources but
+            # no harm in always asking. Context manager ensures that cache
+            # file is not deleted during cache expiration.
+            with self.cacheManager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
                 if cached_file is not None:
                     msg = f"(via cache read of remote file {uri})"
                     uri = cached_file
                     location_updated = True
 
-            with uri.as_local() as local_uri:
+                with uri.as_local() as local_uri:
 
-                # URI was remote and file was downloaded
-                if uri != local_uri:
-                    cache_msg = ""
-                    location_updated = True
+                    # URI was remote and file was downloaded
+                    if uri != local_uri:
+                        cache_msg = ""
+                        location_updated = True
 
-                    # Cache the downloaded file if needed.
-                    cached_uri = self.cacheManager.move_to_cache(local_uri, cache_ref)
-                    if cached_uri is not None:
-                        local_uri = cached_uri
-                        cache_msg = " and cached"
+                        # Cache the downloaded file if needed.
+                        cached_uri = self.cacheManager.move_to_cache(local_uri, cache_ref)
+                        if cached_uri is not None:
+                            local_uri = cached_uri
+                            cache_msg = " and cached"
 
-                    msg = f"(via download to local file{cache_msg})"
+                        msg = f"(via download to local file{cache_msg})"
 
-                # Calculate the (possibly) new location for the formatter
-                # to use.
-                newLocation = Location(*local_uri.split()) if location_updated else None
+                    # Calculate the (possibly) new location for the formatter
+                    # to use.
+                    newLocation = Location(*local_uri.split()) if location_updated else None
 
-                log.debug("Reading%s from location %s %s with formatter %s",
-                          f" component {getInfo.component}" if isComponent else "",
-                          uri, msg, formatter.name())
-                try:
-                    with formatter._updateLocation(newLocation):
-                        with time_this(log, msg="Reading%s from location %s %s with formatter %s",
-                                       args=(f" component {getInfo.component}" if isComponent else "",
-                                             uri, msg, formatter.name())):
-                            result = formatter.read(component=getInfo.component if isComponent else None)
-                except Exception as e:
-                    raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
-                                     f" ({ref.datasetType.name} from {uri}): {e}") from e
+                    log.debug("Reading%s from location %s %s with formatter %s",
+                              f" component {getInfo.component}" if isComponent else "",
+                              uri, msg, formatter.name())
+                    try:
+                        with formatter._updateLocation(newLocation):
+                            with time_this(log, msg="Reading%s from location %s %s with formatter %s",
+                                           args=(f" component {getInfo.component}" if isComponent else "",
+                                                 uri, msg, formatter.name())):
+                                result = formatter.read(component=getInfo.component if isComponent else None)
+                    except Exception as e:
+                        raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
+                                         f" ({ref.datasetType.name} from {uri}): {e}") from e
 
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
                                       isComponent=isComponent)

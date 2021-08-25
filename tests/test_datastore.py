@@ -1115,20 +1115,23 @@ cached:
         self.assertTrue(self.files[1].exists())
 
         # Should find this file and it should be within the cache directory.
-        found = cache_manager.find_in_cache(self.refs[0], ".txt")
-        self.assertTrue(found.exists())
-        self.assertIsNotNone(found.relative_to(cache_manager.cache_directory))
+        with cache_manager.find_in_cache(self.refs[0], ".txt") as found:
+            self.assertTrue(found.exists())
+            self.assertIsNotNone(found.relative_to(cache_manager.cache_directory))
 
         # Should not be able to find these in cache
-        self.assertIsNone(cache_manager.find_in_cache(self.refs[0], ".fits"))
-        self.assertIsNone(cache_manager.find_in_cache(self.refs[1], ".fits"))
+        with cache_manager.find_in_cache(self.refs[0], ".fits") as found:
+            self.assertIsNone(found)
+        with cache_manager.find_in_cache(self.refs[1], ".fits") as found:
+            self.assertIsNone(found)
 
     def testNoCache(self):
         cache_manager = DatastoreDisabledCacheManager("", universe=self.universe)
         for uri, ref in zip(self.files, self.refs):
             self.assertFalse(cache_manager.should_be_cached(ref))
             self.assertIsNone(cache_manager.move_to_cache(uri, ref))
-            self.assertIsNone(cache_manager.find_in_cache(ref, ".txt"))
+            with cache_manager.find_in_cache(ref, ".txt") as found:
+                self.assertIsNone(found)
 
 
 if __name__ == "__main__":

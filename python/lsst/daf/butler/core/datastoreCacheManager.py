@@ -45,6 +45,7 @@ from typing import (
 from abc import ABC, abstractmethod
 from collections import defaultdict
 import atexit
+import contextlib
 import datetime
 import logging
 import os
@@ -292,7 +293,8 @@ class AbstractDatastoreCacheManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def find_in_cache(self, ref: DatasetRef, extension: str) -> Optional[ButlerURI]:
+    @contextlib.contextmanager
+    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ButlerURI]]:
         """Look for a dataset in the cache and return its location.
 
         Parameters
@@ -302,11 +304,16 @@ class AbstractDatastoreCacheManager(ABC):
         extension : `str`
             File extension expected.
 
-        Returns
-        -------
+        Yields
+        ------
         uri : `ButlerURI` or `None`
             The URI to the cached file, or `None` if the file has not been
             cached.
+
+        Notes
+        -----
+        Should be used as a context manager in order to prevent this
+        file from being removed from the cache for that context.
         """
         raise NotImplementedError()
 
@@ -351,6 +358,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     example to configure expiration to limit the cache directory to 5 datasets
     the value would be ``datasets=5``.
     """
+
+    _temp_exemption_prefix = "exempt/"
 
     def __init__(self, config: Union[str, DatastoreCacheManagerConfig],
                  universe: DimensionUniverse):
@@ -415,6 +424,13 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             atexit.register(remove_cache_directory, self._cache_directory.ospath)
         return self._cache_directory
 
+    @property
+    def _temp_exempt_directory(self) -> ButlerURI:
+        """Return the directory in which to store temporary cache files that
+        should not be expired.
+        """
+        return self.cache_directory.join(self._temp_exemption_prefix)
+
     def should_be_cached(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
         # Docstring inherited
         matchName: Union[LookupKey, str] = "{} (via default)".format(entity)
@@ -476,21 +492,53 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         log.debug("Cached dataset %s to %s", ref, cached_location)
 
         self._register_cache_entry(cached_location)
+        print(f"After caching: {self}")
 
         return cached_location
 
-    def find_in_cache(self, ref: DatasetRef, extension: str) -> Optional[ButlerURI]:
+    @contextlib.contextmanager
+    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ButlerURI]]:
         # Docstring inherited
         # Short circuit this if the cache directory has not been created yet.
         if self._cache_directory is None:
-            return None
+            yield None
+            return
 
         cached_location = self._construct_cache_name(ref, extension)
         if cached_location.exists():
-            log.debug("Retrieved cached file %s for dataset %s.", cached_location, ref)
-            return cached_location
+            log.debug("Found cached file %s for dataset %s.", cached_location, ref)
+
+            # The cached file could be removed by another process doing
+            # cache expiration so we need to protect against that by making
+            # a copy in a different tree.  Using hardlinks is preferred but
+            # soft link should still be acceptable given the right checks
+            # in the expiration code.
+            path_in_cache = cached_location.relative_to(self.cache_directory)
+            assert path_in_cache is not None, f"Somehow {cached_location} not in cache directory"
+            temp_location: Optional[ButlerURI] = self._temp_exempt_directory.join(path_in_cache)
+            try:
+                if temp_location is not None:
+                    temp_location.transfer_from(cached_location, transfer="link")
+            except Exception:
+                # Any failure will be treated as if the file was not
+                # in the cache. Yielding the original cache location
+                # is too dangerous.
+                temp_location = None
+
+            try:
+                log.debug("Yielding temporary cache location %s for dataset %s", temp_location, ref)
+                yield temp_location
+            finally:
+                try:
+                    if temp_location:
+                        temp_location.remove()
+                except FileNotFoundError:
+                    pass
+            return
+
         log.debug("Dataset %s not found in cache.", ref)
-        return None
+        yield None
+        return
 
     def remove_from_cache(self, refs: Union[DatasetRef, Iterable[DatasetRef]]) -> None:
         # Docstring inherited.
@@ -549,6 +597,12 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         found = set()
         for file in ButlerURI.findFileResources([self.cache_directory]):
             assert isinstance(file, ButlerURI), "Unexpectedly did not get ButlerURI from iterator"
+
+            # Skip any that are found in an exempt part of the hierarchy
+            # since they should not be part of the registry.
+            if file.relative_to(self._temp_exempt_directory) is not None:
+                continue
+
             path_in_cache = self._register_cache_entry(file, can_exist=True)
             found.add(path_in_cache)
 
@@ -574,6 +628,13 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         """
         for entry in cache_entries:
             path = self.cache_directory.join(entry)
+
+            # If the file happens to also exist in the exempt folder
+            # skip removal since a process is actively using the file.
+            if self._temp_exempt_directory.join(entry).exists():
+                log.debug("Skipping removal of %s since it is currently in use", path)
+                continue
+
             self._cache_entries.pop(entry)
             log.debug("Removing file from cache: %s", path)
             try:
@@ -719,12 +780,13 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         """Move dataset to cache but always refuse and returns `None`."""
         return None
 
-    def find_in_cache(self, ref: DatasetRef, extension: str) -> Optional[ButlerURI]:
+    @contextlib.contextmanager
+    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ButlerURI]]:
         """Look for a dataset in the cache and return its location.
 
         Never finds a file.
         """
-        return None
+        yield None
 
     def remove_from_cache(self, ref: Union[DatasetRef, Iterable[DatasetRef]]) -> None:
         """Remove datasets from cache.
