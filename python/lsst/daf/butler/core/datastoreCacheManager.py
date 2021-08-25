@@ -238,6 +238,16 @@ class AbstractDatastoreCacheManager(ABC):
         in lookup keys.
     """
 
+    @property
+    def cache_size(self) -> int:
+        """Size of the cache in bytes."""
+        return 0
+
+    @property
+    def file_count(self) -> int:
+        """Return number of cached files tracked by registry."""
+        return 0
+
     def __init__(self, config: Union[str, DatastoreCacheManagerConfig],
                  universe: DimensionUniverse):
         if not isinstance(config, DatastoreCacheManagerConfig):
@@ -431,6 +441,14 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         """
         return self.cache_directory.join(self._temp_exemption_prefix)
 
+    @property
+    def cache_size(self) -> int:
+        return self._cache_entries.cache_size
+
+    @property
+    def file_count(self) -> int:
+        return len(self._cache_entries)
+
     def should_be_cached(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
         # Docstring inherited
         matchName: Union[LookupKey, str] = "{} (via default)".format(entity)
@@ -492,7 +510,6 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         log.debug("Cached dataset %s to %s", ref, cached_location)
 
         self._register_cache_entry(cached_location)
-        print(f"After caching: {self}")
 
         return cached_location
 
@@ -711,10 +728,10 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             return
 
         if self._expiration_mode == "size":
-            if self._cache_entries.cache_size > self._expiration_threshold:
+            if self.cache_size > self._expiration_threshold:
                 for key in self._sort_cache():
                     self._remove_from_cache([key])
-                    if self._cache_entries.cache_size <= self._expiration_threshold:
+                    if self.cache_size <= self._expiration_threshold:
                         break
             return
 
@@ -750,7 +767,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         cachedir = self._cache_directory if self._cache_directory else "<tempdir>"
         return f"{type(self).__name__}@{cachedir} ({self._expiration_mode}={self._expiration_threshold}," \
             f"default={self._caching_default}) " \
-            f"n_files={len(self._cache_entries)}, n_bytes={self._cache_entries.cache_size}"
+            f"n_files={self.file_count}, n_bytes={self.cache_size}"
 
 
 class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
