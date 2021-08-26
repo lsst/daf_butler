@@ -58,6 +58,18 @@ except AttributeError:
     yamlLoader = yaml.SafeLoader  # type: ignore
 
 
+def _doUpdate(d, u):
+    if not isinstance(u, collections.abc.Mapping) or \
+            not isinstance(d, collections.abc.MutableMapping):
+        raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
+    for k, v in u.items():
+        if isinstance(v, collections.abc.Mapping):
+            d[k] = _doUpdate(d.get(k, {}), v)
+        else:
+            d[k] = v
+    return d
+
+
 class Loader(yamlLoader):
     """YAML Loader that supports file include directives.
 
@@ -649,17 +661,7 @@ class Config(collections.abc.MutableMapping):
         >>> print(foo)
         {'a': {'c': 2}}
         """
-        def doUpdate(d, u):
-            if not isinstance(u, collections.abc.Mapping) or \
-                    not isinstance(d, collections.abc.MutableMapping):
-                raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
-            for k, v in u.items():
-                if isinstance(v, collections.abc.Mapping):
-                    d[k] = doUpdate(d.get(k, {}), v)
-                else:
-                    d[k] = v
-            return d
-        doUpdate(self._data, other)
+        _doUpdate(self._data, other)
 
     def merge(self, other):
         """Merge another Config into this one.
