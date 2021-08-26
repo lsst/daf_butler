@@ -26,7 +26,6 @@ from astropy.table import Table as AstropyTable
 from numpy import array
 import unittest
 
-from lsst.daf.butler import Butler, DatasetType, StorageClass
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_dataset_types
 from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
@@ -74,17 +73,28 @@ class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
         datasetName = "test"
         instrumentDimension = "instrument"
         visitDimension = "visit"
-        storageClassName = "testDatasetType"
+        storageClassName = "StructuredDataDict"
         expectedNotVerbose = AstropyTable((("test",),), names=("name",))
         runner = LogCliRunner()
         with runner.isolated_filesystem():
-            butlerCfg = Butler.makeRepo("here")
-            butler = Butler(butlerCfg, writeable=True)
-            storageClass = StorageClass(storageClassName)
-            butler.registry.storageClasses.registerStorageClass(storageClass)
-            dimensions = butler.registry.dimensions.extract((instrumentDimension, visitDimension))
-            datasetType = DatasetType(datasetName, dimensions, storageClass)
-            butler.registry.registerDatasetType(datasetType)
+            result = runner.invoke(cli, ["create", "here"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            # Create the dataset type.
+            result = runner.invoke(cli, ["register-dataset-type", "here", datasetName,
+                                         storageClassName, instrumentDimension, visitDimension])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            # Okay to create it again identically.
+            result = runner.invoke(cli, ["register-dataset-type", "here", datasetName,
+                                         storageClassName, instrumentDimension, visitDimension])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            # Not okay to create a different version of it.
+            result = runner.invoke(cli, ["register-dataset-type", "here", datasetName,
+                                         storageClassName, instrumentDimension])
+            self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
+            # Not okay to try to create a component dataset type.
+            result = runner.invoke(cli, ["register-dataset-type", "here", "a.b",
+                                         storageClassName, instrumentDimension])
+            self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
             # check not-verbose output:
             result = runner.invoke(cli, ["query-dataset-types", "here"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
@@ -99,7 +109,7 @@ class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
             expected = AstropyTable(array((
                 "test",
                 "['band', 'instrument', 'physical_filter', 'visit_system', 'visit']",
-                "testDatasetType")),
+                storageClassName)),
                 names=("name", "dimensions", "storage class"))
             self.assertAstropyTablesEqual(readTable(result.output), expected)
 

@@ -33,6 +33,7 @@ from ._associate import associate # depends on QueryDatasets
 from ._pruneDatasets import pruneDatasets # depends on QueryDatasets
 from .queryDatasetTypes import queryDatasetTypes
 from .queryDimensionRecords import queryDimensionRecords
+from .register_dataset_type import register_dataset_type
 from .removeDatasetType import removeDatasetType
 from .retrieveArtifacts import retrieveArtifacts
 from .transferDatasets import transferDatasets
