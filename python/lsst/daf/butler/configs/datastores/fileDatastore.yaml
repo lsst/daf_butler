@@ -19,16 +19,21 @@ datastore:
     # location. This can be left out or null used
     # to indicate a temporary directory.
     root: null
+    expiry:
+      # Expiry mode and associated threshold.
+      # Options are:
+      # - null (no expiry)
+      # - files (threshold is number of files)
+      # - datasets (threshold is number of datasets)
+      # - size (threshold is size in bytes)
+      # - age (threshold is oldest file in seconds)
+      # Default for everyone is to limit the cache size to 4 datasets.
+      mode: datasets
+      threshold: 4
     # Default cache value. This will be the default decision if no specific
     # match is found in the "cacheable" section later on.
     default: false
     # Use a dict over list to simplify merging logic.
-    # Later could change it to be the timescale for caching:
-    #   - Quantum (clear at end of quantum)
-    #   - Pipeline (clear at end of pipeline)
-    # pipeline activator could call clear_cache with a parameter indicating
-    # the event.
     cacheable:
-      # The formatter associated with this storage class
-      # implements deferred loading of data
-      StrayLightData: true
+      Exposure: true
+      ExposureF: true
