@@ -1176,15 +1176,18 @@ class FileDatastore(GenericBaseDatastore):
                 with uri.as_local() as local_uri:
 
                     # URI was remote and file was downloaded
+                    can_be_cached = False
                     if uri != local_uri:
                         cache_msg = ""
                         location_updated = True
 
-                        # Cache the downloaded file if needed.
-                        cached_uri = self.cacheManager.move_to_cache(local_uri, cache_ref)
-                        if cached_uri is not None:
-                            local_uri = cached_uri
-                            cache_msg = " and cached"
+                        if self.cacheManager.should_be_cached(cache_ref):
+                            # In this scenario we want to ask if the downloaded
+                            # file should be cached but we should not cache
+                            # it until after we've used it (to ensure it can't
+                            # be expired whilst we are using it).
+                            can_be_cached = True
+                            cache_msg = " and likely cached"
 
                         msg = f"(via download to local file{cache_msg})"
 
@@ -1204,6 +1207,10 @@ class FileDatastore(GenericBaseDatastore):
                     except Exception as e:
                         raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
                                          f" ({ref.datasetType.name} from {uri}): {e}") from e
+
+                    # File was read successfully so can move to cache
+                    if can_be_cached:
+                        self.cacheManager.move_to_cache(local_uri, cache_ref)
 
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
                                       isComponent=isComponent)
