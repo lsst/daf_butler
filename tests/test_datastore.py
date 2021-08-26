@@ -1036,6 +1036,10 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
         cls.storageClassFactory = StorageClassFactory()
         cls.universe = DimensionUniverse()
 
+        # Ensure that we load the test storage class definitions.
+        scConfigFile = os.path.join(TESTDIR, "config/basic/storageClasses.yaml")
+        cls.storageClassFactory.addFromConfig(scConfigFile)
+
     def setUp(self):
         self.id = 0
 
@@ -1058,6 +1062,25 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
         # Create empty files
         for uri in self.files:
             uri.write(b"0123456789")
+
+        # Create a some composite refs with component files.
+        sc = self.storageClassFactory.getStorageClass("StructuredData")
+        self.composite_refs = [self.makeDatasetRef(f"composite{n}", dimensions, sc, dataId,
+                                                   conform=False) for n in range(3)]
+        self.comp_files = []
+        self.comp_refs = []
+        for n, ref in enumerate(self.composite_refs):
+            component_refs = []
+            component_files = []
+            for component in sc.components:
+                component_ref = ref.makeComponentRef(component)
+                file = root_uri.join(f"composite_file-{n}-{component}.txt")
+                component_refs.append(component_ref)
+                component_files.append(file)
+                file.write(b"9876543210")
+
+            self.comp_files.append(component_files)
+            self.comp_refs.append(component_refs)
 
     def tearDown(self):
         if self.root is not None and os.path.exists(self.root):
@@ -1211,6 +1234,23 @@ cached:
         cache_manager = self._make_cache_manager(config_str)
         self.assertExpiration(cache_manager, 5, threshold + 1)
         self.assertIn(f"{mode}={threshold}", str(cache_manager))
+
+    def testCacheExpiryDatasetsComposite(self):
+        threshold = 2  # Keep 2 datasets.
+        mode = "datasets"
+        config_str = self._expiration_config(mode, threshold)
+
+        cache_manager = self._make_cache_manager(config_str)
+
+        n_datasets = 3
+        for i in range(n_datasets):
+            for component_file, component_ref in zip(self.comp_files[i], self.comp_refs[i]):
+                cached = cache_manager.move_to_cache(component_file, component_ref)
+                self.assertIsNotNone(cached)
+        self.assertEqual(cache_manager.file_count, 6)  # 2 datasets each of 3 files
+
+        # Write two new non-composite and the number of files should drop.
+        self.assertExpiration(cache_manager, 2, 5)
 
     def testCacheExpirySize(self):
         threshold = 55  # Each file is 10 bytes
