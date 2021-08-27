@@ -101,11 +101,12 @@ class PostgresqlDatabase(Database):
     def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
                     lock: Iterable[sqlalchemy.schema.Table] = ()) -> Iterator[None]:
         with super().transaction(interrupting=interrupting, savepoint=savepoint, lock=lock):
+            assert self._session_connection is not None, "Guaranteed to have a connection in transaction"
             if not self.isWriteable():
-                with closing(self._connection.connection.cursor()) as cursor:
+                with closing(self._session_connection.connection.cursor()) as cursor:
                     cursor.execute("SET TRANSACTION READ ONLY")
             else:
-                with closing(self._connection.connection.cursor()) as cursor:
+                with closing(self._session_connection.connection.cursor()) as cursor:
                     # Make timestamps UTC, because we didn't use TIMESTAMPZ for
                     # the column type.  When we can tolerate a schema change,
                     # we should change that type and remove this line.
@@ -114,8 +115,9 @@ class PostgresqlDatabase(Database):
 
     def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
         # Docstring inherited.
-        for table in tables:
-            self._connection.execute(sqlalchemy.text(f"LOCK TABLE {table.key} IN EXCLUSIVE MODE"))
+        with self._connection() as connection:
+            for table in tables:
+                connection.execute(sqlalchemy.text(f"LOCK TABLE {table.key} IN EXCLUSIVE MODE"))
 
     def isWriteable(self) -> bool:
         return self._writeable
@@ -168,7 +170,8 @@ class PostgresqlDatabase(Database):
                 for column in table.columns
                 if column.name not in table.primary_key}
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
-        self._connection.execute(query, rows)
+        with self._connection() as connection:
+            connection.execute(query, rows)
 
     def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
         # Docstring inherited.
@@ -179,7 +182,8 @@ class PostgresqlDatabase(Database):
         # we don't care which constraint is violated or specify which columns
         # to update.
         query = sqlalchemy.dialects.postgresql.dml.insert(table).on_conflict_do_nothing()
-        return self._connection.execute(query, rows).rowcount
+        with self._connection() as connection:
+            return connection.execute(query, rows).rowcount
 
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):

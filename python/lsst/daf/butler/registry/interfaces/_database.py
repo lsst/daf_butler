@@ -112,7 +112,7 @@ class StaticTablesContext:
     def __init__(self, db: Database):
         self._db = db
         self._foreignKeys: List[Tuple[sqlalchemy.schema.Table, sqlalchemy.schema.ForeignKeyConstraint]] = []
-        self._inspector = sqlalchemy.inspect(self._db._connection)
+        self._inspector = sqlalchemy.inspect(self._db._engine)
         self._tableNames = frozenset(self._inspector.get_table_names(schema=self._db.namespace))
         self._initializers: List[Callable[[Database], None]] = []
 
@@ -300,8 +300,8 @@ class Database(ABC):
     `Database` itself has several underscore-prefixed attributes:
 
      - ``_engine``: SQLAlchemy object representing its engine.
-     - ``_connection``: the `sqlalchemy.engine.Connectable` object which can
-       be either an Engine or Connection if a session is active.
+     - ``_connection``: method returning a context manager for
+       `sqlalchemy.engine.Connection` object.
      - ``_metadata``: the `sqlalchemy.schema.MetaData` object representing
         the tables and other schema entities.
 
@@ -520,12 +520,17 @@ class Database(ABC):
                 if not connection.in_transaction():
                     connection.info.pop(_IN_SAVEPOINT_TRANSACTION, None)
 
-    @property
-    def _connection(self) -> sqlalchemy.engine.Connectable:
-        """Object that can be used to execute queries
-        (`sqlalchemy.engine.Connectable`)
+    @contextmanager
+    def _connection(self) -> Iterator[sqlalchemy.engine.Connection]:
+        """Return context manager for Connection.
         """
-        return self._session_connection or self._engine
+        if self._session_connection is not None:
+            yield self._session_connection
+        else:
+            # Make new connection and transaction, transaction will be
+            # committed on context exit.
+            with self._engine.begin() as connection:
+                yield connection
 
     @abstractmethod
     def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
@@ -631,7 +636,8 @@ class Database(ABC):
             if create:
                 if self.namespace is not None:
                     if self.namespace not in context._inspector.get_schema_names():
-                        self._connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
+                        with self._connection() as connection:
+                            connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
                 # In our tables we have columns that make use of sqlalchemy
                 # Sequence objects. There is currently a bug in sqlalchemy that
                 # causes a deprecation warning to be thrown on a property of
@@ -640,7 +646,7 @@ class Database(ABC):
                 # warnings when tables are created.
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", category=sqlalchemy.exc.SADeprecationWarning)
-                    self._metadata.create_all(self._connection)
+                    self._metadata.create_all(self._engine)
                 # call all initializer methods sequentially
                 for init in context._initializers:
                     init(self)
@@ -970,7 +976,8 @@ class Database(ABC):
         table = self._convertTableSpec(name, spec, self._metadata)
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
-        table.create(self._connection)
+        with self._connection() as connection:
+            table.create(connection)
         return table
 
     def getExistingTable(self, name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
@@ -1013,7 +1020,7 @@ class Database(ABC):
                                             f"specification has columns {list(spec.fields.names)}, while "
                                             f"the previous definition has {list(table.columns.keys())}.")
         else:
-            inspector = sqlalchemy.inspect(self._connection)
+            inspector = sqlalchemy.inspect(self._engine)
             if name in inspector.get_table_names(schema=self.namespace):
                 _checkExistingTableDefinition(name, spec, inspector.get_columns(name, schema=self.namespace))
                 table = self._convertTableSpec(name, spec, self._metadata)
@@ -1175,7 +1182,8 @@ class Database(ABC):
             ).select_from(table).where(
                 sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()])
             )
-            fetched = list(self._connection.execute(selectSql).mappings())
+            with self._connection() as connection:
+                fetched = list(connection.execute(selectSql).mappings())
             if len(fetched) != 1:
                 return len(fetched), None, None
             existing = fetched[0]
@@ -1245,13 +1253,14 @@ class Database(ABC):
                             "daf_butler."
                         )
                     elif update:
-                        self._connection.execute(
-                            table.update().where(
-                                sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()])
-                            ).values(
-                                **{k: compared[k] for k in bad.keys()}
+                        with self._connection() as connection:
+                            connection.execute(
+                                table.update().where(
+                                    sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()])
+                                ).values(
+                                    **{k: compared[k] for k in bad.keys()}
+                                )
                             )
-                        )
                         inserted_or_updated = bad
                     else:
                         raise DatabaseConflictError(
@@ -1338,22 +1347,23 @@ class Database(ABC):
                 return []
             else:
                 return None
-        if not returnIds:
-            if select is not None:
-                if names is None:
-                    # columns() is deprecated since 1.4, but
-                    # selected_columns() method did not exist in 1.3.
-                    if hasattr(select, "selected_columns"):
-                        names = select.selected_columns.keys()
-                    else:
-                        names = select.columns.keys()
-                self._connection.execute(table.insert().from_select(names, select))
+        with self._connection() as connection:
+            if not returnIds:
+                if select is not None:
+                    if names is None:
+                        # columns() is deprecated since 1.4, but
+                        # selected_columns() method did not exist in 1.3.
+                        if hasattr(select, "selected_columns"):
+                            names = select.selected_columns.keys()
+                        else:
+                            names = select.columns.keys()
+                    connection.execute(table.insert().from_select(names, select))
+                else:
+                    connection.execute(table.insert(), rows)
+                return None
             else:
-                self._connection.execute(table.insert(), rows)
-            return None
-        else:
-            sql = table.insert()
-            return [self._connection.execute(sql, row).inserted_primary_key[0] for row in rows]
+                sql = table.insert()
+                return [connection.execute(sql, row).inserted_primary_key[0] for row in rows]
 
     @abstractmethod
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
@@ -1490,7 +1500,8 @@ class Database(ABC):
             whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
             if whereTerms:
                 sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
-            return self._connection.execute(sql, rows).rowcount
+            with self._connection() as connection:
+                return connection.execute(sql, rows).rowcount
         else:
             # One of the columns has changing values but any others are
             # fixed. In this case we can use an IN operator and be more
@@ -1514,12 +1525,13 @@ class Database(ABC):
             rowcount = 0
             iposn = 0
             n_per_loop = 1_000  # Controls how many items to put in IN clause
-            for iposn in range(0, n_elements, n_per_loop):
-                endpos = iposn + n_per_loop
-                in_clause = table.columns[name].in_(in_content[iposn:endpos])
+            with self._connection() as connection:
+                for iposn in range(0, n_elements, n_per_loop):
+                    endpos = iposn + n_per_loop
+                    in_clause = table.columns[name].in_(in_content[iposn:endpos])
 
-                newsql = sql.where(sqlalchemy.sql.and_(*clauses, in_clause))
-                rowcount += self._connection.execute(newsql).rowcount
+                    newsql = sql.where(sqlalchemy.sql.and_(*clauses, in_clause))
+                    rowcount += connection.execute(newsql).rowcount
             return rowcount
 
     def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
@@ -1565,7 +1577,8 @@ class Database(ABC):
         sql = table.update().where(
             sqlalchemy.sql.and_(*[table.columns[k] == sqlalchemy.sql.bindparam(v) for k, v in where.items()])
         )
-        return self._connection.execute(sql, rows).rowcount
+        with self._connection() as connection:
+            return connection.execute(sql, rows).rowcount
 
     def query(self, sql: sqlalchemy.sql.FromClause,
               *args: Any, **kwargs: Any) -> sqlalchemy.engine.ResultProxy:
@@ -1592,8 +1605,20 @@ class Database(ABC):
         The default implementation should be sufficient for most derived
         classes.
         """
+        # We are returning a Result object so we need to take care of
+        # connection lifetime. If this is happening in transaction context
+        # then just use existing connection, otherwise make a special
+        # connection which will be closed when result is closed.
+        #
+        # TODO: May be better approach would be to make this method return a
+        # context manager, but this means big changes for callers of this
+        # method.
+        if self._session_connection is not None:
+            connection = self._session_connection
+        else:
+            connection = self._engine.connect(close_with_result=True)
         # TODO: should we guard against non-SELECT queries here?
-        return self._connection.execute(sql, *args, **kwargs)
+        return connection.execute(sql, *args, **kwargs)
 
     origin: int
     """An integer ID that should be used as the default for any datasets,

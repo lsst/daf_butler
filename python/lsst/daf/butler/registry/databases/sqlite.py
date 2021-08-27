@@ -287,7 +287,7 @@ class SqliteDatabase(Database):
         # lost on re-connect. This is only really relevant for tests, and it's
         # convenient there.
         if self.filename is None and self.isWriteable():
-            inspector = sqlalchemy.inspect(self._connection)
+            inspector = sqlalchemy.inspect(self._engine)
             tables = inspector.get_table_names(schema=self.namespace)
             if not tables:
                 create = True
@@ -387,8 +387,8 @@ class SqliteDatabase(Database):
                 # Insert into the autoincr table and the target table inside
                 # a transaction.  The main-table insertion can take care of
                 # returnIds for us.
-                with self.transaction():
-                    self._connection.execute(autoincr.table.insert(), rowsForAutoincrTable)
+                with self.transaction(), self._connection() as connection:
+                    connection.execute(autoincr.table.insert(), rowsForAutoincrTable)
                     return super().insert(table, *rows, returnIds=returnIds)
             else:
                 # Caller did not pass autoincrement key values on the first
@@ -405,7 +405,8 @@ class SqliteDatabase(Database):
                     ids = []
                     for row in rows:
                         newRow = row.copy()
-                        id = self._connection.execute(autoincr.table.insert()).inserted_primary_key[0]
+                        with self._connection() as connection:
+                            id = connection.execute(autoincr.table.insert()).inserted_primary_key[0]
                         newRow[autoincr.column] = id
                         newRows.append(newRow)
                         ids.append(id)
@@ -427,7 +428,8 @@ class SqliteDatabase(Database):
             raise NotImplementedError(
                 "replace does not support compound primary keys with autoincrement fields."
             )
-        self._connection.execute(_Replace(table), rows)
+        with self._connection() as connection:
+            connection.execute(_Replace(table), rows)
 
     def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
         self.assertTableWriteable(table, f"Cannot ensure into read-only table {table}.")
@@ -437,7 +439,8 @@ class SqliteDatabase(Database):
             raise NotImplementedError(
                 "ensure does not support compound primary keys with autoincrement fields."
             )
-        return self._connection.execute(_Ensure(table), rows).rowcount
+        with self._connection() as connection:
+            return connection.execute(_Ensure(table), rows).rowcount
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).
