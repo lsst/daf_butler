@@ -1,4 +1,4 @@
-lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter:
+lsst.obs.base.formatters.fitsExposure.StandardFitsImageFormatterBase: &StandardFitsImageFormatterBase
   # No compression
   noCompression: &noCompression
     image: &noCompressionOptions
@@ -42,3 +42,11 @@ lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter:
   # Set the default
   default:
     <<: *lossless
+lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter:
+  <<: *StandardFitsImageFormatterBase
+lsst.obs.base.formatters.fitsExposure.FitsImageFormatter:
+  <<: *StandardFitsImageFormatterBase
+lsst.obs.base.formatters.fitsExposure.FitsMaskFormatter:
+  <<: *StandardFitsImageFormatterBase
+lsst.obs.base.formatters.fitsExposure.FitsMaskedImageFormatter:
+  <<: *StandardFitsImageFormatterBase
