@@ -287,7 +287,7 @@ class CollectionSummaryManager:
         # rows.  This will never include CHAINED collections or collections
         # with no datasets.
         summaries: Dict[Any, CollectionSummary] = {}
-        for row in self._db.query(sql):
+        for row in self._db.query(sql).mappings():
             # Collection key should never be None/NULL; it's what we join on.
             # Extract that and then turn it into a collection name.
             collectionKey = row[self._collectionKeyName]

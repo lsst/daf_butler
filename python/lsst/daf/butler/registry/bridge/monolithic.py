@@ -183,7 +183,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             )
         )
         for row in self._db.query(sql).fetchall():
-            yield byId[row["dataset_id"]]
+            yield byId[row.dataset_id]
 
     @contextmanager
     def emptyTrash(self, records_table: Optional[OpaqueTableStorage] = None,
@@ -261,7 +261,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                 )
             )
             preserved = {row[record_column]
-                         for row in self._db.query(items_to_preserve).fetchall()}
+                         for row in self._db.query(items_to_preserve).mappings()}
 
         # Convert results to a tuple of id+info and a record of the artifacts
         # that should not be deleted from datastore. The id+info tuple is
@@ -343,7 +343,7 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
         ).where(
             self._tables.dataset_location.columns.dataset_id == ref.getCheckedId()
         )
-        for row in self._db.query(sql).fetchall():
+        for row in self._db.query(sql).mappings():
             yield row[self._tables.dataset_location.columns.datastore_name]
         for name, bridge in self._ephemeral.items():
             if ref in bridge:

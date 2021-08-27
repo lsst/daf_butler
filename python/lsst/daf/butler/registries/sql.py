@@ -1014,7 +1014,7 @@ class SqlRegistry(Registry):
             query = storage.select(collectionRecord)
             if query is None:
                 continue
-            for row in self._db.query(query.combine()):
+            for row in self._db.query(query.combine()).mappings():
                 dataId = DataCoordinate.fromRequiredValues(
                     storage.datasetType.dimensions,
                     tuple(row[name] for name in storage.datasetType.dimensions.required.names)

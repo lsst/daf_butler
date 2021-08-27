@@ -630,12 +630,12 @@ class DatabaseTests(ABC):
             # Give Side2 a chance to create a connection
             await asyncio.sleep(1.0)
             with db1.transaction(lock=lock):
-                names1 = {row["name"] for row in db1.query(tables1.a.select())}
+                names1 = {row.name for row in db1.query(tables1.a.select())}
                 # Give Side2 a chance to insert (which will be blocked if
                 # we've acquired a lock).
                 await asyncio.sleep(2.0)
                 db1.insert(tables1.a, {"name": "a1"})
-                names2 = {row["name"] for row in db1.query(tables1.a.select())}
+                names2 = {row.name for row in db1.query(tables1.a.select())}
             return names1, names2
 
         async def side2() -> None:
@@ -872,7 +872,7 @@ class DatabaseTests(ABC):
         self.assertEqual(
             [row[TimespanReprClass.NAME] is None for row in aRows],
             [
-                row["f"] for row in db.query(
+                row.f for row in db.query(
                     sqlalchemy.sql.select(
                         aRepr.isNull().label("f")
                     ).order_by(
@@ -885,7 +885,7 @@ class DatabaseTests(ABC):
         self.assertEqual(
             [False for row in bRows],
             [
-                row["f"] for row in db.query(
+                row.f for row in db.query(
                     sqlalchemy.sql.select(
                         bRepr.isNull().label("f")
                     ).order_by(
@@ -921,7 +921,7 @@ class DatabaseTests(ABC):
                     (aRepr > rhsRepr).label("greater_than"),
                 ).select_from(aTable)
                 queried = {
-                    row["lhs"]: (row["overlaps"], row["contains"], row["less_than"], row["greater_than"])
+                    row.lhs: (row.overlaps, row.contains, row.less_than, row.greater_than)
                     for row in db.query(sql)
                 }
                 self.assertEqual(expected, queried)
@@ -956,8 +956,7 @@ class DatabaseTests(ABC):
             lhsSubquery.join(rhsSubquery, onclause=sqlalchemy.sql.literal(True))
         )
         queried = {
-            (row["lhs"], row["rhs"]): (row["overlaps"], row["contains"],
-                                       row["less_than"], row["greater_than"])
+            (row.lhs, row.rhs): (row.overlaps, row.contains, row.less_than, row.greater_than)
             for row in db.query(sql)}
         self.assertEqual(expected, queried)
         # Test relationship expressions between in-database timespans and
@@ -982,7 +981,7 @@ class DatabaseTests(ABC):
                     (aRepr > rhs).label("greater_than"),
                 ).select_from(aTable)
                 queried = {
-                    row["lhs"]: (row["contains"], row["less_than"], row["greater_than"])
+                    row.lhs: (row.contains, row.less_than, row.greater_than)
                     for row in db.query(sql)
                 }
                 self.assertEqual(expected, queried)

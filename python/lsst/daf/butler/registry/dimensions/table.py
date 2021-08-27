@@ -650,7 +650,7 @@ class _SkyPixOverlapStorage:
             skypix: Dict[str, NamedKeyDict[SkyPixSystem, List[int]]] = {
                 gv: NamedKeyDict() for gv in grouped.keys()
             }
-            for summaryRow in self._db.query(query):
+            for summaryRow in self._db.query(query).mappings():
                 system = self.element.universe.skypix[summaryRow[sysCol]]
                 skypix[summaryRow[gvCol]].setdefault(system, []).append(summaryRow[lvlCol])
             if replace:
@@ -790,7 +790,7 @@ class _SkyPixOverlapStorage:
             ).where(
                 sqlalchemy.sql.and_(*summaryWhere)
             )
-            materializedGovernorValues = {row[gvCol] for row in self._db.query(summaryQuery)}
+            materializedGovernorValues = {row._mapping[gvCol] for row in self._db.query(summaryQuery)}
             if governorValues is Ellipsis:
                 missingGovernorValues = self._governor.values - materializedGovernorValues
             else:

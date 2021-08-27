@@ -201,7 +201,7 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
                                     category=sqlalchemy.exc.SAWarning)
             dbResults = {
                 (row[columns.n1], row[columns.n2]): row[columns.overlaps]
-                for row in db.query(query)
+                for row in db.query(query).mappings()
             }
 
         pyResults = {

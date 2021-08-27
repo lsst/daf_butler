@@ -281,7 +281,7 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
             self._table.columns.position
         )
         return CollectionSearch.fromExpression(
-            [manager[row[self._table.columns.child]].name for row in self._db.query(sql)]
+            [manager[row._mapping[self._table.columns.child]].name for row in self._db.query(sql)]
         )
 
 
@@ -331,7 +331,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         records = []
         chains = []
         TimespanReprClass = self._db.getTimespanRepresentation()
-        for row in self._db.query(sql).fetchall():
+        for row in self._db.query(sql).mappings():
             collection_id = row[self._tables.collection.columns[self._collectionIdName]]
             name = row[self._tables.collection.columns.name]
             type = CollectionType(row["type"])

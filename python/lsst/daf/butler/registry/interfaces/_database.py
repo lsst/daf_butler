@@ -1175,7 +1175,7 @@ class Database(ABC):
             ).select_from(table).where(
                 sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()])
             )
-            fetched = list(self._connection.execute(selectSql).fetchall())
+            fetched = list(self._connection.execute(selectSql).mappings())
             if len(fetched) != 1:
                 return len(fetched), None, None
             existing = fetched[0]

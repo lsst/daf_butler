@@ -233,7 +233,7 @@ class Query(ABC):
         whereRegion = region if region is not None else self.whereRegion
 
         def closure(row: sqlalchemy.engine.RowProxy) -> bool:
-            rowRegions = [row[self.getRegionColumn(element.name)] for element in self.spatial]
+            rowRegions = [row._mapping[self.getRegionColumn(element.name)] for element in self.spatial]
             if whereRegion and any(r.isDisjointFrom(whereRegion) for r in rowRegions):
                 return False
             return not any(a.isDisjointFrom(b) for a, b in itertools.combinations(rowRegions, 2))
@@ -282,7 +282,7 @@ class Query(ABC):
         if row is None:
             assert not tuple(dimensions), "Can only utilize empty query row when there are no dimensions."
             return ()
-        return tuple(row[self.getDimensionColumn(dimension.name)] for dimension in dimensions)
+        return tuple(row._mapping[self.getDimensionColumn(dimension.name)] for dimension in dimensions)
 
     def extractDataId(self, row: Optional[sqlalchemy.engine.RowProxy], *,
                       graph: Optional[DimensionGraph] = None,
@@ -361,8 +361,9 @@ class Query(ABC):
         assert datasetColumns is not None
         if dataId is None:
             dataId = self.extractDataId(row, graph=datasetColumns.datasetType.dimensions, records=records)
-        runRecord = self.managers.collections[row[datasetColumns.runKey]]
-        return DatasetRef(datasetColumns.datasetType, dataId, id=row[datasetColumns.id], run=runRecord.name)
+        runRecord = self.managers.collections[row._mapping[datasetColumns.runKey]]
+        return DatasetRef(datasetColumns.datasetType, dataId, id=row._mapping[datasetColumns.id],
+                          run=runRecord.name)
 
     def _makeTableSpec(self, constraints: bool = False) -> ddl.TableSpec:
         """Helper method for subclass implementations of `materialize`.
