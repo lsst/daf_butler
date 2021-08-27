@@ -208,6 +208,7 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             # Add a couple more run collections for chain testing
             registry1.registerRun("run2")
             registry1.registerRun("run3")
+            registry1.registerRun("run4")
 
             self.assertChain(["--mode", "pop", "chain1"],
                              "[run1, chain2]")
@@ -224,11 +225,11 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             self.assertChain(["--mode", "pop", "chain1", "1", "3"],
                              "[chain2, run1]")
 
-            self.assertChain(["--mode", "redefine", "chain1", "chain2", "run2", "run3", "--flatten"],
-                             "[calibration1, run1, run2, run3]")
+            self.assertChain(["--mode", "redefine", "chain1", "chain2", "run2", "run3,run4", "--flatten"],
+                             "[calibration1, run1, run2, run3, run4]")
 
             self.assertChain(["--mode", "pop", "chain1", "--", "-1", "-3"],
-                             "[calibration1, run2]")
+                             "[calibration1, run1, run3]")
 
 
 if __name__ == "__main__":

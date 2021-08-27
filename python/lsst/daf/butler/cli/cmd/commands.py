@@ -504,7 +504,7 @@ def transfer_datasets(**kwargs):
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
 @click.argument("parent", required=True, nargs=1)
-@click.argument("children", required=False, nargs=-1)
+@click.argument("children", required=False, nargs=-1, callback=split_commas)
 @click.option("--doc", default="",
               help="Documentation string associated with this collection. "
               "Only relevant if the collection is newly created.")
@@ -526,11 +526,16 @@ def collection_chain(**kwargs):
     PARENT is the name of the chained collection to create or modify. If the
     collection already exists the chain associated with it will be updated.
 
-    CHILDREN are the collections to be used to modify the chain. The exact
-    usage depends on the MODE option. When the MODE is 'pop' the CHILDREN
-    should be integer indices indicating collections to be removed from
-    the current chain.
+    CHILDREN are the collections to be used to modify the chain. The supplied
+    values will be split on comma. The exact usage depends on the MODE option.
+    For example,
 
+    $ butler collection-chain REPO PARENT child1,child2 child3
+
+    will result in three children being included in the chain.
+
+    When the MODE is 'pop' the CHILDREN should be integer indices indicating
+    collections to be removed from the current chain.
     MODE 'pop' can take negative integers to indicate removal relative to the
     end of the chain, but when doing that '--' must be given to indicate the
     end of the options specification.
