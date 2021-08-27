@@ -54,7 +54,7 @@ def _startServer(root):
     """
     server = testing.postgresql.Postgresql(base_dir=root)
     engine = sqlalchemy.engine.create_engine(server.url())
-    engine.execute("CREATE EXTENSION btree_gist;")
+    engine.execute(sqlalchemy.text("CREATE EXTENSION btree_gist;"))
     return server
 
 

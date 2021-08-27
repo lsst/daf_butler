@@ -54,7 +54,7 @@ def _onSqlite3Begin(connection: sqlalchemy.engine.Connection) -> sqlalchemy.engi
     # own that does, and tell SQLite to try to acquire a lock as soon as we
     # start a transaction (this should lead to more blocking and fewer
     # deadlocks).
-    connection.execute("BEGIN IMMEDIATE")
+    connection.execute(sqlalchemy.text("BEGIN IMMEDIATE"))
     return connection
 
 
@@ -388,7 +388,7 @@ class SqliteDatabase(Database):
                 # a transaction.  The main-table insertion can take care of
                 # returnIds for us.
                 with self.transaction():
-                    self._connection.execute(autoincr.table.insert(), *rowsForAutoincrTable)
+                    self._connection.execute(autoincr.table.insert(), rowsForAutoincrTable)
                     return super().insert(table, *rows, returnIds=returnIds)
             else:
                 # Caller did not pass autoincrement key values on the first
@@ -427,7 +427,7 @@ class SqliteDatabase(Database):
             raise NotImplementedError(
                 "replace does not support compound primary keys with autoincrement fields."
             )
-        self._connection.execute(_Replace(table), *rows)
+        self._connection.execute(_Replace(table), rows)
 
     def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
         self.assertTableWriteable(table, f"Cannot ensure into read-only table {table}.")
@@ -437,7 +437,7 @@ class SqliteDatabase(Database):
             raise NotImplementedError(
                 "ensure does not support compound primary keys with autoincrement fields."
             )
-        return self._connection.execute(_Ensure(table), *rows).rowcount
+        return self._connection.execute(_Ensure(table), rows).rowcount
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).

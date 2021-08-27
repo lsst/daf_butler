@@ -1349,7 +1349,7 @@ class Database(ABC):
                         names = select.columns.keys()
                 self._connection.execute(table.insert().from_select(names, select))
             else:
-                self._connection.execute(table.insert(), *rows)
+                self._connection.execute(table.insert(), rows)
             return None
         else:
             sql = table.insert()
@@ -1490,7 +1490,7 @@ class Database(ABC):
             whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
             if whereTerms:
                 sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
-            return self._connection.execute(sql, *rows).rowcount
+            return self._connection.execute(sql, rows).rowcount
         else:
             # One of the columns has changing values but any others are
             # fixed. In this case we can use an IN operator and be more
@@ -1565,7 +1565,7 @@ class Database(ABC):
         sql = table.update().where(
             sqlalchemy.sql.and_(*[table.columns[k] == sqlalchemy.sql.bindparam(v) for k, v in where.items()])
         )
-        return self._connection.execute(sql, *rows).rowcount
+        return self._connection.execute(sql, rows).rowcount
 
     def query(self, sql: sqlalchemy.sql.FromClause,
               *args: Any, **kwargs: Any) -> sqlalchemy.engine.ResultProxy:
