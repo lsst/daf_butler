@@ -640,7 +640,7 @@ class _SkyPixOverlapStorage:
             sysCol = self._summaryTable.columns.skypix_system
             lvlCol = self._summaryTable.columns.skypix_level
             query = sqlalchemy.sql.select(
-                [gvCol, sysCol, lvlCol],
+                gvCol, sysCol, lvlCol,
             ).select_from(
                 self._summaryTable
             ).where(
@@ -784,7 +784,7 @@ class _SkyPixOverlapStorage:
             if governorValues is not Ellipsis:
                 summaryWhere.append(gvCol.in_(list(governorValues)))
             summaryQuery = sqlalchemy.sql.select(
-                [gvCol]
+                gvCol
             ).select_from(
                 self._summaryTable
             ).where(
@@ -812,7 +812,7 @@ class _SkyPixOverlapStorage:
                 self._overlapTable.columns[self._governor.element.name].in_(list(governorValues))
             )
         overlapQuery = sqlalchemy.sql.select(
-            columns
+            *columns
         ).select_from(
             self._overlapTable
         ).where(

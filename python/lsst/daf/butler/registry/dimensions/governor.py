@@ -87,7 +87,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         # Docstring inherited from GovernorDimensionRecordStorage.
         RecordClass = self._dimension.RecordClass
         sql = sqlalchemy.sql.select(
-            [self._table.columns[name] for name in RecordClass.fields.standard.names]
+            *[self._table.columns[name] for name in RecordClass.fields.standard.names]
         ).select_from(self._table)
         cache: Dict[str, DimensionRecord] = {}
         for row in self._db.query(sql):

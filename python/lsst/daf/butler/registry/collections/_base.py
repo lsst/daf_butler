@@ -271,9 +271,9 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
 
     def _load(self, manager: CollectionManager) -> CollectionSearch:
         # Docstring inherited from ChainedCollectionRecord.
-        sql = sqlalchemy.sql.select([
+        sql = sqlalchemy.sql.select(
             self._table.columns.child,
-        ]).select_from(
+        ).select_from(
             self._table
         ).where(
             self._table.columns.parent == self.key
@@ -322,7 +322,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
     def refresh(self) -> None:
         # Docstring inherited from CollectionManager.
         sql = sqlalchemy.sql.select(
-            list(self._tables.collection.columns) + list(self._tables.run.columns)
+            *(list(self._tables.collection.columns) + list(self._tables.run.columns))
         ).select_from(
             self._tables.collection.join(self._tables.run, isouter=True)
         )
@@ -440,7 +440,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
     def getDocumentation(self, key: Any) -> Optional[str]:
         # Docstring inherited from CollectionManager.
         sql = sqlalchemy.sql.select(
-            [self._tables.collection.columns.doc]
+            self._tables.collection.columns.doc
         ).select_from(
             self._tables.collection
         ).where(

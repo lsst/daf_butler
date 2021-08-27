@@ -1171,7 +1171,7 @@ class Database(ABC):
                 # how many rows we get back.
                 toSelect.add(next(iter(keys.keys())))
             selectSql = sqlalchemy.sql.select(
-                [table.columns[k].label(k) for k in toSelect]
+                *[table.columns[k].label(k) for k in toSelect]
             ).select_from(table).where(
                 sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()])
             )

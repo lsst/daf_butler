@@ -282,7 +282,7 @@ class CollectionSummaryManager:
                 ),
                 isouter=True,
             )
-        sql = sqlalchemy.sql.select(columns).select_from(fromClause)
+        sql = sqlalchemy.sql.select(*columns).select_from(fromClause)
         # Run the query and construct CollectionSummary objects from the result
         # rows.  This will never include CHAINED collections or collections
         # with no datasets.

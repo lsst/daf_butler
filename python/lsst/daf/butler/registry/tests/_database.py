@@ -248,7 +248,7 @@ class DatabaseTests(ABC):
             newDatabase.insert(
                 table1,
                 select=sqlalchemy.sql.select(
-                    [static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")]
+                    static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")
                 ).select_from(
                     static.a.join(static.b, onclause=sqlalchemy.sql.literal(True))
                 ).where(
@@ -282,7 +282,7 @@ class DatabaseTests(ABC):
                     existingReadOnlyDatabase.insert(
                         table2,
                         select=sqlalchemy.sql.select(
-                            [static.a.columns.name, static.b.columns.id]
+                            static.a.columns.name, static.b.columns.id
                         ).select_from(
                             static.a.join(static.b, onclause=sqlalchemy.sql.literal(True))
                         ).where(
@@ -390,7 +390,7 @@ class DatabaseTests(ABC):
         self.assertTrue(all(result["id"] is not None for result in results))
 
         # Define 'SELECT COUNT(*)' query for later use.
-        count = sqlalchemy.sql.select([sqlalchemy.sql.func.count()])
+        count = sqlalchemy.sql.select(sqlalchemy.sql.func.count())
         # Get the values we inserted into table b.
         bValues = [dict(r) for r in db.query(tables.b.select()).fetchall()]
         # Remove two row from table b by ID.
@@ -429,7 +429,7 @@ class DatabaseTests(ABC):
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
         n = db.update(tables.a, {"name": "k"}, {"k": "a2", "region": region})
         self.assertEqual(n, 1)
-        sql = sqlalchemy.sql.select([tables.a.columns.name, tables.a.columns.region]).select_from(tables.a)
+        sql = sqlalchemy.sql.select(tables.a.columns.name, tables.a.columns.region).select_from(tables.a)
         self.assertCountEqual(
             [dict(r) for r in db.query(sql).fetchall()],
             [{"name": "a1", "region": None}, {"name": "a2", "region": region}]
@@ -874,7 +874,7 @@ class DatabaseTests(ABC):
             [
                 row["f"] for row in db.query(
                     sqlalchemy.sql.select(
-                        [aRepr.isNull().label("f")]
+                        aRepr.isNull().label("f")
                     ).order_by(
                         aTable.columns.id
                     )
@@ -887,7 +887,7 @@ class DatabaseTests(ABC):
             [
                 row["f"] for row in db.query(
                     sqlalchemy.sql.select(
-                        [bRepr.isNull().label("f")]
+                        bRepr.isNull().label("f")
                     ).order_by(
                         bTable.columns.id
                     )
@@ -913,13 +913,13 @@ class DatabaseTests(ABC):
                             lhsRow[TimespanReprClass.NAME] > rhsRow[TimespanReprClass.NAME],
                         )
                 rhsRepr = TimespanReprClass.fromLiteral(rhsRow[TimespanReprClass.NAME])
-                sql = sqlalchemy.sql.select([
+                sql = sqlalchemy.sql.select(
                     aTable.columns.id.label("lhs"),
                     aRepr.overlaps(rhsRepr).label("overlaps"),
                     aRepr.contains(rhsRepr).label("contains"),
                     (aRepr < rhsRepr).label("less_than"),
                     (aRepr > rhsRepr).label("greater_than"),
-                ]).select_from(aTable)
+                ).select_from(aTable)
                 queried = {
                     row["lhs"]: (row["overlaps"], row["contains"], row["less_than"], row["greater_than"])
                     for row in db.query(sql).fetchall()
@@ -946,14 +946,12 @@ class DatabaseTests(ABC):
         lhsRepr = TimespanReprClass.fromSelectable(lhsSubquery)
         rhsRepr = TimespanReprClass.fromSelectable(rhsSubquery)
         sql = sqlalchemy.sql.select(
-            [
-                lhsSubquery.columns.id.label("lhs"),
-                rhsSubquery.columns.id.label("rhs"),
-                lhsRepr.overlaps(rhsRepr).label("overlaps"),
-                lhsRepr.contains(rhsRepr).label("contains"),
-                (lhsRepr < rhsRepr).label("less_than"),
-                (lhsRepr > rhsRepr).label("greater_than"),
-            ]
+            lhsSubquery.columns.id.label("lhs"),
+            rhsSubquery.columns.id.label("rhs"),
+            lhsRepr.overlaps(rhsRepr).label("overlaps"),
+            lhsRepr.contains(rhsRepr).label("contains"),
+            (lhsRepr < rhsRepr).label("less_than"),
+            (lhsRepr > rhsRepr).label("greater_than"),
         ).select_from(
             lhsSubquery.join(rhsSubquery, onclause=sqlalchemy.sql.literal(True))
         )
@@ -977,12 +975,12 @@ class DatabaseTests(ABC):
                             lhsRow[TimespanReprClass.NAME] > t,
                         )
                 rhs = sqlalchemy.sql.literal(t, type_=ddl.AstropyTimeNsecTai)
-                sql = sqlalchemy.sql.select([
+                sql = sqlalchemy.sql.select(
                     aTable.columns.id.label("lhs"),
                     aRepr.contains(rhs).label("contains"),
                     (aRepr < rhs).label("less_than"),
                     (aRepr > rhs).label("greater_than"),
-                ]).select_from(aTable)
+                ).select_from(aTable)
                 queried = {
                     row["lhs"]: (row["contains"], row["less_than"], row["greater_than"])
                     for row in db.query(sql).fetchall()

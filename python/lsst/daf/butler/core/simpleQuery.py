@@ -126,7 +126,7 @@ class SimpleQuery:
         sql : `sqlalchemy.sql.Select`
             A SQLAlchemy object representing the full query.
         """
-        result = sqlalchemy.sql.select(self.columns)
+        result = sqlalchemy.sql.select(*self.columns)
         if self._from is not None:
             result = result.select_from(self._from)
         if self.where:

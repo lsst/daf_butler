@@ -173,7 +173,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # Docstring inherited from DatastoreRegistryBridge
         byId = {ref.getCheckedId(): ref for ref in refs}
         sql = sqlalchemy.sql.select(
-            [self._tables.dataset_location.columns.dataset_id]
+            self._tables.dataset_location.columns.dataset_id
         ).select_from(
             self._tables.dataset_location
         ).where(
@@ -241,18 +241,18 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         if record_column is not None:
             # Some helper subqueries
             items_not_in_trash = join_records(
-                sqlalchemy.sql.select([records_table._table.columns[record_column]]),
+                sqlalchemy.sql.select(records_table._table.columns[record_column]),
                 self._tables.dataset_location,
             ).alias("items_not_in_trash")
             items_in_trash = join_records(
-                sqlalchemy.sql.select([records_table._table.columns[record_column]]),
+                sqlalchemy.sql.select(records_table._table.columns[record_column]),
                 self._tables.dataset_location_trash,
             ).alias("items_in_trash")
 
             # A query for paths that are referenced by datasets in the trash
             # and datasets not in the trash.
             items_to_preserve = sqlalchemy.sql.select(
-                [items_in_trash.columns[record_column]]
+                items_in_trash.columns[record_column]
             ).select_from(
                 items_not_in_trash.join(
                     items_in_trash,
@@ -337,7 +337,7 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
     def findDatastores(self, ref: DatasetRef) -> Iterable[str]:
         # Docstring inherited from DatastoreRegistryBridge
         sql = sqlalchemy.sql.select(
-            [self._tables.dataset_location.columns.datastore_name]
+            self._tables.dataset_location.columns.datastore_name
         ).select_from(
             self._tables.dataset_location
         ).where(

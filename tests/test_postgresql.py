@@ -175,17 +175,17 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
         # half-open ranges and PostgreSQL operators on ranges.
         def subquery(alias: str) -> sqlalchemy.sql.FromClause:
             return sqlalchemy.sql.select(
-                [tbl.columns.id.label("id"), tbl.columns.timespan.label("timespan")]
+                tbl.columns.id.label("id"), tbl.columns.timespan.label("timespan")
             ).select_from(
                 tbl
             ).alias(alias)
         sq1 = subquery("sq1")
         sq2 = subquery("sq2")
-        query = sqlalchemy.sql.select([
+        query = sqlalchemy.sql.select(
             sq1.columns.id.label("n1"),
             sq2.columns.id.label("n2"),
             sq1.columns.timespan.overlaps(sq2.columns.timespan).label("overlaps"),
-        ])
+        )
 
         # `columns` is deprecated since 1.4, but
         # `selected_columns` method did not exist in 1.3.

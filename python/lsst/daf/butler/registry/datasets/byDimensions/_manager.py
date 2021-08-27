@@ -297,10 +297,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     def getDatasetRef(self, id: DatasetId) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         sql = sqlalchemy.sql.select(
-            [
-                self._static.dataset.columns.dataset_type_id,
-                self._static.dataset.columns[self._collections.getRunForeignKeyName()],
-            ]
+            self._static.dataset.columns.dataset_type_id,
+            self._static.dataset.columns[self._collections.getRunForeignKeyName()],
         ).select_from(
             self._static.dataset
         ).where(
