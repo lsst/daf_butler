@@ -91,7 +91,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         ).select_from(self._table)
         cache: Dict[str, DimensionRecord] = {}
         for row in self._db.query(sql):
-            record = RecordClass(**dict(row))
+            record = RecordClass(**row._asdict())
             cache[getattr(record, self._dimension.primaryKey.name)] = record
         self._cache = cache
 

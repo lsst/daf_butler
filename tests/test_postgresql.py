@@ -168,7 +168,7 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
         # Test basic round-trip through database.
         self.assertEqual(
             rows,
-            [dict(row) for row in db.query(tbl.select().order_by(tbl.columns.id)).fetchall()]
+            [row._asdict() for row in db.query(tbl.select().order_by(tbl.columns.id))]
         )
 
         # Test that Timespan's Python methods are consistent with our usage of

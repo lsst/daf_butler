@@ -206,7 +206,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         query.join(self._table)
         dataIds.constrain(query, lambda name: self._fetchColumns[name])
         for row in self._db.query(query.combine()):
-            values = dict(row)
+            values = row._asdict()
             if self.element.temporal is not None:
                 values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
             yield RecordClass(**values)

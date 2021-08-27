@@ -116,10 +116,10 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
             for clause in _batch_in_clauses(**where):
                 sql_where = sql.where(clause)
                 for row in self._db.query(sql_where):
-                    yield dict(row)
+                    yield row._asdict()
         else:
             for row in self._db.query(sql):
-                yield dict(row)
+                yield row._asdict()
 
     def delete(self, columns: Iterable[str], *rows: dict) -> None:
         # Docstring inherited from OpaqueTableStorage.

@@ -229,7 +229,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # Run query, transform results into a list of dicts that we can later
         # use to delete.
         rows = [dict(**row, datastore_name=self.datastoreName)
-                for row in self._db.query(info_in_trash).fetchall()]
+                for row in self._db.query(info_in_trash).mappings()]
 
         # It is possible for trashed refs to be linked to artifacts that
         # are still associated with refs that are not to be trashed. We
