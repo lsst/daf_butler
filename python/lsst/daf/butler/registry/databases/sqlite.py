@@ -269,7 +269,8 @@ class SqliteDatabase(Database):
         else:
             return "SQLite3@:memory:"
 
-    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+    def _lockTables(self, connection: sqlalchemy.engine.Connection,
+                    tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
         # Docstring inherited.
         # Our SQLite database always acquires full-database locks at the
         # beginning of a transaction, so there's no need to acquire table-level

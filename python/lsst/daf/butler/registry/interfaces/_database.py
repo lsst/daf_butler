@@ -245,7 +245,8 @@ class Session:
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._db._convertForeignKeySpec(name, foreignKeySpec,
                                                                     self._db._metadata))
-        table.create(self._db._session_connection)
+        with self._db._connection() as connection:
+            table.create(connection)
         self._db._tempTables.add(table.key)
         return table
 
@@ -259,7 +260,8 @@ class Session:
             `makeTemporaryTable`.
         """
         if table.key in self._db._tempTables:
-            table.drop(self._db._session_connection)
+            with self._db._connection() as connection:
+                table.drop(connection)
             self._db._tempTables.remove(table.key)
         else:
             raise TypeError(f"Table {table.key} was not created by makeTemporaryTable.")
@@ -441,13 +443,16 @@ class Database(ABC):
             # session already started, just reuse that
             yield Session(self)
         else:
-            # open new connection and close it when done
-            self._session_connection = self._engine.connect()
-            yield Session(self)
-            self._session_connection.close()
-            self._session_connection = None
-            # Temporary tables only live within session
-            self._tempTables = set()
+            try:
+                # open new connection and close it when done
+                self._session_connection = self._engine.connect()
+                yield Session(self)
+            finally:
+                if self._session_connection is not None:
+                    self._session_connection.close()
+                    self._session_connection = None
+                # Temporary tables only live within session
+                self._tempTables = set()
 
     @contextmanager
     def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
@@ -504,17 +509,21 @@ class Database(ABC):
             connection.info[_IN_SAVEPOINT_TRANSACTION] = savepoint
             if connection.in_transaction() and savepoint:
                 trans = connection.begin_nested()
-            else:
+            elif not connection.in_transaction():
                 # Use a regular (non-savepoint) transaction always for the
-                # outermost context, as well as when a savepoint was not
-                # requested.
+                # outermost context.
                 trans = connection.begin()
-            self._lockTables(lock)
+            else:
+                # Nested non-savepoint transactions, don't do anything.
+                trans = None
+            self._lockTables(connection, lock)
             try:
                 yield
-                trans.commit()
+                if trans is not None:
+                    trans.commit()
             except BaseException:
-                trans.rollback()
+                if trans is not None:
+                    trans.rollback()
                 raise
             finally:
                 if not connection.in_transaction():
@@ -525,7 +534,13 @@ class Database(ABC):
         """Return context manager for Connection.
         """
         if self._session_connection is not None:
-            yield self._session_connection
+            # It means that we are in Session context, but we may not be in
+            # transaction context. Start a short transaction in that case.
+            if self._session_connection.in_transaction():
+                yield self._session_connection
+            else:
+                with self._session_connection.begin():
+                    yield self._session_connection
         else:
             # Make new connection and transaction, transaction will be
             # committed on context exit.
@@ -533,7 +548,8 @@ class Database(ABC):
                 yield connection
 
     @abstractmethod
-    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+    def _lockTables(self, connection: sqlalchemy.engine.Connection,
+                    tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
         """Acquire locks on the given tables.
 
         This is an implementation hook for subclasses, called by `transaction`.
@@ -541,6 +557,9 @@ class Database(ABC):
 
         Parameters
         ----------
+        connection : `sqlalchemy.engine.Connection`
+            Database connection object. It is guaranteed that transaction is
+            already in a progress for this connection.
         tables : `Iterable` [ `sqlalchemy.schema.Table` ], optional
             A list of tables to lock for the duration of this transaction.
             These locks are guaranteed to prevent concurrent writes and allow

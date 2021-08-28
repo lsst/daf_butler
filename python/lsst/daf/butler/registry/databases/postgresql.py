@@ -113,11 +113,11 @@ class PostgresqlDatabase(Database):
                     cursor.execute("SET TIME ZONE 0")
             yield
 
-    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+    def _lockTables(self, connection: sqlalchemy.engine.Connection,
+                    tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
         # Docstring inherited.
-        with self._connection() as connection:
-            for table in tables:
-                connection.execute(sqlalchemy.text(f"LOCK TABLE {table.key} IN EXCLUSIVE MODE"))
+        for table in tables:
+            connection.execute(sqlalchemy.text(f"LOCK TABLE {table.key} IN EXCLUSIVE MODE"))
 
     def isWriteable(self) -> bool:
         return self._writeable
