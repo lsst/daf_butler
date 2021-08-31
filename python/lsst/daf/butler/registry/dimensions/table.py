@@ -441,6 +441,12 @@ class _SkyPixOverlapStorage:
                 # (more columns added below)
             ],
             unique=set(),
+            indexes={
+                # This index has the same fields as the PK, in a different
+                # order, to facilitate queries that know skypix_index and want
+                # to find the other element.
+                ("skypix_system", "skypix_level", "skypix_index",) + tuple(element.graph.required.names),
+            },
             foreignKeys=[
                 # Foreign key to summary table.  This makes sure we don't
                 # materialize any overlaps without remembering that we've done
