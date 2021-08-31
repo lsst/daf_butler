@@ -282,12 +282,12 @@ class CollectionSummaryManager:
                 ),
                 isouter=True,
             )
-        sql = sqlalchemy.sql.select(columns).select_from(fromClause)
+        sql = sqlalchemy.sql.select(*columns).select_from(fromClause)
         # Run the query and construct CollectionSummary objects from the result
         # rows.  This will never include CHAINED collections or collections
         # with no datasets.
         summaries: Dict[Any, CollectionSummary] = {}
-        for row in self._db.query(sql):
+        for row in self._db.query(sql).mappings():
             # Collection key should never be None/NULL; it's what we join on.
             # Extract that and then turn it into a collection name.
             collectionKey = row[self._collectionKeyName]

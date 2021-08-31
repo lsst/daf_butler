@@ -184,7 +184,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         byName = {}
         byId: Dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
         c = self._static.dataset_type.columns
-        for row in self._db.query(self._static.dataset_type.select()).fetchall():
+        for row in self._db.query(self._static.dataset_type.select()).mappings():
             name = row[c.name]
             dimensions = self._dimensions.loadDimensionGraph(row[c.dimensions_key])
             calibTableName = row[c.calibration_association_table]
@@ -297,16 +297,14 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     def getDatasetRef(self, id: DatasetId) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         sql = sqlalchemy.sql.select(
-            [
-                self._static.dataset.columns.dataset_type_id,
-                self._static.dataset.columns[self._collections.getRunForeignKeyName()],
-            ]
+            self._static.dataset.columns.dataset_type_id,
+            self._static.dataset.columns[self._collections.getRunForeignKeyName()],
         ).select_from(
             self._static.dataset
         ).where(
             self._static.dataset.columns.id == id
         )
-        row = self._db.query(sql).fetchone()
+        row = self._db.query(sql).mappings().fetchone()
         if row is None:
             return None
         recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])

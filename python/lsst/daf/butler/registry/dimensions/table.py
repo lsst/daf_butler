@@ -206,7 +206,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         query.join(self._table)
         dataIds.constrain(query, lambda name: self._fetchColumns[name])
         for row in self._db.query(query.combine()):
-            values = dict(row)
+            values = row._asdict()
             if self.element.temporal is not None:
                 values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
             yield RecordClass(**values)
@@ -640,7 +640,7 @@ class _SkyPixOverlapStorage:
             sysCol = self._summaryTable.columns.skypix_system
             lvlCol = self._summaryTable.columns.skypix_level
             query = sqlalchemy.sql.select(
-                [gvCol, sysCol, lvlCol],
+                gvCol, sysCol, lvlCol,
             ).select_from(
                 self._summaryTable
             ).where(
@@ -650,7 +650,7 @@ class _SkyPixOverlapStorage:
             skypix: Dict[str, NamedKeyDict[SkyPixSystem, List[int]]] = {
                 gv: NamedKeyDict() for gv in grouped.keys()
             }
-            for summaryRow in self._db.query(query):
+            for summaryRow in self._db.query(query).mappings():
                 system = self.element.universe.skypix[summaryRow[sysCol]]
                 skypix[summaryRow[gvCol]].setdefault(system, []).append(summaryRow[lvlCol])
             if replace:
@@ -784,13 +784,13 @@ class _SkyPixOverlapStorage:
             if governorValues is not Ellipsis:
                 summaryWhere.append(gvCol.in_(list(governorValues)))
             summaryQuery = sqlalchemy.sql.select(
-                [gvCol]
+                gvCol
             ).select_from(
                 self._summaryTable
             ).where(
                 sqlalchemy.sql.and_(*summaryWhere)
             )
-            materializedGovernorValues = {row[gvCol] for row in self._db.query(summaryQuery)}
+            materializedGovernorValues = {row._mapping[gvCol] for row in self._db.query(summaryQuery)}
             if governorValues is Ellipsis:
                 missingGovernorValues = self._governor.values - materializedGovernorValues
             else:
@@ -812,7 +812,7 @@ class _SkyPixOverlapStorage:
                 self._overlapTable.columns[self._governor.element.name].in_(list(governorValues))
             )
         overlapQuery = sqlalchemy.sql.select(
-            columns
+            *columns
         ).select_from(
             self._overlapTable
         ).where(

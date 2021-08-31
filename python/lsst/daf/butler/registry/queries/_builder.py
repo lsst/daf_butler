@@ -248,12 +248,12 @@ class QueryBuilder:
                     ).label("rownum")
                 )
                 window = sqlalchemy.sql.select(
-                    windowSelectCols
+                    *windowSelectCols
                 ).select_from(search).alias(
                     f"{datasetType.name}_window"
                 )
                 subquery = sqlalchemy.sql.select(
-                    [window.columns[name].label(name) for name in baseColumnNames]
+                    *[window.columns[name].label(name) for name in baseColumnNames]
                 ).select_from(
                     window
                 ).where(

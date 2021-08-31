@@ -128,7 +128,8 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
             # as SelectableDimensionRecordStorage.fetch will do.
             # Instead, we add DISTINCT in join() only.
             self._query = sqlalchemy.sql.select(
-                columns, distinct=True
+                *columns
+            ).distinct(
             ).select_from(
                 targetTable
             ).alias(

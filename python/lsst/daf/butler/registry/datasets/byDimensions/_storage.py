@@ -102,8 +102,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         return DatasetRef(
             datasetType=self.datasetType,
             dataId=dataId,
-            id=row["id"],
-            run=self._collections[row[self._runKeyColumn]].name
+            id=row.id,
+            run=self._collections[row._mapping[self._runKeyColumn]].name
         )
 
     def delete(self, datasets: Iterable[DatasetRef]) -> None:
@@ -282,7 +282,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # Acquire a table lock to ensure there are no concurrent writes
         # between the SELECT and the DELETE and INSERT queries based on it.
         with self._db.transaction(lock=[self._calibs], savepoint=True):
-            for row in self._db.query(sql):
+            for row in self._db.query(sql).mappings():
                 rowsToDelete.append({"id": row["id"]})
                 # Construct the insert row(s) by copying the prototype row,
                 # then adding the dimension column values, then adding what's
@@ -457,7 +457,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 self._tags.columns.dataset_type_id == self._dataset_type_id
             )
         ).limit(1)
-        row = self._db.query(sql).fetchone()
+        row = self._db.query(sql).mappings().fetchone()
         assert row is not None, "Should be guaranteed by caller and foreign key constraints."
         return DataCoordinate.standardize(
             {dimension.name: row[dimension.name] for dimension in self.datasetType.dimensions.required},

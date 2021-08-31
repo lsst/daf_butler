@@ -173,7 +173,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # Docstring inherited from DatastoreRegistryBridge
         byId = {ref.getCheckedId(): ref for ref in refs}
         sql = sqlalchemy.sql.select(
-            [self._tables.dataset_location.columns.dataset_id]
+            self._tables.dataset_location.columns.dataset_id
         ).select_from(
             self._tables.dataset_location
         ).where(
@@ -183,7 +183,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             )
         )
         for row in self._db.query(sql).fetchall():
-            yield byId[row["dataset_id"]]
+            yield byId[row.dataset_id]
 
     @contextmanager
     def emptyTrash(self, records_table: Optional[OpaqueTableStorage] = None,
@@ -229,7 +229,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         # Run query, transform results into a list of dicts that we can later
         # use to delete.
         rows = [dict(**row, datastore_name=self.datastoreName)
-                for row in self._db.query(info_in_trash).fetchall()]
+                for row in self._db.query(info_in_trash).mappings()]
 
         # It is possible for trashed refs to be linked to artifacts that
         # are still associated with refs that are not to be trashed. We
@@ -241,18 +241,18 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         if record_column is not None:
             # Some helper subqueries
             items_not_in_trash = join_records(
-                sqlalchemy.sql.select([records_table._table.columns[record_column]]),
+                sqlalchemy.sql.select(records_table._table.columns[record_column]),
                 self._tables.dataset_location,
             ).alias("items_not_in_trash")
             items_in_trash = join_records(
-                sqlalchemy.sql.select([records_table._table.columns[record_column]]),
+                sqlalchemy.sql.select(records_table._table.columns[record_column]),
                 self._tables.dataset_location_trash,
             ).alias("items_in_trash")
 
             # A query for paths that are referenced by datasets in the trash
             # and datasets not in the trash.
             items_to_preserve = sqlalchemy.sql.select(
-                [items_in_trash.columns[record_column]]
+                items_in_trash.columns[record_column]
             ).select_from(
                 items_not_in_trash.join(
                     items_in_trash,
@@ -261,7 +261,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                 )
             )
             preserved = {row[record_column]
-                         for row in self._db.query(items_to_preserve).fetchall()}
+                         for row in self._db.query(items_to_preserve).mappings()}
 
         # Convert results to a tuple of id+info and a record of the artifacts
         # that should not be deleted from datastore. The id+info tuple is
@@ -337,13 +337,13 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
     def findDatastores(self, ref: DatasetRef) -> Iterable[str]:
         # Docstring inherited from DatastoreRegistryBridge
         sql = sqlalchemy.sql.select(
-            [self._tables.dataset_location.columns.datastore_name]
+            self._tables.dataset_location.columns.datastore_name
         ).select_from(
             self._tables.dataset_location
         ).where(
             self._tables.dataset_location.columns.dataset_id == ref.getCheckedId()
         )
-        for row in self._db.query(sql).fetchall():
+        for row in self._db.query(sql).mappings():
             yield row[self._tables.dataset_location.columns.datastore_name]
         for name, bridge in self._ephemeral.items():
             if ref in bridge:

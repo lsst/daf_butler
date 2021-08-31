@@ -248,7 +248,7 @@ class DatabaseTests(ABC):
             newDatabase.insert(
                 table1,
                 select=sqlalchemy.sql.select(
-                    [static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")]
+                    static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")
                 ).select_from(
                     static.a.join(static.b, onclause=sqlalchemy.sql.literal(True))
                 ).where(
@@ -261,7 +261,7 @@ class DatabaseTests(ABC):
             # Check that the inserted rows are present.
             self.assertCountEqual(
                 [{"a_name": "a1", "b_id": bId} for bId in bIds[:2]],
-                [dict(row) for row in newDatabase.query(table1.select())]
+                [row._asdict() for row in newDatabase.query(table1.select())]
             )
             # Create another one via a read-only connection to the database.
             # We _do_ allow temporary table modifications in read-only
@@ -282,7 +282,7 @@ class DatabaseTests(ABC):
                     existingReadOnlyDatabase.insert(
                         table2,
                         select=sqlalchemy.sql.select(
-                            [static.a.columns.name, static.b.columns.id]
+                            static.a.columns.name, static.b.columns.id
                         ).select_from(
                             static.a.join(static.b, onclause=sqlalchemy.sql.literal(True))
                         ).where(
@@ -296,7 +296,7 @@ class DatabaseTests(ABC):
                     # Check that the inserted rows are present.
                     self.assertCountEqual(
                         [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
-                        [dict(row) for row in existingReadOnlyDatabase.query(table2.select())]
+                        [row._asdict() for row in existingReadOnlyDatabase.query(table2.select())]
                     )
                     # Drop the temporary table from the read-only DB.  It's
                     # unspecified whether attempting to use it after this
@@ -338,11 +338,11 @@ class DatabaseTests(ABC):
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
         row = {"name": "a1", "region": region}
         db.insert(tables.a, row)
-        self.assertEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row])
+        self.assertEqual([r._asdict() for r in db.query(tables.a.select())], [row])
         # Insert multiple autoincrement rows but do not try to get the IDs
         # back immediately.
         db.insert(tables.b, {"name": "b1", "value": 10}, {"name": "b2", "value": 20})
-        results = [dict(r) for r in db.query(tables.b.select().order_by("id")).fetchall()]
+        results = [r._asdict() for r in db.query(tables.b.select().order_by("id"))]
         self.assertEqual(len(results), 2)
         for row in results:
             self.assertIn(row["name"], ("b1", "b2"))
@@ -352,9 +352,9 @@ class DatabaseTests(ABC):
         rows = [{"name": "b3", "value": 30}, {"name": "b4", "value": 40}]
         ids = db.insert(tables.b, *rows, returnIds=True)
         results = [
-            dict(r) for r in db.query(
+            r._asdict() for r in db.query(
                 tables.b.select().where(tables.b.columns.id > results[1]["id"])
-            ).fetchall()
+            )
         ]
         expected = [dict(row, id=id) for row, id in zip(rows, ids)]
         self.assertCountEqual(results, expected)
@@ -365,7 +365,7 @@ class DatabaseTests(ABC):
         rows = [{"origin": db.origin, "b_id": results[0]["id"]},
                 {"origin": db.origin, "b_id": None}]
         ids = db.insert(tables.c, *rows, returnIds=True)
-        results = [dict(r) for r in db.query(tables.c.select()).fetchall()]
+        results = [r._asdict() for r in db.query(tables.c.select())]
         expected = [dict(row, id=id) for row, id in zip(rows, ids)]
         self.assertCountEqual(results, expected)
         self.assertTrue(all(result["id"] is not None for result in results))
@@ -374,7 +374,7 @@ class DatabaseTests(ABC):
         # Insert into it.
         rows = [{"c_origin": db.origin, "c_id": id, "a_name": "a1"} for id in ids]
         db.insert(d, *rows)
-        results = [dict(r) for r in db.query(d.select()).fetchall()]
+        results = [r._asdict() for r in db.query(d.select())]
         self.assertCountEqual(rows, results)
         # Insert multiple rows into a table with an autoincrement+origin
         # primary key (this is especially tricky for SQLite, but good to test
@@ -385,14 +385,14 @@ class DatabaseTests(ABC):
                  {"id": 700, "origin": 60, "b_id": None},
                  {"id": 1, "origin": 60, "b_id": None}]
         db.insert(tables.c, *rows2)
-        results = [dict(r) for r in db.query(tables.c.select()).fetchall()]
+        results = [r._asdict() for r in db.query(tables.c.select())]
         self.assertCountEqual(results, expected + rows2)
         self.assertTrue(all(result["id"] is not None for result in results))
 
         # Define 'SELECT COUNT(*)' query for later use.
-        count = sqlalchemy.sql.select([sqlalchemy.sql.func.count()])
+        count = sqlalchemy.sql.select(sqlalchemy.sql.func.count())
         # Get the values we inserted into table b.
-        bValues = [dict(r) for r in db.query(tables.b.select()).fetchall()]
+        bValues = [r._asdict() for r in db.query(tables.b.select())]
         # Remove two row from table b by ID.
         n = db.delete(tables.b, ["id"], {"id": bValues[0]["id"]}, {"id": bValues[1]["id"]})
         self.assertEqual(n, 2)
@@ -429,9 +429,9 @@ class DatabaseTests(ABC):
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
         n = db.update(tables.a, {"name": "k"}, {"k": "a2", "region": region})
         self.assertEqual(n, 1)
-        sql = sqlalchemy.sql.select([tables.a.columns.name, tables.a.columns.region]).select_from(tables.a)
+        sql = sqlalchemy.sql.select(tables.a.columns.name, tables.a.columns.region).select_from(tables.a)
         self.assertCountEqual(
-            [dict(r) for r in db.query(sql).fetchall()],
+            [r._asdict() for r in db.query(sql)],
             [{"name": "a1", "region": None}, {"name": "a2", "region": region}]
         )
 
@@ -445,32 +445,32 @@ class DatabaseTests(ABC):
         values, inserted = db.sync(tables.b, keys={"name": "b1"}, extra={"value": 10}, returning=["id"])
         self.assertTrue(inserted)
         self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
-                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+                         [r._asdict() for r in db.query(tables.b.select())])
         # Repeat that operation, which should do nothing but return the
         # requested values.
         values, inserted = db.sync(tables.b, keys={"name": "b1"}, extra={"value": 10}, returning=["id"])
         self.assertFalse(inserted)
         self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
-                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+                         [r._asdict() for r in db.query(tables.b.select())])
         # Repeat the operation without the 'extra' arg, which should also just
         # return the existing row.
         values, inserted = db.sync(tables.b, keys={"name": "b1"}, returning=["id"])
         self.assertFalse(inserted)
         self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
-                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+                         [r._asdict() for r in db.query(tables.b.select())])
         # Repeat the operation with a different value in 'extra'.  That still
         # shouldn't be an error, because 'extra' is only used if we really do
         # insert.  Also drop the 'returning' argument.
         _, inserted = db.sync(tables.b, keys={"name": "b1"}, extra={"value": 20})
         self.assertFalse(inserted)
         self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
-                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+                         [r._asdict() for r in db.query(tables.b.select())])
         # Repeat the operation with the correct value in 'compared' instead of
         # 'extra'.
         _, inserted = db.sync(tables.b, keys={"name": "b1"}, compared={"value": 10})
         self.assertFalse(inserted)
         self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
-                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+                         [r._asdict() for r in db.query(tables.b.select())])
         # Repeat the operation with an incorrect value in 'compared'; this
         # should raise.
         with self.assertRaises(DatabaseConflictError):
@@ -483,7 +483,7 @@ class DatabaseTests(ABC):
             _, inserted = rodb.sync(tables.b, keys={"name": "b1"})
             self.assertFalse(inserted)
             self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
-                             [dict(r) for r in rodb.query(tables.b.select()).fetchall()])
+                             [r._asdict() for r in rodb.query(tables.b.select())])
             with self.assertRaises(ReadOnlyDatabaseError):
                 rodb.sync(tables.b, keys={"name": "b2"}, extra={"value": 20})
         # Repeat the operation with a different value in 'compared' and ask to
@@ -491,7 +491,7 @@ class DatabaseTests(ABC):
         _, updated = db.sync(tables.b, keys={"name": "b1"}, compared={"value": 20}, update=True)
         self.assertEqual(updated, {"value": 10})
         self.assertEqual([{"id": values["id"], "name": "b1", "value": 20}],
-                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+                         [r._asdict() for r in db.query(tables.b.select())])
 
     def testReplace(self):
         """Tests for `Database.replace`.
@@ -504,25 +504,25 @@ class DatabaseTests(ABC):
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
         row1 = {"name": "a1", "region": region}
         db.replace(tables.a, row1)
-        self.assertEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1])
+        self.assertEqual([r._asdict() for r in db.query(tables.a.select())], [row1])
         # Insert another row without a region.
         row2 = {"name": "a2", "region": None}
         db.replace(tables.a, row2)
-        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2])
+        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2])
         # Use replace to re-insert both of those rows again, which should do
         # nothing.
         db.replace(tables.a, row1, row2)
-        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2])
+        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2])
         # Replace row1 with a row with no region, while reinserting row2.
         row1a = {"name": "a1", "region": None}
         db.replace(tables.a, row1a, row2)
-        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1a, row2])
+        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1a, row2])
         # Replace both rows, returning row1 to its original state, while adding
         # a new one.  Pass them in in a different order.
         row2a = {"name": "a2", "region": region}
         row3 = {"name": "a3", "region": None}
         db.replace(tables.a, row3, row2a, row1)
-        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2a, row3])
+        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2a, row3])
 
     def testEnsure(self):
         """Tests for `Database.ensure`.
@@ -535,27 +535,27 @@ class DatabaseTests(ABC):
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
         row1 = {"name": "a1", "region": region}
         self.assertEqual(db.ensure(tables.a, row1), 1)
-        self.assertEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1])
+        self.assertEqual([r._asdict() for r in db.query(tables.a.select())], [row1])
         # Insert another row without a region.
         row2 = {"name": "a2", "region": None}
         self.assertEqual(db.ensure(tables.a, row2), 1)
-        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2])
+        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2])
         # Use ensure to re-insert both of those rows again, which should do
         # nothing.
         self.assertEqual(db.ensure(tables.a, row1, row2), 0)
-        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2])
+        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2])
         # Attempt to insert row1's key with no region, while
         # reinserting row2.  This should also do nothing.
         row1a = {"name": "a1", "region": None}
         self.assertEqual(db.ensure(tables.a, row1a, row2), 0)
-        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2])
+        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2])
         # Attempt to insert new rows for both existing keys, this time also
         # adding a new row.  Pass them in in a different order.  Only the new
         # row should be added.
         row2a = {"name": "a2", "region": region}
         row3 = {"name": "a3", "region": None}
         self.assertEqual(db.ensure(tables.a, row3, row2a, row1a), 1)
-        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2, row3])
+        self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2, row3])
 
     def testTransactionNesting(self):
         """Test that transactions can be nested with the behavior in the
@@ -582,7 +582,7 @@ class DatabaseTests(ABC):
                     # an exception.
                     db.insert(tables.a, {"name": "a1"})
         self.assertCountEqual(
-            [dict(r) for r in db.query(tables.a.select()).fetchall()],
+            [r._asdict() for r in db.query(tables.a.select())],
             [{"name": "a1", "region": None}, {"name": "a2", "region": None}],
         )
         # Second test: error recovery via implicit savepoint=True, when the
@@ -605,7 +605,7 @@ class DatabaseTests(ABC):
                         # raising an exception.
                         db.insert(tables.a, {"name": "a1"})
         self.assertCountEqual(
-            [dict(r) for r in db.query(tables.a.select()).fetchall()],
+            [r._asdict() for r in db.query(tables.a.select())],
             [{"name": "a1", "region": None}, {"name": "a2", "region": None}, {"name": "a3", "region": None}],
         )
 
@@ -630,12 +630,12 @@ class DatabaseTests(ABC):
             # Give Side2 a chance to create a connection
             await asyncio.sleep(1.0)
             with db1.transaction(lock=lock):
-                names1 = {row["name"] for row in db1.query(tables1.a.select()).fetchall()}
+                names1 = {row.name for row in db1.query(tables1.a.select())}
                 # Give Side2 a chance to insert (which will be blocked if
                 # we've acquired a lock).
                 await asyncio.sleep(2.0)
                 db1.insert(tables1.a, {"name": "a1"})
-                names2 = {row["name"] for row in db1.query(tables1.a.select()).fetchall()}
+                names2 = {row.name for row in db1.query(tables1.a.select())}
             return names1, names2
 
         async def side2() -> None:
@@ -795,8 +795,8 @@ class DatabaseTests(ABC):
         # Test basic round-trip through database.
         self.assertEqual(
             aRows,
-            [convertRowFromSelect(dict(row))
-             for row in db.query(aTable.select().order_by(aTable.columns.id)).fetchall()]
+            [convertRowFromSelect(row._asdict())
+             for row in db.query(aTable.select().order_by(aTable.columns.id))]
         )
         # Create another table B with a not-null timespan and (if the database
         # supports it), an exclusion constraint.  Use ensureTableExists this
@@ -831,8 +831,8 @@ class DatabaseTests(ABC):
         # Test basic round-trip through database.
         self.assertEqual(
             bRows,
-            [convertRowFromSelect(dict(row))
-             for row in db.query(bTable.select().order_by(bTable.columns.id)).fetchall()]
+            [convertRowFromSelect(row._asdict())
+             for row in db.query(bTable.select().order_by(bTable.columns.id))]
         )
         # Test that we can't insert timespan=None into this table.
         with self.assertRaises(sqlalchemy.exc.IntegrityError):
@@ -872,26 +872,26 @@ class DatabaseTests(ABC):
         self.assertEqual(
             [row[TimespanReprClass.NAME] is None for row in aRows],
             [
-                row["f"] for row in db.query(
+                row.f for row in db.query(
                     sqlalchemy.sql.select(
-                        [aRepr.isNull().label("f")]
+                        aRepr.isNull().label("f")
                     ).order_by(
                         aTable.columns.id
                     )
-                ).fetchall()
+                )
             ]
         )
         bRepr = TimespanReprClass.fromSelectable(bTable)
         self.assertEqual(
             [False for row in bRows],
             [
-                row["f"] for row in db.query(
+                row.f for row in db.query(
                     sqlalchemy.sql.select(
-                        [bRepr.isNull().label("f")]
+                        bRepr.isNull().label("f")
                     ).order_by(
                         bTable.columns.id
                     )
-                ).fetchall()
+                )
             ]
         )
         # Test relationships expressions that relate in-database timespans to
@@ -913,16 +913,16 @@ class DatabaseTests(ABC):
                             lhsRow[TimespanReprClass.NAME] > rhsRow[TimespanReprClass.NAME],
                         )
                 rhsRepr = TimespanReprClass.fromLiteral(rhsRow[TimespanReprClass.NAME])
-                sql = sqlalchemy.sql.select([
+                sql = sqlalchemy.sql.select(
                     aTable.columns.id.label("lhs"),
                     aRepr.overlaps(rhsRepr).label("overlaps"),
                     aRepr.contains(rhsRepr).label("contains"),
                     (aRepr < rhsRepr).label("less_than"),
                     (aRepr > rhsRepr).label("greater_than"),
-                ]).select_from(aTable)
+                ).select_from(aTable)
                 queried = {
-                    row["lhs"]: (row["overlaps"], row["contains"], row["less_than"], row["greater_than"])
-                    for row in db.query(sql).fetchall()
+                    row.lhs: (row.overlaps, row.contains, row.less_than, row.greater_than)
+                    for row in db.query(sql)
                 }
                 self.assertEqual(expected, queried)
         # Test relationship expressions that relate in-database timespans to
@@ -946,21 +946,18 @@ class DatabaseTests(ABC):
         lhsRepr = TimespanReprClass.fromSelectable(lhsSubquery)
         rhsRepr = TimespanReprClass.fromSelectable(rhsSubquery)
         sql = sqlalchemy.sql.select(
-            [
-                lhsSubquery.columns.id.label("lhs"),
-                rhsSubquery.columns.id.label("rhs"),
-                lhsRepr.overlaps(rhsRepr).label("overlaps"),
-                lhsRepr.contains(rhsRepr).label("contains"),
-                (lhsRepr < rhsRepr).label("less_than"),
-                (lhsRepr > rhsRepr).label("greater_than"),
-            ]
+            lhsSubquery.columns.id.label("lhs"),
+            rhsSubquery.columns.id.label("rhs"),
+            lhsRepr.overlaps(rhsRepr).label("overlaps"),
+            lhsRepr.contains(rhsRepr).label("contains"),
+            (lhsRepr < rhsRepr).label("less_than"),
+            (lhsRepr > rhsRepr).label("greater_than"),
         ).select_from(
             lhsSubquery.join(rhsSubquery, onclause=sqlalchemy.sql.literal(True))
         )
         queried = {
-            (row["lhs"], row["rhs"]): (row["overlaps"], row["contains"],
-                                       row["less_than"], row["greater_than"])
-            for row in db.query(sql).fetchall()}
+            (row.lhs, row.rhs): (row.overlaps, row.contains, row.less_than, row.greater_than)
+            for row in db.query(sql)}
         self.assertEqual(expected, queried)
         # Test relationship expressions between in-database timespans and
         # Python-literal instantaneous times.
@@ -977,14 +974,14 @@ class DatabaseTests(ABC):
                             lhsRow[TimespanReprClass.NAME] > t,
                         )
                 rhs = sqlalchemy.sql.literal(t, type_=ddl.AstropyTimeNsecTai)
-                sql = sqlalchemy.sql.select([
+                sql = sqlalchemy.sql.select(
                     aTable.columns.id.label("lhs"),
                     aRepr.contains(rhs).label("contains"),
                     (aRepr < rhs).label("less_than"),
                     (aRepr > rhs).label("greater_than"),
-                ]).select_from(aTable)
+                ).select_from(aTable)
                 queried = {
-                    row["lhs"]: (row["contains"], row["less_than"], row["greater_than"])
-                    for row in db.query(sql).fetchall()
+                    row.lhs: (row.contains, row.less_than, row.greater_than)
+                    for row in db.query(sql)
                 }
                 self.assertEqual(expected, queried)

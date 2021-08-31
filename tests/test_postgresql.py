@@ -54,7 +54,8 @@ def _startServer(root):
     """
     server = testing.postgresql.Postgresql(base_dir=root)
     engine = sqlalchemy.engine.create_engine(server.url())
-    engine.execute("CREATE EXTENSION btree_gist;")
+    with engine.begin() as connection:
+        connection.execute(sqlalchemy.text("CREATE EXTENSION btree_gist;"))
     return server
 
 
@@ -168,24 +169,24 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
         # Test basic round-trip through database.
         self.assertEqual(
             rows,
-            [dict(row) for row in db.query(tbl.select().order_by(tbl.columns.id)).fetchall()]
+            [row._asdict() for row in db.query(tbl.select().order_by(tbl.columns.id))]
         )
 
         # Test that Timespan's Python methods are consistent with our usage of
         # half-open ranges and PostgreSQL operators on ranges.
         def subquery(alias: str) -> sqlalchemy.sql.FromClause:
             return sqlalchemy.sql.select(
-                [tbl.columns.id.label("id"), tbl.columns.timespan.label("timespan")]
+                tbl.columns.id.label("id"), tbl.columns.timespan.label("timespan")
             ).select_from(
                 tbl
             ).alias(alias)
         sq1 = subquery("sq1")
         sq2 = subquery("sq2")
-        query = sqlalchemy.sql.select([
+        query = sqlalchemy.sql.select(
             sq1.columns.id.label("n1"),
             sq2.columns.id.label("n2"),
             sq1.columns.timespan.overlaps(sq2.columns.timespan).label("overlaps"),
-        ])
+        )
 
         # `columns` is deprecated since 1.4, but
         # `selected_columns` method did not exist in 1.3.
@@ -201,7 +202,7 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
                                     category=sqlalchemy.exc.SAWarning)
             dbResults = {
                 (row[columns.n1], row[columns.n2]): row[columns.overlaps]
-                for row in db.query(query)
+                for row in db.query(query).mappings()
             }
 
         pyResults = {

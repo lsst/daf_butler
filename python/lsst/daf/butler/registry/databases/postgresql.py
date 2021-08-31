@@ -26,6 +26,7 @@ from contextlib import contextmanager, closing
 from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Type, Union
 
 import psycopg2
+import sqlalchemy
 import sqlalchemy.dialects.postgresql
 
 from ..interfaces import Database
@@ -75,7 +76,7 @@ class PostgresqlDatabase(Database):
             if namespace is None:
                 namespace = connection.execute("SELECT current_schema();").scalar()
             query = "SELECT COUNT(*) FROM pg_extension WHERE extname='btree_gist';"
-            if not connection.execute(query).scalar():
+            if not connection.execute(sqlalchemy.text(query)).scalar():
                 raise RuntimeError(
                     "The Butler PostgreSQL backend requires the btree_gist extension. "
                     "As extensions are enabled per-database, this may require an administrator to run "
@@ -100,21 +101,23 @@ class PostgresqlDatabase(Database):
     def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
                     lock: Iterable[sqlalchemy.schema.Table] = ()) -> Iterator[None]:
         with super().transaction(interrupting=interrupting, savepoint=savepoint, lock=lock):
+            assert self._session_connection is not None, "Guaranteed to have a connection in transaction"
             if not self.isWriteable():
-                with closing(self._connection.connection.cursor()) as cursor:
+                with closing(self._session_connection.connection.cursor()) as cursor:
                     cursor.execute("SET TRANSACTION READ ONLY")
             else:
-                with closing(self._connection.connection.cursor()) as cursor:
+                with closing(self._session_connection.connection.cursor()) as cursor:
                     # Make timestamps UTC, because we didn't use TIMESTAMPZ for
                     # the column type.  When we can tolerate a schema change,
                     # we should change that type and remove this line.
                     cursor.execute("SET TIME ZONE 0")
             yield
 
-    def _lockTables(self, tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+    def _lockTables(self, connection: sqlalchemy.engine.Connection,
+                    tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
         # Docstring inherited.
         for table in tables:
-            self._connection.execute(f"LOCK TABLE {table.key} IN EXCLUSIVE MODE")
+            connection.execute(sqlalchemy.text(f"LOCK TABLE {table.key} IN EXCLUSIVE MODE"))
 
     def isWriteable(self) -> bool:
         return self._writeable
@@ -167,7 +170,8 @@ class PostgresqlDatabase(Database):
                 for column in table.columns
                 if column.name not in table.primary_key}
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
-        self._connection.execute(query, *rows)
+        with self._connection() as connection:
+            connection.execute(query, rows)
 
     def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
         # Docstring inherited.
@@ -178,7 +182,8 @@ class PostgresqlDatabase(Database):
         # we don't care which constraint is violated or specify which columns
         # to update.
         query = sqlalchemy.dialects.postgresql.dml.insert(table).on_conflict_do_nothing()
-        return self._connection.execute(query, *rows).rowcount
+        with self._connection() as connection:
+            return connection.execute(query, rows).rowcount
 
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):

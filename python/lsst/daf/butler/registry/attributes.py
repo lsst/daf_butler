@@ -82,7 +82,7 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
 
     def get(self, name: str, default: Optional[str] = None) -> Optional[str]:
         # Docstring inherited from ButlerAttributeManager.
-        sql = sqlalchemy.sql.select([self._table.columns.value]).where(
+        sql = sqlalchemy.sql.select(self._table.columns.value).where(
             self._table.columns.name == name
         )
         row = self._db.query(sql).fetchone()
@@ -115,16 +115,16 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
 
     def items(self) -> Iterable[Tuple[str, str]]:
         # Docstring inherited from ButlerAttributeManager.
-        sql = sqlalchemy.sql.select([
+        sql = sqlalchemy.sql.select(
             self._table.columns.name,
             self._table.columns.value,
-        ])
+        )
         for row in self._db.query(sql):
             yield row[0], row[1]
 
     def empty(self) -> bool:
         # Docstring inherited from ButlerAttributeManager.
-        sql = sqlalchemy.sql.select([sqlalchemy.sql.func.count()]).select_from(self._table)
+        sql = sqlalchemy.sql.select(sqlalchemy.sql.func.count()).select_from(self._table)
         row = self._db.query(sql).fetchone()
         return row[0] == 0
 
