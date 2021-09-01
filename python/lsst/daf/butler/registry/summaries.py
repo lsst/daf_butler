@@ -212,7 +212,11 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
             to `str` or iterable of `str`.
         """
         for dimension, values in other.items():
-            self._mapping.setdefault(dimension, set()).intersection_update(iterable(values))
+            new_values = set(iterable(values))
+            # Yes, this will often result in a (no-op) self-intersection on the
+            # inner set, but this is easier to read (and obviously more or less
+            # efficient) than adding a check to avoid it.
+            self._mapping.setdefault(dimension, new_values).intersection_update(new_values)
 
     def intersection(self, *others: Mapping[GovernorDimension, Union[str, Iterable[str]]]
                      ) -> GovernorDimensionRestriction:
