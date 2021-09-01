@@ -161,6 +161,9 @@ class QueryBuilder:
         runKeyName = self._managers.collections.getRunForeignKeyName()
         baseColumnNames = {"id", runKeyName, "ingest_date"} if isResult else set()
         baseColumnNames.update(datasetType.dimensions.required.names)
+        if not findFirst:
+            calibration_collections = []
+            other_collections = []
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
                                                                  collectionTypes=collectionTypes)):
             # Only include collections that (according to collection summaries)
@@ -183,21 +186,53 @@ class QueryBuilder:
                             f"Find-first query for dataset type '{datasetType.name}' in CALIBRATION-type "
                             f"collection '{collectionRecord.name}' is not yet supported."
                         )
+                    else:
+                        calibration_collections.append(collectionRecord)
                 else:
                     # We can never find a non-calibration dataset in a
                     # CALIBRATION collection.
                     continue
-            ssq = datasetRecordStorage.select(collection=collectionRecord,
-                                              dataId=SimpleQuery.Select,
-                                              id=SimpleQuery.Select if isResult else None,
-                                              run=SimpleQuery.Select if isResult else None,
-                                              ingestDate=SimpleQuery.Select if isResult else None)
-            if ssq is None:
-                continue
-            assert {c.name for c in ssq.columns} == baseColumnNames
-            if findFirst:
+            elif findFirst:
+                # If findFirst=True, each collection gets its own subquery so
+                # we can add a literal rank for it.
+                ssq = datasetRecordStorage.select(
+                    collectionRecord,
+                    dataId=SimpleQuery.Select,
+                    id=SimpleQuery.Select if isResult else None,
+                    run=SimpleQuery.Select if isResult else None,
+                    ingestDate=SimpleQuery.Select if isResult else None,
+                )
+                if ssq is None:
+                    continue
+                assert {c.name for c in ssq.columns} == baseColumnNames
                 ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
-            subsubqueries.append(ssq.combine())
+                subsubqueries.append(ssq.combine())
+            else:
+                # If findFirst=False, we have one subquery for all CALIBRATION
+                # collections and one subquery for all other collections; we'll
+                # assemble those later after grouping by collection type.
+                other_collections.append(collectionRecord)
+        if not findFirst:
+            if other_collections:
+                ssq = datasetRecordStorage.select(
+                    *other_collections,
+                    dataId=SimpleQuery.Select,
+                    id=SimpleQuery.Select if isResult else None,
+                    run=SimpleQuery.Select if isResult else None,
+                    ingestDate=SimpleQuery.Select if isResult else None,
+                )
+                if ssq is not None:
+                    subsubqueries.append(ssq.combine())
+            if calibration_collections:
+                ssq = datasetRecordStorage.select(
+                    *calibration_collections,
+                    dataId=SimpleQuery.Select,
+                    id=SimpleQuery.Select if isResult else None,
+                    run=SimpleQuery.Select if isResult else None,
+                    ingestDate=SimpleQuery.Select if isResult else None,
+                )
+                if ssq is not None:
+                    subsubqueries.append(ssq.combine())
         if not subsubqueries:
             return False
         # Although one would expect that these subqueries can be
