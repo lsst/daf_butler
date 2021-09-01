@@ -173,10 +173,16 @@ class QueryBuilder:
                 # If collection name was provided explicitly then say sorry,
                 # otherwise collection is a part of chained one and we skip it.
                 if datasetType.isCalibration() and collectionRecord.name in explicitCollections:
-                    raise NotImplementedError(
-                        f"Query for dataset type '{datasetType.name}' in CALIBRATION-type collection "
-                        f"'{collectionRecord.name}' is not yet supported."
-                    )
+                    if self.summary.temporal or self.summary.mustHaveKeysJoined.temporal:
+                        raise NotImplementedError(
+                            f"Temporal query for dataset type '{datasetType.name}' in CALIBRATION-type "
+                            f"collection '{collectionRecord.name}' is not yet supported."
+                        )
+                    elif findFirst:
+                        raise NotImplementedError(
+                            f"Find-first query for dataset type '{datasetType.name}' in CALIBRATION-type "
+                            f"collection '{collectionRecord.name}' is not yet supported."
+                        )
                 else:
                     # We can never find a non-calibration dataset in a
                     # CALIBRATION collection.

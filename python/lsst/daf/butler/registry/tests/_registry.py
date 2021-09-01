@@ -2004,11 +2004,13 @@ class RegistryTests(ABC):
         registry.registerCollection(chain, type=CollectionType.CHAINED)
         registry.setCollectionChain(chain, coll_list)
 
-        # explicit list will raise
+        # explicit list will raise if findFirst=True or there are temporal
+        # dimensions
         with self.assertRaises(NotImplementedError):
-            registry.queryDatasets("bias", collections=coll_list)
+            registry.queryDatasets("bias", collections=coll_list, findFirst=True)
         with self.assertRaises(NotImplementedError):
-            registry.queryDataIds(["instrument", "detector"], datasets="bias", collections=coll_list)
+            registry.queryDataIds(["instrument", "detector", "exposure"], datasets="bias",
+                                  collections=coll_list)
 
         # chain will skip
         datasets = list(registry.queryDatasets("bias", collections=chain))
@@ -2034,9 +2036,6 @@ class RegistryTests(ABC):
         # few tests with findFirst
         datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
         self.assertGreater(len(datasets), 0)
-
-        with self.assertRaises(NotImplementedError):
-            registry.queryDatasets("bias", collections=coll_list, findFirst=True)
 
     def testIngestTimeQuery(self):
 
