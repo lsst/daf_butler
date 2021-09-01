@@ -73,7 +73,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         if collection.type is CollectionType.CALIBRATION and timespan is None:
             raise TypeError(f"Cannot search for dataset in CALIBRATION collection {collection.name} "
                             f"without an input timespan.")
-        sql = self.select(collection=collection, dataId=dataId, id=SimpleQuery.Select,
+        sql = self.select(collection, dataId=dataId, id=SimpleQuery.Select,
                           run=SimpleQuery.Select, timespan=timespan)
         if sql is None:
             return None
@@ -300,7 +300,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             self._db.delete(self._calibs, ["id"], *rowsToDelete)
             self._db.insert(self._calibs, *rowsToInsert)
 
-    def select(self, collection: CollectionRecord,
+    def select(self, *collections: CollectionRecord,
                dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
                id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
@@ -308,7 +308,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
                ) -> Optional[SimpleQuery]:
         # Docstring inherited from DatasetRecordStorage.
-        assert collection.type is not CollectionType.CHAINED
+        assert collections, "At least one collection must be provided."
+        collection_types = {collection.type for collection in collections}
+        assert CollectionType.CHAINED not in collection_types, "CHAINED collections must be flattened."
         #
         # There are two tables in play here:
         #
@@ -345,15 +347,12 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             kwargs = {dim.name: SimpleQuery.Select for dim in self.datasetType.dimensions.required}
         else:
             kwargs = dict(dataId.byName())
-        # We always constrain (never retrieve) the collection in the
-        # tags/calibs table.
-        kwargs[self._collections.getCollectionForeignKeyName()] = collection.key
         # We always constrain (never retrieve) the dataset type in at least the
         # tags/calibs table.
         kwargs["dataset_type_id"] = self._dataset_type_id
         # Join in the tags or calibs table, turning those 'kwargs' entries into
         # WHERE constraints or SELECT columns as appropriate.
-        if collection.type is CollectionType.CALIBRATION:
+        if collection_types == {CollectionType.CALIBRATION}:
             assert self._calibs is not None, \
                 "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
             TimespanReprClass = self._db.getTimespanRepresentation()
@@ -369,9 +368,22 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 )
             query.join(self._calibs, **kwargs)
             dataset_id_col = self._calibs.columns.dataset_id
-        else:
+            collection_col = self._calibs.columns[self._collections.getCollectionForeignKeyName()]
+        elif CollectionType.CALIBRATION not in collection_types:
             query.join(self._tags, **kwargs)
             dataset_id_col = self._tags.columns.dataset_id
+            collection_col = self._tags.columns[self._collections.getCollectionForeignKeyName()]
+        else:
+            raise TypeError(
+                "Cannot query for CALIBRATION collections in the same "
+                "subquery as other kinds of collections."
+            )
+        # We always constrain (never retrieve) the collection(s) in the
+        # tags/calibs table.
+        if len(collections) == 1:
+            query.where.append(collection_col == collections[0].key)
+        else:
+            query.where.append(collection_col.in_([collection.key for collection in collections]))
         # We can always get the dataset_id from the tags/calibs table or
         # constrain it there.  Can't use kwargs for that because we need to
         # alias it to 'id'.
@@ -383,24 +395,17 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # tags/calibs table.  The things we might need to get from the static
         # dataset table are the run key and the ingest date.
         need_static_table = False
-        static_kwargs = {}
+        static_kwargs: Dict[str, Any] = {}
         if run is not None:
-            if collection.type is CollectionType.RUN:
-                if run is SimpleQuery.Select:
-                    # If the collection we're searching is a RUN, we know that
-                    # if we find the dataset in that collection, then that's
-                    # the datasets's run; we don't need to query for it.
-                    query.columns.append(sqlalchemy.sql.literal(collection.key).label(self._runKeyColumn))
-                elif run != collection.name:
-                    # This [sub]query is doomed to yield no results; dataset
-                    # cannot be in more than one run.
-                    return None
-                else:
-                    query.where.append(self._static.dataset.columns[self._runKeyColumn] == collection.key)
+            assert run is SimpleQuery.Select, "To constrain the run name, pass a RunRecord as a collection."
+            if collections[0].type is CollectionType.RUN and len(collections) == 1:
+                # If we are searching exactly one RUN collection, we
+                # know that if we find the dataset in that collection,
+                # then that's the datasets's run; we don't need to
+                # query for it.
+                query.columns.append(sqlalchemy.sql.literal(collections[0].key).label(self._runKeyColumn))
             else:
-                static_kwargs[self._runKeyColumn] = (
-                    SimpleQuery.Select if run is SimpleQuery.Select else self._collections.find(run).key
-                )
+                static_kwargs[self._runKeyColumn] = SimpleQuery.Select
                 need_static_table = True
         # Ingest date can only come from the static table.
         if ingestDate is not None:
