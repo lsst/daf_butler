@@ -163,6 +163,12 @@ class QueryBuilder:
         baseColumnNames.update(datasetType.dimensions.required.names)
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
                                                                  collectionTypes=collectionTypes)):
+            # Only include collections that (according to collection summaries)
+            # might have datasets of this type and governor dimensions
+            # consistent with the query's WHERE clause.
+            collection_summary = self._managers.datasets.getCollectionSummary(collectionRecord)
+            if not collection_summary.is_compatible_with(datasetType, self.summary.where.restriction):
+                continue
             if collectionRecord.type is CollectionType.CALIBRATION:
                 # If collection name was provided explicitly then say sorry,
                 # otherwise collection is a part of chained one and we skip it.

@@ -315,6 +315,43 @@ class CollectionSummary:
         dimensions = self.dimensions.union(*[o.dimensions for o in others])
         return CollectionSummary(datasetTypes, dimensions)
 
+    def is_compatible_with(
+        self,
+        datasetType: DatasetType,
+        restriction: GovernorDimensionRestriction,
+    ) -> bool:
+        """Test whether the collection summarized by this object should be
+        queried for a given dataset type and governor dimension values.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType`
+            Dataset type being queried.  If this collection has no instances of
+            this dataset type (or its parent dataset type, if it is a
+            component), `False` will always be returned.
+        restriction : `GovernorDimensionRestriction`
+            Restriction on the values governor dimensions can take in the
+            query, usually from a WHERE expression.  If this is disjoint with
+            the data IDs actually present in the collection, `False` will be
+            returned.
+
+        Returns
+        -------
+        compatible : `bool`
+            `True` if the dataset query described by this summary and the given
+            arguments might yield non-empty results; `False` if the result from
+            such a query is definitely empty.
+        """
+        parent = datasetType if not datasetType.isComponent() else datasetType.makeCompositeDatasetType()
+        if parent not in self.datasetTypes:
+            return False
+        for governor in datasetType.dimensions.governors:
+            if (values_in_self := self.dimensions.get(governor)) is not None:
+                if (values_in_other := restriction.get(governor)) is not None:
+                    if values_in_self.isdisjoint(values_in_other):
+                        return False
+        return True
+
     datasetTypes: NamedValueSet[DatasetType]
     """Dataset types that may be present in the collection
     (`NamedValueSet` [ `DatasetType` ]).

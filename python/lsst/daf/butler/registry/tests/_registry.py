@@ -1992,6 +1992,13 @@ class RegistryTests(ABC):
         coll_calib = "Cam1/calibs/default"
         registry.registerCollection(coll_calib, type=CollectionType.CALIBRATION)
 
+        # Add all biases to the calibration collection.
+        # Without this, the logic that prunes dataset subqueries based on
+        # datasetType-collection summary information will fire before the logic
+        # we want to test below.  This is a good thing (it avoids the dreaded
+        # NotImplementedError a bit more often) everywhere but here.
+        registry.certify(coll_calib, registry.queryDatasets("bias", collections=...), Timespan(None, None))
+
         coll_list = [coll_calib, "imported_g", "imported_r"]
         chain = "Cam1/chain"
         registry.registerCollection(chain, type=CollectionType.CHAINED)
