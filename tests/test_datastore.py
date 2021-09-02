@@ -1063,7 +1063,7 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
         for uri in self.files:
             uri.write(b"0123456789")
 
-        # Create a some composite refs with component files.
+        # Create some composite refs with component files.
         sc = self.storageClassFactory.getStorageClass("StructuredData")
         self.composite_refs = [self.makeDatasetRef(f"composite{n}", dimensions, sc, dataId,
                                                    conform=False) for n in range(3)]
