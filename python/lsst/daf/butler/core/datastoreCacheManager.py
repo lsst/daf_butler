@@ -364,7 +364,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     * ``$DAF_BUTLER_CACHE_DIRECTORY``
     * ``$DAF_BUTLER_CACHE_EXPIRATION_MODE``
 
-    The expiration mode should take the form a ``mode=threshold`` so for
+    The expiration mode should take the form ``mode=threshold`` so for
     example to configure expiration to limit the cache directory to 5 datasets
     the value would be ``datasets=5``.
     """
