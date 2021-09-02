@@ -901,6 +901,9 @@ class Butler:
         if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
             raise ValueError("DatasetRef must not be in registry, must have None id")
 
+        # Handle dimension records in dataId
+        dataId, kwargs = self._rewrite_data_id(dataId, datasetType, **kwargs)
+
         # Add Registry Dataset entry.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwargs)
 
