@@ -1096,7 +1096,7 @@ class FileDatastore(GenericBaseDatastore):
             This ref must have the same ID as the supplied ref but can
             be a parent ref or component ref to indicate to the cache whether
             a composite file is being requested from the cache or a component
-            file. Without this the cache will default to the suppled ref but
+            file. Without this the cache will default to the supplied ref but
             it can get confused with read-only derived components for
             disassembled composites.
 
