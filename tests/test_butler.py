@@ -912,6 +912,53 @@ class ButlerTests(ButlerPutGetTests):
             for testStr in self.datastoreName:
                 self.assertIn(testStr, datastoreName)
 
+    def testButlerRewriteDataId(self):
+        """Test that dataIds can be rewritten based on dimension records."""
+
+        butler = Butler(self.tmpConfigFile, run="ingest")
+
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
+        datasetTypeName = "random_data"
+
+        # Create dimension records.
+        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
+        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
+                                                                "name": "d-r",
+                                                                "band": "R"})
+        butler.registry.insertDimensionData("detector", {"instrument": "DummyCamComp",
+                                                         "id": 1, "full_name": "det1"})
+
+        dimensions = butler.registry.dimensions.extract(["instrument", "exposure"])
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+        butler.registry.registerDatasetType(datasetType)
+
+        n_exposures = 5
+        dayobs = 20210530
+
+        for i in range(n_exposures):
+            butler.registry.insertDimensionData("exposure", {"instrument": "DummyCamComp",
+                                                             "id": i, "obs_id": f"exp{i}",
+                                                             "seq_num": i, "day_obs": dayobs,
+                                                             "physical_filter": "d-r"})
+
+        # Write some data.
+        for i in range(n_exposures):
+            metric = {"something": i,
+                      "other": "metric",
+                      "list": [2*x for x in range(i)]}
+
+            # Use the seq_num for the put to test rewriting.
+            dataId = {"seq_num": i, "day_obs": dayobs, "detector": 1, "instrument": "DummyCamComp",
+                      "physical_filter": "d-r"}
+            ref = butler.put(metric, datasetTypeName, dataId=dataId)
+
+            # Check that the exposure is correct in the dataId
+            self.assertEqual(ref.dataId["exposure"], i)
+
+            # and check that we can get the dataset back with the same dataId
+            new_metric = butler.get(datasetTypeName, dataId=dataId)
+            self.assertEqual(new_metric, metric)
+
 
 class FileDatastoreButlerTests(ButlerTests):
     """Common tests and specialization of ButlerTests for butlers backed
