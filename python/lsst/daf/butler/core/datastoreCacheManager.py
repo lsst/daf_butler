@@ -383,7 +383,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
         if self._cache_directory:
             if not self._cache_directory.isLocal:
-                raise ValueError(f"Cache directory must be a file system. Got: {self._cache_directory}")
+                raise ValueError("Cache directory must be on a local file system. "
+                                 f"Got: {self._cache_directory}")
             # Ensure that the cache directory is created. We assume that
             # someone specifying a permanent cache directory will be expecting
             # it to always be there. This will also trigger an error
