@@ -1,0 +1,2 @@
+Support rewriting of dataId containing dimension records such as ``day_obs`` and ``seq_num`` in ``butler.put()``.
+This matches the behavior of ``butler.get()``.
