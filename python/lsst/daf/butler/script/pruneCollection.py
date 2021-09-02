@@ -19,15 +19,38 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+from astropy.table import Table
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Optional, Union
 from .. import Butler
 from .. import (
     PurgeWithoutUnstorePruneCollectionsError,
     RunWithoutPurgePruneCollectionsError,
     PurgeUnsupportedPruneCollectionsError,
 )
+from . import QueryDatasets
+from ..registry import CollectionType
 
 
-def pruneCollection(repo, collection, purge, unstore, unlink):
+class PruneCollectionResult:
+    def __init__(self, confirm: bool) -> None:
+        # if `confirm == True`, will contain the astropy table describing data
+        # that will be removed.
+        self.removeTable: Union[None, Table] = None
+        # the callback function to do the work
+        self.onConfirmation: Union[None, Callable[[], None]] = None
+        # true if the user should be shown what will be removed before pruning
+        # the collection.
+        self.confirm: bool = confirm
+
+
+def pruneCollection(repo: str,
+                    collection: str,
+                    purge: bool,
+                    unstore: bool,
+                    unlink: List[str],
+                    confirm: bool) -> Table:
     """Remove a collection and possibly prune datasets within it.
 
     Parameters
@@ -42,14 +65,90 @@ def pruneCollection(repo, collection, purge, unstore, unlink):
         Same as the ``unstore`` argument to ``Butler.pruneCollection``.
     unlink: `list` [`str`]
         Same as the ``unlink`` argument to ``Butler.pruneCollection``.
+    confirm : `bool`
+        If `True` will produce a table of collections that will be removed for
+        display to the user.
+
+    Returns
+    -------
+    collections : `astropy.table.Table`
+        The table containing collections that will be removed, their type, and
+        the number of datasets in the collection if applicable.
     """
-    butler = Butler(repo, writeable=True)
-    try:
-        butler.pruneCollection(collection, purge, unstore, unlink)
-    except PurgeWithoutUnstorePruneCollectionsError as e:
-        raise TypeError("Cannot pass --purge without --unstore.") from e
-    except RunWithoutPurgePruneCollectionsError as e:
-        raise TypeError(f"Cannot prune RUN collection {e.collectionType.name} without --purge.") from e
-    except PurgeUnsupportedPruneCollectionsError as e:
-        raise TypeError(
-            f"Cannot prune {e.collectionType} collection {e.collectionType.name} with --purge.") from e
+
+    @dataclass
+    class CollectionInfo:
+        """Lightweight container to hold the type of collection and the number
+        of datasets in the collection if applicable."""
+        count: Optional[int]
+        type: str
+
+    result = PruneCollectionResult(confirm)
+    if confirm:
+        print("Searching collections...")
+        butler = Butler(repo)
+        collectionNames = list(
+            butler.registry.queryCollections(
+                collectionTypes=frozenset((
+                    CollectionType.RUN,
+                    CollectionType.TAGGED,
+                    CollectionType.CHAINED,
+                    CollectionType.CALIBRATION,
+                )),
+                expression=(collection,),
+                includeChains=True,
+            )
+        )
+
+        collections: Dict[str, CollectionInfo] = {}
+
+        def addCollection(name: str) -> None:
+            """Add a collection to the collections, recursive if the collection
+            being added can contain collections."""
+            collectionType = butler.registry.getCollectionType(name).name
+            collections[name] = CollectionInfo(0 if collectionType == "RUN" else None, collectionType)
+            if collectionType == "CHAINED":
+                for c in butler.registry.getCollectionChain(name):
+                    addCollection(c)
+
+        for name in collectionNames:
+            addCollection(name)
+
+        queryDatasets = QueryDatasets(
+            repo=repo,
+            glob=None,
+            collections=[collection],
+            where=None,
+            find_first=True,
+            show_uri=False,
+        )
+        for datasetRef in queryDatasets.getDatasets():
+            collectionInfo = collections[datasetRef.run]
+            if collectionInfo.count is None:
+                raise RuntimeError(f"Unexpected datasaset in collection of type {collectionInfo.type}")
+            collectionInfo.count += 1
+
+        result.removeTable = Table(
+            [
+                list(collections.keys()),
+                [v.type for v in collections.values()],
+                [v.count if v.count is not None else "-" for v in collections.values()],
+            ],
+            names=("Collection", "Collection Type", "Number of Datasets")
+        )
+
+    def doRemove() -> None:
+        """Perform the prune collection step."""
+        butler = Butler(repo, writeable=True)
+        try:
+            butler.pruneCollection(collection, purge, unstore, unlink)
+        except PurgeWithoutUnstorePruneCollectionsError as e:
+            raise TypeError("Cannot pass --purge without --unstore.") from e
+        except RunWithoutPurgePruneCollectionsError as e:
+            raise TypeError(f"Cannot prune RUN collection {e.collectionType.name} without --purge.") from e
+        except PurgeUnsupportedPruneCollectionsError as e:
+            raise TypeError(
+                f"Cannot prune {e.collectionType} collection {e.collectionType.name} with --purge.") from e
+
+    result.onConfirmation = doRemove
+    return result
