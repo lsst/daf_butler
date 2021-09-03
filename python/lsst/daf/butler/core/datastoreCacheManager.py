@@ -47,6 +47,7 @@ from collections import defaultdict
 import atexit
 import contextlib
 import datetime
+import itertools
 import logging
 import os
 import shutil
@@ -719,15 +720,10 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             n_datasets = len(datasets)
             n_over = n_datasets - self._expiration_threshold
             if n_over > 0:
-                keys_to_remove = []
-                removed = 0
-                for dataset in datasets:
-                    # Keys will be read out in insert order which
-                    # will be date order.
-                    keys_to_remove.extend(datasets[dataset])
-                    removed += 1
-                    if removed >= n_over:
-                        break
+                # Keys will be read out in insert order which
+                # will be date order so oldest ones are removed.
+                ref_ids = list(datasets.keys())[:n_over]
+                keys_to_remove = list(itertools.chain.from_iterable(datasets[ref_id] for ref_id in ref_ids))
                 self._remove_from_cache(keys_to_remove)
             return
 
