@@ -1038,11 +1038,30 @@ class FileDatastore(GenericBaseDatastore):
                                    f"to location {uri}") from e
             log.debug("Successfully wrote python object to local file at %s", uri)
         else:
-            # This is a remote URI, so first try bytes and write directly else
-            # fallback to a temporary file
-            try:
-                serializedDataset = formatter.toBytes(inMemoryDataset)
-            except NotImplementedError:
+            # This is a remote URI. Some datasets can be serialized directly
+            # to bytes and sent to the remote datastore without writing a
+            # file. If the dataset is intended to be saved to the cache
+            # a file is always written and direct write to the remote
+            # datastore is bypassed.
+            data_written = False
+            if not self.cacheManager.should_be_cached(ref):
+                try:
+                    serializedDataset = formatter.toBytes(inMemoryDataset)
+                except NotImplementedError:
+                    # Fallback to the file writing option.
+                    pass
+                except Exception as e:
+                    raise RuntimeError(f"Failed to serialize dataset {ref} "
+                                       f"of type {type(inMemoryDataset)} to bytes.") from e
+                else:
+                    log.debug("Writing bytes directly to %s", uri)
+                    uri.write(serializedDataset, overwrite=True)
+                    log.debug("Successfully wrote bytes directly to %s", uri)
+                    data_written = True
+
+            if not data_written:
+                # Did not write the bytes directly to object store so instead
+                # write to temporary file.
                 with ButlerURI.temporary_uri(suffix=uri.getExtension()) as temporary_uri:
                     # Need to configure the formatter to write to a different
                     # location and that needs us to overwrite internals
@@ -1060,20 +1079,6 @@ class FileDatastore(GenericBaseDatastore):
                     self.cacheManager.move_to_cache(temporary_uri, ref)
 
                 log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
-            except Exception as e:
-                raise RuntimeError(f"Failed to serialize dataset {ref} to bytes.") from e
-            else:
-                log.debug("Writing bytes directly to %s", uri)
-                uri.write(serializedDataset, overwrite=True)
-                log.debug("Successfully wrote bytes directly to %s", uri)
-
-                # It may be that this dataset should be cached locally
-                # to improve get performance later so see whether
-                # a second write is needed.
-                if self.cacheManager.should_be_cached(ref):
-                    with ButlerURI.temporary_uri(suffix=uri.getExtension()) as temporary_uri:
-                        temporary_uri.write(serializedDataset)
-                        self.cacheManager.move_to_cache(temporary_uri, ref)
 
         # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(uri, ref, formatter=formatter)

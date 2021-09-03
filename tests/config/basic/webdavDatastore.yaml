@@ -5,7 +5,9 @@ datastore:
   formatters: !include formatters.yaml
   composites: !include composites.yaml
   cached:
-    default: true
+    default: false
     expiry:
       mode: age
       threshold: 60
+    cacheable:
+      StructuredDataDictYaml: true
