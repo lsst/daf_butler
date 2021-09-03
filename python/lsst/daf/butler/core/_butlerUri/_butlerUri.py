@@ -27,6 +27,7 @@ import posixpath
 import copy
 import logging
 import re
+import shutil
 import tempfile
 
 from random import Random
@@ -742,43 +743,47 @@ class ButlerURI:
         ----------
         prefix : `ButlerURI`, optional
             Prefix to use. Without this the path will be formed as a local
-            file URI in a temporary directory.
+            file URI in a temporary directory. Ensuring that the prefix
+            location exists is the responsibility of the caller.
         suffix : `str`, optional
-            A file suffix to be used.
+            A file suffix to be used. The ``.`` should be included in this
+            suffix.
 
         Yields
         ------
         uri : `ButlerURI`
             The temporary URI. Will be removed when the context is completed.
         """
-        if prefix is None or prefix.isLocal:
-            prefix_path = prefix.ospath if prefix else None
-            _, path = tempfile.mkstemp(suffix=suffix, prefix=prefix_path)
-            temporary_uri = ButlerURI(path, isTemporary=True)
-            # To avoid inconsistencies in behavior, delete the file
-            # even though that might result in a name clash later.
-            try:
-                temporary_uri.remove()
-            except FileNotFoundError:
-                pass
-        else:
-            # Remote resource. Need to create a randomized file name.
-            characters = "abcdefghijklmnopqrstuvwxyz0123456789_"
-            rng = Random()
-            tempname = "".join(rng.choice(characters) for _ in range(16))
-            if suffix:
-                tempname += suffix
-            temporary_uri = prefix.join(tempname, isTemporary=True)
+        use_tempdir = False
+        if prefix is None:
+            prefix = ButlerURI(tempfile.mkdtemp(), forceDirectory=True, isTemporary=True)
+            # Record that we need to delete this directory. Can not rely
+            # on isTemporary flag since an external prefix may have that
+            # set as well.
+            use_tempdir = True
+
+        # Need to create a randomized file name. For consistency do not
+        # use mkstemp for local and something else for remote. Additionally
+        # this method does not create the file to prevent name clashes.
+        characters = "abcdefghijklmnopqrstuvwxyz0123456789_"
+        rng = Random()
+        tempname = "".join(rng.choice(characters) for _ in range(16))
+        if suffix:
+            tempname += suffix
+        temporary_uri = prefix.join(tempname, isTemporary=True)
 
         try:
             yield temporary_uri
         finally:
-            # It's okay if this does not work because the user removed
-            # the file.
-            try:
-                temporary_uri.remove()
-            except FileNotFoundError:
-                pass
+            if use_tempdir:
+                shutil.rmtree(prefix.ospath, ignore_errors=True)
+            else:
+                try:
+                    # It's okay if this does not work because the user removed
+                    # the file.
+                    temporary_uri.remove()
+                except FileNotFoundError:
+                    pass
 
     def read(self, size: int = -1) -> bytes:
         """Open the resource and return the contents in bytes.

@@ -438,7 +438,15 @@ class FileURITestCase(unittest.TestCase):
             self.assertFalse(tmp.exists(), f"uri: {tmp}")
             tmp.write(b"abcd")
             self.assertTrue(tmp.exists(), f"uri: {tmp}")
+            self.assertTrue(tmp.isTemporary)
         self.assertFalse(tmp.exists(), f"uri: {tmp}")
+
+        tmpdir = ButlerURI(self.tmpdir, forceDirectory=True)
+        with ButlerURI.temporary_uri(prefix=tmpdir, suffix=".yaml") as tmp:
+            # Use a specified tmpdir and check it is okay for the file
+            # to not be created.
+            self.assertFalse(tmp.exists(), f"uri: {tmp}")
+        self.assertTrue(tmpdir.exists(), f"uri: {tmpdir} still exists")
 
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
