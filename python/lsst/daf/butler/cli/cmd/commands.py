@@ -640,3 +640,14 @@ def register_dataset_type(**kwargs):
         print("Dataset type successfully registered.")
     else:
         print("Dataset type already existed in identical form.")
+
+
+@click.command(cls=ButlerCommand)
+@repo_argument(required=True, help=willCreateRepoHelp)
+@directory_argument(required=True)
+@collections_argument(help="COLLECTIONS are the collection to export calibrations from.")
+def export_calibs(*args, **kwargs):
+    """Export calibrations from the butler for import elsewhere."""
+    table = script.exportCalibs(*args, **kwargs)
+    if table:
+        table.pprint_all(align="<")
