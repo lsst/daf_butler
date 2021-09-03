@@ -1200,6 +1200,11 @@ cached:
             cached = cache_manager.move_to_cache(self.files[5], self.refs[5])
             self.assertIsNotNone(cached)
 
+            # Add additional entry to cache.
+            # Should now have 2, 4, 5, 6
+            cached = cache_manager.move_to_cache(self.files[6], self.refs[6])
+            self.assertIsNotNone(cached)
+
             # Is the file still there?
             self.assertTrue(found.exists())
 
@@ -1219,10 +1224,10 @@ cached:
 
         # But not the dataset that was stored after it.
         with cache_manager.find_in_cache(self.refs[3], ".txt") as found:
-            self.assertIsNotNone(found)
+            self.assertIsNone(found)
 
         # Adding a new dataset to the cache should now delete it.
-        cache_manager.move_to_cache(self.files[6], self.refs[6])
+        cache_manager.move_to_cache(self.files[7], self.refs[7])
 
         with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
             self.assertIsNone(found)
