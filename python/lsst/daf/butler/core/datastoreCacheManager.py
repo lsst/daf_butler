@@ -83,7 +83,8 @@ def _construct_cache_path(root: ButlerURI, ref: DatasetRef, extension: str) -> B
     ref : `DatasetRef`
         The dataset to look up in or write to the cache.
     extension : `str`
-        File extension to use for this file.
+        File extension to use for this file. Should include the
+        leading "``.``".
 
     Returns
     -------
@@ -312,7 +313,7 @@ class AbstractDatastoreCacheManager(ABC):
         ref : `DatasetRef`
             Dataset to locate in the cache.
         extension : `str`
-            File extension expected.
+            File extension expected. Should include the leading "``.``".
 
         Yields
         ------
@@ -477,7 +478,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         ref : `DatasetRef`
             The dataset to look up in or write to the cache.
         extension : `str`
-            File extension to use for this file.
+            File extension to use for this file. Should include the
+            leading "``.``".
 
         Returns
         -------
