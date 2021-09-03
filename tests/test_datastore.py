@@ -1059,7 +1059,7 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
         root_uri = ButlerURI(self.root, forceDirectory=True)
         self.files = [root_uri.join(f"file{n}.txt") for n in range(n_datasets)]
 
-        # Create empty files
+        # Create test files.
         for uri in self.files:
             uri.write(b"0123456789")
 
@@ -1187,6 +1187,7 @@ cached:
         config_str = self._expiration_config(mode, threshold)
 
         cache_manager = self._make_cache_manager(config_str)
+        # Should end with datasets: 2, 3, 4
         self.assertExpiration(cache_manager, 5, threshold + 1)
         self.assertIn(f"{mode}={threshold}", str(cache_manager))
 
@@ -1195,7 +1196,7 @@ cached:
             self.assertIsNotNone(found)
 
             # Trigger cache expiration that should remove the file
-            # we just retrieved.
+            # we just retrieved. Should now have: 2, 3, 4, 5
             cached = cache_manager.move_to_cache(self.files[5], self.refs[5])
             self.assertIsNotNone(cached)
 

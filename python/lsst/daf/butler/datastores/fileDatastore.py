@@ -1175,9 +1175,9 @@ class FileDatastore(GenericBaseDatastore):
 
                 with uri.as_local() as local_uri:
 
-                    # URI was remote and file was downloaded
                     can_be_cached = False
                     if uri != local_uri:
+                        # URI was remote and file was downloaded
                         cache_msg = ""
                         location_updated = True
 
@@ -1187,6 +1187,10 @@ class FileDatastore(GenericBaseDatastore):
                             # it until after we've used it (to ensure it can't
                             # be expired whilst we are using it).
                             can_be_cached = True
+
+                            # Say that it is "likely" to be cached because
+                            # if the formatter read fails we will not be
+                            # caching this file.
                             cache_msg = " and likely cached"
 
                         msg = f"(via download to local file{cache_msg})"

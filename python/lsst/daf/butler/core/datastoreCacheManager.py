@@ -116,6 +116,7 @@ def _parse_cache_name(cached_location: str) -> Dict[str, Optional[str]]:
         - "component": The name of the component (can be `None`),
         - "extension": File extension (can be `None`).
     """
+    # Assume first dot is the extension and so allow .fits.gz
     root_ext = cached_location.split(".", maxsplit=1)
     root = root_ext.pop(0)
     ext = "." + root_ext.pop(0) if root_ext else None
@@ -708,7 +709,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             return
 
         if self._expiration_mode == "datasets":
-            # Count the datasets, using reverse date order
+            # Count the datasets, in ascending timestamp order,
             # so that oldest turn up first.
             datasets = defaultdict(list)
             for key in self._sort_cache():
