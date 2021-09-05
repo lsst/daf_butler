@@ -1012,8 +1012,6 @@ class SqlRegistry(Registry):
                                                  collectionTypes=frozenset(collectionTypes),
                                                  flattenChains=flattenChains):
             query = storage.select(collectionRecord)
-            if query is None:
-                continue
             for row in self._db.query(query.combine()).mappings():
                 dataId = DataCoordinate.fromRequiredValues(
                     storage.datasetType.dimensions,

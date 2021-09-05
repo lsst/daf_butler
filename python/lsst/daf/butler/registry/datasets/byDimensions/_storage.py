@@ -75,10 +75,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                             f"without an input timespan.")
         sql = self.select(collection, dataId=dataId, id=SimpleQuery.Select,
                           run=SimpleQuery.Select, timespan=timespan)
-        if sql is None:
-            return None
-        else:
-            sql = sql.combine()
+        sql = sql.combine()
         results = self._db.query(sql)
         row = results.fetchone()
         if row is None:
@@ -306,7 +303,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
                ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
-               ) -> Optional[SimpleQuery]:
+               ) -> SimpleQuery:
         # Docstring inherited from DatasetRecordStorage.
         assert collections, "At least one collection must be provided."
         collection_types = {collection.type for collection in collections}

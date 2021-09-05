@@ -202,8 +202,6 @@ class QueryBuilder:
                     run=SimpleQuery.Select if isResult else None,
                     ingestDate=SimpleQuery.Select if isResult else None,
                 )
-                if ssq is None:
-                    continue
                 assert {c.name for c in ssq.columns} == baseColumnNames
                 ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
                 subsubqueries.append(ssq.combine())

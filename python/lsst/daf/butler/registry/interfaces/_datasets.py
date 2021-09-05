@@ -315,7 +315,7 @@ class DatasetRecordStorage(ABC):
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
                ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
-               ) -> Optional[SimpleQuery]:
+               ) -> SimpleQuery:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
         this `DatasetType`.
 
@@ -358,10 +358,9 @@ class DatasetRecordStorage(ABC):
 
         Returns
         -------
-        query : `SimpleQuery` or `None`
+        query : `SimpleQuery`
             A struct containing the SQLAlchemy object that representing a
-            simple ``SELECT`` query, or `None` if it is known that there are
-            no datasets of this `DatasetType` that match the given constraints.
+            simple ``SELECT`` query.
         """
         raise NotImplementedError()
 
