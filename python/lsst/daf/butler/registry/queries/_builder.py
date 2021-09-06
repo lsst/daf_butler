@@ -54,13 +54,18 @@ class QueryBuilder:
     managers : `RegistryManagers`
         A struct containing the registry manager instances used by the query
         system.
+    doomed_by : `Iterable` [ `str` ], optional
+        A list of messages (appropriate for e.g. logging or exceptions) that
+        explain why the query is known to return no results even before it is
+        executed.  Queries with a non-empty list will never be executed.
     """
-    def __init__(self, summary: QuerySummary, managers: RegistryManagers):
+    def __init__(self, summary: QuerySummary, managers: RegistryManagers, doomed_by: Iterable[str] = ()):
         self.summary = summary
         self._simpleQuery = SimpleQuery()
         self._elements: NamedKeyDict[DimensionElement, sqlalchemy.sql.FromClause] = NamedKeyDict()
         self._columns = QueryColumns()
         self._managers = managers
+        self._doomed_by = list(doomed_by)
 
     def hasDimensionKey(self, dimension: Dimension) -> bool:
         """Return `True` if the given dimension's primary key column has
@@ -156,6 +161,10 @@ class QueryBuilder:
             # Unrecognized dataset type means no results.  It might be better
             # to raise here, but this is consistent with previous behavior,
             # which is expected by QuantumGraph generation code in pipe_base.
+            self._doomed_by.append(
+                f"Dataset type {datasetType.name!r} is not registered, so no instances of it can exist in "
+                "any collection."
+            )
             return False
         subsubqueries = []
         runKeyName = self._managers.collections.getRunForeignKeyName()
@@ -164,13 +173,19 @@ class QueryBuilder:
         if not findFirst:
             calibration_collections = []
             other_collections = []
+        rejections: List[str] = []
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
                                                                  collectionTypes=collectionTypes)):
             # Only include collections that (according to collection summaries)
             # might have datasets of this type and governor dimensions
             # consistent with the query's WHERE clause.
             collection_summary = self._managers.datasets.getCollectionSummary(collectionRecord)
-            if not collection_summary.is_compatible_with(datasetType, self.summary.where.restriction):
+            if not collection_summary.is_compatible_with(
+                datasetType,
+                self.summary.where.restriction,
+                rejections=rejections,
+                name=collectionRecord.name,
+            ):
                 continue
             if collectionRecord.type is CollectionType.CALIBRATION:
                 # If collection name was provided explicitly then say sorry,
@@ -191,6 +206,10 @@ class QueryBuilder:
                 else:
                     # We can never find a non-calibration dataset in a
                     # CALIBRATION collection.
+                    rejections.append(
+                        f"Not searching for non-calibration dataset {datasetType.name!r} "
+                        f"in CALIBRATION collection {collectionRecord.name!r}."
+                    )
                     continue
             elif findFirst:
                 # If findFirst=True, each collection gets its own subquery so
@@ -219,8 +238,7 @@ class QueryBuilder:
                     run=SimpleQuery.Select if isResult else None,
                     ingestDate=SimpleQuery.Select if isResult else None,
                 )
-                if ssq is not None:
-                    subsubqueries.append(ssq.combine())
+                subsubqueries.append(ssq.combine())
             if calibration_collections:
                 ssq = datasetRecordStorage.select(
                     *calibration_collections,
@@ -229,9 +247,9 @@ class QueryBuilder:
                     run=SimpleQuery.Select if isResult else None,
                     ingestDate=SimpleQuery.Select if isResult else None,
                 )
-                if ssq is not None:
-                    subsubqueries.append(ssq.combine())
+                subsubqueries.append(ssq.combine())
         if not subsubqueries:
+            self._doomed_by.extend(rejections)
             return False
         # Although one would expect that these subqueries can be
         # UNION ALL instead of UNION because each subquery is already
@@ -507,10 +525,12 @@ class QueryBuilder:
             self._joinMissingDimensionElements()
         self._addWhereClause()
         if self._columns.isEmpty():
-            return EmptyQuery(self.summary.requested.universe, managers=self._managers)
+            return EmptyQuery(self.summary.requested.universe, managers=self._managers,
+                              doomed_by=self._doomed_by)
         return DirectQuery(graph=self.summary.requested,
                            uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
                            whereRegion=self.summary.where.dataId.region,
                            simpleQuery=self._simpleQuery,
                            columns=self._columns,
-                           managers=self._managers)
+                           managers=self._managers,
+                           doomed_by=self._doomed_by)

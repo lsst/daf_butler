@@ -33,7 +33,9 @@ from typing import (
     ItemsView,
     Iterable,
     Iterator,
+    List,
     Mapping,
+    Optional,
     Set,
     Union,
     ValuesView,
@@ -319,6 +321,8 @@ class CollectionSummary:
         self,
         datasetType: DatasetType,
         restriction: GovernorDimensionRestriction,
+        rejections: Optional[List[str]] = None,
+        name: Optional[str] = None,
     ) -> bool:
         """Test whether the collection summarized by this object should be
         queried for a given dataset type and governor dimension values.
@@ -334,6 +338,13 @@ class CollectionSummary:
             query, usually from a WHERE expression.  If this is disjoint with
             the data IDs actually present in the collection, `False` will be
             returned.
+        rejections : `list` [ `str` ], optional
+            If provided, a list that will be populated with a log- or
+            exception-friendly message explaining why this dataset is
+            incompatible with this collection when `False` is returned.
+        name : `str`, optional
+            Name of the collection this object summarizes, for use in messages
+            appended to ``rejections``.  Ignored if ``rejections`` is `None`.
 
         Returns
         -------
@@ -344,11 +355,19 @@ class CollectionSummary:
         """
         parent = datasetType if not datasetType.isComponent() else datasetType.makeCompositeDatasetType()
         if parent not in self.datasetTypes:
+            if rejections is not None:
+                rejections.append(f"No datasets of type {parent.name} in collection {name!r}.")
             return False
         for governor in datasetType.dimensions.governors:
             if (values_in_self := self.dimensions.get(governor)) is not None:
                 if (values_in_other := restriction.get(governor)) is not None:
                     if values_in_self.isdisjoint(values_in_other):
+                        assert values_in_other, f"No valid values in restriction for dimension {governor}."
+                        if rejections is not None:
+                            rejections.append(
+                                f"No datasets with {governor.name} in {values_in_other} "
+                                f"in collection {name!r}."
+                            )
                         return False
         return True
 

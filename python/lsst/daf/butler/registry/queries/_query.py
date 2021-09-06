@@ -27,7 +27,6 @@ from contextlib import contextmanager
 import enum
 import itertools
 from typing import (
-    Callable,
     Dict,
     Iterable,
     Iterator,
@@ -75,6 +74,10 @@ class Query(ABC):
     managers : `RegistryManagers`
         A struct containing the registry manager instances used by the query
         system.
+    doomed_by : `Iterable` [ `str` ], optional
+        A list of messages (appropriate for e.g. logging or exceptions) that
+        explain why the query is known to return no results even before it is
+        executed.  Queries with a non-empty list will never be executed.
 
     Notes
     -----
@@ -87,10 +90,14 @@ class Query(ABC):
                  graph: DimensionGraph,
                  whereRegion: Optional[Region],
                  managers: RegistryManagers,
+                 doomed_by: Iterable[str] = (),
                  ):
         self.graph = graph
         self.whereRegion = whereRegion
         self.managers = managers
+        self._doomed_by = tuple(doomed_by)
+        self._filtered_by_join: Optional[int] = None
+        self._filtered_by_where: Optional[int] = None
 
     @abstractmethod
     def isUnique(self) -> bool:
@@ -178,6 +185,138 @@ class Query(ABC):
             return None
         return cols.datasetType
 
+    def count(self, db: Database, *, region: Optional[Region] = None, exact: bool = True) -> int:
+        """Count the number of rows this query would return.
+
+        Parameters
+        ----------
+        db : `Database`
+            Object managing the database connection.
+        region : `sphgeom.Region`, optional
+            A region that any result-row regions must overlap in order to be
+            yielded.  If not provided, this will be ``self.whereRegion``, if
+            that exists.
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed to account for that filtering in the count.  If `False`, the
+            result may be an upper bound.
+
+        Returns
+        -------
+        count : `int`
+            The number of rows the query would return, or an upper bound if
+            ``exact=False``.
+        """
+        if self._doomed_by:
+            return 0
+        sql = self.sql
+        if sql is None:
+            return 1
+        if exact and self.spatial:
+            filtered_count = 0
+            for _ in self.rows(db, region=region):
+                filtered_count += 1
+            return filtered_count
+        else:
+            return db.query(
+                sql.with_only_columns([sqlalchemy.sql.func.count()]).order_by(None)
+            ).scalar()
+
+    def any(
+        self,
+        db: Database, *,
+        region: Optional[Region] = None,
+        execute: bool = True,
+        exact: bool = True,
+    ) -> bool:
+        """Test whether this query returns any results.
+
+        Parameters
+        ----------
+        db : `Database`
+            Object managing the database connection.
+        region : `sphgeom.Region`, optional
+            A region that any result-row regions must overlap in order to be
+            yielded.  If not provided, this will be ``self.whereRegion``, if
+            that exists.
+        execute : `bool`, optional
+            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
+            determined prior to execution that the query would return no rows.
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed, until at least one result row is found.  If `False`, the
+            returned result does not account for post-query filtering, and
+            hence may be `True` even when all result rows would be filtered
+            out.
+
+        Returns
+        -------
+        any : `bool`
+            `True` if the query would (or might, depending on arguments) yield
+            result rows.  `False` if it definitely would not.
+        """
+        if self._doomed_by:
+            return False
+        sql = self.sql
+        if sql is None:
+            return True
+        if exact and not execute:
+            raise TypeError("Cannot obtain exact results without executing the query.")
+        if exact and self.spatial:
+            for _ in self.rows(db, region=region):
+                return True
+            return False
+        elif execute:
+            return db.query(sql.limit(1)).one_or_none() is not None
+        else:
+            return True
+
+    def explain_no_results(
+        self,
+        db: Database, *,
+        region: Optional[Region] = None,
+    ) -> Iterator[str]:
+        """Return human-readable messages that may help explain why the query
+        yields no results.
+
+        Parameters
+        ----------
+        db : `Database`
+            Object managing the database connection.
+        region : `sphgeom.Region`, optional
+            A region that any result-row regions must overlap in order to be
+            yielded.  If not provided, this will be ``self.whereRegion``, if
+            that exists.
+
+        Returns
+        -------
+        messages : `Iterator` [ `str` ]
+            String messages that describe reasons the query might not yield any
+            results.
+
+        Notes
+        -----
+        Messages related to post-query filtering are only available if `rows`,
+        `any`, or `count` was already called with the same region (with
+        ``exact=True`` for the latter two).
+
+        At present, this method only returns messages that are generated while
+        the query is being built or filtered.  In the future, it may perform
+        its own new follow-up queries, which users may wish to short-circuit
+        simply by not continuing to iterate over its results.
+        """
+        yield from self._doomed_by
+        if self._filtered_by_where:
+            yield (
+                f"{self._filtered_by_where} result rows were filtered out because "
+                "one or more region did not overlap the WHERE-clause region."
+            )
+        if self._filtered_by_join:
+            yield (
+                f"{self._filtered_by_join} result rows were filtered out because "
+                "one or more regions did not overlap."
+            )
+
     @abstractmethod
     def getDatasetColumns(self) -> Optional[DatasetQueryColumns]:
         """Return the columns for the datasets returned by this query.
@@ -208,44 +347,14 @@ class Query(ABC):
         """
         raise NotImplementedError()
 
-    def predicate(self, region: Optional[Region] = None) -> Callable[[sqlalchemy.engine.RowProxy], bool]:
-        """Return a callable that can perform extra Python-side filtering of
-        query results.
-
-        To get the expected results from a query, the returned predicate *must*
-        be used to ignore rows for which it returns `False`; this permits the
-        `QueryBuilder` implementation to move logic from the database to Python
-        without changing the public interface.
-
-        Parameters
-        ----------
-        region : `sphgeom.Region`, optional
-            A region that any result-row regions must overlap in order for the
-            predicate to return `True`.  If not provided, this will be
-            ``self.whereRegion``, if that exists.
-
-        Returns
-        -------
-        func : `Callable`
-            A callable that takes a single `sqlalchemy.engine.RowProxy`
-            argmument and returns `bool`.
-        """
-        whereRegion = region if region is not None else self.whereRegion
-
-        def closure(row: sqlalchemy.engine.RowProxy) -> bool:
-            rowRegions = [row._mapping[self.getRegionColumn(element.name)] for element in self.spatial]
-            if whereRegion and any(r.isDisjointFrom(whereRegion) for r in rowRegions):
-                return False
-            return not any(a.isDisjointFrom(b) for a, b in itertools.combinations(rowRegions, 2))
-
-        return closure
-
     def rows(self, db: Database, *, region: Optional[Region] = None
              ) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
         """Execute the query and yield result rows, applying `predicate`.
 
         Parameters
         ----------
+        db : `Database`
+            Object managing the database connection.
         region : `sphgeom.Region`, optional
             A region that any result-row regions must overlap in order to be
             yielded.  If not provided, this will be ``self.whereRegion``, if
@@ -257,10 +366,20 @@ class Query(ABC):
             Result row from the query.  `None` may yielded exactly once instead
             of any real rows to indicate an empty query (see `EmptyQuery`).
         """
-        predicate = self.predicate(region)
+        if self._doomed_by:
+            return
+        whereRegion = region if region is not None else self.whereRegion
+        self._filtered_by_where = 0
+        self._filtered_by_join = 0
         for row in db.query(self.sql):
-            if predicate(row):
-                yield row
+            rowRegions = [row._mapping[self.getRegionColumn(element.name)] for element in self.spatial]
+            if whereRegion and any(r.isDisjointFrom(whereRegion) for r in rowRegions):
+                self._filtered_by_where += 1
+                continue
+            if not not any(a.isDisjointFrom(b) for a, b in itertools.combinations(rowRegions, 2)):
+                self._filtered_by_join += 1
+                continue
+            yield row
 
     def extractDimensionsTuple(self, row: Optional[sqlalchemy.engine.RowProxy],
                                dimensions: Iterable[Dimension]) -> tuple:
@@ -470,14 +589,16 @@ class Query(ABC):
         spec = self._makeTableSpec()
         with db.session() as session:
             table = session.makeTemporaryTable(spec)
-            db.insert(table, select=self.sql, names=spec.fields.names)
+            if not self._doomed_by:
+                db.insert(table, select=self.sql, names=spec.fields.names)
             yield MaterializedQuery(table=table,
                                     spatial=self.spatial,
                                     datasetType=self.datasetType,
                                     isUnique=self.isUnique(),
                                     graph=self.graph,
                                     whereRegion=self.whereRegion,
-                                    managers=self.managers)
+                                    managers=self.managers,
+                                    doomed_by=self._doomed_by)
             session.dropTemporaryTable(table)
 
     @abstractmethod
@@ -620,6 +741,10 @@ class DirectQuery(Query):
     managers : `RegistryManagers`
         Struct containing the `Registry` manager helper objects, to be
         forwarded to the `Query` constructor.
+    doomed_by : `Iterable` [ `str` ], optional
+        A list of messages (appropriate for e.g. logging or exceptions) that
+        explain why the query is known to return no results even before it is
+        executed.  Queries with a non-empty list will never be executed.
     """
     def __init__(self, *,
                  simpleQuery: SimpleQuery,
@@ -627,8 +752,9 @@ class DirectQuery(Query):
                  uniqueness: DirectQueryUniqueness,
                  graph: DimensionGraph,
                  whereRegion: Optional[Region],
-                 managers: RegistryManagers):
-        super().__init__(graph=graph, whereRegion=whereRegion, managers=managers)
+                 managers: RegistryManagers,
+                 doomed_by: Iterable[str] = ()):
+        super().__init__(graph=graph, whereRegion=whereRegion, managers=managers, doomed_by=doomed_by)
         assert not simpleQuery.columns, "Columns should always be set on a copy in .sql"
         assert not columns.isEmpty(), "EmptyQuery must be used when a query would have no columns."
         self._simpleQuery = simpleQuery
@@ -713,6 +839,7 @@ class DirectQuery(Query):
             graph=graph,
             whereRegion=self.whereRegion if not unique else None,
             managers=self.managers,
+            doomed_by=self._doomed_by,
         )
 
     def makeBuilder(self, summary: Optional[QuerySummary] = None) -> QueryBuilder:
@@ -726,7 +853,7 @@ class DirectQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        builder = QueryBuilder(summary, managers=self.managers)
+        builder = QueryBuilder(summary, managers=self.managers, doomed_by=self._doomed_by)
         builder.joinTable(self.sql.alias(), dimensions=self.graph.dimensions,
                           datasets=self.getDatasetColumns())
         return builder
@@ -760,6 +887,10 @@ class MaterializedQuery(Query):
     managers : `RegistryManagers`
         A struct containing `Registry` manager helper objects, forwarded to
         the `Query` constructor.
+    doomed_by : `Iterable` [ `str` ], optional
+        A list of messages (appropriate for e.g. logging or exceptions) that
+        explain why the query is known to return no results even before it is
+        executed.  Queries with a non-empty list will never be executed.
     """
     def __init__(self, *,
                  table: sqlalchemy.schema.Table,
@@ -768,8 +899,9 @@ class MaterializedQuery(Query):
                  isUnique: bool,
                  graph: DimensionGraph,
                  whereRegion: Optional[Region],
-                 managers: RegistryManagers):
-        super().__init__(graph=graph, whereRegion=whereRegion, managers=managers)
+                 managers: RegistryManagers,
+                 doomed_by: Iterable[str] = ()):
+        super().__init__(graph=graph, whereRegion=whereRegion, managers=managers, doomed_by=doomed_by)
         self._table = table
         self._spatial = tuple(spatial)
         self._datasetType = datasetType
@@ -832,6 +964,7 @@ class MaterializedQuery(Query):
             graph=graph,
             whereRegion=self.whereRegion if not unique else None,
             managers=self.managers,
+            doomed_by=self._doomed_by,
         )
 
     def makeBuilder(self, summary: Optional[QuerySummary] = None) -> QueryBuilder:
@@ -845,7 +978,7 @@ class MaterializedQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        builder = QueryBuilder(summary, managers=self.managers)
+        builder = QueryBuilder(summary, managers=self.managers, doomed_by=self._doomed_by)
         builder.joinTable(self._table, dimensions=self.graph.dimensions, datasets=self.getDatasetColumns())
         return builder
 
@@ -861,9 +994,18 @@ class EmptyQuery(Query):
     managers : `RegistryManagers`
         A struct containing the registry manager instances used by the query
         system.
+    doomed_by : `Iterable` [ `str` ], optional
+        A list of messages (appropriate for e.g. logging or exceptions) that
+        explain why the query is known to return no results even before it is
+        executed.  Queries with a non-empty list will never be executed.
     """
-    def __init__(self, universe: DimensionUniverse, managers: RegistryManagers):
-        super().__init__(graph=universe.empty, whereRegion=None, managers=managers)
+    def __init__(
+        self,
+        universe: DimensionUniverse,
+        managers: RegistryManagers,
+        doomed_by: Iterable[str] = (),
+    ):
+        super().__init__(graph=universe.empty, whereRegion=None, managers=managers, doomed_by=doomed_by)
 
     def isUnique(self) -> bool:
         # Docstring inherited from Query.
@@ -888,7 +1030,8 @@ class EmptyQuery(Query):
 
     def rows(self, db: Database, *, region: Optional[Region] = None
              ) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
-        yield None
+        if not self._doomed_by:
+            yield None
 
     @property
     def sql(self) -> Optional[sqlalchemy.sql.FromClause]:
@@ -918,4 +1061,4 @@ class EmptyQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        return QueryBuilder(summary, managers=self.managers)
+        return QueryBuilder(summary, managers=self.managers, doomed_by=self._doomed_by)

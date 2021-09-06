@@ -304,17 +304,84 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             components = [componentName]
         else:
             components = [None]
-        if not builder.joinDataset(datasetType, collections=collections, findFirst=findFirst):
-            raise RuntimeError(
-                f"Error finding datasets of type {datasetType.name} in collections {collections}; "
-                "it is impossible for any such datasets to be found in any of those collections, "
-                "most likely because the dataset type is not registered.  "
-                "This error may become a successful query that returns no results in the future, "
-                "because queries with no results are not usually considered an error."
-            )
+        builder.joinDataset(datasetType, collections=collections, findFirst=findFirst)
         query = builder.finish(joinMissing=False)
         return ParentDatasetQueryResults(db=self._db, query=query, components=components,
-                                         records=self._records)
+                                         records=self._records, datasetType=datasetType)
+
+    def count(self, *, exact: bool = True) -> int:
+        """Count the number of rows this query would return.
+
+        Parameters
+        ----------
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed to account for that filtering in the count.  If `False`, the
+            result may be an upper bound.
+
+        Returns
+        -------
+        count : `int`
+            The number of rows the query would return, or an upper bound if
+            ``exact=False``.
+
+        Notes
+        -----
+        This counts the number of rows returned, not the number of unique rows
+        returned, so even with ``exact=True`` it may provide only an upper
+        bound on the number of *deduplicated* result rows.
+        """
+        return self._query.count(self._db, exact=exact)
+
+    def any(
+        self, *,
+        execute: bool = True,
+        exact: bool = True,
+    ) -> bool:
+        """Test whether this query returns any results.
+
+        Parameters
+        ----------
+        execute : `bool`, optional
+            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
+            determined prior to execution that the query would return no rows.
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed, until at least one result row is found.  If `False`, the
+            returned result does not account for post-query filtering, and
+            hence may be `True` even when all result rows would be filtered
+            out.
+
+        Returns
+        -------
+        any : `bool`
+            `True` if the query would (or might, depending on arguments) yield
+            result rows.  `False` if it definitely would not.
+        """
+        return self._query.any(self._db, execute=execute, exact=exact)
+
+    def explain_no_results(self) -> Iterator[str]:
+        """Return human-readable messages that may help explain why the query
+        yields no results.
+
+        Returns
+        -------
+        messages : `Iterator` [ `str` ]
+            String messages that describe reasons the query might not yield any
+            results.
+
+        Notes
+        -----
+        Messages related to post-query filtering are only available if the
+        iterator has been exhausted, or if `any` or `count` was already called
+        (with ``exact=True`` for the latter two).
+
+        At present, this method only returns messages that are generated while
+        the query is being built or filtered.  In the future, it may perform
+        its own new follow-up queries, which users may wish to short-circuit
+        simply by not continuing to iterate over its results.
+        """
+        return self._query.explain_no_results(self._db)
 
 
 class DatasetQueryResults(Iterable[DatasetRef]):
@@ -370,6 +437,83 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def count(self, *, exact: bool = True) -> int:
+        """Count the number of rows this query would return.
+
+        Parameters
+        ----------
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed to account for that filtering in the count.  If `False`, the
+            result may be an upper bound.
+
+        Returns
+        -------
+        count : `int`
+            The number of rows the query would return, or an upper bound if
+            ``exact=False``.
+
+        Notes
+        -----
+        This counts the number of rows returned, not the number of unique rows
+        returned, so even with ``exact=True`` it may provide only an upper
+        bound on the number of *deduplicated* result rows.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def any(
+        self, *,
+        execute: bool = True,
+        exact: bool = True,
+    ) -> bool:
+        """Test whether this query returns any results.
+
+        Parameters
+        ----------
+        execute : `bool`, optional
+            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
+            determined prior to execution that the query would return no rows.
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed, until at least one result row is found.  If `False`, the
+            returned result does not account for post-query filtering, and
+            hence may be `True` even when all result rows would be filtered
+            out.
+
+        Returns
+        -------
+        any : `bool`
+            `True` if the query would (or might, depending on arguments) yield
+            result rows.  `False` if it definitely would not.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def explain_no_results(self) -> Iterator[str]:
+        """Return human-readable messages that may help explain why the query
+        yields no results.
+
+        Returns
+        -------
+        messages : `Iterator` [ `str` ]
+            String messages that describe reasons the query might not yield any
+            results.
+
+        Notes
+        -----
+        Messages related to post-query filtering are only available if the
+        iterator has been exhausted, or if `any` or `count` was already called
+        (with ``exact=True`` for the latter two).
+
+        At present, this method only returns messages that are generated while
+        the query is being built or filtered.  In the future, it may perform
+        its own new follow-up queries, which users may wish to short-circuit
+        simply by not continuing to iterate over its results.
+        """
+        raise NotImplementedError()
+
 
 class ParentDatasetQueryResults(DatasetQueryResults):
     """An object that represents results from a query for datasets with a
@@ -393,17 +537,27 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         as outer keys, `DimensionRecord` instances as inner values, and
         ``tuple(record.dataId.values())`` for the inner keys / outer values
         (where ``record`` is the innermost `DimensionRecord` instance).
+    datasetType : `DatasetType`, optional
+        Parent dataset type for all datasets returned by this query.  If not
+        provided, ``query.datasetType`` be used, and must not be `None` (as it
+        is in the case where the query is known to yield no results prior to
+        execution).
     """
     def __init__(self, db: Database, query: Query, *,
                  components: Sequence[Optional[str]],
-                 records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None):
+                 records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+                 datasetType: Optional[DatasetType] = None):
         self._db = db
         self._query = query
         self._components = components
         self._records = records
-        assert query.datasetType is not None, \
+        if datasetType is None:
+            datasetType = query.datasetType
+        assert datasetType is not None, \
             "Query used to initialize dataset results must have a dataset."
-        assert query.datasetType.dimensions == query.graph
+        assert datasetType.dimensions == query.graph, \
+            f"Query dimensions {query.graph} do not match dataset type dimesions {datasetType.dimensions}."
+        self._datasetType = datasetType
 
     __slots__ = ("_db", "_query", "_dimensions", "_components", "_records")
 
@@ -433,8 +587,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         """The parent dataset type for all datasets in this iterable
         (`DatasetType`).
         """
-        assert self._query.datasetType is not None
-        return self._query.datasetType
+        return self._datasetType
 
     @property
     def dataIds(self) -> DataCoordinateQueryResults:
@@ -460,16 +613,32 @@ class ParentDatasetQueryResults(DatasetQueryResults):
             included (at most once) to include the parent dataset type.
         """
         return ParentDatasetQueryResults(self._db, self._query, records=self._records,
-                                         components=components)
+                                         components=components, datasetType=self._datasetType)
 
     def expanded(self) -> ParentDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
         if self._records is None:
             records = self.dataIds.expanded()._records
             return ParentDatasetQueryResults(self._db, self._query, records=records,
-                                             components=self._components)
+                                             components=self._components, datasetType=self._datasetType)
         else:
             return self
+
+    def count(self, *, exact: bool = True) -> int:
+        # Docstring inherited.
+        return len(self._components) * self._query.count(self._db, exact=exact)
+
+    def any(
+        self, *,
+        execute: bool = True,
+        exact: bool = True,
+    ) -> bool:
+        # Docstring inherited.
+        return self._query.any(self._db, execute=execute, exact=exact)
+
+    def explain_no_results(self) -> Iterator[str]:
+        # Docstring inherited.
+        return self._query.explain_no_results(self._db)
 
 
 class ChainedDatasetQueryResults(DatasetQueryResults):
@@ -480,10 +649,16 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
     ----------
     chain : `Sequence` [ `ParentDatasetQueryResults` ]
         The underlying results objects this object will chain together.
+    doomed_by : `Iterable` [ `str` ], optional
+        A list of messages (appropriate for e.g. logging or exceptions) that
+        explain why the query is known to return no results even before it is
+        executed.  Queries with a non-empty list will never be executed.
+        Child results objects may also have their own list.
     """
 
-    def __init__(self, chain: Sequence[ParentDatasetQueryResults]):
+    def __init__(self, chain: Sequence[ParentDatasetQueryResults], doomed_by: Iterable[str] = ()):
         self._chain = chain
+        self._doomed_by = tuple(doomed_by)
 
     __slots__ = ("_chain",)
 
@@ -505,3 +680,21 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
     def expanded(self) -> ChainedDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
         return ChainedDatasetQueryResults([r.expanded() for r in self._chain])
+
+    def count(self, *, exact: bool = True) -> int:
+        # Docstring inherited.
+        return sum(r.count(exact=exact) for r in self._chain)
+
+    def any(
+        self, *,
+        execute: bool = True,
+        exact: bool = True,
+    ) -> bool:
+        # Docstring inherited.
+        return any(r.any(execute=execute, exact=exact) for r in self._chain)
+
+    def explain_no_results(self) -> Iterator[str]:
+        # Docstring inherited.
+        for r in self._chain:
+            yield from r.explain_no_results()
+        yield from self._doomed_by

@@ -860,6 +860,12 @@ class SqlRegistry(Registry):
                     composition.setdefault(parentDatasetType, []).append(componentName)
                 else:
                     composition.setdefault(trueDatasetType, []).append(None)
+            if not composition:
+                return queries.ChainedDatasetQueryResults(
+                    [],
+                    doomed_by=[f"No registered dataset type matching {t!r} found."
+                               for t in iterable(datasetType)],
+                )
         elif datasetType.isComponent():
             # We were given a true DatasetType instance, but it's a component.
             # the composition dict will have exactly one item.
@@ -912,10 +918,9 @@ class SqlRegistry(Registry):
         # need to findFirst.  Note that if any of the collections are
         # actually wildcard expressions, and we've asked for deduplication,
         # this will raise TypeError for us.
-        if not builder.joinDataset(datasetType, collections, isResult=True, findFirst=findFirst):
-            return queries.ChainedDatasetQueryResults(())
+        builder.joinDataset(datasetType, collections, isResult=True, findFirst=findFirst)
         query = builder.finish()
-        return queries.ParentDatasetQueryResults(self._db, query, components=[None])
+        return queries.ParentDatasetQueryResults(self._db, query, components=[None], datasetType=datasetType)
 
     def queryDataIds(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                      dataId: Optional[DataId] = None,
