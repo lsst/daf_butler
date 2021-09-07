@@ -935,9 +935,9 @@ class SqlRegistry(Registry):
         requestedDimensions = self.dimensions.extract(dimensions)
         queryDimensionNames = set(requestedDimensions.names)
         if datasets is not None:
-            if collections is None:
+            if not collections:
                 if not self.defaults.collections:
-                    raise TypeError("Cannot pass 'datasets' without 'collections'.")
+                    raise TypeError(f"Cannot pass 'datasets' (='{datasets}') without 'collections'.")
                 collections = self.defaults.collections
             else:
                 # Preprocess collections expression in case the original
@@ -954,6 +954,8 @@ class SqlRegistry(Registry):
                 if componentName is not None:
                     datasetType = self.getDatasetType(parentDatasetTypeName)
                 standardizedDatasetTypes.add(datasetType)
+        elif collections:
+            raise TypeError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
 
         summary = queries.QuerySummary(
             requested=DimensionGraph(self.dimensions, names=queryDimensionNames),

@@ -898,6 +898,13 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (2, 3))
 
+        # queryDataIds with only one of `datasets` and `collections` is an
+        # error.
+        with self.assertRaises(TypeError):
+            registry.queryDataIds(dimensions, datasets=rawType)
+        with self.assertRaises(TypeError):
+            registry.queryDataIds(dimensions, collections=run1)
+
         # expression excludes everything
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
                                      where="visit > 1000", instrument="DummyCam").toSet()

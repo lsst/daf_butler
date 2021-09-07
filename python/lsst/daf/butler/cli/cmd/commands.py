@@ -424,12 +424,12 @@ def certify_calibrations(*args, **kwargs):
 @repo_argument(required=True)
 @dimensions_argument(help=unwrap("""DIMENSIONS are the keys of the data IDs to yield, such as exposure,
                                  instrument, or tract. Will be expanded to include any dependencies."""))
-@collections_option()
+@collections_option(help=collections_option.help + " May only be used with --datasets.")
 @datasets_option(help=unwrap("""An expression that fully or partially identifies dataset types that should
                              constrain the yielded data IDs.  For example, including "raw" here would
                              constrain the yielded "instrument", "exposure", "detector", and
                              "physical_filter" values to only those for which at least one "raw" dataset
-                             exists in "collections"."""))
+                             exists in "collections".  Requires --collections."""))
 @where_option(help=where_help)
 @options_file_option()
 def query_data_ids(**kwargs):
@@ -449,9 +449,9 @@ def query_data_ids(**kwargs):
 @repo_argument(required=True)
 @element_argument(required=True)
 @datasets_option(help=unwrap("""An expression that fully or partially identifies dataset types that should
-                             constrain the yielded records. Only affects results when used with
+                             constrain the yielded records. May only be used with
                              --collections."""))
-@collections_option(help=collections_option.help + " Only affects results when used with --datasets.")
+@collections_option(help=collections_option.help + " May only be used with --datasets.")
 @where_option(help=where_help)
 @click.option("--no-check", is_flag=True,
               help=unwrap("""Don't check the query before execution. By default the query is checked before it
