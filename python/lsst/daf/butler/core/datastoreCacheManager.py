@@ -532,15 +532,17 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
             # The cached file could be removed by another process doing
             # cache expiration so we need to protect against that by making
-            # a copy in a different tree.  Using hardlinks is preferred but
-            # soft link should still be acceptable given the right checks
-            # in the expiration code.
+            # a copy in a different tree. Use hardlinks to ensure that
+            # we either have the cached file or we don't. This is robust
+            # against race conditions that can be caused by using soft links
+            # and the other end of the link being deleted just after it
+            # is created.
             path_in_cache = cached_location.relative_to(self.cache_directory)
             assert path_in_cache is not None, f"Somehow {cached_location} not in cache directory"
             temp_location: Optional[ButlerURI] = self._temp_exempt_directory.join(path_in_cache)
             try:
                 if temp_location is not None:
-                    temp_location.transfer_from(cached_location, transfer="link")
+                    temp_location.transfer_from(cached_location, transfer="hardlink")
             except Exception:
                 # Any failure will be treated as if the file was not
                 # in the cache. Yielding the original cache location
@@ -650,12 +652,6 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         """
         for entry in cache_entries:
             path = self.cache_directory.join(entry)
-
-            # If the file happens to also exist in the exempt folder
-            # skip removal since a process is actively using the file.
-            if self._temp_exempt_directory.join(entry).exists():
-                log.debug("Skipping removal of %s since it is currently in use", path)
-                continue
 
             self._cache_entries.pop(entry)
             log.debug("Removing file from cache: %s", path)

@@ -1196,12 +1196,15 @@ cached:
             self.assertIsNotNone(found)
 
             # Trigger cache expiration that should remove the file
-            # we just retrieved. Should now have: 2, 3, 4, 5
+            # we just retrieved. Should now have: 3, 4, 5
             cached = cache_manager.move_to_cache(self.files[5], self.refs[5])
             self.assertIsNotNone(cached)
 
+            # Cache should still report the standard file count.
+            self.assertEqual(cache_manager.file_count, threshold + 1)
+
             # Add additional entry to cache.
-            # Should now have 2, 4, 5, 6
+            # Should now have 4, 5, 6
             cached = cache_manager.move_to_cache(self.files[6], self.refs[6])
             self.assertIsNotNone(cached)
 
@@ -1215,16 +1218,22 @@ cached:
         # Outside context the file should no longer exist.
         self.assertFalse(found.exists())
 
-        # There should be more files in the cache than normally allowed.
-        self.assertEqual(cache_manager.file_count, threshold + 2)
+        # File count should not have changed.
+        self.assertEqual(cache_manager.file_count, threshold + 1)
 
-        # We can still ask for the same file from the cache.
+        # Dataset 2 was in the exempt directory but because hardlinks
+        # are used it was deleted from the main cache during cache expiry
+        # above and so should no longer be found.
         with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
-            self.assertIsNotNone(found)
+            self.assertIsNone(found)
 
-        # But not the dataset that was stored after it.
+        # And the one stored after it is also gone.
         with cache_manager.find_in_cache(self.refs[3], ".txt") as found:
             self.assertIsNone(found)
+
+        # But dataset 4 is present.
+        with cache_manager.find_in_cache(self.refs[4], ".txt") as found:
+            self.assertIsNotNone(found)
 
         # Adding a new dataset to the cache should now delete it.
         cache_manager.move_to_cache(self.files[7], self.refs[7])
