@@ -175,6 +175,9 @@ class Quantum:
                 (self.taskName, self.taskClass, self.dataId, dict(self.initInputs.items()),
                  dict(self.inputs), dict(self.outputs)))
 
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}(taskName={self.taskName}, dataId={self.dataId})"
+
     @staticmethod
     def _reduceFactory(taskName: Optional[str],
                        taskClass: Optional[Type],
