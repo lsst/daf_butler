@@ -1,0 +1,2 @@
+Add ability to cache datasets locally when using a remote file store.
+This can significantly improve performance when retrieving components from a dataset.

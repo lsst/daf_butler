@@ -1,4 +1,4 @@
-default: "{run:/}/{datasetType}.{component:?}/{tract:?}/{patch:?}/??#?/{physical_filter:?}/{instrument:?}_{visit:?}"
+default: "{run:/}/{datasetType}.{component:?}/{tract:?}/{patch:?}/??#?/{physical_filter:?}/{instrument:?}_{visit:?}_{component:?}"
 random_data: "{run:/}/{datasetType}.{component:?}/{tract:?}/{patch:?}/??#?/{physical_filter:?}/{instrument:?}_{exposure:?}"
 random_data_2: "{run:/}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{exposure:?}"
 calexp: "{run:/}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"

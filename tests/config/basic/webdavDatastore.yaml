@@ -4,3 +4,10 @@ datastore:
   templates: !include templates.yaml
   formatters: !include formatters.yaml
   composites: !include composites.yaml
+  cached:
+    default: false
+    expiry:
+      mode: age
+      threshold: 60
+    cacheable:
+      StructuredDataDictYaml: true

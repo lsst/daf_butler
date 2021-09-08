@@ -24,6 +24,7 @@ import unittest
 import shutil
 import yaml
 import tempfile
+import time
 import lsst.utils.tests
 
 from lsst.utils import doImport
@@ -1035,6 +1036,10 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
         cls.storageClassFactory = StorageClassFactory()
         cls.universe = DimensionUniverse()
 
+        # Ensure that we load the test storage class definitions.
+        scConfigFile = os.path.join(TESTDIR, "config/basic/storageClasses.yaml")
+        cls.storageClassFactory.addFromConfig(scConfigFile)
+
     def setUp(self):
         self.id = 0
 
@@ -1047,16 +1052,35 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
         dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V"}
 
         # Create list of refs and list of temporary files
-        n_datasets = 2
+        n_datasets = 10
         self.refs = [self.makeDatasetRef(f"metric{n}", dimensions, sc, dataId,
                                          conform=False) for n in range(n_datasets)]
 
         root_uri = ButlerURI(self.root, forceDirectory=True)
         self.files = [root_uri.join(f"file{n}.txt") for n in range(n_datasets)]
 
-        # Create empty files
+        # Create test files.
         for uri in self.files:
-            uri.write(b"")
+            uri.write(b"0123456789")
+
+        # Create some composite refs with component files.
+        sc = self.storageClassFactory.getStorageClass("StructuredData")
+        self.composite_refs = [self.makeDatasetRef(f"composite{n}", dimensions, sc, dataId,
+                                                   conform=False) for n in range(3)]
+        self.comp_files = []
+        self.comp_refs = []
+        for n, ref in enumerate(self.composite_refs):
+            component_refs = []
+            component_files = []
+            for component in sc.components:
+                component_ref = ref.makeComponentRef(component)
+                file = root_uri.join(f"composite_file-{n}-{component}.txt")
+                component_refs.append(component_ref)
+                component_files.append(file)
+                file.write(b"9876543210")
+
+            self.comp_files.append(component_files)
+            self.comp_refs.append(component_refs)
 
     def tearDown(self):
         if self.root is not None and os.path.exists(self.root):
@@ -1082,6 +1106,19 @@ cached:
 
         # Test that the cache directory is marked temporary
         self.assertTrue(cache_manager.cache_directory.isTemporary)
+
+    def testNoCacheDirReversed(self):
+        """Use default caching status and metric1 to false"""
+        config_str = """
+cached:
+  root: null
+  default: true
+  cacheable:
+    metric1: false
+        """
+        cache_manager = self._make_cache_manager(config_str)
+
+        self.assertCache(cache_manager)
 
     def testExplicitCacheDir(self):
         config_str = f"""
@@ -1115,20 +1152,170 @@ cached:
         self.assertTrue(self.files[1].exists())
 
         # Should find this file and it should be within the cache directory.
-        found = cache_manager.find_in_cache(self.refs[0], ".txt")
-        self.assertTrue(found.exists())
-        self.assertIsNotNone(found.relative_to(cache_manager.cache_directory))
+        with cache_manager.find_in_cache(self.refs[0], ".txt") as found:
+            self.assertTrue(found.exists())
+            self.assertIsNotNone(found.relative_to(cache_manager.cache_directory))
 
         # Should not be able to find these in cache
-        self.assertIsNone(cache_manager.find_in_cache(self.refs[0], ".fits"))
-        self.assertIsNone(cache_manager.find_in_cache(self.refs[1], ".fits"))
+        with cache_manager.find_in_cache(self.refs[0], ".fits") as found:
+            self.assertIsNone(found)
+        with cache_manager.find_in_cache(self.refs[1], ".fits") as found:
+            self.assertIsNone(found)
 
     def testNoCache(self):
         cache_manager = DatastoreDisabledCacheManager("", universe=self.universe)
         for uri, ref in zip(self.files, self.refs):
             self.assertFalse(cache_manager.should_be_cached(ref))
             self.assertIsNone(cache_manager.move_to_cache(uri, ref))
-            self.assertIsNone(cache_manager.find_in_cache(ref, ".txt"))
+            with cache_manager.find_in_cache(ref, ".txt") as found:
+                self.assertIsNone(found, msg=f"{cache_manager}")
+
+    def _expiration_config(self, mode: str, threshold: int) -> str:
+        return f"""
+cached:
+  default: true
+  expiry:
+    mode: {mode}
+    threshold: {threshold}
+  cacheable:
+    unused: true
+        """
+
+    def testCacheExpiryFiles(self):
+        threshold = 2  # Keep at least 2 files.
+        mode = "files"
+        config_str = self._expiration_config(mode, threshold)
+
+        cache_manager = self._make_cache_manager(config_str)
+        # Should end with datasets: 2, 3, 4
+        self.assertExpiration(cache_manager, 5, threshold + 1)
+        self.assertIn(f"{mode}={threshold}", str(cache_manager))
+
+        # Check that we will not expire a file that is actively in use.
+        with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
+            self.assertIsNotNone(found)
+
+            # Trigger cache expiration that should remove the file
+            # we just retrieved. Should now have: 3, 4, 5
+            cached = cache_manager.move_to_cache(self.files[5], self.refs[5])
+            self.assertIsNotNone(cached)
+
+            # Cache should still report the standard file count.
+            self.assertEqual(cache_manager.file_count, threshold + 1)
+
+            # Add additional entry to cache.
+            # Should now have 4, 5, 6
+            cached = cache_manager.move_to_cache(self.files[6], self.refs[6])
+            self.assertIsNotNone(cached)
+
+            # Is the file still there?
+            self.assertTrue(found.exists())
+
+            # Can we read it?
+            data = found.read()
+            self.assertGreater(len(data), 0)
+
+        # Outside context the file should no longer exist.
+        self.assertFalse(found.exists())
+
+        # File count should not have changed.
+        self.assertEqual(cache_manager.file_count, threshold + 1)
+
+        # Dataset 2 was in the exempt directory but because hardlinks
+        # are used it was deleted from the main cache during cache expiry
+        # above and so should no longer be found.
+        with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
+            self.assertIsNone(found)
+
+        # And the one stored after it is also gone.
+        with cache_manager.find_in_cache(self.refs[3], ".txt") as found:
+            self.assertIsNone(found)
+
+        # But dataset 4 is present.
+        with cache_manager.find_in_cache(self.refs[4], ".txt") as found:
+            self.assertIsNotNone(found)
+
+        # Adding a new dataset to the cache should now delete it.
+        cache_manager.move_to_cache(self.files[7], self.refs[7])
+
+        with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
+            self.assertIsNone(found)
+
+    def testCacheExpiryDatasets(self):
+        threshold = 2  # Keep 2 datasets.
+        mode = "datasets"
+        config_str = self._expiration_config(mode, threshold)
+
+        cache_manager = self._make_cache_manager(config_str)
+        self.assertExpiration(cache_manager, 5, threshold + 1)
+        self.assertIn(f"{mode}={threshold}", str(cache_manager))
+
+    def testCacheExpiryDatasetsComposite(self):
+        threshold = 2  # Keep 2 datasets.
+        mode = "datasets"
+        config_str = self._expiration_config(mode, threshold)
+
+        cache_manager = self._make_cache_manager(config_str)
+
+        n_datasets = 3
+        for i in range(n_datasets):
+            for component_file, component_ref in zip(self.comp_files[i], self.comp_refs[i]):
+                cached = cache_manager.move_to_cache(component_file, component_ref)
+                self.assertIsNotNone(cached)
+        self.assertEqual(cache_manager.file_count, 6)  # 2 datasets each of 3 files
+
+        # Write two new non-composite and the number of files should drop.
+        self.assertExpiration(cache_manager, 2, 5)
+
+    def testCacheExpirySize(self):
+        threshold = 55  # Each file is 10 bytes
+        mode = "size"
+        config_str = self._expiration_config(mode, threshold)
+
+        cache_manager = self._make_cache_manager(config_str)
+        self.assertExpiration(cache_manager, 10, 6)
+        self.assertIn(f"{mode}={threshold}", str(cache_manager))
+
+    def assertExpiration(self, cache_manager, n_datasets, n_retained):
+        """Insert the datasets and then check the number retained."""
+        for i in range(n_datasets):
+            cached = cache_manager.move_to_cache(self.files[i], self.refs[i])
+            self.assertIsNotNone(cached)
+
+        self.assertEqual(cache_manager.file_count, n_retained)
+
+        # The oldest file should not be in the cache any more.
+        for i in range(n_datasets):
+            with cache_manager.find_in_cache(self.refs[i], ".txt") as found:
+                if i >= n_datasets - n_retained:
+                    self.assertIsInstance(found, ButlerURI)
+                else:
+                    self.assertIsNone(found)
+
+    def testCacheExpiryAge(self):
+        threshold = 1  # Expire older than 2 seconds
+        mode = "age"
+        config_str = self._expiration_config(mode, threshold)
+
+        cache_manager = self._make_cache_manager(config_str)
+        self.assertIn(f"{mode}={threshold}", str(cache_manager))
+
+        # Insert 3 files, then sleep, then insert more.
+        for i in range(2):
+            cached = cache_manager.move_to_cache(self.files[i], self.refs[i])
+            self.assertIsNotNone(cached)
+        time.sleep(2.0)
+        for j in range(4):
+            i = 2 + j  # Continue the counting
+            cached = cache_manager.move_to_cache(self.files[i], self.refs[i])
+            self.assertIsNotNone(cached)
+
+        # Only the files written after the sleep should exist.
+        self.assertEqual(cache_manager.file_count, 4)
+        with cache_manager.find_in_cache(self.refs[1], ".txt") as found:
+            self.assertIsNone(found)
+        with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
+            self.assertIsInstance(found, ButlerURI)
 
 
 if __name__ == "__main__":

@@ -26,8 +26,6 @@ __all__ = ("FileDatastore", )
 
 import hashlib
 import logging
-import os
-import tempfile
 
 from sqlalchemy import BigInteger, String
 
@@ -1040,41 +1038,54 @@ class FileDatastore(GenericBaseDatastore):
                                    f"to location {uri}") from e
             log.debug("Successfully wrote python object to local file at %s", uri)
         else:
-            # This is a remote URI, so first try bytes and write directly else
-            # fallback to a temporary file
-            try:
-                serializedDataset = formatter.toBytes(inMemoryDataset)
-            except NotImplementedError:
-                with tempfile.NamedTemporaryFile(suffix=uri.getExtension()) as tmpFile:
+            # This is a remote URI. Some datasets can be serialized directly
+            # to bytes and sent to the remote datastore without writing a
+            # file. If the dataset is intended to be saved to the cache
+            # a file is always written and direct write to the remote
+            # datastore is bypassed.
+            data_written = False
+            if not self.cacheManager.should_be_cached(ref):
+                try:
+                    serializedDataset = formatter.toBytes(inMemoryDataset)
+                except NotImplementedError:
+                    # Fallback to the file writing option.
+                    pass
+                except Exception as e:
+                    raise RuntimeError(f"Failed to serialize dataset {ref} "
+                                       f"of type {type(inMemoryDataset)} to bytes.") from e
+                else:
+                    log.debug("Writing bytes directly to %s", uri)
+                    uri.write(serializedDataset, overwrite=True)
+                    log.debug("Successfully wrote bytes directly to %s", uri)
+                    data_written = True
+
+            if not data_written:
+                # Did not write the bytes directly to object store so instead
+                # write to temporary file.
+                with ButlerURI.temporary_uri(suffix=uri.getExtension()) as temporary_uri:
                     # Need to configure the formatter to write to a different
                     # location and that needs us to overwrite internals
-                    tmpLocation = Location(*os.path.split(tmpFile.name))
-                    log.debug("Writing dataset to temporary location at %s", tmpLocation.uri)
-                    with formatter._updateLocation(tmpLocation):
+                    log.debug("Writing dataset to temporary location at %s", temporary_uri)
+                    with formatter._updateLocation(Location(None, temporary_uri)):
                         try:
                             formatter.write(inMemoryDataset)
                         except Exception as e:
                             raise RuntimeError(f"Failed to serialize dataset {ref} of type"
                                                f" {type(inMemoryDataset)} to "
-                                               f"temporary location {tmpLocation.uri}") from e
-                    uri.transfer_from(tmpLocation.uri, transfer="copy", overwrite=True)
+                                               f"temporary location {temporary_uri}") from e
+                    uri.transfer_from(temporary_uri, transfer="copy", overwrite=True)
 
                     # Cache if required
-                    self.cacheManager.move_to_cache(tmpLocation.uri, ref)
+                    self.cacheManager.move_to_cache(temporary_uri, ref)
 
                 log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
-            except Exception as e:
-                raise RuntimeError(f"Failed to serialize dataset {ref} to bytes.") from e
-            else:
-                log.debug("Writing bytes directly to %s", uri)
-                uri.write(serializedDataset, overwrite=True)
-                log.debug("Successfully wrote bytes directly to %s", uri)
 
         # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(uri, ref, formatter=formatter)
 
     def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
-                                   ref: DatasetRef, isComponent: bool = False) -> Any:
+                                   ref: DatasetRef, isComponent: bool = False,
+                                   cache_ref: Optional[DatasetRef] = None) -> Any:
         """Read the artifact from datastore into in memory object.
 
         Parameters
@@ -1085,6 +1096,14 @@ class FileDatastore(GenericBaseDatastore):
             The registry information associated with this artifact.
         isComponent : `bool`
             Flag to indicate if a component is being read from this artifact.
+        cache_ref : `DatasetRef`, optional
+            The DatasetRef to use when looking up the file in the cache.
+            This ref must have the same ID as the supplied ref but can
+            be a parent ref or component ref to indicate to the cache whether
+            a composite file is being requested from the cache or a component
+            file. Without this the cache will default to the supplied ref but
+            it can get confused with read-only derived components for
+            disassembled composites.
 
         Returns
         -------
@@ -1094,6 +1113,12 @@ class FileDatastore(GenericBaseDatastore):
         location = getInfo.location
         uri = location.uri
         log.debug("Accessing data from %s", uri)
+
+        if cache_ref is None:
+            cache_ref = ref
+        if cache_ref.id != ref.id:
+            raise ValueError("The supplied cache dataset ref refers to a different dataset than expected:"
+                             f" {ref.id} != {cache_ref.id}")
 
         # Cannot recalculate checksum but can compare size as a quick check
         # Do not do this if the size is negative since that indicates
@@ -1116,8 +1141,15 @@ class FileDatastore(GenericBaseDatastore):
         formatter = getInfo.formatter
         nbytes_max = 10_000_000  # Arbitrary number that we can tune
         if resource_size <= nbytes_max and formatter.can_read_bytes():
-            with time_this(log, msg="Reading bytes from %s", args=(uri,)):
-                serializedDataset = uri.read()
+            with self.cacheManager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
+                if cached_file is not None:
+                    desired_uri = cached_file
+                    msg = f" (cached version of {uri})"
+                else:
+                    desired_uri = uri
+                    msg = ""
+                with time_this(log, msg="Reading bytes from %s%s", args=(desired_uri, msg)):
+                    serializedDataset = desired_uri.read()
             log.debug("Deserializing %s from %d bytes from location %s with formatter %s",
                       f"component {getInfo.component}" if isComponent else "",
                       len(serializedDataset), uri, formatter.name())
@@ -1137,45 +1169,57 @@ class FileDatastore(GenericBaseDatastore):
             msg = ""
 
             # First check in cache for local version.
-            # The cache will only be relevant for remote resources.
-            if not uri.isLocal:
-                cached_file = self.cacheManager.find_in_cache(ref, uri.getExtension())
+            # The cache will only be relevant for remote resources but
+            # no harm in always asking. Context manager ensures that cache
+            # file is not deleted during cache expiration.
+            with self.cacheManager.find_in_cache(cache_ref, uri.getExtension()) as cached_file:
                 if cached_file is not None:
                     msg = f"(via cache read of remote file {uri})"
                     uri = cached_file
                     location_updated = True
 
-            with uri.as_local() as local_uri:
+                with uri.as_local() as local_uri:
 
-                # URI was remote and file was downloaded
-                if uri != local_uri:
-                    cache_msg = ""
-                    location_updated = True
+                    can_be_cached = False
+                    if uri != local_uri:
+                        # URI was remote and file was downloaded
+                        cache_msg = ""
+                        location_updated = True
 
-                    # Cache the downloaded file if needed.
-                    cached_uri = self.cacheManager.move_to_cache(local_uri, ref)
-                    if cached_uri is not None:
-                        local_uri = cached_uri
-                        cache_msg = " and cached"
+                        if self.cacheManager.should_be_cached(cache_ref):
+                            # In this scenario we want to ask if the downloaded
+                            # file should be cached but we should not cache
+                            # it until after we've used it (to ensure it can't
+                            # be expired whilst we are using it).
+                            can_be_cached = True
 
-                    msg = f"(via download to local file{cache_msg})"
+                            # Say that it is "likely" to be cached because
+                            # if the formatter read fails we will not be
+                            # caching this file.
+                            cache_msg = " and likely cached"
 
-                # Calculate the (possibly) new location for the formatter
-                # to use.
-                newLocation = Location(*local_uri.split()) if location_updated else None
+                        msg = f"(via download to local file{cache_msg})"
 
-                log.debug("Reading%s from location %s %s with formatter %s",
-                          f" component {getInfo.component}" if isComponent else "",
-                          uri, msg, formatter.name())
-                try:
-                    with formatter._updateLocation(newLocation):
-                        with time_this(log, msg="Reading%s from location %s %s with formatter %s",
-                                       args=(f" component {getInfo.component}" if isComponent else "",
-                                             uri, msg, formatter.name())):
-                            result = formatter.read(component=getInfo.component if isComponent else None)
-                except Exception as e:
-                    raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
-                                     f" ({ref.datasetType.name} from {uri}): {e}") from e
+                    # Calculate the (possibly) new location for the formatter
+                    # to use.
+                    newLocation = Location(*local_uri.split()) if location_updated else None
+
+                    log.debug("Reading%s from location %s %s with formatter %s",
+                              f" component {getInfo.component}" if isComponent else "",
+                              uri, msg, formatter.name())
+                    try:
+                        with formatter._updateLocation(newLocation):
+                            with time_this(log, msg="Reading%s from location %s %s with formatter %s",
+                                           args=(f" component {getInfo.component}" if isComponent else "",
+                                                 uri, msg, formatter.name())):
+                                result = formatter.read(component=getInfo.component if isComponent else None)
+                    except Exception as e:
+                        raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
+                                         f" ({ref.datasetType.name} from {uri}): {e}") from e
+
+                    # File was read successfully so can move to cache
+                    if can_be_cached:
+                        self.cacheManager.move_to_cache(local_uri, cache_ref)
 
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
                                       isComponent=isComponent)
@@ -1516,7 +1560,9 @@ class FileDatastore(GenericBaseDatastore):
                 # a component though because it is really reading a
                 # standalone dataset -- always tell reader it is not a
                 # component.
-                components[component] = self._read_artifact_into_memory(getInfo, ref, isComponent=False)
+                components[component] = self._read_artifact_into_memory(getInfo,
+                                                                        ref.makeComponentRef(component),
+                                                                        isComponent=False)
 
             inMemoryDataset = ref.datasetType.storageClass.delegate().assemble(components)
 
@@ -1559,6 +1605,10 @@ class FileDatastore(GenericBaseDatastore):
             forwardedStorageClass = rwInfo.formatter.fileDescriptor.readStorageClass
             forwardedStorageClass.validateParameters(parameters)
 
+            # The reference to use for the caching must refer to the forwarded
+            # component and not the derived component.
+            cache_ref = ref.makeCompositeRef().makeComponentRef(forwardedComponent)
+
             # Unfortunately the FileDescriptor inside the formatter will have
             # the wrong write storage class so we need to create a new one
             # given the immutability constraint.
@@ -1585,7 +1635,8 @@ class FileDatastore(GenericBaseDatastore):
                                                    rwInfo.info, assemblerParams, {},
                                                    refComponent, refStorageClass)
 
-            return self._read_artifact_into_memory(readInfo, ref, isComponent=True)
+            return self._read_artifact_into_memory(readInfo, ref, isComponent=True,
+                                                   cache_ref=cache_ref)
 
         else:
             # Single file request or component from that composite file
@@ -1603,6 +1654,10 @@ class FileDatastore(GenericBaseDatastore):
             else:
                 isComponent = getInfo.component is not None
 
+            # For a component read of a composite we want the cache to
+            # be looking at the composite ref itself.
+            cache_ref = ref.makeCompositeRef() if isComponent else ref
+
             # For a disassembled component we can validate parametersagainst
             # the component storage class directly
             if isDisassembled:
@@ -1614,7 +1669,8 @@ class FileDatastore(GenericBaseDatastore):
                 # the composite storage class
                 getInfo.formatter.fileDescriptor.storageClass.validateParameters(parameters)
 
-            return self._read_artifact_into_memory(getInfo, ref, isComponent=isComponent)
+            return self._read_artifact_into_memory(getInfo, ref, isComponent=isComponent,
+                                                   cache_ref=cache_ref)
 
     @transactional
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
@@ -1667,6 +1723,11 @@ class FileDatastore(GenericBaseDatastore):
 
     @transactional
     def trash(self, ref: Union[DatasetRef, Iterable[DatasetRef]], ignore_errors: bool = True) -> None:
+        # At this point can safely remove these datasets from the cache
+        # to avoid confusion later on. If they are not trashed later
+        # the cache will simply be refilled.
+        self.cacheManager.remove_from_cache(ref)
+
         # Get file metadata and internal metadata
         if not isinstance(ref, DatasetRef):
             log.debug("Doing multi-dataset trash in datastore %s", self.name)
