@@ -59,7 +59,7 @@ class _ParquetLoader:
         self.file = pq.ParquetFile(path)
         self.md = json.loads(self.file.metadata.metadata[b"pandas"])
         indexes = self.md["column_indexes"]
-        if len(indexes) == 1:
+        if len(indexes) <= 1:
             self.columns = pd.Index(
                 name for name in self.file.metadata.schema.names if not name.startswith("__")
             )
