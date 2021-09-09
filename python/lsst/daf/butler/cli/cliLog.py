@@ -287,10 +287,6 @@ class CliLog:
         will not be setup when `daf_butler` is setup. Packages that depend on
         `daf_butler` and use `lsst.log` may setup `lsst.log`.
 
-        Will adapt the python name to an `lsst.log` name:
-        - CRITICAL to FATAL
-        - WARNING to WARN
-
         Parameters
         ----------
         level : `str`
@@ -300,17 +296,18 @@ class CliLog:
         -------
         numericValue : `int` or `None`
             The `lsst.log` numeric value.
+
+        Notes
+        -----
+        ``VERBOSE`` logging is not supported by the LSST logger and so will
+        always be converted to ``INFO``.
         """
         if lsstLog is None:
             return None
-        if level == "CRITICAL":
-            level = "FATAL"
-        elif level == "WARNING":
-            level = "WARN"
-        elif level == "VERBOSE":
-            # LSST log does not yet have verbose defined
-            return (lsstLog.Log.DEBUG + lsstLog.Log.INFO) // 2
-        return getattr(lsstLog.Log, level, None)
+        if level == "VERBOSE":
+            level = "INFO"
+        pylog_level = CliLog._getPyLogLevel(level)
+        return lsstLog.LevelTranslator.logging2lsstLog(pylog_level)
 
     class ComponentSettings:
         """Container for log level values for a logging component."""
