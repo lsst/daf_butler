@@ -110,6 +110,8 @@ storageClasses:
     pytype: lsst.daf.base.PropertySet
   PropertyList:
     pytype: lsst.daf.base.PropertyList
+  IsrCalib:
+    pytype: lsst.ip.isr.IsrCalib
   Defects:
     pytype: lsst.ip.isr.Defects
   QECurve:

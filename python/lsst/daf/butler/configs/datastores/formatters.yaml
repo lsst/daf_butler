@@ -27,6 +27,7 @@ ExposureCatalog: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 ObjectMaskCatalog: lsst.pipe.tasks.objectMasks.RegionFileFormatter
 DataFrame: lsst.daf.butler.formatters.parquet.ParquetFormatter
 Defects: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
+IsrCalib: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 QECurve: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 CrosstalkCalib: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 PhotonTransferCurveDataset: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
