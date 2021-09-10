@@ -85,7 +85,8 @@ def exportCalibs(repo, directory, collections):
     """
     butler = Butler(repo, writeable=False)
 
-    calibTypes = ["bias", "dark", "flat", "defects", "linearity", "bfk", "ptc", "crosstalk"]
+    calibTypes = [datasetType for datasetType in butler.registry.queryDatasetTypes(...)
+                  if datasetType.isCalibration()]
 
     collectionsToExport = []
     datasetsToExport = []
