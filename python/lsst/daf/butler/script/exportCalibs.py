@@ -140,9 +140,13 @@ def exportCalibs(repo, directory, collections):
 
     sortedDatasets = sorted(datasetsToExport, key=lambda x: x.datasetType.name)
 
+    requiredDimensions = set()
+    for ref in sortedDatasets:
+        requiredDimensions.update(ref.dimensions.names)
+    dimensionColumns = {dimensionName: [ref.dataId.get(dimensionName, "") for ref in sortedDatasets]
+                        for dimensionName in requiredDimensions}
+
     return Table({"calibrationType": [ref.datasetType.name for ref in sortedDatasets],
                   "run": [ref.run for ref in sortedDatasets],
-                  "instrument": [ref.dataId["instrument"] for ref in sortedDatasets],
-                  "detector": [ref.dataId["detector"] for ref in sortedDatasets],
-                  "physical_filter": [ref.dataId.get("physical_filter", "") for ref in sortedDatasets],
+                  **dimensionColumns
                   })
