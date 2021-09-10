@@ -2242,6 +2242,7 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
+        self.loadData(registry, "spatial.yaml")
         # Default test dataset has two collections, each with both flats and
         # biases.  Add a new collection with only biases.
         registry.registerCollection("biases", CollectionType.TAGGED)
@@ -2306,3 +2307,49 @@ class RegistryTests(ABC):
                 ),
                 messages
             )
+        # This query yields four overlaps in the database, but one is filtered
+        # out in postprocessing.  The count queries aren't accurate because
+        # they don't account for duplication that happens due to an internal
+        # join against commonSkyPix.
+        query3 = registry.queryDataIds(["visit", "tract"], instrument="Cam1", skymap="SkyMap1")
+        self.assertEqual(
+            {
+                DataCoordinate.standardize(
+                    instrument="Cam1",
+                    skymap="SkyMap1",
+                    visit=v,
+                    tract=t,
+                    universe=registry.dimensions,
+                )
+                for v, t in [(1, 0), (2, 0), (2, 1)]
+            },
+            set(query3),
+        )
+        self.assertTrue(query3.any(execute=False, exact=False))
+        self.assertTrue(query3.any(execute=True, exact=False))
+        self.assertTrue(query3.any(execute=True, exact=True))
+        self.assertGreaterEqual(query3.count(exact=False), 4)
+        self.assertGreaterEqual(query3.count(exact=True), 3)
+        self.assertFalse(list(query3.explain_no_results()))
+        # This query yields overlaps in the database, but all are filtered
+        # out in postprocessing.  The count queries again aren't very useful.
+        # We have to use `where=` here to avoid an optimization that
+        # (currently) skips the spatial postprocess-filtering because it
+        # recognizes that no spatial join is necessary.  That's not ideal, but
+        # fixing it is out of scope for this ticket.
+        query4 = registry.queryDataIds(["visit", "tract"], instrument="Cam1", skymap="SkyMap1",
+                                       where="visit=1 AND detector=1 AND tract=0 AND patch=4")
+        self.assertFalse(set(query4))
+        self.assertTrue(query4.any(execute=False, exact=False))
+        self.assertTrue(query4.any(execute=True, exact=False))
+        self.assertFalse(query4.any(execute=True, exact=True))
+        self.assertGreaterEqual(query4.count(exact=False), 1)
+        self.assertEqual(query4.count(exact=True), 0)
+        messages = list(query4.explain_no_results())
+        self.assertTrue(messages)
+        self.assertTrue(
+            any(
+                "regions did not overlap" in message
+                for message in messages
+            )
+        )
