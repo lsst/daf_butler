@@ -206,6 +206,12 @@ class Query(ABC):
         count : `int`
             The number of rows the query would return, or an upper bound if
             ``exact=False``.
+
+        Notes
+        -----
+        This counts the number of rows returned, not the number of unique rows
+        returned, so even with ``exact=True`` it may provide only an upper
+        bound on the number of *deduplicated* result rows.
         """
         if self._doomed_by:
             return 0
