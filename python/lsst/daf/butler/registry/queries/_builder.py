@@ -249,7 +249,10 @@ class QueryBuilder:
                 )
                 subsubqueries.append(ssq.combine())
         if not subsubqueries:
-            self._doomed_by.extend(rejections)
+            if rejections:
+                self._doomed_by.extend(rejections)
+            else:
+                self._doomed_by.append(f"No collections to search matching expression {collections}.")
             return False
         # Although one would expect that these subqueries can be
         # UNION ALL instead of UNION because each subquery is already

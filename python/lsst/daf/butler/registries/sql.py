@@ -886,14 +886,11 @@ class SqlRegistry(Registry):
                     findFirst=findFirst,
                     check=check,
                 )
-                if isinstance(parentResults, queries.ParentDatasetQueryResults):
-                    chain.append(
-                        parentResults.withComponents(componentNames)
-                    )
-                else:
-                    # Should only happen if we know there would be no results.
-                    assert isinstance(parentResults, queries.ChainedDatasetQueryResults) \
-                        and not parentResults._chain
+                assert isinstance(parentResults, queries.ParentDatasetQueryResults), \
+                    "Should always be true if passing in a DatasetType instance, and we are."
+                chain.append(
+                    parentResults.withComponents(componentNames)
+                )
             return queries.ChainedDatasetQueryResults(chain)
         # If we get here, there's no need to recurse (or we are already
         # recursing; there can only ever be one level of recursion).

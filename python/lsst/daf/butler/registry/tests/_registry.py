@@ -2290,6 +2290,11 @@ class RegistryTests(ABC):
                 registry.queryDatasets("flat", collections=["biases"]),
                 ["flat", "biases"],
             ),
+            (
+                # No collections matching at all.
+                registry.queryDatasets("flat", collections=re.compile("potato.+")),
+                ["potato"],
+            ),
         ]:
 
             self.assertFalse(query.any(execute=False, exact=False))
