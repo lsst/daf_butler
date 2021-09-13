@@ -38,6 +38,8 @@ def parseCalibrationCollection(registry, collection, datasetTypes):
     collection : `str`
         Collection to search.  This should be a CALIBRATION
         collection.
+    datasetTypes : `list` [`lsst.daf.Butler.DatasetType`]
+        List of calibration dataset types.
 
     Returns
     -------
@@ -128,11 +130,8 @@ def exportCalibs(repo, directory, collections):
             except Exception as e:
                 log.warning("Did not save collection %s due to %s.", exportable, e)
 
-        try:
-            log.info("Saving dataset(s)")
-            export.saveDatasets(datasetsToExport)
-        except Exception as e:
-            log.warning("Did not save datasets %s due to %s.", exportable, e)
+        log.info("Saving %d dataset(s)", len(datasetsToExport))
+        export.saveDatasets(datasetsToExport)
 
     sortedDatasets = sorted(datasetsToExport, key=lambda x: x.datasetType.name)
 
