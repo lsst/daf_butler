@@ -45,11 +45,20 @@ def parseCalibrationCollection(registry, collection, datasetTypes):
         List of collections to save on export.
     exportDatasets : `list` [`lsst.daf.butler.queries.DatasetQueryResults`]
         Datasets to save on export.
+
+    Raises
+    ------
+    RuntimeError
+        Raised if the collection to search is not a CALIBRATION collection.
     """
+    if registry.getCollectionType(collection) != CollectionType.CALIBRATION:
+        raise RuntimeError(f"Collection {collection} is not a CALIBRATION collection.")
+
     exportCollections = []
     exportDatasets = []
     for calibType in datasetTypes:
-        associations = registry.queryDatasetAssociations(calibType, collections=[collection])
+        associations = registry.queryDatasetAssociations(calibType, collections=collection,
+                                                         collectionTypes=[CollectionType.CALIBRATION])
         for result in associations:
             exportDatasets.append(result.ref)
             exportCollections.append(result.ref.run)
