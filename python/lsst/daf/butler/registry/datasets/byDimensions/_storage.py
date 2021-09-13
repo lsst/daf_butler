@@ -305,7 +305,6 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
                ) -> SimpleQuery:
         # Docstring inherited from DatasetRecordStorage.
-        assert collections, "At least one collection must be provided."
         collection_types = {collection.type for collection in collections}
         assert CollectionType.CHAINED not in collection_types, "CHAINED collections must be flattened."
         #
@@ -379,6 +378,14 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # tags/calibs table.
         if len(collections) == 1:
             query.where.append(collection_col == collections[0].key)
+        elif len(collections) == 0:
+            # We support the case where there are no collections as a way to
+            # generate a valid SQL query that can't yield results.  This should
+            # never get executed, but lots of downstream code will still try
+            # to access the SQLAlchemy objects representing the columns in the
+            # subquery.  That's not idea, but it'd take a lot of refactoring to
+            # fix it.
+            query.where.append(sqlalchemy.sql.literal(False))
         else:
             query.where.append(collection_col.in_([collection.key for collection in collections]))
         # We can always get the dataset_id from the tags/calibs table or
@@ -395,7 +402,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         static_kwargs: Dict[str, Any] = {}
         if run is not None:
             assert run is SimpleQuery.Select, "To constrain the run name, pass a RunRecord as a collection."
-            if collections[0].type is CollectionType.RUN and len(collections) == 1:
+            if len(collections) == 1 and collections[0].type is CollectionType.RUN:
                 # If we are searching exactly one RUN collection, we
                 # know that if we find the dataset in that collection,
                 # then that's the datasets's run; we don't need to

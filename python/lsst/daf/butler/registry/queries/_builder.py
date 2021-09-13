@@ -253,7 +253,18 @@ class QueryBuilder:
                 self._doomed_by.extend(rejections)
             else:
                 self._doomed_by.append(f"No collections to search matching expression {collections}.")
-            return False
+            # Make a single subquery with no collections that never yields
+            # results; this should never get executed, but downstream code
+            # still needs to access the SQLAlchemy column objects.
+            ssq = datasetRecordStorage.select(
+                dataId=SimpleQuery.Select,
+                id=SimpleQuery.Select if isResult else None,
+                run=SimpleQuery.Select if isResult else None,
+                ingestDate=SimpleQuery.Select if isResult else None,
+            )
+            if findFirst:
+                ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
+            subsubqueries.append(ssq.combine())
         # Although one would expect that these subqueries can be
         # UNION ALL instead of UNION because each subquery is already
         # distinct, it turns out that with many
@@ -336,7 +347,7 @@ class QueryBuilder:
         else:
             subquery = subquery.alias(datasetType.name)
         self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
-        return True
+        return not self._doomed_by
 
     def joinTable(self, table: sqlalchemy.sql.FromClause, dimensions: NamedValueAbstractSet[Dimension], *,
                   datasets: Optional[DatasetQueryColumns] = None) -> None:
