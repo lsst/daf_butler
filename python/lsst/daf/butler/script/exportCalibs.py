@@ -100,31 +100,18 @@ def exportCalibs(repo, directory, collections):
     collectionsToExport = []
     datasetsToExport = []
 
-    for collection in collections:
+    for collection in butler.registry.queryCollections(collections, flattenChains=True, includeChains=True,
+                                                       collectionTypes={CollectionType.CALIBRATION,
+                                                                        CollectionType.CHAINED}):
         log.info("Checking collection: %s", collection)
 
         # Get collection information.
         collectionsToExport.append(collection)
         collectionType = butler.registry.getCollectionType(collection)
-        if collectionType == CollectionType.CHAINED:
-            # Iterate over the chain:
-            collectionsToExport.append(collection)
-            collectionRecords = butler.registry.getCollectionChain(collection)
-
-            for child in collectionRecords:
-                childType = butler.registry.getCollectionType(child)
-                collectionsToExport.append(child)
-                if childType == CollectionType.CALIBRATION:
-                    exportCollections, exportDatasets = parseCalibrationCollection(butler.registry,
-                                                                                   child,
-                                                                                   calibTypes)
-                    collectionsToExport.extend(exportCollections)
-                    datasetsToExport.extend(exportDatasets)
-        elif collectionType == CollectionType.CALIBRATION:
+        if collectionType == CollectionType.CALIBRATION:
             exportCollections, exportDatasets = parseCalibrationCollection(butler.registry,
                                                                            collection,
                                                                            calibTypes)
-            collectionsToExport.append(collection)
             collectionsToExport.extend(exportCollections)
             datasetsToExport.extend(exportDatasets)
 
