@@ -26,6 +26,7 @@ __all__ = (
     "CollectionSearch",
 )
 
+import itertools
 import re
 from dataclasses import dataclass
 from typing import (
@@ -552,8 +553,6 @@ class CollectionQuery:
         by ``patterns=None``.
     patterns : `tuple` of `re.Pattern`
         Regular expression patterns to match against collection names.
-    universe : `DimensionUniverse`
-        Object managing all dimensions.
 
     Notes
     -----
@@ -709,3 +708,26 @@ class CollectionQuery:
 
     def __repr__(self) -> str:
         return f"CollectionQuery({self._search!r}, {self._patterns!r})"
+
+    def union(self, *others: CollectionQuery) -> CollectionQuery:
+        """Return a new `CollectionQuery` that matches any collection matched
+        by the given `CollectionQuery` objects.
+
+        Parameters
+        ----------
+        *others : `CollectionQuery`
+            Expressions to merge with ``self``.
+
+        Returns
+        -------
+        merged : `CollectionQuery`
+            Union expression.
+        """
+        names: Set[str] = set()
+        patterns: Set[re.Pattern] = set()
+        for q in itertools.chain((self,), others):
+            if q._search is Ellipsis:
+                return q
+            names.update(q._search)
+            patterns.update(q._patterns)
+        return CollectionQuery(CollectionSearch.fromExpression(names), tuple(patterns))
