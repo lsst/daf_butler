@@ -532,8 +532,6 @@ class CollectionQuery:
         by ``patterns=None``.
     patterns : `tuple` of `re.Pattern`
         Regular expression patterns to match against collection names.
-    universe : `DimensionUniverse`
-        Object managing all dimensions.
 
     Notes
     -----
@@ -689,3 +687,26 @@ class CollectionQuery:
 
     def __repr__(self) -> str:
         return f"CollectionQuery({self._search!r}, {self._patterns!r})"
+
+    def union(*args: CollectionQuery) -> CollectionQuery:
+        """Return a new `CollectionQuery` that matches any collection matched
+        by any of the given `CollectionQuery` objects.
+
+        Parameters
+        ----------
+        *others : `CollectionQuery`
+            Expressions to merge.
+
+        Returns
+        -------
+        merged : `CollectionQuery`
+            Union expression.
+        """
+        names: Set[str] = set()
+        patterns: Set[re.Pattern] = set()
+        for q in args:
+            if q._search is Ellipsis:
+                return q
+            names.update(q._search)
+            patterns.update(q._patterns)
+        return CollectionQuery(CollectionSearch.fromExpression(names), tuple(patterns))
