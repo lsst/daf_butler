@@ -248,19 +248,27 @@ class Butler:
             self._allow_put_of_predefined_dataset = butler._allow_put_of_predefined_dataset
         else:
             self._config = ButlerConfig(config, searchPaths=searchPaths)
-            if "root" in self._config:
-                butlerRoot = self._config["root"]
-            else:
-                butlerRoot = self._config.configDir
-            if writeable is None:
-                writeable = run is not None
-            self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot, writeable=writeable,
-                                                defaults=defaults)
-            self.datastore = Datastore.fromConfig(self._config, self.registry.getDatastoreBridgeManager(),
-                                                  butlerRoot=butlerRoot)
-            self.storageClasses = StorageClassFactory()
-            self.storageClasses.addFromConfig(self._config)
-            self._allow_put_of_predefined_dataset = self._config.get("allow_put_of_predefined_dataset", False)
+            try:
+                if "root" in self._config:
+                    butlerRoot = self._config["root"]
+                else:
+                    butlerRoot = self._config.configDir
+                if writeable is None:
+                    writeable = run is not None
+                self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot, writeable=writeable,
+                                                    defaults=defaults)
+                self.datastore = Datastore.fromConfig(self._config, self.registry.getDatastoreBridgeManager(),
+                                                      butlerRoot=butlerRoot)
+                self.storageClasses = StorageClassFactory()
+                self.storageClasses.addFromConfig(self._config)
+                self._allow_put_of_predefined_dataset = self._config.get("allow_put_of_predefined_dataset",
+                                                                         False)
+            except Exception:
+                # Failures here usually mean that configuration is incomplete,
+                # just issue an error message which includes config file URI.
+                log.error(f"Failed to instantiate Butler from config {self._config.configFile}.")
+                raise
+
         if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
 

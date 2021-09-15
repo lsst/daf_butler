@@ -20,13 +20,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import click
+import click.exceptions
 import click.testing
 from contextlib import contextmanager
 import copy
-from functools import partial
+from functools import partial, wraps
 import itertools
 import logging
 import os
+import sys
 import textwrap
 import traceback
 from unittest.mock import patch
@@ -649,6 +651,14 @@ class MWCommand(click.Command):
 
     extra_epilog = None
 
+    def __init__(self, *args, **kwargs):
+        # wrap callback method with catch_and_exit decorator
+        callback = kwargs.get("callback")
+        if callback is not None:
+            kwargs = kwargs.copy()
+            kwargs["callback"] = catch_and_exit(callback)
+        super().__init__(*args, **kwargs)
+
     def parse_args(self, ctx, args):
         MWCtxObj.getFrom(ctx).args = copy.copy(args)
         super().parse_args(ctx, args)
@@ -806,3 +816,27 @@ def sortAstropyTable(table, dimensions, sort_first=None):
 
     table.sort(sort_keys)
     return table
+
+
+def catch_and_exit(func):
+    """Decorator which catches all exceptions, prints an exception traceback
+    and signals click to exit.
+    """
+    @wraps(func)
+    def inner(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except (click.exceptions.ClickException, click.exceptions.Exit, click.exceptions.Abort):
+            # this is handled by click itself
+            raise
+        except Exception:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            if exc_tb.tb_next:
+                # do not show this decorator in traceback
+                exc_tb = exc_tb.tb_next
+            log.exception("Caught an exception, details are in traceback:",
+                          exc_info=(exc_type, exc_value, exc_tb))
+            # tell click to stop, this never returns.
+            click.get_current_context().exit(1)
+
+    return inner
