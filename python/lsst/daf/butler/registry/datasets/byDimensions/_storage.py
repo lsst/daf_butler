@@ -18,13 +18,13 @@ from lsst.daf.butler import (
     ddl,
 )
 from lsst.daf.butler.registry import (
+    CollectionSummary,
     CollectionTypeError,
     ConflictingDefinitionError,
     UnsupportedIdGeneratorError,
 )
 from lsst.daf.butler.registry.interfaces import DatasetIdFactory, DatasetIdGenEnum, DatasetRecordStorage
 
-from ...summaries import GovernorDimensionRestriction
 from .tables import makeTagTableSpec
 
 if TYPE_CHECKING:
@@ -126,17 +126,16 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             "dataset_type_id": self._dataset_type_id,
         }
         rows = []
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-        for dataset in datasets:
+        summary = CollectionSummary()
+        for dataset in summary.add_datasets_generator(datasets):
             row = dict(protoRow, dataset_id=dataset.getCheckedId())
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
-            governorValues.update_extract(dataset.dataId)
             rows.append(row)
         # Update the summary tables for this collection in case this is the
         # first time this dataset type or these governor values will be
         # inserted there.
-        self._summaries.update(collection, self.datasetType, self._dataset_type_id, governorValues)
+        self._summaries.update(collection, [self._dataset_type_id], summary)
         # Update the tag table itself.
         self._db.replace(self._tags, *rows)
 
@@ -202,23 +201,22 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             "dataset_type_id": self._dataset_type_id,
         }
         rows = []
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
         dataIds: Optional[Set[DataCoordinate]] = (
             set() if not TimespanReprClass.hasExclusionConstraint() else None
         )
-        for dataset in datasets:
+        summary = CollectionSummary()
+        for dataset in summary.add_datasets_generator(datasets):
             row = dict(protoRow, dataset_id=dataset.getCheckedId())
             for dimension, value in dataset.dataId.items():
                 row[dimension.name] = value
             TimespanReprClass.update(timespan, result=row)
-            governorValues.update_extract(dataset.dataId)
             rows.append(row)
             if dataIds is not None:
                 dataIds.add(dataset.dataId)
         # Update the summary tables for this collection in case this is the
         # first time this dataset type or these governor values will be
         # inserted there.
-        self._summaries.update(collection, self.datasetType, self._dataset_type_id, governorValues)
+        self._summaries.update(collection, [self._dataset_type_id], summary)
         # Update the association table itself.
         if TimespanReprClass.hasExclusionConstraint():
             # Rely on database constraint to enforce invariants; we just
@@ -592,9 +590,8 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
         """Common part of implementation of `insert` and `import_` methods."""
 
         # Remember any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-        for dataId in dataIdList:
-            governorValues.update_extract(dataId)
+        summary = CollectionSummary()
+        summary.add_data_ids(self.datasetType, dataIdList)
 
         staticRow = {
             "dataset_type_id": self._dataset_type_id,
@@ -616,7 +613,7 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
             # Update the summary tables for this collection in case this is the
             # first time this dataset type or these governor values will be
             # inserted there.
-            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+            self._summaries.update(run, [self._dataset_type_id], summary)
             # Combine the generated dataset_id values and data ID fields to
             # form rows to be inserted into the tags table.
             protoTagsRow = {
@@ -657,14 +654,12 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
     ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
-        # Remember any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.
         dataIdList = []
         rows = []
-        for dataId in dataIds:
+        summary = CollectionSummary()
+        for dataId in summary.add_data_ids_generator(self.datasetType, dataIds):
             dataIdList.append(dataId)
             rows.append(
                 {
@@ -673,7 +668,6 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     self._runKeyColumn: run.key,
                 }
             )
-            governorValues.update_extract(dataId)
 
         with self._db.transaction():
             # Insert into the static dataset table.
@@ -681,7 +675,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             # Update the summary tables for this collection in case this is the
             # first time this dataset type or these governor values will be
             # inserted there.
-            self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+            self._summaries.update(run, [self._dataset_type_id], summary)
             # Combine the generated dataset_id values and data ID fields to
             # form rows to be inserted into the tags table.
             protoTagsRow = {
@@ -712,13 +706,11 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
     ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
-        # Remember any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.
         dataIds = {}
-        for dataset in datasets:
+        summary = CollectionSummary()
+        for dataset in summary.add_datasets_generator(datasets):
             # Ignore unknown ID types, normally all IDs have the same type but
             # this code supports mixed types or missing IDs.
             datasetId = dataset.id if isinstance(dataset.id, uuid.UUID) else None
@@ -727,7 +719,6 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                     run.name, self.datasetType, dataset.dataId, idGenerationMode
                 )
             dataIds[datasetId] = dataset.dataId
-            governorValues.update_extract(dataset.dataId)
 
         with self._db.session() as session:
 
@@ -776,7 +767,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 # Update the summary tables for this collection in case this
                 # is the first time this dataset type or these governor values
                 # will be inserted there.
-                self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+                self._summaries.update(run, [self._dataset_type_id], summary)
 
                 # Copy it into tags table.
                 self._db.insert(self._tags, select=tmp_tags.select())

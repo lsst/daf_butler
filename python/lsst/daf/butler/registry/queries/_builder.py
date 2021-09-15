@@ -73,19 +73,17 @@ class QueryBuilder:
 
         Raises
         ------
-        LookupError
+        DataIdValueError
             Raised when governor dimension values are not found.
         """
-        for governor, values in self.summary.where.restriction.items():
-            storage = self._managers.dimensions[governor]
-            assert isinstance(
-                storage, GovernorDimensionRecordStorage
-            ), f"Unexpected type of the governor dimension record storage {type(storage)}"
-            if not values <= storage.values:
-                unknown = values - storage.values
-                raise DataIdValueError(
-                    f"Unknown values specified for governor dimension {governor}: {unknown}"
-                )
+        for dimension, bounds in self.summary.where.governor_constraints.items():
+            storage = self._managers.dimensions[self.summary.requested.universe[dimension]]
+            if isinstance(storage, GovernorDimensionRecordStorage):
+                if not (storage.values >= bounds):
+                    raise DataIdValueError(
+                        f"Unknown values specified for governor dimension {dimension}: "
+                        f"{set(bounds - storage.values)}."
+                    )
 
     def hasDimensionKey(self, dimension: Dimension) -> bool:
         """Return `True` if the given dimension's primary key column has
@@ -196,7 +194,7 @@ class QueryBuilder:
             collection_summary = self._managers.datasets.getCollectionSummary(collectionRecord)
             if not collection_summary.is_compatible_with(
                 datasetType,
-                self.summary.where.restriction,
+                self.summary.where.governor_constraints,
                 rejections=rejections,
                 name=collectionRecord.name,
             ):

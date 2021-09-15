@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, Union
+from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, Union, cast
 
 from lsst.sphgeom import Region
 from lsst.utils.classes import cached_getter, immutable
@@ -46,7 +46,6 @@ from ...core import (
 )
 from .._exceptions import UserExpressionSyntaxError
 from ..interfaces import CollectionManager, DatasetRecordStorageManager, DimensionRecordStorageManager
-from ..summaries import GovernorDimensionRestriction
 
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
@@ -130,7 +129,7 @@ class QueryWhereExpression:
                 table, sep, column = identifier.partition(".")
                 if column and table in graph.universe.getStaticElements().names:
                     raise RuntimeError(f"Bind parameter key {identifier!r} looks like a dimension column.")
-        restriction = GovernorDimensionRestriction(NamedKeyDict())
+        governor_constraints: dict[str, AbstractSet[str]] = {}
         summary: InspectionSummary
         if self._tree is not None:
             if check:
@@ -160,7 +159,9 @@ class QueryWhereExpression:
                             f'(normalized to "{exprNormal}"): {err}'
                         )
                     raise RuntimeError(msg) from None
-                restriction = summary.governors
+                for dimension_name, values in summary.dimension_constraints.items():
+                    if dimension_name in graph.universe.getGovernorDimensions().names:
+                        governor_constraints[dimension_name] = cast(AbstractSet[str], values)
                 dataId = visitor.dataId
             else:
                 from .expressions import InspectionVisitor
@@ -176,7 +177,7 @@ class QueryWhereExpression:
             dimensions=summary.dimensions,
             columns=summary.columns,
             bind=self._bind,
-            restriction=restriction,
+            governor_constraints=governor_constraints,
             region=region,
         )
 
@@ -223,10 +224,12 @@ class QueryWhereClause:
     (`lsst.sphgeom.Region` or `None`).
     """
 
-    restriction: GovernorDimensionRestriction
+    governor_constraints: Mapping[str, AbstractSet[str]]
     """Restrictions on the values governor dimensions can take in this query,
-    imposed by the string expression or data ID
-    (`GovernorDimensionRestriction`).
+    imposed by the string expression and/or data ID
+    (`Mapping` [ `set`,  `~collections.abc.Set` [ `str` ] ]).
+
+    Governor dimensions not present in this mapping are not constrained at all.
     """
 
     @property  # type: ignore
