@@ -46,6 +46,7 @@ from lsst.utils.iteration import ensure_iterable
 from ..core import (
     DataCoordinate,
     DatasetType,
+    DimensionGraph,
     DimensionUniverse,
     GovernorDimension,
     NamedKeyDict,
@@ -261,6 +262,27 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
             if current is not None:
                 current.add(data_id[dimension])
 
+    def dooms_on(self, dimensions: DimensionGraph) -> NamedValueSet[GovernorDimension]:
+        """Return any governor dimensions in the given `DimensionGraph`, for
+        which ``self`` does not permit any values.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGraph`
+            Dimensions whose governors should be checked.  These are usually
+            the dimensions being included in a query.
+
+        Returns
+        -------
+        dooms : `NamedValueSet` [ `GovernorDimension` ]
+            Governor dimensions that are not allowed to take on any values by
+            this restriction.  When this is not an empty set, it means a
+            query on the given dimensions subject to this restriction is doomed
+            to yield no results, because of incompatible constraints on the
+            returned dimensions.
+        """
+        return NamedValueSet(g for g in dimensions.governors if not self.get(g, True))
+
 
 @dataclass
 class CollectionSummary:
@@ -361,17 +383,13 @@ class CollectionSummary:
             if rejections is not None:
                 rejections.append(f"No datasets of type {parent.name} in collection {name!r}.")
             return False
-        for governor in datasetType.dimensions.governors:
-            if (values_in_self := self.dimensions.get(governor)) is not None:
-                if (values_in_other := restriction.get(governor)) is not None:
-                    if values_in_self.isdisjoint(values_in_other):
-                        assert values_in_other, f"No valid values in restriction for dimension {governor}."
-                        if rejections is not None:
-                            rejections.append(
-                                f"No datasets with {governor.name} in {values_in_other} "
-                                f"in collection {name!r}."
-                            )
-                        return False
+        if dooms := restriction.intersection(self.dimensions).dooms_on(datasetType.dimensions):
+            if rejections is not None:
+                rejections.extend(
+                    f"No datasets with {governor.name} in {restriction[governor]} in collection {name!r}."
+                    for governor in dooms
+                )
+            return False
         return True
 
     datasetTypes: NamedValueSet[DatasetType]
