@@ -59,6 +59,7 @@ from ..registry import (
     ArgumentError,
     CollectionExpressionError,
     CollectionSearch,
+    CollectionSummary,
     CollectionType,
     CollectionTypeError,
     ConflictingDefinitionError,
@@ -77,7 +78,6 @@ from ..registry import (
 from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.queries import Query
-from ..registry.summaries import CollectionSummary
 from ..registry.wildcards import CategorizedWildcard, CollectionQuery, Ellipsis
 
 if TYPE_CHECKING:

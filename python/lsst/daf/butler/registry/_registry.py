@@ -62,12 +62,12 @@ from ..core import (
     StorageClassFactory,
     Timespan,
 )
+from ._collection_summary import CollectionSummary
 from ._collectionType import CollectionType
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
 from .interfaces import DatasetIdGenEnum
 from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
-from .summaries import CollectionSummary
 from .wildcards import CollectionSearch
 
 if TYPE_CHECKING:

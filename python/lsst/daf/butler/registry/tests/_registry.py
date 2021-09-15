@@ -55,6 +55,7 @@ from ...core import (
     Timespan,
     ddl,
 )
+from .._collection_summary import CollectionSummary
 from .._collectionType import CollectionType
 from .._config import RegistryConfig
 from .._exceptions import (
@@ -68,7 +69,6 @@ from .._exceptions import (
     OrphanedRecordError,
 )
 from ..interfaces import ButlerAttributeExistsError, DatasetIdGenEnum
-from ..summaries import CollectionSummary
 
 if TYPE_CHECKING:
     from .._registry import Registry
@@ -2370,11 +2370,10 @@ class RegistryTests(ABC):
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
         flat = registry.getDatasetType("flat")
-        expected1 = CollectionSummary.makeEmpty(registry.dimensions)
-        expected1.datasetTypes.add(registry.getDatasetType("bias"))
-        expected1.datasetTypes.add(flat)
-        expected1.dimensions.update_extract(
-            DataCoordinate.standardize(instrument="Cam1", universe=registry.dimensions)
+        expected1 = CollectionSummary()
+        expected1.dataset_types.add(registry.getDatasetType("bias"))
+        expected1.add_data_ids(
+            flat, [DataCoordinate.standardize(instrument="Cam1", universe=registry.dimensions)]
         )
         self.assertEqual(registry.getCollectionSummary("imported_g"), expected1)
         self.assertEqual(registry.getCollectionSummary("imported_r"), expected1)
@@ -2395,7 +2394,7 @@ class RegistryTests(ABC):
             calibs, registry.queryDatasets(flat, collections="imported_g"), timespan=Timespan(None, None)
         )
         expected2 = expected1.copy()
-        expected2.datasetTypes.discard("bias")
+        expected2.dataset_types.discard("bias")
         self.assertEqual(registry.getCollectionSummary(tag), expected2)
         self.assertEqual(registry.getCollectionSummary(calibs), expected2)
         # Explicitly calling Registry.refresh() should load those same

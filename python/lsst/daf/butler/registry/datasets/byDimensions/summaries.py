@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("CollectionSummaryManager",)
 
-from typing import Any, Callable, Dict, Generic, TypeVar
+from typing import Any, Callable, Dict, Generic, Iterable, TypeVar
 
 import sqlalchemy
 from lsst.daf.butler import (
@@ -31,7 +31,6 @@ from lsst.daf.butler import (
     GovernorDimension,
     NamedKeyDict,
     NamedKeyMapping,
-    NamedValueSet,
     addDimensionForeignKey,
     ddl,
 )
@@ -44,8 +43,8 @@ from lsst.daf.butler.registry.interfaces import (
     StaticTablesContext,
 )
 
+from ..._collection_summary import CollectionSummary
 from ..._collectionType import CollectionType
-from ...summaries import CollectionSummary, GovernorDimensionRestriction
 
 _T = TypeVar("_T")
 
@@ -196,9 +195,8 @@ class CollectionSummaryManager:
     def update(
         self,
         collection: CollectionRecord,
-        datasetType: DatasetType,
-        dataset_type_id: int,
-        governors: GovernorDimensionRestriction,
+        dataset_type_ids: Iterable[int],
+        summary: CollectionSummary,
     ) -> None:
         """Update the summary tables to associate the given collection with
         a dataset type and governor dimension values.
@@ -207,14 +205,12 @@ class CollectionSummaryManager:
         ----------
         collection : `CollectionRecord`
             Collection whose summary should be updated.
-        datasetType : `DatasetType`
-            DatasetType instance to associate with this collection.
-        dataset_type_id : `int`
-            Integer ID for the dataset type to associate with this collection.
-        governors : `GovernorDimensionRestriction`
-            Mapping from `GovernorDimensionRestriction` to sets of values they
-            may be associated with in the data IDs of the datasets in this
+        dataset_type_ids : `Iterable` [ `int` ]
+            Integer IDs for the dataset types to associate with this
             collection.
+        summary : `CollectionSummary`
+            Summary to store.  Dataset types must correspond to
+            ``dataset_type_ids``.
 
         Notes
         -----
@@ -223,16 +219,19 @@ class CollectionSummaryManager:
         """
         self._db.ensure(
             self._tables.datasetType,
-            {
-                "dataset_type_id": dataset_type_id,
-                self._collectionKeyName: collection.key,
-            },
+            *[
+                {
+                    "dataset_type_id": dataset_type_id,
+                    self._collectionKeyName: collection.key,
+                }
+                for dataset_type_id in dataset_type_ids
+            ],
         )
-        for dimension, values in governors.items():
+        for dimension, values in summary.governors.items():
             if values:
                 self._db.ensure(
-                    self._tables.dimensions[dimension.name],
-                    *[{self._collectionKeyName: collection.key, dimension.name: v} for v in values],
+                    self._tables.dimensions[dimension],
+                    *[{self._collectionKeyName: collection.key, dimension: v} for v in values],
                 )
         # Update the in-memory cache, too.  These changes will remain even if
         # the database inserts above are rolled back by some later exception in
@@ -248,9 +247,7 @@ class CollectionSummaryManager:
         # some more datasets of that same type, it would not be okay to skip
         # the DB summary table insertions because we found entries in the
         # in-memory cache.
-        summary = self.get(collection)
-        summary.datasetTypes.add(datasetType)
-        summary.dimensions.update(governors)
+        self.get(collection).update(summary)
 
     def refresh(self, get_dataset_type: Callable[[int], DatasetType]) -> None:
         """Load all collection summary information from the database.
@@ -294,20 +291,16 @@ class CollectionSummaryManager:
             # make one.
             summary = summaries.get(collectionKey)
             if summary is None:
-                summary = CollectionSummary(
-                    datasetTypes=NamedValueSet([datasetType]),
-                    dimensions=GovernorDimensionRestriction.makeEmpty(self._dimensions.universe),
-                )
+                summary = CollectionSummary()
                 summaries[collectionKey] = summary
-            else:
-                summary.datasetTypes.add(datasetType)
             # Update the dimensions with the values in this row that aren't
             # None/NULL (many will be in general, because these enter the query
             # via LEFT OUTER JOIN).
+            summary.dataset_types.add(datasetType)
             for dimension in self._tables.dimensions:
                 value = row[dimension.name]
                 if value is not None:
-                    summary.dimensions.add(dimension, value)
+                    summary.governors.setdefault(dimension.name, set()).add(value)
         self._cache = summaries
 
     def get(self, collection: CollectionRecord) -> CollectionSummary:
@@ -338,7 +331,7 @@ class CollectionSummaryManager:
                 if child_summaries:
                     summary = CollectionSummary.union(*child_summaries)
                 else:
-                    summary = CollectionSummary.makeEmpty(self._dimensions.universe)
+                    summary = CollectionSummary()
             else:
                 # Either this collection doesn't have any datasets yet, or the
                 # only datasets it has were created by some other process since
@@ -346,6 +339,6 @@ class CollectionSummaryManager:
                 # responsible for calling refresh if they want to read
                 # concurrently-written things.  We do remember this in the
                 # cache.
-                summary = CollectionSummary.makeEmpty(self._dimensions.universe)
+                summary = CollectionSummary()
                 self._cache[collection.key] = summary
         return summary

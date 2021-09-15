@@ -18,7 +18,7 @@ from lsst.daf.butler.registry.interfaces import (
     VersionTuple,
 )
 
-from ...summaries import CollectionSummary
+from ..._collection_summary import CollectionSummary
 from ._storage import (
     ByDimensionsDatasetRecordStorage,
     ByDimensionsDatasetRecordStorageInt,

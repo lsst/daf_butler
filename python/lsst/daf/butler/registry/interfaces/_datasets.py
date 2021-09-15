@@ -33,7 +33,7 @@ from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQu
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
-    from ..summaries import CollectionSummary
+    from .._collection_summary import CollectionSummary
     from ._collections import CollectionManager, CollectionRecord, RunRecord
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager

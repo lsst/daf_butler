@@ -63,9 +63,15 @@ from ..core.serverModels import (
     QueryDatasetsModel,
     QueryDimensionRecordsModel,
 )
-from ..registry import CollectionSearch, CollectionType, Registry, RegistryConfig, RegistryDefaults
+from ..registry import (
+    CollectionSearch,
+    CollectionSummary,
+    CollectionType,
+    Registry,
+    RegistryConfig,
+    RegistryDefaults,
+)
 from ..registry.interfaces import DatasetIdGenEnum
-from ..registry.summaries import CollectionSummary
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig

@@ -22,15 +22,18 @@ from __future__ import annotations
 
 __all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
 
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, Union
 
 from lsst.sphgeom import Region
 from lsst.utils.classes import cached_getter, immutable
+from lsst.utils.sets.unboundable import FrozenUnboundableSet, UnboundableSet
 from sqlalchemy.sql import ColumnElement
 
 from ...core import (
     DataCoordinate,
+    DataIdValue,
     DatasetType,
     Dimension,
     DimensionElement,
@@ -46,7 +49,6 @@ from ...core import (
 )
 from .._exceptions import UserExpressionSyntaxError
 from ..interfaces import CollectionManager, DatasetRecordStorageManager, DimensionRecordStorageManager
-from ..summaries import GovernorDimensionRestriction
 
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
@@ -130,7 +132,9 @@ class QueryWhereExpression:
                 table, sep, column = identifier.partition(".")
                 if column and table in graph.universe.getStaticElements().names:
                     raise RuntimeError(f"Bind parameter key {identifier!r} looks like a dimension column.")
-        restriction = GovernorDimensionRestriction(NamedKeyDict())
+        dimension_constraint: defaultdict[str, FrozenUnboundableSet] = defaultdict(
+            FrozenUnboundableSet.make_full
+        )
         summary: InspectionSummary
         if self._tree is not None:
             if check:
@@ -160,7 +164,8 @@ class QueryWhereExpression:
                             f'(normalized to "{exprNormal}"): {err}'
                         )
                     raise RuntimeError(msg) from None
-                restriction = summary.governors
+                for dimension, values in summary.dimension_constraint.items():
+                    dimension_constraint[dimension] = FrozenUnboundableSet.coerce(values)
                 dataId = visitor.dataId
             else:
                 from .expressions import InspectionVisitor
@@ -176,7 +181,7 @@ class QueryWhereExpression:
             dimensions=summary.dimensions,
             columns=summary.columns,
             bind=self._bind,
-            restriction=restriction,
+            dimension_constraint=dimension_constraint,
             region=region,
         )
 
@@ -223,10 +228,10 @@ class QueryWhereClause:
     (`lsst.sphgeom.Region` or `None`).
     """
 
-    restriction: GovernorDimensionRestriction
-    """Restrictions on the values governor dimensions can take in this query,
-    imposed by the string expression or data ID
-    (`GovernorDimensionRestriction`).
+    dimension_constraint: Mapping[str, UnboundableSet[DataIdValue]]
+    """Restrictions on the values dimensions can take in this query,
+    imposed by the string expression and/or data ID
+    (`Mapping` [ ``set`,  `UnboundableSet` ] ]).
     """
 
     @property  # type: ignore
