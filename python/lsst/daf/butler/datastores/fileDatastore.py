@@ -1311,6 +1311,27 @@ class FileDatastore(GenericBaseDatastore):
         existence : `dict` of [`DatasetRef`, `bool`]
             Mapping from dataset to boolean indicating existence.
         """
+        chunk_size = 1000
+        dataset_existence: Dict[DatasetRef, bool] = {}
+        refs = list(refs)
+        for i in range(0, len(refs), chunk_size):
+            log.info("Processing chunk: %d:%d", i, i + chunk_size)
+            dataset_existence.update(self._mexists(refs[i:i + chunk_size]))
+        return dataset_existence
+
+    def _mexists(self, refs: Iterable[DatasetRef]) -> Dict[DatasetRef, bool]:
+        """Check the existence of multiple datasets at once.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked.
+
+        Returns
+        -------
+        existence : `dict` of [`DatasetRef`, `bool`]
+            Mapping from dataset to boolean indicating existence.
+        """
         # Need a mapping of dataset_id to dataset ref since the API
         # works with dataset_id
         id_to_ref = {ref.getCheckedId(): ref for ref in refs}
