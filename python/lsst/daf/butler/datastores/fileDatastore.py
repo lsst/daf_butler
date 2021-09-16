@@ -1311,12 +1311,27 @@ class FileDatastore(GenericBaseDatastore):
         existence : `dict` of [`DatasetRef`, `bool`]
             Mapping from dataset to boolean indicating existence.
         """
-        chunk_size = 1000
+        chunk_size = 10_000
         dataset_existence: Dict[DatasetRef, bool] = {}
         refs = list(refs)
-        for i in range(0, len(refs), chunk_size):
-            log.info("Processing chunk: %d:%d", i, i + chunk_size)
-            dataset_existence.update(self._mexists(refs[i:i + chunk_size]))
+        n_refs = len(refs)
+        n_found_total = 0
+        n_checked = 0
+        for i in range(0, n_refs, chunk_size):
+            chunk_result = self._mexists(refs[i:i + chunk_size])
+            if log.isEnabledFor(VERBOSE):
+                n_results = len(chunk_result)
+                n_checked += n_results
+                n_found = 0
+                for found in chunk_result.values():
+                    if found:
+                        n_found += 1
+                n_found_total += n_found
+                log.log(VERBOSE, "Number of datasets found in datastore for chunk %d:%d = %d/%d"
+                        " (running total: %d/%d out of %d)",
+                        i, i + chunk_size, n_found, n_results, n_found_total, n_checked, n_refs)
+            dataset_existence.update(chunk_result)
+
         return dataset_existence
 
     def _mexists(self, refs: Iterable[DatasetRef]) -> Dict[DatasetRef, bool]:
