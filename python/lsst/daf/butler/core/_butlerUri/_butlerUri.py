@@ -668,8 +668,28 @@ class ButlerURI:
         existence : `dict` of [`ButlerURI`, `bool`]
             Mapping of original URI to boolean indicating existence.
         """
-        # None asyncio
-        return {uri: uri.exists() for uri in uris}
+        import concurrent.futures
+
+        # The max worker count here must not exceed the max connection pools
+        # in whatever system is doing the network connection. The default
+        # is 10 for urllib3.
+        max_workers = 10
+        exists_executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+
+        def wrapper(uri: ButlerURI) -> Tuple[ButlerURI, bool]:
+            try:
+                exists = uri.exists()
+            except Exception:
+                exists = False
+            return (uri, exists)
+
+        future_exists = [exists_executor.submit(wrapper, uri) for uri in uris]
+
+        results: Dict[ButlerURI, bool] = {}
+        for future in concurrent.futures.as_completed(future_exists):
+            uri, exists = future.result()
+            results[uri] = exists
+        return results
 
     def remove(self) -> None:
         """Remove the resource."""
