@@ -1815,7 +1815,9 @@ class Butler:
             import always uses unique.
         skip_missing : `bool`
             If `True`, datasets with no datastore artifact associated with
-            them are not transferred.
+            them are not transferred. If `False` a registry entry will be
+            created even if no datastore record is created (and so will
+            look equivalent to the dataset being unstored).
 
         Returns
         -------
@@ -1844,7 +1846,8 @@ class Butler:
         if not isinstance(source_refs, collections.abc.Collection):
             source_refs = list(source_refs)
 
-        log.info("Transferring %d datasets into %s", len(source_refs), str(self))
+        original_count = len(source_refs)
+        log.info("Transferring %d datasets into %s", original_count, str(self))
 
         if id_gen_map is None:
             id_gen_map = {}
@@ -1856,7 +1859,11 @@ class Butler:
         # existence explicitly. Execution butler is set up exactly like
         # this with no datastore records.
         if skip_missing:
-            source_refs = [ref for ref in source_refs if source_butler.datastore.exists(ref)]
+            dataset_existence = source_butler.datastore.mexists(source_refs)
+            source_refs = [ref for ref, exists in dataset_existence.items() if exists]
+            filtered_count = len(source_refs)
+            log.log(VERBOSE, "%d datasets removed because the artifact does not exist. Now have %d.",
+                    original_count - filtered_count, filtered_count)
 
         # Importing requires that we group the refs by dataset type and run
         # before doing the import.

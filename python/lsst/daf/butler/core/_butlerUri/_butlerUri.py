@@ -41,6 +41,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Dict,
     Optional,
     Tuple,
     Type,
@@ -652,6 +653,23 @@ class ButlerURI:
             `True` if the resource exists.
         """
         raise NotImplementedError()
+
+    @classmethod
+    def mexists(cls, uris: Iterable[ButlerURI]) -> Dict[ButlerURI, bool]:
+        """Check for existence of multiple URIs at once.
+
+        Parameters
+        ----------
+        uris : iterable of `ButlerURI`
+            The URIs to test.
+
+        Returns
+        -------
+        existence : `dict` of [`ButlerURI`, `bool`]
+            Mapping of original URI to boolean indicating existence.
+        """
+        # None asyncio
+        return {uri: uri.exists() for uri in uris}
 
     def remove(self) -> None:
         """Remove the resource."""

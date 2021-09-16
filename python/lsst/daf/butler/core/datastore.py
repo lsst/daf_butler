@@ -356,6 +356,25 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    def mexists(self, refs: Iterable[DatasetRef]) -> Dict[DatasetRef, bool]:
+        """Check the existence of multiple datasets at once.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked.
+
+        Returns
+        -------
+        existence : `dict` of [`DatasetRef`, `bool`]
+            Mapping from dataset to boolean indicating existence.
+        """
+        existence: Dict[DatasetRef, bool] = {}
+        # Non-optimized default.
+        for ref in refs:
+            existence[ref] = self.exists(ref)
+        return existence
+
     @abstractmethod
     def exists(self, datasetRef: DatasetRef) -> bool:
         """Check if the dataset exists in the datastore.

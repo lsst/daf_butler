@@ -70,6 +70,7 @@ from lsst.daf.butler import (
     Progress,
     StorageClass,
     StoredFileInfo,
+    VERBOSE,
 )
 
 from lsst.daf.butler import ddl
@@ -1243,6 +1244,110 @@ class FileDatastore(GenericBaseDatastore):
         if fileLocations:
             return True
         return False
+
+    def _process_mexists_records(self, id_to_ref: Dict[DatasetId, DatasetRef],
+                                 records: Dict[DatasetId, List[StoredFileInfo]],
+                                 all_required: bool) -> Dict[DatasetRef, bool]:
+        """Helper function for mexists that checks the given records.
+
+        Parameters
+        ----------
+        id_to_ref : `dict` of [`DatasetId`, `DatasetRef`]
+            Mapping of the dataset ID to the dataset ref itself.
+        records : `dict` of [`DatasetId`, `list` of `StoredFileInfo`]
+            Records as generally returned by
+            ``_get_stored_records_associated_with_refs``.
+        all_required : `bool`
+            Flag to indicate whether existence requires all artifacts
+            associated with a dataset ID to exist or not for existence.
+
+        Returns
+        -------
+        existence : `dict` of [`DatasetRef`, `bool`]
+            Mapping from dataset to boolean indicating existence.
+        """
+        # The URIs to be checked and a mapping of those URIs to
+        # the dataset ID.
+        uris_to_check: List[ButlerURI] = []
+        location_map: Dict[ButlerURI, DatasetId] = {}
+
+        location_factory = self.locationFactory
+
+        for ref_id, info in records.items():
+            # Key is the dataId, value is list of StoredItemInfo
+            uris = [info.file_location(location_factory).uri for info in info]
+            uris_to_check.extend(uris)
+            location_map.update({uri: ref_id for uri in uris})
+
+        # Results.
+        dataset_existence: Dict[DatasetRef, bool] = {}
+
+        uri_existence = ButlerURI.mexists(uris_to_check)
+        for uri, exists in uri_existence.items():
+            dataset_id = location_map[uri]
+            ref = id_to_ref[dataset_id]
+
+            # Disassembled composite needs to check all locations.
+            # all_required indicates whether all need to exist or not.
+            if ref in dataset_existence:
+                if all_required:
+                    exists = dataset_existence[ref] and exists
+                else:
+                    exists = dataset_existence[ref] or exists
+            dataset_existence[ref] = exists
+
+        return dataset_existence
+
+    def mexists(self, refs: Iterable[DatasetRef]) -> Dict[DatasetRef, bool]:
+        """Check the existence of multiple datasets at once.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked.
+
+        Returns
+        -------
+        existence : `dict` of [`DatasetRef`, `bool`]
+            Mapping from dataset to boolean indicating existence.
+        """
+        # Need a mapping of dataset_id to dataset ref since the API
+        # works with dataset_id
+        id_to_ref = {ref.getCheckedId(): ref for ref in refs}
+
+        # Set of all IDs we are checking for.
+        requested_ids = set(id_to_ref.keys())
+
+        # The records themselves. Could be missing some entries.
+        records = self._get_stored_records_associated_with_refs(refs)
+
+        dataset_existence = self._process_mexists_records(id_to_ref, records, True)
+
+        # Set of IDs that have been handled.
+        handled_ids = {ref.id for ref in dataset_existence.keys()}
+
+        missing_ids = requested_ids - handled_ids
+        if missing_ids:
+            if not self.trustGetRequest:
+                # Must assume these do not exist
+                for missing in missing_ids:
+                    dataset_existence[id_to_ref[missing]] = False
+            else:
+                log.log(VERBOSE,
+                        "%d out of %d datasets were not known to datastore during initial existence check.",
+                        len(missing_ids), len(requested_ids))
+
+                # Construct data structure identical to that returned
+                # by _get_stored_records_associated_with_refs() but using
+                # guessed names.
+                records = {}
+                for missing in missing_ids:
+                    expected = self._get_expected_dataset_locations_info(id_to_ref[missing])
+                    records[missing] = [info for _, info in expected]
+
+                dataset_existence.update(self._process_mexists_records(id_to_ref, records, False))
+
+        return dataset_existence
 
     def exists(self, ref: DatasetRef) -> bool:
         """Check if the dataset exists in the datastore.
