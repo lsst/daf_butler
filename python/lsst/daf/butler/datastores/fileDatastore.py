@@ -1315,6 +1315,7 @@ class FileDatastore(GenericBaseDatastore):
         dataset_existence: Dict[DatasetRef, bool] = {}
         refs = list(refs)
         n_refs = len(refs)
+        log.log(VERBOSE, "Checking for the existence of artifacts for %d datasets in datastore", n_refs)
         n_found_total = 0
         n_checked = 0
         for i in range(0, n_refs, chunk_size):
@@ -1369,9 +1370,8 @@ class FileDatastore(GenericBaseDatastore):
                 for missing in missing_ids:
                     dataset_existence[id_to_ref[missing]] = False
             else:
-                log.log(VERBOSE,
-                        "%d out of %d datasets were not known to datastore during initial existence check.",
-                        len(missing_ids), len(requested_ids))
+                log.debug("%d out of %d datasets were not known to datastore during initial existence check.",
+                          len(missing_ids), len(requested_ids))
 
                 # Construct data structure identical to that returned
                 # by _get_stored_records_associated_with_refs() but using
