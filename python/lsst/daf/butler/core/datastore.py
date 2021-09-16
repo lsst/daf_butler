@@ -356,13 +356,18 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    def mexists(self, refs: Iterable[DatasetRef]) -> Dict[DatasetRef, bool]:
+    def mexists(self, refs: Iterable[DatasetRef],
+                artifact_existence: Optional[Dict[ButlerURI, bool]] = None) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
         Parameters
         ----------
         refs : iterable of `DatasetRef`
             The datasets to be checked.
+        artifact_existence : `dict` of [`ButlerURI`, `bool`], optional
+            Mapping of datastore artifact to existence. Updated by this
+            method with details of all artifacts tested. Can be `None`
+            if the caller is not interested.
 
         Returns
         -------
@@ -623,7 +628,8 @@ class Datastore(metaclass=ABCMeta):
 
     def transfer_from(self, source_datastore: Datastore, refs: Iterable[DatasetRef],
                       local_refs: Optional[Iterable[DatasetRef]] = None,
-                      transfer: str = "auto") -> None:
+                      transfer: str = "auto",
+                      artifact_existence: Optional[Dict[ButlerURI, bool]] = None) -> None:
         """Transfer dataset artifacts from another datastore to this one.
 
         Parameters
@@ -649,6 +655,10 @@ class Datastore(metaclass=ABCMeta):
             data store choose the most natural option for itself.
             If the source location and transfer location are identical the
             transfer mode will be ignored.
+        artifact_existence : `dict` of [`ButlerURI`, `bool`], optional
+            Mapping of datastore artifact to existence. Updated by this
+            method with details of all artifacts tested. Can be `None`
+            if the caller is not interested.
 
         Raises
         ------

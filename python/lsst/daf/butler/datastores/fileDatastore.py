@@ -1247,7 +1247,9 @@ class FileDatastore(GenericBaseDatastore):
 
     def _process_mexists_records(self, id_to_ref: Dict[DatasetId, DatasetRef],
                                  records: Dict[DatasetId, List[StoredFileInfo]],
-                                 all_required: bool) -> Dict[DatasetRef, bool]:
+                                 all_required: bool,
+                                 artifact_existence: Optional[Dict[ButlerURI,
+                                                                   bool]] = None) -> Dict[DatasetRef, bool]:
         """Helper function for mexists that checks the given records.
 
         Parameters
@@ -1260,6 +1262,10 @@ class FileDatastore(GenericBaseDatastore):
         all_required : `bool`
             Flag to indicate whether existence requires all artifacts
             associated with a dataset ID to exist or not for existence.
+        artifact_existence : `dict` of [`ButlerURI`, `bool`], optional
+            Mapping of datastore artifact to existence. Updated by this
+            method with details of all artifacts tested. Can be `None`
+            if the caller is not interested.
 
         Returns
         -------
@@ -1279,10 +1285,22 @@ class FileDatastore(GenericBaseDatastore):
             uris_to_check.extend(uris)
             location_map.update({uri: ref_id for uri in uris})
 
+        uri_existence: Dict[ButlerURI, bool] = {}
+        if artifact_existence is not None:
+            # If a URI has already been checked remove it from the list
+            # and immediately add the status to the output dict.
+            filtered_uris_to_check = []
+            for uri in uris_to_check:
+                if uri in artifact_existence:
+                    uri_existence[uri] = artifact_existence[uri]
+                else:
+                    filtered_uris_to_check.append(uri)
+            uris_to_check = filtered_uris_to_check
+
         # Results.
         dataset_existence: Dict[DatasetRef, bool] = {}
 
-        uri_existence = ButlerURI.mexists(uris_to_check)
+        uri_existence.update(ButlerURI.mexists(uris_to_check))
         for uri, exists in uri_existence.items():
             dataset_id = location_map[uri]
             ref = id_to_ref[dataset_id]
@@ -1296,15 +1314,23 @@ class FileDatastore(GenericBaseDatastore):
                     exists = dataset_existence[ref] or exists
             dataset_existence[ref] = exists
 
+        if artifact_existence is not None:
+            artifact_existence.update(uri_existence)
+
         return dataset_existence
 
-    def mexists(self, refs: Iterable[DatasetRef]) -> Dict[DatasetRef, bool]:
+    def mexists(self, refs: Iterable[DatasetRef],
+                artifact_existence: Optional[Dict[ButlerURI, bool]] = None) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
         Parameters
         ----------
         refs : iterable of `DatasetRef`
             The datasets to be checked.
+        artifact_existence : `dict` of [`ButlerURI`, `bool`], optional
+            Mapping of datastore artifact to existence. Updated by this
+            method with details of all artifacts tested. Can be `None`
+            if the caller is not interested.
 
         Returns
         -------
@@ -1319,7 +1345,7 @@ class FileDatastore(GenericBaseDatastore):
         n_found_total = 0
         n_checked = 0
         for i in range(0, n_refs, chunk_size):
-            chunk_result = self._mexists(refs[i:i + chunk_size])
+            chunk_result = self._mexists(refs[i:i + chunk_size], artifact_existence)
             if log.isEnabledFor(VERBOSE):
                 n_results = len(chunk_result)
                 n_checked += n_results
@@ -1335,7 +1361,8 @@ class FileDatastore(GenericBaseDatastore):
 
         return dataset_existence
 
-    def _mexists(self, refs: Iterable[DatasetRef]) -> Dict[DatasetRef, bool]:
+    def _mexists(self, refs: Iterable[DatasetRef],
+                 artifact_existence: Optional[Dict[ButlerURI, bool]] = None) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
         Parameters
@@ -1358,7 +1385,8 @@ class FileDatastore(GenericBaseDatastore):
         # The records themselves. Could be missing some entries.
         records = self._get_stored_records_associated_with_refs(refs)
 
-        dataset_existence = self._process_mexists_records(id_to_ref, records, True)
+        dataset_existence = self._process_mexists_records(id_to_ref, records, True,
+                                                          artifact_existence=artifact_existence)
 
         # Set of IDs that have been handled.
         handled_ids = {ref.id for ref in dataset_existence.keys()}
@@ -1381,7 +1409,8 @@ class FileDatastore(GenericBaseDatastore):
                     expected = self._get_expected_dataset_locations_info(id_to_ref[missing])
                     records[missing] = [info for _, info in expected]
 
-                dataset_existence.update(self._process_mexists_records(id_to_ref, records, False))
+                dataset_existence.update(self._process_mexists_records(id_to_ref, records, False,
+                                                                       artifact_existence=artifact_existence))
 
         return dataset_existence
 
@@ -2022,7 +2051,8 @@ class FileDatastore(GenericBaseDatastore):
     @transactional
     def transfer_from(self, source_datastore: Datastore, refs: Iterable[DatasetRef],
                       local_refs: Optional[Iterable[DatasetRef]] = None,
-                      transfer: str = "auto") -> None:
+                      transfer: str = "auto",
+                      artifact_existence: Optional[Dict[ButlerURI, bool]] = None) -> None:
         # Docstring inherited
         if type(self) is not type(source_datastore):
             raise TypeError(f"Datastore mismatch between this datastore ({type(self)}) and the "
@@ -2040,6 +2070,10 @@ class FileDatastore(GenericBaseDatastore):
         if transfer in ("direct", "split"):
             raise ValueError("Can not transfer from a source datastore using direct mode since"
                              " those files are controlled by the other datastore.")
+
+        # Empty existence lookup if none given.
+        if artifact_existence is None:
+            artifact_existence = {}
 
         # We will go through the list multiple times so must convert
         # generators to lists.
@@ -2090,6 +2124,10 @@ class FileDatastore(GenericBaseDatastore):
                      len(missing_ids), len(requested_ids))
             id_to_ref = {ref.id: ref for ref in refs if ref.id in missing_ids}
 
+            # Using datastore.mexists() is possible but would still require
+            # the call to get_expected_dataset_locations_info because
+            # the source records are required and mexists() does not
+            # return that information.
             for missing in missing_ids:
                 # Ask the source datastore where the missing artifacts
                 # should be.  An execution butler might not know about the
@@ -2099,7 +2137,16 @@ class FileDatastore(GenericBaseDatastore):
                 # Not all components can be guaranteed to exist so this
                 # list has to filter those by checking to see if the
                 # artifact is really there.
-                records = [info for location, info in expected if location.uri.exists()]
+                records = []
+                for location, info in expected:
+                    uri = location.uri
+                    if uri in artifact_existence:
+                        exists = artifact_existence[uri]
+                    else:
+                        exists = uri.exists()
+                    if exists:
+                        records.append(info)
+
                 if records:
                     source_records[missing].extend(records)
                 else:

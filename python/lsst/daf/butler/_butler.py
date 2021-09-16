@@ -1858,8 +1858,10 @@ class Butler:
         # purged, we have to ask for the (predicted) URI and check
         # existence explicitly. Execution butler is set up exactly like
         # this with no datastore records.
+        artifact_existence: Dict[ButlerURI, bool] = {}
         if skip_missing:
-            dataset_existence = source_butler.datastore.mexists(source_refs)
+            dataset_existence = source_butler.datastore.mexists(source_refs,
+                                                                artifact_existence=artifact_existence)
             source_refs = [ref for ref, exists in dataset_existence.items() if exists]
             filtered_count = len(source_refs)
             log.log(VERBOSE, "%d datasets removed because the artifact does not exist. Now have %d.",
@@ -1934,7 +1936,8 @@ class Butler:
             # Ask the datastore to transfer. The datastore has to check that
             # the source datastore is compatible with the target datastore.
             self.datastore.transfer_from(source_butler.datastore, source_refs,
-                                         local_refs=transferred_refs, transfer=transfer)
+                                         local_refs=transferred_refs, transfer=transfer,
+                                         artifact_existence=artifact_existence)
 
         return transferred_refs
 
