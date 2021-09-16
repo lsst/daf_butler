@@ -15,3 +15,5 @@ rules:
     # "on" as a key in workflows confuses things
     ignore: |
       /.github/workflows/
+  indentation:
+    indent-sequences: consistent
