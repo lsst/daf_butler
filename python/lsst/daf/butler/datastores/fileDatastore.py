@@ -26,6 +26,7 @@ __all__ = ("FileDatastore", )
 
 import hashlib
 import logging
+import itertools
 
 from sqlalchemy import BigInteger, String
 
@@ -35,8 +36,10 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
+    Collection,
     Dict,
     Iterable,
+    Iterator,
     List,
     Mapping,
     Optional,
@@ -2124,34 +2127,57 @@ class FileDatastore(GenericBaseDatastore):
                      len(missing_ids), len(requested_ids))
             id_to_ref = {ref.id: ref for ref in refs if ref.id in missing_ids}
 
-            # Using datastore.mexists() is possible but would still require
-            # the call to get_expected_dataset_locations_info because
-            # the source records are required and mexists() does not
-            # return that information.
-            for missing in missing_ids:
-                # Ask the source datastore where the missing artifacts
-                # should be.  An execution butler might not know about the
-                # artifacts even if they are there.
-                expected = source_datastore._get_expected_dataset_locations_info(id_to_ref[missing])
+            def chunk_iterable(data: Collection[Any], chunk_size: int = 10_000) -> Iterator[Iterable[Any]]:
+                """Converts any iterable that can be sized to a chunked
+                iterable."""
+                it = iter(data)
+                for i in range(0, len(data), chunk_size):
+                    yield tuple(element for element in itertools.islice(it, chunk_size))
 
-                # Not all components can be guaranteed to exist so this
-                # list has to filter those by checking to see if the
-                # artifact is really there.
-                records = []
-                for location, info in expected:
-                    uri = location.uri
-                    if uri in artifact_existence:
-                        exists = artifact_existence[uri]
+            # This should be chunked in case we end up having to check
+            # the file store since we need some log output to show
+            # progress.
+            for missing_ids_chunk in chunk_iterable(missing_ids):
+                records = {}
+                for missing in missing_ids_chunk:
+                    # Ask the source datastore where the missing artifacts
+                    # should be.  An execution butler might not know about the
+                    # artifacts even if they are there.
+                    expected = source_datastore._get_expected_dataset_locations_info(id_to_ref[missing])
+                    records[missing] = [info for _, info in expected]
+
+                # Call the mexist helper method in case we have not already
+                # checked these artifacts such that artifact_existence is
+                # empty. This allows us to benefit from parallelism.
+                # datastore.mexists() itself does not give us access to the
+                # derived datastore record.
+                log.log(VERBOSE, "Checking existence of %d datasets unknown to datastore",
+                        len(records))
+                ref_exists = source_datastore._process_mexists_records(id_to_ref, records, False,
+                                                                       artifact_existence=artifact_existence)
+
+                # Now go through the records and propagate the ones that exist.
+                location_factory = self.locationFactory
+                for missing, record_list in records.items():
+                    # Skip completely if the ref does not exist.
+                    ref = id_to_ref[missing]
+                    if not ref_exists[ref]:
+                        log.warning("Asked to transfer dataset %s but no file artifacts exist for it.",
+                                    ref)
+                        continue
+                    # Check for file artifact to decide which parts of a
+                    # disassembled composite do exist. If there is only a
+                    # single record we don't even need to look because it can't
+                    # be a composite and must exist.
+                    if len(record_list) == 1:
+                        dataset_records = record_list
                     else:
-                        exists = uri.exists()
-                    if exists:
-                        records.append(info)
+                        dataset_records = [record for record in record_list
+                                           if artifact_existence[record.file_location(location_factory).uri]]
+                        assert len(dataset_records) > 0, "Disassembled composite should have had some files."
 
-                if records:
-                    source_records[missing].extend(records)
-                else:
-                    log.warning("Asked to transfer dataset %s but no file artifacts exist for it.",
-                                id_to_ref[missing])
+                    # Rely on source_records being a defaultdict.
+                    source_records[missing].extend(dataset_records)
 
         # See if we already have these records
         target_records = self._get_stored_records_associated_with_refs(local_refs)
