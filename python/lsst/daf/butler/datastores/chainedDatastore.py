@@ -272,7 +272,7 @@ class ChainedDatastore(Datastore):
         """
         dataset_existence: Dict[DatasetRef, bool] = {}
         for datastore in self.datastores:
-            dataset_existence.update(datastore.mexists(refs))
+            dataset_existence.update(datastore.mexists(refs, artifact_existence=artifact_existence))
 
             # For next datastore no point asking about ones we know
             # exist already. No special exemption for ephemeral datastores.
