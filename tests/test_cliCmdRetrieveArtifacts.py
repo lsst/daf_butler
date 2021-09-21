@@ -83,11 +83,25 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
             artifacts = self.find_files(destdir)
             self.assertEqual(len(artifacts), 3, f"Expected 3 artifacts: {artifacts}")
 
+    def testOverwriteLink(self):
+        runner = LogCliRunner()
+        with runner.isolated_filesystem():
+            destdir = "tmp2/"
+            # Force hardlink
+            result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir, "--transfer", "hardlink"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+            # Running again should pass because hard links are the same
+            # file.
+            result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
     def testClobber(self):
         runner = LogCliRunner()
         with runner.isolated_filesystem():
             destdir = "tmp2/"
-            result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir])
+            # Force copy so we can ensure that overwrite tests will trigger.
+            result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir, "--transfer", "copy"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
             # Running again should fail

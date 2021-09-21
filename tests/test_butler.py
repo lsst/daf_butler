@@ -242,8 +242,12 @@ class ButlerPutGetTests:
 
                     for preserve_path in (True, False):
                         destination = root_uri.join(f"artifacts/{preserve_path}_{counter}/")
+                        # Use copy so that we can test that overwrite
+                        # protection works (using "auto" for File URIs would
+                        # use hard links and subsequent transfer would work
+                        # because it knows they are the same file).
                         transferred = butler.retrieveArtifacts([ref], destination,
-                                                               preserve_path=preserve_path)
+                                                               preserve_path=preserve_path, transfer="copy")
                         self.assertGreater(len(transferred), 0)
                         artifacts = list(ButlerURI.findFileResources([destination]))
                         self.assertEqual(set(transferred), set(artifacts))
