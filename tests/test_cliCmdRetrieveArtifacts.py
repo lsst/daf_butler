@@ -87,9 +87,14 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
         runner = LogCliRunner()
         with runner.isolated_filesystem():
             destdir = "tmp2/"
-            # Force hardlink
+            # Force hardlink -- if this fails assume that it is because
+            # hardlinks are not supported (/tmp and TESTDIR are on
+            # different file systems) and skip the test. There are other
+            # tests for the command line itself.
             result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir, "--transfer", "hardlink"])
-            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            if result.exit_code != 0:
+                raise unittest.SkipTest("hardlink not supported between these directories for this test:"
+                                        f" {clickResultMsg(result)}")
 
             # Running again should pass because hard links are the same
             # file.
