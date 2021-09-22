@@ -110,6 +110,9 @@ Python API reference
 .. automodapi:: lsst.daf.butler.registry.queries
    :no-main-docstr:
 
+.. automodapi:: lsst.daf.butler.registry.summaries
+   :no-main-docstr:
+
 .. automodapi:: lsst.daf.butler.registry.wildcards
    :no-main-docstr:
 

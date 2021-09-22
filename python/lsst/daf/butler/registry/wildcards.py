@@ -677,3 +677,14 @@ class CollectionQuery:
             return self._search == other._search and self._patterns == other._patterns
         else:
             return False
+
+    def __str__(self) -> str:
+        if self._search is Ellipsis:
+            return "..."
+        else:
+            terms = list(self._search)
+            terms.extend(str(p) for p in self._patterns)
+            return "[{}]".format(", ".join(terms))
+
+    def __repr__(self) -> str:
+        return f"CollectionQuery({self._search!r}, {self._patterns!r})"

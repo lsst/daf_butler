@@ -10,6 +10,12 @@ Querying datasets
 Datasets in a butler-managed data repository are identified by the combination of their *dataset type* and *data ID* within a *collection*.
 The `Registry` class's query methods (`~Registry.queryDatasetTypes`, `~Registry.queryCollections`, `~Registry.queryDataIds`, `~Registry.queryDatasets`, and `~Registry.queryDimensionRecords`) allow these to be specified either fully or partially in various ways.
 
+.. note::
+    Registry queries utilize locally-cached information and heuristics to generate simpler queries and provide diagnostics when queries yield no results.
+    Concurrent writes by other butler clients may not be reflected in these caches, if they happened since this `Registry` was initialized, and new datasets may not be found by queries as a result.
+    Users can call `Registry.refresh` before querying to update the caches.
+    Other `Registry` and `Butler` methods (`Registry.findDataset` and `Butler.get` variants in particular) do not suffer from this limitation; if caching is used in these contexts, we always fall back to database searches when cached information indicates that a dataset does not exist.
+
 .. _daf_butler_dataset_type_expressions:
 
 DatasetType expressions

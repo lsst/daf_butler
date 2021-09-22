@@ -33,7 +33,9 @@ from typing import (
     ItemsView,
     Iterable,
     Iterator,
+    List,
     Mapping,
+    Optional,
     Set,
     Union,
     ValuesView,
@@ -212,7 +214,11 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
             to `str` or iterable of `str`.
         """
         for dimension, values in other.items():
-            self._mapping.setdefault(dimension, set()).intersection_update(iterable(values))
+            new_values = set(iterable(values))
+            # Yes, this will often result in a (no-op) self-intersection on the
+            # inner set, but this is easier to read (and obviously more or less
+            # efficient) than adding a check to avoid it.
+            self._mapping.setdefault(dimension, new_values).intersection_update(new_values)
 
     def intersection(self, *others: Mapping[GovernorDimension, Union[str, Iterable[str]]]
                      ) -> GovernorDimensionRestriction:
@@ -310,6 +316,60 @@ class CollectionSummary:
         datasetTypes.update(itertools.chain.from_iterable(o.datasetTypes for o in others))
         dimensions = self.dimensions.union(*[o.dimensions for o in others])
         return CollectionSummary(datasetTypes, dimensions)
+
+    def is_compatible_with(
+        self,
+        datasetType: DatasetType,
+        restriction: GovernorDimensionRestriction,
+        rejections: Optional[List[str]] = None,
+        name: Optional[str] = None,
+    ) -> bool:
+        """Test whether the collection summarized by this object should be
+        queried for a given dataset type and governor dimension values.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType`
+            Dataset type being queried.  If this collection has no instances of
+            this dataset type (or its parent dataset type, if it is a
+            component), `False` will always be returned.
+        restriction : `GovernorDimensionRestriction`
+            Restriction on the values governor dimensions can take in the
+            query, usually from a WHERE expression.  If this is disjoint with
+            the data IDs actually present in the collection, `False` will be
+            returned.
+        rejections : `list` [ `str` ], optional
+            If provided, a list that will be populated with a log- or
+            exception-friendly message explaining why this dataset is
+            incompatible with this collection when `False` is returned.
+        name : `str`, optional
+            Name of the collection this object summarizes, for use in messages
+            appended to ``rejections``.  Ignored if ``rejections`` is `None`.
+
+        Returns
+        -------
+        compatible : `bool`
+            `True` if the dataset query described by this summary and the given
+            arguments might yield non-empty results; `False` if the result from
+            such a query is definitely empty.
+        """
+        parent = datasetType if not datasetType.isComponent() else datasetType.makeCompositeDatasetType()
+        if parent not in self.datasetTypes:
+            if rejections is not None:
+                rejections.append(f"No datasets of type {parent.name} in collection {name!r}.")
+            return False
+        for governor in datasetType.dimensions.governors:
+            if (values_in_self := self.dimensions.get(governor)) is not None:
+                if (values_in_other := restriction.get(governor)) is not None:
+                    if values_in_self.isdisjoint(values_in_other):
+                        assert values_in_other, f"No valid values in restriction for dimension {governor}."
+                        if rejections is not None:
+                            rejections.append(
+                                f"No datasets with {governor.name} in {values_in_other} "
+                                f"in collection {name!r}."
+                            )
+                        return False
+        return True
 
     datasetTypes: NamedValueSet[DatasetType]
     """Dataset types that may be present in the collection

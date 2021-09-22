@@ -54,13 +54,18 @@ class QueryBuilder:
     managers : `RegistryManagers`
         A struct containing the registry manager instances used by the query
         system.
+    doomed_by : `Iterable` [ `str` ], optional
+        A list of messages (appropriate for e.g. logging or exceptions) that
+        explain why the query is known to return no results even before it is
+        executed.  Queries with a non-empty list will never be executed.
     """
-    def __init__(self, summary: QuerySummary, managers: RegistryManagers):
+    def __init__(self, summary: QuerySummary, managers: RegistryManagers, doomed_by: Iterable[str] = ()):
         self.summary = summary
         self._simpleQuery = SimpleQuery()
         self._elements: NamedKeyDict[DimensionElement, sqlalchemy.sql.FromClause] = NamedKeyDict()
         self._columns = QueryColumns()
         self._managers = managers
+        self._doomed_by = list(doomed_by)
 
     def hasDimensionKey(self, dimension: Dimension) -> bool:
         """Return `True` if the given dimension's primary key column has
@@ -156,38 +161,110 @@ class QueryBuilder:
             # Unrecognized dataset type means no results.  It might be better
             # to raise here, but this is consistent with previous behavior,
             # which is expected by QuantumGraph generation code in pipe_base.
+            self._doomed_by.append(
+                f"Dataset type {datasetType.name!r} is not registered, so no instances of it can exist in "
+                "any collection."
+            )
             return False
         subsubqueries = []
         runKeyName = self._managers.collections.getRunForeignKeyName()
         baseColumnNames = {"id", runKeyName, "ingest_date"} if isResult else set()
         baseColumnNames.update(datasetType.dimensions.required.names)
+        if not findFirst:
+            calibration_collections = []
+            other_collections = []
+        rejections: List[str] = []
         for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
                                                                  collectionTypes=collectionTypes)):
+            # Only include collections that (according to collection summaries)
+            # might have datasets of this type and governor dimensions
+            # consistent with the query's WHERE clause.
+            collection_summary = self._managers.datasets.getCollectionSummary(collectionRecord)
+            if not collection_summary.is_compatible_with(
+                datasetType,
+                self.summary.where.restriction,
+                rejections=rejections,
+                name=collectionRecord.name,
+            ):
+                continue
             if collectionRecord.type is CollectionType.CALIBRATION:
                 # If collection name was provided explicitly then say sorry,
                 # otherwise collection is a part of chained one and we skip it.
                 if datasetType.isCalibration() and collectionRecord.name in explicitCollections:
-                    raise NotImplementedError(
-                        f"Query for dataset type '{datasetType.name}' in CALIBRATION-type collection "
-                        f"'{collectionRecord.name}' is not yet supported."
-                    )
+                    if self.summary.temporal or self.summary.mustHaveKeysJoined.temporal:
+                        raise NotImplementedError(
+                            f"Temporal query for dataset type '{datasetType.name}' in CALIBRATION-type "
+                            f"collection '{collectionRecord.name}' is not yet supported."
+                        )
+                    elif findFirst:
+                        raise NotImplementedError(
+                            f"Find-first query for dataset type '{datasetType.name}' in CALIBRATION-type "
+                            f"collection '{collectionRecord.name}' is not yet supported."
+                        )
+                    else:
+                        calibration_collections.append(collectionRecord)
                 else:
                     # We can never find a non-calibration dataset in a
                     # CALIBRATION collection.
+                    rejections.append(
+                        f"Not searching for non-calibration dataset {datasetType.name!r} "
+                        f"in CALIBRATION collection {collectionRecord.name!r}."
+                    )
                     continue
-            ssq = datasetRecordStorage.select(collection=collectionRecord,
-                                              dataId=SimpleQuery.Select,
-                                              id=SimpleQuery.Select if isResult else None,
-                                              run=SimpleQuery.Select if isResult else None,
-                                              ingestDate=SimpleQuery.Select if isResult else None)
-            if ssq is None:
-                continue
-            assert {c.name for c in ssq.columns} == baseColumnNames
+            elif findFirst:
+                # If findFirst=True, each collection gets its own subquery so
+                # we can add a literal rank for it.
+                ssq = datasetRecordStorage.select(
+                    collectionRecord,
+                    dataId=SimpleQuery.Select,
+                    id=SimpleQuery.Select if isResult else None,
+                    run=SimpleQuery.Select if isResult else None,
+                    ingestDate=SimpleQuery.Select if isResult else None,
+                )
+                assert {c.name for c in ssq.columns} == baseColumnNames
+                ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
+                subsubqueries.append(ssq.combine())
+            else:
+                # If findFirst=False, we have one subquery for all CALIBRATION
+                # collections and one subquery for all other collections; we'll
+                # assemble those later after grouping by collection type.
+                other_collections.append(collectionRecord)
+        if not findFirst:
+            if other_collections:
+                ssq = datasetRecordStorage.select(
+                    *other_collections,
+                    dataId=SimpleQuery.Select,
+                    id=SimpleQuery.Select if isResult else None,
+                    run=SimpleQuery.Select if isResult else None,
+                    ingestDate=SimpleQuery.Select if isResult else None,
+                )
+                subsubqueries.append(ssq.combine())
+            if calibration_collections:
+                ssq = datasetRecordStorage.select(
+                    *calibration_collections,
+                    dataId=SimpleQuery.Select,
+                    id=SimpleQuery.Select if isResult else None,
+                    run=SimpleQuery.Select if isResult else None,
+                    ingestDate=SimpleQuery.Select if isResult else None,
+                )
+                subsubqueries.append(ssq.combine())
+        if not subsubqueries:
+            if rejections:
+                self._doomed_by.extend(rejections)
+            else:
+                self._doomed_by.append(f"No collections to search matching expression {collections}.")
+            # Make a single subquery with no collections that never yields
+            # results; this should never get executed, but downstream code
+            # still needs to access the SQLAlchemy column objects.
+            ssq = datasetRecordStorage.select(
+                dataId=SimpleQuery.Select,
+                id=SimpleQuery.Select if isResult else None,
+                run=SimpleQuery.Select if isResult else None,
+                ingestDate=SimpleQuery.Select if isResult else None,
+            )
             if findFirst:
                 ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
             subsubqueries.append(ssq.combine())
-        if not subsubqueries:
-            return False
         # Although one would expect that these subqueries can be
         # UNION ALL instead of UNION because each subquery is already
         # distinct, it turns out that with many
@@ -270,7 +347,7 @@ class QueryBuilder:
         else:
             subquery = subquery.alias(datasetType.name)
         self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
-        return True
+        return not self._doomed_by
 
     def joinTable(self, table: sqlalchemy.sql.FromClause, dimensions: NamedValueAbstractSet[Dimension], *,
                   datasets: Optional[DatasetQueryColumns] = None) -> None:
@@ -462,10 +539,12 @@ class QueryBuilder:
             self._joinMissingDimensionElements()
         self._addWhereClause()
         if self._columns.isEmpty():
-            return EmptyQuery(self.summary.requested.universe, managers=self._managers)
+            return EmptyQuery(self.summary.requested.universe, managers=self._managers,
+                              doomed_by=self._doomed_by)
         return DirectQuery(graph=self.summary.requested,
                            uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
                            whereRegion=self.summary.where.dataId.region,
                            simpleQuery=self._simpleQuery,
                            columns=self._columns,
-                           managers=self._managers)
+                           managers=self._managers,
+                           doomed_by=self._doomed_by)

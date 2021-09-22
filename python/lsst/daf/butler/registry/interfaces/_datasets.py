@@ -309,13 +309,13 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def select(self, collection: CollectionRecord,
+    def select(self, *collections: CollectionRecord,
                dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
                id: SimpleQuery.Select.Or[Optional[DatasetId]] = SimpleQuery.Select,
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
                ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
-               ) -> Optional[SimpleQuery]:
+               ) -> SimpleQuery:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
         this `DatasetType`.
 
@@ -326,9 +326,11 @@ class DatasetRecordStorage(ABC):
 
         Parameters
         ----------
-        collection : `CollectionRecord`
-            The record object describing the collection to query.  May not be
-            of type `CollectionType.CHAINED`.
+        *collections : `CollectionRecord`
+            The record object(s) describing the collection(s) to query.  May
+            not be of type `CollectionType.CHAINED`.  If multiple collections
+            are passed, the query will search all of them in an unspecified
+            order, and all collections must have the same type.
         dataId : `DataCoordinate` or `Select`
             The data ID to restrict results with, or an instruction to return
             the data ID via columns with names
@@ -356,10 +358,9 @@ class DatasetRecordStorage(ABC):
 
         Returns
         -------
-        query : `SimpleQuery` or `None`
+        query : `SimpleQuery`
             A struct containing the SQLAlchemy object that representing a
-            simple ``SELECT`` query, or `None` if it is known that there are
-            no datasets of this `DatasetType` that match the given constraints.
+            simple ``SELECT`` query.
         """
         raise NotImplementedError()
 

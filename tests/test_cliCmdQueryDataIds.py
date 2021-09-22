@@ -74,20 +74,8 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         res = self._queryDataIds(self.root)
         self.assertEqual(res, None)
 
-    def testDatasets(self):
-        """Test getting datasets."""
-        res = self._queryDataIds(self.root, datasets="test_metric_comp")
-        expected = AstropyTable(
-            array((
-                ("R", "DummyCamComp", "d-r", 1, 423),
-                ("R", "DummyCamComp", "d-r", 1, 424)
-            )),
-            names=("band", "instrument", "physical_filter", "visit_system", "visit")
-        )
-        self.assertAstropyTablesEqual(res, expected)
-
     def testWhere(self):
-        """Test getting datasets."""
+        """Test with a WHERE constraint."""
         res = self._queryDataIds(self.root, dimensions=("visit",),
                                  where="instrument='DummyCamComp' AND visit=423")
         expected = AstropyTable(
@@ -98,8 +86,8 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         )
         self.assertAstropyTablesEqual(res, expected)
 
-    def testCollections(self):
-        """Test getting datasets using the collections option."""
+    def testDatasetsAndCollections(self):
+        """Test constraining via datasets and collections."""
 
         # Add a dataset in a different collection
         self.butler = Butler(self.root, run="foo")

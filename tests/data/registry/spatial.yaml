@@ -1,0 +1,193 @@
+# Spatial test data; see spatial.py for more information.
+description: Butler Data Repository Export
+version: 0
+data:
+- type: dimension
+  element: visit_system
+  records:
+  - id: 0
+    name: one-to-one
+    instrument: Cam1
+- type: dimension
+  element: visit
+  records:
+  - physical_filter: Cam1-G
+    day_obs: 20210909
+    exposure_time: 60.0
+    target_name: test_target
+    observation_reason: science
+    science_program: test_survey
+    zenith_angle: 5.0
+    datetime_begin: !butler_time/tai/iso '2021-09-09 03:00:00.000000000'
+    datetime_end: !butler_time/tai/iso '2021-09-09 03:01:00.000000000'
+    instrument: Cam1
+    id: 1
+    name: '1'
+    visit_system: 0
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 704d451894e4feef3f2df2f2f7ac03683f53bc30b89490903f6080025d14ffef3fb4655dd5d003683fc5d8707f771b8e3fd47dc347f9feef3f53de11724108783fad0e8b035e1b8e3faf1050449cfeef3f5d5a7de96209823f03f849486f90903ff5511f7111feef3ff70a8ad0940c853f3493bccecf96933fb93758d2d3fdef3f4fb2aa456c0c853ff51de0686a1a953f6b79a49191fdef3f26af86ae400c853ff98e1a27469e963f669174e2c7fdef3f6b9e40a8070c7e3f04af3a8e6c9e963ffe5aba04ecfdef3f12465249e703723f0607741a869e963ffe5aba04ecfdef3f133f5249e703723f0607741a869e963f9f43984af7fdef3faa1168dffa02683fea4cd9128e9e963f5410c48d39feef3f89dd1d9b2c03683f0ed46784ad1a953f5410c48d39feef3f89dd1d9b2c03683f4ed26784ad1a953f
+  - physical_filter: Cam1-R1
+    day_obs: 20210909
+    exposure_time: 45.0
+    target_name: test_target
+    observation_reason: science
+    science_program: test_survey
+    zenith_angle: 10.0
+    datetime_begin: !butler_time/tai/iso '2021-09-09 03:02:00.000000000'
+    datetime_end: !butler_time/tai/iso '2021-09-09 03:03:00.000000000'
+    instrument: Cam1
+    id: 2
+    name: '2'
+    visit_system: 0
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70550548f08effef3f21b35a98eb01583f92c821d18f0d853f40573b4bc5ffef3f4b4d64601402583f39592a1be60d7e3f0173bfa4d9ffef3f24f2f5a42302583f3b7618f7e908783f1da70f9ac7ffef3f1ed1b918f304723f09cafd69dc08783f135961188fffef3f923a9633b30d7e3f92339633b30d7e3f65dc7ed93fffef3fa06d6421bf09823f4637f1c75b0d853f9fdf24d41dffef3faef091f3ab09823f2ffe2d127111883f9fdf24d41dffef3faef091f3ab09823fae012e127111883f76e61a3bf7feef3fb41738319609823f3bb6789f0e168b3f9ec0741f10ffef3f707a37f23b0d7e3f643efbb123168b3f9ec0741f10ffef3f707337f23b0d7e3f643efbb123168b3f5fec4b8d3fffef3f2489a93ff103683fb631a6d84b168b3f2392c94f46ffef3f819edf1ab501583fbf5b989151168b3f
+- type: dimension
+  element: visit_detector_region
+  records:
+  - instrument: Cam1
+    visit: 1
+    detector: 1
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 705410d72e77feef3fbb059adc5a03683fe677a21a0e97933f3b26271b5cfeef3f08ca4664cb07783f9daa5586fd96933f7f9db07a1efeef3f0fb68b1a9d07783fd61d53a89b1a953f7f9db07a1efeef3f0fb68b1a9d07783f961f53a89b1a953fbb082d38dcfdef3f4a4af8556b07783f84fbd4ee7a9e963ffe5aba04ecfdef3f12465249e703723f0607741a869e963ffe5aba04ecfdef3f133f5249e703723f0607741a869e963f9f43984af7fdef3faa1168dffa02683fea4cd9128e9e963f5410c48d39feef3f89dd1d9b2c03683f0ed46784ad1a953f5410c48d39feef3f89dd1d9b2c03683f4ed26784ad1a953f
+  - instrument: Cam1
+    visit: 1
+    detector: 2
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7013ce7ac447feef3fc0388ec47f0c7e3ff4824412f196933ff5511f7111feef3ff70a8ad0940c853f3493bccecf96933fb93758d2d3fdef3f4fb2aa456c0c853ff51de0686a1a953f6b79a49191fdef3f26af86ae400c853ff98e1a27469e963f669174e2c7fdef3f6b9e40a8070c7e3f04af3a8e6c9e963f
+  - instrument: Cam1
+    visit: 1
+    detector: 3
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 704d451894e4feef3f2df2f2f7ac03683f53bc30b89490903f6080025d14ffef3fb4655dd5d003683fc5d8707f771b8e3fd47dc347f9feef3f53de11724108783fad0e8b035e1b8e3fde98527fc9feef3f15b5428e1d08783fde64f6b28690903f7917e91b95feef3ffd86ec34f607783fa063c209a113923f9cbd2930b0feef3f4c3a9fa58503683f1d8e7056b013923f
+  - instrument: Cam1
+    visit: 1
+    detector: 4
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70119fd527b5feef3f34ccf281e60c7e3fb563f22a7c90903faf1050449cfeef3f5d5a7de96209823f03f849486f90903f46bac4e167feef3fb50b69614509823f88072e7c8713923fa608d0c480feef3fa35c024eb50c7e3ff3e4c78b9513923f
+  - instrument: Cam1
+    visit: 2
+    detector: 1
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70550548f08effef3f21b35a98eb01583f92c821d18f0d853ffb9316e67cffef3fef92a507c904723f1f2fa2f2830d853f5cf5124634ffef3f16be1f22a004723f9003794c42168b3f5fec4b8d3fffef3f2497a93ff103683fb631a6d84b168b3f5fec4b8d3fffef3f2489a93ff103683fb631a6d84b168b3f2392c94f46ffef3f819edf1ab501583fbf5b989151168b3f
+  - instrument: Cam1
+    visit: 2
+    detector: 2
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f2ee4c114bffef3f91eb4ae07e08783ff9e3a4199311883fbc3a37176dffef3f4f82536e9808783f9fc6078c790d853f0b3582be58ffef3f84045c27800d7e3fb73302296c0d853f0b3582be58ffef3f840b5c27800d7e3fb73302296c0d853f65dc7ed93fffef3fa06d6421bf09823f4637f1c75b0d853f9fdf24d41dffef3faef091f3ab09823f2ffe2d127111883f9fdf24d41dffef3faef091f3ab09823fae012e127111883f76e61a3bf7feef3fb41738319609823f3bb6789f0e168b3f9ec0741f10ffef3f707a37f23b0d7e3f643efbb123168b3f9ec0741f10ffef3f707337f23b0d7e3f643efbb123168b3f333e9f7724ffef3f144225e26108783f7d81f3ea34168b3ff2ee4c114bffef3f91eb4ae07e08783f79e7a4199311883f
+  - instrument: Cam1
+    visit: 2
+    detector: 3
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7040573b4bc5ffef3f4b4d64601402583f39592a1be60d7e3f0173bfa4d9ffef3f24f2f5a42302583f3b7618f7e908783f1da70f9ac7ffef3f1ed1b918f304723f09cafd69dc08783fcdf6ad40b3ffef3f21e938a3e704723f22bb5029d50d7e3f0d5cd75a9affef3fdd9cfd9dd904723f4f87e926f209823f43467ca2a5ffef3f003aeedd3d04683fcbffcb82f809823f43467ca2a5ffef3f012ceedd3d04683fcbffcb82f809823fa59f3a65acffef3f6f4323b20102583fc61b7d52fc09823f
+  - instrument: Cam1
+    visit: 2
+    detector: 4
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70540e7e71a3ffef3fc3865d41c108783f94b21a50c60d7e3f135961188fffef3f923a9633b30d7e3f92339633b30d7e3f4024df3276ffef3f71ff70d19b0d7e3f7251f0c4dd09823f905acc8b8affef3f9060128eae08783f742b6d3de909823f
+- type: dimension
+  element: skymap
+  records:
+  - name: SkyMap1
+    hash: !!binary |
+      bm90cmVhbGx5YWhhc2hvZmFueXRoaW5nIQ==
+    tract_max: 50
+    patch_nx_max: 2
+    patch_ny_max: 3
+- type: dimension
+  element: tract
+  records:
+  - id: 0
+    skymap: SkyMap1
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7022408b0df0feef3f20378b0df0fe6f3fe23d8b0df0fe8f3ff1d8af0460ffef3fefcfaf0460ff6f3f75e0830388ff873f31aaeb0730ffef3fb0a5eb0730ff7f3f65bdf00564ff873f31aaeb0730ffef3fb1aeeb0730ff7f3f65bdf00564ff873f3e1c2f0fe0feef3f6e57630b28ff873fef52630b28ff873f911ade5e30fdef3f2d962647e4fd873f0d952647e4fd973f553df64a80fdef3fd438f64a80fd7f3f20af383820fe973f58462440b0fdef3f573d2440b0fd6f3fe2351b3044fe973f22408b0df0feef3f20378b0df0fe6f3f61428b0df0fe8f3f
+  - id: 1
+    skymap: SkyMap1
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f6ff0b00f0ffef3ff4f60b00f0ff6f3fff47169da603d2bc80fdbf00c0ffef3f0002c000c0ff7f3ffd2cf4978b03d2bc87e3cb0370ffef3fe5ecd80294ff873ff42a74905e03d2bcf1d8af0460ffef3ff5e4830388ff873fefcfaf0460ff6f3f31aaeb0730ffef3fe5c1f00564ff873fb0a5eb0730ff7f3f31aaeb0730ffef3fe5c1f00564ff873fb1aeeb0730ff7f3f3e1c2f0fe0feef3f6e57630b28ff873f6e57630b28ff873f31aaeb0730ffef3fb1aeeb0730ff7f3fe5c1f00564ff873f31aaeb0730ffef3fb0a5eb0730ff7f3fe5c1f00564ff873ff1d8af0460ffef3fefcfaf0460ff6f3ff5e4830388ff873f
+- type: dimension
+  element: patch
+  records:
+  - cell_x: 0
+    cell_y: 0
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70ac51ad1f60feef3fab48ad1f60fe6f3fec51cc13fcfe933fad47682730feef3f2d4c682730fe7f3fac2ba118defe933f553df64a80fdef3fd441f64a80fd7f3f20af383820fe973f58462440b0fdef3f573d2440b0fd6f3fe2351b3044fe973f
+    id: 0
+    tract: 0
+    skymap: SkyMap1
+  - cell_x: 1
+    cell_y: 0
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70ad47682730feef3f2c43682730fe7f3fac2ba118defe933f63012a36e0fdef3f4a839f2868fe873fbe3fda21acfe933f911ade5e30fdef3f2d962647e4fd873f0d952647e4fd973f553df64a80fdef3fd438f64a80fd7f3f20af383820fe973f
+    id: 1
+    tract: 0
+    skymap: SkyMap1
+  - cell_x: 0
+    cell_y: 1
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7022408b0df0feef3f20378b0df0fe6f3fe23d8b0df0fe8f3f96c7be12c0feef3f16ccbe12c0fe7f3f56c5be12c0fe8f3fad47682730feef3f2d4c682730fe7f3fec2da118defe933fac51ad1f60feef3fab48ad1f60fe6f3f2c54cc13fcfe933f
+    id: 2
+    tract: 0
+    skymap: SkyMap1
+  - cell_x: 1
+    cell_y: 1
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7096c7be12c0feef3f15c3be12c0fe7f3f56c5be12c0fe8f3fdb9d491d70feef3fa438f715d4fe873f9b9b491d70fe8f3f63012a36e0fdef3f4a839f2868fe873ffe41da21acfe933fad47682730feef3f2c43682730fe7f3fec2da118defe933f
+    id: 3
+    tract: 0
+    skymap: SkyMap1
+  - cell_x: 0
+    cell_y: 2
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f1d8af0460ffef3fefcfaf0460ff6f3f75e0830388ff873f31aaeb0730ffef3fb1aeeb0730ff7f3f65bdf00564ff873f96c7be12c0feef3f16ccbe12c0fe7f3fd6c9be12c0fe8f3f22408b0df0feef3f20378b0df0fe6f3f61428b0df0fe8f3f
+    id: 4
+    tract: 0
+    skymap: SkyMap1
+  - cell_x: 1
+    cell_y: 2
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7031aaeb0730ffef3fb0a5eb0730ff7f3f65bdf00564ff873f3e1c2f0fe0feef3f6e57630b28ff873fef52630b28ff873fdb9d491d70feef3fa438f715d4fe873f1ba0491d70fe8f3f96c7be12c0feef3f15c3be12c0fe7f3fd6c9be12c0fe8f3f
+    id: 5
+    tract: 0
+    skymap: SkyMap1
+  - cell_x: 0
+    cell_y: 0
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 701efb2b01b0ffef3f1cf22b01b0ff6f3f9df62b01b0ff7f3f00ecff0280ffef3f80f0ff0280ff7f3f80e7ff0280ff7f3f31aaeb0730ffef3fb1aeeb0730ff7f3fe5c1f00564ff873ff1d8af0460ffef3fefcfaf0460ff6f3ff5e4830388ff873f
+    id: 0
+    tract: 1
+    skymap: SkyMap1
+  - cell_x: 1
+    cell_y: 0
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7000ecff0280ffef3f80e7ff0280ff7f3f80e7ff0280ff7f3f31aaeb0730ffef3fe5c1f00564ff873fb0a5eb0730ff7f3f3e1c2f0fe0feef3f6e57630b28ff873f6e57630b28ff873f31aaeb0730ffef3fb0a5eb0730ff7f3fe5c1f00564ff873f
+    id: 1
+    tract: 1
+    skymap: SkyMap1
+  - cell_x: 0
+    cell_y: 1
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70b0ff2f00e0ffef3faef62f00e0ff6f3faef62f00e0ff6f3f1efb2b01b0ffef3f9eff2b01b0ff7f3f1cf22b01b0ff6f3f00ecff0280ffef3f80f0ff0280ff7f3f80f0ff0280ff7f3f1efb2b01b0ffef3f1cf22b01b0ff6f3f9eff2b01b0ff7f3f
+    id: 2
+    tract: 1
+    skymap: SkyMap1
+  - cell_x: 1
+    cell_y: 1
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 701efb2b01b0ffef3f9df62b01b0ff7f3f1cf22b01b0ff6f3ff1d8af0460ffef3ff5e4830388ff873fefcfaf0460ff6f3f31aaeb0730ffef3fe5c1f00564ff873fb1aeeb0730ff7f3f00ecff0280ffef3f80e7ff0280ff7f3f80f0ff0280ff7f3f
+    id: 3
+    tract: 1
+    skymap: SkyMap1
+  - cell_x: 0
+    cell_y: 2
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 70f6ff0b00f0ffef3ff4f60b00f0ff6f3fff47169da603d2bc80fdbf00c0ffef3f0002c000c0ff7f3ffd2cf4978b03d2bc1efb2b01b0ffef3f9eff2b01b0ff7f3f20042c01b0ff6f3fb0ff2f00e0ffef3faef62f00e0ff6f3fb2083000e0ff6f3f
+    id: 4
+    tract: 1
+    skymap: SkyMap1
+  - cell_x: 1
+    cell_y: 2
+    region: !<lsst.sphgeom.ConvexPolygon>
+      encoded: 7080fdbf00c0ffef3ffff8bf00c0ff7f3ffd2cf4978b03d2bc87e3cb0370ffef3fe5ecd80294ff873ff42a74905e03d2bcf1d8af0460ffef3ff5e4830388ff873ff3e1af0460ff6f3f1efb2b01b0ffef3f9df62b01b0ff7f3f20042c01b0ff6f3f
+    id: 5
+    tract: 1
+    skymap: SkyMap1

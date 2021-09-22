@@ -30,9 +30,6 @@ def queryDimensionRecords(repo, element, datasets, collections, where, no_check)
     # Registry.queryDimensionRecords except for ``no_check``, which is the
     # inverse of ``check``.
 
-    if not collections:
-        collections = ...
-
     butler = Butler(repo)
 
     records = list(butler.registry.queryDimensionRecords(element,

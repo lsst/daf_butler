@@ -860,6 +860,12 @@ class SqlRegistry(Registry):
                     composition.setdefault(parentDatasetType, []).append(componentName)
                 else:
                     composition.setdefault(trueDatasetType, []).append(None)
+            if not composition:
+                return queries.ChainedDatasetQueryResults(
+                    [],
+                    doomed_by=[f"No registered dataset type matching {t!r} found."
+                               for t in iterable(datasetType)],
+                )
         elif datasetType.isComponent():
             # We were given a true DatasetType instance, but it's a component.
             # the composition dict will have exactly one item.
@@ -880,14 +886,11 @@ class SqlRegistry(Registry):
                     findFirst=findFirst,
                     check=check,
                 )
-                if isinstance(parentResults, queries.ParentDatasetQueryResults):
-                    chain.append(
-                        parentResults.withComponents(componentNames)
-                    )
-                else:
-                    # Should only happen if we know there would be no results.
-                    assert isinstance(parentResults, queries.ChainedDatasetQueryResults) \
-                        and not parentResults._chain
+                assert isinstance(parentResults, queries.ParentDatasetQueryResults), \
+                    "Should always be true if passing in a DatasetType instance, and we are."
+                chain.append(
+                    parentResults.withComponents(componentNames)
+                )
             return queries.ChainedDatasetQueryResults(chain)
         # If we get here, there's no need to recurse (or we are already
         # recursing; there can only ever be one level of recursion).
@@ -912,10 +915,9 @@ class SqlRegistry(Registry):
         # need to findFirst.  Note that if any of the collections are
         # actually wildcard expressions, and we've asked for deduplication,
         # this will raise TypeError for us.
-        if not builder.joinDataset(datasetType, collections, isResult=True, findFirst=findFirst):
-            return queries.ChainedDatasetQueryResults(())
+        builder.joinDataset(datasetType, collections, isResult=True, findFirst=findFirst)
         query = builder.finish()
-        return queries.ParentDatasetQueryResults(self._db, query, components=[None])
+        return queries.ParentDatasetQueryResults(self._db, query, components=[None], datasetType=datasetType)
 
     def queryDataIds(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                      dataId: Optional[DataId] = None,
@@ -933,9 +935,9 @@ class SqlRegistry(Registry):
         requestedDimensions = self.dimensions.extract(dimensions)
         queryDimensionNames = set(requestedDimensions.names)
         if datasets is not None:
-            if collections is None:
+            if not collections:
                 if not self.defaults.collections:
-                    raise TypeError("Cannot pass 'datasets' without 'collections'.")
+                    raise TypeError(f"Cannot pass 'datasets' (='{datasets}') without 'collections'.")
                 collections = self.defaults.collections
             else:
                 # Preprocess collections expression in case the original
@@ -952,6 +954,8 @@ class SqlRegistry(Registry):
                 if componentName is not None:
                     datasetType = self.getDatasetType(parentDatasetTypeName)
                 standardizedDatasetTypes.add(datasetType)
+        elif collections:
+            raise TypeError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
 
         summary = queries.QuerySummary(
             requested=DimensionGraph(self.dimensions, names=queryDimensionNames),
@@ -1012,8 +1016,6 @@ class SqlRegistry(Registry):
                                                  collectionTypes=frozenset(collectionTypes),
                                                  flattenChains=flattenChains):
             query = storage.select(collectionRecord)
-            if query is None:
-                continue
             for row in self._db.query(query.combine()).mappings():
                 dataId = DataCoordinate.fromRequiredValues(
                     storage.datasetType.dimensions,

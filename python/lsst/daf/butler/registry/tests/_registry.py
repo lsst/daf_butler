@@ -44,7 +44,6 @@ except ImportError:
 import lsst.sphgeom
 from ...core import (
     DataCoordinate,
-    DataCoordinateSequence,
     DataCoordinateSet,
     DatasetAssociation,
     DatasetRef,
@@ -126,6 +125,24 @@ class RegistryTests(ABC):
             backend = YamlRepoImportBackend(stream, registry)
         backend.register()
         backend.load(datastore=None)
+
+    def checkQueryResults(self, results, expected):
+        """Check that a query results object contains expected values.
+
+        Parameters
+        ----------
+        results : `DataCoordinateQueryResults` or `DatasetQueryResults`
+            A lazy-evaluation query results object.
+        expected : `list`
+            A list of `DataCoordinate` o `DatasetRef` objects that should be
+            equal to results of the query, aside from ordering.
+        """
+        self.assertCountEqual(list(results), expected)
+        self.assertEqual(results.count(), len(expected))
+        if expected:
+            self.assertTrue(results.any())
+        else:
+            self.assertFalse(results.any())
 
     def testOpaque(self):
         """Tests for `Registry.registerOpaqueTable`,
@@ -881,6 +898,13 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (2, 3))
 
+        # queryDataIds with only one of `datasets` and `collections` is an
+        # error.
+        with self.assertRaises(TypeError):
+            registry.queryDataIds(dimensions, datasets=rawType)
+        with self.assertRaises(TypeError):
+            registry.queryDataIds(dimensions, collections=run1)
+
         # expression excludes everything
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
                                      where="visit > 1000", instrument="DummyCam").toSet()
@@ -1392,126 +1416,107 @@ class RegistryTests(ABC):
         (dataset1,) = registry.insertDatasets(schema, dataIds=[dataId], run=run1)
         (dataset2,) = registry.insertDatasets(schema, dataIds=[dataId], run=run2)
         # Query directly for both of the datasets, and each one, one at a time.
-        self.assertCountEqual(
-            list(registry.queryDatasets(schema, collections=[run1, run2], findFirst=False)),
+        self.checkQueryResults(
+            registry.queryDatasets(schema, collections=[run1, run2], findFirst=False),
             [dataset1, dataset2]
         )
-        self.assertEqual(
-            list(registry.queryDatasets(schema, collections=[run1, run2], findFirst=True)),
+        self.checkQueryResults(
+            registry.queryDatasets(schema, collections=[run1, run2], findFirst=True),
             [dataset1],
         )
-        self.assertEqual(
-            list(registry.queryDatasets(schema, collections=[run2, run1], findFirst=True)),
+        self.checkQueryResults(
+            registry.queryDatasets(schema, collections=[run2, run1], findFirst=True),
             [dataset2],
         )
         # Query for data IDs with no dimensions.
         dataIds = registry.queryDataIds([])
-        self.assertEqual(
-            dataIds.toSequence(),
-            DataCoordinateSequence([dataId], registry.dimensions.empty)
-        )
+        self.checkQueryResults(dataIds, [dataId])
         # Use queried data IDs to find the datasets.
-        self.assertCountEqual(
-            list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
+        self.checkQueryResults(
+            dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False),
             [dataset1, dataset2],
         )
-        self.assertEqual(
-            list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
+        self.checkQueryResults(
+            dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True),
             [dataset1],
         )
-        self.assertEqual(
-            list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
+        self.checkQueryResults(
+            dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True),
             [dataset2],
         )
         # Now materialize the data ID query results and repeat those tests.
         with dataIds.materialize() as dataIds:
-            self.assertEqual(
-                dataIds.toSequence(),
-                DataCoordinateSequence([dataId], registry.dimensions.empty)
-            )
-            self.assertCountEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
-                [dataset1, dataset2],
-            )
-            self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
+            self.checkQueryResults(dataIds, [dataId])
+            self.checkQueryResults(
+                dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True),
                 [dataset1],
             )
-            self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
+            self.checkQueryResults(
+                dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True),
                 [dataset2],
             )
         # Query for non-empty data IDs, then subset that to get the empty one.
         # Repeat the above tests starting from that.
         dataIds = registry.queryDataIds(["instrument"]).subset(registry.dimensions.empty, unique=True)
-        self.assertEqual(
-            dataIds.toSequence(),
-            DataCoordinateSequence([dataId], registry.dimensions.empty)
-        )
-        self.assertCountEqual(
-            list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
+        self.checkQueryResults(dataIds, [dataId])
+        self.checkQueryResults(
+            dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False),
             [dataset1, dataset2],
         )
-        self.assertEqual(
-            list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
+        self.checkQueryResults(
+            dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True),
             [dataset1],
         )
-        self.assertEqual(
-            list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
+        self.checkQueryResults(
+            dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True),
             [dataset2],
         )
         with dataIds.materialize() as dataIds:
-            self.assertEqual(
-                dataIds.toSequence(),
-                DataCoordinateSequence([dataId], registry.dimensions.empty)
-            )
-            self.assertCountEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
+            self.checkQueryResults(dataIds, [dataId])
+            self.checkQueryResults(
+                dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False),
                 [dataset1, dataset2],
             )
-            self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
+            self.checkQueryResults(
+                dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True),
                 [dataset1],
             )
-            self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
+            self.checkQueryResults(
+                dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True),
                 [dataset2],
             )
         # Query for non-empty data IDs, then materialize, then subset to get
         # the empty one.  Repeat again.
         with registry.queryDataIds(["instrument"]).materialize() as nonEmptyDataIds:
             dataIds = nonEmptyDataIds.subset(registry.dimensions.empty, unique=True)
-            self.assertEqual(
-                dataIds.toSequence(),
-                DataCoordinateSequence([dataId], registry.dimensions.empty)
-            )
-            self.assertCountEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
+            self.checkQueryResults(dataIds, [dataId])
+            self.checkQueryResults(
+                dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False),
                 [dataset1, dataset2],
             )
-            self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
+            self.checkQueryResults(
+                dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True),
                 [dataset1],
             )
-            self.assertEqual(
-                list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
+            self.checkQueryResults(
+                dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True),
                 [dataset2],
             )
             with dataIds.materialize() as dataIds:
-                self.assertEqual(
-                    dataIds.toSequence(),
-                    DataCoordinateSequence([dataId], registry.dimensions.empty)
+                self.checkQueryResults(
+                    dataIds,
+                    [dataId]
                 )
-                self.assertCountEqual(
-                    list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False)),
+                self.checkQueryResults(
+                    dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False),
                     [dataset1, dataset2],
                 )
-                self.assertEqual(
-                    list(dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True)),
+                self.checkQueryResults(
+                    dataIds.findDatasets(schema, collections=[run1, run2], findFirst=True),
                     [dataset1],
                 )
-                self.assertEqual(
-                    list(dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True)),
+                self.checkQueryResults(
+                    dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True),
                     [dataset2],
                 )
 
@@ -1992,16 +1997,25 @@ class RegistryTests(ABC):
         coll_calib = "Cam1/calibs/default"
         registry.registerCollection(coll_calib, type=CollectionType.CALIBRATION)
 
+        # Add all biases to the calibration collection.
+        # Without this, the logic that prunes dataset subqueries based on
+        # datasetType-collection summary information will fire before the logic
+        # we want to test below.  This is a good thing (it avoids the dreaded
+        # NotImplementedError a bit more often) everywhere but here.
+        registry.certify(coll_calib, registry.queryDatasets("bias", collections=...), Timespan(None, None))
+
         coll_list = [coll_calib, "imported_g", "imported_r"]
         chain = "Cam1/chain"
         registry.registerCollection(chain, type=CollectionType.CHAINED)
         registry.setCollectionChain(chain, coll_list)
 
-        # explicit list will raise
+        # explicit list will raise if findFirst=True or there are temporal
+        # dimensions
         with self.assertRaises(NotImplementedError):
-            registry.queryDatasets("bias", collections=coll_list)
+            registry.queryDatasets("bias", collections=coll_list, findFirst=True)
         with self.assertRaises(NotImplementedError):
-            registry.queryDataIds(["instrument", "detector"], datasets="bias", collections=coll_list)
+            registry.queryDataIds(["instrument", "detector", "exposure"], datasets="bias",
+                                  collections=coll_list)
 
         # chain will skip
         datasets = list(registry.queryDatasets("bias", collections=chain))
@@ -2027,9 +2041,6 @@ class RegistryTests(ABC):
         # few tests with findFirst
         datasets = list(registry.queryDatasets("bias", collections=chain, findFirst=True))
         self.assertGreater(len(datasets), 0)
-
-        with self.assertRaises(NotImplementedError):
-            registry.queryDatasets("bias", collections=coll_list, findFirst=True)
 
     def testIngestTimeQuery(self):
 
@@ -2229,4 +2240,128 @@ class RegistryTests(ABC):
         self.assertEqual(
             set(registry.queryDatasets("flat", band="r", collections=...)),
             set(registry.queryDatasets("flat", where="band=my_band", bind={"my_band": "r"}, collections=...)),
+        )
+
+    def testQueryResultSummaries(self):
+        """Test summary methods like `count`, `any`, and `explain_no_results`
+        on `DataCoordinateQueryResults` and `DatasetQueryResults`
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        self.loadData(registry, "spatial.yaml")
+        # Default test dataset has two collections, each with both flats and
+        # biases.  Add a new collection with only biases.
+        registry.registerCollection("biases", CollectionType.TAGGED)
+        registry.associate("biases", registry.queryDatasets("bias", collections=["imported_g"]))
+        # First query yields two results, and involves no postprocessing.
+        query1 = registry.queryDataIds(["physical_filter"], band="r")
+        self.assertTrue(query1.any(execute=False, exact=False))
+        self.assertTrue(query1.any(execute=True, exact=False))
+        self.assertTrue(query1.any(execute=True, exact=True))
+        self.assertEqual(query1.count(exact=False), 2)
+        self.assertEqual(query1.count(exact=True), 2)
+        self.assertFalse(list(query1.explain_no_results()))
+        # Second query should yield no results, but this isn't detectable
+        # unless we actually run a query.
+        query2 = registry.queryDataIds(["physical_filter"], band="h")
+        self.assertTrue(query2.any(execute=False, exact=False))
+        self.assertFalse(query2.any(execute=True, exact=False))
+        self.assertFalse(query2.any(execute=True, exact=True))
+        self.assertEqual(query2.count(exact=False), 0)
+        self.assertEqual(query2.count(exact=True), 0)
+        self.assertFalse(list(query2.explain_no_results()))
+        # These queries yield no results due to various problems that can be
+        # spotted prior to execution, yielding helpful diagnostics.
+        for query, snippets in [
+            (
+                # Dataset type name doesn't match any existing dataset types.
+                registry.queryDatasets("nonexistent", collections=...),
+                ["nonexistent"],
+            ),
+            (
+                # Dataset type object isn't registered.
+                registry.queryDatasets(
+                    DatasetType(
+                        "nonexistent",
+                        dimensions=["instrument"],
+                        universe=registry.dimensions,
+                        storageClass="Image",
+                    ),
+                    collections=...
+                ),
+                ["nonexistent"],
+            ),
+            (
+                # No datasets of this type in this collection.
+                registry.queryDatasets("flat", collections=["biases"]),
+                ["flat", "biases"],
+            ),
+            (
+                # No collections matching at all.
+                registry.queryDatasets("flat", collections=re.compile("potato.+")),
+                ["potato"],
+            ),
+        ]:
+
+            self.assertFalse(query.any(execute=False, exact=False))
+            self.assertFalse(query.any(execute=True, exact=False))
+            self.assertFalse(query.any(execute=True, exact=True))
+            self.assertEqual(query.count(exact=False), 0)
+            self.assertEqual(query.count(exact=True), 0)
+            messages = list(query.explain_no_results())
+            self.assertTrue(messages)
+            # Want all expected snippets to appear in at least one message.
+            self.assertTrue(
+                any(
+                    all(snippet in message for snippet in snippets)
+                    for message in query.explain_no_results()
+                ),
+                messages
+            )
+        # This query yields four overlaps in the database, but one is filtered
+        # out in postprocessing.  The count queries aren't accurate because
+        # they don't account for duplication that happens due to an internal
+        # join against commonSkyPix.
+        query3 = registry.queryDataIds(["visit", "tract"], instrument="Cam1", skymap="SkyMap1")
+        self.assertEqual(
+            {
+                DataCoordinate.standardize(
+                    instrument="Cam1",
+                    skymap="SkyMap1",
+                    visit=v,
+                    tract=t,
+                    universe=registry.dimensions,
+                )
+                for v, t in [(1, 0), (2, 0), (2, 1)]
+            },
+            set(query3),
+        )
+        self.assertTrue(query3.any(execute=False, exact=False))
+        self.assertTrue(query3.any(execute=True, exact=False))
+        self.assertTrue(query3.any(execute=True, exact=True))
+        self.assertGreaterEqual(query3.count(exact=False), 4)
+        self.assertGreaterEqual(query3.count(exact=True), 3)
+        self.assertFalse(list(query3.explain_no_results()))
+        # This query yields overlaps in the database, but all are filtered
+        # out in postprocessing.  The count queries again aren't very useful.
+        # We have to use `where=` here to avoid an optimization that
+        # (currently) skips the spatial postprocess-filtering because it
+        # recognizes that no spatial join is necessary.  That's not ideal, but
+        # fixing it is out of scope for this ticket.
+        query4 = registry.queryDataIds(["visit", "tract"], instrument="Cam1", skymap="SkyMap1",
+                                       where="visit=1 AND detector=1 AND tract=0 AND patch=4")
+        self.assertFalse(set(query4))
+        self.assertTrue(query4.any(execute=False, exact=False))
+        self.assertTrue(query4.any(execute=True, exact=False))
+        self.assertFalse(query4.any(execute=True, exact=True))
+        self.assertGreaterEqual(query4.count(exact=False), 1)
+        self.assertEqual(query4.count(exact=True), 0)
+        messages = list(query4.explain_no_results())
+        self.assertTrue(messages)
+        self.assertTrue(
+            any(
+                "regions did not overlap" in message
+                for message in messages
+            )
         )
