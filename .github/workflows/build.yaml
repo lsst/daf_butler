@@ -62,7 +62,7 @@ jobs:
         run: |
           conda install -y -q \
             flake8 \
-            pytest pytest-flake8 pytest-xdist pytest-openfiles
+            pytest pytest-flake8 pytest-xdist pytest-openfiles pytest-cov
 
       - name: List installed packages
         shell: bash -l {0}
@@ -80,4 +80,8 @@ jobs:
         env:
           SQLALCHEMY_WARN_20: 1
         run: |
-          pytest -r a -v -n 3 --open-files
+          pytest -r a -v -n 3 --open-files --cov=./ --cov-report=xml --cov-branch
+      - name: Upload coverage to codecov
+        uses: codecov/codecov-action@v2
+        with:
+          file: ./coverage.xml

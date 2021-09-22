@@ -207,8 +207,14 @@ class FileURITestCase(unittest.TestCase):
             if mode in ("symlink", "relsymlink"):
                 self.assertTrue(os.path.islink(dest.ospath), f"Check that {dest} is symlink")
 
-            with self.assertRaises(FileExistsError):
+            # If the source and destination are hardlinks of each other
+            # the transfer should work even if overwrite=False.
+            if mode in ("link", "hardlink"):
                 dest.transfer_from(src, transfer=mode)
+            else:
+                with self.assertRaises(FileExistsError,
+                                       msg=f"Overwrite of {dest} should not be allowed ({mode})"):
+                    dest.transfer_from(src, transfer=mode)
 
             dest.transfer_from(src, transfer=mode, overwrite=True)
 
@@ -224,6 +230,28 @@ class FileURITestCase(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             src.transfer_from(src, transfer="unknown")
+
+    def testTransferIdentical(self):
+        """Test overwrite of identical files."""
+        dir1 = ButlerURI(os.path.join(self.tmpdir, "dir1"), forceDirectory=True)
+        dir1.mkdir()
+        dir2 = os.path.join(self.tmpdir, "dir2")
+        os.symlink(dir1.ospath, dir2)
+
+        # Write a test file.
+        src_file = dir1.join("test.txt")
+        content = "0123456"
+        src_file.write(content.encode())
+
+        # Construct URI to destination that should be identical.
+        dest_file = ButlerURI(os.path.join(dir2), forceDirectory=True).join("test.txt")
+        self.assertTrue(dest_file.exists())
+        self.assertNotEqual(src_file, dest_file)
+
+        # Transfer it over itself.
+        dest_file.transfer_from(src_file, transfer="symlink", overwrite=True)
+        new_content = dest_file.read().decode()
+        self.assertEqual(content, new_content)
 
     def testResource(self):
         u = ButlerURI("resource://lsst.daf.butler/configs/datastore.yaml")

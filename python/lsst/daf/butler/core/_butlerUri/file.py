@@ -171,6 +171,12 @@ class ButlerFileURI(ButlerURI):
             is_temporary = local_uri.isTemporary
             local_src = local_uri.ospath
 
+            # Short circuit if the URIs are identical immediately.
+            if self == local_uri:
+                log.debug("Target and destination URIs are identical: %s, returning immediately."
+                          " No further action required.", self)
+                return
+
             # Default transfer mode depends on whether we have a temporary
             # file or not.
             if transfer == "auto":
@@ -196,9 +202,33 @@ class ButlerFileURI(ButlerURI):
             if is_temporary and transfer == "copy":
                 transfer = "move"
 
-            # The output location should not exist
-            dest_exists = self.exists()
-            if not overwrite and dest_exists:
+            # The output location should not exist unless overwrite=True.
+            # Rather than use `exists()`, use os.stat since we might need
+            # the full answer later.
+            dest_stat: Optional[os.stat_result]
+            try:
+                # Do not read through links of the file itself.
+                dest_stat = os.lstat(self.ospath)
+            except FileNotFoundError:
+                dest_stat = None
+
+            # It is possible that the source URI and target URI refer
+            # to the same file. This can happen for a number of reasons
+            # (such as soft links in the path, or they really are the same).
+            # In that case log a message and return as if the transfer
+            # completed (it technically did). A temporary file download
+            # can't be the same so the test can be skipped.
+            if dest_stat and not is_temporary:
+                # Be consistent and use lstat here (even though realpath
+                # has been called). It does not harm.
+                local_src_stat = os.lstat(local_src)
+                if (dest_stat.st_ino == local_src_stat.st_ino
+                        and dest_stat.st_dev == local_src_stat.st_dev):
+                    log.debug("Destination URI %s is the same file as source URI %s, returning immediately."
+                              " No further action required.", self, local_uri)
+                    return
+
+            if not overwrite and dest_stat:
                 raise FileExistsError(f"Destination path '{self}' already exists. Transfer "
                                       f"from {src} cannot be completed.")
 
@@ -220,7 +250,7 @@ class ButlerFileURI(ButlerURI):
             # For links the OS doesn't let us overwrite so if something does
             # exist we have to remove it before we do the actual "transfer"
             # below
-            if "link" in transfer and overwrite and dest_exists:
+            if "link" in transfer and overwrite and dest_stat:
                 try:
                     self.remove()
                 except Exception:
