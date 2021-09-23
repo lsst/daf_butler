@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import contextlib
+import concurrent.futures
 import urllib.parse
 import posixpath
 import copy
@@ -673,8 +674,6 @@ class ButlerURI:
         existence : `dict` of [`ButlerURI`, `bool`]
             Mapping of original URI to boolean indicating existence.
         """
-        import concurrent.futures
-
         exists_executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
         def wrapper(uri: ButlerURI) -> Tuple[ButlerURI, bool]:
