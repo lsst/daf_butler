@@ -6,10 +6,11 @@ __all__ = (
 )
 
 import copy
-from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 import sqlalchemy
 from lsst.daf.butler import DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
+from lsst.daf.butler.core.named import NamedKeyDict, NamedValueAbstractSet
 from lsst.daf.butler.registry import ConflictingDefinitionError, OrphanedRecordError
 from lsst.daf.butler.registry.interfaces import (
     DatasetIdGenEnum,
@@ -107,7 +108,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         self._dimensions = dimensions
         self._static = static
         self._summaries = summaries
-        self._byName: Dict[str, ByDimensionsDatasetRecordStorage] = {}
+        self._byDatasetType = NamedKeyDict[DatasetType, ByDimensionsDatasetRecordStorage]()
         self._byId: Dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
 
     @classmethod
@@ -182,7 +183,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     def refresh(self) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
-        byName = {}
+        byDatasetType = NamedKeyDict[DatasetType, ByDimensionsDatasetRecordStorage]()
         byId: Dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
         c = self._static.dataset_type.columns
         for row in self._db.query(self._static.dataset_type.select()).mappings():
@@ -226,9 +227,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 dataset_type_id=row["id"],
                 collections=self._collections,
             )
-            byName[datasetType.name] = storage
+            byDatasetType[datasetType] = storage
             byId[storage._dataset_type_id] = storage
-        self._byName = byName
+        self._byDatasetType = byDatasetType
         self._byId = byId
         self._summaries.refresh(lambda dataset_type_id: self._byId[dataset_type_id].datasetType)
 
@@ -251,10 +252,15 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         # not need to be fast.
         self.refresh()
 
+    @property
+    def parent_dataset_types(self) -> NamedValueAbstractSet[DatasetType]:
+        # Docstring inherited from DatasetRecordStorageManager.
+        return self._byDatasetType.keys()
+
     def find(self, name: str) -> Optional[DatasetRecordStorage]:
         # Docstring inherited from DatasetRecordStorageManager.
         compositeName, componentName = DatasetType.splitDatasetTypeName(name)
-        storage = self._byName.get(compositeName)
+        storage = self._byDatasetType.get(compositeName)
         if storage is not None and componentName is not None:
             componentStorage = copy.copy(storage)
             componentStorage.datasetType = storage.datasetType.makeComponentDatasetType(componentName)
@@ -266,9 +272,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         if datasetType.isComponent():
             raise ValueError(
-                f"Component dataset types can not be stored in registry. Rejecting {datasetType.name}"
+                "Component dataset types can not be stored in registry." f" Rejecting {datasetType.name}"
             )
-        storage = self._byName.get(datasetType.name)
+        storage = self._byDatasetType.get(datasetType)
         if storage is None:
             dimensionsKey = self._dimensions.saveDimensionGraph(datasetType.dimensions)
             tagTableName = makeTagTableName(datasetType, dimensionsKey)
@@ -321,7 +327,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 dataset_type_id=row["id"],
                 collections=self._collections,
             )
-            self._byName[datasetType.name] = storage
+            self._byDatasetType[datasetType] = storage
             self._byId[storage._dataset_type_id] = storage
         else:
             if datasetType != storage.datasetType:
@@ -331,10 +337,6 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 )
             inserted = False
         return storage, bool(inserted)
-
-    def __iter__(self) -> Iterator[DatasetType]:
-        for storage in self._byName.values():
-            yield storage.datasetType
 
     def getDatasetRef(self, id: DatasetId) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
