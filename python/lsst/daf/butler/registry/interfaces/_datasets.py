@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Tuple
 import sqlalchemy.sql
 
 from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl
+from ...core.named import NamedValueAbstractSet
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -496,6 +497,14 @@ class DatasetRecordStorageManager(VersionedExtension):
         """
         raise NotImplementedError()
 
+    @property
+    @abstractmethod
+    def parent_dataset_types(self) -> NamedValueAbstractSet[DatasetType]:
+        """A set view of all parent dataset types known to the manager
+        (`NamedValueAbstractSet`).
+        """
+        raise NotImplementedError()
+
     def __getitem__(self, name: str) -> DatasetRecordStorage:
         """Return the object that provides access to the records associated
         with the given `DatasetType` name.
@@ -582,7 +591,6 @@ class DatasetRecordStorageManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def __iter__(self) -> Iterator[DatasetType]:
         """Return an iterator over the the dataset types present in this layer.
 
@@ -591,7 +599,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         Dataset types registered by another client of the same layer since
         the last call to `initialize` or `refresh` may not be included.
         """
-        raise NotImplementedError()
+        return iter(self.parent_dataset_types)
 
     @abstractmethod
     def getDatasetRef(self, id: DatasetId) -> Optional[DatasetRef]:
