@@ -675,19 +675,15 @@ class ButlerURI:
             Mapping of original URI to boolean indicating existence.
         """
         exists_executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)
-
-        def wrapper(uri: ButlerURI) -> Tuple[ButlerURI, bool]:
-            try:
-                exists = uri.exists()
-            except Exception:
-                exists = False
-            return (uri, exists)
-
-        future_exists = [exists_executor.submit(wrapper, uri) for uri in uris]
+        future_exists = {exists_executor.submit(uri.exists): uri for uri in uris}
 
         results: Dict[ButlerURI, bool] = {}
         for future in concurrent.futures.as_completed(future_exists):
-            uri, exists = future.result()
+            uri = future_exists[future]
+            try:
+                exists = future.result()
+            except Exception:
+                exists = False
             results[uri] = exists
         return results
 
