@@ -9,7 +9,7 @@ version = "0.1.0"
 with open("./python/lsst/daf/butler/version.py", "w") as f:
     print(f"""
 __all__ = ("__version__", )
-__version__='{version}'""", file=f)
+__version__ = '{version}'""", file=f)
 
 # The purpose of this setup.py is to build enough of the system to
 # allow testing. Not to distribute on PyPI.
