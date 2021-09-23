@@ -1,0 +1,3 @@
+Made 20x speed improvement for ``Butler.transfer_from``.
+The main slow down is asking the datastore whether a file artifact exists.
+This is now parallelized and the result is cached for later.
