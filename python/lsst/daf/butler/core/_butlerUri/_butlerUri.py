@@ -62,6 +62,11 @@ ESCAPES_RE = re.compile(r"%[A-F0-9]{2}")
 # Precomputed escaped hash
 ESCAPED_HASH = urllib.parse.quote("#")
 
+# Maximum number of worker threads for parallelized operations.
+# If greater than 10, be aware that this number has to be consistent
+# with connection pool sizing (for example in urllib3).
+MAX_WORKERS = 10
+
 
 class ButlerURI:
     """Convenience wrapper around URI parsers.
@@ -670,11 +675,7 @@ class ButlerURI:
         """
         import concurrent.futures
 
-        # The max worker count here must not exceed the max connection pools
-        # in whatever system is doing the network connection. The default
-        # is 10 for urllib3.
-        max_workers = 10
-        exists_executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+        exists_executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
         def wrapper(uri: ButlerURI) -> Tuple[ButlerURI, bool]:
             try:
