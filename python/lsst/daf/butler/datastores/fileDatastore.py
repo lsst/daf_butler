@@ -2071,7 +2071,7 @@ class FileDatastore(GenericBaseDatastore):
         # directly in the target datastore, which seems unlikely to be useful
         # since at any moment the source datastore could delete the file.
         if transfer in ("direct", "split"):
-            raise ValueError("Can not transfer from a source datastore using direct mode since"
+            raise ValueError(f"Can not transfer from a source datastore using {transfer} mode since"
                              " those files are controlled by the other datastore.")
 
         # Empty existence lookup if none given.

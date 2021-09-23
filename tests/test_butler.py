@@ -22,6 +22,7 @@
 """Tests for Butler.
 """
 
+import logging
 import os
 import posixpath
 import unittest
@@ -1630,7 +1631,23 @@ class PosixDatastoreTransfers(unittest.TestCase):
                             )
         self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
 
-    def assertButlerTransfers(self, id_gen_map=None):
+    def testTransferMissing(self):
+        """Test transfers where datastore records are missing.
+
+        This is how execution butler works.
+        """
+        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            "lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            )
+
+        # Configure the source butler to allow trust.
+        self.source_butler.datastore.trustGetRequest = True
+
+        self.assertButlerTransfers(purge=True)
+
+    def assertButlerTransfers(self, id_gen_map=None, purge=False):
         """Test that a run can be transferred to another butler."""
 
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
@@ -1679,6 +1696,11 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Write some example metrics to the source
         butler = Butler(butler=self.source_butler)
 
+        # Set of DatasetRefs that should be in the list of refs to transfer
+        # but which will not be transferred.
+        deleted = set()
+
+        n_expected = 20  # Number of datasets expected to be transferred
         source_refs = []
         for i in range(n_exposures):
             # Put a third of datasets into each collection, only retain
@@ -1692,22 +1714,67 @@ class PosixDatastoreTransfers(unittest.TestCase):
                       "list": [2*x for x in range(i)]}
             dataId = {"exposure": i, "detector": 1, "instrument": "DummyCamComp", "physical_filter": "d-r"}
             ref = butler.put(metric, datasetTypeName, dataId=dataId, run=run)
+
+            # Remove the datastore record using low-level API
+            if purge:
+                # Remove records for a fraction.
+                if index == 1:
+
+                    # For one of these delete the file as well.
+                    # This allows the "missing" code to filter the
+                    # file out.
+                    if not deleted:
+                        primary, uris = butler.datastore.getURIs(ref)
+                        if primary:
+                            primary.remove()
+                        for uri in uris:
+                            uri.remove()
+                        n_expected -= 1
+                        deleted.add(ref)
+
+                    # Remove the datastore record.
+                    butler.datastore._table.delete(["dataset_id"], {"dataset_id": ref.id})
+
             if index < 2:
                 source_refs.append(ref)
-            new_metric = butler.get(ref.unresolved(), collections=run)
-            self.assertEqual(new_metric, metric)
+            if ref not in deleted:
+                new_metric = butler.get(ref.unresolved(), collections=run)
+                self.assertEqual(new_metric, metric)
 
         # Now transfer them to the second butler
         transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
                                                        id_gen_map=id_gen_map)
-        self.assertEqual(len(transferred), 20)
+        self.assertEqual(len(transferred), n_expected)
+
+        # Do the transfer twice to ensure that it will do nothing extra.
+        # Only do this if purge=True because it does not work for int
+        # dataset_id.
+        if purge:
+            transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
+                                                           id_gen_map=id_gen_map)
+            self.assertEqual(len(transferred), n_expected)
+
+            # Also do an explicit low-level transfer to trigger some
+            # edge cases.
+            with self.assertLogs(level=logging.DEBUG) as cm:
+                self.target_butler.datastore.transfer_from(self.source_butler.datastore, source_refs)
+            log_output = ";".join(cm.output)
+            self.assertIn("no file artifacts exist", log_output)
+
+            with self.assertRaises(TypeError):
+                self.target_butler.datastore.transfer_from(self.source_butler, source_refs)
+
+            with self.assertRaises(ValueError):
+                self.target_butler.datastore.transfer_from(self.source_butler.datastore, source_refs,
+                                                           transfer="split")
 
         # Now try to get the same refs from the new butler.
         for ref in source_refs:
-            unresolved_ref = ref.unresolved()
-            new_metric = self.target_butler.get(unresolved_ref, collections=ref.run)
-            old_metric = self.source_butler.get(unresolved_ref, collections=ref.run)
-            self.assertEqual(new_metric, old_metric)
+            if ref not in deleted:
+                unresolved_ref = ref.unresolved()
+                new_metric = self.target_butler.get(unresolved_ref, collections=ref.run)
+                old_metric = self.source_butler.get(unresolved_ref, collections=ref.run)
+                self.assertEqual(new_metric, old_metric)
 
 
 if __name__ == "__main__":
