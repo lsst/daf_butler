@@ -1352,10 +1352,8 @@ class FileDatastore(GenericBaseDatastore):
             if log.isEnabledFor(VERBOSE):
                 n_results = len(chunk_result)
                 n_checked += n_results
-                n_found = 0
-                for found in chunk_result.values():
-                    if found:
-                        n_found += 1
+                # Can treat the booleans as 0, 1 integers and sum them.
+                n_found = sum(chunk_result.values())
                 n_found_total += n_found
                 log.log(VERBOSE, "Number of datasets found in datastore for chunk %d:%d = %d/%d"
                         " (running total: %d/%d out of %d)",

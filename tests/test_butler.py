@@ -1742,9 +1742,12 @@ class PosixDatastoreTransfers(unittest.TestCase):
                 self.assertEqual(new_metric, metric)
 
         # Now transfer them to the second butler
-        transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
-                                                       id_gen_map=id_gen_map)
+        with self.assertLogs(level=logging.DEBUG) as cm:
+            transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
+                                                           id_gen_map=id_gen_map)
         self.assertEqual(len(transferred), n_expected)
+        log_output = ";".join(cm.output)
+        self.assertIn("found in datastore for chunk", log_output)
 
         # Do the transfer twice to ensure that it will do nothing extra.
         # Only do this if purge=True because it does not work for int
