@@ -26,7 +26,6 @@ __all__ = ("FileDatastore", )
 
 import hashlib
 import logging
-import itertools
 
 from sqlalchemy import BigInteger, String
 
@@ -36,10 +35,8 @@ from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
-    Collection,
     Dict,
     Iterable,
-    Iterator,
     List,
     Mapping,
     Optional,
@@ -83,7 +80,7 @@ from lsst.daf.butler.registry.interfaces import (
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
-from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional, time_this
+from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional, time_this, chunk_iterable
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
@@ -1342,23 +1339,24 @@ class FileDatastore(GenericBaseDatastore):
         """
         chunk_size = 10_000
         dataset_existence: Dict[DatasetRef, bool] = {}
-        refs = list(refs)
-        n_refs = len(refs)
-        log.log(VERBOSE, "Checking for the existence of artifacts for %d datasets in datastore", n_refs)
+        log.debug("Checking for the existence of multiple artifacts in datastore in chunks of %d",
+                  chunk_size)
         n_found_total = 0
         n_checked = 0
-        for i in range(0, n_refs, chunk_size):
-            chunk_result = self._mexists(refs[i:i + chunk_size], artifact_existence)
+        n_chunks = 0
+        for chunk in chunk_iterable(refs, chunk_size=chunk_size):
+            chunk_result = self._mexists(chunk, artifact_existence)
             if log.isEnabledFor(VERBOSE):
                 n_results = len(chunk_result)
                 n_checked += n_results
                 # Can treat the booleans as 0, 1 integers and sum them.
                 n_found = sum(chunk_result.values())
                 n_found_total += n_found
-                log.log(VERBOSE, "Number of datasets found in datastore for chunk %d:%d = %d/%d"
-                        " (running total: %d/%d out of %d)",
-                        i, i + chunk_size, n_found, n_results, n_found_total, n_checked, n_refs)
+                log.log(VERBOSE, "Number of datasets found in datastore for chunk %d = %d/%d"
+                        " (running total: %d/%d)",
+                        n_chunks, n_found, n_results, n_found_total, n_checked)
             dataset_existence.update(chunk_result)
+            n_chunks += 1
 
         return dataset_existence
 
@@ -2125,17 +2123,10 @@ class FileDatastore(GenericBaseDatastore):
                      len(missing_ids), len(requested_ids))
             id_to_ref = {ref.id: ref for ref in refs if ref.id in missing_ids}
 
-            def chunk_iterable(data: Collection[Any], chunk_size: int = 10_000) -> Iterator[Iterable[Any]]:
-                """Converts any iterable that can be sized to a chunked
-                iterable."""
-                it = iter(data)
-                for i in range(0, len(data), chunk_size):
-                    yield tuple(element for element in itertools.islice(it, chunk_size))
-
             # This should be chunked in case we end up having to check
             # the file store since we need some log output to show
             # progress.
-            for missing_ids_chunk in chunk_iterable(missing_ids):
+            for missing_ids_chunk in chunk_iterable(missing_ids, chunk_size=10_000):
                 records = {}
                 for missing in missing_ids_chunk:
                     # Ask the source datastore where the missing artifacts
