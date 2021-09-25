@@ -1647,10 +1647,27 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         self.assertButlerTransfers(purge=True)
 
-    def assertButlerTransfers(self, id_gen_map=None, purge=False):
+    def testTransferMissingDisassembly(self):
+        """Test transfers where datastore records are missing.
+
+        This is how execution butler works.
+        """
+        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            "lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            )
+
+        # Configure the source butler to allow trust.
+        self.source_butler.datastore.trustGetRequest = True
+
+        # Test disassembly.
+        self.assertButlerTransfers(purge=True, storageClassName="StructuredComposite")
+
+    def assertButlerTransfers(self, id_gen_map=None, purge=False, storageClassName="StructuredData"):
         """Test that a run can be transferred to another butler."""
 
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
+        storageClass = self.storageClassFactory.getStorageClass(storageClassName)
         datasetTypeName = "random_data"
 
         # Test will create 3 collections and we will want to transfer
@@ -1690,7 +1707,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Will not be relevant for UUID.
         run = "distraction"
         butler = Butler(butler=self.source_butler, run=run)
-        butler.put({"unrelated": 5, "dataset": "test"}, datasetTypeName,
+        butler.put(makeExampleMetrics(), datasetTypeName,
                    exposure=1, detector=1, instrument="DummyCamComp", physical_filter="d-r")
 
         # Write some example metrics to the source
@@ -1709,9 +1726,10 @@ class PosixDatastoreTransfers(unittest.TestCase):
             run = runs[index]
             datasetTypeName = datasetTypeNames[i % 2]
 
-            metric = {"something": i,
-                      "other": "metric",
-                      "list": [2*x for x in range(i)]}
+            metric_data = {"summary": {"counter": i},
+                           "output": {"text": "metric"},
+                           "data": [2*x for x in range(i)]}
+            metric = MetricsExample(**metric_data)
             dataId = {"exposure": i, "detector": 1, "instrument": "DummyCamComp", "physical_filter": "d-r"}
             ref = butler.put(metric, datasetTypeName, dataId=dataId, run=run)
 
@@ -1727,7 +1745,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
                         primary, uris = butler.datastore.getURIs(ref)
                         if primary:
                             primary.remove()
-                        for uri in uris:
+                        for uri in uris.values():
                             uri.remove()
                         n_expected -= 1
                         deleted.add(ref)
