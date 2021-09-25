@@ -2146,7 +2146,7 @@ class FileDatastore(GenericBaseDatastore):
                                                                        artifact_existence=artifact_existence)
 
                 # Now go through the records and propagate the ones that exist.
-                location_factory = self.locationFactory
+                location_factory = source_datastore.locationFactory
                 for missing, record_list in records.items():
                     # Skip completely if the ref does not exist.
                     ref = id_to_ref[missing]
