@@ -251,6 +251,35 @@ class ChainedDatastore(Datastore):
                 return True
         return False
 
+    def mexists(self, refs: Iterable[DatasetRef],
+                artifact_existence: Optional[Dict[ButlerURI, bool]] = None) -> Dict[DatasetRef, bool]:
+        """Check the existence of multiple datasets at once.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            The datasets to be checked.
+        artifact_existence : `dict` of [`ButlerURI`, `bool`], optional
+            Mapping of datastore artifact to existence. Updated by this
+            method with details of all artifacts tested. Can be `None`
+            if the caller is not interested.
+
+        Returns
+        -------
+        existence : `dict` of [`DatasetRef`, `bool`]
+            Mapping from dataset to boolean indicating existence in any
+            of the child datastores.
+        """
+        dataset_existence: Dict[DatasetRef, bool] = {}
+        for datastore in self.datastores:
+            dataset_existence.update(datastore.mexists(refs, artifact_existence=artifact_existence))
+
+            # For next datastore no point asking about ones we know
+            # exist already. No special exemption for ephemeral datastores.
+            refs = [ref for ref, exists in dataset_existence.items() if not exists]
+
+        return dataset_existence
+
     def exists(self, ref: DatasetRef) -> bool:
         """Check if the dataset exists in one of the datastores.
 

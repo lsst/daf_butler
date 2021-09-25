@@ -29,7 +29,7 @@ import logging
 from lsst.daf.butler.core.utils import findFileResources, getFullTypeName, globToRegex, iterable, Singleton
 from lsst.daf.butler import Formatter, Registry
 from lsst.daf.butler import NamedKeyDict, NamedValueSet, StorageClass
-from lsst.daf.butler.core.utils import isplit, time_this
+from lsst.daf.butler.core.utils import isplit, time_this, chunk_iterable
 
 TESTDIR = os.path.dirname(__file__)
 
@@ -47,6 +47,28 @@ class IterableTestCase(unittest.TestCase):
     def testIterableNoString(self):
         self.assertEqual(list(iterable([0, 1, 2])), [0, 1, 2])
         self.assertEqual(list(iterable(["hello", "world"])), ["hello", "world"])
+
+    def testChunking(self):
+        """Chunk iterables."""
+        simple = list(range(101))
+        out = []
+        n_chunks = 0
+        for chunk in chunk_iterable(simple, chunk_size=10):
+            out.extend(chunk)
+            n_chunks += 1
+        self.assertEqual(out, simple)
+        self.assertEqual(n_chunks, 11)
+
+        test_dict = {k: 1 for k in range(101)}
+        n_chunks = 0
+        for chunk in chunk_iterable(test_dict, chunk_size=45):
+            # Subtract 1 for each key in chunk
+            for k in chunk:
+                test_dict[k] -= 1
+            n_chunks += 1
+        # Should have matched every key
+        self.assertEqual(sum(test_dict.values()), 0)
+        self.assertEqual(n_chunks, 3)
 
 
 class SingletonTestCase(unittest.TestCase):

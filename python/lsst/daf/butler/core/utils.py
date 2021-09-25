@@ -22,6 +22,7 @@ from __future__ import annotations
 
 __all__ = (
     "allSlots",
+    "chunk_iterable",
     "getClassOf",
     "getFullTypeName",
     "getInstanceOf",
@@ -40,6 +41,7 @@ import os
 import builtins
 import fnmatch
 import functools
+import itertools
 import logging
 import time
 import re
@@ -54,6 +56,7 @@ from typing import (
     Mapping,
     Optional,
     Pattern,
+    Tuple,
     Type,
     TypeVar,
     TYPE_CHECKING,
@@ -534,3 +537,27 @@ def time_this(log: Optional[logging.Logger] = None, msg: Optional[str] = None,
         # caller (1 is this file, 2 is contextlib, 3 is user)
         log.log(level, msg + "%sTook %.4f seconds", *args,
                 ": " if msg else "", end - start, stacklevel=3)
+
+
+def chunk_iterable(data: Iterable[Any], chunk_size: int = 1_000) -> Iterator[Tuple[Any, ...]]:
+    """Return smaller chunks of an iterable.
+
+    Parameters
+    ----------
+    data : iterable of anything
+        The iterable to be chunked. Can be a mapping, in which case
+        the keys are returned in chunks.
+    chunk_size : int, optional
+        The largest chunk to return. Can be smaller and depends on the
+        number of elements in the iterator. Defaults to 1_000.
+
+    Yields
+    ------
+    chunk : `tuple`
+        The contents of a chunk of the iterator as a `tuple`. A tuple is
+        preferred over an iterator since it is more convenient to tell it is
+        empty and the caller knows it can be sized and indexed.
+    """
+    it = iter(data)
+    while (chunk := tuple(itertools.islice(it, chunk_size))):
+        yield chunk

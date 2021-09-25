@@ -22,6 +22,7 @@
 """Tests for Butler.
 """
 
+import logging
 import os
 import posixpath
 import unittest
@@ -685,9 +686,10 @@ class ButlerTests(ButlerPutGetTests):
             butler.pruneCollection(run2, pruge=True, unstore=True)
         self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
                               [ref1, ref2, ref3])
-        self.assertTrue(butler.datastore.exists(ref1))
-        self.assertTrue(butler.datastore.exists(ref2))
-        self.assertTrue(butler.datastore.exists(ref3))
+        existence = butler.datastore.mexists([ref1, ref2, ref3])
+        self.assertTrue(existence[ref1])
+        self.assertTrue(existence[ref2])
+        self.assertTrue(existence[ref3])
         # Try to delete CHAINED and TAGGED collections with purge; should not
         # work.
         with self.assertRaises(TypeError):
@@ -701,9 +703,10 @@ class ButlerTests(ButlerPutGetTests):
             butler.registry.getCollectionType(tag1)
         self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
                               [ref1, ref2, ref3])
-        self.assertTrue(butler.datastore.exists(ref1))
-        self.assertTrue(butler.datastore.exists(ref2))
-        self.assertTrue(butler.datastore.exists(ref3))
+        existence = butler.datastore.mexists([ref1, ref2, ref3])
+        self.assertTrue(existence[ref1])
+        self.assertTrue(existence[ref2])
+        self.assertTrue(existence[ref3])
         # Add the tagged collection back in, and remove it with unstore=True.
         # This should remove ref3 only from the datastore.
         butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
@@ -713,9 +716,10 @@ class ButlerTests(ButlerPutGetTests):
             butler.registry.getCollectionType(tag1)
         self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
                               [ref1, ref2, ref3])
-        self.assertTrue(butler.datastore.exists(ref1))
-        self.assertTrue(butler.datastore.exists(ref2))
-        self.assertFalse(butler.datastore.exists(ref3))
+        existence = butler.datastore.mexists([ref1, ref2, ref3])
+        self.assertTrue(existence[ref1])
+        self.assertTrue(existence[ref2])
+        self.assertFalse(existence[ref3])
         # Delete the chain with unstore=False.  The datasets should not be
         # affected at all.
         butler.pruneCollection(chain1)
@@ -723,9 +727,10 @@ class ButlerTests(ButlerPutGetTests):
             butler.registry.getCollectionType(chain1)
         self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
                               [ref1, ref2, ref3])
-        self.assertTrue(butler.datastore.exists(ref1))
-        self.assertTrue(butler.datastore.exists(ref2))
-        self.assertFalse(butler.datastore.exists(ref3))
+        existence = butler.datastore.mexists([ref1, ref2, ref3])
+        self.assertTrue(existence[ref1])
+        self.assertTrue(existence[ref2])
+        self.assertFalse(existence[ref3])
         # Redefine and then delete the chain with unstore=True.  Only ref1
         # should be unstored (ref3 has already been unstored, but otherwise
         # would be now).
@@ -736,9 +741,10 @@ class ButlerTests(ButlerPutGetTests):
             butler.registry.getCollectionType(chain1)
         self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
                               [ref1, ref2, ref3])
-        self.assertFalse(butler.datastore.exists(ref1))
-        self.assertTrue(butler.datastore.exists(ref2))
-        self.assertFalse(butler.datastore.exists(ref3))
+        existence = butler.datastore.mexists([ref1, ref2, ref3])
+        self.assertFalse(existence[ref1])
+        self.assertTrue(existence[ref2])
+        self.assertFalse(existence[ref3])
         # Remove run1.  This removes ref1 and ref3 from the registry (they're
         # already gone from the datastore, which is fine).
         butler.pruneCollection(run1, purge=True, unstore=True)
@@ -1625,10 +1631,43 @@ class PosixDatastoreTransfers(unittest.TestCase):
                             )
         self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
 
-    def assertButlerTransfers(self, id_gen_map=None):
+    def testTransferMissing(self):
+        """Test transfers where datastore records are missing.
+
+        This is how execution butler works.
+        """
+        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            "lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            )
+
+        # Configure the source butler to allow trust.
+        self.source_butler.datastore.trustGetRequest = True
+
+        self.assertButlerTransfers(purge=True)
+
+    def testTransferMissingDisassembly(self):
+        """Test transfers where datastore records are missing.
+
+        This is how execution butler works.
+        """
+        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            "lsst.daf.butler.registry.datasets.byDimensions."
+                            "ByDimensionsDatasetRecordStorageManagerUUID",
+                            )
+
+        # Configure the source butler to allow trust.
+        self.source_butler.datastore.trustGetRequest = True
+
+        # Test disassembly.
+        self.assertButlerTransfers(purge=True, storageClassName="StructuredComposite")
+
+    def assertButlerTransfers(self, id_gen_map=None, purge=False, storageClassName="StructuredData"):
         """Test that a run can be transferred to another butler."""
 
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
+        storageClass = self.storageClassFactory.getStorageClass(storageClassName)
         datasetTypeName = "random_data"
 
         # Test will create 3 collections and we will want to transfer
@@ -1668,12 +1707,17 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Will not be relevant for UUID.
         run = "distraction"
         butler = Butler(butler=self.source_butler, run=run)
-        butler.put({"unrelated": 5, "dataset": "test"}, datasetTypeName,
+        butler.put(makeExampleMetrics(), datasetTypeName,
                    exposure=1, detector=1, instrument="DummyCamComp", physical_filter="d-r")
 
         # Write some example metrics to the source
         butler = Butler(butler=self.source_butler)
 
+        # Set of DatasetRefs that should be in the list of refs to transfer
+        # but which will not be transferred.
+        deleted = set()
+
+        n_expected = 20  # Number of datasets expected to be transferred
         source_refs = []
         for i in range(n_exposures):
             # Put a third of datasets into each collection, only retain
@@ -1682,27 +1726,76 @@ class PosixDatastoreTransfers(unittest.TestCase):
             run = runs[index]
             datasetTypeName = datasetTypeNames[i % 2]
 
-            metric = {"something": i,
-                      "other": "metric",
-                      "list": [2*x for x in range(i)]}
+            metric_data = {"summary": {"counter": i},
+                           "output": {"text": "metric"},
+                           "data": [2*x for x in range(i)]}
+            metric = MetricsExample(**metric_data)
             dataId = {"exposure": i, "detector": 1, "instrument": "DummyCamComp", "physical_filter": "d-r"}
             ref = butler.put(metric, datasetTypeName, dataId=dataId, run=run)
+
+            # Remove the datastore record using low-level API
+            if purge:
+                # Remove records for a fraction.
+                if index == 1:
+
+                    # For one of these delete the file as well.
+                    # This allows the "missing" code to filter the
+                    # file out.
+                    if not deleted:
+                        primary, uris = butler.datastore.getURIs(ref)
+                        if primary:
+                            primary.remove()
+                        for uri in uris.values():
+                            uri.remove()
+                        n_expected -= 1
+                        deleted.add(ref)
+
+                    # Remove the datastore record.
+                    butler.datastore._table.delete(["dataset_id"], {"dataset_id": ref.id})
+
             if index < 2:
                 source_refs.append(ref)
-            new_metric = butler.get(ref.unresolved(), collections=run)
-            self.assertEqual(new_metric, metric)
+            if ref not in deleted:
+                new_metric = butler.get(ref.unresolved(), collections=run)
+                self.assertEqual(new_metric, metric)
 
         # Now transfer them to the second butler
-        transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
-                                                       id_gen_map=id_gen_map)
-        self.assertEqual(len(transferred), 20)
+        with self.assertLogs(level=logging.DEBUG) as cm:
+            transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
+                                                           id_gen_map=id_gen_map)
+        self.assertEqual(len(transferred), n_expected)
+        log_output = ";".join(cm.output)
+        self.assertIn("found in datastore for chunk", log_output)
+
+        # Do the transfer twice to ensure that it will do nothing extra.
+        # Only do this if purge=True because it does not work for int
+        # dataset_id.
+        if purge:
+            transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
+                                                           id_gen_map=id_gen_map)
+            self.assertEqual(len(transferred), n_expected)
+
+            # Also do an explicit low-level transfer to trigger some
+            # edge cases.
+            with self.assertLogs(level=logging.DEBUG) as cm:
+                self.target_butler.datastore.transfer_from(self.source_butler.datastore, source_refs)
+            log_output = ";".join(cm.output)
+            self.assertIn("no file artifacts exist", log_output)
+
+            with self.assertRaises(TypeError):
+                self.target_butler.datastore.transfer_from(self.source_butler, source_refs)
+
+            with self.assertRaises(ValueError):
+                self.target_butler.datastore.transfer_from(self.source_butler.datastore, source_refs,
+                                                           transfer="split")
 
         # Now try to get the same refs from the new butler.
         for ref in source_refs:
-            unresolved_ref = ref.unresolved()
-            new_metric = self.target_butler.get(unresolved_ref, collections=ref.run)
-            old_metric = self.source_butler.get(unresolved_ref, collections=ref.run)
-            self.assertEqual(new_metric, old_metric)
+            if ref not in deleted:
+                unresolved_ref = ref.unresolved()
+                new_metric = self.target_butler.get(unresolved_ref, collections=ref.run)
+                old_metric = self.source_butler.get(unresolved_ref, collections=ref.run)
+                self.assertEqual(new_metric, old_metric)
 
 
 if __name__ == "__main__":

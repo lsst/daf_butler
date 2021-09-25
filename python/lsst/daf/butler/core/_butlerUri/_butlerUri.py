@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import contextlib
+import concurrent.futures
 import urllib.parse
 import posixpath
 import copy
@@ -41,6 +42,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Dict,
     Optional,
     Tuple,
     Type,
@@ -60,6 +62,11 @@ ESCAPES_RE = re.compile(r"%[A-F0-9]{2}")
 
 # Precomputed escaped hash
 ESCAPED_HASH = urllib.parse.quote("#")
+
+# Maximum number of worker threads for parallelized operations.
+# If greater than 10, be aware that this number has to be consistent
+# with connection pool sizing (for example in urllib3).
+MAX_WORKERS = 10
 
 
 class ButlerURI:
@@ -652,6 +659,33 @@ class ButlerURI:
             `True` if the resource exists.
         """
         raise NotImplementedError()
+
+    @classmethod
+    def mexists(cls, uris: Iterable[ButlerURI]) -> Dict[ButlerURI, bool]:
+        """Check for existence of multiple URIs at once.
+
+        Parameters
+        ----------
+        uris : iterable of `ButlerURI`
+            The URIs to test.
+
+        Returns
+        -------
+        existence : `dict` of [`ButlerURI`, `bool`]
+            Mapping of original URI to boolean indicating existence.
+        """
+        exists_executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)
+        future_exists = {exists_executor.submit(uri.exists): uri for uri in uris}
+
+        results: Dict[ButlerURI, bool] = {}
+        for future in concurrent.futures.as_completed(future_exists):
+            uri = future_exists[future]
+            try:
+                exists = future.result()
+            except Exception:
+                exists = False
+            results[uri] = exists
+        return results
 
     def remove(self) -> None:
         """Remove the resource."""

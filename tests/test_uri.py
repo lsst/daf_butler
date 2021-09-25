@@ -270,7 +270,14 @@ class FileURITestCase(unittest.TestCase):
         self.assertEqual(u, j)
         self.assertFalse(j.dirLike)
         self.assertFalse(j.isdir())
-        self.assertFalse(d.join("not-there.yaml").exists())
+        not_there = d.join("not-there.yaml")
+        self.assertFalse(not_there.exists())
+
+        bad = ButlerURI("resource://bad.module/not.yaml")
+        multi = ButlerURI.mexists([u, bad, not_there])
+        self.assertTrue(multi[u])
+        self.assertFalse(multi[bad])
+        self.assertFalse(multi[not_there])
 
     def testEscapes(self):
         """Special characters in file paths"""
