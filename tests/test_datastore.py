@@ -679,13 +679,6 @@ class DatastoreTests(DatastoreTestsBase):
                                          transfer=mode)
                     self.assertFalse(datastore.exists(ref), f"Checking not in datastore using mode {mode}")
 
-                def failOutputExists(obj, path, ref):
-                    """Can't ingest files if transfer destination already
-                    exists."""
-                    with self.assertRaises(FileExistsError):
-                        datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
-                    self.assertFalse(datastore.exists(ref), f"Checking not in datastore using mode {mode}")
-
                 def failNotImplemented(obj, path, ref):
                     with self.assertRaises(NotImplementedError):
                         datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
@@ -693,7 +686,6 @@ class DatastoreTests(DatastoreTestsBase):
                 if mode in self.ingestTransferModes:
                     self.runIngestTest(failInputDoesNotExist)
                     self.runIngestTest(succeed, expectOutput=(mode != "move"))
-                    self.runIngestTest(failOutputExists)
                 else:
                     self.runIngestTest(failNotImplemented)
 

@@ -902,8 +902,13 @@ class FileDatastore(GenericBaseDatastore):
                 checksum = self.computeChecksum(srcUri) if self.useChecksum else None
                 have_sized = True
 
-            # transfer the resource to the destination
-            tgtLocation.uri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction)
+            # Transfer the resource to the destination.
+            # Allow overwrite of an existing file. This matches the behavior
+            # of datastore.put() in that it trusts that registry would not
+            # be asking to overwrite unless registry thought that the
+            # overwrite was allowed.
+            tgtLocation.uri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction,
+                                          overwrite=True)
 
         if tgtLocation is None:
             # This means we are using direct mode
