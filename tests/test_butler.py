@@ -1167,6 +1167,70 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
                         self.assertTrue(self.checkFileExists(exportDir, path),
                                         f"Check that mode {transfer} exported files")
 
+    def testPruneDatasets(self):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        butler = Butler(self.tmpConfigFile, writeable=True)
+        # Load registry data with dimensions to hang datasets off of.
+        registryDataDir = os.path.normpath(os.path.join(TESTDIR, "data", "registry"))
+        butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
+        # Add some RUN-type collections.
+        run1 = "run1"
+        butler.registry.registerRun(run1)
+        run2 = "run2"
+        butler.registry.registerRun(run2)
+        # put some datasets.  ref1 and ref2 have the same data ID, and are in
+        # different runs.  ref3 has a different data ID.
+        metric = makeExampleMetrics()
+        dimensions = butler.registry.dimensions.extract(["instrument", "physical_filter"])
+        datasetType = self.addDatasetType("prune_collections_test_dataset", dimensions, storageClass,
+                                          butler.registry)
+        ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
+        ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
+        ref3 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-R1"}, run=run1)
+
+        # Simple prune.
+        butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
+        with self.assertRaises(LookupError):
+            butler.datasetExists(ref1.datasetType, ref1.dataId, collections=run1)
+
+        # Put data back.
+        ref1 = butler.put(metric, ref1.unresolved(), run=run1)
+        ref2 = butler.put(metric, ref2.unresolved(), run=run2)
+        ref3 = butler.put(metric, ref3.unresolved(), run=run1)
+
+        # Check that in normal mode, deleting the record will lead to
+        # trash not touching the file.
+        uri1 = butler.datastore.getURI(ref1)
+        butler.datastore.bridge.moveToTrash([ref1])  # Update the dataset_location table
+        butler.datastore._table.delete(["dataset_id"], {"dataset_id": ref1.id})
+        butler.datastore.trash(ref1)
+        butler.datastore.emptyTrash()
+        self.assertTrue(uri1.exists())
+        uri1.remove()  # Clean it up.
+
+        # Simulate execution butler setup by deleting the datastore
+        # record but keeping the file around and trusting.
+        butler.datastore.trustGetRequest = True
+        uri2 = butler.datastore.getURI(ref2)
+        uri3 = butler.datastore.getURI(ref3)
+        self.assertTrue(uri2.exists())
+        self.assertTrue(uri3.exists())
+
+        # Remove the datastore record.
+        butler.datastore.bridge.moveToTrash([ref2])  # Update the dataset_location table
+        butler.datastore._table.delete(["dataset_id"], {"dataset_id": ref2.id})
+        self.assertTrue(uri2.exists())
+        butler.datastore.trash([ref2, ref3])
+        # Immediate removal for ref2 file
+        self.assertFalse(uri2.exists())
+        # But ref3 has to wait for the empty.
+        self.assertTrue(uri3.exists())
+        butler.datastore.emptyTrash()
+        self.assertFalse(uri3.exists())
+
+        # Clear out the datasets from registry.
+        butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
+
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """InMemoryDatastore specialization of a butler"""
