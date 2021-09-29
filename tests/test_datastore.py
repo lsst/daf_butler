@@ -797,6 +797,55 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
         self.assertIsNotNone(infos[0].checksum)
 
 
+class TrashDatastoreTestCase(PosixDatastoreTestCase, unittest.TestCase):
+    """Restrict trash test to FileDatastore."""
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        # Override the working directory before calling the base class
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        super().setUp()
+
+    def testTrash(self):
+        datastore, *refs = self.prepDeleteTest(n_refs=10)
+
+        # Trash one of them.
+        ref = refs.pop()
+        uri = datastore.getURI(ref)
+        datastore.trash(ref)
+        self.assertTrue(uri.exists(), uri)  # Not deleted yet
+        datastore.emptyTrash()
+        self.assertFalse(uri.exists(), uri)
+
+        # Trash it again should be fine.
+        datastore.trash(ref)
+
+        # Trash multiple items at once.
+        subset = [refs.pop(), refs.pop()]
+        datastore.trash(subset)
+        datastore.emptyTrash()
+
+        # Remove a record and trash should do nothing.
+        # This is execution butler scenario.
+        ref = refs.pop()
+        uri = datastore.getURI(ref)
+        datastore._table.delete(["dataset_id"], {"dataset_id": ref.id})
+        self.assertTrue(uri.exists())
+        datastore.trash(ref)
+        datastore.emptyTrash()
+        self.assertTrue(uri.exists())
+
+        # Switch on trust and it should delete the file.
+        datastore.trustGetRequest = True
+        datastore.trash([ref])
+        self.assertFalse(uri.exists())
+
+        # Remove multiples at once in trust mode.
+        subset = [refs.pop() for i in range(3)]
+        datastore.trash(subset)
+        datastore.trash(refs.pop())  # Check that a single ref can trash
+
+
 class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 
