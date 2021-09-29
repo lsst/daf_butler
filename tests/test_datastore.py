@@ -450,25 +450,28 @@ class DatastoreTests(DatastoreTestsBase):
             metricsOut = sc.delegate().assemble(compsRead)
             self.assertEqual(metrics, metricsOut)
 
-    def prepDeleteTest(self):
+    def prepDeleteTest(self, n_refs=1):
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
         # Put
         dimensions = self.universe.extract(("visit", "physical_filter"))
-        dataId = {"instrument": "dummy", "visit": 638, "physical_filter": "U"}
-
         sc = self.storageClassFactory.getStorageClass("StructuredData")
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
-        datastore.put(metrics, ref)
+        refs = []
+        for i in range(n_refs):
+            dataId = FakeDataCoordinate.from_dict({"instrument": "dummy", "visit": 638 + i,
+                                                   "physical_filter": "U"})
+            ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+            datastore.put(metrics, ref)
 
-        # Does it exist?
-        self.assertTrue(datastore.exists(ref))
+            # Does it exist?
+            self.assertTrue(datastore.exists(ref))
 
-        # Get
-        metricsOut = datastore.get(ref)
-        self.assertEqual(metrics, metricsOut)
+            # Get
+            metricsOut = datastore.get(ref)
+            self.assertEqual(metrics, metricsOut)
+            refs.append(ref)
 
-        return datastore, ref
+        return datastore, *refs
 
     def testRemove(self):
         datastore, ref = self.prepDeleteTest()
