@@ -25,6 +25,7 @@ import shutil
 import yaml
 import tempfile
 import time
+from dataclasses import dataclass
 import lsst.utils.tests
 
 from lsst.utils import doImport
@@ -33,7 +34,7 @@ from lsst.daf.butler import StorageClassFactory, StorageClass, DimensionUniverse
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError, DatastoreValidationError
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.daf.butler import (DatastoreCacheManager, DatastoreDisabledCacheManager,
-                             DatastoreCacheManagerConfig, Config, ButlerURI)
+                             DatastoreCacheManagerConfig, Config, ButlerURI, NamedKeyDict)
 
 from lsst.daf.butler.tests import (DatasetTestHelper, DatastoreTestHelper, BadWriteFormatter,
                                    BadNoWriteFormatter, MetricsExample, DummyRegistry)
@@ -52,6 +53,25 @@ def makeExampleMetrics(use_none=False):
                            "b": {"blue": 5, "red": "green"}},
                           array,
                           )
+
+
+@dataclass(frozen=True)
+class Named:
+    name: str
+
+
+class FakeDataCoordinate(NamedKeyDict):
+    """A fake hashable frozen DataCoordinate built from a simple dict."""
+
+    @classmethod
+    def from_dict(cls, dataId):
+        new = cls()
+        for k, v in dataId.items():
+            new[Named(k)] = v
+        return new.freeze()
+
+    def __hash__(self) -> int:
+        return hash(frozenset(self.items()))
 
 
 class TransactionTestError(Exception):
