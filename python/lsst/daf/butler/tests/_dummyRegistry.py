@@ -90,8 +90,8 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
             for where_row in rows:
                 if all(table_row[k] == v for k, v in where_row.items()):
                     break
-                else:
-                    kept_rows.append(table_row)
+            else:
+                kept_rows.append(table_row)
         self._rows = kept_rows
 
 
