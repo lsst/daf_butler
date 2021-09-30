@@ -1915,13 +1915,19 @@ class Butler:
         transferred_refs_tmp: List[Optional[DatasetRef]] = [None] * len(source_refs)
         default_id_gen = DatasetIdGenEnum.UNIQUE
 
+        handled_collections: Set[str] = set()
+
         # Do all the importing in a single transaction.
         with self.transaction():
             for (datasetType, run), refs_to_import in progress.iter_item_chunks(grouped_refs.items(),
                                                                                 desc="Importing to registry"
                                                                                 " by run and dataset type"):
-                run_doc = source_butler.registry.getCollectionDocumentation(run)
-                self.registry.registerCollection(run, CollectionType.RUN, doc=run_doc)
+                if run not in handled_collections:
+                    run_doc = source_butler.registry.getCollectionDocumentation(run)
+                    registered = self.registry.registerRun(run, doc=run_doc)
+                    handled_collections.add(run)
+                    if registered:
+                        log.log(VERBOSE, "Creating output run %s", run)
 
                 id_generation_mode = default_id_gen
                 if isinstance(refs_to_import[0].id, int):
