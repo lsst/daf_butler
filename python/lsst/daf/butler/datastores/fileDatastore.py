@@ -902,8 +902,13 @@ class FileDatastore(GenericBaseDatastore):
                 checksum = self.computeChecksum(srcUri) if self.useChecksum else None
                 have_sized = True
 
-            # transfer the resource to the destination
-            tgtLocation.uri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction)
+            # Transfer the resource to the destination.
+            # Allow overwrite of an existing file. This matches the behavior
+            # of datastore.put() in that it trusts that registry would not
+            # be asking to overwrite unless registry thought that the
+            # overwrite was allowed.
+            tgtLocation.uri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction,
+                                          overwrite=True)
 
         if tgtLocation is None:
             # This means we are using direct mode
@@ -1896,6 +1901,53 @@ class FileDatastore(GenericBaseDatastore):
         # to avoid confusion later on. If they are not trashed later
         # the cache will simply be refilled.
         self.cacheManager.remove_from_cache(ref)
+
+        # If we are in trust mode there will be nothing to move to
+        # the trash table and we will have to try to delete the file
+        # immediately.
+        if self.trustGetRequest:
+            # Try to keep the logic below for a single file trash.
+            if isinstance(ref, DatasetRef):
+                refs = {ref}
+            else:
+                # Will recreate ref at the end of this branch.
+                refs = set(ref)
+
+            # Determine which datasets are known to datastore directly.
+            id_to_ref = {ref.getCheckedId(): ref for ref in refs}
+            existing_ids = self._get_stored_records_associated_with_refs(refs)
+            existing_refs = {id_to_ref[ref_id] for ref_id in existing_ids}
+
+            missing = refs - existing_refs
+            if missing:
+                # Do an explicit existence check on these refs.
+                # We only care about the artifacts at this point and not
+                # the dataset existence.
+                artifact_existence: Dict[ButlerURI, bool] = {}
+                _ = self.mexists(missing, artifact_existence)
+                uris = [uri for uri, exists in artifact_existence.items() if exists]
+
+                # FUTURE UPGRADE: Implement a parallelized bulk remove.
+                log.debug("Removing %d artifacts from datastore that are unknown to datastore", len(uris))
+                for uri in uris:
+                    try:
+                        uri.remove()
+                    except Exception as e:
+                        if ignore_errors:
+                            log.debug("Artifact %s could not be removed: %s", uri, e)
+                            continue
+                        raise
+
+            # There is no point asking the code below to remove refs we
+            # know are missing so update it with the list of existing
+            # records. Try to retain one vs many logic.
+            if not existing_refs:
+                # Nothing more to do since none of the datasets were
+                # known to the datastore record table.
+                return
+            ref = list(existing_refs)
+            if len(ref) == 1:
+                ref = ref[0]
 
         # Get file metadata and internal metadata
         if not isinstance(ref, DatasetRef):

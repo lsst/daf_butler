@@ -25,6 +25,7 @@ import shutil
 import yaml
 import tempfile
 import time
+from dataclasses import dataclass
 import lsst.utils.tests
 
 from lsst.utils import doImport
@@ -33,7 +34,7 @@ from lsst.daf.butler import StorageClassFactory, StorageClass, DimensionUniverse
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError, DatastoreValidationError
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 from lsst.daf.butler import (DatastoreCacheManager, DatastoreDisabledCacheManager,
-                             DatastoreCacheManagerConfig, Config, ButlerURI)
+                             DatastoreCacheManagerConfig, Config, ButlerURI, NamedKeyDict)
 
 from lsst.daf.butler.tests import (DatasetTestHelper, DatastoreTestHelper, BadWriteFormatter,
                                    BadNoWriteFormatter, MetricsExample, DummyRegistry)
@@ -52,6 +53,25 @@ def makeExampleMetrics(use_none=False):
                            "b": {"blue": 5, "red": "green"}},
                           array,
                           )
+
+
+@dataclass(frozen=True)
+class Named:
+    name: str
+
+
+class FakeDataCoordinate(NamedKeyDict):
+    """A fake hashable frozen DataCoordinate built from a simple dict."""
+
+    @classmethod
+    def from_dict(cls, dataId):
+        new = cls()
+        for k, v in dataId.items():
+            new[Named(k)] = v
+        return new.freeze()
+
+    def __hash__(self) -> int:
+        return hash(frozenset(self.items()))
 
 
 class TransactionTestError(Exception):
@@ -430,25 +450,28 @@ class DatastoreTests(DatastoreTestsBase):
             metricsOut = sc.delegate().assemble(compsRead)
             self.assertEqual(metrics, metricsOut)
 
-    def prepDeleteTest(self):
+    def prepDeleteTest(self, n_refs=1):
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
         # Put
         dimensions = self.universe.extract(("visit", "physical_filter"))
-        dataId = {"instrument": "dummy", "visit": 638, "physical_filter": "U"}
-
         sc = self.storageClassFactory.getStorageClass("StructuredData")
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
-        datastore.put(metrics, ref)
+        refs = []
+        for i in range(n_refs):
+            dataId = FakeDataCoordinate.from_dict({"instrument": "dummy", "visit": 638 + i,
+                                                   "physical_filter": "U"})
+            ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+            datastore.put(metrics, ref)
 
-        # Does it exist?
-        self.assertTrue(datastore.exists(ref))
+            # Does it exist?
+            self.assertTrue(datastore.exists(ref))
 
-        # Get
-        metricsOut = datastore.get(ref)
-        self.assertEqual(metrics, metricsOut)
+            # Get
+            metricsOut = datastore.get(ref)
+            self.assertEqual(metrics, metricsOut)
+            refs.append(ref)
 
-        return datastore, ref
+        return datastore, *refs
 
     def testRemove(self):
         datastore, ref = self.prepDeleteTest()
@@ -679,13 +702,6 @@ class DatastoreTests(DatastoreTestsBase):
                                          transfer=mode)
                     self.assertFalse(datastore.exists(ref), f"Checking not in datastore using mode {mode}")
 
-                def failOutputExists(obj, path, ref):
-                    """Can't ingest files if transfer destination already
-                    exists."""
-                    with self.assertRaises(FileExistsError):
-                        datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
-                    self.assertFalse(datastore.exists(ref), f"Checking not in datastore using mode {mode}")
-
                 def failNotImplemented(obj, path, ref):
                     with self.assertRaises(NotImplementedError):
                         datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
@@ -693,7 +709,6 @@ class DatastoreTests(DatastoreTestsBase):
                 if mode in self.ingestTransferModes:
                     self.runIngestTest(failInputDoesNotExist)
                     self.runIngestTest(succeed, expectOutput=(mode != "move"))
-                    self.runIngestTest(failOutputExists)
                 else:
                     self.runIngestTest(failNotImplemented)
 
@@ -780,6 +795,55 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
 
         infos = datastore.getStoredItemsInfo(ref)
         self.assertIsNotNone(infos[0].checksum)
+
+
+class TrashDatastoreTestCase(PosixDatastoreTestCase, unittest.TestCase):
+    """Restrict trash test to FileDatastore."""
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        # Override the working directory before calling the base class
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        super().setUp()
+
+    def testTrash(self):
+        datastore, *refs = self.prepDeleteTest(n_refs=10)
+
+        # Trash one of them.
+        ref = refs.pop()
+        uri = datastore.getURI(ref)
+        datastore.trash(ref)
+        self.assertTrue(uri.exists(), uri)  # Not deleted yet
+        datastore.emptyTrash()
+        self.assertFalse(uri.exists(), uri)
+
+        # Trash it again should be fine.
+        datastore.trash(ref)
+
+        # Trash multiple items at once.
+        subset = [refs.pop(), refs.pop()]
+        datastore.trash(subset)
+        datastore.emptyTrash()
+
+        # Remove a record and trash should do nothing.
+        # This is execution butler scenario.
+        ref = refs.pop()
+        uri = datastore.getURI(ref)
+        datastore._table.delete(["dataset_id"], {"dataset_id": ref.id})
+        self.assertTrue(uri.exists())
+        datastore.trash(ref)
+        datastore.emptyTrash()
+        self.assertTrue(uri.exists())
+
+        # Switch on trust and it should delete the file.
+        datastore.trustGetRequest = True
+        datastore.trash([ref])
+        self.assertFalse(uri.exists())
+
+        # Remove multiples at once in trust mode.
+        subset = [refs.pop() for i in range(3)]
+        datastore.trash(subset)
+        datastore.trash(refs.pop())  # Check that a single ref can trash
 
 
 class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
