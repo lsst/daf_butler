@@ -1796,7 +1796,8 @@ class Butler:
     def transfer_from(self, source_butler: Butler, source_refs: Iterable[DatasetRef],
                       transfer: str = "auto",
                       id_gen_map: Dict[str, DatasetIdGenEnum] = None,
-                      skip_missing: bool = True) -> List[DatasetRef]:
+                      skip_missing: bool = True,
+                      register_dataset_types: bool = False) -> List[DatasetRef]:
         """Transfer datasets to this Butler from a run in another Butler.
 
         Parameters
@@ -1818,6 +1819,9 @@ class Butler:
             them are not transferred. If `False` a registry entry will be
             created even if no datastore record is created (and so will
             look equivalent to the dataset being unstored).
+        register_dataset_types : `bool`
+            If `True` any missing dataset types are registered. Otherwise
+            an exception is raised.
 
         Returns
         -------
@@ -1869,16 +1873,56 @@ class Butler:
 
         # Importing requires that we group the refs by dataset type and run
         # before doing the import.
+        source_dataset_types = set()
         grouped_refs = defaultdict(list)
         grouped_indices = defaultdict(list)
         for i, ref in enumerate(source_refs):
             grouped_refs[ref.datasetType, ref.run].append(ref)
             grouped_indices[ref.datasetType, ref.run].append(i)
+            source_dataset_types.add(ref.datasetType)
 
-        # Register any dataset types we need. This has to be done outside
-        # of a transaction and so will not be rolled back on failure.
-        for datasetType, _ in grouped_refs:
-            self.registry.registerDatasetType(datasetType)
+        # Check to see if the dataset type in the source butler has
+        # the same definition in the target butler and register missing
+        # ones if requested. Registration must happen outside a transaction.
+        missing_dataset_types = set()
+        inconsistent_dataset_types = {}
+        newly_registered_dataset_types = set()
+        for datasetType in source_dataset_types:
+            is_missing = False
+            try:
+                # If another process is registering this just after this
+                # search then this process could report failure if not
+                # allowed to register. That is fine. Rerunning will fix
+                # the problem.
+                target_dataset_type = self.registry.getDatasetType(datasetType.name)
+            except KeyError:
+                is_missing = True
+            if is_missing:
+                if register_dataset_types:
+                    self.registry.registerDatasetType(datasetType)
+                    newly_registered_dataset_types.add(datasetType)
+                else:
+                    missing_dataset_types.add(datasetType)
+            else:
+                if datasetType != target_dataset_type:
+                    inconsistent_dataset_types[datasetType] = target_dataset_type
+
+        if newly_registered_dataset_types:
+            # We may have registered some even if there were inconsistencies
+            # but should let people know (or else remove them again).
+            log.log(VERBOSE, "Registered the following dataset types in the target Butler: %s",
+                    ", ".join(d.name for d in newly_registered_dataset_types))
+
+        if missing_dataset_types:
+            raise KeyError("The following dataset types are not known to the target registry"
+                           " and must be added: " + ", ".join(d.name for d in missing_dataset_types))
+        if inconsistent_dataset_types:
+            msg = "\n".join(f" - {src} != {tgt}" for src, tgt in inconsistent_dataset_types.items())
+            raise ValueError("Inconsistent dataset type definitions between source and target registry:\n"
+                             f"{msg}")
+
+        if not newly_registered_dataset_types:
+            log.log(VERBOSE, "All required dataset types are known to the target Butler")
 
         # The returned refs should be identical for UUIDs.
         # For now must also support integers and so need to retain the

@@ -1756,15 +1756,16 @@ class PosixDatastoreTransfers(unittest.TestCase):
             butler.registry.insertDimensionData("detector", {"instrument": "DummyCamComp",
                                                              "id": 1, "full_name": "det1"})
 
-            dimensions = butler.registry.dimensions.extract(["instrument", "exposure"])
-            for datasetTypeName in datasetTypeNames:
-                datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
-                butler.registry.registerDatasetType(datasetType)
-
             for i in range(n_exposures):
                 butler.registry.insertDimensionData("exposure", {"instrument": "DummyCamComp",
                                                                  "id": i, "obs_id": f"exp{i}",
                                                                  "physical_filter": "d-r"})
+
+        # Create dataset types in the source butler.
+        dimensions = butler.registry.dimensions.extract(["instrument", "exposure"])
+        for datasetTypeName in datasetTypeNames:
+            datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+            self.source_butler.registry.registerDatasetType(datasetType)
 
         # Write a dataset to an unrelated run -- this will ensure that
         # we are rewriting integer dataset ids in the target if necessary.
@@ -1823,10 +1824,29 @@ class PosixDatastoreTransfers(unittest.TestCase):
                 new_metric = butler.get(ref.unresolved(), collections=run)
                 self.assertEqual(new_metric, metric)
 
+        # Create some bad dataset types to ensure we check for inconsistent
+        # definitions.
+        badStorageClass = self.storageClassFactory.getStorageClass("StructuredDataList")
+        for datasetTypeName in datasetTypeNames:
+            datasetType = DatasetType(datasetTypeName, dimensions, badStorageClass)
+            self.target_butler.registry.registerDatasetType(datasetType)
+        with self.assertRaises(ValueError):
+            self.target_butler.transfer_from(self.source_butler, source_refs,
+                                             id_gen_map=id_gen_map)
+        # And remove the bad definitions.
+        for datasetTypeName in datasetTypeNames:
+            self.target_butler.registry.removeDatasetType(datasetTypeName)
+
+        # Transfer without creating dataset types should fail.
+        with self.assertRaises(KeyError):
+            self.target_butler.transfer_from(self.source_butler, source_refs,
+                                             id_gen_map=id_gen_map)
+
         # Now transfer them to the second butler
         with self.assertLogs(level=logging.DEBUG) as cm:
             transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
-                                                           id_gen_map=id_gen_map)
+                                                           id_gen_map=id_gen_map,
+                                                           register_dataset_types=True)
         self.assertEqual(len(transferred), n_expected)
         log_output = ";".join(cm.output)
         self.assertIn("found in datastore for chunk", log_output)
@@ -1835,6 +1855,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Only do this if purge=True because it does not work for int
         # dataset_id.
         if purge:
+            # This should not need to register dataset types.
             transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
                                                            id_gen_map=id_gen_map)
             self.assertEqual(len(transferred), n_expected)
