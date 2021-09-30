@@ -1856,6 +1856,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.assertEqual(len(transferred), n_expected)
         log_output = ";".join(cm.output)
         self.assertIn("found in datastore for chunk", log_output)
+        self.assertIn("Creating output run", log_output)
 
         # Do the transfer twice to ensure that it will do nothing extra.
         # Only do this if purge=True because it does not work for int
@@ -1887,6 +1888,14 @@ class PosixDatastoreTransfers(unittest.TestCase):
                 new_metric = self.target_butler.get(unresolved_ref, collections=ref.run)
                 old_metric = self.source_butler.get(unresolved_ref, collections=ref.run)
                 self.assertEqual(new_metric, old_metric)
+
+        # Now prune run2 collection and create instead a CHAINED collection.
+        # This should block the transfer.
+        self.target_butler.pruneCollection("run2", purge=True, unstore=True)
+        self.target_butler.registry.registerCollection("run2", CollectionType.CHAINED)
+        with self.assertRaises(TypeError):
+            self.target_butler.transfer_from(self.source_butler, source_refs,
+                                             id_gen_map=id_gen_map)
 
 
 if __name__ == "__main__":
