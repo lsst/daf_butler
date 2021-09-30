@@ -39,6 +39,7 @@ from ..opt import (
     glob_argument,
     options_file_option,
     query_datasets_options,
+    register_dataset_types_option,
     repo_argument,
     transfer_option,
     verbose_option,
@@ -494,6 +495,7 @@ def retrieve_artifacts(**kwargs):
 @click.argument("dest", required=True)
 @query_datasets_options(showUri=False, useArguments=False, repo=False)
 @transfer_option()
+@register_dataset_types_option()
 @options_file_option()
 def transfer_datasets(**kwargs):
     """Transfer datasets from a source butler to a destination butler.

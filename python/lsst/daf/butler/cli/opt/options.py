@@ -159,6 +159,11 @@ processes_option = MWOptionDecorator("-j", "--processes",
 regex_option = MWOptionDecorator("--regex")
 
 
+register_dataset_types_option = MWOptionDecorator("--register-dataset-types",
+                                                  help=unwrap("""Register DatasetTypes that do not already
+                                                              exist in the Registry."""),
+                                                  is_flag=True)
+
 run_option = MWOptionDecorator("--output-run",
                                help="The name of the run datasets should be output to.")
 
