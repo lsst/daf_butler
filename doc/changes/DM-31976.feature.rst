@@ -1,0 +1,2 @@
+* The ``Butler.transfer_from`` method no longer registers new dataset types by default.
+* Add the related option ``--register-dataset-types`` to the ``butler transfer-datasets`` subcommand.
