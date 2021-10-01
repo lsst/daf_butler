@@ -63,6 +63,7 @@ except ImportError:
 
 from lsst.utils import doImport
 from lsst.utils.introspection import get_class_of
+from lsst.utils.logging import getLogger, VERBOSE
 from .core import (
     AmbiguousDatasetError,
     ButlerURI,
@@ -81,7 +82,6 @@ from .core import (
     StorageClassFactory,
     Timespan,
     ValidationError,
-    VERBOSE,
 )
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional
@@ -98,7 +98,7 @@ from .registry import (
 )
 from .transfers import RepoExportContext
 
-log = logging.getLogger(__name__)
+log = getLogger(__name__)
 
 
 class ButlerValidationError(ValidationError):
@@ -414,7 +414,7 @@ class Butler:
         dimensionConfig = DimensionConfig(dimensionConfig)
         Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root)
 
-        log.log(VERBOSE, "Wrote new Butler configuration file to %s", configURI)
+        log.verbose("Wrote new Butler configuration file to %s", configURI)
 
         return config
 
@@ -1869,8 +1869,8 @@ class Butler:
                                                                 artifact_existence=artifact_existence)
             source_refs = [ref for ref, exists in dataset_existence.items() if exists]
             filtered_count = len(source_refs)
-            log.log(VERBOSE, "%d datasets removed because the artifact does not exist. Now have %d.",
-                    original_count - filtered_count, filtered_count)
+            log.verbose("%d datasets removed because the artifact does not exist. Now have %d.",
+                        original_count - filtered_count, filtered_count)
 
         # Importing requires that we group the refs by dataset type and run
         # before doing the import.
@@ -1937,8 +1937,8 @@ class Butler:
                     id_generation_mode = id_gen_map.get(datasetType.name, default_id_gen)
 
                 n_refs = len(refs_to_import)
-                log.log(VERBOSE, "Importing %d ref%s of dataset type %s into run %s",
-                        n_refs, "" if n_refs == 1 else "s", datasetType.name, run)
+                log.verbose("Importing %d ref%s of dataset type %s into run %s",
+                            n_refs, "" if n_refs == 1 else "s", datasetType.name, run)
 
                 # No way to know if this butler's registry uses UUID.
                 # We have to trust the caller on this. If it fails they will
@@ -1962,7 +1962,7 @@ class Butler:
             # Check consistency
             assert len(source_refs) == len(transferred_refs), "Different number of refs imported than given"
 
-            log.log(VERBOSE, "Imported %d datasets into destination butler", len(transferred_refs))
+            log.verbose("Imported %d datasets into destination butler", len(transferred_refs))
 
             # The transferred refs need to be reordered to match the original
             # ordering given by the caller. Without this the datastore transfer

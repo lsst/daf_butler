@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
+__all__ = ("ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
            "ButlerLogRecord", "JsonLogFormatter")
 
 import logging
@@ -35,13 +35,8 @@ from pydantic import BaseModel, PrivateAttr
 
 from lsst.utils.iteration import isplit
 
-VERBOSE = (logging.INFO + logging.DEBUG) // 2
-"""Verbose log level"""
-
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""
-
-logging.addLevelName(VERBOSE, "VERBOSE")
 
 
 class MDCDict(dict):

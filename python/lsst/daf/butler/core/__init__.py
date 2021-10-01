@@ -30,7 +30,6 @@ from ._topology import *
 from .timespan import *
 from .progress import Progress
 from . import progress  # most symbols are only used by handler implementors
-# Only import the VERBOSE constant and ButlerLogRecords
-# VERBOSE is useful for log messages and ButlerLogRecords is the
-# fundamental type stored in datastores.
-from .logging import VERBOSE, ButlerLogRecords
+# Only import ButlerLogRecords
+# ButlerLogRecords is the fundamental type stored in datastores.
+from .logging import ButlerLogRecords
