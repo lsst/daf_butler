@@ -413,7 +413,7 @@ class ButlerLogRecords(BaseModel):
         # Filter out blank lines -- mypy is confused by the newline
         # argument to split().
         newline = "\n" if isinstance(serialized, str) else b"\n"
-        records = [ButlerLogRecord.parse_raw(line) for line in isplit(serialized, newline)  # type: ignore
+        records = [ButlerLogRecord.parse_raw(line) for line in isplit(serialized, newline)
                    if line]
         return cls.from_records(records)
 
