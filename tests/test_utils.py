@@ -24,51 +24,11 @@ from glob import glob
 import os
 import re
 import unittest
-import logging
 
-from lsst.daf.butler.core.utils import findFileResources, getFullTypeName, globToRegex, iterable, Singleton
-from lsst.daf.butler import Formatter, Registry
-from lsst.daf.butler import NamedKeyDict, NamedValueSet, StorageClass
-from lsst.daf.butler.core.utils import isplit, time_this, chunk_iterable
+from lsst.daf.butler.core.utils import findFileResources, globToRegex, Singleton
+from lsst.daf.butler import NamedKeyDict, NamedValueSet
 
 TESTDIR = os.path.dirname(__file__)
-
-
-class IterableTestCase(unittest.TestCase):
-    """Tests for `iterable` helper.
-    """
-
-    def testNonIterable(self):
-        self.assertEqual(list(iterable(0)), [0, ])
-
-    def testString(self):
-        self.assertEqual(list(iterable("hello")), ["hello", ])
-
-    def testIterableNoString(self):
-        self.assertEqual(list(iterable([0, 1, 2])), [0, 1, 2])
-        self.assertEqual(list(iterable(["hello", "world"])), ["hello", "world"])
-
-    def testChunking(self):
-        """Chunk iterables."""
-        simple = list(range(101))
-        out = []
-        n_chunks = 0
-        for chunk in chunk_iterable(simple, chunk_size=10):
-            out.extend(chunk)
-            n_chunks += 1
-        self.assertEqual(out, simple)
-        self.assertEqual(n_chunks, 11)
-
-        test_dict = {k: 1 for k in range(101)}
-        n_chunks = 0
-        for chunk in chunk_iterable(test_dict, chunk_size=45):
-            # Subtract 1 for each key in chunk
-            for k in chunk:
-                test_dict[k] -= 1
-            n_chunks += 1
-        # Should have matched every key
-        self.assertEqual(sum(test_dict.values()), 0)
-        self.assertEqual(n_chunks, 3)
 
 
 class SingletonTestCase(unittest.TestCase):
@@ -226,33 +186,6 @@ class NamedValueSetTest(unittest.TestCase):
         self.checkOperator(ab - bc, {self.a})
 
 
-class TestButlerUtils(unittest.TestCase):
-    """Tests of the simple utilities."""
-
-    def testTypeNames(self):
-        # Check types and also an object
-        tests = [(Formatter, "lsst.daf.butler.core.formatter.Formatter"),
-                 (int, "int"),
-                 (StorageClass, "lsst.daf.butler.core.storageClass.StorageClass"),
-                 (StorageClass(None), "lsst.daf.butler.core.storageClass.StorageClass"),
-                 (Registry, "lsst.daf.butler.registry.Registry")]
-
-        for item, typeName in tests:
-            self.assertEqual(getFullTypeName(item), typeName)
-
-    def testIsplit(self):
-        # Test compatibility with str.split
-        seps = ("\n", " ", "d")
-        input_str = "ab\ncd ef\n"
-
-        for sep in seps:
-            for input in (input_str, input_str.encode()):
-                test_sep = sep.encode() if isinstance(input, bytes) else sep
-                isp = list(isplit(input, sep=test_sep))
-                ssp = input.split(test_sep)
-                self.assertEqual(isp, ssp)
-
-
 class FindFileResourcesTestCase(unittest.TestCase):
 
     def test_getSingleFile(self):
@@ -315,69 +248,6 @@ class GlobToRegexTestCase(unittest.TestCase):
         self.assertTrue(bool(re.fullmatch(patterns[1], "bar.fits")))
         self.assertTrue(re.fullmatch(patterns[1], "boz.fits"))
         self.assertIsNone(re.fullmatch(patterns[1], "boz.hdf5"))
-
-
-class TimerTestCase(unittest.TestCase):
-
-    def testTimer(self):
-        with self.assertLogs(level="DEBUG") as cm:
-            with time_this():
-                pass
-        self.assertEqual(cm.records[0].name, "timer")
-        self.assertEqual(cm.records[0].levelname, "DEBUG")
-        self.assertEqual(cm.records[0].filename, "test_utils.py")
-
-        with self.assertLogs(level="DEBUG") as cm:
-            with time_this(prefix=None):
-                pass
-        self.assertEqual(cm.records[0].name, "root")
-        self.assertEqual(cm.records[0].levelname, "DEBUG")
-        self.assertIn("Took", cm.output[0])
-        self.assertEqual(cm.records[0].filename, "test_utils.py")
-
-        # Change logging level
-        with self.assertLogs(level="INFO") as cm:
-            with time_this(level=logging.INFO, prefix=None):
-                pass
-        self.assertEqual(cm.records[0].name, "root")
-        self.assertIn("Took", cm.output[0])
-        self.assertIn("seconds", cm.output[0])
-
-        # Use a new logger with a message.
-        msg = "Test message %d"
-        test_num = 42
-        logname = "test"
-        with self.assertLogs(level="DEBUG") as cm:
-            with time_this(log=logging.getLogger(logname),
-                           msg=msg, args=(42,), prefix=None):
-                pass
-        self.assertEqual(cm.records[0].name, logname)
-        self.assertIn("Took", cm.output[0])
-        self.assertIn(msg % test_num, cm.output[0])
-
-        # Prefix the logger.
-        prefix = "prefix"
-        with self.assertLogs(level="DEBUG") as cm:
-            with time_this(prefix=prefix):
-                pass
-        self.assertEqual(cm.records[0].name, prefix)
-        self.assertIn("Took", cm.output[0])
-
-        # Prefix explicit logger.
-        with self.assertLogs(level="DEBUG") as cm:
-            with time_this(log=logging.getLogger(logname),
-                           prefix=prefix):
-                pass
-        self.assertEqual(cm.records[0].name, f"{prefix}.{logname}")
-
-        # Trigger a problem.
-        with self.assertLogs(level="ERROR") as cm:
-            with self.assertRaises(RuntimeError):
-                with time_this(log=logging.getLogger(logname),
-                               prefix=prefix):
-                    raise RuntimeError("A problem")
-        self.assertEqual(cm.records[0].name, f"{prefix}.{logname}")
-        self.assertEqual(cm.records[0].levelname, "ERROR")
 
 
 if __name__ == "__main__":

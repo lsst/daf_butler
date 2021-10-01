@@ -42,6 +42,7 @@ from typing import (
 )
 
 import sqlalchemy
+from lsst.utils.iteration import iterable
 
 from ..core import (
     ButlerURI,
@@ -66,7 +67,7 @@ from ..core import (
     StorageClassFactory,
     Timespan,
 )
-from ..core.utils import iterable, transactional
+from ..core.utils import transactional
 
 from ..registry import (
     Registry,

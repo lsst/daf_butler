@@ -40,6 +40,7 @@ from typing import (
     Union,
     ValuesView,
 )
+from lsst.utils.iteration import iterable
 
 from ..core import (
     DataCoordinate,
@@ -51,7 +52,6 @@ from ..core import (
     NamedValueAbstractSet,
     NamedValueSet,
 )
-from ..core.utils import iterable
 
 
 class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSet[str]]):

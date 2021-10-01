@@ -51,6 +51,7 @@ import sqlalchemy
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import func
 
+from lsst.utils.iteration import iterable
 from ....core import (
     ddl,
     Dimension,
@@ -60,7 +61,6 @@ from ....core import (
     Timespan,
     TimespanDatabaseRepresentation,
 )
-from ....core.utils import iterable
 from .parser import Node, TreeVisitor
 from .categorize import categorizeElementId, categorizeConstant, ExpressionConstant
 

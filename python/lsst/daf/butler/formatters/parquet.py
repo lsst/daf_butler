@@ -42,7 +42,7 @@ import pyarrow.parquet as pq
 import pandas as pd
 import pyarrow as pa
 
-from lsst.daf.butler.core.utils import iterable
+from lsst.utils.iteration import iterable
 from lsst.daf.butler import Formatter
 
 

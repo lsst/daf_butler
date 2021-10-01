@@ -22,30 +22,19 @@ from __future__ import annotations
 
 __all__ = (
     "allSlots",
-    "chunk_iterable",
-    "getClassOf",
-    "getFullTypeName",
-    "getInstanceOf",
     "immutable",
-    "isplit",
-    "iterable",
     "safeMakeDir",
     "Singleton",
     "stripIfNotNone",
-    "time_this",
     "transactional",
 )
 
 import errno
 import os
-import builtins
 import fnmatch
 import functools
-import itertools
 import logging
-import time
 import re
-from contextlib import contextmanager
 from typing import (
     Any,
     Callable,
@@ -53,17 +42,15 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    Mapping,
     Optional,
     Pattern,
-    Tuple,
     Type,
     TypeVar,
     TYPE_CHECKING,
     Union,
 )
 
-from lsst.utils import doImport
+from lsst.utils.iteration import iterable
 
 if TYPE_CHECKING:
     from ..registry.wildcards import Ellipsis, EllipsisType
@@ -83,39 +70,6 @@ def safeMakeDir(directory: str) -> None:
                 raise e
 
 
-def iterable(a: Any) -> Iterable[Any]:
-    """Make input iterable.
-
-    There are three cases, when the input is:
-
-    - iterable, but not a `str`  or Mapping -> iterate over elements
-      (e.g. ``[i for i in a]``)
-    - a `str` -> return single element iterable (e.g. ``[a]``)
-    - a Mapping -> return single element iterable
-    - not iterable -> return single element iterable (e.g. ``[a]``).
-
-    Parameters
-    ----------
-    a : iterable or `str` or not iterable
-        Argument to be converted to an iterable.
-
-    Returns
-    -------
-    i : `generator`
-        Iterable version of the input value.
-    """
-    if isinstance(a, str):
-        yield a
-        return
-    if isinstance(a, Mapping):
-        yield a
-        return
-    try:
-        yield from a
-    except Exception:
-        yield a
-
-
 def allSlots(self: Any) -> Iterator[str]:
     """
     Return combined ``__slots__`` for all classes in objects mro.
@@ -132,107 +86,6 @@ def allSlots(self: Any) -> Iterator[str]:
     """
     from itertools import chain
     return chain.from_iterable(getattr(cls, "__slots__", []) for cls in self.__class__.__mro__)
-
-
-def getFullTypeName(cls: Any) -> str:
-    """Return full type name of the supplied entity.
-
-    Parameters
-    ----------
-    cls : `type` or `object`
-        Entity from which to obtain the full name. Can be an instance
-        or a `type`.
-
-    Returns
-    -------
-    name : `str`
-        Full name of type.
-
-    Notes
-    -----
-    Builtins are returned without the ``builtins`` specifier included.  This
-    allows `str` to be returned as "str" rather than "builtins.str". Any
-    parts of the path that start with a leading underscore are removed
-    on the assumption that they are an implementation detail and the
-    entity will be hoisted into the parent namespace.
-    """
-    # If we have an instance we need to convert to a type
-    if not hasattr(cls, "__qualname__"):
-        cls = type(cls)
-    if hasattr(builtins, cls.__qualname__):
-        # Special case builtins such as str and dict
-        return cls.__qualname__
-
-    real_name = cls.__module__ + "." + cls.__qualname__
-
-    # Remove components with leading underscores
-    cleaned_name = ".".join(c for c in real_name.split(".") if not c.startswith("_"))
-
-    # Consistency check
-    if real_name != cleaned_name:
-        try:
-            test = doImport(cleaned_name)
-        except Exception:
-            # Could not import anything so return the real name
-            return real_name
-
-        # The thing we imported should match the class we started with
-        # despite the clean up. If it does not we return the real name
-        if test is not cls:
-            return real_name
-
-    return cleaned_name
-
-
-def getClassOf(typeOrName: Union[Type, str]) -> Type:
-    """Given the type name or a type, return the python type.
-
-    If a type name is given, an attempt will be made to import the type.
-
-    Parameters
-    ----------
-    typeOrName : `str` or Python class
-        A string describing the Python class to load or a Python type.
-
-    Returns
-    -------
-    type_ : `type`
-        Directly returns the Python type if a type was provided, else
-        tries to import the given string and returns the resulting type.
-
-    Notes
-    -----
-    This is a thin wrapper around `~lsst.utils.doImport`.
-    """
-    if isinstance(typeOrName, str):
-        cls = doImport(typeOrName)
-    else:
-        cls = typeOrName
-    return cls
-
-
-def getInstanceOf(typeOrName: Union[Type, str], *args: Any, **kwargs: Any) -> Any:
-    """Given the type name or a type, instantiate an object of that type.
-
-    If a type name is given, an attempt will be made to import the type.
-
-    Parameters
-    ----------
-    typeOrName : `str` or Python class
-        A string describing the Python class to load or a Python type.
-    args : `tuple`
-        Positional arguments to use pass to the object constructor.
-    **kwargs
-        Keyword arguments to pass to object constructor.
-
-    Returns
-    -------
-    instance : `object`
-        Instance of the requested type, instantiated with the provided
-        parameters.
-    """
-    cls = getClassOf(typeOrName)
-    return cls(*args, **kwargs)
 
 
 class Singleton(type):
@@ -452,112 +305,3 @@ def globToRegex(expressions: Union[str, EllipsisType, None,
             res = re.compile(fnmatch.translate(e))
         results.append(res)
     return results
-
-
-T = TypeVar('T', str, bytes)
-
-
-def isplit(string: T, sep: T) -> Iterator[T]:
-    """Split a string or bytes by separator returning a generator.
-
-    Parameters
-    ----------
-    string : `str` or `bytes`
-        The string to split into substrings.
-    sep : `str` or `bytes`
-        The separator to use to split the string. Must be the same
-        type as ``string``. Must always be given.
-
-    Yields
-    ------
-    subset : `str` or `bytes`
-        The next subset extracted from the input until the next separator.
-    """
-    begin = 0
-    while True:
-        end = string.find(sep, begin)
-        if end == -1:
-            yield string[begin:]
-            return
-        yield string[begin:end]
-        begin = end + 1
-
-
-@contextmanager
-def time_this(log: Optional[logging.Logger] = None, msg: Optional[str] = None,
-              level: int = logging.DEBUG, prefix: Optional[str] = "timer",
-              args: Iterable[Any] = ()) -> Iterator[None]:
-    """Time the enclosed block and issue a log message.
-
-    Parameters
-    ----------
-    log : `logging.Logger`, optional
-        Logger to use to report the timer message. The root logger will
-        be used if none is given.
-    msg : `str`, optional
-        Context to include in log message.
-    level : `int`, optional
-        Python logging level to use to issue the log message. If the
-        code block raises an exception the log message will automatically
-        switch to level ERROR.
-    prefix : `str`, optional
-        Prefix to use to prepend to the supplied logger to
-        create a new logger to use instead. No prefix is used if the value
-        is set to `None`. Defaults to "timer".
-    args : iterable of any
-        Additional parameters passed to the log command that should be
-        written to ``msg``.
-    """
-    if log is None:
-        log = logging.getLogger()
-    if prefix:
-        log_name = f"{prefix}.{log.name}" if not isinstance(log, logging.RootLogger) else prefix
-        log = logging.getLogger(log_name)
-
-    success = False
-    start = time.time()
-    try:
-        yield
-        success = True
-    finally:
-        end = time.time()
-
-        # The message is pre-inserted to allow the logger to expand
-        # the additional args provided. Make that easier by converting
-        # the None message to empty string.
-        if msg is None:
-            msg = ""
-
-        if not success:
-            # Something went wrong so change the log level to indicate
-            # this.
-            level = logging.ERROR
-
-        # Specify stacklevel to ensure the message is reported from the
-        # caller (1 is this file, 2 is contextlib, 3 is user)
-        log.log(level, msg + "%sTook %.4f seconds", *args,
-                ": " if msg else "", end - start, stacklevel=3)
-
-
-def chunk_iterable(data: Iterable[Any], chunk_size: int = 1_000) -> Iterator[Tuple[Any, ...]]:
-    """Return smaller chunks of an iterable.
-
-    Parameters
-    ----------
-    data : iterable of anything
-        The iterable to be chunked. Can be a mapping, in which case
-        the keys are returned in chunks.
-    chunk_size : int, optional
-        The largest chunk to return. Can be smaller and depends on the
-        number of elements in the iterator. Defaults to 1_000.
-
-    Yields
-    ------
-    chunk : `tuple`
-        The contents of a chunk of the iterator as a `tuple`. A tuple is
-        preferred over an iterator since it is more convenient to tell it is
-        empty and the caller knows it can be sized and indexed.
-    """
-    it = iter(data)
-    while (chunk := tuple(itertools.islice(it, chunk_size))):
-        yield chunk

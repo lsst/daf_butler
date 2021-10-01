@@ -62,6 +62,7 @@ except ImportError:
     boto3 = None
 
 from lsst.utils import doImport
+from lsst.utils.introspection import get_class_of
 from .core import (
     AmbiguousDatasetError,
     ButlerURI,
@@ -83,7 +84,7 @@ from .core import (
     VERBOSE,
 )
 from .core.repoRelocation import BUTLER_ROOT_TAG
-from .core.utils import transactional, getClassOf
+from .core.utils import transactional
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
 from .registry import (
@@ -1707,7 +1708,7 @@ class Butler:
             filename = f"export.{format}"
         if directory is not None:
             filename = os.path.join(directory, filename)
-        BackendClass = getClassOf(self._config["repo_transfer_formats"][format]["export"])
+        BackendClass = get_class_of(self._config["repo_transfer_formats"][format]["export"])
         with open(filename, 'w') as stream:
             backend = BackendClass(stream)
             try:
@@ -1777,7 +1778,7 @@ class Butler:
             filename = f"export.{format}"
         if isinstance(filename, str) and directory is not None and not os.path.exists(filename):
             filename = os.path.join(directory, filename)
-        BackendClass = getClassOf(self._config["repo_transfer_formats"][format]["import"])
+        BackendClass = get_class_of(self._config["repo_transfer_formats"][format]["import"])
 
         def doImport(importStream: TextIO) -> None:
             backend = BackendClass(importStream, self.registry)

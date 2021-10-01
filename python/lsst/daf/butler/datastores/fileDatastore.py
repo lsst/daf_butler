@@ -46,6 +46,10 @@ from typing import (
     Union,
 )
 
+from lsst.utils.iteration import chunk_iterable
+from lsst.utils.introspection import get_class_of, get_instance_of
+from lsst.utils.timer import time_this
+
 from lsst.daf.butler import (
     ButlerURI,
     CompositesMap,
@@ -80,7 +84,7 @@ from lsst.daf.butler.registry.interfaces import (
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
-from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional, time_this, chunk_iterable
+from lsst.daf.butler.core.utils import transactional
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
@@ -615,10 +619,10 @@ class FileDatastore(GenericBaseDatastore):
             else:
                 readStorageClass = refStorageClass
 
-            formatter = getInstanceOf(storedFileInfo.formatter,
-                                      FileDescriptor(location, readStorageClass=readStorageClass,
-                                                     storageClass=writeStorageClass, parameters=parameters),
-                                      ref.dataId)
+            formatter = get_instance_of(storedFileInfo.formatter,
+                                        FileDescriptor(location, readStorageClass=readStorageClass,
+                                                       storageClass=writeStorageClass, parameters=parameters),
+                                        ref.dataId)
 
             formatterParams, notFormatterParams = formatter.segregateParameters()
 
@@ -941,7 +945,7 @@ class FileDatastore(GenericBaseDatastore):
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
                 assert isinstance(dataset.formatter, (type, str))
-                dataset.formatter = getClassOf(dataset.formatter)
+                dataset.formatter = get_class_of(dataset.formatter)
             dataset.path = self._standardizeIngestPath(dataset.path, transfer=transfer)
             filtered.append(dataset)
         return _IngestPrepData(filtered)

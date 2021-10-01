@@ -41,10 +41,9 @@ from typing import (
     TYPE_CHECKING,
     Union,
 )
-
+from lsst.utils.introspection import get_full_type_name
 from .configSupport import processLookupConfigs, LookupKey
 from .mappingFactory import MappingFactory
-from .utils import getFullTypeName
 from .fileDescriptor import FileDescriptor
 from .location import Location
 from .config import Config
@@ -198,7 +197,7 @@ class Formatter(metaclass=ABCMeta):
         name : `str`
             Fully-qualified name of formatter class.
         """
-        return getFullTypeName(cls)
+        return get_full_type_name(cls)
 
     @abstractmethod
     def read(self, component: Optional[str] = None) -> Any:
@@ -672,7 +671,7 @@ class FormatterFactory:
         """
         names = (LookupKey(name=entity),) if isinstance(entity, str) else entity._lookupNames()
         matchKey, formatter, formatter_kwargs = self._mappingFactory.getClassFromRegistryWithMatch(names)
-        log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
+        log.debug("Retrieved formatter %s from key '%s' for entity '%s'", get_full_type_name(formatter),
                   matchKey, entity)
 
         return matchKey, formatter, formatter_kwargs
@@ -722,7 +721,7 @@ class FormatterFactory:
         """
         names = (LookupKey(name=entity),) if isinstance(entity, str) else entity._lookupNames()
         matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(names, *args, **kwargs)
-        log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
+        log.debug("Retrieved formatter %s from key '%s' for entity '%s'", get_full_type_name(formatter),
                   matchKey, entity)
 
         return matchKey, formatter

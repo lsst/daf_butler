@@ -33,7 +33,7 @@ from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO
 from logging import LogRecord, StreamHandler, Formatter
 from pydantic import BaseModel, PrivateAttr
 
-from .utils import isplit
+from lsst.utils.iteration import isplit
 
 VERBOSE = (logging.INFO + logging.DEBUG) // 2
 """Verbose log level"""

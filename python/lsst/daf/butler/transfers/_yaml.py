@@ -44,6 +44,7 @@ import yaml
 import astropy.time
 
 from lsst.utils import doImport
+from lsst.utils.iteration import iterable
 from ..core import (
     DatasetAssociation,
     DatasetId,
@@ -56,7 +57,6 @@ from ..core import (
     Timespan,
 )
 from ..core._butlerUri import ButlerURI
-from ..core.utils import iterable
 from ..core.named import NamedValueSet
 from ..registry import CollectionType, Registry
 from ..registry.interfaces import (

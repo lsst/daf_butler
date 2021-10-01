@@ -35,8 +35,8 @@ from unittest.mock import patch
 import uuid
 import yaml
 
+from lsst.utils.iteration import iterable
 from .cliLog import CliLog
-from ..core.utils import iterable
 from ..core.config import Config
 
 log = logging.getLogger(__name__)

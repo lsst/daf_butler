@@ -45,8 +45,9 @@ from typing import (
 
 import sqlalchemy
 
+from lsst.utils.iteration import iterable
 from ..core import DatasetType
-from ..core.utils import iterable, globToRegex
+from ..core.utils import globToRegex
 from ._collectionType import CollectionType
 
 if TYPE_CHECKING:

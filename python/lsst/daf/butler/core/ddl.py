@@ -46,11 +46,12 @@ import sqlalchemy
 from sqlalchemy.dialects.postgresql import UUID
 import astropy.time
 
+from lsst.utils.iteration import iterable
 from lsst.sphgeom import Region
 from .config import Config
 from .exceptions import ValidationError
 from . import time_utils
-from .utils import iterable, stripIfNotNone
+from .utils import stripIfNotNone
 from .named import NamedValueSet
 
 if TYPE_CHECKING:
