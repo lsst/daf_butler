@@ -167,7 +167,7 @@ def _writeParquet(path: str, inMemoryDataset: pd.DataFrame) -> None:
     """Write a `pandas.DataFrame` instance as a Parquet file.
     """
     table = pa.Table.from_pandas(inMemoryDataset)
-    pq.write_table(table, path, compression="none")
+    pq.write_table(table, path)
 
 
 class ParquetFormatter(Formatter):

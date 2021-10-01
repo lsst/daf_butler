@@ -1,0 +1,1 @@
+Update parquet writing to use default per-column compression.
