@@ -23,14 +23,11 @@ from __future__ import annotations
 __all__ = (
     "allSlots",
     "immutable",
-    "safeMakeDir",
     "Singleton",
     "stripIfNotNone",
     "transactional",
 )
 
-import errno
-import os
 import fnmatch
 import functools
 import logging
@@ -56,17 +53,6 @@ if TYPE_CHECKING:
 
 
 _LOG = logging.getLogger(__name__)
-
-
-def safeMakeDir(directory: str) -> None:
-    """Make a directory in a manner avoiding race conditions."""
-    if directory != "" and not os.path.exists(directory):
-        try:
-            os.makedirs(directory)
-        except OSError as e:
-            # Don't fail if directory exists due to race
-            if e.errno != errno.EEXIST:
-                raise e
 
 
 def allSlots(self: Any) -> Iterator[str]:
