@@ -31,6 +31,7 @@ import os
 import re
 from typing import Iterator
 import unittest
+import uuid
 
 import astropy.time
 import sqlalchemy
@@ -54,6 +55,7 @@ from ...core import (
     ddl,
     Timespan,
 )
+from ..interfaces import DatasetIdGenEnum
 from ..summaries import CollectionSummary
 from .._collectionType import CollectionType
 from .._config import RegistryConfig
@@ -410,6 +412,106 @@ class RegistryTests(ABC):
             registry.removeDatasetType("flat")
         with self.assertRaises(ValueError):
             registry.removeDatasetType(DatasetType.nameWithComponent("flat", "image"))
+
+    def testImportDatasetsUUID(self):
+        """Test for `Registry._importDatasets` with UUID dataset ID.
+        """
+        if not self.datasetsManager.endswith(".ByDimensionsDatasetRecordStorageManagerUUID"):
+            self.skipTest(f"Unexpected dataset manager {self.datasetsManager}")
+
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        for run in range(6):
+            registry.registerRun(f"run{run}")
+        datasetTypeBias = registry.getDatasetType("bias")
+        datasetTypeFlat = registry.getDatasetType("flat")
+        dataIdBias1 = {"instrument": "Cam1", "detector": 1}
+        dataIdBias2 = {"instrument": "Cam1", "detector": 2}
+        dataIdFlat1 = {"instrument": "Cam1", "detector": 1, "physical_filter": "Cam1-G", "band": "g"}
+
+        dataset_id = uuid.uuid4()
+        ref = DatasetRef(datasetTypeBias, dataIdBias1, id=dataset_id, run="run0")
+        ref1, = registry._importDatasets([ref])
+        # UUID is used without change
+        self.assertEqual(ref.id, ref1.id)
+
+        # All different failure modes
+        refs = (
+            # Importing same DatasetRef with different dataset ID is an error
+            DatasetRef(datasetTypeBias, dataIdBias1, id=uuid.uuid4(), run="run0"),
+            # Same DatasetId but different DataId
+            DatasetRef(datasetTypeBias, dataIdBias2, id=ref1.id, run="run0"),
+            DatasetRef(datasetTypeFlat, dataIdFlat1, id=ref1.id, run="run0"),
+            # Same DatasetRef and DatasetId but different run
+            DatasetRef(datasetTypeBias, dataIdBias1, id=ref1.id, run="run1"),
+        )
+        for ref in refs:
+            with self.assertRaises(ConflictingDefinitionError):
+                registry._importDatasets([ref])
+
+        # Test for non-unique IDs, they can be re-imported multiple times.
+        for run, idGenMode in ((2, DatasetIdGenEnum.DATAID_TYPE), (4, DatasetIdGenEnum.DATAID_TYPE_RUN)):
+            with self.subTest(idGenMode=idGenMode):
+
+                # Use integer dataset ID to force UUID calculation in _import
+                ref = DatasetRef(datasetTypeBias, dataIdBias1, id=0, run=f"run{run}")
+                ref1, = registry._importDatasets([ref], idGenerationMode=idGenMode)
+                self.assertIsInstance(ref1.id, uuid.UUID)
+                self.assertEqual(ref1.id.version, 5)
+
+                # Importing it again is OK
+                ref2, = registry._importDatasets([ref1])
+                self.assertEqual(ref2.id, ref1.id)
+
+                # Cannot import to different run with the same ID
+                ref = DatasetRef(datasetTypeBias, dataIdBias1, id=ref1.id, run=f"run{run+1}")
+                with self.assertRaises(ConflictingDefinitionError):
+                    registry._importDatasets([ref])
+
+                ref = DatasetRef(datasetTypeBias, dataIdBias1, id=0, run=f"run{run+1}")
+                if idGenMode is DatasetIdGenEnum.DATAID_TYPE:
+                    # Cannot import same DATAID_TYPE ref into a new run
+                    with self.assertRaises(ConflictingDefinitionError):
+                        ref2, = registry._importDatasets([ref], idGenerationMode=idGenMode)
+                else:
+                    # DATAID_TYPE_RUN ref can be imported into a new run
+                    ref2, = registry._importDatasets([ref], idGenerationMode=idGenMode)
+
+    def testImportDatasetsInt(self):
+        """Test for `Registry._importDatasets` with integer dataset ID.
+        """
+        if not self.datasetsManager.endswith(".ByDimensionsDatasetRecordStorageManager"):
+            self.skipTest(f"Unexpected dataset manager {self.datasetsManager}")
+
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        run = "test"
+        registry.registerRun(run)
+        datasetTypeBias = registry.getDatasetType("bias")
+        datasetTypeFlat = registry.getDatasetType("flat")
+        dataIdBias1 = {"instrument": "Cam1", "detector": 1}
+        dataIdBias2 = {"instrument": "Cam1", "detector": 2}
+        dataIdFlat1 = {"instrument": "Cam1", "detector": 1, "physical_filter": "Cam1-G", "band": "g"}
+        dataset_id = 999999999
+
+        ref = DatasetRef(datasetTypeBias, dataIdBias1, id=dataset_id, run=run)
+        ref1, = registry._importDatasets([ref])
+        # Should make new integer ID.
+        self.assertNotEqual(ref1.id, ref.id)
+
+        # Ingesting same dataId with different dataset ID is an error
+        ref2 = ref1.unresolved().resolved(dataset_id, run=run)
+        with self.assertRaises(ConflictingDefinitionError):
+            registry._importDatasets([ref2])
+
+        # Ingesting different dataId with the same dataset ID should work
+        ref3 = DatasetRef(datasetTypeBias, dataIdBias2, id=ref1.id, run=run)
+        ref4, = registry._importDatasets([ref3])
+        self.assertNotEqual(ref4.id, ref1.id)
+
+        ref3 = DatasetRef(datasetTypeFlat, dataIdFlat1, id=ref1.id, run=run)
+        ref4, = registry._importDatasets([ref3])
+        self.assertNotEqual(ref4.id, ref1.id)
 
     def testDatasetTypeComponentQueries(self):
         """Test component options when querying for dataset types.

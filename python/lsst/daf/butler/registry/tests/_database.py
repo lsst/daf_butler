@@ -417,6 +417,33 @@ class DatabaseTests(ABC):
         self.assertEqual(db.query(count.select_from(tables.a)).scalar(), 0)
         self.assertEqual(db.query(count.select_from(d)).scalar(), 0)
 
+    def testDeleteWhere(self):
+        """Tests for `Database.deleteWhere`.
+        """
+        db = self.makeEmptyDatabase(origin=1)
+        with db.declareStaticTables(create=True) as context:
+            tables = context.addTableTuple(STATIC_TABLE_SPECS)
+        db.insert(tables.b, *[{"id": i, "name": f"b{i}"} for i in range(10)])
+        count = sqlalchemy.sql.select(sqlalchemy.sql.func.count())
+
+        n = db.deleteWhere(tables.b, tables.b.columns.id.in_([0, 1, 2]))
+        self.assertEqual(n, 3)
+        self.assertEqual(db.query(count.select_from(tables.b)).scalar(), 7)
+
+        n = db.deleteWhere(tables.b, tables.b.columns.id.in_(
+            sqlalchemy.sql.select(tables.b.columns.id).where(tables.b.columns.id > 5)
+        ))
+        self.assertEqual(n, 4)
+        self.assertEqual(db.query(count.select_from(tables.b)).scalar(), 3)
+
+        n = db.deleteWhere(tables.b, tables.b.columns.name == "b5")
+        self.assertEqual(n, 1)
+        self.assertEqual(db.query(count.select_from(tables.b)).scalar(), 2)
+
+        n = db.deleteWhere(tables.b, sqlalchemy.sql.literal(True))
+        self.assertEqual(n, 2)
+        self.assertEqual(db.query(count.select_from(tables.b)).scalar(), 0)
+
     def testUpdate(self):
         """Tests for `Database.update`.
         """

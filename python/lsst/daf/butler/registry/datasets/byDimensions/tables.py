@@ -285,7 +285,7 @@ def makeCalibTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
 
 
 def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManager],
-                     dtype: type) -> ddl.TableSpec:
+                     dtype: type, *, constraints: bool = True) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag
     table used by the classes in this package.
 
@@ -297,9 +297,11 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
     collections : `type` [ `CollectionManager` ]
         `CollectionManager` subclass that can be used to construct foreign keys
         to the run and/or collection tables.
-    dtype: `type`
+    dtype : `type`
         Type of the FK column, same as the column type of the PK column of
         a referenced table (``dataset.id``).
+    constraints : `bool`, optional
+        If `False` (`True` is default), do not define foreign key constraints.
 
     Returns
     -------
@@ -314,35 +316,39 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
             # in the main monolithic dataset table, but we need it here for an
             # important unique constraint.
             ddl.FieldSpec("dataset_type_id", dtype=sqlalchemy.BigInteger, nullable=False),
-        ],
-        foreignKeys=[
-            ddl.ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",)),
         ]
     )
+    if constraints:
+        tableSpec.foreignKeys.append(
+            ddl.ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",))
+        )
     # We'll also have a unique constraint on dataset type, collection, and data
     # ID.  We only include the required part of the data ID, as that's
     # sufficient and saves us from worrying about nulls in the constraint.
     constraint = ["dataset_type_id"]
     # Add foreign key fields to dataset table (part of the primary key)
-    addDatasetForeignKey(tableSpec, dtype, primaryKey=True, onDelete="CASCADE")
+    addDatasetForeignKey(tableSpec, dtype, primaryKey=True, onDelete="CASCADE", constraint=constraints)
     # Add foreign key fields to collection table (part of the primary key and
     # the data ID unique constraint).
-    collectionFieldSpec = collections.addCollectionForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE")
+    collectionFieldSpec = collections.addCollectionForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE",
+                                                              constraint=constraints)
     constraint.append(collectionFieldSpec.name)
     # Add foreign key constraint to the collection_summary_dataset_type table.
-    tableSpec.foreignKeys.append(
-        ddl.ForeignKeySpec(
-            "collection_summary_dataset_type",
-            source=(collectionFieldSpec.name, "dataset_type_id"),
-            target=(collectionFieldSpec.name, "dataset_type_id"),
+    if constraints:
+        tableSpec.foreignKeys.append(
+            ddl.ForeignKeySpec(
+                "collection_summary_dataset_type",
+                source=(collectionFieldSpec.name, "dataset_type_id"),
+                target=(collectionFieldSpec.name, "dataset_type_id"),
+            )
         )
-    )
     for dimension in datasetType.dimensions.required:
-        fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
+        fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False,
+                                           constraint=constraints)
         constraint.append(fieldSpec.name)
         # If this is a governor dimension, add a foreign key constraint to the
         # collection_summary_<dimension> table.
-        if isinstance(dimension, GovernorDimension):
+        if isinstance(dimension, GovernorDimension) and constraints:
             tableSpec.foreignKeys.append(
                 ddl.ForeignKeySpec(
                     f"collection_summary_{dimension.name}",

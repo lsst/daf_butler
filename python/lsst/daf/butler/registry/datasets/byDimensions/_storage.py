@@ -4,7 +4,6 @@ __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 from typing import (
     Any,
-    Callable,
     Dict,
     Iterable,
     Iterator,
@@ -27,11 +26,13 @@ from lsst.daf.butler import (
     DatasetType,
     SimpleQuery,
     Timespan,
+    ddl
 )
 from lsst.daf.butler.registry import ConflictingDefinitionError, UnsupportedIdGeneratorError
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage, DatasetIdGenEnum
 
 from ...summaries import GovernorDimensionRestriction
+from .tables import makeTagTableSpec
 
 if TYPE_CHECKING:
     from ...interfaces import CollectionManager, CollectionRecord, Database, RunRecord
@@ -587,6 +588,9 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
+        # Remember any governor dimension values we see.
+        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
+
         # Iterate over data IDs, transforming a possibly-single-pass iterable
         # into a list.
         dataIdList = []
@@ -598,46 +602,11 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 "dataset_type_id": self._dataset_type_id,
                 self._runKeyColumn: run.key,
             })
-
-        yield from self._insert(run, dataIdList, rows, self._db.insert)
-
-    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
-                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-                reuseIds: bool = False) -> Iterator[DatasetRef]:
-        # Docstring inherited from DatasetRecordStorage.
-
-        # Iterate over data IDs, transforming a possibly-single-pass iterable
-        # into a list.
-        dataIdList = []
-        rows = []
-        for dataset in datasets:
-            dataIdList.append(dataset.dataId)
-            # Ignore unknown ID types, normally all IDs have the same type but
-            # this code supports mixed types or missing IDs.
-            datasetId = dataset.id if isinstance(dataset.id, uuid.UUID) else None
-            if datasetId is None:
-                datasetId = self._makeDatasetId(run, dataset.dataId, idGenerationMode)
-            rows.append({
-                "id": datasetId,
-                "dataset_type_id": self._dataset_type_id,
-                self._runKeyColumn: run.key,
-            })
-
-        yield from self._insert(run, dataIdList, rows, self._db.ensure)
-
-    def _insert(self, run: RunRecord, dataIdList: List[DataCoordinate],
-                rows: List[Dict], insertMethod: Callable) -> Iterator[DatasetRef]:
-        """Common part of implementation of `insert` and `import_` methods.
-        """
-
-        # Remember any governor dimension values we see.
-        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
-        for dataId in dataIdList:
             governorValues.update_extract(dataId)
 
         with self._db.transaction():
             # Insert into the static dataset table.
-            insertMethod(self._static.dataset, *rows)
+            self._db.insert(self._static.dataset, *rows)
             # Update the summary tables for this collection in case this is the
             # first time this dataset type or these governor values will be
             # inserted there.
@@ -653,13 +622,189 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 for dataId, row in zip(dataIdList, rows)
             ]
             # Insert those rows into the tags table.
-            insertMethod(self._tags, *tagsRows)
+            self._db.insert(self._tags, *tagsRows)
+
         for dataId, row in zip(dataIdList, rows):
             yield DatasetRef(
                 datasetType=self.datasetType,
                 dataId=dataId,
                 id=row["id"],
                 run=run.name,
+            )
+
+    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
+                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+                reuseIds: bool = False) -> Iterator[DatasetRef]:
+        # Docstring inherited from DatasetRecordStorage.
+
+        # Remember any governor dimension values we see.
+        governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
+
+        # Iterate over data IDs, transforming a possibly-single-pass iterable
+        # into a list.
+        dataIds = {}
+        for dataset in datasets:
+            # Ignore unknown ID types, normally all IDs have the same type but
+            # this code supports mixed types or missing IDs.
+            datasetId = dataset.id if isinstance(dataset.id, uuid.UUID) else None
+            if datasetId is None:
+                datasetId = self._makeDatasetId(run, dataset.dataId, idGenerationMode)
+            dataIds[datasetId] = dataset.dataId
+            governorValues.update_extract(dataset.dataId)
+
+        with self._db.session() as session:
+
+            # insert all new rows into a temporary table
+            tableSpec = makeTagTableSpec(self.datasetType, type(self._collections),
+                                         ddl.GUID, constraints=False)
+            tmp_tags = session.makeTemporaryTable(tableSpec)
+
+            collFkName = self._collections.getCollectionForeignKeyName()
+            protoTagsRow = {
+                "dataset_type_id": self._dataset_type_id,
+                collFkName: run.key,
+            }
+            tmpRows = [dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
+                       for dataset_id, dataId in dataIds.items()]
+
+            with self._db.transaction():
+
+                # store all incoming data in a temporary table
+                self._db.insert(tmp_tags, *tmpRows)
+
+                # There are some checks that we want to make for consistency
+                # of the new datasets with existing ones.
+                self._validateImport(tmp_tags, run)
+
+                # Before we merge temporary table into dataset/tags we need to
+                # drop datasets which are already there (and do not conflict).
+                self._db.deleteWhere(tmp_tags, tmp_tags.columns.dataset_id.in_(
+                    sqlalchemy.sql.select(self._static.dataset.columns.id)
+                ))
+
+                # Copy it into dataset table, need to re-label some columns.
+                self._db.insert(self._static.dataset, select=sqlalchemy.sql.select(
+                    tmp_tags.columns.dataset_id.label("id"),
+                    tmp_tags.columns.dataset_type_id,
+                    tmp_tags.columns[collFkName].label(self._runKeyColumn)
+                ))
+
+                # Update the summary tables for this collection in case this
+                # is the first time this dataset type or these governor values
+                # will be inserted there.
+                self._summaries.update(run, self.datasetType, self._dataset_type_id, governorValues)
+
+                # Copy it into tags table.
+                self._db.insert(self._tags, select=tmp_tags.select())
+
+                # Return refs in the same order as in the input list.
+                for dataset_id, dataId in dataIds.items():
+                    yield DatasetRef(
+                        datasetType=self.datasetType,
+                        id=dataset_id,
+                        dataId=dataId,
+                        run=run.name,
+                    )
+
+    def _validateImport(self, tmp_tags: sqlalchemy.schema.Table, run: RunRecord) -> None:
+        """Validate imported refs against existing datasets.
+
+        Parameters
+        ----------
+        tmp_tags : `sqlalchemy.schema.Table`
+            Temporary table with new datasets and the same schema as tags
+            table.
+        run : `RunRecord`
+            The record object describing the `~CollectionType.RUN` collection.
+
+        Raises
+        ------
+        ConflictingDefinitionError
+            Raise if new datasets conflict with existing ones.
+        """
+        dataset = self._static.dataset
+        tags = self._tags
+        collFkName = self._collections.getCollectionForeignKeyName()
+
+        # Check that existing datasets have the same dataset type and
+        # run.
+        query = sqlalchemy.sql.select(
+            dataset.columns.id.label("dataset_id"),
+            dataset.columns.dataset_type_id.label("dataset_type_id"),
+            tmp_tags.columns.dataset_type_id.label("new dataset_type_id"),
+            dataset.columns[self._runKeyColumn].label("run"),
+            tmp_tags.columns[collFkName].label("new run")
+        ).select_from(
+            dataset.join(
+                tmp_tags,
+                dataset.columns.id == tmp_tags.columns.dataset_id
+            )
+        ).where(
+            sqlalchemy.sql.or_(
+                dataset.columns.dataset_type_id != tmp_tags.columns.dataset_type_id,
+                dataset.columns[self._runKeyColumn] != tmp_tags.columns[collFkName]
+            )
+        )
+        result = self._db.query(query)
+        if (row := result.first()) is not None:
+            # Only include the first one in the exception message
+            raise ConflictingDefinitionError(
+                f"Existing dataset type or run do not match new dataset: {row._asdict()}"
+            )
+
+        # Check that matching dataset in tags table has the same DataId.
+        query = sqlalchemy.sql.select(
+            tags.columns.dataset_id,
+            tags.columns.dataset_type_id.label("type_id"),
+            tmp_tags.columns.dataset_type_id.label("new type_id"),
+            *[tags.columns[dim] for dim in self.datasetType.dimensions.required.names],
+            *[tmp_tags.columns[dim].label(f"new {dim}")
+              for dim in self.datasetType.dimensions.required.names],
+        ).select_from(
+            tags.join(
+                tmp_tags,
+                tags.columns.dataset_id == tmp_tags.columns.dataset_id
+            )
+        ).where(
+            sqlalchemy.sql.or_(
+                tags.columns.dataset_type_id != tmp_tags.columns.dataset_type_id,
+                *[tags.columns[dim] != tmp_tags.columns[dim]
+                    for dim in self.datasetType.dimensions.required.names]
+            )
+        )
+        result = self._db.query(query)
+        if (row := result.first()) is not None:
+            # Only include the first one in the exception message
+            raise ConflictingDefinitionError(
+                f"Existing dataset type or dataId do not match new dataset: {row._asdict()}"
+            )
+
+        # Check that matching run+dataId have the same dataset ID.
+        query = sqlalchemy.sql.select(
+            tags.columns.dataset_type_id.label("dataset_type_id"),
+            *[tags.columns[dim] for dim in self.datasetType.dimensions.required.names],
+            tags.columns.dataset_id,
+            tmp_tags.columns.dataset_id.label("new dataset_id"),
+            tags.columns[collFkName],
+            tmp_tags.columns[collFkName].label(f"new {collFkName}")
+        ).select_from(
+            tags.join(
+                tmp_tags,
+                sqlalchemy.sql.and_(
+                    tags.columns.dataset_type_id == tmp_tags.columns.dataset_type_id,
+                    tags.columns[collFkName] == tmp_tags.columns[collFkName],
+                    *[tags.columns[dim] == tmp_tags.columns[dim]
+                        for dim in self.datasetType.dimensions.required.names]
+                )
+            )
+        ).where(
+            tags.columns.dataset_id != tmp_tags.columns.dataset_id
+        )
+        result = self._db.query(query)
+        if (row := result.first()) is not None:
+            # only include the first one in the exception message
+            raise ConflictingDefinitionError(
+                f"Existing dataset type and dataId does not match new dataset: {row._asdict()}"
             )
 
     def _makeDatasetId(self, run: RunRecord, dataId: DataCoordinate,
