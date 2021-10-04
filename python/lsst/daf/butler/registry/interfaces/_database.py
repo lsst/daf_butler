@@ -1241,7 +1241,7 @@ class Database(ABC):
                 row.update(compared)
             if extra is not None:
                 row.update(extra)
-            with self.transaction(lock=[table]):
+            with self.transaction():
                 inserted = bool(self.ensure(table, row))
                 inserted_or_updated: Union[bool, Dict[str, Any]]
                 # Need to perform check() for this branch inside the
