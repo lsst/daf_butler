@@ -39,7 +39,7 @@ from typing import (
 import sqlalchemy
 
 from lsst.sphgeom import Pixelization
-from lsst.utils import doImport
+from lsst.utils import doImportType
 from .. import ddl
 from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
 
@@ -229,7 +229,11 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
 
     def visit(self, builder: DimensionConstructionBuilder) -> None:
         # Docstring inherited from DimensionConstructionVisitor.
-        PixelizationClass = doImport(self._pixelizationClassName)
+        pixelization_class = doImportType(self._pixelizationClassName)
+        if not hasattr(pixelization_class, "MAX_LEVEL"):
+            raise TypeError(f"Skypix pixelization class {self._pixelizationClassName} does"
+                            " not have MAX_LEVEL")
+        PixelizationClass = pixelization_class
         maxLevel = self._maxLevel if self._maxLevel is not None else PixelizationClass.MAX_LEVEL
         system = SkyPixSystem(
             self.name,

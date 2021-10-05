@@ -39,7 +39,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 
 from .. import ddl
 from ..named import NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
@@ -266,7 +266,7 @@ class DatabaseDimensionElement(DimensionElement):
             Storage object that should back this element in a registry.
         """
         from ...registry.interfaces import DatabaseDimensionRecordStorage
-        cls = doImport(self._storage["cls"])
+        cls = doImportType(self._storage["cls"])
         assert issubclass(cls, DatabaseDimensionRecordStorage)
         return cls.initialize(db, self, context=context, config=self._storage, governors=governors)
 

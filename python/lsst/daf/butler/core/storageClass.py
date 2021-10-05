@@ -43,7 +43,7 @@ from typing import (
     Union,
 )
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
 from .utils import Singleton
 from .storageClassDelegate import StorageClassDelegate
@@ -174,7 +174,7 @@ class StorageClass:
         if hasattr(builtins, self._pytypeName):
             pytype = getattr(builtins, self._pytypeName)
         else:
-            pytype = doImport(self._pytypeName)
+            pytype = doImportType(self._pytypeName)
         self._pytype = pytype
         return self._pytype
 
@@ -185,7 +185,8 @@ class StorageClass:
             return self._delegate
         if self._delegateClassName is None:
             return None
-        self._delegate = doImport(self._delegateClassName)
+        delegate_class = doImportType(self._delegateClassName)
+        self._delegate = delegate_class
         return self._delegate
 
     def allComponents(self) -> Mapping[str, StorageClass]:

@@ -61,7 +61,7 @@ try:
 except ImportError:
     boto3 = None
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import getLogger, VERBOSE
 from .core import (
@@ -371,7 +371,10 @@ class Butler:
             del config["root"]
 
         full = ButlerConfig(config, searchPaths=searchPaths)  # this applies defaults
-        datastoreClass: Type[Datastore] = doImport(full["datastore", "cls"])
+        imported_class = doImportType(full["datastore", "cls"])
+        if not issubclass(imported_class, Datastore):
+            raise TypeError(f"Imported datastore class {full['datastore', 'cls']} is not a Datastore")
+        datastoreClass: Type[Datastore] = imported_class
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
         # if key exists in given config, parse it, otherwise parse the defaults

@@ -42,7 +42,7 @@ from typing import (
     Union,
 )
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 
 from ..core import (
     ButlerURI,
@@ -147,9 +147,13 @@ class Registry(ABC):
         config = cls.forceRegistryConfig(config)
 
         # Default to the standard registry
-        registry_cls = doImport(config.get("cls", "lsst.daf.butler.registries.sql.SqlRegistry"))
+        registry_cls_name = config.get("cls", "lsst.daf.butler.registries.sql.SqlRegistry")
+        registry_cls = doImportType(registry_cls_name)
         if registry_cls is cls:
             raise ValueError("Can not instantiate the abstract base Registry from config")
+        if not issubclass(registry_cls, Registry):
+            raise TypeError(f"Registry class obtained from config {registry_cls_name} is "
+                            "not a Registry class.")
         return registry_cls, config
 
     @classmethod

@@ -947,7 +947,10 @@ class FileDatastore(GenericBaseDatastore):
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
                 assert isinstance(dataset.formatter, (type, str))
-                dataset.formatter = get_class_of(dataset.formatter)
+                formatter_class = get_class_of(dataset.formatter)
+                if not issubclass(formatter_class, Formatter):
+                    raise TypeError(f"Requested formatter {dataset.formatter} is not a Formatter class.")
+                dataset.formatter = formatter_class
             dataset.path = self._standardizeIngestPath(dataset.path, transfer=transfer)
             filtered.append(dataset)
         return _IngestPrepData(filtered)

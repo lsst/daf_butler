@@ -25,16 +25,16 @@ __all__ = ("RegistryConfig",)
 
 from typing import Optional, Type, TYPE_CHECKING, Union
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 
 from ..core import ConfigSubset
 from ..core.repoRelocation import replaceRoot
 from .connectionString import ConnectionStringFactory
+from .interfaces import Database
 
 if TYPE_CHECKING:
     import sqlalchemy
     from ..core import ButlerURI
-    from .interfaces import Database
 
 
 class RegistryConfig(ConfigSubset):
@@ -63,8 +63,11 @@ class RegistryConfig(ConfigSubset):
         dialect = self.getDialect()
         if dialect not in self["engines"]:
             raise ValueError(f"Connection string dialect has no known aliases. Received: {dialect}")
-        databaseClass = self["engines", dialect]
-        return doImport(databaseClass)
+        databaseClassName = self["engines", dialect]
+        databaseClass = doImportType(databaseClassName)
+        if not issubclass(databaseClass, Database):
+            raise TypeError(f"Imported database class {databaseClassName} is not a Database")
+        return databaseClass
 
     def makeDefaultDatabaseUri(self, root: str) -> Optional[str]:
         """Return a default 'db' URI for the registry configured here that is

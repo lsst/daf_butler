@@ -43,7 +43,7 @@ from typing import (
     Union,
 )
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 from lsst.daf.butler import ButlerURI, Datastore, DatastoreConfig, DatasetTypeNotSupportedError, \
     DatastoreValidationError, Constraints, FileDataset, DatasetRef
 
@@ -156,7 +156,9 @@ class ChainedDatastore(Datastore):
                                                      fullDatastoreConfig[containerKey])):
             childConfig = DatastoreConfig(child, mergeDefaults=False)
             fullChildConfig = DatastoreConfig(fullChild, mergeDefaults=False)
-            datastoreClass = doImport(fullChildConfig["cls"])
+            datastoreClass = doImportType(fullChildConfig["cls"])
+            if not issubclass(datastoreClass, Datastore):
+                raise TypeError(f"Imported child class {fullChildConfig['cls']} is not a Datastore")
             newroot = "{}/{}_{}".format(root, datastoreClass.__qualname__, idx)
             datastoreClass.setConfigRoot(newroot, childConfig, fullChildConfig, overwrite=overwrite)
 
@@ -181,7 +183,9 @@ class ChainedDatastore(Datastore):
         self.datastores = []
         for c in self.config["datastores"]:
             c = DatastoreConfig(c)
-            datastoreType = doImport(c["cls"])
+            datastoreType = doImportType(c["cls"])
+            if not issubclass(datastoreType, Datastore):
+                raise TypeError(f"Imported child class {c['cls']} is not a Datastore")
             datastore = datastoreType(c, bridgeManager, butlerRoot=butlerRoot)
             log.debug("Creating child datastore %s", datastore.name)
             self.datastores.append(datastore)
