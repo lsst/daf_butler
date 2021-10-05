@@ -35,7 +35,7 @@ from typing import (
     Union,
 )
 
-from ...core.utils import immutable
+from lsst.utils.classes import immutable
 from ...core import DatasetId, DatasetRef
 from ._versioning import VersionedExtension
 

@@ -46,10 +46,10 @@ from typing import (
 
 import sqlalchemy
 
+from lsst.utils.classes import immutable
 import lsst.sphgeom
 from . import ddl
 from .named import NamedValueAbstractSet
-from .utils import immutable
 
 
 @enum.unique

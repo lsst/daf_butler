@@ -24,44 +24,10 @@ import os
 import re
 import unittest
 
-from lsst.daf.butler.core.utils import globToRegex, Singleton
+from lsst.daf.butler.core.utils import globToRegex
 from lsst.daf.butler import NamedKeyDict, NamedValueSet
 
 TESTDIR = os.path.dirname(__file__)
-
-
-class SingletonTestCase(unittest.TestCase):
-    """Tests of the Singleton metaclass"""
-
-    class IsSingleton(metaclass=Singleton):
-        def __init__(self):
-            self.data = {}
-            self.id = 0
-
-    class IsBadSingleton(IsSingleton):
-        def __init__(self, arg):
-            """A singleton can not accept any arguments."""
-            self.arg = arg
-
-    class IsSingletonSubclass(IsSingleton):
-        def __init__(self):
-            super().__init__()
-
-    def testSingleton(self):
-        one = SingletonTestCase.IsSingleton()
-        two = SingletonTestCase.IsSingleton()
-
-        # Now update the first one and check the second
-        one.data["test"] = 52
-        self.assertEqual(one.data, two.data)
-        two.id += 1
-        self.assertEqual(one.id, two.id)
-
-        three = SingletonTestCase.IsSingletonSubclass()
-        self.assertNotEqual(one.id, three.id)
-
-        with self.assertRaises(TypeError):
-            SingletonTestCase.IsBadSingleton(52)
 
 
 class NamedKeyDictTest(unittest.TestCase):

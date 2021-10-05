@@ -40,10 +40,10 @@ from typing import (
 )
 
 from lsst.utils import doImportType
+from lsst.utils.classes import cached_getter
 
 from .. import ddl
 from ..named import NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
-from ..utils import cached_getter
 from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
 
 from ._elements import Dimension, DimensionCombination, DimensionElement

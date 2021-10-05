@@ -36,9 +36,9 @@ from typing import (
 
 from pydantic import BaseModel, StrictStr, ConstrainedInt, validator
 
+from lsst.utils.classes import immutable
 from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
 from ..configSupport import LookupKey
-from ..utils import immutable
 from ..named import NamedKeyDict
 from .type import DatasetType, SerializedDatasetType
 from ..json import from_json_pydantic, to_json_pydantic

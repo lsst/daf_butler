@@ -37,7 +37,7 @@ try:
 except ImportError:
     erfa = None
 
-from .utils import Singleton
+from lsst.utils.classes import Singleton
 
 _LOG = logging.getLogger(__name__)
 

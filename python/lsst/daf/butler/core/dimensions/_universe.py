@@ -39,10 +39,10 @@ from typing import (
     Union,
 )
 
+from lsst.utils.classes import cached_getter, immutable
 from ..config import Config
 from ..named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalSpace, TopologicalFamily
-from ..utils import cached_getter, immutable
 from ._config import DimensionConfig
 from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph

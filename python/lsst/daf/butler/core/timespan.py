@@ -55,10 +55,10 @@ try:
 except ImportError:
     erfa = None
 
+from lsst.utils.classes import cached_getter
 from . import ddl
 from .time_utils import TimeConverter
 from ._topology import TopologicalExtentDatabaseRepresentation, TopologicalSpace
-from .utils import cached_getter
 from .json import from_json_generic, to_json_generic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.

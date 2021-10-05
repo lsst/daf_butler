@@ -45,7 +45,7 @@ from typing import (
 
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
-from .utils import Singleton
+from lsst.utils.classes import Singleton
 from .storageClassDelegate import StorageClassDelegate
 from .config import ConfigSubset, Config
 from .configSupport import LookupKey

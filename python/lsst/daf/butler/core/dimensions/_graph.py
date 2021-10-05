@@ -41,8 +41,8 @@ from typing import (
     Union,
 )
 
+from lsst.utils.classes import cached_getter, immutable
 from ..named import NamedValueAbstractSet, NamedValueSet
-from ..utils import cached_getter, immutable
 from .._topology import TopologicalSpace, TopologicalFamily
 from ..json import from_json_pydantic, to_json_pydantic
 

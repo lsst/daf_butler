@@ -36,8 +36,8 @@ from typing import (
     TYPE_CHECKING,
 )
 
+from lsst.utils.classes import cached_getter
 from ..named import NamedValueAbstractSet, NamedValueSet
-from ..utils import cached_getter
 from .. import ddl
 from .._topology import TopologicalRelationshipEndpoint
 from ..json import from_json_generic, to_json_generic
