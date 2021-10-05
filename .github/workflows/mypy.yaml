@@ -24,6 +24,9 @@ jobs:
       - name: Install third party stubs
         run: pip install types-requests types-PyYAML types-click types-pkg_resources
 
+      - name: Install lsst.utils
+        run: pip install git+git://github.com/lsst/utils@master#egg=lsst_utils
+
       - name: Fake a version
         run: |
           echo "__all__ = ['__version__']" > python/lsst/daf/butler/version.py
