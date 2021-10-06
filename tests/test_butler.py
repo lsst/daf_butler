@@ -1894,7 +1894,10 @@ class PosixDatastoreTransfers(unittest.TestCase):
         self.target_butler.pruneCollection("run2", purge=True, unstore=True)
         self.target_butler.registry.registerCollection("run2", CollectionType.CHAINED)
         with self.assertRaises(TypeError):
-            self.target_butler.transfer_from(self.source_butler, source_refs,
+            # Re-importing the run1 datasets can be problematic if they
+            # use integer IDs so filter those out.
+            to_transfer = [ref for ref in source_refs if ref.run == "run2"]
+            self.target_butler.transfer_from(self.source_butler, to_transfer,
                                              id_gen_map=id_gen_map)
 
 
