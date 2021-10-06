@@ -1830,7 +1830,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         for datasetTypeName in datasetTypeNames:
             datasetType = DatasetType(datasetTypeName, dimensions, badStorageClass)
             self.target_butler.registry.registerDatasetType(datasetType)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConflictingDefinitionError):
             self.target_butler.transfer_from(self.source_butler, source_refs,
                                              id_gen_map=id_gen_map)
         # And remove the bad definitions.
