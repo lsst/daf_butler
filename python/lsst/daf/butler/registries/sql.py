@@ -324,9 +324,10 @@ class SqlRegistry(Registry):
         self._managers.opaque[tableName].delete(where.keys(), where)
 
     def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED,
-                           doc: Optional[str] = None) -> None:
+                           doc: Optional[str] = None) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        self._managers.collections.register(name, type, doc=doc)
+        _, registered = self._managers.collections.register(name, type, doc=doc)
+        return registered
 
     def getCollectionType(self, name: str) -> CollectionType:
         # Docstring inherited from lsst.daf.butler.registry.Registry
@@ -336,9 +337,10 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.collections.find(name)
 
-    def registerRun(self, name: str, doc: Optional[str] = None) -> None:
+    def registerRun(self, name: str, doc: Optional[str] = None) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        self._managers.collections.register(name, CollectionType.RUN, doc=doc)
+        _, registered = self._managers.collections.register(name, CollectionType.RUN, doc=doc)
+        return registered
 
     @transactional
     def removeCollection(self, name: str) -> None:
