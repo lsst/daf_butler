@@ -32,6 +32,7 @@ from typing import (
     Any,
     Iterator,
     Optional,
+    Tuple,
     TYPE_CHECKING,
 )
 
@@ -404,7 +405,8 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def register(self, name: str, type: CollectionType, doc: Optional[str] = None) -> CollectionRecord:
+    def register(self, name: str, type: CollectionType,
+                 doc: Optional[str] = None) -> Tuple[CollectionRecord, bool]:
         """Ensure that a collection of the given name and type are present
         in the layer this manager is associated with.
 
@@ -425,6 +427,9 @@ class CollectionManager(VersionedExtension):
             If ``type is CollectionType.RUN``, this will be a `RunRecord`
             instance.  If ``type is CollectionType.CHAIN``, this will be a
             `ChainedCollectionRecord` instance.
+        registered : `bool`
+            True if the collection was registered, `False` if it already
+            existed.
 
         Raises
         ------

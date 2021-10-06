@@ -427,7 +427,9 @@ class ButlerPutGetTests:
         metric = makeExampleMetrics()
         # Register a new run and put dataset.
         run = "deferred"
-        butler.registry.registerRun(run)
+        self.assertTrue(butler.registry.registerRun(run))
+        # Second time it will be allowed but indicate no-op
+        self.assertFalse(butler.registry.registerRun(run))
         ref = butler.put(metric, datasetType, dataId, run=run)
         # Putting with no run should fail with TypeError.
         with self.assertRaises(TypeError):
@@ -669,7 +671,11 @@ class ButlerTests(ButlerPutGetTests):
             butler.pruneCollection(run2, purge=True)
         # Add a TAGGED collection and associate ref3 only into it.
         tag1 = "tag1"
-        butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
+        registered = butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
+        self.assertTrue(registered)
+        # Registering a second time should be allowed.
+        registered = butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
+        self.assertFalse(registered)
         butler.registry.associate(tag1, [ref3])
         # Add a CHAINED collection that searches run1 and then run2.  It
         # logically contains only ref1, because ref2 is shadowed due to them

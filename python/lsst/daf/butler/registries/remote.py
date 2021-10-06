@@ -203,7 +203,7 @@ class RemoteRegistry(Registry):
     #    use by Datastore. DatastoreBridgeManager also is not needed.
 
     def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED,
-                           doc: Optional[str] = None) -> None:
+                           doc: Optional[str] = None) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
@@ -222,7 +222,7 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError
 
-    def registerRun(self, name: str, doc: Optional[str] = None) -> None:
+    def registerRun(self, name: str, doc: Optional[str] = None) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
