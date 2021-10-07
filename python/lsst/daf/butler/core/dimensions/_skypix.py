@@ -229,12 +229,15 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
 
     def visit(self, builder: DimensionConstructionBuilder) -> None:
         # Docstring inherited from DimensionConstructionVisitor.
-        pixelization_class = doImportType(self._pixelizationClassName)
-        if not hasattr(pixelization_class, "MAX_LEVEL"):
-            raise TypeError(f"Skypix pixelization class {self._pixelizationClassName} does"
-                            " not have MAX_LEVEL")
-        PixelizationClass = pixelization_class
-        maxLevel = self._maxLevel if self._maxLevel is not None else PixelizationClass.MAX_LEVEL
+        PixelizationClass = doImportType(self._pixelizationClassName)
+        assert issubclass(PixelizationClass, Pixelization)
+        if self._maxLevel is not None:
+            maxLevel = self._maxLevel
+        else:
+            maxLevel = getattr(PixelizationClass, "MAX_LEVEL", None)
+            if maxLevel is None:
+                raise TypeError(f"Skypix pixelization class {self._pixelizationClassName} does"
+                                " not have MAX_LEVEL but no max level has been set explicitly.")
         system = SkyPixSystem(
             self.name,
             maxLevel=maxLevel,
