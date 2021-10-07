@@ -45,7 +45,7 @@ import re
 
 from pydantic import BaseModel, Field, validator
 
-from lsst.utils.iteration import iterable
+from lsst.utils.iteration import ensure_iterable
 from .dimensions import SerializedDataCoordinate, DataIdValue
 from .utils import globToRegex
 
@@ -121,7 +121,7 @@ class ExpressionQueryParameter(BaseModel):
         if expression is ...:
             return cls()
 
-        expressions = iterable(expression)
+        expressions = ensure_iterable(expression)
         params: Dict[str, List[str]] = {"glob": [], "regex": []}
         for expression in expressions:
             if expression is ...:

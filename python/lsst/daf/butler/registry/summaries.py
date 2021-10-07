@@ -40,7 +40,7 @@ from typing import (
     Union,
     ValuesView,
 )
-from lsst.utils.iteration import iterable
+from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
     DataCoordinate,
@@ -175,7 +175,7 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
         for dimension in (self.keys() - other.keys()):
             self._mapping.pop(dimension, None)
         for dimension in (self.keys() & other.keys()):
-            self._mapping[dimension].update(iterable(other[dimension]))
+            self._mapping[dimension].update(ensure_iterable(other[dimension]))
         # Dimensions that are in 'other' but not in 'self' are ignored, because
         # 'self' says they are already unconstrained.
 
@@ -214,7 +214,7 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
             to `str` or iterable of `str`.
         """
         for dimension, values in other.items():
-            new_values = set(iterable(values))
+            new_values = set(ensure_iterable(values))
             # Yes, this will often result in a (no-op) self-intersection on the
             # inner set, but this is easier to read (and obviously more or less
             # efficient) than adding a check to avoid it.

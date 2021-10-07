@@ -40,7 +40,7 @@ from typing import (
     Union,
 )
 
-from lsst.utils.iteration import iterable
+from lsst.utils.iteration import ensure_iterable
 
 if TYPE_CHECKING:
     from ..registry.wildcards import Ellipsis, EllipsisType
@@ -105,7 +105,7 @@ def globToRegex(expressions: Union[str, EllipsisType, None,
     """
     if expressions is Ellipsis or expressions is None:
         return Ellipsis
-    expressions = list(iterable(expressions))
+    expressions = list(ensure_iterable(expressions))
     if not expressions or "*" in expressions:
         return Ellipsis
 

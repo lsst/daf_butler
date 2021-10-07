@@ -45,7 +45,7 @@ from typing import (
 
 import sqlalchemy
 
-from lsst.utils.iteration import iterable
+from lsst.utils.iteration import ensure_iterable
 from ..core import DatasetType
 from ..core.utils import globToRegex
 from ._collectionType import CollectionType
@@ -250,7 +250,7 @@ class CategorizedWildcard:
                 raise TypeError(f"Unsupported object in wildcard expression: '{element!r}'{extra}")
             return None
 
-        for element in iterable(expression):
+        for element in ensure_iterable(expression):
             retval = process(element)
             if retval is Ellipsis:
                 # One of the globs matched everything

@@ -42,7 +42,7 @@ import contextlib
 import httpx
 
 from lsst.utils.introspection import get_full_type_name
-from lsst.utils.iteration import iterable
+from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
     ButlerURI,
@@ -421,7 +421,7 @@ class RemoteRegistry(Registry):
                       **kwargs: Any) -> Iterable[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if dimensions is not None:
-            dimensions = [str(d) for d in iterable(dimensions)]
+            dimensions = [str(d) for d in ensure_iterable(dimensions)]
 
         if collections is not None:
             collections = ExpressionQueryParameter.from_expression(collections)
@@ -457,7 +457,7 @@ class RemoteRegistry(Registry):
                      check: bool = True,
                      **kwargs: Any) -> DataCoordinateSequence:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        cleaned_dimensions = [str(d) for d in iterable(dimensions)]
+        cleaned_dimensions = [str(d) for d in ensure_iterable(dimensions)]
 
         if collections is not None:
             collections = ExpressionQueryParameter.from_expression(collections)

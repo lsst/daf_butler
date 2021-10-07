@@ -35,7 +35,7 @@ from unittest.mock import patch
 import uuid
 import yaml
 
-from lsst.utils.iteration import iterable
+from lsst.utils.iteration import ensure_iterable
 from .cliLog import CliLog
 from ..core.config import Config
 
@@ -232,7 +232,7 @@ def split_commas(context, param, values):
     if values is None:
         return values
     valueList = []
-    for value in iterable(values):
+    for value in ensure_iterable(values):
         valueList.extend(value.split(","))
     return tuple(valueList)
 
@@ -368,7 +368,7 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
         raise click.ClickException(f"Internal error: invalid return type '{return_type}' for split_kv.")
     if multiple:
         vals = split_commas(context, param, vals)
-    for val in iterable(vals):
+    for val in ensure_iterable(vals):
         if unseparated_okay and separator not in val:
             if choice is not None:
                 choice(val)  # will raise if val is an invalid choice

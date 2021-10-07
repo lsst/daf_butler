@@ -44,7 +44,7 @@ import yaml
 import astropy.time
 
 from lsst.utils import doImportType
-from lsst.utils.iteration import iterable
+from lsst.utils.iteration import ensure_iterable
 from ..core import (
     DatasetAssociation,
     DatasetId,
@@ -326,7 +326,8 @@ class YamlRepoImportBackend(RepoImportBackend):
                 FileDataset(
                     d.get("path"),
                     [DatasetRef(datasetType, dataId, run=data["run"], id=refid)
-                     for dataId, refid in zip(iterable(d["data_id"]), iterable(d["dataset_id"]))],
+                     for dataId, refid in zip(ensure_iterable(d["data_id"]),
+                                              ensure_iterable(d["dataset_id"]))],
                     formatter=doImportType(d.get("formatter")) if "formatter" in d else None
                 )
                 for d in data["records"]

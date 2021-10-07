@@ -42,7 +42,7 @@ import pyarrow.parquet as pq
 import pandas as pd
 import pyarrow as pa
 
-from lsst.utils.iteration import iterable
+from lsst.utils.iteration import ensure_iterable
 from lsst.daf.butler import Formatter
 
 
@@ -126,7 +126,7 @@ class _ParquetLoader:
             if not set(self.indexLevelNames).issuperset(columns.keys()):
                 raise ValueError(f"Cannot use dict with keys {set(columns.keys())} "
                                  f"to select columns from {self.indexLevelNames}.")
-            factors = [iterable(columns.get(level, self.columns.levels[i]))
+            factors = [ensure_iterable(columns.get(level, self.columns.levels[i]))
                        for i, level in enumerate(self.indexLevelNames)]
             for requested in itertools.product(*factors):
                 for i, value in enumerate(requested):
