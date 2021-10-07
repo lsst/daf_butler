@@ -32,6 +32,7 @@ from typing import (
     Iterable,
     Iterator,
     Optional,
+    Tuple,
     Type,
     TYPE_CHECKING,
     TypeVar,
@@ -371,17 +372,21 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                 # the floor (a manual refresh can be used to get it back).
                 self._removeCachedRecord(chain)
 
-    def register(self, name: str, type: CollectionType, doc: Optional[str] = None) -> CollectionRecord:
+    def register(self, name: str, type: CollectionType,
+                 doc: Optional[str] = None) -> Tuple[CollectionRecord, bool]:
         # Docstring inherited from CollectionManager.
+        registered = False
         record = self._getByName(name)
         if record is None:
-            row, _ = self._db.sync(
+            row, inserted_or_updated = self._db.sync(
                 self._tables.collection,
                 keys={"name": name},
                 compared={"type": int(type)},
                 extra={"doc": doc},
                 returning=[self._collectionIdName],
             )
+            assert isinstance(inserted_or_updated, bool)
+            registered = inserted_or_updated
             assert row is not None
             collection_id = row[self._collectionIdName]
             if type is CollectionType.RUN:
@@ -408,7 +413,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
             else:
                 record = CollectionRecord(key=collection_id, name=name, type=type)
             self._addCachedRecord(record)
-        return record
+        return record, registered
 
     def remove(self, name: str) -> None:
         # Docstring inherited from CollectionManager.

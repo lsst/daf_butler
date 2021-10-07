@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 def transferDatasets(source: str, dest: str, dataset_type: Tuple[str, ...], collections: Tuple[str, ...],
                      where: str, find_first: bool,
-                     transfer: str) -> int:
+                     transfer: str, register_dataset_types: bool) -> int:
     """Transfer datasets from run in source to dest.
 
     Parameters
@@ -52,6 +52,8 @@ def transferDatasets(source: str, dest: str, dataset_type: Tuple[str, ...], coll
         Whether only the first match should be used.
     transfer : `str`
         Transfer mode to use when placing artifacts in the destination.
+    register_dataset_types : `bool`
+        Indicate whether missing dataset types should be registered.
     """
     source_butler = Butler(source, writeable=False)
     dest_butler = Butler(dest, writeable=True)
@@ -72,5 +74,6 @@ def transferDatasets(source: str, dest: str, dataset_type: Tuple[str, ...], coll
     # Place results in a set to remove duplicates
     source_refs = set(source_refs)
 
-    transferred = dest_butler.transfer_from(source_butler, source_refs, transfer=transfer)
+    transferred = dest_butler.transfer_from(source_butler, source_refs, transfer=transfer,
+                                            register_dataset_types=register_dataset_types)
     return len(transferred)
