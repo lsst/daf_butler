@@ -1,0 +1,1 @@
+Many internal utilities from ``lsst.daf.butler.core.utils`` have been relocated to the ``lsst.utils`` package.
