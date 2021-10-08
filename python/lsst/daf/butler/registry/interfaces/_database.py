@@ -1553,6 +1553,42 @@ class Database(ABC):
                     rowcount += connection.execute(newsql).rowcount
             return rowcount
 
+    def deleteWhere(self, table: sqlalchemy.schema.Table, where: sqlalchemy.sql.ClauseElement) -> int:
+        """Delete rows from a table with pre-constructed WHERE clause.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            Table that rows should be deleted from.
+        where: `sqlalchemy.sql.ClauseElement`
+            The names of columns that will be used to constrain the rows to
+            be deleted; these will be combined via ``AND`` to form the
+            ``WHERE`` clause of the delete query.
+
+        Returns
+        -------
+        count : `int`
+            Number of rows deleted.
+
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
+
+        Notes
+        -----
+        May be used inside transaction contexts, so implementations may not
+        perform operations that interrupt transactions.
+
+        The default implementation should be sufficient for most derived
+        classes.
+        """
+        self.assertTableWriteable(table, f"Cannot delete from read-only table {table}.")
+
+        sql = table.delete().where(where)
+        with self._connection() as connection:
+            return connection.execute(sql).rowcount
+
     def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
         """Update one or more rows in a table.
 
