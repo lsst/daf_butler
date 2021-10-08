@@ -36,7 +36,7 @@ from typing import (
     Union,
 )
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 from ._coordinate import DataCoordinate, DataId
@@ -229,7 +229,10 @@ class DimensionPackerFactory:
             self._dimensions = universe.extract(self._dimensions)
         assert fixed.graph.issuperset(self._fixed)
         if self._cls is None:
-            self._cls = doImport(self._clsName)
+            packer_class = doImportType(self._clsName)
+            assert not isinstance(packer_class, DimensionPacker), \
+                f"Packer class {self._clsName} must be a DimensionPacker."
+            self._cls = packer_class
         return self._cls(fixed, self._dimensions)
 
 

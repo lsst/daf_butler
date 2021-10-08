@@ -33,9 +33,9 @@ from typing import (
     Type,
     Union,
 )
+from lsst.utils.introspection import get_class_of
 
 from .config import Config
-from .utils import getClassOf
 from .configSupport import LookupKey
 
 
@@ -126,7 +126,7 @@ class MappingFactory:
                 except KeyError:
                     pass
                 else:
-                    return key, getClassOf(entry["type"]), entry["kwargs"]
+                    return key, get_class_of(entry["type"]), entry["kwargs"]
 
         # Convert list to a string for error reporting
         msg = ", ".join(str(k) for k in attempts)

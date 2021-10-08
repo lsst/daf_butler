@@ -27,6 +27,7 @@ from typing import AbstractSet, Any, Iterator, List, Mapping, Optional, Type, Un
 
 from sqlalchemy.sql import ColumnElement
 
+from lsst.utils.classes import cached_getter, immutable
 from lsst.sphgeom import Region
 from ...core import (
     DataCoordinate,
@@ -43,7 +44,6 @@ from ...core import (
     SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
-from ...core.utils import cached_getter, immutable
 from ..interfaces import (
     CollectionManager,
     DatasetRecordStorageManager,

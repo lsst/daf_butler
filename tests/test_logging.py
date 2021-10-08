@@ -24,11 +24,12 @@ import io
 import logging
 import tempfile
 from logging import StreamHandler, FileHandler
+import lsst.utils.logging
+from lsst.utils.logging import VERBOSE
 
 from lsst.daf.butler.core.logging import (
     ButlerLogRecordHandler,
     ButlerLogRecords,
-    VERBOSE,
     JsonLogFormatter,
     ButlerLogRecord,
     ButlerMDC,
@@ -41,7 +42,7 @@ class LoggingTestCase(unittest.TestCase):
     def setUp(self):
         self.handler = ButlerLogRecordHandler()
 
-        self.log = logging.getLogger(self.id())
+        self.log = lsst.utils.logging.getLogger(self.id())
         self.log.addHandler(self.handler)
 
     def tearDown(self):
@@ -111,7 +112,7 @@ class LoggingTestCase(unittest.TestCase):
         self.log.debug("debug message")
         self.log.warning("warning message")
         self.log.critical("critical message")
-        self.log.log(VERBOSE, "verbose message")
+        self.log.verbose("verbose message")
 
         self.assertEqual(len(self.handler.records), 4)
 

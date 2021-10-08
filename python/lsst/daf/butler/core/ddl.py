@@ -46,11 +46,12 @@ import sqlalchemy
 from sqlalchemy.dialects.postgresql import UUID
 import astropy.time
 
+from lsst.utils.iteration import ensure_iterable
 from lsst.sphgeom import Region
 from .config import Config
 from .exceptions import ValidationError
 from . import time_utils
-from .utils import iterable, stripIfNotNone
+from .utils import stripIfNotNone
 from .named import NamedValueSet
 
 if TYPE_CHECKING:
@@ -419,8 +420,8 @@ class ForeignKeySpec:
             Raised if configuration keys are missing or have invalid values.
         """
         return cls(table=config["table"],
-                   source=tuple(iterable(config["source"])),
-                   target=tuple(iterable(config["target"])),
+                   source=tuple(ensure_iterable(config["source"])),
+                   target=tuple(ensure_iterable(config["target"])),
                    onDelete=config.get("onDelete", None))
 
 

@@ -43,7 +43,8 @@ from collections import defaultdict
 import yaml
 import astropy.time
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
+from lsst.utils.iteration import ensure_iterable
 from ..core import (
     DatasetAssociation,
     DatasetId,
@@ -56,7 +57,6 @@ from ..core import (
     Timespan,
 )
 from ..core._butlerUri import ButlerURI
-from ..core.utils import iterable
 from ..core.named import NamedValueSet
 from ..registry import CollectionType, Registry
 from ..registry.interfaces import (
@@ -326,8 +326,9 @@ class YamlRepoImportBackend(RepoImportBackend):
                 FileDataset(
                     d.get("path"),
                     [DatasetRef(datasetType, dataId, run=data["run"], id=refid)
-                     for dataId, refid in zip(iterable(d["data_id"]), iterable(d["dataset_id"]))],
-                    formatter=doImport(d.get("formatter")) if "formatter" in d else None
+                     for dataId, refid in zip(ensure_iterable(d["data_id"]),
+                                              ensure_iterable(d["dataset_id"]))],
+                    formatter=doImportType(d.get("formatter")) if "formatter" in d else None
                 )
                 for d in data["records"]
             )

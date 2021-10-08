@@ -42,6 +42,7 @@ from typing import (
 )
 
 import sqlalchemy
+from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
     ButlerURI,
@@ -66,7 +67,7 @@ from ..core import (
     StorageClassFactory,
     Timespan,
 )
-from ..core.utils import iterable, transactional
+from ..core.utils import transactional
 
 from ..registry import (
     Registry,
@@ -866,7 +867,7 @@ class SqlRegistry(Registry):
                 return queries.ChainedDatasetQueryResults(
                     [],
                     doomed_by=[f"No registered dataset type matching {t!r} found."
-                               for t in iterable(datasetType)],
+                               for t in ensure_iterable(datasetType)],
                 )
         elif datasetType.isComponent():
             # We were given a true DatasetType instance, but it's a component.
@@ -931,7 +932,7 @@ class SqlRegistry(Registry):
                      check: bool = True,
                      **kwargs: Any) -> queries.DataCoordinateQueryResults:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        dimensions = iterable(dimensions)
+        dimensions = ensure_iterable(dimensions)
         standardizedDataId = self.expandDataId(dataId, **kwargs)
         standardizedDatasetTypes = set()
         requestedDimensions = self.dimensions.extract(dimensions)

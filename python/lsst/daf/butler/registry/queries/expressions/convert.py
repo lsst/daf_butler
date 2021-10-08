@@ -51,6 +51,7 @@ import sqlalchemy
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import func
 
+from lsst.utils.iteration import ensure_iterable
 from ....core import (
     ddl,
     Dimension,
@@ -60,7 +61,6 @@ from ....core import (
     Timespan,
     TimespanDatabaseRepresentation,
 )
-from ....core.utils import iterable
 from .parser import Node, TreeVisitor
 from .categorize import categorizeElementId, categorizeConstant, ExpressionConstant
 
@@ -666,7 +666,7 @@ class DispatchTable:
             adapt = adaptUnaryColumnFunc
         elif adapt is False:
             adapt = adaptIdentity
-        for item in iterable(operand):
+        for item in ensure_iterable(operand):
             self._unary[operator, item] = adapt(
                 func,
                 result if result is not None else item
@@ -721,11 +721,11 @@ class DispatchTable:
             adapt = adaptBinaryColumnFunc
         elif adapt is False:
             adapt = adaptIdentity
-        for lh in iterable(lhs):
+        for lh in ensure_iterable(lhs):
             if rhs is None:
                 self._binary[operator, lh, lh] = adapt(func, result if result is not None else lh)
             else:
-                for rh in iterable(rhs):
+                for rh in ensure_iterable(rhs):
                     self._binary[operator, lh, rh] = adapt(func, result)
 
     def applyUnary(

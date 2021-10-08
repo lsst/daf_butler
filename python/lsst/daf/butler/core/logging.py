@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("VERBOSE", "ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
+__all__ = ("ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
            "ButlerLogRecord", "JsonLogFormatter")
 
 import logging
@@ -33,15 +33,11 @@ from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO
 from logging import LogRecord, StreamHandler, Formatter
 from pydantic import BaseModel, PrivateAttr
 
-from .utils import isplit
-
-VERBOSE = (logging.INFO + logging.DEBUG) // 2
-"""Verbose log level"""
+from lsst.utils.iteration import isplit
+from lsst.utils.introspection import get_full_type_name
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""
-
-logging.addLevelName(VERBOSE, "VERBOSE")
 
 
 class MDCDict(dict):
@@ -416,10 +412,17 @@ class ButlerLogRecords(BaseModel):
             return cls.parse_raw(serialized)
 
         # Filter out blank lines -- mypy is confused by the newline
-        # argument to split().
-        newline = "\n" if isinstance(serialized, str) else b"\n"
-        records = [ButlerLogRecord.parse_raw(line) for line in isplit(serialized, newline)  # type: ignore
-                   if line]
+        # argument to isplit() [which can't have two different types
+        # simultaneously] so we have to duplicate some logic.
+        substrings: Iterator[Union[str, bytes]]
+        if isinstance(serialized, str):
+            substrings = isplit(serialized, "\n")
+        elif isinstance(serialized, bytes):
+            substrings = isplit(serialized, b"\n")
+        else:
+            raise TypeError(f"Serialized form must be str or bytes not {get_full_type_name(serialized)}")
+        records = [ButlerLogRecord.parse_raw(line) for line in substrings if line]
+
         return cls.from_records(records)
 
     @property

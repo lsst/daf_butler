@@ -34,7 +34,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 
 from .. import ddl
 from ..named import NamedValueAbstractSet, NamedValueSet
@@ -172,7 +172,7 @@ class GovernorDimension(Dimension):
             Storage object that should back this element in a registry.
         """
         from ...registry.interfaces import GovernorDimensionRecordStorage
-        cls = doImport(self._storage["cls"])
+        cls = doImportType(self._storage["cls"])
         assert issubclass(cls, GovernorDimensionRecordStorage)
         return cls.initialize(db, self, context=context, config=self._storage)
 

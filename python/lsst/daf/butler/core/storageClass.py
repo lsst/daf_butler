@@ -43,8 +43,9 @@ from typing import (
     Union,
 )
 
-from lsst.utils import doImport
-from .utils import Singleton, getFullTypeName
+from lsst.utils import doImportType
+from lsst.utils.introspection import get_full_type_name
+from lsst.utils.classes import Singleton
 from .storageClassDelegate import StorageClassDelegate
 from .config import ConfigSubset, Config
 from .configSupport import LookupKey
@@ -87,7 +88,7 @@ class StorageClass:
     _cls_delegate: Optional[str] = None
     _cls_pytype: Optional[Union[Type, str]] = None
     defaultDelegate: Type = StorageClassDelegate
-    defaultDelegateName: str = getFullTypeName(defaultDelegate)
+    defaultDelegateName: str = get_full_type_name(defaultDelegate)
 
     def __init__(self, name: Optional[str] = None,
                  pytype: Optional[Union[Type, str]] = None,
@@ -115,7 +116,7 @@ class StorageClass:
         self._pytype: Optional[Type]
         if not isinstance(pytype, str):
             # Already have a type so store it and get the name
-            self._pytypeName = getFullTypeName(pytype)
+            self._pytypeName = get_full_type_name(pytype)
             self._pytype = pytype
         else:
             # Store the type name and defer loading of type
@@ -173,7 +174,7 @@ class StorageClass:
         if hasattr(builtins, self._pytypeName):
             pytype = getattr(builtins, self._pytypeName)
         else:
-            pytype = doImport(self._pytypeName)
+            pytype = doImportType(self._pytypeName)
         self._pytype = pytype
         return self._pytype
 
@@ -184,7 +185,8 @@ class StorageClass:
             return self._delegate
         if self._delegateClassName is None:
             return None
-        self._delegate = doImport(self._delegateClassName)
+        delegate_class = doImportType(self._delegateClassName)
+        self._delegate = delegate_class
         return self._delegate
 
     def allComponents(self) -> Mapping[str, StorageClass]:

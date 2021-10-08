@@ -48,7 +48,7 @@ from typing import (
 from dataclasses import dataclass
 from abc import ABCMeta, abstractmethod
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 from .config import ConfigSubset, Config
 from .exceptions import ValidationError, DatasetTypeNotSupportedError
 from .constraints import Constraints
@@ -290,11 +290,14 @@ class Datastore(metaclass=ABCMeta):
         butlerRoot : `str`, optional
             Butler root directory.
         """
-        cls = doImport(config["datastore", "cls"])
+        cls = doImportType(config["datastore", "cls"])
+        if not issubclass(cls, Datastore):
+            raise TypeError(f"Imported child class {config['datastore', 'cls']} is not a Datastore")
         return cls(config=config, bridgeManager=bridgeManager, butlerRoot=butlerRoot)
 
     def __init__(self, config: Union[Config, str],
-                 bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
+                 bridgeManager: DatastoreRegistryBridgeManager,
+                 butlerRoot: Optional[Union[str, ButlerURI]] = None):
         self.config = DatastoreConfig(config)
         self.name = "ABCDataStore"
         self._transaction: Optional[DatastoreTransaction] = None

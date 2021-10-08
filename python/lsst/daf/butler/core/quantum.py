@@ -34,7 +34,7 @@ from typing import (
     Union,
 )
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 
 from .datasets import DatasetRef, DatasetType
 from .dimensions import DataCoordinate
@@ -105,7 +105,10 @@ class Quantum:
     def taskClass(self) -> Optional[Type]:
         """Task class associated with this `Quantum` (`type`)."""
         if self._taskClass is None:
-            self._taskClass = doImport(self._taskName)
+            if self._taskName is None:
+                raise ValueError("No task class defined and task name is None")
+            task_class = doImportType(self._taskName)
+            self._taskClass = task_class
         return self._taskClass
 
     @property

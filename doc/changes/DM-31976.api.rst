@@ -1,0 +1,1 @@
+`lsst.daf.butler.Registry.registerRun` and `lsst.daf.butler.Registry.registerCollection` now return a Booelan indicating whether the collection was created or already existed.

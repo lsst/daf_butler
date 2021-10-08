@@ -30,7 +30,7 @@ import dataclasses
 import logging
 from typing import Any, Dict, Generic, Type, TypeVar
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 
 from ..core import (
     Config,
@@ -127,7 +127,7 @@ class RegistryManagerTypes(_GenericRegistryManagers[
         types : `RegistryManagerTypes`
             A new struct containing type objects.
         """
-        return cls(**{f.name: doImport(config["managers", f.name]) for f in dataclasses.fields(cls)})
+        return cls(**{f.name: doImportType(config["managers", f.name]) for f in dataclasses.fields(cls)})
 
     def makeRepo(self, database: Database, dimensionConfig: DimensionConfig) -> RegistryManagerInstances:
         """Create all persistent `Registry` state for a new, empty data

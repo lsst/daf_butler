@@ -61,7 +61,9 @@ try:
 except ImportError:
     boto3 = None
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
+from lsst.utils.introspection import get_class_of
+from lsst.utils.logging import getLogger, VERBOSE
 from .core import (
     AmbiguousDatasetError,
     ButlerURI,
@@ -80,10 +82,9 @@ from .core import (
     StorageClassFactory,
     Timespan,
     ValidationError,
-    VERBOSE,
 )
 from .core.repoRelocation import BUTLER_ROOT_TAG
-from .core.utils import transactional, getClassOf
+from .core.utils import transactional
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
 from .registry import (
@@ -97,7 +98,7 @@ from .registry import (
 )
 from .transfers import RepoExportContext
 
-log = logging.getLogger(__name__)
+log = getLogger(__name__)
 
 
 class ButlerValidationError(ValidationError):
@@ -370,7 +371,10 @@ class Butler:
             del config["root"]
 
         full = ButlerConfig(config, searchPaths=searchPaths)  # this applies defaults
-        datastoreClass: Type[Datastore] = doImport(full["datastore", "cls"])
+        imported_class = doImportType(full["datastore", "cls"])
+        if not issubclass(imported_class, Datastore):
+            raise TypeError(f"Imported datastore class {full['datastore', 'cls']} is not a Datastore")
+        datastoreClass: Type[Datastore] = imported_class
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
         # if key exists in given config, parse it, otherwise parse the defaults
@@ -413,7 +417,7 @@ class Butler:
         dimensionConfig = DimensionConfig(dimensionConfig)
         Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root)
 
-        log.log(VERBOSE, "Wrote new Butler configuration file to %s", configURI)
+        log.verbose("Wrote new Butler configuration file to %s", configURI)
 
         return config
 
@@ -1707,7 +1711,7 @@ class Butler:
             filename = f"export.{format}"
         if directory is not None:
             filename = os.path.join(directory, filename)
-        BackendClass = getClassOf(self._config["repo_transfer_formats"][format]["export"])
+        BackendClass = get_class_of(self._config["repo_transfer_formats"][format]["export"])
         with open(filename, 'w') as stream:
             backend = BackendClass(stream)
             try:
@@ -1777,7 +1781,7 @@ class Butler:
             filename = f"export.{format}"
         if isinstance(filename, str) and directory is not None and not os.path.exists(filename):
             filename = os.path.join(directory, filename)
-        BackendClass = getClassOf(self._config["repo_transfer_formats"][format]["import"])
+        BackendClass = get_class_of(self._config["repo_transfer_formats"][format]["import"])
 
         def doImport(importStream: TextIO) -> None:
             backend = BackendClass(importStream, self.registry)
@@ -1868,8 +1872,8 @@ class Butler:
                                                                 artifact_existence=artifact_existence)
             source_refs = [ref for ref, exists in dataset_existence.items() if exists]
             filtered_count = len(source_refs)
-            log.log(VERBOSE, "%d datasets removed because the artifact does not exist. Now have %d.",
-                    original_count - filtered_count, filtered_count)
+            log.verbose("%d datasets removed because the artifact does not exist. Now have %d.",
+                        original_count - filtered_count, filtered_count)
 
         # Importing requires that we group the refs by dataset type and run
         # before doing the import.
@@ -1936,8 +1940,8 @@ class Butler:
                     id_generation_mode = id_gen_map.get(datasetType.name, default_id_gen)
 
                 n_refs = len(refs_to_import)
-                log.log(VERBOSE, "Importing %d ref%s of dataset type %s into run %s",
-                        n_refs, "" if n_refs == 1 else "s", datasetType.name, run)
+                log.verbose("Importing %d ref%s of dataset type %s into run %s",
+                            n_refs, "" if n_refs == 1 else "s", datasetType.name, run)
 
                 # No way to know if this butler's registry uses UUID.
                 # We have to trust the caller on this. If it fails they will
@@ -1961,7 +1965,7 @@ class Butler:
             # Check consistency
             assert len(source_refs) == len(transferred_refs), "Different number of refs imported than given"
 
-            log.log(VERBOSE, "Imported %d datasets into destination butler", len(transferred_refs))
+            log.verbose("Imported %d datasets into destination butler", len(transferred_refs))
 
             # The transferred refs need to be reordered to match the original
             # ordering given by the caller. Without this the datastore transfer

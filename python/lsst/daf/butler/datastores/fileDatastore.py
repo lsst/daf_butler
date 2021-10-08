@@ -46,6 +46,13 @@ from typing import (
     Union,
 )
 
+from lsst.utils.iteration import chunk_iterable
+from lsst.utils.introspection import get_class_of, get_instance_of
+from lsst.utils.timer import time_this
+
+# For VERBOSE logging usage.
+from lsst.utils.logging import getLogger, VERBOSE
+
 from lsst.daf.butler import (
     ButlerURI,
     CompositesMap,
@@ -70,7 +77,6 @@ from lsst.daf.butler import (
     Progress,
     StorageClass,
     StoredFileInfo,
-    VERBOSE,
 )
 
 from lsst.daf.butler import ddl
@@ -80,14 +86,14 @@ from lsst.daf.butler.registry.interfaces import (
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
-from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional, time_this, chunk_iterable
+from lsst.daf.butler.core.utils import transactional
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
     from lsst.daf.butler import LookupKey, AbstractDatastoreCacheManager
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
-log = logging.getLogger(__name__)
+log = getLogger(__name__)
 
 
 class _IngestPrepData(Datastore.IngestPrepData):
@@ -615,10 +621,10 @@ class FileDatastore(GenericBaseDatastore):
             else:
                 readStorageClass = refStorageClass
 
-            formatter = getInstanceOf(storedFileInfo.formatter,
-                                      FileDescriptor(location, readStorageClass=readStorageClass,
-                                                     storageClass=writeStorageClass, parameters=parameters),
-                                      ref.dataId)
+            formatter = get_instance_of(storedFileInfo.formatter,
+                                        FileDescriptor(location, readStorageClass=readStorageClass,
+                                                       storageClass=writeStorageClass, parameters=parameters),
+                                        ref.dataId)
 
             formatterParams, notFormatterParams = formatter.segregateParameters()
 
@@ -941,7 +947,10 @@ class FileDatastore(GenericBaseDatastore):
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
                 assert isinstance(dataset.formatter, (type, str))
-                dataset.formatter = getClassOf(dataset.formatter)
+                formatter_class = get_class_of(dataset.formatter)
+                if not issubclass(formatter_class, Formatter):
+                    raise TypeError(f"Requested formatter {dataset.formatter} is not a Formatter class.")
+                dataset.formatter = formatter_class
             dataset.path = self._standardizeIngestPath(dataset.path, transfer=transfer)
             filtered.append(dataset)
         return _IngestPrepData(filtered)
@@ -1357,9 +1366,9 @@ class FileDatastore(GenericBaseDatastore):
                 # Can treat the booleans as 0, 1 integers and sum them.
                 n_found = sum(chunk_result.values())
                 n_found_total += n_found
-                log.log(VERBOSE, "Number of datasets found in datastore for chunk %d = %d/%d"
-                        " (running total: %d/%d)",
-                        n_chunks, n_found, n_results, n_found_total, n_checked)
+                log.verbose("Number of datasets found in datastore for chunk %d = %d/%d"
+                            " (running total: %d/%d)",
+                            n_chunks, n_found, n_results, n_found_total, n_checked)
             dataset_existence.update(chunk_result)
             n_chunks += 1
 
@@ -2192,8 +2201,8 @@ class FileDatastore(GenericBaseDatastore):
                 # empty. This allows us to benefit from parallelism.
                 # datastore.mexists() itself does not give us access to the
                 # derived datastore record.
-                log.log(VERBOSE, "Checking existence of %d datasets unknown to datastore",
-                        len(records))
+                log.verbose("Checking existence of %d datasets unknown to datastore",
+                            len(records))
                 ref_exists = source_datastore._process_mexists_records(id_to_ref, records, False,
                                                                        artifact_existence=artifact_existence)
 

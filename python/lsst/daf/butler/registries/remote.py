@@ -41,6 +41,9 @@ import functools
 import contextlib
 import httpx
 
+from lsst.utils.introspection import get_full_type_name
+from lsst.utils.iteration import ensure_iterable
+
 from ..core import (
     ButlerURI,
     Config,
@@ -72,7 +75,6 @@ from ..core.serverModels import (
     QueryDataIdsModel,
     QueryDimensionRecordsModel,
 )
-from ..core.utils import iterable, getFullTypeName
 
 from ..registry import (
     Registry,
@@ -140,7 +142,7 @@ class RemoteRegistry(Registry):
 
         self._dimensions: Optional[DimensionUniverse] = None
 
-        headers = {"user-agent": f"{getFullTypeName(self)}/{__version__}"}
+        headers = {"user-agent": f"{get_full_type_name(self)}/{__version__}"}
         self._client = httpx.Client(headers=headers)
 
         # Does each API need to be sent the defaults so that the server
@@ -419,7 +421,7 @@ class RemoteRegistry(Registry):
                       **kwargs: Any) -> Iterable[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if dimensions is not None:
-            dimensions = [str(d) for d in iterable(dimensions)]
+            dimensions = [str(d) for d in ensure_iterable(dimensions)]
 
         if collections is not None:
             collections = ExpressionQueryParameter.from_expression(collections)
@@ -455,7 +457,7 @@ class RemoteRegistry(Registry):
                      check: bool = True,
                      **kwargs: Any) -> DataCoordinateSequence:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        cleaned_dimensions = [str(d) for d in iterable(dimensions)]
+        cleaned_dimensions = [str(d) for d in ensure_iterable(dimensions)]
 
         if collections is not None:
             collections = ExpressionQueryParameter.from_expression(collections)

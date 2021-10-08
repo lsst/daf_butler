@@ -28,6 +28,7 @@ try:
 except ModuleNotFoundError:
     lsstLog = None
 
+from lsst.utils.logging import VERBOSE
 from ..core.logging import JsonLogFormatter, ButlerMDC
 
 
@@ -274,7 +275,6 @@ class CliLog:
             The python `logging` numeric value for the log level.
         """
         if level == "VERBOSE":
-            from .. import VERBOSE
             return VERBOSE
         return getattr(logging, level, None)
 

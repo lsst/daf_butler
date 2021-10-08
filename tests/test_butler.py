@@ -56,7 +56,6 @@ import astropy.time
 from threading import Thread
 from tempfile import gettempdir
 from lsst.utils import doImport
-from lsst.daf.butler.core.utils import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef, DatasetIdGenEnum
@@ -1280,7 +1279,7 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
 
         # Move the yaml file to a different place and add a "root"
         self.dir2 = os.path.join(self.root, "dir2")
-        safeMakeDir(self.dir2)
+        os.makedirs(self.dir2, exist_ok=True)
         configFile1 = os.path.join(self.dir1, "butler.yaml")
         config = Config(configFile1)
         config["root"] = self.dir1

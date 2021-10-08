@@ -36,10 +36,10 @@ from typing import (
 from pydantic import BaseModel, create_model, StrictStr, StrictInt, StrictBool, StrictFloat, Field
 
 import lsst.sphgeom
+from lsst.utils.classes import immutable
 
 from .._topology import SpatialRegionDatabaseRepresentation
 from ..timespan import Timespan, TimespanDatabaseRepresentation
-from ..utils import immutable
 from ._elements import Dimension, DimensionElement
 from ..json import from_json_pydantic, to_json_pydantic
 

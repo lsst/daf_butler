@@ -26,7 +26,7 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Set, Union
 
 import sqlalchemy
 
-from lsst.utils import doImport
+from lsst.utils import doImportType
 
 from ...core import (
     DatabaseDimensionElement,
@@ -75,7 +75,9 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         config = config["nested"]
-        NestedClass = doImport(config["cls"])
+        NestedClass = doImportType(config["cls"])
+        if not hasattr(NestedClass, "initialize"):
+            raise TypeError(f"Nested class {config['cls']} does not have an initialize() method.")
         nested = NestedClass.initialize(db, element, context=context, config=config, governors=governors)
         return cls(nested)
 

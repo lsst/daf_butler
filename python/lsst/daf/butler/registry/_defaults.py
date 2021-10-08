@@ -25,8 +25,8 @@ __all__ = ("RegistryDefaults",)
 
 from typing import Any, Optional, TYPE_CHECKING
 
+from lsst.utils.classes import immutable
 from ..core import DataCoordinate
-from ..core.utils import immutable
 from ._exceptions import MissingCollectionError
 from .summaries import CollectionSummary
 from .wildcards import CollectionSearch

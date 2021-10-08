@@ -41,7 +41,6 @@ from typing import (
     Union,
 )
 
-from ..utils import safeMakeDir
 from .utils import NoTransaction, os2posix, posix2os
 from ._butlerUri import ButlerURI
 
@@ -112,7 +111,7 @@ class ButlerFileURI(ButlerURI):
         """Write the supplied data to the file."""
         dir = os.path.dirname(self.ospath)
         if not os.path.exists(dir):
-            safeMakeDir(dir)
+            os.makedirs(dir, exist_ok=True)
         if overwrite:
             mode = "wb"
         else:
@@ -123,7 +122,7 @@ class ButlerFileURI(ButlerURI):
     def mkdir(self) -> None:
         """Make the directory associated with this URI."""
         if not os.path.exists(self.ospath):
-            safeMakeDir(self.ospath)
+            os.makedirs(self.ospath, exist_ok=True)
         elif not os.path.isdir(self.ospath):
             raise FileExistsError(f"URI {self} exists but is not a directory!")
 
@@ -241,7 +240,7 @@ class ButlerFileURI(ButlerURI):
                 # Must create the directory -- this can not be rolled back
                 # since another transfer running concurrently may
                 # be relying on this existing.
-                safeMakeDir(outputDir)
+                os.makedirs(outputDir, exist_ok=True)
 
             if transaction is None:
                 # Use a no-op transaction to reduce code duplication

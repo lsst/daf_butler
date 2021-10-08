@@ -40,7 +40,7 @@ from typing import (
     Union,
 )
 
-from ..utils import time_this
+from lsst.utils.timer import time_this
 from .utils import NoTransaction
 from ._butlerUri import ButlerURI
 
