@@ -1,4 +1,6 @@
 storageClasses:
+  int:
+    pytype: int
   StructuredDataDict:
     pytype: dict
   StructuredDataList:
@@ -195,6 +197,7 @@ storageClasses:
       validPolygon: Polygon
       summaryStats: ExposureSummaryStats
     derivedComponents:
+      id: int
       bbox: Box2I
       dimensions: Extent2I
       xy0: Point2I
