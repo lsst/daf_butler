@@ -30,6 +30,8 @@ from lsst.daf.butler import DatasetType, DatasetRef, FileTemplates, DimensionUni
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
+PlaceHolder = StorageClass("PlaceHolder")
+
 
 class TestFileTemplates(unittest.TestCase):
     """Test creation of paths from templates."""
@@ -42,7 +44,7 @@ class TestFileTemplates(unittest.TestCase):
 
         # Pretend we have a parent if this looks like a composite
         compositeName, componentName = DatasetType.splitDatasetTypeName(datasetTypeName)
-        parentStorageClass = DatasetType.PlaceholderParentStorageClass if componentName else None
+        parentStorageClass = PlaceHolder if componentName else None
 
         datasetType = DatasetType(datasetTypeName, DimensionGraph(self.universe, names=dataId.keys()),
                                   StorageClass(storageClassName),
