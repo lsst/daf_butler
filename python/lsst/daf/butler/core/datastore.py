@@ -23,13 +23,13 @@
 
 from __future__ import annotations
 
-__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
+__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError", "DatastoreRecordData")
 
 import contextlib
+import dataclasses
 import logging
 from abc import ABCMeta, abstractmethod
 from collections import defaultdict
-from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -58,7 +58,7 @@ from .storageClass import StorageClassFactory
 if TYPE_CHECKING:
     from lsst.resources import ResourcePath, ResourcePathExpression
 
-    from ..registry.interfaces import DatastoreRegistryBridgeManager
+    from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from .configSupport import LookupKey
     from .datasets import DatasetRef, DatasetType
     from .storageClass import StorageClass
@@ -78,7 +78,23 @@ class DatastoreValidationError(ValidationError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass
+class DatastoreRecordData:
+    """A struct that represents a tabular data export from one or more
+    datastores.
+    """
+
+    locations: Dict[str, List[DatasetIdRef]] = dataclasses.field(default_factory=lambda: defaultdict(list))
+    """Mapping from datastore name to the datasets in that datastore.
+    """
+
+    records: Dict[str, List[Dict[str, Any]]] = dataclasses.field(default_factory=lambda: defaultdict(list))
+    """Opaque table data that backs one or more datastores, grouped by
+    opaque table name.
+    """
+
+
+@dataclasses.dataclass(frozen=True)
 class Event:
     __slots__ = {"name", "undoFunc", "args", "kwargs"}
     name: str
@@ -1018,3 +1034,52 @@ class Datastore(metaclass=ABCMeta):
             expansion definitely isn't necessary.
         """
         return True
+
+    # TODO: make abstract, implement in all concrete datastores
+    def import_records(
+        self,
+        data: DatastoreRecordData,
+    ) -> None:
+        """Import datastore location and record data from an in-memory data
+        structure.
+
+        Parameters
+        ----------
+        data : `DatastoreRecordData`
+            Data structure to load from.  May contain data for other
+            `Datastore` instances (generally because they are chained to this
+            one), which should be ignored.
+
+        Notes
+        -----
+        Implementations should generally not check that any external resources
+        (e.g. files) referred to by these records actually exist, for
+        performance reasons; we expect higher-level code to guarantee that they
+        do.
+
+        Implementations are responsible for calling
+        `DatastoreRegistryBridge.insert` on all datasets in ``data.locations``
+        where the key is in `names`, as well as loading any opaque table data.
+        """
+        raise NotImplementedError()
+
+    # TODO: make abstract, implement in all concrete datastores
+    def export_records(
+        self,
+        refs: Iterable[DatasetIdRef],
+    ) -> DatastoreRecordData:
+        """Export datastore records and locations from an in-memory data
+        structure.
+
+        Parameters
+        ----------
+        refs : `Iterable` [ `DatasetIdRef` ]
+            Datasets to save.  This may include datasets not known to this
+            datastore, which should be ignored.
+
+        Returns
+        -------
+        data : `DatastoreRecordData`
+            Populated data structure.
+        """
+        raise NotImplementedError()
