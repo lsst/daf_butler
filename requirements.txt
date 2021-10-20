@@ -2,7 +2,7 @@ pyyaml >= 5.1
 astropy >= 4.0
 click >7.0
 sqlalchemy >= 1.3
-git+git://github.com/lsst/sphgeom@tickets/DM-32254#egg=lsst_sphgeom
+git+git://github.com/lsst/sphgeom@master#egg=lsst_sphgeom
 git+git://github.com/lsst/utils@master#egg=lsst_utils
 pydantic
 httpx
