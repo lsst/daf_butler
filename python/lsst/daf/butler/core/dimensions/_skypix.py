@@ -38,7 +38,7 @@ from typing import (
 
 import sqlalchemy
 
-from lsst.sphgeom import Pixelization
+from lsst.sphgeom import PixelizationABC
 from lsst.utils import doImportType
 from .. import ddl
 from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
@@ -63,7 +63,7 @@ class SkyPixSystem(TopologicalFamily):
         Name of the system.
     maxLevel : `int`
         Maximum level (inclusive) of the hierarchy.
-    PixelizationClass : `type` (`lsst.sphgeom.Pixelization` subclass)
+    PixelizationClass : `type` (`lsst.sphgeom.PixelizationABC` subclass)
         Class whose instances represent a particular level of this
         pixelization.
     """
@@ -72,7 +72,7 @@ class SkyPixSystem(TopologicalFamily):
         self,
         name: str, *,
         maxLevel: int,
-        PixelizationClass: Type[Pixelization],
+        PixelizationClass: Type[PixelizationABC],
     ):
         super().__init__(name, TopologicalSpace.SPATIAL)
         self.maxLevel = maxLevel
@@ -187,9 +187,9 @@ class SkyPixDimension(Dimension):
     """Integer level of this pixelization (smaller numbers are coarser grids).
     """
 
-    pixelization: Pixelization
+    pixelization: PixelizationABC
     """Pixelization instance that can compute regions from IDs and IDs from
-    points (`sphgeom.Pixelization`).
+    points (`sphgeom.PixelizationABC`).
     """
 
 
@@ -230,7 +230,7 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
     def visit(self, builder: DimensionConstructionBuilder) -> None:
         # Docstring inherited from DimensionConstructionVisitor.
         PixelizationClass = doImportType(self._pixelizationClassName)
-        assert issubclass(PixelizationClass, Pixelization)
+        assert issubclass(PixelizationClass, PixelizationABC)
         if self._maxLevel is not None:
             maxLevel = self._maxLevel
         else:
