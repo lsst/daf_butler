@@ -19,7 +19,7 @@ We call a `DatasetRef` whose `~DatasetRef.id` attribute is not `None` a *resolve
 Most of the time, however, users identify a dataset using a combination of three other attributes:
 
  - a dataset type;
- - a data ID;
+ - a data ID (also known as data coordinates);
  - a collection.
 
 Most collections are constrained to contain only one dataset with a particular dataset type and data ID, so this combination is usually enough to resolve a dataset (see :ref:`daf_butler_collections` for exceptions).
