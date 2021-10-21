@@ -6,6 +6,7 @@ default:
     # default is the default recipe regardless but this demonstrates
     # how to specify a default write parameter
     recipe: default
+int: lsst.daf.butler.formatters.json.JsonFormatter
 TablePersistable: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Wcs: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Psf: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
