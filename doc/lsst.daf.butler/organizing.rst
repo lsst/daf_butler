@@ -28,7 +28,7 @@ A dataset's type and data ID are intrinsic to it --- while there may be many dat
 A `DatasetRef` always has both a dataset type attribute and a data ID, though the latter may be empty.
 Dataset types are discussed below in :ref:`daf_butler_dataset_types`, while data IDs are one aspect of the larger :ref:`Dimensions <lsst.daf.butler-dimensions_overview>` system and are discussed in :ref:`lsst.daf.butler-dimensions_data_ids`.
 
-In contrast, the relationship between dataset and collections is many-to-many: a collection typically contains many different datasets, and a particular dataset may belong to multiple collections.
+In contrast, the relationship between datasets and collections is many-to-many: a collection typically contains many different datasets, and a particular dataset may belong to multiple collections.
 As a result, is is common to search for datasets in multiple collections (often in a well-defined order), and interfaces that provide that functionality can accept a collection search path in :ref:`many different forms <daf_butler_collection_expressions>`.
 Collections are discussed further below in :ref:`daf_butler_collections`.
 
