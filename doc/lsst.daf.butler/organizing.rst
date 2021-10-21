@@ -10,6 +10,12 @@ This is the number used as the primary key in most `Registry` tables that refer 
 With that number, the dataset is fully identified, and anything else about it can be unambiguously looked up.
 We call a `DatasetRef` whose `~DatasetRef.id` attribute is not `None` a *resolved* `DatasetRef`.
 
+.. note::
+
+    In most data repositories, dataset IDs are 128-bit UUIDs that are guaranteed to be unique across all data repositories, not just within one; if two datasets share the same UUID in different data repositories, they must be identical (this is possible because of the extraordinarily low probability of a collision between two random 128-bit numbers, and our reservation of deterministic UUIDs for very special datasets).
+    As a result, we also frequently refer to the dataset ID as the UUID, especially in contexts where UUIDs are actually needed or can be safely assumed.
+    But 64-bit autoincrement integers are also supported (albeit mostly for legacy reasons), and we continue to use "dataset ID" in most code and documentation to refer to either form.
+
 Most of the time, however, users identify a dataset using a combination of three other attributes:
 
  - a dataset type;
