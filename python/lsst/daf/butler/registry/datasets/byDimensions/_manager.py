@@ -66,6 +66,11 @@ _VERSION_INT = VersionTuple(1, 0, 0)
 _VERSION_UUID = VersionTuple(1, 0, 0)
 
 
+class MissingDatabaseTableError(RuntimeError):
+    """Exception raised when a table is not found in a database.
+    """
+
+
 class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     """A manager class for datasets that uses one dataset-collection table for
     each group of dataset types that share the same dimensions.
@@ -193,11 +198,19 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             tags = self._db.getExistingTable(
                 row[c.tag_association_table],
                 makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType()))
+            if tags is None:
+                raise MissingDatabaseTableError(
+                    f"Table {row[c.tag_association_table]} is missing from database schema."
+                )
             if calibTableName is not None:
                 calibs = self._db.getExistingTable(row[c.calibration_association_table],
                                                    makeCalibTableSpec(datasetType, type(self._collections),
                                                                       self._db.getTimespanRepresentation(),
                                                                       self.getIdColumnType()))
+                if calibs is None:
+                    raise MissingDatabaseTableError(
+                        f"Table {row[c.calibration_association_table]} is missing from database schema."
+                    )
             else:
                 calibs = None
             storage = self._recordStorageType(db=self._db, datasetType=datasetType,
@@ -250,6 +263,22 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             tagTableName = makeTagTableName(datasetType, dimensionsKey)
             calibTableName = (makeCalibTableName(datasetType, dimensionsKey)
                               if datasetType.isCalibration() else None)
+            # The order is important here, we want to create tables first and
+            # only register them if this operation is successful. We cannot
+            # wrap it into a transaction because database class assumes that
+            # DDL is not transaction safe in general.
+            tags = self._db.ensureTableExists(
+                tagTableName,
+                makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType()),
+            )
+            if calibTableName is not None:
+                calibs = self._db.ensureTableExists(
+                    calibTableName,
+                    makeCalibTableSpec(datasetType, type(self._collections),
+                                       self._db.getTimespanRepresentation(), self.getIdColumnType()),
+                )
+            else:
+                calibs = None
             row, inserted = self._db.sync(
                 self._static.dataset_type,
                 keys={"name": datasetType.name},
@@ -264,18 +293,6 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 returning=["id", "tag_association_table"],
             )
             assert row is not None
-            tags = self._db.ensureTableExists(
-                tagTableName,
-                makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType()),
-            )
-            if calibTableName is not None:
-                calibs = self._db.ensureTableExists(
-                    calibTableName,
-                    makeCalibTableSpec(datasetType, type(self._collections),
-                                       self._db.getTimespanRepresentation(), self.getIdColumnType()),
-                )
-            else:
-                calibs = None
             storage = self._recordStorageType(db=self._db, datasetType=datasetType,
                                               static=self._static, summaries=self._summaries,
                                               tags=tags, calibs=calibs,
