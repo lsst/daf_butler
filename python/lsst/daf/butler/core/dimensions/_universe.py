@@ -392,7 +392,7 @@ class DimensionUniverse:
             Name of the packer, matching a key in the "packers" section of the
             dimension configuration.
         dataId : `DataCoordinate`
-            Fully-expanded data ID that identfies the at least the "fixed"
+            Fully-expanded data ID that identifies the at least the "fixed"
             dimensions of the packer (i.e. those that are assumed/given,
             setting the space over which packed integer IDs are unique).
             ``dataId.hasRecords()`` must return `True`.

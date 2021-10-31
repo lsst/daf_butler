@@ -189,7 +189,7 @@ class MetricsExampleFormatter(Formatter):
 class MetricsExampleDataFormatter(Formatter):
     """A specialist test formatter for the data component of a MetricsExample.
 
-    This is needed if the MetricsExample is dissassembled and we want to
+    This is needed if the MetricsExample is disassembled and we want to
     support the derived component.
     """
 

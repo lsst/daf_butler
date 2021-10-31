@@ -195,7 +195,7 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
             May be ``self`` if ``graph == self.graph``.  Elements are
             equivalent to those that would be created by calling
             `DataCoordinate.subset` on all elements in ``self``, possibly
-            with deduplication and/or reordeding (depending on the subclass,
+            with deduplication and/or reordering (depending on the subclass,
             which may make more specific guarantees).
         """
         raise NotImplementedError()

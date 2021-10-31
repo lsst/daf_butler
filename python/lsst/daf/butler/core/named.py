@@ -254,7 +254,7 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
         -------
         self : `NamedKeyMapping`
             While ``self`` is modified in-place, it is also returned with a
-            type anotation that reflects its new, frozen state; assigning it
+            type annotation that reflects its new, frozen state; assigning it
             to a new variable (and considering any previous references
             invalidated) should allow for more accurate static type checking.
         """
@@ -558,7 +558,7 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
         -------
         self : `NamedValueAbstractSet`
             While ``self`` is modified in-place, it is also returned with a
-            type anotation that reflects its new, frozen state; assigning it
+            type annotation that reflects its new, frozen state; assigning it
             to a new variable (and considering any previous references
             invalidated) should allow for more accurate static type checking.
         """

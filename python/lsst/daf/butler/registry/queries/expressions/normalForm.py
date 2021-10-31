@@ -351,12 +351,12 @@ class PrecedenceTier(enum.Enum):
     """
 
     COMPARISON = 3
-    """Precendence tier for binary comparison operators that accept non-boolean
+    """Precedence tier for binary comparison operators that accept non-boolean
     values and return boolean values.
     """
 
     AND = 4
-    """Precendence tier for logical AND.
+    """Precedence tier for logical AND.
     """
 
     OR = 5
@@ -393,9 +393,9 @@ class PrecedenceTier(enum.Enum):
         operators either; the `LogicalBinaryOperation.unwrap` method that calls
         it is never invoked by `NormalFormExpression` (the main public
         interface), because those operators are flattened out (see
-        `TransormationWrapper.flatten`) instead.  Parentheses are instead added
-        there by `TreeReconstructionVisitor`, which is simpler because the
-        structure of operators is restricted.
+        `TransformationWrapper.flatten`) instead.  Parentheses are instead
+        added there by `TreeReconstructionVisitor`, which is simpler because
+        the structure of operators is restricted.
         """
         if outer is cls.OR and inner is cls.AND:
             return True
@@ -766,7 +766,7 @@ class Opaque(TransformationWrapper):
     """A `TransformationWrapper` implementation for tree nodes that do not need
     to be modified in boolean expression transformations.
 
-    This includes all identifers, literals, and operators whose arguments are
+    This includes all identifiers, literals, and operators whose arguments are
     not boolean.
 
     Parameters
@@ -809,7 +809,7 @@ class LogicalNot(TransformationWrapper):
 
     Notes
     -----
-    Instances should aways be created by calling `not_` on an existing
+    Instances should always be created by calling `not_` on an existing
     `TransformationWrapper` instead of calling `LogicalNot` directly.
     `LogicalNot` should only be called directly by `Opaque.not_`.  This
     guarantees that double-negatives are simplified away and NOT operations

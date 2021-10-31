@@ -341,7 +341,7 @@ class DatasetRecordStorage(ABC):
         run : `None` or `Select`
             If `Select` (default), include the dataset's run key value (as
             column labeled with the return value of
-            ``CollectionManager.getRunForiegnKeyName``).
+            ``CollectionManager.getRunForeignKeyName``).
             If `None`, do not include this column (to constrain the run,
             pass a `RunRecord` as the ``collection`` argument instead).
         timespan : `None`, `Select`, or `Timespan`

@@ -568,7 +568,7 @@ class Query(ABC):
             argument is `None`.
         columns : `QueryColumns` or `None`
             A struct containing the SQLAlchemy column objects to use in the
-            new query, contructed by delegating to other (mostly abstract)
+            new query, constructed by delegating to other (mostly abstract)
             methods on ``self``.  If `None`, `subset` may return ``self``.
         """
         if graph is None:
@@ -891,7 +891,7 @@ class MaterializedQuery(Query):
     Parameters
     ----------
     table : `sqlalchemy.schema.Table`
-        SQLAlchemy object represnting the temporary table.
+        SQLAlchemy object representing the temporary table.
     spatial : `Iterable` [ `DimensionElement` ]
         Spatial dimension elements whose regions must overlap for each valid
         result row (which may reject some rows that are in the table).
@@ -900,7 +900,7 @@ class MaterializedQuery(Query):
         if there are no dataset results
     isUnique : `bool`
         If `True`, the table's rows are unique, and there is no need to
-        add ``SELECT DISTINCT`` to gaurantee this in results.
+        add ``SELECT DISTINCT`` to guarantee this in results.
     graph : `DimensionGraph`
         Dimensions included in the columns of this table.
     whereRegion : `Region` or `None`

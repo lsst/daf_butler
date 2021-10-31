@@ -406,7 +406,7 @@ class Database(ABC):
 
         Parameters
         ----------
-        engine : `sqllachemy.engine.Engine`
+        engine : `sqlalchemy.engine.Engine`
             The engine for the database.  May be shared between `Database`
             instances.
         origin : `int`

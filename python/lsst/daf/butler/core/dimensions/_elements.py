@@ -65,7 +65,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
 
     Notes
     -----
-    `DimensionElement` instances should always be constructed by and retreived
+    `DimensionElement` instances should always be constructed by and retrieved
     from a `DimensionUniverse`.  They are immutable after they are fully
     constructed, and should never be copied.
 

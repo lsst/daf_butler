@@ -1206,7 +1206,7 @@ cached:
         self.assertIsNone(cache_manager.move_to_cache(self.files[1], self.refs[1]))
 
         # Cached file should no longer exist but uncached file should be
-        # unaffectted.
+        # unaffected.
         self.assertFalse(self.files[0].exists())
         self.assertTrue(self.files[1].exists())
 

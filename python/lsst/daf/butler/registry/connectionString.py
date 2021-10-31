@@ -80,7 +80,7 @@ class ConnectionStringFactory:
         DbAuthPermissionsError
             If the credentials file has incorrect permissions.
         DbAuthError
-            A problem occured when retrieving DB authentication.
+            A problem occurred when retrieving DB authentication.
 
         Notes
         -----

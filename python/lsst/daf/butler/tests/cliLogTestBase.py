@@ -119,7 +119,7 @@ class CliLogTestBase():
         self.assertEqual(pyButler.logger.level, pyButler.initialLevel)
         if lsstLog is not None:
             self.assertEqual(lsstRoot.logger.getLevel(), lsstLog.INFO)
-            # lsstLogLevel can either be the inital level, or uninitialized or
+            # lsstLogLevel can either be the initial level, or uninitialized or
             # the defined default value.
             expectedLsstLogLevel = ((lsstButler.initialLevel, ) if lsstButler.initialLevel != -1
                                     else(-1, CliLog.defaultLsstLogLevel))

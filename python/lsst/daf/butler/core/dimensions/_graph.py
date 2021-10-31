@@ -83,7 +83,7 @@ class DimensionGraph:
         be included.  At most one of ``dimensions`` and ``names`` must be
         provided.
     names : iterable of `str`, optional
-        An iterable of the names of dimensiosn that must be included in the
+        An iterable of the names of dimensions that must be included in the
         graph.  All (recursive) dependencies of these dimensions will also
         be included.  At most one of ``dimensions`` and ``names`` must be
         provided.
@@ -454,8 +454,8 @@ class DimensionGraph:
     """
 
     required: NamedValueAbstractSet[Dimension]
-    """The subset of `dimensions` whose elments must be directly identified via
-    their primary keys in a data ID in order to identify the rest of the
+    """The subset of `dimensions` whose elements must be directly identified
+    via their primary keys in a data ID in order to identify the rest of the
     elements in the graph (`NamedValueAbstractSet` of `Dimension`).
     """
 

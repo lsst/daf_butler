@@ -243,7 +243,7 @@ class DatasetType:
     def name(self) -> str:
         """Return a string name for the Dataset.
 
-        Mmust correspond to the same `DatasetType` across all Registries.
+        Must correspond to the same `DatasetType` across all Registries.
         """
         return self._name
 
@@ -514,7 +514,7 @@ class DatasetType:
                     registry: Optional[Registry] = None) -> DatasetType:
         """Construct a new object from the simplified form.
 
-        This is usally data returned from the `to_simple` method.
+        This is usually data returned from the `to_simple` method.
 
         Parameters
         ----------

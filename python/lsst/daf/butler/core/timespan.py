@@ -614,7 +614,7 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
 
     Compound: ClassVar[Type[TimespanDatabaseRepresentation]]
     """A concrete subclass of `TimespanDatabaseRepresentation` that simply
-    uses two separate fields for the begin (inclusive) and end (excusive)
+    uses two separate fields for the begin (inclusive) and end (exclusive)
     endpoints.
 
     This implementation should be compatible with any SQL database, and should

@@ -197,7 +197,7 @@ class DatabaseDimensionElement(DimensionElement):
 
     @property
     def name(self) -> str:
-        # Docstring inherited from TopoogicalRelationshipEndpoint.
+        # Docstring inherited from TopologicalRelationshipEndpoint.
         return self._name
 
     @property

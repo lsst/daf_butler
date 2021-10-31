@@ -103,7 +103,7 @@ class RegistryTests(ABC):
 
         This method should be called by a subclass from `makeRegistry`.
         Returned instance will be pre-configured based on the values of class
-        members, and default-configured for all other parametrs. Subclasses
+        members, and default-configured for all other parameters. Subclasses
         that need default configuration should just instantiate
         `RegistryConfig` directly.
         """

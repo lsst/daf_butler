@@ -212,7 +212,7 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
     @abstractmethod
     def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
                        ) -> Tuple[ddl.FieldSpec, ...]:
-        """Make objects that relfect the fields that must be added to table.
+        """Make objects that reflect the fields that must be added to table.
 
         Makes one or more `ddl.FieldSpec` objects that reflect the fields
         that must be added to a table for this representation.

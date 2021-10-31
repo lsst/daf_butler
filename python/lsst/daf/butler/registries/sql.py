@@ -165,7 +165,7 @@ class SqlRegistry(Registry):
                    defaults: Optional[RegistryDefaults] = None) -> Registry:
         """Create `Registry` subclass instance from `config`.
 
-        Registry database must be inbitialized prior to calling this method.
+        Registry database must be initialized prior to calling this method.
 
         Parameters
         ----------

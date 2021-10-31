@@ -1038,7 +1038,7 @@ class Registry(ABC):
         -------
         expanded : `DataCoordinate`
             A data ID that includes full metadata for all of the dimensions it
-            identifieds, i.e. guarantees that ``expanded.hasRecords()`` and
+            identifies, i.e. guarantees that ``expanded.hasRecords()`` and
             ``expanded.hasFull()`` both return `True`.
         """
         raise NotImplementedError()
@@ -1446,7 +1446,7 @@ class Registry(ABC):
         the collection.
 
         This method is a temporary placeholder for better support for
-        assocation results in `queryDatasets`.  It will probably be
+        association results in `queryDatasets`.  It will probably be
         removed in the future, and should be avoided in production code
         whenever possible.
 
@@ -1474,7 +1474,7 @@ class Registry(ABC):
         Yields
         ------
         association : `DatasetAssociation`
-            Object representing the relationship beween a single dataset and
+            Object representing the relationship between a single dataset and
             a single collection.
 
         Raises
