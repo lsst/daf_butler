@@ -107,6 +107,10 @@ class DatasetType:
     isCalibration : `bool`, optional
         If `True`, this dataset type may be included in
         `~CollectionType.CALIBRATION` collections.
+
+    See Also
+    --------
+    :ref:`daf_butler_organizing_datasets`
     """
 
     __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName",

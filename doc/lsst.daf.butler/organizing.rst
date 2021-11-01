@@ -10,10 +10,16 @@ This is the number used as the primary key in most `Registry` tables that refer 
 With that number, the dataset is fully identified, and anything else about it can be unambiguously looked up.
 We call a `DatasetRef` whose `~DatasetRef.id` attribute is not `None` a *resolved* `DatasetRef`.
 
+.. note::
+
+    In most data repositories, dataset IDs are 128-bit UUIDs that are guaranteed to be unique across all data repositories, not just within one; if two datasets share the same UUID in different data repositories, they must be identical (this is possible because of the extraordinarily low probability of a collision between two random 128-bit numbers, and our reservation of deterministic UUIDs for very special datasets).
+    As a result, we also frequently refer to the dataset ID as the UUID, especially in contexts where UUIDs are actually needed or can be safely assumed.
+    But 64-bit autoincrement integers are also supported (albeit mostly for legacy reasons), and we continue to use "dataset ID" in most code and documentation to refer to either form.
+
 Most of the time, however, users identify a dataset using a combination of three other attributes:
 
  - a dataset type;
- - a data ID;
+ - a data ID (also known as data coordinates);
  - a collection.
 
 Most collections are constrained to contain only one dataset with a particular dataset type and data ID, so this combination is usually enough to resolve a dataset (see :ref:`daf_butler_collections` for exceptions).
@@ -22,7 +28,7 @@ A dataset's type and data ID are intrinsic to it --- while there may be many dat
 A `DatasetRef` always has both a dataset type attribute and a data ID, though the latter may be empty.
 Dataset types are discussed below in :ref:`daf_butler_dataset_types`, while data IDs are one aspect of the larger :ref:`Dimensions <lsst.daf.butler-dimensions_overview>` system and are discussed in :ref:`lsst.daf.butler-dimensions_data_ids`.
 
-In contrast, the relationship between dataset and collections is many-to-many: a collection typically contains many different datasets, and a particular dataset may belong to multiple collections.
+In contrast, the relationship between datasets and collections is many-to-many: a collection typically contains many different datasets, and a particular dataset may belong to multiple collections.
 As a result, is is common to search for datasets in multiple collections (often in a well-defined order), and interfaces that provide that functionality can accept a collection search path in :ref:`many different forms <daf_butler_collection_expressions>`.
 Collections are discussed further below in :ref:`daf_butler_collections`.
 
