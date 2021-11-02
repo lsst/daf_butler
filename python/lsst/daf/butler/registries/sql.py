@@ -80,6 +80,7 @@ from ..registry import (
     CollectionSearch,
 )
 from ..registry import queries
+
 from ..registry.wildcards import CategorizedWildcard, CollectionQuery, Ellipsis
 from ..registry.summaries import CollectionSummary
 from ..registry.managers import RegistryManagerTypes, RegistryManagerInstances
@@ -715,7 +716,8 @@ class SqlRegistry(Registry):
         storage = self._managers.dimensions[element]  # type: ignore
         return storage.sync(record, update=update)
 
-    def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None
+    def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None,
+                          missing: Optional[List[str]] = None,
                           ) -> Iterator[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
@@ -736,8 +738,11 @@ class SqlRegistry(Registry):
         done: Set[str] = set()
         for name in wildcard.strings:
             storage = self._managers.datasets.find(name)
-            if storage is not None:
-                done.add(storage.datasetType.name)
+            done.add(name)
+            if storage is None:
+                if missing is not None:
+                    missing.append(name)
+            else:
                 yield storage.datasetType
         if wildcard.patterns:
             # If components (the argument) is None, we'll save component
@@ -784,7 +789,8 @@ class SqlRegistry(Registry):
                                  flattenChains=flattenChains, includeChains=includeChains):
             yield record.name
 
-    def _makeQueryBuilder(self, summary: queries.QuerySummary) -> queries.QueryBuilder:
+    def _makeQueryBuilder(self, summary: queries.QuerySummary,
+                          doomed_by: Iterable[str] = ()) -> queries.QueryBuilder:
         """Return a `QueryBuilder` instance capable of constructing and
         managing more complex queries than those obtainable via `Registry`
         interfaces.
@@ -798,6 +804,11 @@ class SqlRegistry(Registry):
         summary : `queries.QuerySummary`
             Object describing and categorizing the full set of dimensions that
             will be included in the query.
+        doomed_by : `Iterable` of `str`, optional
+            A list of diagnostic messages that indicate why the query is going
+            to yield no results and should not even be executed.  If an empty
+            container (default) the query will be executed unless other code
+            determines that it is doomed.
 
         Returns
         -------
@@ -812,6 +823,7 @@ class SqlRegistry(Registry):
                 datasets=self._managers.datasets,
                 TimespanReprClass=self._db.getTimespanRepresentation(),
             ),
+            doomed_by=doomed_by,
         )
 
     def queryDatasets(self, datasetType: Any, *,
@@ -937,6 +949,7 @@ class SqlRegistry(Registry):
         standardizedDatasetTypes = set()
         requestedDimensions = self.dimensions.extract(dimensions)
         queryDimensionNames = set(requestedDimensions.names)
+        missing: List[str] = []
         if datasets is not None:
             if not collections:
                 if not self.defaults.collections:
@@ -947,7 +960,7 @@ class SqlRegistry(Registry):
                 # included single-pass iterators (we'll want to use it multiple
                 # times below).
                 collections = CollectionQuery.fromExpression(collections)
-            for datasetType in self.queryDatasetTypes(datasets, components=components):
+            for datasetType in self.queryDatasetTypes(datasets, components=components, missing=missing):
                 queryDimensionNames.update(datasetType.dimensions.names)
                 # If any matched dataset type is a component, just operate on
                 # its parent instead, because Registry doesn't know anything
@@ -968,7 +981,10 @@ class SqlRegistry(Registry):
             defaults=self.defaults.dataId,
             check=check,
         )
-        builder = self._makeQueryBuilder(summary)
+        builder = self._makeQueryBuilder(
+            summary,
+            doomed_by=[f"Dataset type {name} is not registered." for name in missing]
+        )
         for datasetType in standardizedDatasetTypes:
             builder.joinDataset(datasetType, collections, isResult=False)
         query = builder.finish()

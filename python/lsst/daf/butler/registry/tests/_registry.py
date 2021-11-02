@@ -66,6 +66,8 @@ from .._exceptions import (
     MissingCollectionError,
     OrphanedRecordError,
 )
+
+
 from ..interfaces import ButlerAttributeExistsError
 
 if TYPE_CHECKING:
@@ -2379,6 +2381,11 @@ class RegistryTests(ABC):
             (
                 # Dataset type name doesn't match any existing dataset types.
                 registry.queryDatasets("nonexistent", collections=...),
+                ["nonexistent"],
+            ),
+            (
+                # Dataset type name doesn't match any existing dataset types.
+                registry.queryDataIds(["detector"], datasets=["nonexistent"], collections=...),
                 ["nonexistent"],
             ),
             (
