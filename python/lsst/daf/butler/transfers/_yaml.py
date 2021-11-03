@@ -183,8 +183,7 @@ class YamlRepoExportBackend(RepoExportBackend):
                 "collection_type": collectionType.name,
                 "validity_ranges": [
                     {
-                        "begin": timespan.begin,
-                        "end": timespan.end,
+                        "timespan": timespan,
                         "dataset_ids": dataset_ids,
                     }
                     for timespan, dataset_ids in idsByTimespan.items()
@@ -311,7 +310,12 @@ class YamlRepoImportBackend(RepoImportBackend):
                 elif collectionType is CollectionType.CALIBRATION:
                     assocsByTimespan = self.calibAssociations[data["collection"]]
                     for d in data["validity_ranges"]:
-                        assocsByTimespan[Timespan(begin=d["begin"], end=d["end"])] = d["dataset_ids"]
+                        if "timespan" in d:
+                            assocsByTimespan[d["timespan"]] = d["dataset_ids"]
+                        else:
+                            # TODO: this is for backward compatibility, should
+                            # be removed at some point.
+                            assocsByTimespan[Timespan(begin=d["begin"], end=d["end"])] = d["dataset_ids"]
                 else:
                     raise ValueError(f"Unexpected calibration type for association: {collectionType.name}.")
             else:

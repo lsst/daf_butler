@@ -47,6 +47,7 @@ import astropy.time
 import astropy.utils.exceptions
 import sqlalchemy
 import warnings
+import yaml
 
 # As of astropy 4.2, the erfa interface is shipped independently and
 # ErfaWarning is no longer an AstropyWarning
@@ -198,6 +199,9 @@ class Timespan:
     __slots__ = ("_nsec", "_cached_begin", "_cached_end")
 
     EMPTY: ClassVar[_SpecialTimespanBound] = _SpecialTimespanBound.EMPTY
+
+    # YAML tag name for Timespan
+    yaml_tag = "!lsst.daf.butler.Timespan"
 
     @classmethod
     def makeEmpty(cls) -> Timespan:
@@ -529,6 +533,60 @@ class Timespan:
 
     to_json = to_json_generic
     from_json = classmethod(from_json_generic)
+
+    @classmethod
+    def to_yaml(cls, dumper: yaml.Dumper, timespan: Timespan) -> Any:
+        """Convert Timespan into YAML format.
+
+        This produces a scalar node with a tag "!_SpecialTimespanBound" and
+        value being a name of _SpecialTimespanBound enum.
+
+        Parameters
+        ----------
+        dumper : `yaml.Dumper`
+            YAML dumper instance.
+        timespan : `Timespan`
+            Data to be converted.
+        """
+        if timespan.isEmpty():
+            return dumper.represent_scalar(cls.yaml_tag, "EMPTY")
+        else:
+            return dumper.represent_mapping(
+                cls.yaml_tag,
+                dict(begin=timespan.begin, end=timespan.end),
+            )
+
+    @classmethod
+    def from_yaml(cls, loader: yaml.SafeLoader, node: yaml.ScalarNode) -> Optional[Timespan]:
+        """Convert YAML node into _SpecialTimespanBound.
+
+        Parameters
+        ----------
+        loader : `yaml.SafeLoader`
+            Instance of YAML loader class.
+        node : `yaml.ScalarNode`
+            YAML node.
+
+        Returns
+        -------
+        value : `Timespan`
+            Timespan instance, can be ``None``.
+        """
+        if node.value is None:
+            return None
+        elif node.value == "EMPTY":
+            return Timespan.makeEmpty()
+        else:
+            d = loader.construct_mapping(node)
+            return Timespan(d["begin"], d["end"])
+
+
+# Register Timespan -> YAML conversion method with Dumper class
+yaml.Dumper.add_representer(Timespan, Timespan.to_yaml)
+
+# Register YAML -> Timespan conversion method with Loader, for our use case we
+# only need SafeLoader.
+yaml.SafeLoader.add_constructor(Timespan.yaml_tag, Timespan.from_yaml)
 
 
 _S = TypeVar("_S", bound="TimespanDatabaseRepresentation")

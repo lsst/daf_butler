@@ -282,6 +282,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         t1 = astropy.time.Time('2020-01-01T01:00:00', format="isot", scale="tai")
         t2 = astropy.time.Time('2020-01-01T02:00:00', format="isot", scale="tai")
         t3 = astropy.time.Time('2020-01-01T03:00:00', format="isot", scale="tai")
+        bias1a = registry1.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g")
         bias2a = registry1.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g")
         bias3a = registry1.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g")
         bias2b = registry1.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r")
@@ -289,6 +290,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         registry1.certify("calibration1", [bias2a, bias3a], Timespan(t1, t2))
         registry1.certify("calibration1", [bias2b], Timespan(t2, None))
         registry1.certify("calibration1", [bias3b], Timespan(t2, t3))
+        registry1.certify("calibration1", [bias1a], Timespan.makeEmpty())
 
         with tempfile.NamedTemporaryFile(mode='w', suffix=".yaml") as file:
             # Export all collections, and some datasets.
@@ -298,7 +300,7 @@ class SimpleButlerTestCase(unittest.TestCase):
                 for collection in sorted(registry1.queryCollections()):
                     exporter.saveCollection(collection)
                 exporter.saveDatasets(flats1)
-                exporter.saveDatasets([bias2a, bias2b, bias3a, bias3b])
+                exporter.saveDatasets([bias1a, bias2a, bias2b, bias3a, bias3b])
             # Import them into a new registry.
             butler2 = self.makeButler(writeable=True)
             butler2.import_(filename=file.name)

@@ -797,14 +797,9 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
         self.assertIsNotNone(infos[0].checksum)
 
 
-class TrashDatastoreTestCase(PosixDatastoreTestCase, unittest.TestCase):
+class TrashDatastoreTestCase(PosixDatastoreTestCase):
     """Restrict trash test to FileDatastore."""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-
-    def setUp(self):
-        # Override the working directory before calling the base class
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
-        super().setUp()
 
     def testTrash(self):
         datastore, *refs = self.prepDeleteTest(n_refs=10)
