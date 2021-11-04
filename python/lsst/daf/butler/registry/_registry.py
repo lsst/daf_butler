@@ -1109,7 +1109,8 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None
+    def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None,
+                          missing: Optional[List[str]] = None,
                           ) -> Iterator[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
 
@@ -1128,6 +1129,10 @@ class Registry(ABC):
             parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
+        missing : `list` of `str`, optional
+            String dataset type names that were explicitly given (i.e. not
+            regular expression patterns) but not found will be appended to this
+            list, if it is provided.
 
         Yields
         ------

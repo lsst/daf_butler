@@ -354,9 +354,13 @@ class RemoteRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
-    def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None
+    def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None,
+                          missing: Optional[List[str]] = None,
                           ) -> Iterator[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
+        if missing is not None:
+            raise NotImplementedError("RemoteRegistry does not support the 'missing' parameter.")
+
         params: Dict[str, Any] = {}
 
         expression = ExpressionQueryParameter.from_expression(expression)
