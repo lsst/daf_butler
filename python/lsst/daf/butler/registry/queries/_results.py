@@ -378,10 +378,10 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         iterator has been exhausted, or if `any` or `count` was already called
         (with ``exact=True`` for the latter two).
 
-        At present, this method only returns messages that are generated while
-        the query is being built or filtered.  In the future, it may perform
-        its own new follow-up queries, which users may wish to short-circuit
-        simply by not continuing to iterate over its results.
+        This method first yields messages that are generated while the query is
+        being built or filtered, but may then proceed to diagnostics generated
+        by performing what should be inexpensive follow-up queries.  Callers
+        can short-circuit this at any time by simplying not iterating further.
         """
         return self._query.explain_no_results(self._db)
 
@@ -509,10 +509,10 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         iterator has been exhausted, or if `any` or `count` was already called
         (with ``exact=True`` for the latter two).
 
-        At present, this method only returns messages that are generated while
-        the query is being built or filtered.  In the future, it may perform
-        its own new follow-up queries, which users may wish to short-circuit
-        simply by not continuing to iterate over its results.
+        This method first yields messages that are generated while the query is
+        being built or filtered, but may then proceed to diagnostics generated
+        by performing what should be inexpensive follow-up queries.  Callers
+        can short-circuit this at any time by simplying not iterating further.
         """
         raise NotImplementedError()
 

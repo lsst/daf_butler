@@ -2428,6 +2428,30 @@ class RegistryTests(ABC):
                 ),
                 messages
             )
+
+        # These queries yield no results due to problems that can be identified
+        # by cheap follow-up queries, yielding helpful diagnostics.
+        for query, snippets in [
+            (
+                # No records for one of the involved dimensions.
+                registry.queryDataIds(["subfilter"]),
+                ["dimension records", "subfilter"],
+            ),
+        ]:
+            self.assertFalse(query.any(execute=True, exact=False))
+            self.assertFalse(query.any(execute=True, exact=True))
+            self.assertEqual(query.count(exact=True), 0)
+            messages = list(query.explain_no_results())
+            self.assertTrue(messages)
+            # Want all expected snippets to appear in at least one message.
+            self.assertTrue(
+                any(
+                    all(snippet in message for snippet in snippets)
+                    for message in query.explain_no_results()
+                ),
+                messages
+            )
+
         # This query yields four overlaps in the database, but one is filtered
         # out in postprocessing.  The count queries aren't accurate because
         # they don't account for duplication that happens due to an internal

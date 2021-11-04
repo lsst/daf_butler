@@ -281,6 +281,7 @@ class Query(ABC):
         self,
         db: Database, *,
         region: Optional[Region] = None,
+        followup: bool = True,
     ) -> Iterator[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
@@ -293,6 +294,9 @@ class Query(ABC):
             A region that any result-row regions must overlap in order to be
             yielded.  If not provided, this will be ``self.whereRegion``, if
             that exists.
+        followup : `bool`, optional
+            If `True` (default) perform inexpensive follow-up queries if no
+            diagnostics are available from query generation alone.
 
         Returns
         -------
@@ -305,13 +309,11 @@ class Query(ABC):
         Messages related to post-query filtering are only available if `rows`,
         `any`, or `count` was already called with the same region (with
         ``exact=True`` for the latter two).
-
-        At present, this method only returns messages that are generated while
-        the query is being built or filtered.  In the future, it may perform
-        its own new follow-up queries, which users may wish to short-circuit
-        simply by not continuing to iterate over its results.
         """
-        yield from self._doomed_by
+        from ._builder import QueryBuilder
+        if self._doomed_by:
+            yield from self._doomed_by
+            return
         if self._filtered_by_where:
             yield (
                 f"{self._filtered_by_where} result rows were filtered out because "
@@ -322,6 +324,20 @@ class Query(ABC):
                 f"{self._filtered_by_join} result rows were filtered out because "
                 "one or more regions did not overlap."
             )
+        if (not followup) or self._filtered_by_join or self._filtered_by_where:
+            return
+        # Query didn't return results even before client-side filtering, and
+        # caller says we can do follow-up queries to determine why.
+        # Start by seeing if there are _any_ dimension records for each element
+        # involved.
+        for element in self.graph.elements:
+            summary = QuerySummary(element.graph)
+            builder = QueryBuilder(summary, self.managers)
+            followup_query = builder.finish()
+            if not followup_query.any(db, exact=False):
+                yield f"No dimension records for element '{element.name}' found."
+                yield from followup_query.explain_no_results(db, region=region, followup=False)
+                return
 
     @abstractmethod
     def getDatasetColumns(self) -> Optional[DatasetQueryColumns]:
