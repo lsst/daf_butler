@@ -923,6 +923,7 @@ class SqlRegistry(Registry):
             bind=bind,
             defaults=self.defaults.dataId,
             check=check,
+            datasets=[datasetType],
         )
         builder = self._makeQueryBuilder(summary)
         # Add the dataset subquery to the query, telling the QueryBuilder to
@@ -948,7 +949,6 @@ class SqlRegistry(Registry):
         standardizedDataId = self.expandDataId(dataId, **kwargs)
         standardizedDatasetTypes = set()
         requestedDimensions = self.dimensions.extract(dimensions)
-        queryDimensionNames = set(requestedDimensions.names)
         missing: List[str] = []
         if datasets is not None:
             if not collections:
@@ -961,7 +961,6 @@ class SqlRegistry(Registry):
                 # times below).
                 collections = CollectionQuery.fromExpression(collections)
             for datasetType in self.queryDatasetTypes(datasets, components=components, missing=missing):
-                queryDimensionNames.update(datasetType.dimensions.names)
                 # If any matched dataset type is a component, just operate on
                 # its parent instead, because Registry doesn't know anything
                 # about what components exist, and here (unlike queryDatasets)
@@ -974,12 +973,13 @@ class SqlRegistry(Registry):
             raise TypeError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
 
         summary = queries.QuerySummary(
-            requested=DimensionGraph(self.dimensions, names=queryDimensionNames),
+            requested=requestedDimensions,
             dataId=standardizedDataId,
             expression=where,
             bind=bind,
             defaults=self.defaults.dataId,
             check=check,
+            datasets=standardizedDatasetTypes,
         )
         builder = self._makeQueryBuilder(
             summary,
