@@ -1797,6 +1797,17 @@ class FileDatastore(GenericBaseDatastore):
             # given the immutability constraint.
             writeStorageClass = rwInfo.info.storageClass
 
+            # A read of a derived component will only work if there is a
+            # storage class delegate. If there is no delegate for this
+            # storage class the only option is to read the responsible
+            # component and then ask the composite delegate to try to handle
+            # the derived component.
+            if writeStorageClass.delegateClass is None:
+                component_data = self._read_artifact_into_memory(rwInfo, ref, isComponent=False,
+                                                                 cache_ref=ref)
+                return compositeDelegate.getDerivedFromComponent(component_data, forwardedComponent,
+                                                                 refComponent)
+
             # We may need to put some thought into parameters for read
             # components but for now forward them on as is
             readFormatter = type(rwInfo.formatter)(FileDescriptor(rwInfo.location,

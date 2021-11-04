@@ -255,6 +255,24 @@ class StorageClassDelegate:
             raise AttributeError("Unable to get component {}".format(componentName))
         return component
 
+    def getDerivedFromComponent(self, component: Any, componentName: str, derivedComponentName: str) -> Any:
+        """Get a derived component from a component.
+
+        Where `getComponent` obtains a component from the composite, this
+        method is used to get a derived component from the selected responsible
+        component.
+
+        Parameters
+        ----------
+        component : `object`
+            The component object from which to extract the derived component.
+        componentName : `str`
+            The name of the component associated with this component object.
+        derivedComponentName : `str`
+            The name of the derived component to get.
+        """
+        raise NotImplementedError("This delegate can not get derived components from components.")
+
     def disassemble(self, composite: Any, subset: Optional[Iterable] = None,
                     override: bool = None) -> Dict[str, Any]:
         """Disassembler a composite.
