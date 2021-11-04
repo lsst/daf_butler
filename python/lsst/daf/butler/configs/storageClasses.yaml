@@ -196,8 +196,8 @@ storageClasses:
       detector: Detector
       validPolygon: Polygon
       summaryStats: ExposureSummaryStats
-    derivedComponents:
       id: int
+    derivedComponents:
       bbox: Box2I
       dimensions: Extent2I
       xy0: Point2I
