@@ -25,6 +25,7 @@ import shutil
 import unittest
 import urllib.parse
 import responses
+import pathlib
 
 try:
     import boto3
@@ -61,6 +62,10 @@ class FileURITestCase(unittest.TestCase):
         file = os.path.join(self.tmpdir, "test.txt")
         uri = ButlerURI(file)
         self.assertFalse(uri.exists(), f"{uri} should not exist")
+        self.assertEqual(uri.ospath, file)
+
+        path = pathlib.Path(file)
+        uri = ButlerURI(path)
         self.assertEqual(uri.ospath, file)
 
         content = "abcdefghijklmnopqrstuv\n"

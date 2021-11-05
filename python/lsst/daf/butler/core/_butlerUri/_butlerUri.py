@@ -30,6 +30,7 @@ import logging
 import re
 import shutil
 import tempfile
+import os
 
 from random import Random
 from pathlib import Path, PurePath, PurePosixPath
@@ -145,7 +146,7 @@ class ButlerURI:
         dirLike: bool = False
         subclass: Optional[Type[ButlerURI]] = None
 
-        if isinstance(uri, Path):
+        if isinstance(uri, os.PathLike):
             uri = str(uri)
 
         # Record if we need to post process the URI components
