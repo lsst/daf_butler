@@ -70,14 +70,14 @@ def _doUpdate(d, u):
     return d
 
 
-def _checkNextItem(k, d, create):
+def _checkNextItem(k, d, create, must_be_dict):
     """See if k is in d and if it is return the new child."""
     nextVal = None
     isThere = False
     if d is None:
         # We have gone past the end of the hierarchy
         pass
-    elif isinstance(d, collections.abc.Sequence):
+    elif not must_be_dict and isinstance(d, collections.abc.Sequence):
         # Check sequence first because for lists
         # __contains__ checks whether value is found in list
         # not whether the index exists in list. When we traverse
@@ -249,7 +249,7 @@ class Config(collections.abc.MutableMapping):
         if isinstance(other, Config):
             self._data = copy.deepcopy(other._data)
             self.configFile = other.configFile
-        elif isinstance(other, collections.abc.Mapping):
+        elif isinstance(other, (dict, collections.abc.Mapping)):
             self.update(other)
         elif isinstance(other, (str, ButlerURI, Path)):
             # if other is a string, assume it is a file path/URI
@@ -574,15 +574,21 @@ class Config(collections.abc.MutableMapping):
         """
         d = self._data
 
+        # For the first key, d must be a dict so it is a waste
+        # of time to check for a sequence.
+        must_be_dict = True
+
         hierarchy = []
         complete = True
         for k in keys:
-            d, isThere = _checkNextItem(k, d, create)
+            d, isThere = _checkNextItem(k, d, create, must_be_dict)
             if isThere:
                 hierarchy.append(d)
             else:
                 complete = False
                 break
+            # Second time round it might be a sequence.
+            must_be_dict = False
 
         return hierarchy, complete
 
