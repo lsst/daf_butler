@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import AbstractSet, Any, Iterator, List, Mapping, Optional, Type, Union
+from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Type, Union
 
 from sqlalchemy.sql import ColumnElement
 
@@ -266,6 +266,12 @@ class QuerySummary:
         query expression, keyed by the identifiers they replace.
     defaults : `DataCoordinate`, optional
         A data ID containing default for governor dimensions.
+    datasets : `Iterable` [ `DatasetType` ], optional
+        Dataset types whose searches may be joined into the query.  Callers
+        must still call `QueryBuilder.joinDataset` explicitly to control how
+        that join happens (e.g. which collections are searched), but by
+        declaring them here first we can ensure that the query includes the
+        right dimensions for those joins.
     check : `bool`
         If `True` (default) check the query for consistency.  This may reject
         some valid queries that resemble common mistakes (e.g. queries for
@@ -277,6 +283,7 @@ class QuerySummary:
                  whereRegion: Optional[Region] = None,
                  bind: Optional[Mapping[str, Any]] = None,
                  defaults: Optional[DataCoordinate] = None,
+                 datasets: Iterable[DatasetType] = (),
                  check: bool = True):
         self.requested = requested
         if expression is None:
@@ -287,6 +294,7 @@ class QuerySummary:
             raise TypeError("New bind parameters passed, but expression is already a QueryWhereExpression.")
         self.where = expression.attach(self.requested, dataId=dataId, region=whereRegion, defaults=defaults,
                                        check=check)
+        self.datasets = NamedValueSet(datasets).freeze()
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
@@ -296,6 +304,11 @@ class QuerySummary:
     where: QueryWhereClause
     """Structure containing objects that contribute to the WHERE clause of the
     query (`QueryWhereClause`).
+    """
+
+    datasets: NamedValueAbstractSet[DatasetType]
+    """Dataset types whose searches may be joined into the query
+    (`NamedValueAbstractSet` [ `DatasetType` ]).
     """
 
     @property
@@ -364,6 +377,8 @@ class QuerySummary:
         dataset.
         """
         names = set(self.requested.names | self.where.dimensions.names)
+        for dataset_type in self.datasets:
+            names.update(dataset_type.dimensions.names)
         return DimensionGraph(self.universe, names=names)
 
     @property  # type: ignore

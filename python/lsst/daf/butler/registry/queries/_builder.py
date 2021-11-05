@@ -143,7 +143,7 @@ class QueryBuilder:
             the inner join that would normally be present), the full query will
             return no results.
         """
-        assert datasetType.dimensions.issubset(self.summary.requested)
+        assert datasetType in self.summary.datasets
         if isResult and findFirst:
             collections = CollectionSearch.fromExpression(collections)
         else:

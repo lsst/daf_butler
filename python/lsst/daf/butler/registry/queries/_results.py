@@ -55,6 +55,7 @@ from ...core import (
 )
 from ..interfaces import Database
 from ._query import Query
+from ._structs import QuerySummary
 
 
 class DataCoordinateQueryResults(DataCoordinateIterable):
@@ -295,7 +296,6 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                              f"the DataCoordinateQueryResult used as input to the search, but "
                              f"{datasetType.name} has dimensions {datasetType.dimensions}, while the input "
                              f"dimensions are {self.graph}.")
-        builder = self._query.makeBuilder()
         if datasetType.isComponent():
             # We were given a true DatasetType instance, but it's a component.
             parentName, componentName = datasetType.nameAndComponent()
@@ -304,6 +304,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             components = [componentName]
         else:
             components = [None]
+        summary = QuerySummary(self.graph, whereRegion=self._query.whereRegion, datasets=[datasetType])
+        builder = self._query.makeBuilder(summary)
         builder.joinDataset(datasetType, collections=collections, findFirst=findFirst)
         query = builder.finish(joinMissing=False)
         return ParentDatasetQueryResults(db=self._db, query=query, components=components,

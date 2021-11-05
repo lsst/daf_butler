@@ -2474,3 +2474,20 @@ class RegistryTests(ABC):
                 for message in messages
             )
         )
+
+    def testDatasetConstrainedDimensionRecordQueries(self):
+        """Test that queryDimensionRecords works even when given a dataset
+        constraint whose dimensions extend beyond the requested dimension
+        element's.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        # Query for physical_filter dimension records, using a dataset that
+        # has both physical_filter and dataset dimensions.
+        records = registry.queryDimensionRecords(
+            "physical_filter",
+            datasets=["flat"],
+            collections="imported_r",
+        )
+        self.assertEqual({record.name for record in records}, {"Cam1-R1", "Cam1-R2"})
