@@ -597,14 +597,27 @@ class Config(collections.abc.MutableMapping):
         # match.  This allows `Config.items()` to work via a simple
         # __iter__ implementation that returns top level keys of
         # self._data.
-        keys = self._getKeyHierarchy(name)
 
-        hierarchy, complete = self._findInHierarchy(keys)
-        if not complete:
-            raise KeyError(f"{name} not found")
-        data = hierarchy[-1]
+        # If the name matches a key in the top-level hierarchy, bypass
+        # all further cleverness.
+        found_directly = False
+        try:
+            data = self._data[name]
+            found_directly = True
+        except KeyError:
+            pass
 
-        if isinstance(data, collections.abc.Mapping):
+        if not found_directly:
+            keys = self._getKeyHierarchy(name)
+
+            hierarchy, complete = self._findInHierarchy(keys)
+            if not complete:
+                raise KeyError(f"{name} not found")
+            data = hierarchy[-1]
+
+        # In most cases we have a dict, and it's more efficient
+        # to check for a dict instance before checking the generic mapping.
+        if isinstance(data, (dict, collections.abc.Mapping)):
             data = Config(data)
             # Ensure that child configs inherit the parent internal delimiter
             if self._D != Config._D:
