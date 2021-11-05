@@ -26,6 +26,7 @@ from __future__ import annotations
 
 __all__ = ("ButlerConfig",)
 
+import os
 import copy
 from typing import (
     Optional,
@@ -83,7 +84,7 @@ class ButlerConfig(Config):
             self.configDir = copy.copy(other.configDir)
             return
 
-        if isinstance(other, str):
+        if isinstance(other, (str, os.PathLike)):
             # This will only allow supported schemes
             uri = ButlerURI(other)
 
