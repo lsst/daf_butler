@@ -70,6 +70,36 @@ def _doUpdate(d, u):
     return d
 
 
+def _checkNextItem(k, d, create):
+    """See if k is in d and if it is return the new child."""
+    nextVal = None
+    isThere = False
+    if d is None:
+        # We have gone past the end of the hierarchy
+        pass
+    elif isinstance(d, collections.abc.Sequence):
+        # Check sequence first because for lists
+        # __contains__ checks whether value is found in list
+        # not whether the index exists in list. When we traverse
+        # the hierarchy we are interested in the index.
+        try:
+            nextVal = d[int(k)]
+            isThere = True
+        except IndexError:
+            pass
+        except ValueError:
+            isThere = k in d
+    elif k in d:
+        nextVal = d[k]
+        isThere = True
+    elif create:
+        d[k] = {}
+        nextVal = d[k]
+        isThere = True
+
+    return nextVal, isThere
+
+
 class Loader(yamlLoader):
     """YAML Loader that supports file include directives.
 
@@ -544,38 +574,10 @@ class Config(collections.abc.MutableMapping):
         """
         d = self._data
 
-        def checkNextItem(k, d, create):
-            """See if k is in d and if it is return the new child."""
-            nextVal = None
-            isThere = False
-            if d is None:
-                # We have gone past the end of the hierarchy
-                pass
-            elif isinstance(d, collections.abc.Sequence):
-                # Check sequence first because for lists
-                # __contains__ checks whether value is found in list
-                # not whether the index exists in list. When we traverse
-                # the hierarchy we are interested in the index.
-                try:
-                    nextVal = d[int(k)]
-                    isThere = True
-                except IndexError:
-                    pass
-                except ValueError:
-                    isThere = k in d
-            elif k in d:
-                nextVal = d[k]
-                isThere = True
-            elif create:
-                d[k] = {}
-                nextVal = d[k]
-                isThere = True
-            return nextVal, isThere
-
         hierarchy = []
         complete = True
         for k in keys:
-            d, isThere = checkNextItem(k, d, create)
+            d, isThere = _checkNextItem(k, d, create)
             if isThere:
                 hierarchy.append(d)
             else:
