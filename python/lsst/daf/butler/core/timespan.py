@@ -749,6 +749,30 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def lower(self: _S) -> sqlalchemy.sql.ColumnElement:
+        """Return a SQLAlchemy expression representing a lower bound of a
+        timespan.
+
+        Returns
+        -------
+        lower : `sqlalchemy.sql.ColumnElement`
+            A SQLAlchemy expression for a lower bound.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def upper(self: _S) -> sqlalchemy.sql.ColumnElement:
+        """Return a SQLAlchemy expression representing an upper bound of a
+        timespan.
+
+        Returns
+        -------
+        upper : `sqlalchemy.sql.ColumnElement`
+            A SQLAlchemy expression for an upper bound.
+        """
+        raise NotImplementedError()
+
 
 class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
     """Representation of a time span as two separate fields.
@@ -918,6 +942,14 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
             return sqlalchemy.sql.and_(self._nsec[0] <= other, self._nsec[1] > other)
         else:
             return sqlalchemy.sql.and_(self._nsec[0] <= other._nsec[0], self._nsec[1] >= other._nsec[1])
+
+    def lower(self) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited.
+        return self._nsec[0]
+
+    def upper(self) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited.
+        return self._nsec[1]
 
     def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
         # Docstring inherited.

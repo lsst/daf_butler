@@ -1119,8 +1119,8 @@ class Registry(ABC):
         expression : `Any`, optional
             An expression that fully or partially identifies the dataset types
             to return, such as a `str`, `re.Pattern`, or iterable thereof.
-            `...` can be used to return all dataset types, and is the default.
-            See :ref:`daf_butler_dataset_type_expressions` for more
+            ``...`` can be used to return all dataset types, and is the
+            default. See :ref:`daf_butler_dataset_type_expressions` for more
             information.
         components : `bool`, optional
             If `True`, apply all expression patterns to component dataset type
@@ -1154,7 +1154,7 @@ class Registry(ABC):
         expression : `Any`, optional
             An expression that identifies the collections to return, such as
             a `str` (for full matches or partial matches via globs),
-            `re.Pattern` (for partial matches), or iterable thereof.  `...`
+            `re.Pattern` (for partial matches), or iterable thereof.  ``...``
             can be used to return all collections, and is the default.
             See :ref:`daf_butler_collection_expressions` for more information.
         datasetType : `DatasetType`, optional
@@ -1197,13 +1197,13 @@ class Registry(ABC):
         datasetType
             An expression that fully or partially identifies the dataset types
             to be queried.  Allowed types include `DatasetType`, `str`,
-            `re.Pattern`, and iterables thereof.  The special value `...` can
+            `re.Pattern`, and iterables thereof.  The special value ``...`` can
             be used to query all dataset types.  See
             :ref:`daf_butler_dataset_type_expressions` for more information.
         collections: optional
             An expression that identifies the collections to search, such as a
             `str` (for full matches or partial matches via globs), `re.Pattern`
-            (for partial matches), or iterable thereof.  `...` can be used to
+            (for partial matches), or iterable thereof.  ``...`` can be used to
             search all collections (actually just all `~CollectionType.RUN`
             collections, because this will still find all datasets).
             If not provided, ``self.default.collections`` is used.  See
@@ -1228,7 +1228,7 @@ class Registry(ABC):
             collection in which a dataset of that dataset type appears
             (according to the order of ``collections`` passed in).  If `True`,
             ``collections`` must not contain regular expressions and may not
-            be `...`.
+            be ``...``.
         components : `bool`, optional
             If `True`, apply all dataset expression patterns to component
             dataset type names as well.  If `False`, never apply patterns to
@@ -1319,7 +1319,7 @@ class Registry(ABC):
             An expression that identifies the collections to search for
             datasets, such as a `str` (for full matches or partial matches
             via globs), `re.Pattern` (for partial matches), or iterable
-            thereof.  `...` can be used to search all collections (actually
+            thereof.  ``...`` can be used to search all collections (actually
             just all `~CollectionType.RUN` collections, because this will
             still find all datasets).  If not provided,
             ``self.default.collections`` is used.  Ignored unless ``datasets``
@@ -1381,7 +1381,7 @@ class Registry(ABC):
                               components: Optional[bool] = None,
                               bind: Optional[Mapping[str, Any]] = None,
                               check: bool = True,
-                              **kwargs: Any) -> Iterator[DimensionRecord]:
+                              **kwargs: Any) -> Iterable[DimensionRecord]:
         """Query for dimension information matching user-provided criteria.
 
         Parameters
@@ -1395,11 +1395,11 @@ class Registry(ABC):
             An expression that fully or partially identifies dataset types
             that should constrain the yielded records.  See `queryDataIds` and
             :ref:`daf_butler_dataset_type_expressions` for more information.
-        collections: `Any`, optional
+        collections : `Any`, optional
             An expression that identifies the collections to search for
             datasets, such as a `str` (for full matches  or partial matches
             via globs), `re.Pattern` (for partial matches), or iterable
-            thereof.  `...` can be used to search all collections (actually
+            thereof.  ``...`` can be used to search all collections (actually
             just all `~CollectionType.RUN` collections, because this will
             still find all datasets).  If not provided,
             ``self.default.collections`` is used.  Ignored unless ``datasets``
@@ -1428,7 +1428,7 @@ class Registry(ABC):
 
         Returns
         -------
-        dataIds : `DataCoordinateQueryResults`
+        dataIds : `Iterator` [ `DimensionRecord` ]
             Data IDs matching the given query parameters.
         """
         raise NotImplementedError()
@@ -1458,7 +1458,7 @@ class Registry(ABC):
             An expression that identifies the collections to search for
             datasets, such as a `str` (for full matches  or partial matches
             via globs), `re.Pattern` (for partial matches), or iterable
-            thereof.  `...` can be used to search all collections (actually
+            thereof.  ``...`` can be used to search all collections (actually
             just all `~CollectionType.RUN` collections, because this will still
             find all datasets).  If not provided, ``self.default.collections``
             is used.  See :ref:`daf_butler_collection_expressions` for more

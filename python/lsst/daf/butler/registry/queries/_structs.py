@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Type, Union
+from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, Union
 
 from sqlalchemy.sql import ColumnElement
 
@@ -53,6 +53,7 @@ from ..summaries import GovernorDimensionRestriction
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
 from .expressions import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
+from .expressions.categorize import categorizeOrderByName
 
 
 @immutable
@@ -239,6 +240,60 @@ class QueryWhereClause:
         ).freeze()
 
 
+@dataclass(frozen=True)
+class OrderByClauseColumn:
+    """Information about single column in ORDER BY clause.
+    """
+    element: DimensionElement
+    """Dimension element for data in this column (`DimensionElement`)."""
+
+    column: Optional[str]
+    """Name of the column or `None` for primary key (`str` or `None`)"""
+
+    ordering: bool
+    """True for ascending order, False for descending (`bool`)."""
+
+
+@immutable
+class OrderByClause:
+    """Class for information about columns in ORDER BY clause
+
+    Parameters
+    ----------
+    order_by : `Iterable` [ `str` ]
+        Sequence of names to use for ordering with optional "-" prefix.
+    graph : `DimensionGraph`
+        Dimensions used by a query.
+    """
+    def __init__(self, order_by: Iterable[str], graph: DimensionGraph):
+
+        self.order_by_columns = []
+        for name in order_by:
+            if not name or name == "-":
+                raise ValueError("Empty dimension name in ORDER BY")
+            ascending = True
+            if name[0] == "-":
+                ascending = False
+                name = name[1:]
+            element, column = categorizeOrderByName(graph, name)
+            self.order_by_columns.append(
+                OrderByClauseColumn(element=element, column=column, ordering=ascending)
+            )
+
+        self.elements = NamedValueSet(column.element for column in self.order_by_columns
+                                      if column.column is not None)
+
+    order_by_columns: Iterable[OrderByClauseColumn]
+    """Columns that appear in the ORDER BY
+    (`Iterable` [ `OrderByClauseColumn` ]).
+    """
+
+    elements: NamedValueSet[DimensionElement]
+    """Dimension elements whose non-key columns were referenced by order_by
+    (`NamedValueSet` [ `DimensionElement` ]).
+    """
+
+
 @immutable
 class QuerySummary:
     """A struct that holds and categorizes the dimensions involved in a query.
@@ -272,6 +327,10 @@ class QuerySummary:
         that join happens (e.g. which collections are searched), but by
         declaring them here first we can ensure that the query includes the
         right dimensions for those joins.
+    order_by : `Iterable` [ `str` ]
+        Sequence of names to use for ordering with optional "-" prefix.
+    limit : `Tuple`, optional
+        Limit on the number of returned rows and optional offset.
     check : `bool`
         If `True` (default) check the query for consistency.  This may reject
         some valid queries that resemble common mistakes (e.g. queries for
@@ -284,6 +343,8 @@ class QuerySummary:
                  bind: Optional[Mapping[str, Any]] = None,
                  defaults: Optional[DataCoordinate] = None,
                  datasets: Iterable[DatasetType] = (),
+                 order_by: Optional[Iterable[str]] = None,
+                 limit: Optional[Tuple[int, Optional[int]]] = None,
                  check: bool = True):
         self.requested = requested
         if expression is None:
@@ -295,6 +356,8 @@ class QuerySummary:
         self.where = expression.attach(self.requested, dataId=dataId, region=whereRegion, defaults=defaults,
                                        check=check)
         self.datasets = NamedValueSet(datasets).freeze()
+        self.order_by = None if order_by is None else OrderByClause(order_by, requested)
+        self.limit = limit
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
@@ -388,6 +451,8 @@ class QuerySummary:
         query's FROM clause (`NamedValueSet` of `DimensionElement`).
         """
         result = NamedValueSet(self.spatial | self.temporal | self.where.columns.keys())
+        if self.order_by is not None:
+            result.update(self.order_by.elements)
         for dimension in self.mustHaveKeysJoined:
             if dimension.implied:
                 result.add(dimension)

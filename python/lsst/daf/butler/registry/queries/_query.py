@@ -24,9 +24,11 @@ __all__ = ("Query",)
 
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
+import dataclasses
 import enum
 import itertools
 from typing import (
+    ContextManager,
     Dict,
     Iterable,
     Iterator,
@@ -59,6 +61,57 @@ from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryM
 
 if TYPE_CHECKING:
     from ._builder import QueryBuilder
+
+
+@dataclasses.dataclass(frozen=True)
+class OrderByColumn:
+    """Information about single column in ORDER BY clause.
+    """
+    column: sqlalchemy.sql.ColumnElement
+    """Name of the column or `None` for primary key (`str` or `None`)"""
+
+    ordering: bool
+    """True for ascending order, False for descending (`bool`)."""
+
+    add_to_select: bool
+    """True if columns is a non-key column and needs to be added to select
+    columns explicitly (`bool`)."""
+
+    field_spec: Optional[ddl.FieldSpec]
+    """Field specification for a column in materialized table (`ddl.FieldSpec`)
+    """
+
+    dimension: Optional[Dimension]
+    """Not-None if column corresponds to a dimension (`Dimension` or `None`)"""
+
+    @property
+    def column_order(self) -> sqlalchemy.sql.ColumnElement:
+        """Column element for use in ORDER BY clause
+        (`sqlalchemy.sql.ColumnElement`)
+        """
+        return self.column.asc() if self.ordering else self.column.desc()
+
+    def materialized(self, table: sqlalchemy.schema.Table) -> OrderByColumn:
+        """Re-purpose ordering column definition for a materialized table.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            Materialized table, it should have all columns in SELECT clause
+            already.
+
+        Returns
+        -------
+        column : `OrderByColumn`
+            Column definition to use with ORDER BY in materialized table.
+        """
+        return OrderByColumn(
+            column=table.columns[self.dimension.name if self.dimension else self.column.name],
+            ordering=self.ordering,
+            add_to_select=False,
+            field_spec=None,
+            dimension=self.dimension
+        )
 
 
 class Query(ABC):
@@ -506,41 +559,6 @@ class Query(ABC):
         return DatasetRef(datasetColumns.datasetType, dataId, id=row._mapping[datasetColumns.id],
                           run=runRecord.name)
 
-    def _makeTableSpec(self, constraints: bool = False) -> ddl.TableSpec:
-        """Helper method for subclass implementations of `materialize`.
-
-        Parameters
-        ----------
-        constraints : `bool`, optional
-            If `True` (`False` is default), define a specification that
-            includes actual foreign key constraints for logical foreign keys.
-            Some database engines do not permit temporary tables to reference
-            normal tables, so this should be `False` when generating a spec
-            for a temporary table unless the database engine is known to
-            support them.
-
-        Returns
-        -------
-        spec : `ddl.TableSpec`
-            Specification for a table that could hold this query's result rows.
-        """
-        unique = self.isUnique()
-        spec = ddl.TableSpec(fields=())
-        for dimension in self.graph:
-            addDimensionForeignKey(spec, dimension, primaryKey=unique, constraint=constraints)
-        for element in self.spatial:
-            spec.fields.update(
-                SpatialRegionDatabaseRepresentation.makeFieldSpecs(
-                    nullable=True,
-                    name=f"{element.name}_region",
-                )
-            )
-        datasetColumns = self.getDatasetColumns()
-        if datasetColumns is not None:
-            self.managers.datasets.addDatasetForeignKey(spec, primaryKey=unique, constraint=constraints)
-            self.managers.collections.addRunForeignKey(spec, nullable=False, constraint=constraints)
-        return spec
-
     def _makeSubsetQueryColumns(self, *, graph: Optional[DimensionGraph] = None,
                                 datasets: bool = True,
                                 unique: bool = False) -> Tuple[DimensionGraph, Optional[QueryColumns]]:
@@ -588,8 +606,8 @@ class Query(ABC):
             columns.datasets = self.getDatasetColumns()
         return graph, columns
 
-    @contextmanager
-    def materialize(self, db: Database) -> Iterator[Query]:
+    @abstractmethod
+    def materialize(self, db: Database) -> ContextManager[Query]:
         """Execute this query and insert its results into a temporary table.
 
         Parameters
@@ -608,20 +626,7 @@ class Query(ABC):
             an outer context manager should already take care of everything
             else).
         """
-        spec = self._makeTableSpec()
-        with db.session() as session:
-            table = session.makeTemporaryTable(spec)
-            if not self._doomed_by:
-                db.insert(table, select=self.sql, names=spec.fields.names)
-            yield MaterializedQuery(table=table,
-                                    spatial=self.spatial,
-                                    datasetType=self.datasetType,
-                                    isUnique=self.isUnique(),
-                                    graph=self.graph,
-                                    whereRegion=self.whereRegion,
-                                    managers=self.managers,
-                                    doomed_by=self._doomed_by)
-            session.dropTemporaryTable(table)
+        raise NotImplementedError()
 
     @abstractmethod
     def subset(self, *, graph: Optional[DimensionGraph] = None,
@@ -775,6 +780,8 @@ class DirectQuery(Query):
                  graph: DimensionGraph,
                  whereRegion: Optional[Region],
                  managers: RegistryManagers,
+                 order_by_columns: Iterable[OrderByColumn] = (),
+                 limit: Optional[Tuple[int, Optional[int]]] = None,
                  doomed_by: Iterable[str] = ()):
         super().__init__(graph=graph, whereRegion=whereRegion, managers=managers, doomed_by=doomed_by)
         assert not simpleQuery.columns, "Columns should always be set on a copy in .sql"
@@ -782,6 +789,8 @@ class DirectQuery(Query):
         self._simpleQuery = simpleQuery
         self._columns = columns
         self._uniqueness = uniqueness
+        self._order_by_columns = order_by_columns
+        self._limit = limit
         self._datasetQueryColumns: Optional[DatasetQueryColumns] = None
         self._dimensionColumns: Dict[str, sqlalchemy.sql.ColumnElement] = {}
         self._regionColumns: Dict[str, sqlalchemy.sql.ColumnElement] = {}
@@ -839,11 +848,86 @@ class DirectQuery(Query):
         datasetColumns = self.getDatasetColumns()
         if datasetColumns is not None:
             simpleQuery.columns.extend(datasetColumns)
-        sql = simpleQuery.combine()
+
+        if self._order_by_columns:
+            # add ORDER BY columns
+            select_columns = [column.column for column in self._order_by_columns if column.add_to_select]
+            simpleQuery.columns.extend(select_columns)
+            sql = simpleQuery.combine()
+            order_by_columns = [column.column_order for column in self._order_by_columns]
+            sql = sql.order_by(*order_by_columns)
+        else:
+            sql = simpleQuery.combine()
+
+        if self._limit:
+            sql = sql.limit(self._limit[0])
+            if self._limit[1] is not None:
+                sql = sql.offset(self._limit[1])
+
         if self._uniqueness is DirectQueryUniqueness.NEEDS_DISTINCT:
             return sql.distinct()
         else:
             return sql
+
+    def _makeTableSpec(self, constraints: bool = False) -> ddl.TableSpec:
+        """Helper method for subclass implementations of `materialize`.
+
+        Parameters
+        ----------
+        constraints : `bool`, optional
+            If `True` (`False` is default), define a specification that
+            includes actual foreign key constraints for logical foreign keys.
+            Some database engines do not permit temporary tables to reference
+            normal tables, so this should be `False` when generating a spec
+            for a temporary table unless the database engine is known to
+            support them.
+
+        Returns
+        -------
+        spec : `ddl.TableSpec`
+            Specification for a table that could hold this query's result rows.
+        """
+        unique = self.isUnique()
+        spec = ddl.TableSpec(fields=())
+        for dimension in self.graph:
+            addDimensionForeignKey(spec, dimension, primaryKey=unique, constraint=constraints)
+        for element in self.spatial:
+            spec.fields.update(
+                SpatialRegionDatabaseRepresentation.makeFieldSpecs(
+                    nullable=True,
+                    name=f"{element.name}_region",
+                )
+            )
+        datasetColumns = self.getDatasetColumns()
+        if datasetColumns is not None:
+            self.managers.datasets.addDatasetForeignKey(spec, primaryKey=unique, constraint=constraints)
+            self.managers.collections.addRunForeignKey(spec, nullable=False, constraint=constraints)
+
+        # may need few extra columns from ORDER BY
+        spec.fields.update(column.field_spec for column in self._order_by_columns
+                           if column.field_spec is not None)
+
+        return spec
+
+    @contextmanager
+    def materialize(self, db: Database) -> Iterator[Query]:
+        # Docstring inherited from Query.
+        spec = self._makeTableSpec()
+        with db.session() as session:
+            table = session.makeTemporaryTable(spec)
+            if not self._doomed_by:
+                db.insert(table, select=self.sql, names=spec.fields.names)
+            order_by_columns = [column.materialized(table) for column in self._order_by_columns]
+            yield MaterializedQuery(table=table,
+                                    spatial=self.spatial,
+                                    datasetType=self.datasetType,
+                                    isUnique=self.isUnique(),
+                                    graph=self.graph,
+                                    whereRegion=self.whereRegion,
+                                    managers=self.managers,
+                                    doomed_by=self._doomed_by,
+                                    order_by_columns=order_by_columns)
+            session.dropTemporaryTable(table)
 
     def subset(self, *, graph: Optional[DimensionGraph] = None,
                datasets: bool = True,
@@ -913,6 +997,9 @@ class MaterializedQuery(Query):
         A list of messages (appropriate for e.g. logging or exceptions) that
         explain why the query is known to return no results even before it is
         executed.  Queries with a non-empty list will never be executed.
+    order_by : `Tuple` [ `str` ], optional
+        Optional list of column names to use in ORDER BY clause, names can be
+        prefixed with minus sign for descending ordering.
     """
     def __init__(self, *,
                  table: sqlalchemy.schema.Table,
@@ -922,12 +1009,15 @@ class MaterializedQuery(Query):
                  graph: DimensionGraph,
                  whereRegion: Optional[Region],
                  managers: RegistryManagers,
-                 doomed_by: Iterable[str] = ()):
-        super().__init__(graph=graph, whereRegion=whereRegion, managers=managers, doomed_by=doomed_by)
+                 doomed_by: Iterable[str] = (),
+                 order_by_columns: Iterable[OrderByColumn] = ()):
+        super().__init__(graph=graph, whereRegion=whereRegion, managers=managers,
+                         doomed_by=doomed_by)
         self._table = table
         self._spatial = tuple(spatial)
         self._datasetType = datasetType
         self._isUnique = isUnique
+        self._order_by_columns = order_by_columns
 
     def isUnique(self) -> bool:
         # Docstring inherited from Query.
@@ -941,6 +1031,17 @@ class MaterializedQuery(Query):
     def spatial(self) -> Iterator[DimensionElement]:
         # Docstring inherited from Query.
         return iter(self._spatial)
+
+    def order_by(self, *args: str) -> Query:
+        # Docstring inherited from Query.
+        raise NotImplementedError("MaterializedQuery.order_by should not be called directly")
+
+    def limit(self, limit: int, offset: Optional[int] = None) -> Query:
+        # Docstring inherited from Query.
+
+        # Calling limit on materialized data is likely an error, limit should
+        # be set before materializing.
+        raise NotImplementedError("MaterializedQuery.limit should not be called directly")
 
     def getRegionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from Query.
@@ -961,7 +1062,11 @@ class MaterializedQuery(Query):
     @property
     def sql(self) -> sqlalchemy.sql.FromClause:
         # Docstring inherited from Query.
-        return self._table.select()
+        select = self._table.select()
+        if self._order_by_columns:
+            order_by_columns = [column.column_order for column in self._order_by_columns]
+            select = select.order_by(*order_by_columns)
+        return select
 
     @contextmanager
     def materialize(self, db: Database) -> Iterator[Query]:
@@ -1041,6 +1146,14 @@ class EmptyQuery(Query):
     def spatial(self) -> Iterator[DimensionElement]:
         # Docstring inherited from Query.
         return iter(())
+
+    def order_by(self, *args: str) -> Query:
+        # Docstring inherited from Query.
+        return self
+
+    def limit(self, limit: int, offset: Optional[int] = None) -> Query:
+        # Docstring inherited from Query.
+        return self
 
     def getRegionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from Query.

@@ -22,8 +22,10 @@ from __future__ import annotations
 
 __all__ = (
     "ChainedDatasetQueryResults",
+    "DatabaseDimensionRecordQueryResults",
     "DataCoordinateQueryResults",
     "DatasetQueryResults",
+    "DimensionRecordQueryResults",
     "ParentDatasetQueryResults",
 )
 
@@ -39,6 +41,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Tuple,
     Union,
 )
 
@@ -53,9 +56,14 @@ from ...core import (
     DimensionRecord,
     SimpleQuery,
 )
-from ..interfaces import Database
+from ..interfaces import Database, DimensionRecordStorage
 from ._query import Query
 from ._structs import QuerySummary
+
+
+QueryFactoryMethod = Callable[[Optional[Iterable[str]], Optional[Tuple[int, Optional[int]]]], Query]
+"""Type of a query factory method type used by DataCoordinateQueryResults.
+"""
 
 
 class DataCoordinateQueryResults(DataCoordinateIterable):
@@ -66,8 +74,14 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
     ----------
     db : `Database`
         Database engine used to execute queries.
-    query : `Query`
-        Low-level representation of the query that backs this result object.
+    query_factory : `QueryFactoryMethod`
+        Method which creates an instance of `Query` class.
+    graph : `DimensionGraph`
+        Dimensions used by query.
+    order_by : `Iterable` [ `str` ], optional
+        Optional sequence of column names used for result ordering.
+    limit : `Tuple` [ `int`, `int` ], optional
+        Limit for the number of returned records and optional offset.
     records : `Mapping`, optional
         A nested mapping containing `DimensionRecord` objects for all
         dimensions and all data IDs this query will yield.  If `None`
@@ -85,26 +99,105 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
     Instances should generally only be constructed by `Registry` methods or the
     methods of other query result objects.
     """
-    def __init__(self, db: Database, query: Query, *,
+    def __init__(self,
+                 db: Database,
+                 query_factory: QueryFactoryMethod,
+                 graph: DimensionGraph,
+                 *,
+                 order_by: Optional[Iterable[str]] = None,
+                 limit: Optional[Tuple[int, Optional[int]]] = None,
                  records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None):
         self._db = db
-        self._query = query
+        self._query_factory = query_factory
+        self._graph = graph
+        self._order_by = order_by
+        self._limit = limit
         self._records = records
-        assert query.datasetType is None, \
-            "Query used to initialize data coordinate results should not have any datasets."
+        self._cached_query: Optional[Query] = None
 
-    __slots__ = ("_db", "_query", "_records")
+    __slots__ = ("_db", "_query_factory", "_graph", "_order_by", "_limit", "_records", "_cached_query")
+
+    @classmethod
+    def from_query(cls,
+                   db: Database,
+                   query: Query,
+                   graph: DimensionGraph,
+                   *,
+                   order_by: Optional[Iterable[str]] = None,
+                   limit: Optional[Tuple[int, Optional[int]]] = None,
+                   records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None
+                   ) -> DataCoordinateQueryResults:
+        """Make an instance from a pre-existing query instead of a factory.
+
+        Parameters
+        ----------
+        db : `Database`
+            Database engine used to execute queries.
+        query : `Query`
+            Low-level representation of the query that backs this result
+            object.
+        graph : `DimensionGraph`
+            Dimensions used by query.
+        order_by : `Iterable` [ `str` ], optional
+            Optional sequence of column names used for result ordering.
+        limit : `Tuple` [ `int`, `int` ], optional
+            Limit for the number of returned records and optional offset.
+        records : `Mapping`, optional
+            A nested mapping containing `DimensionRecord` objects for all
+            dimensions and all data IDs this query will yield.  If `None`
+            (default), `DataCoordinateIterable.hasRecords` will return `False`.
+            The outer mapping has `str` keys (the names of dimension elements).
+            The inner mapping has `tuple` keys representing data IDs (tuple
+            conversions of `DataCoordinate.values()`) and `DimensionRecord`
+            values.
+        """
+        def factory(order_by: Optional[Iterable[str]], limit: Optional[Tuple[int, Optional[int]]]) -> Query:
+            return query
+
+        return DataCoordinateQueryResults(db, factory, graph, order_by=order_by,
+                                          limit=limit, records=records)
 
     def __iter__(self) -> Iterator[DataCoordinate]:
         return (self._query.extractDataId(row, records=self._records) for row in self._query.rows(self._db))
 
     def __repr__(self) -> str:
-        return f"<DataCoordinate iterator with dimensions={self._query.graph}>"
+        return f"<DataCoordinate iterator with dimensions={self._graph}>"
+
+    def _clone(self, *,
+               query_factory: Optional[QueryFactoryMethod] = None,
+               query: Optional[Query] = None,
+               graph: Optional[DimensionGraph] = None,
+               order_by: Optional[Iterable[str]] = None,
+               limit: Optional[Tuple[int, Optional[int]]] = None,
+               records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+               ) -> DataCoordinateQueryResults:
+        """Clone this instance potentially updating some attributes.
+        """
+        graph = graph if graph is not None else self._graph
+        order_by = order_by if order_by is not None else self._order_by
+        limit = limit if limit is not None else self._limit
+        records = records if records is not None else self._records
+        if query is None:
+            query_factory = query_factory or self._query_factory
+            return DataCoordinateQueryResults(self._db, query_factory, graph,
+                                              order_by=order_by, limit=limit, records=records)
+        else:
+            return DataCoordinateQueryResults.from_query(self._db, query, graph,
+                                                         order_by=order_by, limit=limit, records=records)
+
+    @property
+    def _query(self) -> Query:
+        """Query representation instance (`Query`)"""
+        if self._cached_query is None:
+            self._cached_query = self._query_factory(self._order_by, self._limit)
+            assert self._cached_query.datasetType is None, \
+                "Query used to initialize data coordinate results should not have any datasets."
+        return self._cached_query
 
     @property
     def graph(self) -> DimensionGraph:
         # Docstring inherited from DataCoordinateIterable.
-        return self._query.graph
+        return self._graph
 
     def hasFull(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
@@ -112,7 +205,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     def hasRecords(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
-        return self._records is not None or not self._query.graph
+        return self._records is not None or not self._graph
 
     @contextmanager
     def materialize(self) -> Iterator[DataCoordinateQueryResults]:
@@ -141,7 +234,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         `subset` for examples.
         """
         with self._query.materialize(self._db) as materialized:
-            yield DataCoordinateQueryResults(self._db, materialized, records=self._records)
+            # Note that we depend on order_by columns to be passes from Query
+            # to MaterializedQuery, so order_by and limit are not used.
+            yield self._clone(query=materialized)
 
     def expanded(self) -> DataCoordinateQueryResults:
         """Return a results object for which `hasRecords` returns `True`.
@@ -175,7 +270,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                     tuple(record.dataId.values()): record
                     for record in self._query.managers.dimensions[element].fetch(subset)
                 }
-            return DataCoordinateQueryResults(self._db, self._query, records=records)
+
+            return self._clone(query=self._query, records=records)
         else:
             return self
 
@@ -238,11 +334,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             records = {element.name: self._records[element.name] for element in graph.elements}
         else:
             records = None
-        return DataCoordinateQueryResults(
-            self._db,
-            self._query.subset(graph=graph, datasets=False, unique=unique),
-            records=records,
-        )
+        query = self._query.subset(graph=graph, datasets=False, unique=unique)
+
+        return self._clone(graph=graph, query=query, records=records)
 
     def constrain(self, query: SimpleQuery, columns: Callable[[str], sqlalchemy.sql.ColumnElement]) -> None:
         # Docstring inherited from DataCoordinateIterable.
@@ -387,6 +481,53 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         can short-circuit this at any time by simplying not iterating further.
         """
         return self._query.explain_no_results(self._db)
+
+    def order_by(self, *args: str) -> DataCoordinateQueryResults:
+        """Make the iterator return ordered result.
+
+        Parameters
+        ----------
+        *args : `str`
+            Names of the columns/dimensions to use for ordering. Column name
+            can be prefixed with minus (``-``) to use descending ordering.
+
+        Returns
+        -------
+        result : `DataCoordinateQueryResults`
+            Returns ``self`` instance which is updated to return ordered
+            result.
+
+        Notes
+        -----
+        This method modifies the iterator in place and returns the same
+        instance to support method chaining.
+        """
+        return self._clone(order_by=args)
+
+    def limit(self, limit: int, offset: Optional[int] = None) -> DataCoordinateQueryResults:
+        """Make the iterator return limited number of records.
+
+        Parameters
+        ----------
+        limit : `int`
+            Upper limit on the number of returned records.
+        offset : `int` or `None`
+            If not `None` then the number of records to skip before returning
+            ``limit`` records.
+
+        Returns
+        -------
+        result : `DataCoordinateQueryResults`
+            Returns ``self`` instance which is updated to return limited set
+            of records.
+
+        Notes
+        -----
+        This method modifies the iterator in place and returns the same
+        instance to support method chaining. Normally this method is used
+        together with `order_by` method.
+        """
+        return self._clone(limit=(limit, offset))
 
 
 class DatasetQueryResults(Iterable[DatasetRef]):
@@ -606,9 +747,11 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         The returned object is not in general `zip`-iterable with ``self``;
         it may be in a different order or have (or not have) duplicates.
         """
-        return DataCoordinateQueryResults(
+        query = self._query.subset(graph=self.parentDatasetType.dimensions, datasets=False, unique=False)
+        return DataCoordinateQueryResults.from_query(
             self._db,
-            self._query.subset(graph=self.parentDatasetType.dimensions, datasets=False, unique=False),
+            query,
+            self.parentDatasetType.dimensions,
             records=self._records,
         )
 
@@ -709,3 +852,159 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
         for r in self._chain:
             yield from r.explain_no_results()
         yield from self._doomed_by
+
+
+class DimensionRecordQueryResults(Iterable[DimensionRecord]):
+    """An interface for objects that represent the results of queries for
+    dimension records.
+    """
+
+    @abstractmethod
+    def count(self, *, exact: bool = True) -> int:
+        """Count the number of rows this query would return.
+
+        Parameters
+        ----------
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed to account for that filtering in the count.  If `False`, the
+            result may be an upper bound.
+
+        Returns
+        -------
+        count : `int`
+            The number of rows the query would return, or an upper bound if
+            ``exact=False``.
+
+        Notes
+        -----
+        This counts the number of rows returned, not the number of unique rows
+        returned, so even with ``exact=True`` it may provide only an upper
+        bound on the number of *deduplicated* result rows.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
+        """Test whether this query returns any results.
+
+        Parameters
+        ----------
+        execute : `bool`, optional
+            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
+            determined prior to execution that the query would return no rows.
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed, until at least one result row is found.  If `False`, the
+            returned result does not account for post-query filtering, and
+            hence may be `True` even when all result rows would be filtered
+            out.
+
+        Returns
+        -------
+        any : `bool`
+            `True` if the query would (or might, depending on arguments) yield
+            result rows.  `False` if it definitely would not.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def order_by(self, *args: str) -> DimensionRecordQueryResults:
+        """Make the iterator return ordered result.
+
+        Parameters
+        ----------
+        *args : `str`
+            Names of the columns/dimensions to use for ordering. Column name
+            can be prefixed with minus (``-``) to use descending ordering.
+
+        Returns
+        -------
+        result : `DimensionRecordQueryResults`
+            Returns ``self`` instance which is updated to return ordered
+            result.
+
+        Notes
+        -----
+        This method can modify the iterator in place and return the same
+        instance.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def limit(self, limit: int, offset: Optional[int] = None) -> DimensionRecordQueryResults:
+        """Make the iterator return limited number of records.
+
+        Parameters
+        ----------
+        limit : `int`
+            Upper limit on the number of returned records.
+        offset : `int` or `None`
+            If not `None` then the number of records to skip before returning
+            ``limit`` records.
+
+        Returns
+        -------
+        result : `DimensionRecordQueryResults`
+            Returns ``self`` instance which is updated to return limited set
+            of records.
+
+        Notes
+        -----
+        This method can modify the iterator in place and return the same
+        instance. Normally this method is used together with `order_by`
+        method.
+        """
+        raise NotImplementedError()
+
+
+class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
+    """Implementation of DimensionRecordQueryResults using database query.
+
+    Parameters
+    ----------
+    dataIds : `DataCoordinateQueryResults`
+        Iterator for DataIds.
+    recordStorage : `DimensionRecordStorage`
+        Instance of storage class for dimension records.
+    """
+    def __init__(self, dataIds: DataCoordinateQueryResults, recordStorage: DimensionRecordStorage):
+        self._dataIds = dataIds
+        self._recordStorage = recordStorage
+        self._order_by: Iterable[str] = ()
+
+    def __iter__(self) -> Iterator[DimensionRecord]:
+        # LIMIT is already applied at DataCoordinateQueryResults level
+        # (assumption here is that if DataId exists then dimension record
+        # exists too and their counts must be equal). We still need to make
+        # sure that ordering is applied to dimension records as well.
+        if not self._order_by:
+            return iter(self._recordStorage.fetch(self._dataIds))
+        else:
+            # fetch() method does not support ordering, for now do it hard way
+            # by fetching everything into memory and ordering by DataId
+            dataIds = self._dataIds.toSequence()
+            rec_map = {}
+            for rec in self._recordStorage.fetch(dataIds):
+                rec_map[rec.dataId] = rec
+            # TODO: Do we want to clean up dataIds that may be missing
+            return iter(rec_map[dataId] for dataId in dataIds)
+
+    def count(self, *, exact: bool = True) -> int:
+        # Docstring inherited from base class.
+        return self._dataIds.count(exact=exact)
+
+    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
+        # Docstring inherited from base class.
+        return self._dataIds.any(execute=execute, exact=exact)
+
+    def order_by(self, *args: str) -> DimensionRecordQueryResults:
+        # Docstring inherited from base class.
+        self._dataIds = self._dataIds.order_by(*args)
+        self._order_by = args
+        return self
+
+    def limit(self, limit: int, offset: Optional[int] = None) -> DimensionRecordQueryResults:
+        # Docstring inherited from base class.
+        self._dataIds = self._dataIds.limit(limit, offset)
+        return self
