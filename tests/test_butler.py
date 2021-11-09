@@ -427,7 +427,9 @@ class ButlerPutGetTests:
         metric = makeExampleMetrics()
         # Register a new run and put dataset.
         run = "deferred"
-        butler.registry.registerRun(run)
+        self.assertTrue(butler.registry.registerRun(run))
+        # Second time it will be allowed but indicate no-op
+        self.assertFalse(butler.registry.registerRun(run))
         ref = butler.put(metric, datasetType, dataId, run=run)
         # Putting with no run should fail with TypeError.
         with self.assertRaises(TypeError):
@@ -669,7 +671,11 @@ class ButlerTests(ButlerPutGetTests):
             butler.pruneCollection(run2, purge=True)
         # Add a TAGGED collection and associate ref3 only into it.
         tag1 = "tag1"
-        butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
+        registered = butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
+        self.assertTrue(registered)
+        # Registering a second time should be allowed.
+        registered = butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
+        self.assertFalse(registered)
         butler.registry.associate(tag1, [ref3])
         # Add a CHAINED collection that searches run1 and then run2.  It
         # logically contains only ref1, because ref2 is shadowed due to them
@@ -1756,15 +1762,16 @@ class PosixDatastoreTransfers(unittest.TestCase):
             butler.registry.insertDimensionData("detector", {"instrument": "DummyCamComp",
                                                              "id": 1, "full_name": "det1"})
 
-            dimensions = butler.registry.dimensions.extract(["instrument", "exposure"])
-            for datasetTypeName in datasetTypeNames:
-                datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
-                butler.registry.registerDatasetType(datasetType)
-
             for i in range(n_exposures):
                 butler.registry.insertDimensionData("exposure", {"instrument": "DummyCamComp",
                                                                  "id": i, "obs_id": f"exp{i}",
                                                                  "physical_filter": "d-r"})
+
+        # Create dataset types in the source butler.
+        dimensions = butler.registry.dimensions.extract(["instrument", "exposure"])
+        for datasetTypeName in datasetTypeNames:
+            datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+            self.source_butler.registry.registerDatasetType(datasetType)
 
         # Write a dataset to an unrelated run -- this will ensure that
         # we are rewriting integer dataset ids in the target if necessary.
@@ -1823,18 +1830,39 @@ class PosixDatastoreTransfers(unittest.TestCase):
                 new_metric = butler.get(ref.unresolved(), collections=run)
                 self.assertEqual(new_metric, metric)
 
+        # Create some bad dataset types to ensure we check for inconsistent
+        # definitions.
+        badStorageClass = self.storageClassFactory.getStorageClass("StructuredDataList")
+        for datasetTypeName in datasetTypeNames:
+            datasetType = DatasetType(datasetTypeName, dimensions, badStorageClass)
+            self.target_butler.registry.registerDatasetType(datasetType)
+        with self.assertRaises(ConflictingDefinitionError):
+            self.target_butler.transfer_from(self.source_butler, source_refs,
+                                             id_gen_map=id_gen_map)
+        # And remove the bad definitions.
+        for datasetTypeName in datasetTypeNames:
+            self.target_butler.registry.removeDatasetType(datasetTypeName)
+
+        # Transfer without creating dataset types should fail.
+        with self.assertRaises(KeyError):
+            self.target_butler.transfer_from(self.source_butler, source_refs,
+                                             id_gen_map=id_gen_map)
+
         # Now transfer them to the second butler
         with self.assertLogs(level=logging.DEBUG) as cm:
             transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
-                                                           id_gen_map=id_gen_map)
+                                                           id_gen_map=id_gen_map,
+                                                           register_dataset_types=True)
         self.assertEqual(len(transferred), n_expected)
         log_output = ";".join(cm.output)
         self.assertIn("found in datastore for chunk", log_output)
+        self.assertIn("Creating output run", log_output)
 
         # Do the transfer twice to ensure that it will do nothing extra.
         # Only do this if purge=True because it does not work for int
         # dataset_id.
         if purge:
+            # This should not need to register dataset types.
             transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
                                                            id_gen_map=id_gen_map)
             self.assertEqual(len(transferred), n_expected)
@@ -1860,6 +1888,17 @@ class PosixDatastoreTransfers(unittest.TestCase):
                 new_metric = self.target_butler.get(unresolved_ref, collections=ref.run)
                 old_metric = self.source_butler.get(unresolved_ref, collections=ref.run)
                 self.assertEqual(new_metric, old_metric)
+
+        # Now prune run2 collection and create instead a CHAINED collection.
+        # This should block the transfer.
+        self.target_butler.pruneCollection("run2", purge=True, unstore=True)
+        self.target_butler.registry.registerCollection("run2", CollectionType.CHAINED)
+        with self.assertRaises(TypeError):
+            # Re-importing the run1 datasets can be problematic if they
+            # use integer IDs so filter those out.
+            to_transfer = [ref for ref in source_refs if ref.run == "run2"]
+            self.target_butler.transfer_from(self.source_butler, to_transfer,
+                                             id_gen_map=id_gen_map)
 
 
 if __name__ == "__main__":

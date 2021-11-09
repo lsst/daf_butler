@@ -311,7 +311,7 @@ class Registry(ABC):
 
     @abstractmethod
     def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED,
-                           doc: Optional[str] = None) -> None:
+                           doc: Optional[str] = None) -> bool:
         """Add a new collection if one with the given name does not exist.
 
         Parameters
@@ -322,6 +322,12 @@ class Registry(ABC):
             Enum value indicating the type of collection to create.
         doc : `str`, optional
             Documentation string for the collection.
+
+        Returns
+        -------
+        registered : `bool`
+            Boolean indicating whether the collection was already registered
+            or was created by this call.
 
         Notes
         -----
@@ -369,7 +375,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def registerRun(self, name: str, doc: Optional[str] = None) -> None:
+    def registerRun(self, name: str, doc: Optional[str] = None) -> bool:
         """Add a new run if one with the given name does not exist.
 
         Parameters
@@ -378,6 +384,12 @@ class Registry(ABC):
             The name of the run to create.
         doc : `str`, optional
             Documentation string for the collection.
+
+        Returns
+        -------
+        registered : `bool`
+            Boolean indicating whether a new run was registered. `False`
+            if it already existed.
 
         Notes
         -----

@@ -1796,7 +1796,8 @@ class Butler:
     def transfer_from(self, source_butler: Butler, source_refs: Iterable[DatasetRef],
                       transfer: str = "auto",
                       id_gen_map: Dict[str, DatasetIdGenEnum] = None,
-                      skip_missing: bool = True) -> List[DatasetRef]:
+                      skip_missing: bool = True,
+                      register_dataset_types: bool = False) -> List[DatasetRef]:
         """Transfer datasets to this Butler from a run in another Butler.
 
         Parameters
@@ -1818,6 +1819,9 @@ class Butler:
             them are not transferred. If `False` a registry entry will be
             created even if no datastore record is created (and so will
             look equivalent to the dataset being unstored).
+        register_dataset_types : `bool`
+            If `True` any missing dataset types are registered. Otherwise
+            an exception is raised.
 
         Returns
         -------
@@ -1869,16 +1873,40 @@ class Butler:
 
         # Importing requires that we group the refs by dataset type and run
         # before doing the import.
+        source_dataset_types = set()
         grouped_refs = defaultdict(list)
         grouped_indices = defaultdict(list)
         for i, ref in enumerate(source_refs):
             grouped_refs[ref.datasetType, ref.run].append(ref)
             grouped_indices[ref.datasetType, ref.run].append(i)
+            source_dataset_types.add(ref.datasetType)
 
-        # Register any dataset types we need. This has to be done outside
-        # of a transaction and so will not be rolled back on failure.
-        for datasetType, _ in grouped_refs:
-            self.registry.registerDatasetType(datasetType)
+        # Check to see if the dataset type in the source butler has
+        # the same definition in the target butler and register missing
+        # ones if requested. Registration must happen outside a transaction.
+        newly_registered_dataset_types = set()
+        for datasetType in source_dataset_types:
+            if register_dataset_types:
+                # Let this raise immediately if inconsistent. Continuing
+                # on to find additional inconsistent dataset types
+                # might result in additional unwanted dataset types being
+                # registered.
+                if self.registry.registerDatasetType(datasetType):
+                    newly_registered_dataset_types.add(datasetType)
+            else:
+                # If the dataset type is missing, let it fail immediately.
+                target_dataset_type = self.registry.getDatasetType(datasetType.name)
+                if target_dataset_type != datasetType:
+                    raise ConflictingDefinitionError("Source butler dataset type differs from definition"
+                                                     f" in target butler: {datasetType} !="
+                                                     f" {target_dataset_type}")
+        if newly_registered_dataset_types:
+            # We may have registered some even if there were inconsistencies
+            # but should let people know (or else remove them again).
+            log.log(VERBOSE, "Registered the following dataset types in the target Butler: %s",
+                    ", ".join(d.name for d in newly_registered_dataset_types))
+        else:
+            log.log(VERBOSE, "All required dataset types are known to the target Butler")
 
         # The returned refs should be identical for UUIDs.
         # For now must also support integers and so need to retain the
@@ -1887,13 +1915,19 @@ class Butler:
         transferred_refs_tmp: List[Optional[DatasetRef]] = [None] * len(source_refs)
         default_id_gen = DatasetIdGenEnum.UNIQUE
 
+        handled_collections: Set[str] = set()
+
         # Do all the importing in a single transaction.
         with self.transaction():
             for (datasetType, run), refs_to_import in progress.iter_item_chunks(grouped_refs.items(),
                                                                                 desc="Importing to registry"
                                                                                 " by run and dataset type"):
-                run_doc = source_butler.registry.getCollectionDocumentation(run)
-                self.registry.registerCollection(run, CollectionType.RUN, doc=run_doc)
+                if run not in handled_collections:
+                    run_doc = source_butler.registry.getCollectionDocumentation(run)
+                    registered = self.registry.registerRun(run, doc=run_doc)
+                    handled_collections.add(run)
+                    if registered:
+                        log.log(VERBOSE, "Creating output run %s", run)
 
                 id_generation_mode = default_id_gen
                 if isinstance(refs_to_import[0].id, int):
