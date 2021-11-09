@@ -70,6 +70,36 @@ def _doUpdate(d, u):
     return d
 
 
+def _checkNextItem(k, d, create, must_be_dict):
+    """See if k is in d and if it is return the new child."""
+    nextVal = None
+    isThere = False
+    if d is None:
+        # We have gone past the end of the hierarchy
+        pass
+    elif not must_be_dict and isinstance(d, collections.abc.Sequence):
+        # Check for Sequence first because for lists
+        # __contains__ checks whether value is found in list
+        # not whether the index exists in list. When we traverse
+        # the hierarchy we are interested in the index.
+        try:
+            nextVal = d[int(k)]
+            isThere = True
+        except IndexError:
+            pass
+        except ValueError:
+            isThere = k in d
+    elif k in d:
+        nextVal = d[k]
+        isThere = True
+    elif create:
+        d[k] = {}
+        nextVal = d[k]
+        isThere = True
+
+    return nextVal, isThere
+
+
 class Loader(yamlLoader):
     """YAML Loader that supports file include directives.
 
@@ -219,7 +249,9 @@ class Config(collections.abc.MutableMapping):
         if isinstance(other, Config):
             self._data = copy.deepcopy(other._data)
             self.configFile = other.configFile
-        elif isinstance(other, collections.abc.Mapping):
+        elif isinstance(other, (dict, collections.abc.Mapping)):
+            # In most cases we have a dict, and it's more efficient
+            # to check for a dict instance before checking the generic mapping.
             self.update(other)
         elif isinstance(other, (str, ButlerURI, Path)):
             # if other is a string, assume it is a file path/URI
@@ -544,43 +576,21 @@ class Config(collections.abc.MutableMapping):
         """
         d = self._data
 
-        def checkNextItem(k, d, create):
-            """See if k is in d and if it is return the new child."""
-            nextVal = None
-            isThere = False
-            if d is None:
-                # We have gone past the end of the hierarchy
-                pass
-            elif isinstance(d, collections.abc.Sequence):
-                # Check sequence first because for lists
-                # __contains__ checks whether value is found in list
-                # not whether the index exists in list. When we traverse
-                # the hierarchy we are interested in the index.
-                try:
-                    nextVal = d[int(k)]
-                    isThere = True
-                except IndexError:
-                    pass
-                except ValueError:
-                    isThere = k in d
-            elif k in d:
-                nextVal = d[k]
-                isThere = True
-            elif create:
-                d[k] = {}
-                nextVal = d[k]
-                isThere = True
-            return nextVal, isThere
+        # For the first key, d must be a dict so it is a waste
+        # of time to check for a sequence.
+        must_be_dict = True
 
         hierarchy = []
         complete = True
         for k in keys:
-            d, isThere = checkNextItem(k, d, create)
+            d, isThere = _checkNextItem(k, d, create, must_be_dict)
             if isThere:
                 hierarchy.append(d)
             else:
                 complete = False
                 break
+            # Second time round it might be a sequence.
+            must_be_dict = False
 
         return hierarchy, complete
 
@@ -589,14 +599,27 @@ class Config(collections.abc.MutableMapping):
         # match.  This allows `Config.items()` to work via a simple
         # __iter__ implementation that returns top level keys of
         # self._data.
-        keys = self._getKeyHierarchy(name)
 
-        hierarchy, complete = self._findInHierarchy(keys)
-        if not complete:
-            raise KeyError(f"{name} not found")
-        data = hierarchy[-1]
+        # If the name matches a key in the top-level hierarchy, bypass
+        # all further cleverness.
+        found_directly = False
+        try:
+            data = self._data[name]
+            found_directly = True
+        except KeyError:
+            pass
 
-        if isinstance(data, collections.abc.Mapping):
+        if not found_directly:
+            keys = self._getKeyHierarchy(name)
+
+            hierarchy, complete = self._findInHierarchy(keys)
+            if not complete:
+                raise KeyError(f"{name} not found")
+            data = hierarchy[-1]
+
+        # In most cases we have a dict, and it's more efficient
+        # to check for a dict instance before checking the generic mapping.
+        if isinstance(data, (dict, collections.abc.Mapping)):
             data = Config(data)
             # Ensure that child configs inherit the parent internal delimiter
             if self._D != Config._D:
