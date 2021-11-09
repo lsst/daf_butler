@@ -78,7 +78,7 @@ def _checkNextItem(k, d, create, must_be_dict):
         # We have gone past the end of the hierarchy
         pass
     elif not must_be_dict and isinstance(d, collections.abc.Sequence):
-        # Check sequence first because for lists
+        # Check for Sequence first because for lists
         # __contains__ checks whether value is found in list
         # not whether the index exists in list. When we traverse
         # the hierarchy we are interested in the index.
@@ -250,6 +250,8 @@ class Config(collections.abc.MutableMapping):
             self._data = copy.deepcopy(other._data)
             self.configFile = other.configFile
         elif isinstance(other, (dict, collections.abc.Mapping)):
+            # In most cases we have a dict, and it's more efficient
+            # to check for a dict instance before checking the generic mapping.
             self.update(other)
         elif isinstance(other, (str, ButlerURI, Path)):
             # if other is a string, assume it is a file path/URI
