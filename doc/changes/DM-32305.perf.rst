@@ -1,0 +1,1 @@
+Minor efficiency improvements when accessing `lsst.daf.butler.Config` hierarchies.
