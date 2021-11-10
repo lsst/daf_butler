@@ -29,22 +29,17 @@ from ..cli.utils import sortAstropyTable
 class _Table:
     """Aggregates DataIds and creates an astropy table with one DataId per
     row. Eliminates duplicate rows.
+
+    Parameters
+    ----------
+    dataIds : `iterable` [ ``DataId`` ]
+        The DataIds to add to the table.
     """
+    def __init__(self, dataIds):
+        # use dict to store dataIds as keys to preserve ordering
+        self.dataIds = dict.fromkeys(dataIds)
 
-    def __init__(self):
-        self.dataIds = set()
-
-    def add(self, dataId):
-        """Add a DataId to the table.
-
-        Parameters
-        ----------
-        dataId : ``DataId``
-            The DataId to add to the table.
-        """
-        self.dataIds.add(dataId)
-
-    def getAstropyTable(self):
+    def getAstropyTable(self, order):
         """Get the table as an astropy table.
 
         Returns
@@ -52,6 +47,8 @@ class _Table:
         table : `astropy.table.Table`
             The dataIds, sorted by spatial and temporal columns first, and then
             the rest of the columns, with duplicate dataIds removed.
+        order : `bool`
+            If True then order rows based on DataIds.
         """
         # Should never happen; adding a dataset should be the action that
         # causes a _Table to be created.
@@ -71,10 +68,12 @@ class _Table:
         rows = [[value for value in dataId.full.values()] for dataId in self.dataIds]
 
         table = AstropyTable(np.array(rows), names=columnNames, dtype=columnTypes)
-        return sortAstropyTable(table, dimensions)
+        if order:
+            table = sortAstropyTable(table, dimensions)
+        return table
 
 
-def queryDataIds(repo, dimensions, datasets, where, collections):
+def queryDataIds(repo, dimensions, datasets, where, collections, order_by, limit, offset):
     # Docstring for supported parameters is the same as Registry.queryDataIds
 
     butler = Butler(repo)
@@ -83,10 +82,15 @@ def queryDataIds(repo, dimensions, datasets, where, collections):
                                            where=where,
                                            collections=collections)
 
+    if order_by:
+        results.order_by(*order_by)
+    if limit > 0:
+        if offset <= 0:
+            offset = None
+        results.limit(limit, offset)
+
     if len(results.graph) > 0:
-        table = _Table()
-        for dataId in results:
-            table.add(dataId)
-        return table.getAstropyTable()
+        table = _Table(results)
+        return table.getAstropyTable(not order_by)
     else:
         return None

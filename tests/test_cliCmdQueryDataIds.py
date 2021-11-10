@@ -47,7 +47,10 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
                                    dimensions=dimensions,
                                    collections=collections,
                                    datasets=datasets,
-                                   where=where)
+                                   where=where,
+                                   order_by=None,
+                                   limit=0,
+                                   offset=0)
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
