@@ -33,6 +33,7 @@ import string
 import random
 import time
 import socket
+import pathlib
 
 try:
     import boto3
@@ -1145,6 +1146,25 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     datastoreStr = ["/tmp"]
     datastoreName = [f"FileDatastore@{BUTLER_ROOT_TAG}"]
     registryStr = "/gen3.sqlite3"
+
+    def testPathConstructor(self):
+        """Independent test of constructor using PathLike.
+        """
+        butler = Butler(self.tmpConfigFile, run="ingest")
+        self.assertIsInstance(butler, Butler)
+
+        # And again with a Path object with the butler yaml
+        path = pathlib.Path(self.tmpConfigFile)
+        butler = Butler(path, writeable=False)
+        self.assertIsInstance(butler, Butler)
+
+        # And again with a Path object without the butler yaml
+        # (making sure we skip it if the tmp config doesn't end
+        # in butler.yaml -- which is the case for a subclass)
+        if self.tmpConfigFile.endswith("butler.yaml"):
+            path = pathlib.Path(os.path.dirname(self.tmpConfigFile))
+            butler = Butler(path, writeable=False)
+            self.assertIsInstance(butler, Butler)
 
     def testExportTransferCopy(self):
         """Test local export using all transfer modes"""

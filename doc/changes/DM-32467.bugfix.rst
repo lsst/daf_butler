@@ -1,0 +1,1 @@
+Butler constructor can now take a `os.PathLike` object when the ``butler.yaml`` is not included in the path.
