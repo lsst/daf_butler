@@ -98,6 +98,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
     def __iter__(self) -> Iterator[DataCoordinate]:
         return (self._query.extractDataId(row, records=self._records) for row in self._query.rows(self._db))
 
+    def __repr__(self) -> str:
+        return f"<DataCoordinate iterator with dimensions={self._query.graph}>"
+
     @property
     def graph(self) -> DimensionGraph:
         # Docstring inherited from DataCoordinateIterable.
@@ -572,6 +575,9 @@ class ParentDatasetQueryResults(DatasetQueryResults):
                 else:
                     yield parentRef.makeComponentRef(component)
 
+    def __repr__(self) -> str:
+        return f"<DatasetRef iterator for [components of] {self._datasetType.name}>"
+
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         yield self
@@ -666,6 +672,9 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
 
     def __iter__(self) -> Iterator[DatasetRef]:
         return itertools.chain.from_iterable(self._chain)
+
+    def __repr__(self) -> str:
+        return "<DatasetRef iterator for multiple dataset types>"
 
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
