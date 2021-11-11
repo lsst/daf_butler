@@ -98,6 +98,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
     def __iter__(self) -> Iterator[DataCoordinate]:
         return (self._query.extractDataId(row, records=self._records) for row in self._query.rows(self._db))
 
+    def __repr__(self) -> str:
+        return f"<DataCoordinate iterator with dimensions={self._query.graph}>"
+
     @property
     def graph(self) -> DimensionGraph:
         # Docstring inherited from DataCoordinateIterable.
@@ -378,10 +381,10 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         iterator has been exhausted, or if `any` or `count` was already called
         (with ``exact=True`` for the latter two).
 
-        At present, this method only returns messages that are generated while
-        the query is being built or filtered.  In the future, it may perform
-        its own new follow-up queries, which users may wish to short-circuit
-        simply by not continuing to iterate over its results.
+        This method first yields messages that are generated while the query is
+        being built or filtered, but may then proceed to diagnostics generated
+        by performing what should be inexpensive follow-up queries.  Callers
+        can short-circuit this at any time by simplying not iterating further.
         """
         return self._query.explain_no_results(self._db)
 
@@ -509,10 +512,10 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         iterator has been exhausted, or if `any` or `count` was already called
         (with ``exact=True`` for the latter two).
 
-        At present, this method only returns messages that are generated while
-        the query is being built or filtered.  In the future, it may perform
-        its own new follow-up queries, which users may wish to short-circuit
-        simply by not continuing to iterate over its results.
+        This method first yields messages that are generated while the query is
+        being built or filtered, but may then proceed to diagnostics generated
+        by performing what should be inexpensive follow-up queries.  Callers
+        can short-circuit this at any time by simplying not iterating further.
         """
         raise NotImplementedError()
 
@@ -571,6 +574,9 @@ class ParentDatasetQueryResults(DatasetQueryResults):
                     yield parentRef
                 else:
                     yield parentRef.makeComponentRef(component)
+
+    def __repr__(self) -> str:
+        return f"<DatasetRef iterator for [components of] {self._datasetType.name}>"
 
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
@@ -666,6 +672,9 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
 
     def __iter__(self) -> Iterator[DatasetRef]:
         return itertools.chain.from_iterable(self._chain)
+
+    def __repr__(self) -> str:
+        return "<DatasetRef iterator for multiple dataset types>"
 
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
