@@ -281,6 +281,47 @@ class Butler:
     code.
     """
 
+    @classmethod
+    def get_repo_uri(cls, label: str) -> ButlerURI:
+        """Look up the label in a butler repository index.
+
+        Parameters
+        ----------
+        label : `str`
+            Label of the Butler repository to look up.
+
+        Returns
+        -------
+        uri : `ButlerURI`
+            URI to the Butler repository associated with the given label.
+
+        Raises
+        ------
+        KeyError
+            Raised if the label is not found in the index, or if an index
+            can not be found at all.
+
+        Notes
+        -----
+        The index of butler repositories is found by looking for a
+        configuration file at the URI pointed at by the environment
+        variable ``$BUTLER_REPOSITORY_INDEX``. The configuration file
+        is a simple dictionary lookup of the form:
+
+        .. code-block:: yaml
+
+           label1: uri1
+           label2: uri2
+
+        and can be in YAML or JSON format.
+        """
+        index_uri = os.environ.get("BUTLER_REPOSITORY_INDEX")
+        if index_uri is None:
+            raise KeyError("No repository index defined in enviroment variable BUTLER_REPOSITORY_INDEX.")
+
+        config = Config(index_uri)
+        return config[label]
+
     @staticmethod
     def makeRepo(root: str, config: Union[Config, str, None] = None,
                  dimensionConfig: Union[Config, str, None] = None, standalone: bool = False,

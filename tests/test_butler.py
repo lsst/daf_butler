@@ -482,6 +482,26 @@ class ButlerTests(ButlerPutGetTests):
         self.assertIsNone(butler2.run)
         self.assertIs(butler.datastore, butler2.datastore)
 
+        # Test that we can use an environment variable to find this
+        # repository.
+        butler_index = Config()
+        butler_index["label"] = self.tmpConfigFile
+        butler_index.dump
+        with ButlerURI.temporary_uri(suffix=".yaml") as temp_file:
+            butler_index.dumpToUri(temp_file)
+            with unittest.mock.patch.dict(os.environ, {"BUTLER_REPOSITORY_INDEX": str(temp_file)}):
+                uri = Butler.get_repo_uri("label")
+                butler = Butler(uri, writeable=False)
+                self.assertIsInstance(butler, Butler)
+                with self.assertRaises(KeyError):
+                    Butler.get_repo_uri("missing")
+            with unittest.mock.patch.dict(os.environ, {"BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
+                with self.assertRaises(FileNotFoundError):
+                    Butler.get_repo_uri("label")
+            with self.assertRaises(KeyError):
+                # No environment variable set.
+                Butler.get_repo_uri("label")
+
     def testBasicPutGet(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         self.runPutGetTest(storageClass, "test_metric")
