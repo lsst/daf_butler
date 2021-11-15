@@ -19,8 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import annotations
-
 __all__ = ("ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
            "ButlerLogRecord", "JsonLogFormatter")
 
@@ -192,7 +190,7 @@ class ButlerLogRecord(BaseModel):
         allow_mutation = False
 
     @classmethod
-    def from_record(cls, record: LogRecord) -> ButlerLogRecord:
+    def from_record(cls, record: LogRecord) -> "ButlerLogRecord":
         """Create a new instance from a `~logging.LogRecord`.
 
         Parameters
@@ -274,7 +272,7 @@ class ButlerLogRecords(BaseModel):
     _log_format: Optional[str] = PrivateAttr(None)
 
     @classmethod
-    def from_records(cls, records: Iterable[ButlerLogRecord]) -> ButlerLogRecords:
+    def from_records(cls, records: Iterable[ButlerLogRecord]) -> "ButlerLogRecords":
         """Create collection from iterable.
 
         Parameters
@@ -285,7 +283,7 @@ class ButlerLogRecords(BaseModel):
         return cls(__root__=list(records))
 
     @classmethod
-    def from_file(cls, filename: str) -> ButlerLogRecords:
+    def from_file(cls, filename: str) -> "ButlerLogRecords":
         """Read records from file.
 
         Parameters
@@ -354,7 +352,7 @@ class ButlerLogRecords(BaseModel):
         return False
 
     @classmethod
-    def from_stream(cls, stream: IO) -> ButlerLogRecords:
+    def from_stream(cls, stream: IO) -> "ButlerLogRecords":
         """Read records from I/O stream.
 
         Parameters
@@ -391,7 +389,7 @@ class ButlerLogRecords(BaseModel):
         return cls.from_records(records)
 
     @classmethod
-    def from_raw(cls, serialized: Union[str, bytes]) -> ButlerLogRecords:
+    def from_raw(cls, serialized: Union[str, bytes]) -> "ButlerLogRecords":
         """Parse raw serialized form and return records.
 
         Parameters
@@ -464,7 +462,7 @@ class ButlerLogRecords(BaseModel):
     def __setitem__(self, index: int, value: Record) -> None:
         self.__root__[index] = self._validate_record(value)
 
-    def __getitem__(self, index: Union[slice, int]) -> Union[ButlerLogRecords, ButlerLogRecord]:
+    def __getitem__(self, index: Union[slice, int]) -> "Union[ButlerLogRecords, ButlerLogRecord]":
         # Handles slices and returns a new collection in that
         # case.
         item = self.__root__[index]

@@ -19,8 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import annotations
-
 __all__ = (
     "QueryDatasetsModel",
     "QueryDataIdsModel",
@@ -116,7 +114,7 @@ class ExpressionQueryParameter(BaseModel):
         return expression
 
     @classmethod
-    def from_expression(cls, expression: Any) -> ExpressionQueryParameter:
+    def from_expression(cls, expression: Any) -> "ExpressionQueryParameter":
         """Convert a standard dataset type expression to wire form."""
         if expression is ...:
             return cls()
