@@ -758,6 +758,15 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
         -------
         lower : `sqlalchemy.sql.ColumnElement`
             A SQLAlchemy expression for a lower bound.
+
+        Notes
+        -----
+        If database holds ``NULL`` for a timespan then the returned expression
+        should evaluate to 0. Main purpose of this and `upper` method is to use
+        them in generating SQL, in particular ORDER BY clause, to guarantee a
+        predictable ordering. It may potentially be used for transforming
+        boolean user expressions into SQL, but it will likely require extra
+        attention to ordering issues.
         """
         raise NotImplementedError()
 
@@ -770,6 +779,11 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
         -------
         upper : `sqlalchemy.sql.ColumnElement`
             A SQLAlchemy expression for an upper bound.
+
+        Notes
+        -----
+        If database holds ``NULL`` for a timespan then the returned expression
+        should evaluate to 0. Also see notes for `lower` method.
         """
         raise NotImplementedError()
 
@@ -945,11 +959,11 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
 
     def lower(self) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
-        return self._nsec[0]
+        return sqlalchemy.sql.functions.coalesce(self._nsec[0], sqlalchemy.sql.literal(0))
 
     def upper(self) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
-        return self._nsec[1]
+        return sqlalchemy.sql.functions.coalesce(self._nsec[1], sqlalchemy.sql.literal(0))
 
     def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
         # Docstring inherited.
