@@ -37,7 +37,10 @@ from ..opt import (
     directory_argument,
     element_argument,
     glob_argument,
+    limit_option,
+    offset_option,
     options_file_option,
+    order_by_option,
     query_datasets_options,
     register_dataset_types_option,
     repo_argument,
@@ -432,6 +435,9 @@ def certify_calibrations(*args, **kwargs):
                              "physical_filter" values to only those for which at least one "raw" dataset
                              exists in "collections".  Requires --collections."""))
 @where_option(help=where_help)
+@order_by_option()
+@limit_option()
+@offset_option()
 @options_file_option()
 def query_data_ids(**kwargs):
     """List the data IDs in a repository.
@@ -454,6 +460,9 @@ def query_data_ids(**kwargs):
                              --collections."""))
 @collections_option(help=collections_option.help + " May only be used with --datasets.")
 @where_option(help=where_help)
+@order_by_option()
+@limit_option()
+@offset_option()
 @click.option("--no-check", is_flag=True,
               help=unwrap("""Don't check the query before execution. By default the query is checked before it
                           executed, this may reject some valid queries that resemble common mistakes."""))

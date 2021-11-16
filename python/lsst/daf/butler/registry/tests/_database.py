@@ -183,7 +183,7 @@ class DatabaseTests(ABC):
         newDatabase = self.makeEmptyDatabase()
         with newDatabase.declareStaticTables(create=True) as context:
             context.addTableTuple(STATIC_TABLE_SPECS)
-        # Try to ensure the dyamic table exists in a read-only version of that
+        # Try to ensure the dynamic table exists in a read-only version of that
         # database, which should fail because we can't create it.
         with self.asReadOnly(newDatabase) as existingReadOnlyDatabase:
             with existingReadOnlyDatabase.declareStaticTables(create=False) as context:

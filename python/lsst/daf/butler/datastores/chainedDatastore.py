@@ -581,7 +581,7 @@ class ChainedDatastore(Datastore):
         primary, components = self.getURIs(ref, predict)
         if primary is None or components:
             raise RuntimeError(f"Dataset ({ref}) includes distinct URIs for components. "
-                               "Use Dataastore.getURIs() instead.")
+                               "Use Datastore.getURIs() instead.")
         return primary
 
     def retrieveArtifacts(self, refs: Iterable[DatasetRef],

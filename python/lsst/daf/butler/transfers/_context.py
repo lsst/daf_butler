@@ -71,7 +71,7 @@ class RepoExportContext:
     directory : `str`, optional
         Directory to pass to `Datastore.export`.
     transfer : `str`, optional
-        Transfer mdoe to pass to `Datastore.export`.
+        Transfer mode to pass to `Datastore.export`.
     """
 
     def __init__(self, registry: Registry, datastore: Datastore, backend: RepoExportBackend, *,

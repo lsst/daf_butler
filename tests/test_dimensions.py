@@ -354,7 +354,7 @@ class DataCoordinateTestCase(unittest.TestCase):
              Number of dimensions to select, before automatic expansion by
              `DimensionGraph`.
         dataIds : `DimensionGraph`, optional
-            Dimensions to select ffrom.  Defaults to ``self.allDataIds.graph``.
+            Dimensions to select from.  Defaults to ``self.allDataIds.graph``.
 
         Returns
         -------

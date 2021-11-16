@@ -1070,7 +1070,7 @@ class ConfigSubset(Config):
         consistency.
     mergeDefaults : `bool`, optional
         If `True` defaults will be read and the supplied config will
-        be combined with the defaults, with the supplied valiues taking
+        be combined with the defaults, with the supplied values taking
         precedence.
     searchPaths : `list` or `tuple`, optional
         Explicit additional paths to search for defaults. They should
@@ -1128,7 +1128,7 @@ class ConfigSubset(Config):
             if searchPaths:
                 fullSearchPath.extend(searchPaths)
 
-            # Read default paths from enviroment
+            # Read default paths from environment
             fullSearchPath.extend(self.defaultSearchPaths())
 
             # There are two places to find defaults for this particular config

@@ -583,7 +583,7 @@ class Butler:
         -------
         dataId : `dict` or `DataCoordinate`
             The, possibly rewritten, dataId. If given a `DataCoordinate` and
-            no keyword arguments, the orginal dataId will be returned
+            no keyword arguments, the original dataId will be returned
             unchanged.
         **kwargs : `dict`
             Any unused keyword arguments.

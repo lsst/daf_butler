@@ -409,6 +409,16 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         else:
             return self.column.contains(other)
 
+    def lower(self) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited.
+        return sqlalchemy.sql.functions.coalesce(sqlalchemy.sql.func.lower(self.column),
+                                                 sqlalchemy.sql.literal(0))
+
+    def upper(self) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited.
+        return sqlalchemy.sql.functions.coalesce(sqlalchemy.sql.func.upper(self.column),
+                                                 sqlalchemy.sql.literal(0))
+
     def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
         # Docstring inherited.
         if name is None:

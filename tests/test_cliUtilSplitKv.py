@@ -95,7 +95,7 @@ class SplitKvTestCase(unittest.TestCase):
                          {...: "foo"})
 
     def test_dashSeparator(self):
-        """Test that specifying a spearator is accepted and converts to a dict.
+        """Test that specifying a separator is accepted and converts to a dict.
         """
         self.assertEqual(split_kv("context", "param", "first-1,second-2", separator="-"),
                          {"first": "1", "second": "2"})
@@ -162,7 +162,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with({"lsst.daf.butler": "BAR"})
 
-        # check that invalid choices with and wihtout kv separators fail &
+        # check that invalid choices with and without kv separators fail &
         # return a non-zero exit code.
         for val in ("BOZ", "lsst.daf.butler=BOZ"):
             result = self.runner.invoke(cli, ["--metasyntactic-var", val])

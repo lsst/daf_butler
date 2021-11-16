@@ -25,22 +25,35 @@ from .. import Butler
 from ..core import Timespan
 
 
-def queryDimensionRecords(repo, element, datasets, collections, where, no_check):
+def queryDimensionRecords(repo, element, datasets, collections, where, no_check, order_by, limit, offset):
     # Docstring for supported parameters is the same as
     # Registry.queryDimensionRecords except for ``no_check``, which is the
     # inverse of ``check``.
 
     butler = Butler(repo)
 
-    records = list(butler.registry.queryDimensionRecords(element,
-                                                         datasets=datasets,
-                                                         collections=collections,
-                                                         where=where,
-                                                         check=not no_check))
+    records = butler.registry.queryDimensionRecords(element,
+                                                    datasets=datasets,
+                                                    collections=collections,
+                                                    where=where,
+                                                    check=not no_check)
+
+    if order_by:
+        records.order_by(*order_by)
+    if limit > 0:
+        if offset <= 0:
+            offset = None
+        records.limit(limit, offset)
+
+    records = list(records)
+
     if not records:
         return None
 
-    records.sort(key=lambda r: r.dataId)  # use the dataId to sort the rows
+    if not order_by:
+        # use the dataId to sort the rows if not ordered already
+        records.sort(key=lambda r: r.dataId)
+
     keys = records[0].fields.names  # order the columns the same as the record's `field.names`
 
     def conform(v):

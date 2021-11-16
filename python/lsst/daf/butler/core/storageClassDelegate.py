@@ -374,7 +374,7 @@ class StorageClassDelegate:
 
     @classmethod
     def selectResponsibleComponent(cls, derivedComponent: str, fromComponents: Set[Optional[str]]) -> str:
-        """Select the best component for calcluating a derived component.
+        """Select the best component for calculating a derived component.
 
         Given a possible set of components to choose from, return the
         component that should be used to calculate the requested derived

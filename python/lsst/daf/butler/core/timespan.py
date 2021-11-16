@@ -614,7 +614,7 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
 
     Compound: ClassVar[Type[TimespanDatabaseRepresentation]]
     """A concrete subclass of `TimespanDatabaseRepresentation` that simply
-    uses two separate fields for the begin (inclusive) and end (excusive)
+    uses two separate fields for the begin (inclusive) and end (exclusive)
     endpoints.
 
     This implementation should be compatible with any SQL database, and should
@@ -746,6 +746,44 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
         Notes
         -----
         See `Timespan.contains` for edge-case behavior.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def lower(self: _S) -> sqlalchemy.sql.ColumnElement:
+        """Return a SQLAlchemy expression representing a lower bound of a
+        timespan.
+
+        Returns
+        -------
+        lower : `sqlalchemy.sql.ColumnElement`
+            A SQLAlchemy expression for a lower bound.
+
+        Notes
+        -----
+        If database holds ``NULL`` for a timespan then the returned expression
+        should evaluate to 0. Main purpose of this and `upper` method is to use
+        them in generating SQL, in particular ORDER BY clause, to guarantee a
+        predictable ordering. It may potentially be used for transforming
+        boolean user expressions into SQL, but it will likely require extra
+        attention to ordering issues.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def upper(self: _S) -> sqlalchemy.sql.ColumnElement:
+        """Return a SQLAlchemy expression representing an upper bound of a
+        timespan.
+
+        Returns
+        -------
+        upper : `sqlalchemy.sql.ColumnElement`
+            A SQLAlchemy expression for an upper bound.
+
+        Notes
+        -----
+        If database holds ``NULL`` for a timespan then the returned expression
+        should evaluate to 0. Also see notes for `lower` method.
         """
         raise NotImplementedError()
 
@@ -918,6 +956,14 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
             return sqlalchemy.sql.and_(self._nsec[0] <= other, self._nsec[1] > other)
         else:
             return sqlalchemy.sql.and_(self._nsec[0] <= other._nsec[0], self._nsec[1] >= other._nsec[1])
+
+    def lower(self) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited.
+        return sqlalchemy.sql.functions.coalesce(self._nsec[0], sqlalchemy.sql.literal(0))
+
+    def upper(self) -> sqlalchemy.sql.ColumnElement:
+        # Docstring inherited.
+        return sqlalchemy.sql.functions.coalesce(self._nsec[1], sqlalchemy.sql.literal(0))
 
     def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
         # Docstring inherited.

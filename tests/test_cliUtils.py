@@ -70,7 +70,7 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
     def runTest(self, cli):
         """Tests `utils.addArgumentHelp` and its use in repo_argument and
         directory_argument; verifies that the argument help gets added to the
-        command fucntion help, and that it's added in the correct order. See
+        command function help, and that it's added in the correct order. See
         addArgumentHelp for more details."""
         expected = """Usage: cli [OPTIONS] REPO DIRECTORY
 
@@ -150,9 +150,9 @@ class MWOptionTest(unittest.TestCase):
             pass
         result = self.runner.invoke(cmd, ["--help"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        expectedOutut = """Options:
+        expectedOutput = """Options:
   --things TEXT ..."""
-        self.assertIn(expectedOutut, result.output)
+        self.assertIn(expectedOutput, result.output)
 
     def test_addElipsisToNargs(self):
         """Verify that MWOption adds " ..." after the option metavar when
@@ -169,9 +169,9 @@ class MWOptionTest(unittest.TestCase):
                 pass
             result = self.runner.invoke(cmd, ["--help"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            expectedOutut = f"""Options:
+            expectedOutput = f"""Options:
   --things TEXT{' ...' if numberOfArgs != 1 else ''}"""
-            self.assertIn(expectedOutut, result.output)
+            self.assertIn(expectedOutput, result.output)
 
 
 class MWArgumentDecoratorTest(unittest.TestCase):
@@ -209,7 +209,7 @@ class MWArgumentDecoratorTest(unittest.TestCase):
                     pass
                 result = self.runner.invoke(cmd, ["--help"])
                 self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-                expectedOutut = (f"""Usage: cmd [OPTIONS] {'THINGS' if required else '[THINGS]'} {'... ' if numberOfArgs != 1 else ''}OTHER
+                expectedOutput = (f"""Usage: cmd [OPTIONS] {'THINGS' if required else '[THINGS]'} {'... ' if numberOfArgs != 1 else ''}OTHER
 
   Cmd help text.
 
@@ -217,7 +217,7 @@ class MWArgumentDecoratorTest(unittest.TestCase):
 
   {self.otherHelpText}
 """)
-                self.assertIn(expectedOutut, result.output)
+                self.assertIn(expectedOutput, result.output)
 
     def testUse(self):
         """Test using the MWArgumentDecorator with a command."""
@@ -293,7 +293,7 @@ class SectionOptionTest(unittest.TestCase):
         """Verify that the section break is printed in the help output in the
         expected location and with expected formatting."""
         result = self.runner.invoke(self.cli, ["--help"])
-        # \x20 is a space, added explicity below to prevent the
+        # \x20 is a space, added explicitly below to prevent the
         # normally-helpful editor setting "remove trailing whitespace" from
         # stripping it out in this case. (The blank line with 2 spaces is an
         # artifact of how click and our code generate help text.)

@@ -37,6 +37,7 @@ from typing import (
     Mapping,
     Optional,
     Set,
+    Tuple,
     TYPE_CHECKING,
     Union,
 )
@@ -84,6 +85,7 @@ from ..registry import queries
 from ..registry.wildcards import CategorizedWildcard, CollectionQuery, Ellipsis
 from ..registry.summaries import CollectionSummary
 from ..registry.managers import RegistryManagerTypes, RegistryManagerInstances
+from ..registry.queries import Query
 from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
 
 if TYPE_CHECKING:
@@ -165,7 +167,7 @@ class SqlRegistry(Registry):
                    defaults: Optional[RegistryDefaults] = None) -> Registry:
         """Create `Registry` subclass instance from `config`.
 
-        Registry database must be inbitialized prior to calling this method.
+        Registry database must be initialized prior to calling this method.
 
         Parameters
         ----------
@@ -972,23 +974,30 @@ class SqlRegistry(Registry):
         elif collections:
             raise TypeError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
 
-        summary = queries.QuerySummary(
-            requested=requestedDimensions,
-            dataId=standardizedDataId,
-            expression=where,
-            bind=bind,
-            defaults=self.defaults.dataId,
-            check=check,
-            datasets=standardizedDatasetTypes,
-        )
-        builder = self._makeQueryBuilder(
-            summary,
-            doomed_by=[f"Dataset type {name} is not registered." for name in missing]
-        )
-        for datasetType in standardizedDatasetTypes:
-            builder.joinDataset(datasetType, collections, isResult=False)
-        query = builder.finish()
-        return queries.DataCoordinateQueryResults(self._db, query)
+        def query_factory(order_by: Optional[Iterable[str]] = None,
+                          limit: Optional[Tuple[int, Optional[int]]] = None) -> Query:
+            """Construct the Query object that generates query results.
+            """
+            summary = queries.QuerySummary(
+                requested=requestedDimensions,
+                dataId=standardizedDataId,
+                expression=where,
+                bind=bind,
+                defaults=self.defaults.dataId,
+                check=check,
+                datasets=standardizedDatasetTypes,
+                order_by=order_by,
+                limit=limit
+            )
+            builder = self._makeQueryBuilder(
+                summary,
+                doomed_by=[f"Dataset type {name} is not registered." for name in missing]
+            )
+            for datasetType in standardizedDatasetTypes:
+                builder.joinDataset(datasetType, collections, isResult=False,)
+            return builder.finish()
+
+        return queries.DataCoordinateQueryResults(self._db, query_factory, requestedDimensions)
 
     def queryDimensionRecords(self, element: Union[DimensionElement, str], *,
                               dataId: Optional[DataId] = None,
@@ -998,7 +1007,7 @@ class SqlRegistry(Registry):
                               components: Optional[bool] = None,
                               bind: Optional[Mapping[str, Any]] = None,
                               check: bool = True,
-                              **kwargs: Any) -> Iterator[DimensionRecord]:
+                              **kwargs: Any) -> queries.DimensionRecordQueryResults:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if not isinstance(element, DimensionElement):
             try:
@@ -1008,7 +1017,7 @@ class SqlRegistry(Registry):
                                + str(self.dimensions.getStaticElements())) from e
         dataIds = self.queryDataIds(element.graph, dataId=dataId, datasets=datasets, collections=collections,
                                     where=where, components=components, bind=bind, check=check, **kwargs)
-        return iter(self._managers.dimensions[element].fetch(dataIds))
+        return queries.DatabaseDimensionRecordQueryResults(dataIds, self._managers.dimensions[element])
 
     def queryDatasetAssociations(
         self,

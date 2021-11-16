@@ -843,7 +843,7 @@ class FileDatastore(GenericBaseDatastore):
         -------
         info : `StoredFileInfo`
             Internal datastore record for this file.  This will be inserted by
-            the caller; the `_extractIngestInfo` is only resposible for
+            the caller; the `_extractIngestInfo` is only responsible for
             creating and populating the struct.
 
         Raises
@@ -1016,7 +1016,7 @@ class FileDatastore(GenericBaseDatastore):
         Returns
         -------
         info : `StoredFileInfo`
-            Information describin the artifact written to the datastore.
+            Information describing the artifact written to the datastore.
         """
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
         uri = location.uri
@@ -1588,7 +1588,7 @@ class FileDatastore(GenericBaseDatastore):
         primary, components = self.getURIs(ref, predict)
         if primary is None or components:
             raise RuntimeError(f"Dataset ({ref}) includes distinct URIs for components. "
-                               "Use Dataastore.getURIs() instead.")
+                               "Use Datastore.getURIs() instead.")
         return primary
 
     def retrieveArtifacts(self, refs: Iterable[DatasetRef],

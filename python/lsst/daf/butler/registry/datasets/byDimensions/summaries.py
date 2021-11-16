@@ -247,7 +247,7 @@ class CollectionSummaryManager:
         # present.
         # That guarantee (and the possibility of rollbacks) means we can't get
         # away with checking the cache before we try the database inserts,
-        # however; if someone had attemped to insert datasets of some dataset
+        # however; if someone had attempted to insert datasets of some dataset
         # type previously, and that rolled back, and we're now trying to insert
         # some more datasets of that same type, it would not be okay to skip
         # the DB summary table insertions because we found entries in the
@@ -291,7 +291,7 @@ class CollectionSummaryManager:
             # Collection key should never be None/NULL; it's what we join on.
             # Extract that and then turn it into a collection name.
             collectionKey = row[self._collectionKeyName]
-            # dataset_type_id should also nver be None/NULL; it's in the first
+            # dataset_type_id should also never be None/NULL; it's in the first
             # table we joined.
             datasetType = get_dataset_type(row["dataset_type_id"])
             # See if we have a summary already for this collection; if not,

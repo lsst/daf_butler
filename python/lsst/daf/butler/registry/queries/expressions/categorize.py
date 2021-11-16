@@ -32,6 +32,7 @@ from ....core import (
     DimensionUniverse,
     Dimension,
     DimensionElement,
+    DimensionGraph,
 )
 
 
@@ -125,3 +126,98 @@ def categorizeElementId(universe: DimensionUniverse, name: str) -> Tuple[Dimensi
         except KeyError as err:
             raise LookupError(f"No dimension with name '{table}'.") from err
         return dimension, None
+
+
+def categorizeOrderByName(graph: DimensionGraph, name: str) -> Tuple[DimensionElement, Optional[str]]:
+    """Categorize an identifier in an ORDER BY clause.
+
+    Parameters
+    ----------
+    graph : `DimensionGraph`
+        All known dimensions.
+    name : `str`
+        Identifier to categorize.
+
+    Returns
+    -------
+    element : `DimensionElement`
+        The `DimensionElement` the identifier refers to.
+    column : `str` or `None`
+        The name of a column in the table for ``element``, or `None` if
+        ``element`` is a `Dimension` and the requested column is its primary
+        key.
+
+    Raises
+    ------
+    ValueError
+        Raised if element name is not found in a graph, metadata name is not
+        recognized, or if there is more than one element has specified
+        metadata.
+
+    Notes
+    -----
+    For ORDER BY identifiers we use slightly different set of rules compared to
+    the rules in `categorizeElementId`:
+
+    - Name can be a dimension element name. e.g. ``visit``.
+    - Name can be an element name and a metadata name (or key name) separated
+      by dot, e.g. ``detector.full_name``.
+    - Name can be a metadata name without element name prefix, e.g.
+      ``day_obs``; in that case metadata (or key) is searched in all elements
+      present in a graph. Exception is raised if name appears in more than one
+      element.
+    - Two special identifiers ``timespan.begin`` and ``timespan.end`` can be
+      used with temporal elements, if element name is not given then a temporal
+      element from a graph is used.
+    """
+    element: DimensionElement
+    field_name: Optional[str] = None
+    if name in ("timespan.begin", "timespan.end"):
+        matches = [element for element in graph.elements if element.temporal]
+        if len(matches) == 1:
+            element = matches[0]
+            field_name = name
+        elif len(matches) > 1:
+            raise ValueError(
+                f"Timespan exists in more than one dimesion element: {matches},"
+                " qualify timespan with specific dimension name.")
+        else:
+            raise ValueError(
+                f"Cannot find any temporal dimension element for '{name}'.")
+    elif "." not in name:
+        # No dot, can be either a dimension name or a field name (in any of
+        # the known elements)
+        if name in graph.elements.names:
+            element = graph.elements[name]
+        else:
+            # Can be a metadata name or any of unique keys
+            matches = [elem for elem in graph.elements if name in elem.metadata.names]
+            matches += [dim for dim in graph if name in dim.uniqueKeys.names]
+            if len(matches) == 1:
+                element = matches[0]
+                field_name = name
+            elif len(matches) > 1:
+                raise ValueError(
+                    f"Metadata '{name}' exists in more than one dimension element: {matches},"
+                    " qualify metadata name with dimension name.")
+            else:
+                raise ValueError(
+                    f"Metadata '{name}' cannot be found in any dimension.")
+    else:
+        # qualified name, must be a dimension element and a field
+        elem_name, _, field_name = name.partition(".")
+        if elem_name not in graph.elements.names:
+            raise ValueError(f"Unknown dimension element name '{elem_name}'")
+        element = graph.elements[elem_name]
+        if field_name in ("timespan.begin", "timespan.end"):
+            if not element.temporal:
+                raise ValueError(f"Cannot use '{field_name}' with non-temporal element '{element}'.")
+        elif isinstance(element, Dimension) and field_name == element.primaryKey.name:
+            # Primary key is optional
+            field_name = None
+        else:
+            if not (field_name in element.metadata.names
+                    or (isinstance(element, Dimension) and field_name in element.alternateKeys.names)):
+                raise ValueError(f"Field '{field_name}' does not exist in '{element}'.")
+
+    return element, field_name

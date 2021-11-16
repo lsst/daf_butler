@@ -356,7 +356,7 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
         -------
         bridge : `DatastoreRegistryBridge`
             Object that provides the interface this `Datastore` should use to
-            communicate with the `Regitry`.
+            communicate with the `Registry`.
         """
         raise NotImplementedError()
 

@@ -391,7 +391,7 @@ class Formatter(metaclass=ABCMeta):
             raise NotImplementedError("No file extension registered with this formatter") from None
 
         # If extension is implemented as an instance property it won't return
-        # a string when called as a class propertt. Assume that
+        # a string when called as a class property. Assume that
         # the supported extensions class property is complete.
         if default is not None and isinstance(default, str):
             supported.add(default)

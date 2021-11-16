@@ -385,3 +385,28 @@ Few examples of valid expressions using some of the constructs:
     visit.datetime_end < T'mjd/58938.515/tai'
 
     ingest_date < T'2020-11-06 21:10:00'
+
+
+.. _daf_butler_query_ordering:
+
+Query result ordering
+---------------------
+
+Few query methods (`~Registry.queryDataIds` and `~Registry.queryDimensionRecords`) support special constructs for ordering and limiting the number of the returned records. These methods return iterable objects which have ``order_by()`` and ``limit()`` methods. Methods modify the iterable object and should be used before iterating over resulting records, for convenience the methods can be chained, see example below.
+
+The ``order_by()`` method accepts a variable number of positional arguments specifying columns/fields used for ordering, each argument can have one of the supported formats:
+
+- A dimension name, corresponding to the value of the dimension primary key, e.g. ``"visit"``
+- A dimension name and a field name separated bey a dot. Field name can refer to any of the dimension's metadata or key, e.g. ``"visit.name"``, ``"detector.raft"``. Special field names ``"timespan.begin"`` and ``"timespan.end"`` can be used for temporal dimensions (visit and exposure).
+- A field name without dimension name, in that case field is searched in all dimensions used by the query, and it has to be unique. E.g. ``"cell_x"`` means the same as ``"patch.cell_x"``.
+- To reverse ordering for the field it is prefixed with a minus sign, e.g. ``"-visit.timespan.begin"``.
+
+The ``limit()`` method accepts two positional integer arguments - limit for the number of returned records and offset (number of records to skip). The offset argument is optional, if not provided it is equivalent to offset 0.
+
+Example of use of these two methods:
+
+.. code-block:: Python
+
+    # Print ten latest visit records in reverse time order
+    for record in registry.queryDimensionRecords("visit").order_by("-timespan.begin").limit(10):
+        print(record)

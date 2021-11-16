@@ -102,7 +102,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     An immutable data ID dictionary that guarantees that its key-value pairs
     identify at least all required dimensions in a `DimensionGraph`.
 
-    `DataCoordinateSet` itself is an ABC, but provides `staticmethod` factory
+    `DataCoordinate` itself is an ABC, but provides `staticmethod` factory
     functions for private concrete implementations that should be sufficient
     for most purposes.  `standardize` is the most flexible and safe of these;
     the others (`makeEmpty`, `fromRequiredValues`, and `fromFullValues`) are

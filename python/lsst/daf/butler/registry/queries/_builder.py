@@ -22,6 +22,7 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
+import dataclasses
 from typing import AbstractSet, Any, Iterable, List, Optional
 
 import sqlalchemy.sql
@@ -35,11 +36,12 @@ from ...core import (
 )
 
 from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
+from ...core import ddl
 
 from .._collectionType import CollectionType
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns, RegistryManagers
 from .expressions import convertExpressionToSql
-from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, Query
+from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
 from ..wildcards import CollectionSearch, CollectionQuery
 
 
@@ -546,5 +548,63 @@ class QueryBuilder:
                            whereRegion=self.summary.where.dataId.region,
                            simpleQuery=self._simpleQuery,
                            columns=self._columns,
+                           order_by_columns=self._order_by_columns(),
+                           limit=self.summary.limit,
                            managers=self._managers,
                            doomed_by=self._doomed_by)
+
+    def _order_by_columns(self) -> Iterable[OrderByColumn]:
+        """Generate columns to be used for ORDER BY clause.
+
+        Returns
+        -------
+        order_by_columns : `Iterable` [ `ColumnIterable` ]
+            Sequence of columns to appear in ORDER BY clause.
+        """
+        order_by_columns: List[OrderByColumn] = []
+        if not self.summary.order_by:
+            return order_by_columns
+
+        for order_by_column in self.summary.order_by.order_by_columns:
+
+            column: sqlalchemy.sql.ColumnElement
+            field_spec: Optional[ddl.FieldSpec]
+            dimension: Optional[Dimension] = None
+            if order_by_column.column is None:
+                # dimension name, it has to be in SELECT list already, only
+                # add it to ORDER BY
+                assert isinstance(order_by_column.element, Dimension), "expecting full Dimension"
+                column = self._columns.getKeyColumn(order_by_column.element)
+                add_to_select = False
+                field_spec = None
+                dimension = order_by_column.element
+            else:
+                table = self._elements[order_by_column.element]
+
+                if order_by_column.column in ("timespan.begin", "timespan.end"):
+                    TimespanReprClass = self._managers.TimespanReprClass
+                    timespan_repr = TimespanReprClass.fromSelectable(table)
+                    if order_by_column.column == "timespan.begin":
+                        column = timespan_repr.lower()
+                        label = f"{order_by_column.element.name}_timespan_begin"
+                    else:
+                        column = timespan_repr.upper()
+                        label = f"{order_by_column.element.name}_timespan_end"
+                    field_spec = ddl.FieldSpec(label, dtype=sqlalchemy.BigInteger, nullable=True)
+                else:
+                    column = table.columns[order_by_column.column]
+                    # make a unique label for it
+                    label = f"{order_by_column.element.name}_{order_by_column.column}"
+                    field_spec = order_by_column.element.RecordClass.fields.facts[order_by_column.column]
+                    field_spec = dataclasses.replace(field_spec, name=label)
+
+                column = column.label(label)
+                add_to_select = True
+
+            order_by_columns.append(
+                OrderByColumn(column=column, ordering=order_by_column.ordering,
+                              add_to_select=add_to_select, field_spec=field_spec,
+                              dimension=dimension)
+            )
+
+        return order_by_columns

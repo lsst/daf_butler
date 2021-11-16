@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["RegistryTests"]
 
 from abc import ABC, abstractmethod
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from datetime import datetime, timedelta
 import itertools
 import logging
@@ -103,7 +103,7 @@ class RegistryTests(ABC):
 
         This method should be called by a subclass from `makeRegistry`.
         Returned instance will be pre-configured based on the values of class
-        members, and default-configured for all other parametrs. Subclasses
+        members, and default-configured for all other parameters. Subclasses
         that need default configuration should just instantiate
         `RegistryConfig` directly.
         """
@@ -2119,7 +2119,7 @@ class RegistryTests(ABC):
             registry.queryDatasets("bias", collections=coll_list, findFirst=True)
         with self.assertRaises(NotImplementedError):
             registry.queryDataIds(["instrument", "detector", "exposure"], datasets="bias",
-                                  collections=coll_list)
+                                  collections=coll_list).count()
 
         # chain will skip
         datasets = list(registry.queryDatasets("bias", collections=chain))
@@ -2498,6 +2498,156 @@ class RegistryTests(ABC):
                 for message in messages
             )
         )
+
+    def testQueryDataIdsOrderBy(self):
+        """Test order_by and limit on result returned by queryDataIds().
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        self.loadData(registry, "spatial.yaml")
+
+        def do_query(dimensions=("visit", "tract"), datasets=None, collections=None):
+            return registry.queryDataIds(dimensions, datasets=datasets, collections=collections,
+                                         instrument="Cam1", skymap="SkyMap1")
+
+        # query = do_query()
+        # self.assertEqual(len(list(query)), 6)
+
+        Test = namedtuple(
+            "testQueryDataIdsOrderByTest",
+            ("order_by", "keys", "result", "limit", "datasets", "collections"),
+            defaults=(None, None, None),
+        )
+
+        # For each test four items are defined here:
+        #  - order_by column names, comma separated
+        #  - limit tuple or None
+        #  - DataId keys to extract
+        #  - tuple of the resulting values we expect
+        test_data = (
+            Test("tract,visit", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
+            Test("-tract,visit", "tract,visit", ((1, 2), (1, 2), (0, 1), (0, 1), (0, 2), (0, 2))),
+            Test("tract,-visit", "tract,visit", ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))),
+            Test("-tract,-visit", "tract,visit", ((1, 2), (1, 2), (0, 2), (0, 2), (0, 1), (0, 1))),
+            Test("tract.id,visit.id", "tract,visit", ((0, 1), (0, 1), (0, 2)), limit=(3, ),),
+            Test("-tract,-visit", "tract,visit", ((1, 2), (1, 2), (0, 2)), limit=(3, )),
+            Test("tract,visit", "tract,visit", ((0, 2), (1, 2), (1, 2)), limit=(3, 3)),
+            Test("-tract,-visit", "tract,visit", ((0, 1), ), limit=(3, 5)),
+            Test("tract,visit.exposure_time", "tract,visit",
+                 ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))),
+            Test("-tract,-visit.exposure_time", "tract,visit",
+                 ((1, 2), (1, 2), (0, 1), (0, 1), (0, 2), (0, 2))),
+            Test("tract,-exposure_time", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
+            Test("tract,visit.name", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
+            Test("tract,-timespan.begin,timespan.end", "tract,visit",
+                 ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))),
+            Test("visit.day_obs,exposure.day_obs", "visit,exposure", ()),
+            Test("visit.timespan.begin,-exposure.timespan.begin", "visit,exposure", ()),
+            Test("tract,detector", "tract,detector",
+                 ((0, 1), (0, 2), (0, 3), (0, 4), (1, 1), (1, 2), (1, 3), (1, 4)),
+                 datasets="flat", collections="imported_r"),
+            Test("tract,detector.full_name", "tract,detector",
+                 ((0, 1), (0, 2), (0, 3), (0, 4), (1, 1), (1, 2), (1, 3), (1, 4)),
+                 datasets="flat", collections="imported_r"),
+            Test("tract,detector.raft,detector.name_in_raft", "tract,detector",
+                 ((0, 1), (0, 2), (0, 3), (0, 4), (1, 1), (1, 2), (1, 3), (1, 4)),
+                 datasets="flat", collections="imported_r"),
+        )
+
+        for test in test_data:
+            order_by = test.order_by.split(",")
+            keys = test.keys.split(",")
+            query = do_query(keys, test.datasets, test.collections).order_by(*order_by)
+            if test.limit is not None:
+                query = query.limit(*test.limit)
+            dataIds = tuple(tuple(dataId[k] for k in keys) for dataId in query)
+            self.assertEqual(dataIds, test.result)
+
+            # and materialize
+            query = do_query(keys).order_by(*order_by)
+            if test.limit is not None:
+                query = query.limit(*test.limit)
+            with query.materialize() as materialized:
+                dataIds = tuple(tuple(dataId[k] for k in keys) for dataId in materialized)
+                self.assertEqual(dataIds, test.result)
+
+        # errors in a name
+        for order_by in ("", "-"):
+            with self.assertRaisesRegex(ValueError, "Empty dimension name in ORDER BY"):
+                list(do_query().order_by(order_by))
+
+        for order_by in ("undimension.name", "-undimension.name"):
+            with self.assertRaisesRegex(ValueError, "Unknown dimension element name 'undimension'"):
+                list(do_query().order_by(order_by))
+
+        for order_by in ("attract", "-attract"):
+            with self.assertRaisesRegex(ValueError, "Metadata 'attract' cannot be found in any dimension"):
+                list(do_query().order_by(order_by))
+
+        with self.assertRaisesRegex(ValueError, "Metadata 'exposure_time' exists in more than one dimension"):
+            list(do_query(("exposure", "visit")).order_by("exposure_time"))
+
+        with self.assertRaisesRegex(ValueError, "Timespan exists in more than one dimesion"):
+            list(do_query(("exposure", "visit")).order_by("timespan.begin"))
+
+        with self.assertRaisesRegex(ValueError,
+                                    "Cannot find any temporal dimension element for 'timespan.begin'"):
+            list(do_query(("tract")).order_by("timespan.begin"))
+
+        with self.assertRaisesRegex(ValueError, "Cannot use 'timespan.begin' with non-temporal element"):
+            list(do_query(("tract")).order_by("tract.timespan.begin"))
+
+        with self.assertRaisesRegex(ValueError, "Field 'name' does not exist in 'tract'."):
+            list(do_query(("tract")).order_by("tract.name"))
+
+    def testQueryDimensionRecordsOrderBy(self):
+        """Test order_by and limit on result returned by
+        queryDimensionRecords().
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        self.loadData(registry, "spatial.yaml")
+
+        def do_query():
+            return registry.queryDimensionRecords("detector", instrument="Cam1")
+
+        query = do_query()
+        self.assertEqual(len(list(query)), 4)
+
+        # For each test three items are defined here:
+        #  - order_by column names, comma separated
+        #  - limit tuple or None
+        #  - tuple of the detector IDs
+        test_data = (
+            ("detector", None, (1, 2, 3, 4)),
+            ("-detector", None, (4, 3, 2, 1)),
+            ("raft,-name_in_raft", None, (2, 1, 4, 3)),
+            ("-detector.purpose", (1, ), (4, )),
+            ("-purpose,detector.raft,name_in_raft", (2, 2), (2, 3)),
+        )
+
+        for order_by, limit, expected in test_data:
+            order_by = order_by.split(",")
+            query = do_query().order_by(*order_by)
+            if limit is not None:
+                query = query.limit(*limit)
+            dataIds = tuple(rec.id for rec in query)
+            self.assertEqual(dataIds, expected)
+
+        # errors in a name
+        for order_by in ("", "-"):
+            with self.assertRaisesRegex(ValueError, "Empty dimension name in ORDER BY"):
+                list(do_query().order_by(order_by))
+
+        for order_by in ("undimension.name", "-undimension.name"):
+            with self.assertRaisesRegex(ValueError, "Unknown dimension element name 'undimension'"):
+                list(do_query().order_by(order_by))
+
+        for order_by in ("attract", "-attract"):
+            with self.assertRaisesRegex(ValueError, "Metadata 'attract' cannot be found in any dimension"):
+                list(do_query().order_by(order_by))
 
     def testDatasetConstrainedDimensionRecordQueries(self):
         """Test that queryDimensionRecords works even when given a dataset

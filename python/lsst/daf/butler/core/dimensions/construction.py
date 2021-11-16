@@ -106,7 +106,7 @@ class DimensionConstructionBuilder:
     `DimensionConstructionVisitor` objects can be added to a
     `DimensionConstructionBuilder` object in any order, and are invoked
     in a deterministic order consistent with their dependency relationships
-    by a single call (by the `DimensionUnvierse`) to the `finish` method.
+    by a single call (by the `DimensionUniverse`) to the `finish` method.
 
     Parameters
     ----------

@@ -137,7 +137,7 @@ class NormalFormExpressionTestCase(unittest.TestCase):
             originalTree = parser.parse(expression)
             wrapper = originalTree.visit(TransformationVisitor())
             trees = {form: NormalFormExpression.fromTree(originalTree, form).toTree() for form in NormalForm}
-            if conjunctive is True:  # expected to be conjuctive already
+            if conjunctive is True:  # expected to be conjunctive already
                 self.assertTrue(wrapper.satisfies(NormalForm.CONJUNCTIVE), msg=str(wrapper))
             elif conjunctive:  # str to expect after normalization to conjunctive
                 self.assertEqual(str(trees[NormalForm.CONJUNCTIVE]), conjunctive)

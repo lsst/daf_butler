@@ -183,3 +183,29 @@ verbose_option = MWOptionDecorator("-v", "--verbose",
 
 where_option = MWOptionDecorator("--where",
                                  help="A string expression similar to a SQL WHERE clause.")
+
+
+order_by_option = MWOptionDecorator(
+    "--order-by",
+    help=unwrap("""One or more comma-separated names used to order records. Names can be dimension names,
+                metadata names optionally prefixed by a dimension name and dot, or
+                timestamp_begin/timestamp_end (with optional dimension name). To reverse ordering for a name
+                prefix it with a minus sign."""),
+    multiple=True,
+    callback=split_commas
+)
+
+
+limit_option = MWOptionDecorator(
+    "--limit",
+    help=unwrap("Limit the number of records, by default all records are shown."),
+    type=int,
+    default=0
+)
+
+offset_option = MWOptionDecorator(
+    "--offset",
+    help=unwrap("Skip initial number of records, only used when --limit is specified."),
+    type=int,
+    default=0
+)
