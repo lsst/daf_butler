@@ -486,21 +486,32 @@ class ButlerTests(ButlerPutGetTests):
         # repository.
         butler_index = Config()
         butler_index["label"] = self.tmpConfigFile
-        butler_index.dump
-        with ButlerURI.temporary_uri(suffix=".yaml") as temp_file:
-            butler_index.dumpToUri(temp_file)
-            with unittest.mock.patch.dict(os.environ, {"BUTLER_REPOSITORY_INDEX": str(temp_file)}):
-                uri = Butler.get_repo_uri("label")
-                butler = Butler(uri, writeable=False)
-                self.assertIsInstance(butler, Butler)
-                with self.assertRaises(KeyError):
-                    Butler.get_repo_uri("missing")
-            with unittest.mock.patch.dict(os.environ, {"BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
-                with self.assertRaises(FileNotFoundError):
-                    Butler.get_repo_uri("label")
-            with self.assertRaises(KeyError):
-                # No environment variable set.
+        for suffix in (".yaml", ".json"):
+            # Ensure that the content differs so that we know that
+            # we aren't reusing the cache.
+            bad_label = f"s3://bucket/not_real{suffix}"
+            butler_index["bad_label"] = bad_label
+            with ButlerURI.temporary_uri(suffix=suffix) as temp_file:
+                butler_index.dumpToUri(temp_file)
+                with unittest.mock.patch.dict(os.environ, {"BUTLER_REPOSITORY_INDEX": str(temp_file)}):
+                    self.assertEqual(Butler.get_known_repos(), set(("label", "bad_label")))
+                    uri = Butler.get_repo_uri("bad_label")
+                    self.assertEqual(uri, ButlerURI(bad_label))
+                    uri = Butler.get_repo_uri("label")
+                    butler = Butler(uri, writeable=False)
+                    self.assertIsInstance(butler, Butler)
+                    with self.assertRaises(KeyError) as cm:
+                        Butler.get_repo_uri("missing")
+                    self.assertIn("not known to", str(cm.exception))
+        with unittest.mock.patch.dict(os.environ, {"BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
+            with self.assertRaises(FileNotFoundError):
                 Butler.get_repo_uri("label")
+            self.assertEqual(Butler.get_known_repos(), set())
+        with self.assertRaises(KeyError) as cm:
+            # No environment variable set.
+            Butler.get_repo_uri("label")
+        self.assertIn("No repository index defined", str(cm.exception))
+        self.assertEqual(Butler.get_known_repos(), set())
 
     def testBasicPutGet(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")

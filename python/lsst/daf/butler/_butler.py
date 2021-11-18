@@ -87,6 +87,7 @@ from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
+from ._butlerRepoIndex import ButlerRepoIndex
 from .registry import (
     Registry,
     RegistryConfig,
@@ -303,24 +304,26 @@ class Butler:
 
         Notes
         -----
-        The index of butler repositories is found by looking for a
-        configuration file at the URI pointed at by the environment
-        variable ``$BUTLER_REPOSITORY_INDEX``. The configuration file
-        is a simple dictionary lookup of the form:
-
-        .. code-block:: yaml
-
-           label1: uri1
-           label2: uri2
-
-        and can be in YAML or JSON format.
+        See `~lsst.daf.butler.ButlerRepoIndex` for details on how the
+        information is discovered.
         """
-        index_uri = os.environ.get("BUTLER_REPOSITORY_INDEX")
-        if index_uri is None:
-            raise KeyError("No repository index defined in enviroment variable BUTLER_REPOSITORY_INDEX.")
+        return ButlerRepoIndex.get_repo_uri(label)
 
-        config = Config(index_uri)
-        return config[label]
+    @classmethod
+    def get_known_repos(cls) -> Set[str]:
+        """Retrieve the list of known repository labels.
+
+        Returns
+        -------
+        repos : `set` of `str`
+            All the known labels. Can be empty if no index can be found.
+
+        Notes
+        -----
+        See `~lsst.daf.butler.ButlerRepoIndex` for details on how the
+        information is discovered.
+        """
+        return ButlerRepoIndex.get_known_repos()
 
     @staticmethod
     def makeRepo(root: str, config: Union[Config, str, None] = None,
