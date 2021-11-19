@@ -1,0 +1,2 @@
+Butler can now support lookup of repositories by label if the user environment is correctly configured.
+This is done using the new `~lsst.daf.butler.Butler.get_repo_uri()` and `~lsst.daf.butler.Butler.get_known_repos()` APIs.

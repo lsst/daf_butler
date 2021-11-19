@@ -87,6 +87,7 @@ from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.utils import transactional
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
+from ._butlerRepoIndex import ButlerRepoIndex
 from .registry import (
     Registry,
     RegistryConfig,
@@ -280,6 +281,49 @@ class Butler:
     interface has been fully retired; it should only be used in transitional
     code.
     """
+
+    @classmethod
+    def get_repo_uri(cls, label: str) -> ButlerURI:
+        """Look up the label in a butler repository index.
+
+        Parameters
+        ----------
+        label : `str`
+            Label of the Butler repository to look up.
+
+        Returns
+        -------
+        uri : `ButlerURI`
+            URI to the Butler repository associated with the given label.
+
+        Raises
+        ------
+        KeyError
+            Raised if the label is not found in the index, or if an index
+            can not be found at all.
+
+        Notes
+        -----
+        See `~lsst.daf.butler.ButlerRepoIndex` for details on how the
+        information is discovered.
+        """
+        return ButlerRepoIndex.get_repo_uri(label)
+
+    @classmethod
+    def get_known_repos(cls) -> Set[str]:
+        """Retrieve the list of known repository labels.
+
+        Returns
+        -------
+        repos : `set` of `str`
+            All the known labels. Can be empty if no index can be found.
+
+        Notes
+        -----
+        See `~lsst.daf.butler.ButlerRepoIndex` for details on how the
+        information is discovered.
+        """
+        return ButlerRepoIndex.get_known_repos()
 
     @staticmethod
     def makeRepo(root: str, config: Union[Config, str, None] = None,
