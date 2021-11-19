@@ -42,7 +42,7 @@ class ButlerRepoIndex:
 
     The index of butler repositories is found by looking for a
     configuration file at the URI pointed at by the environment
-    variable ``$BUTLER_REPOSITORY_INDEX``. The configuration file
+    variable ``$DAF_BUTLER_REPOSITORY_INDEX``. The configuration file
     is a simple dictionary lookup of the form:
 
     .. code-block:: yaml
@@ -54,7 +54,7 @@ class ButlerRepoIndex:
     cached.
     """
 
-    index_env_var: ClassVar[str] = "BUTLER_REPOSITORY_INDEX"
+    index_env_var: ClassVar[str] = "DAF_BUTLER_REPOSITORY_INDEX"
     """The name of the environment variable to read to locate the index."""
 
     _cache: ClassVar[Dict[ButlerURI, Config]] = {}

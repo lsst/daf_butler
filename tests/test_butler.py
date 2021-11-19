@@ -493,7 +493,7 @@ class ButlerTests(ButlerPutGetTests):
             butler_index["bad_label"] = bad_label
             with ButlerURI.temporary_uri(suffix=suffix) as temp_file:
                 butler_index.dumpToUri(temp_file)
-                with unittest.mock.patch.dict(os.environ, {"BUTLER_REPOSITORY_INDEX": str(temp_file)}):
+                with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
                     self.assertEqual(Butler.get_known_repos(), set(("label", "bad_label")))
                     uri = Butler.get_repo_uri("bad_label")
                     self.assertEqual(uri, ButlerURI(bad_label))
@@ -503,7 +503,7 @@ class ButlerTests(ButlerPutGetTests):
                     with self.assertRaises(KeyError) as cm:
                         Butler.get_repo_uri("missing")
                     self.assertIn("not known to", str(cm.exception))
-        with unittest.mock.patch.dict(os.environ, {"BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": "file://not_found/x.yaml"}):
             with self.assertRaises(FileNotFoundError):
                 Butler.get_repo_uri("label")
             self.assertEqual(Butler.get_known_repos(), set())
