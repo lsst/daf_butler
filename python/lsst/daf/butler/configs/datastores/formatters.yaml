@@ -77,3 +77,4 @@ AstropyQTable: lsst.daf.butler.formatters.astropyTable.AstropyTableFormatter
 ExtendedPsf: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 HealSparseMap: lsst.pipe.tasks.healSparseMapping.HealSparseMapFormatter
 ButlerLogRecords: lsst.daf.butler.formatters.logs.ButlerLogRecordsFormatter
+TaskMetadata: lsst.daf.butler.formatters.json.JsonFormatter
