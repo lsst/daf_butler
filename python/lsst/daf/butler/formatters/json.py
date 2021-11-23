@@ -126,6 +126,12 @@ class JsonFormatter(FileFormatter):
         Exception
             The object could not be serialized.
         """
+        # For example, Pydantic models have a .json method so use it.
+        try:
+            return inMemoryDataset.json().encode()
+        except AttributeError:
+            pass
+
         if hasattr(inMemoryDataset, "_asdict"):
             inMemoryDataset = inMemoryDataset._asdict()
         return json.dumps(inMemoryDataset, ensure_ascii=False).encode()
@@ -152,6 +158,10 @@ class JsonFormatter(FileFormatter):
             if storageClass.isComposite():
                 inMemoryDataset = storageClass.delegate().assemble(inMemoryDataset, pytype=pytype)
             elif not isinstance(inMemoryDataset, pytype):
-                # Hope that we can pass the arguments in directly
-                inMemoryDataset = pytype(inMemoryDataset)
+                # Pydantic models have their own scheme.
+                try:
+                    inMemoryDataset = pytype.parse_obj(inMemoryDataset)
+                except AttributeError:
+                    # Hope that we can pass the arguments in directly
+                    inMemoryDataset = pytype(inMemoryDataset)
         return inMemoryDataset
