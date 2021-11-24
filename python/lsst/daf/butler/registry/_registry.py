@@ -404,7 +404,7 @@ class Registry(ABC):
 
     @abstractmethod
     def removeCollection(self, name: str) -> None:
-        """Completely remove the given collection.
+        """Remove the given collection from the registry.
 
         Parameters
         ----------
@@ -415,12 +415,19 @@ class Registry(ABC):
         ------
         MissingCollectionError
             Raised if no collection with the given name exists.
+        sqlalchemy.IntegrityError
+            Raised if the database rows associated with the collection are
+            still referenced by some other table, such as a dataset in a
+            datastore (for `~CollectionType.RUN` collections only) or a
+            `~CollectionType.CHAINED` collection of which this collection is
+            a child.
 
         Notes
         -----
         If this is a `~CollectionType.RUN` collection, all datasets and quanta
-        in it are also fully removed.  This requires that those datasets be
-        removed (or at least trashed) from any datastores that hold them first.
+        in it will removed from the `Registry` database.  This requires that
+        those datasets be removed (or at least trashed) from any datastores
+        that hold them first.
 
         A collection may not be deleted as long as it is referenced by a
         `~CollectionType.CHAINED` collection; the ``CHAINED`` collection must
