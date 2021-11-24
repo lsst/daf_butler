@@ -385,11 +385,14 @@ class RemoteRegistry(Registry):
         return (DatasetType.from_simple(SerializedDatasetType(**d), universe=self.dimensions)
                 for d in datasetTypes)
 
-    def queryCollections(self, expression: Any = ...,
-                         datasetType: Optional[DatasetType] = None,
-                         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
-                         flattenChains: bool = False,
-                         includeChains: Optional[bool] = None) -> Iterator[str]:
+    def queryCollections(
+        self,
+        expression: Any = ...,
+        datasetType: Optional[DatasetType] = None,
+        collectionTypes: Union[Iterable[CollectionType], CollectionType] = CollectionType.all(),
+        flattenChains: bool = False,
+        includeChains: Optional[bool] = None,
+    ) -> Iterator[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         params: Dict[str, Any] = {"flattenChains": flattenChains}
 
@@ -403,7 +406,7 @@ class RemoteRegistry(Registry):
         if includeChains is not None:
             params["includeChains"] = includeChains
 
-        collection_types = [collectionType.name for collectionType in collectionTypes]
+        collection_types = [collectionType.name for collectionType in ensure_iterable(collectionTypes)]
         params["collectionType"] = collection_types
 
         path = "v1/registry/collections"

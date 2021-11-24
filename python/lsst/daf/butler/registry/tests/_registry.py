@@ -668,9 +668,15 @@ class RegistryTests(ABC):
         dataId2 = {"instrument": "Cam1", "detector": 2}
         ref2 = registry.findDataset(datasetType, dataId2, collections=run1)
         self.assertIsNotNone(ref2)
-        # Associate those into a new collection,then look for them there.
+        # Associate those into a new collection, then look for them there.
         tag1 = "tag1"
         registry.registerCollection(tag1, type=CollectionType.TAGGED, doc="doc for tag1")
+        # Check that we can query for old and new collections by type.
+        self.assertEqual(set(registry.queryCollections(collectionTypes=CollectionType.RUN)), {run1, run2})
+        self.assertEqual(
+            set(registry.queryCollections(collectionTypes={CollectionType.TAGGED, CollectionType.RUN})),
+            {tag1, run1, run2}
+        )
         self.assertEqual(registry.getCollectionDocumentation(tag1), "doc for tag1")
         registry.associate(tag1, [ref1, ref2])
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)

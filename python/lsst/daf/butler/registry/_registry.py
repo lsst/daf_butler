@@ -1142,11 +1142,14 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def queryCollections(self, expression: Any = ...,
-                         datasetType: Optional[DatasetType] = None,
-                         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
-                         flattenChains: bool = False,
-                         includeChains: Optional[bool] = None) -> Iterator[str]:
+    def queryCollections(
+        self,
+        expression: Any = ...,
+        datasetType: Optional[DatasetType] = None,
+        collectionTypes: Union[Iterable[CollectionType], CollectionType] = CollectionType.all(),
+        flattenChains: bool = False,
+        includeChains: Optional[bool] = None,
+    ) -> Iterator[str]:
         """Iterate over the collections whose names match an expression.
 
         Parameters
@@ -1161,7 +1164,8 @@ class Registry(ABC):
             If provided, only yield collections that may contain datasets of
             this type.  This is a conservative approximation in general; it may
             yield collections that do not have any such datasets.
-        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
+        collectionTypes : `AbstractSet` [ `CollectionType` ] or \
+            `CollectionType`, optional
             If provided, only yield collections of these types.
         flattenChains : `bool`, optional
             If `True` (`False` is default), recursively yield the child
