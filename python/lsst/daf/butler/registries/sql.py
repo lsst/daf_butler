@@ -776,17 +776,21 @@ class SqlRegistry(Registry):
                 if parentName not in done and any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
                     yield datasetType
 
-    def queryCollections(self, expression: Any = ...,
-                         datasetType: Optional[DatasetType] = None,
-                         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
-                         flattenChains: bool = False,
-                         includeChains: Optional[bool] = None) -> Iterator[str]:
+    def queryCollections(
+        self,
+        expression: Any = ...,
+        datasetType: Optional[DatasetType] = None,
+        collectionTypes: Union[Iterable[CollectionType], CollectionType] = CollectionType.all(),
+        flattenChains: bool = False,
+        includeChains: Optional[bool] = None,
+    ) -> Iterator[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
 
         # Right now the datasetTypes argument is completely ignored, but that
         # is consistent with its [lack of] guarantees.  DM-24939 or a follow-up
         # ticket will take care of that.
         query = CollectionQuery.fromExpression(expression)
+        collectionTypes = ensure_iterable(collectionTypes)
         for record in query.iter(self._managers.collections, collectionTypes=frozenset(collectionTypes),
                                  flattenChains=flattenChains, includeChains=includeChains):
             yield record.name

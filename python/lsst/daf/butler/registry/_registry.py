@@ -404,7 +404,7 @@ class Registry(ABC):
 
     @abstractmethod
     def removeCollection(self, name: str) -> None:
-        """Completely remove the given collection.
+        """Remove the given collection from the registry.
 
         Parameters
         ----------
@@ -415,12 +415,19 @@ class Registry(ABC):
         ------
         MissingCollectionError
             Raised if no collection with the given name exists.
+        sqlalchemy.IntegrityError
+            Raised if the database rows associated with the collection are
+            still referenced by some other table, such as a dataset in a
+            datastore (for `~CollectionType.RUN` collections only) or a
+            `~CollectionType.CHAINED` collection of which this collection is
+            a child.
 
         Notes
         -----
         If this is a `~CollectionType.RUN` collection, all datasets and quanta
-        in it are also fully removed.  This requires that those datasets be
-        removed (or at least trashed) from any datastores that hold them first.
+        in it will removed from the `Registry` database.  This requires that
+        those datasets be removed (or at least trashed) from any datastores
+        that hold them first.
 
         A collection may not be deleted as long as it is referenced by a
         `~CollectionType.CHAINED` collection; the ``CHAINED`` collection must
@@ -1142,11 +1149,14 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def queryCollections(self, expression: Any = ...,
-                         datasetType: Optional[DatasetType] = None,
-                         collectionTypes: Iterable[CollectionType] = CollectionType.all(),
-                         flattenChains: bool = False,
-                         includeChains: Optional[bool] = None) -> Iterator[str]:
+    def queryCollections(
+        self,
+        expression: Any = ...,
+        datasetType: Optional[DatasetType] = None,
+        collectionTypes: Union[Iterable[CollectionType], CollectionType] = CollectionType.all(),
+        flattenChains: bool = False,
+        includeChains: Optional[bool] = None,
+    ) -> Iterator[str]:
         """Iterate over the collections whose names match an expression.
 
         Parameters
@@ -1161,7 +1171,8 @@ class Registry(ABC):
             If provided, only yield collections that may contain datasets of
             this type.  This is a conservative approximation in general; it may
             yield collections that do not have any such datasets.
-        collectionTypes : `AbstractSet` [ `CollectionType` ], optional
+        collectionTypes : `AbstractSet` [ `CollectionType` ] or \
+            `CollectionType`, optional
             If provided, only yield collections of these types.
         flattenChains : `bool`, optional
             If `True` (`False` is default), recursively yield the child
