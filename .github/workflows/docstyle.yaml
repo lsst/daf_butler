@@ -3,7 +3,7 @@ name: lint docstrings
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
 
 jobs:
