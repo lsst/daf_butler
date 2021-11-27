@@ -97,6 +97,8 @@ class ButlerURI:
         is interpreted as is.
     isTemporary : `bool`, optional
         If `True` indicates that this URI points to a temporary resource.
+        The default is `False`, unless ``uri`` is already a `ButlerURI`
+        instance and ``uri.isTemporary is True``.
     """
 
     _pathLib: Type[PurePath] = PurePosixPath
@@ -140,7 +142,7 @@ class ButlerURI:
 
     def __new__(cls, uri: Union[str, urllib.parse.ParseResult, ButlerURI, Path],
                 root: Optional[Union[str, ButlerURI]] = None, forceAbsolute: bool = True,
-                forceDirectory: bool = False, isTemporary: bool = False) -> ButlerURI:
+                forceDirectory: bool = False, isTemporary: Optional[bool] = None) -> ButlerURI:
         """Create and return new specialist ButlerURI subclass."""
         parsed: urllib.parse.ParseResult
         dirLike: bool = False
@@ -188,7 +190,18 @@ class ButlerURI:
 
         elif isinstance(uri, ButlerURI):
             # Since ButlerURI is immutable we can return the argument
-            # unchanged.
+            # unchanged if it already agrees with forceDirectory and
+            # isTemporary.
+            # It might be safe to use uri.replace to change these to match
+            # the arguments, but that seems more likely to paper over logic
+            # errors than do something useful, so we just raise.
+            if forceDirectory and not uri.dirLike:
+                raise RuntimeError(f"{uri} is already a file-like ButlerURI; cannot force it to directory.")
+            if isTemporary is not None and isTemporary != uri.isTemporary:
+                raise RuntimeError(
+                    f"{uri} is already a {'temporary' if uri.isTemporary else 'permanent'} "
+                    f"ButlerURI; cannot make it {'temporary' if isTemporary else 'permanent'}."
+                )
             return uri
         else:
             raise ValueError("Supplied URI must be string, Path, "
@@ -235,6 +248,8 @@ class ButlerURI:
         self = object.__new__(subclass)
         self._uri = parsed
         self.dirLike = dirLike
+        if isTemporary is None:
+            isTemporary = False
         self.isTemporary = isTemporary
         return self
 
@@ -539,7 +554,8 @@ class ButlerURI:
 
         return ext
 
-    def join(self, path: Union[str, ButlerURI], isTemporary: bool = False) -> ButlerURI:
+    def join(self, path: Union[str, ButlerURI], isTemporary: Optional[bool] = None,
+             forceDirectory: bool = False) -> ButlerURI:
         """Return new `ButlerURI` with additional path components.
 
         Parameters
@@ -553,6 +569,10 @@ class ButlerURI:
             also be a `ButlerURI`.
         isTemporary : `bool`, optional
             Indicate that the resulting URI represents a temporary resource.
+            Default is ``self.isTemporary``.
+        forceDirectory : `bool`, optional
+            If `True` forces the URI to end with a separator, otherwise given
+            URI is interpreted as is.
 
         Returns
         -------
@@ -579,11 +599,19 @@ class ButlerURI:
             situation it is unclear whether the intent is to return a
             ``file`` URI or it was a mistake and a relative scheme-less URI
             was meant.
+        RuntimeError
+            Raised this attempts to join a temporary URI to a non-temporary
+            URI.
         """
+        if isTemporary is None:
+            isTemporary = self.isTemporary
+        elif not isTemporary and self.isTemporary:
+            raise RuntimeError("Cannot join temporary URI to non-temporary URI.")
         # If we have a full URI in path we will use it directly
         # but without forcing to absolute so that we can trap the
         # expected option of relative path.
-        path_uri = ButlerURI(path, forceAbsolute=False)
+        path_uri = ButlerURI(path, forceAbsolute=False, forceDirectory=forceDirectory,
+                             isTemporary=isTemporary)
         if path_uri.scheme:
             # Check for scheme so can distinguish explicit URIs from
             # absolute scheme-less URIs.
@@ -610,7 +638,8 @@ class ButlerURI:
 
         # normpath can strip trailing / so we force directory if the supplied
         # path ended with a /
-        return new.replace(path=newpath, forceDirectory=path.endswith(self._pathModule.sep),
+        return new.replace(path=newpath,
+                           forceDirectory=(forceDirectory or path.endswith(self._pathModule.sep)),
                            isTemporary=isTemporary)
 
     def relative_to(self, other: ButlerURI) -> Optional[str]:
@@ -758,6 +787,8 @@ class ButlerURI:
            with uri.as_local() as local:
                ospath = local.ospath
         """
+        if self.dirLike:
+            raise TypeError(f"Directory-like URI {self} cannot be fetched as local.")
         local_src, is_temporary = self._as_local()
         local_uri = ButlerURI(local_src, isTemporary=is_temporary)
 
@@ -772,7 +803,7 @@ class ButlerURI:
     @contextlib.contextmanager
     def temporary_uri(cls, prefix: Optional[ButlerURI] = None,
                       suffix: Optional[str] = None) -> Iterator[ButlerURI]:
-        """Create a temporary URI.
+        """Create a temporary file-like URI.
 
         Parameters
         ----------
@@ -782,7 +813,11 @@ class ButlerURI:
             location exists is the responsibility of the caller.
         suffix : `str`, optional
             A file suffix to be used. The ``.`` should be included in this
-            suffix.
+            suffix.  Passing a string that ends with ``/`` causes a
+            directory-like to be returned even if ``forceDirectory`` is
+            `False`.
+        forceDirectory : `bool`, optional
+            If `True`, return a directory-like URI instead of a file-like URI.
 
         Yields
         ------
@@ -806,7 +841,10 @@ class ButlerURI:
         if suffix:
             tempname += suffix
         temporary_uri = prefix.join(tempname, isTemporary=True)
-
+        if temporary_uri.dirLike:
+            # If we had a safe way to clean up a remote temporary directory, we
+            # could support this.
+            raise NotImplementedError("temporary_uri cannot be used to create a temporary directory.")
         try:
             yield temporary_uri
         finally:

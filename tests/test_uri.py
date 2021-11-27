@@ -482,7 +482,6 @@ class FileURITestCase(unittest.TestCase):
             self.assertFalse(tmp.exists(), f"uri: {tmp}")
             tmp.write(b"abcd")
             self.assertTrue(tmp.exists(), f"uri: {tmp}")
-            self.assertTrue(tmp.isTemporary)
         self.assertFalse(tmp.exists(), f"uri: {tmp}")
 
         tmpdir = ButlerURI(self.tmpdir, forceDirectory=True)
