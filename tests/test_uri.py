@@ -457,6 +457,10 @@ class FileURITestCase(unittest.TestCase):
         self.assertTrue(add_dir.isdir())
         self.assertEqual(add_dir.geturl(), f"{root_str}b/c/d/")
 
+        up_relative = root.join("../b/c.txt")
+        self.assertFalse(up_relative.isdir())
+        self.assertEqual(up_relative.geturl(), "s3://bucket/hsc/b/c.txt")
+
         quote_example = "b&c.t@x#t"
         needs_quote = root.join(quote_example)
         self.assertEqual(needs_quote.unquoted_path, f"/hsc/payload/{quote_example}")
