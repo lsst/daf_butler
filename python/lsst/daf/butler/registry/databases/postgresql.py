@@ -236,7 +236,7 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
         The existence of this nested class is a workaround for a bug
         submitted upstream as
         https://github.com/sqlalchemy/sqlalchemy/issues/5476 (now fixed on
-        master, but not in the releases we currently use).  The code is
+        main, but not in the releases we currently use).  The code is
         a limited copy of the operators in
         ``sqlalchemy.dialects.postgresql.ranges.RangeOperators``, but with
         ``is_comparison=True`` added to all calls.

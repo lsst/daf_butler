@@ -15,7 +15,7 @@
 #             ).expanded()
 #         )
 # This requires functionality on branch tickets/DM-24938, which should land
-# on master shortly after this data file does.
+# on main shortly after this data file does.
 #
 # After that export, it was run through the automatic formatter from VSCode's
 # YAML extension (making it compatible with yamllint, which is sadly not true
