@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import os.path
 import shutil
@@ -35,6 +36,7 @@ __all__ = ('ButlerFileURI',)
 from typing import (
     TYPE_CHECKING,
     Iterator,
+    IO,
     List,
     Optional,
     Tuple,
@@ -419,3 +421,15 @@ class ButlerFileURI(ButlerURI):
             log.warning("Additional items unexpectedly encountered in file URI: %s", parsed.geturl())
 
         return parsed, dirLike
+
+    @contextlib.contextmanager
+    def open(
+        self,
+        mode: str = "r",
+        *,
+        encoding: Optional[str] = None,
+        prefer_file_temporary: bool = False,
+    ) -> Iterator[IO]:
+        # Docstring inherited.
+        with open(self.ospath, mode=mode, encoding=encoding) as buffer:
+            yield buffer

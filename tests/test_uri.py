@@ -24,6 +24,7 @@ import os
 import shutil
 import unittest
 import urllib.parse
+import uuid
 import responses
 import pathlib
 
@@ -45,6 +46,81 @@ from lsst.daf.butler.core._butlerUri.s3utils import (setAwsEnvCredentials,
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
+
+
+def _check_open(test_case, uri, *, mode_suffixes=("", "t", "b"), **kwargs) -> None:
+    """Test an implementation of ButlerURI.open.
+
+    Parameters
+    ----------
+    test_case : `unittest.TestCase`
+        Test case to use for assertions.
+    uri : `ButlerURI`
+        URI to use for tests.  Must point to a writeable location that is not
+        yet occupied by a file.  On return, the location may point to a file
+        only if the test fails.
+    mode_suffixes : `Iterable` of `str`
+        Suffixes to pass as part of the ``mode`` argument to `ButlerURI.open`,
+        indicating whether to open as binary or as text; the only permitted
+        elements are ``""``, ``"t"``, and ``""b""`.
+    **kwargs
+        Additional keyword arguments to forward to all calls to `open`.
+    """
+    text_content = "wxyz🙂"
+    bytes_content = uuid.uuid4().bytes
+    content_by_mode_suffix = {
+        "": text_content,
+        "t": text_content,
+        "b": bytes_content,
+    }
+    empty_content_by_mode_suffix = {
+        "": "",
+        "t": "",
+        "b": b"",
+    }
+    for mode_suffix in mode_suffixes:
+        content = content_by_mode_suffix[mode_suffix]
+        # Create file with mode='x', which prohibits overwriting.
+        with uri.open("x" + mode_suffix, **kwargs) as write_buffer:
+            write_buffer.write(content)
+        test_case.assertTrue(uri.exists())
+        # Check that opening with 'x' now raises, and does not modify content.
+        with test_case.assertRaises(FileExistsError):
+            with uri.open("x" + mode_suffix, **kwargs) as write_buffer:
+                write_buffer.write("bad")
+        # Read the file we created and check the contents.
+        with uri.open("r" + mode_suffix, **kwargs) as read_buffer:
+            test_case.assertEqual(read_buffer.read(), content)
+        # Write two copies of the content, overwriting the single copy there.
+        with uri.open("w" + mode_suffix, **kwargs) as write_buffer:
+            write_buffer.write(content + content)
+        # Read again, this time use mode='r+', which reads what is there and
+        # then lets us write more; we'll use that to reset the file to one
+        # copy of the content.
+        with uri.open("r+" + mode_suffix, **kwargs) as rw_buffer:
+            test_case.assertEqual(rw_buffer.read(), content + content)
+            rw_buffer.seek(0)
+            rw_buffer.truncate()
+            rw_buffer.write(content)
+            rw_buffer.seek(0)
+            test_case.assertEqual(rw_buffer.read(), content)
+        with uri.open("r" + mode_suffix, **kwargs) as read_buffer:
+            test_case.assertEqual(read_buffer.read(), content)
+        # Append some more content to the file; should now have two copies.
+        with uri.open("a" + mode_suffix, **kwargs) as append_buffer:
+            append_buffer.write(content)
+        with uri.open("r" + mode_suffix, **kwargs) as read_buffer:
+            test_case.assertEqual(read_buffer.read(), content + content)
+        # Final mode to check is w+, which does read/write but truncates first.
+        with uri.open("w+" + mode_suffix, **kwargs) as rw_buffer:
+            test_case.assertEqual(rw_buffer.read(), empty_content_by_mode_suffix[mode_suffix])
+            rw_buffer.write(content)
+            rw_buffer.seek(0)
+            test_case.assertEqual(rw_buffer.read(), content)
+        with uri.open("r" + mode_suffix, **kwargs) as read_buffer:
+            test_case.assertEqual(read_buffer.read(), content)
+        # Remove file to make room for the next loop of tests with this URI.
+        uri.remove()
 
 
 class FileURITestCase(unittest.TestCase):
@@ -491,6 +567,17 @@ class FileURITestCase(unittest.TestCase):
             self.assertFalse(tmp.exists(), f"uri: {tmp}")
         self.assertTrue(tmpdir.exists(), f"uri: {tmpdir} still exists")
 
+    def test_open(self):
+        tmpdir = ButlerURI(self.tmpdir, forceDirectory=True)
+        with ButlerURI.temporary_uri(prefix=tmpdir, suffix=".txt") as tmp:
+            _check_open(self, tmp, mode_suffixes=("", "t"))
+            _check_open(self, tmp, mode_suffixes=("t",), encoding="utf-16")
+            _check_open(self, tmp, mode_suffixes=("t",), prefer_file_temporary=True)
+            _check_open(self, tmp, mode_suffixes=("t",), encoding="utf-16", prefer_file_temporary=True)
+        with ButlerURI.temporary_uri(prefix=tmpdir, suffix=".dat") as tmp:
+            _check_open(self, tmp, mode_suffixes=("b",))
+            _check_open(self, tmp, mode_suffixes=("b"), prefer_file_temporary=True)
+
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
@@ -692,6 +779,16 @@ class S3URITestCase(unittest.TestCase):
         self.assertEqual(child.relativeToPathRoot, subpath)
         self.assertIn("%", child.path)
         self.assertEqual(child.unquoted_path, "/" + subpath)
+
+    def test_open(self):
+        text_uri = ButlerURI(self.makeS3Uri("file.txt"))
+        _check_open(self, text_uri, mode_suffixes=("", "t"))
+        _check_open(self, text_uri, mode_suffixes=("t",), encoding="utf-16")
+        _check_open(self, text_uri, mode_suffixes=("t",), prefer_file_temporary=True)
+        _check_open(self, text_uri, mode_suffixes=("t",), prefer_file_temporary=True, encoding="utf-16")
+        binary_uri = ButlerURI(self.makeS3Uri("file.dat"))
+        _check_open(self, binary_uri, mode_suffixes=("b",))
+        _check_open(self, binary_uri, mode_suffixes=("b",), prefer_file_temporary=True)
 
 
 # Mock required environment variables during tests

@@ -19,8 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import contextlib
 import pkg_resources
 import logging
+from typing import IO, Iterator, Optional
 
 __all__ = ('ButlerPackageResourceURI',)
 
@@ -45,3 +47,21 @@ class ButlerPackageResourceURI(ButlerURI):
         """Read the contents of the resource."""
         with pkg_resources.resource_stream(self.netloc, self.relativeToPathRoot) as fh:
             return fh.read(size)
+
+    @contextlib.contextmanager
+    def open(
+        self,
+        mode: str = "r",
+        *,
+        encoding: Optional[str] = None,
+        prefer_file_temporary: bool = False,
+    ) -> Iterator[IO]:
+        # Docstring inherited.
+        if "r" not in mode or "+" in mode:
+            raise RuntimeError(f"Package resource URI {self} is read-only.")
+        if "b" in mode:
+            with pkg_resources.resource_stream(self.netloc, self.relativeToPathRoot) as buffer:
+                yield buffer
+        else:
+            with super().open(mode, encoding=encoding, prefer_file_temporary=prefer_file_temporary) as buffer:
+                yield buffer
