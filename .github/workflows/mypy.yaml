@@ -25,7 +25,7 @@ jobs:
         run: pip install types-requests types-PyYAML types-click types-pkg_resources
 
       - name: Install lsst.utils
-        run: pip install git+git://github.com/lsst/utils@master#egg=lsst_utils
+        run: pip install git+git://github.com/lsst/utils@main#egg=lsst_utils
 
       - name: Fake a version
         run: |
