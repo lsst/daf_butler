@@ -38,6 +38,7 @@ from typing import (
     Set,
     Union,
 )
+import warnings
 
 import sqlalchemy
 
@@ -205,11 +206,17 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             query.columns.extend(self._table.columns[name] for name in TimespanReprClass.getFieldNames())
         query.join(self._table)
         dataIds.constrain(query, lambda name: self._fetchColumns[name])
-        for row in self._db.query(query.combine()):
-            values = row._asdict()
-            if self.element.temporal is not None:
-                values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
-            yield RecordClass(**values)
+        with warnings.catch_warnings():
+            # Some of our generated queries may contain cartesian joins, this
+            # is not a serious issue as it is properly constrained, so we want
+            # to suppress sqlalchemy warnings.
+            warnings.filterwarnings("ignore", message="SELECT statement has a cartesian product",
+                                    category=sqlalchemy.exc.SAWarning)
+            for row in self._db.query(query.combine()):
+                values = row._asdict()
+                if self.element.temporal is not None:
+                    values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
+                yield RecordClass(**values)
 
     def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
