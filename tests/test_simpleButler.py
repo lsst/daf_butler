@@ -468,6 +468,17 @@ class SimpleButlerTestCase(unittest.TestCase):
                                   collections="calibs", instrument="Cam1")
         self.assertEqual(bias3b_id, bias3b.id)
 
+        # Ensure that spurious kwargs cause an exception.
+        with self.assertRaises(ValueError):
+            butler.get("bias", {"exposure.obs_id": "four", "immediate": True,
+                       "detector.full_name": "Ba"},
+                       collections="calibs", instrument="Cam1")
+
+        with self.assertRaises(ValueError):
+            butler.get("bias", day_obs=20211114, seq_num=42,
+                       raft="B", name_in_raft="a",
+                       collections="calibs", instrument="Cam1", immediate=True)
+
     def testRegistryDefaults(self):
         """Test that we can default the collections and some data ID keys when
         constructing a butler.
