@@ -270,5 +270,4 @@ class MetricTestRepo:
         self.butler.put(metric,
                         self.datasetType if datasetType is None else datasetType,
                         dataId,
-                        run=run,
-                        tags=())
+                        run=run)

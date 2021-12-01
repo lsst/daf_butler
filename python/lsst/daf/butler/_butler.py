@@ -731,6 +731,7 @@ class Butler:
 
             # Go through the missing dimensions and associate the
             # given names with records within those dimensions
+            matched_dims = set()
             for dimensionName in candidateDimensions:
                 dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
                 fields = dimension.metadata.names | dimension.uniqueKeys.names
@@ -739,6 +740,13 @@ class Butler:
                         guessedAssociation[dimensionName][field] = not_dimensions[field]
                         counter[dimensionName] += 1
                         assigned[field].add(dimensionName)
+                        matched_dims.add(field)
+
+            # Calculate the fields that matched nothing.
+            never_found = set(not_dimensions) - matched_dims
+
+            if never_found:
+                raise ValueError(f"Unrecognized keyword args given: {never_found}")
 
             # There is a chance we have allocated a single dataId item
             # to multiple dimensions. Need to decide which should be retained.
