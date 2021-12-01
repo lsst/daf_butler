@@ -995,7 +995,7 @@ class ButlerTests(ButlerPutGetTests):
                       "list": [2*x for x in range(i)]}
 
             # Use the seq_num for the put to test rewriting.
-            dataId = {"seq_num": i, "day_obs": dayobs, "detector": 1, "instrument": "DummyCamComp",
+            dataId = {"seq_num": i, "day_obs": dayobs, "instrument": "DummyCamComp",
                       "physical_filter": "d-r"}
             ref = butler.put(metric, datasetTypeName, dataId=dataId)
 
@@ -1829,7 +1829,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         run = "distraction"
         butler = Butler(butler=self.source_butler, run=run)
         butler.put(makeExampleMetrics(), datasetTypeName,
-                   exposure=1, detector=1, instrument="DummyCamComp", physical_filter="d-r")
+                   exposure=1, instrument="DummyCamComp", physical_filter="d-r")
 
         # Write some example metrics to the source
         butler = Butler(butler=self.source_butler)
@@ -1851,7 +1851,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
                            "output": {"text": "metric"},
                            "data": [2*x for x in range(i)]}
             metric = MetricsExample(**metric_data)
-            dataId = {"exposure": i, "detector": 1, "instrument": "DummyCamComp", "physical_filter": "d-r"}
+            dataId = {"exposure": i, "instrument": "DummyCamComp", "physical_filter": "d-r"}
             ref = butler.put(metric, datasetTypeName, dataId=dataId, run=run)
 
             # Remove the datastore record using low-level API
