@@ -1,6 +1,7 @@
 setupRequired(sphgeom)
 setupRequired(sconsUtils)
 setupRequired(utils)
+setupRequired(resources)
 
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
