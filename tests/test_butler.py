@@ -67,9 +67,8 @@ from lsst.daf.butler import ButlerURI
 from lsst.daf.butler import script
 from lsst.daf.butler.registry import MissingCollectionError, ConflictingDefinitionError
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
-from lsst.daf.butler.core._butlerUri.s3utils import (setAwsEnvCredentials,
-                                                     unsetAwsEnvCredentials)
-from lsst.daf.butler.core._butlerUri.http import isWebdavEndpoint
+from lsst.resources.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
+from lsst.resources.http import isWebdavEndpoint
 
 from lsst.daf.butler.tests import MultiDetectorFormatter, MetricsExample
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
