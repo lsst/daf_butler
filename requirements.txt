@@ -4,6 +4,7 @@ click >7.0
 sqlalchemy >= 1.3
 git+git://github.com/lsst/sphgeom@main#egg=lsst_sphgeom
 git+git://github.com/lsst/utils@main#egg=lsst_utils
+git+git://github.com/lsst/resources@tickets/DM-31723#egg=lsst_resources
 pydantic
 httpx
 
