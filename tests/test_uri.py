@@ -40,8 +40,7 @@ except ImportError:
         return cls
 
 from lsst.daf.butler import ButlerURI
-from lsst.daf.butler.core._butlerUri.s3utils import (setAwsEnvCredentials,
-                                                     unsetAwsEnvCredentials)
+from lsst.resources.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
