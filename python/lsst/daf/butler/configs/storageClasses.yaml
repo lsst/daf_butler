@@ -269,3 +269,5 @@ storageClasses:
       - degrade_nside
   ButlerLogRecords:
     pytype: lsst.daf.butler.ButlerLogRecords
+  TaskMetadata:
+    pytype: lsst.pipe.base.TaskMetadata
