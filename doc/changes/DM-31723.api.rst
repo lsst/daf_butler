@@ -1,0 +1,3 @@
+The ``ButlerURI`` class has now been removed from this package.
+It now exists as `lsst.resources.ResourcePath`.
+All code should be modified to use the new class name.
