@@ -1,0 +1,1 @@
+Add a butler command line command called ``butler remove-collections`` that can remove non-RUN collections.

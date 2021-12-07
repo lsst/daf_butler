@@ -37,6 +37,7 @@ __all__ = ("associate",
            "query_dimension_records",
            "register_dataset_type",
            "retrieve_artifacts",
+           "remove_collections",
            "remove_dataset_type",
            "transfer_datasets",
 )
@@ -63,3 +64,4 @@ from .commands import (associate,
                        remove_dataset_type,
                        transfer_datasets,
 )
+from ._remove_collections import remove_collections
