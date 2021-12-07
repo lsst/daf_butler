@@ -30,17 +30,17 @@
     [[tool.towncrier.type]]
         directory = "other"
         name = "Other Changes and Additions"
-        showcontent = false
+        showcontent = true
 
     [[tool.towncrier.type]]
         directory = "misc"
         name = "Miscellaneous Changes of Minor Interest"
-        showcontent = false
+        showcontent = true
 
     [[tool.towncrier.type]]
         directory = "removal"
         name = "An API Removal or Deprecation"
-        showcontent = false
+        showcontent = true
 
     [[tool.towncrier.section]]
         name = ""
