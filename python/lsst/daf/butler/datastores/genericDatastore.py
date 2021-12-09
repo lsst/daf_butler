@@ -167,8 +167,7 @@ class GenericBaseDatastore(Datastore):
             allowedTypes.append(type(None))
 
         if allowedTypes and not isinstance(inMemoryDataset, tuple(allowedTypes)):
-            raise TypeError("Got Python type {} from datastore but expected {}".format(type(inMemoryDataset),
-                                                                                       pytype))
+            inMemoryDataset = readStorageClass.coerce_type(inMemoryDataset)
 
         return inMemoryDataset
 
