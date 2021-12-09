@@ -79,6 +79,9 @@ class StorageClass:
     delegate : `str`, optional
         Fully qualified name of class supporting assembly and disassembly
         of a `pytype` instance.
+    converters : `dict` [`str`, `str`], optional
+        Mapping of python type to function that can be called to convert
+        that python type to the valid type of this storage class.
     """
 
     _cls_name: str = "BaseStorageClass"
@@ -87,6 +90,7 @@ class StorageClass:
     _cls_parameters: Optional[Union[Set[str], Sequence[str]]] = None
     _cls_delegate: Optional[str] = None
     _cls_pytype: Optional[Union[Type, str]] = None
+    _cls_converters: Optional[Dict[str, str]] = None
     defaultDelegate: Type = StorageClassDelegate
     defaultDelegateName: str = get_full_type_name(defaultDelegate)
 
@@ -95,7 +99,8 @@ class StorageClass:
                  components: Optional[Dict[str, StorageClass]] = None,
                  derivedComponents: Optional[Dict[str, StorageClass]] = None,
                  parameters: Optional[Union[Sequence, Set]] = None,
-                 delegate: Optional[str] = None):
+                 delegate: Optional[str] = None,
+                 converters: Optional[Dict[str, str]] = None):
         if name is None:
             name = self._cls_name
         if pytype is None:
@@ -108,6 +113,18 @@ class StorageClass:
             parameters = self._cls_parameters
         if delegate is None:
             delegate = self._cls_delegate
+
+        # Merge converters with class defaults.
+        self._converters = {}
+        if self._cls_converters is not None:
+            self._converters.update(self._cls_converters)
+        if converters:
+            self._converters.update(converters)
+
+        # Version of converters where the python types have been
+        # Do not try to import anything until needed.
+        self._converters_by_type: Optional[Dict[Type, Type]] = None
+
         self.name = name
 
         if pytype is None:
@@ -159,6 +176,35 @@ class StorageClass:
     def derivedComponents(self) -> Dict[str, StorageClass]:
         """Return derived components associated with `StorageClass`."""
         return self._derivedComponents
+
+    @property
+    def converters(self) -> Dict[str, str]:
+        """Return the type converters supported by this `StorageClass`."""
+        return self._converters
+
+    @property
+    def converters_by_type(self) -> Dict[Type, Type]:
+        """Return the type converters as python types."""
+        if self._converters_by_type is None:
+            self._converters_by_type = {}
+
+            for candidate_type_str, converter_str in self.converters.items():
+                try:
+                    candidate_type = doImportType(candidate_type_str)
+                except ImportError as e:
+                    log.info("Unable to import type %s associated with storage class %s (%s)",
+                             candidate_type_str, self.name, e)
+                    continue
+
+                try:
+                    converter = doImportType(converter_str)
+                except ImportError as e:
+                    log.info("Unable to import conversion function %s associated with storage class %s "
+                             "required to convert type %s (%s)",
+                             candidate_type_str, self.name, candidate_type_str, e)
+                    continue
+                self._converters_by_type[candidate_type] = converter
+        return self._converters_by_type
 
     @property
     def parameters(self) -> Set[str]:
@@ -355,6 +401,64 @@ class StorageClass:
         """
         return isinstance(instance, self.pytype)
 
+    def can_convert(self, other: StorageClass) -> bool:
+        """Return `True` if this storage class can convert python types
+        in the other storage class.
+
+        Parameters
+        ----------
+        other : `StorageClass`
+            The storage class to check.
+
+        Returns
+        -------
+        can : `bool`
+            `True` if the two storage classes are compatible.
+        """
+        if other.name == self.name:
+            # Identical storage classes are compatible.
+            return True
+
+        for candidate_type in self.converters_by_type:
+            if issubclass(other.pytype, candidate_type):
+                return True
+        return False
+
+    def coerce_type(self, incorrect: Any) -> Any:
+        """Coerce the supplied incorrect instance to the python type
+        associated with this `StorageClass`.
+
+        Parameters
+        ----------
+        incorrect : `object`
+            An object that might be the incorrect type.
+
+        Returns
+        -------
+        correct : `object`
+            An object that matches the python type of this `StorageClass`.
+            Can be the same object as given. If `None`, `None` will be
+            returned.
+
+        Raises
+        ------
+        TypeError
+            Raised if no conversion can be found.
+        """
+        if incorrect is None:
+            return None
+
+        # Possible this is the correct type already.
+        if self.validateInstance(incorrect):
+            return incorrect
+
+        # Check each registered converter.
+        for candidate_type, converter in self.converters_by_type.items():
+            if isinstance(incorrect, candidate_type):
+                return converter(incorrect)
+        raise TypeError("Type does not match and no valid converter found to convert"
+                        f" '{type(incorrect)}' to '{self.pytype}'")
+
     def __eq__(self, other: Any) -> bool:
         """Equality checks name, pytype name, delegate name, and components."""
         if not isinstance(other, StorageClass):
@@ -399,6 +503,8 @@ class StorageClass:
             optionals["parameters"] = self._parameters
         if self.components:
             optionals["components"] = self.components
+        if self.converters:
+            optionals["converters"] = self.converters
 
         # order is preserved in the dict
         options = ", ".join(f"{k}={v!r}" for k, v in optionals.items())
@@ -516,6 +622,9 @@ StorageClasses
             # StorageClass Constructor
             storageClassKwargs = {k: info[k] for k in ("pytype", "delegate", "parameters") if k in info}
 
+            if "converters" in info:
+                storageClassKwargs["converters"] = info["converters"].toDict()
+
             for compName in ("components", "derivedComponents"):
                 if compName not in info:
                     continue
@@ -576,7 +685,7 @@ StorageClasses
         # so that a child can inherit but override one bit.
         # lists (which you get from configs) are treated as sets for this to
         # work consistently.
-        for k in ("components", "parameters", "derivedComponents"):
+        for k in ("components", "parameters", "derivedComponents", "converters"):
             classKey = f"_cls_{k}"
             if classKey in clsargs:
                 baseValue = getattr(baseClass, classKey, None)
