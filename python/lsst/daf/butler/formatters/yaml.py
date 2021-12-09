@@ -172,32 +172,40 @@ class YamlFormatter(FileFormatter):
             serialized = yaml.safe_dump(inMemoryDataset)
         return serialized.encode()
 
-    def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
-                    pytype: Optional[Type[Any]] = None) -> Any:
-        """Coerce the supplied inMemoryDataset to type `pytype`.
+    def _coerceType(self, inMemoryDataset: Any, writeStorageClass: StorageClass,
+                    readStorageClass: StorageClass) -> Any:
+        """Coerce the supplied inMemoryDataset to the correct python type.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             Object to coerce to expected type.
-        storageClass : `StorageClass`
-            StorageClass associated with `inMemoryDataset`.
-        pytype : `type`, optional
-            Override type to use for conversion.
+        writeStorageClass : `StorageClass`
+            Storage class used to serialize this data.
+        readStorageClass : `StorageClass`
+            Storage class requested as the outcome.
 
         Returns
         -------
         inMemoryDataset : `object`
-            Object of expected type `pytype`.
+            Object of expected type ``readStorageClass.pytype``.
         """
-        if inMemoryDataset is not None and pytype is not None and not hasattr(builtins, pytype.__name__):
-            if storageClass.isComposite():
-                inMemoryDataset = storageClass.delegate().assemble(inMemoryDataset, pytype=pytype)
-            elif not isinstance(inMemoryDataset, pytype):
-                if dataclasses.is_dataclass(pytype):
-                    # dataclasses accept key/value parameters
-                    inMemoryDataset = pytype(**inMemoryDataset)
-                else:
-                    # Hope that we can pass the arguments in directly
-                    inMemoryDataset = pytype(inMemoryDataset)
+        if inMemoryDataset is not None and not hasattr(builtins, readStorageClass.pytype.__name__):
+            if readStorageClass.isComposite():
+                inMemoryDataset = readStorageClass.delegate().assemble(inMemoryDataset,
+                                                                       pytype=readStorageClass.pytype)
+                return readStorageClass.coerce_type(inMemoryDataset)
+            elif not isinstance(inMemoryDataset, readStorageClass.pytype):
+                if not isinstance(inMemoryDataset, writeStorageClass.pytype):
+                    # This does not look like the written type or the required
+                    # type. Try to cast it to the written type and then coerce
+                    # to requested type.
+                    if dataclasses.is_dataclass(writeStorageClass.pytype):
+                        # dataclasses accept key/value parameters.
+                        inMemoryDataset = writeStorageClass.pytype(**inMemoryDataset)
+                    else:
+                        # Hope that we can pass the arguments in directly.
+                        inMemoryDataset = writeStorageClass.pytype(inMemoryDataset)
+                # Coerce to the read storage class if necessary.
+                inMemoryDataset = readStorageClass.coerce_type(inMemoryDataset)
         return inMemoryDataset

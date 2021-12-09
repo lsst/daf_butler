@@ -136,32 +136,36 @@ class JsonFormatter(FileFormatter):
             inMemoryDataset = inMemoryDataset._asdict()
         return json.dumps(inMemoryDataset, ensure_ascii=False).encode()
 
-    def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
-                    pytype: Optional[Type[Any]] = None) -> Any:
-        """Coerce the supplied inMemoryDataset to type `pytype`.
+    def _coerceType(self, inMemoryDataset: Any, writeStorageClass: StorageClass,
+                    readStorageClass: StorageClass) -> Any:
+        """Coerce the supplied inMemoryDataset to the correct python type.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             Object to coerce to expected type.
-        storageClass : `StorageClass`
-            StorageClass associated with `inMemoryDataset`.
-        pytype : `type`, optional
-            Override type to use for conversion.
+        writeStorageClass : `StorageClass`
+            Storage class used to serialize this data.
+        readStorageClass : `StorageClass`
+            Storage class requested as the outcome.
 
         Returns
         -------
         inMemoryDataset : `object`
-            Object of expected type `pytype`.
+            Object of expected type ``readStorageClass.pytype``.
         """
-        if inMemoryDataset is not None and pytype is not None and not hasattr(builtins, pytype.__name__):
-            if storageClass.isComposite():
-                inMemoryDataset = storageClass.delegate().assemble(inMemoryDataset, pytype=pytype)
-            elif not isinstance(inMemoryDataset, pytype):
+        if inMemoryDataset is not None and not hasattr(builtins, readStorageClass.pytype.__name__):
+            if readStorageClass.isComposite():
+                inMemoryDataset = readStorageClass.delegate().assemble(inMemoryDataset,
+                                                                       pytype=readStorageClass.pytype)
+            elif not isinstance(inMemoryDataset, readStorageClass.pytype):
+                # JSON data are returned as simple python types.
+                # The content will match the written storage class.
                 # Pydantic models have their own scheme.
                 try:
-                    inMemoryDataset = pytype.parse_obj(inMemoryDataset)
+                    inMemoryDataset = writeStorageClass.pytype.parse_obj(inMemoryDataset)
                 except AttributeError:
                     # Hope that we can pass the arguments in directly
-                    inMemoryDataset = pytype(inMemoryDataset)
+                    inMemoryDataset = writeStorageClass.pytype(inMemoryDataset)
+                inMemoryDataset = readStorageClass.coerce_type(inMemoryDataset)
         return inMemoryDataset

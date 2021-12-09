@@ -114,45 +114,46 @@ class FileFormatter(Formatter):
         readStorageClass = fileDescriptor.readStorageClass
         if readStorageClass != fileDescriptor.storageClass:
             if component is None:
-                raise ValueError("Storage class inconsistency ({} vs {}) but no"
-                                 " component requested".format(readStorageClass.name,
-                                                               fileDescriptor.storageClass.name))
-
-            # Concrete composite written as a single file (we hope)
-            try:
-                data = fileDescriptor.storageClass.delegate().getComponent(data, component)
-            except AttributeError:
-                # Defer the complaint
-                data = None
+                # This likely means that type conversion is required but
+                # it will be an error if no valid converter is available
+                # for this pytype.
+                if not readStorageClass.can_convert(fileDescriptor.storageClass):
+                    raise ValueError(f"Storage class inconsistency ({readStorageClass.name,} vs"
+                                     f" {fileDescriptor.storageClass.name}) but no"
+                                     " component requested or converter registered")
+            else:
+                # Concrete composite written as a single file (we hope)
+                try:
+                    data = fileDescriptor.storageClass.delegate().getComponent(data, component)
+                except AttributeError:
+                    # Defer the complaint
+                    data = None
 
         # Coerce to the requested type (not necessarily the type that was
         # written)
-        data = self._coerceType(data, fileDescriptor.readStorageClass,
-                                pytype=fileDescriptor.readStorageClass.pytype)
+        data = self._coerceType(data, fileDescriptor.storageClass, readStorageClass)
 
         return data
 
-    def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
-                    pytype: Optional[Type[Any]] = None) -> Any:
-        """Coerce the supplied inMemoryDataset to type `pytype`.
-
-        Usually a no-op.
+    def _coerceType(self, inMemoryDataset: Any, writeStorageClass: StorageClass,
+                    readStorageClass: StorageClass) -> Any:
+        """Coerce the supplied inMemoryDataset to the correct python type.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             Object to coerce to expected type.
-        storageClass : `StorageClass`
-            StorageClass associated with ``inMemoryDataset``.
-        pytype : `class`, optional
-            Override type to use for conversion.
+        writeStorageClass : `StorageClass`
+            Storage class used to serialize this data.
+        readStorageClass : `StorageClass`
+            Storage class requested as the outcome.
 
         Returns
         -------
         inMemoryDataset : `object`
-            Object of expected type `pytype`.
+            Object of expected type ``readStorageClass.pytype``.
         """
-        return inMemoryDataset
+        return readStorageClass.coerce_type(inMemoryDataset)
 
     def read(self, component: Optional[str] = None) -> Any:
         """Read data from a file.
