@@ -271,3 +271,6 @@ storageClasses:
     pytype: lsst.daf.butler.ButlerLogRecords
   TaskMetadata:
     pytype: lsst.pipe.base.TaskMetadata
+    converters:
+      # Compatible python types.
+      lsst.daf.base.PropertySet: lsst.pipe.base.TaskMetadata.from_metadata
