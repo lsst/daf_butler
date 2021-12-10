@@ -1,3 +1,0 @@
-Fix parquet formatter error when reading tables with no indices.
-
-Previously, this would cause butler.get to fail to read valid parquet tables. 

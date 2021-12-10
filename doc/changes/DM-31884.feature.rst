@@ -1,1 +1,0 @@
-Add ``--log-label`` option to ``butler`` command to allow extra information to be injected into the log record.

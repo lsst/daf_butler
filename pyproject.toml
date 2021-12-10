@@ -28,28 +28,11 @@
         showcontent = true
 
     [[tool.towncrier.type]]
-        directory = "other"
-        name = "Other Changes and Additions"
-        showcontent = false
-
-    [[tool.towncrier.type]]
         directory = "misc"
-        name = "Miscellaneous Changes of Minor Interest"
-        showcontent = false
+        name = "Other Changes and Additions"
+        showcontent = true
 
     [[tool.towncrier.type]]
         directory = "removal"
         name = "An API Removal or Deprecation"
-        showcontent = false
-
-    [[tool.towncrier.section]]
-        name = ""
-        path = ""
-
-    [[tool.towncrier.section]]
-        name = "Butler Datastores"
-        path = "datastore"
-
-    [[tool.towncrier.section]]
-        name = "Butler Registry"
-        path = "registry"
+        showcontent = true
