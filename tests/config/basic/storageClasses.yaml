@@ -79,3 +79,11 @@ storageClasses:
       counter: Integer
   StructuredCompositeReadCompNoDisassembly:
     inheritsFrom: StructuredCompositeReadComp
+  StructuredDataNoComponentsModel:
+    # Reading and writing a blob and no components known
+    pytype: lsst.daf.butler.tests.MetricsExampleModel
+    converters:
+      lsst.daf.butler.tests.MetricsExample: lsst.daf.butler.tests.MetricsExampleModel.from_metrics
+      # Add some entries that will fail to import.
+      lsst.daf.butler.bad.type: lsst.daf.butler.tests.MetricsExampleModel.from_metrics
+      lsst.daf.butler.tests.MetricsExampleModel: lsst.daf.butler.bad.function

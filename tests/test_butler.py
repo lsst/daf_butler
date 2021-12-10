@@ -57,6 +57,7 @@ import astropy.time
 from threading import Thread
 from tempfile import gettempdir
 from lsst.utils import doImport
+from lsst.utils.introspection import get_full_type_name
 from lsst.daf.butler import Butler, Config, ButlerConfig
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef, DatasetIdGenEnum
@@ -1285,6 +1286,59 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         # Clear out the datasets from registry.
         butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
+
+    def testPytypeCoercion(self):
+        """Test python type coercion on Butler.get"""
+
+        # Store some data with the normal example storage class.
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        datasetTypeName = "test_metric"
+        butler = self.runPutGetTest(storageClass, datasetTypeName)
+
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+        metric = butler.get(datasetTypeName, dataId=dataId)
+        self.assertEqual(get_full_type_name(metric), "lsst.daf.butler.tests.MetricsExample")
+
+        datasetType_ori = butler.registry.getDatasetType(datasetTypeName)
+        self.assertEqual(datasetType_ori.storageClass.name, "StructuredDataNoComponents")
+
+        # Now need to hack the registry dataset type definition.
+        # There is no API for this.
+        manager = butler.registry._managers.datasets
+        manager._db.update(
+            manager._static.dataset_type,
+            {"name": datasetTypeName},
+            {datasetTypeName: datasetTypeName, "storage_class": "StructuredDataNoComponentsModel"},
+        )
+
+        # Force reset of dataset type cache
+        butler.registry.refresh()
+
+        datasetType_new = butler.registry.getDatasetType(datasetTypeName)
+        self.assertEqual(datasetType_new.name, datasetType_ori.name)
+        self.assertEqual(datasetType_new.storageClass.name, "StructuredDataNoComponentsModel")
+
+        metric_model = butler.get(datasetTypeName, dataId=dataId)
+        self.assertNotEqual(type(metric_model), type(metric))
+        self.assertEqual(get_full_type_name(metric_model), "lsst.daf.butler.tests.MetricsExampleModel")
+
+        # Put the model and read it back to show that everything now
+        # works as normal.
+        metric_ref = butler.put(metric_model, datasetTypeName, dataId=dataId, visit=424)
+        metric_model_new = butler.get(metric_ref)
+        self.assertEqual(metric_model_new, metric_model)
+
+        # Hack the storage class again to something that will fail on the
+        # get with no conversion class.
+        manager._db.update(
+            manager._static.dataset_type,
+            {"name": datasetTypeName},
+            {datasetTypeName: datasetTypeName, "storage_class": "StructuredDataListYaml"},
+        )
+        butler.registry.refresh()
+
+        with self.assertRaises(ValueError):
+            butler.get(datasetTypeName, dataId=dataId)
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
