@@ -32,6 +32,18 @@ New Features
 - Add ``--log-label`` option to ``butler`` command to allow extra information to be injected into the log record. (`DM-31884 <https://jira.lsstcorp.org/browse/DM-31884>`_)
 - * The ``Butler.transfer_from`` method no longer registers new dataset types by default.
   * Add the related option ``--register-dataset-types`` to the ``butler transfer-datasets`` subcommand. (`DM-31976 <https://jira.lsstcorp.org/browse/DM-31976>`_)
+- Support UUIDs as the primary keys in registry and allow for reproducible UUIDs.
+
+  This change will significantly simplify transferring of data between butler repositories. (`DM-29196 <https://jira.lsstcorp.org/browse/DM-29196>`_)
+- Allow registry methods such as ``queryDatasets`` to use a glob-style string when specifying collection or dataset type names. (`DM-30200 <https://jira.lsstcorp.org/browse/DM-30200>`_)
+- Add support for updating and replacing dimension records. (`DM-30866 <https://jira.lsstcorp.org/browse/DM-30866>`_)
+
+
+API Changes
+-----------
+
+- A new method ``Datastore.knows()`` has been added to allow a user to ask the datastore whether it knows about a specific dataset but without requiring a check to see if the artifact itself exists.
+  Use ``Datastore.exists()`` to check that the datastore knows about a dataset and the artifact exists. (`DM-30335 <https://jira.lsstcorp.org/browse/DM-30335>`_)
 
 
 Bug Fixes
@@ -67,7 +79,7 @@ Performance Enhancement
   The main slow down is asking the datastore whether a file artifact exists.
   This is now parallelized and the result is cached for later. (`DM-31785 <https://jira.lsstcorp.org/browse/DM-31785>`_)
 - Minor efficiency improvements when accessing `lsst.daf.butler.Config` hierarchies. (`DM-32305 <https://jira.lsstcorp.org/browse/DM-32305>`_)
-
+- FileDatastore: Improve removing of datasets from the trash by at least a factor of 10. (`DM-29849 <https://jira.lsstcorp.org/browse/DM-29849>`_)
 
 Other Changes and Additions
 ---------------------------
@@ -77,11 +89,6 @@ Other Changes and Additions
   Warnings are only issued if WebDAV functionality is requested. (`DM-29708 <https://jira.lsstcorp.org/browse/DM-29708>`_)
 - Switch logging such that all logging messages are now forwarded to Python ``logging`` from ``lsst.log``.
   Previously all Python ``logging`` messages were being forwarded to ``lsst.log``. (`DM-31120 <https://jira.lsstcorp.org/browse/DM-31120>`_)
-
-
-Miscellaneous Changes of Minor Interest
----------------------------------------
-
 - Add formatter and storageClass information for FocalPlaneBackground. (`DM-22534 <https://jira.lsstcorp.org/browse/DM-22534>`_)
 - Add formatter and storageClass information for IsrCalib. (`DM-29531 <https://jira.lsstcorp.org/browse/DM-29531>`_)
 - Change release note creation to use [Towncrier](https://towncrier.readthedocs.io/en/actual-freaking-docs/index.html). (`DM-30291 <https://jira.lsstcorp.org/browse/DM-30291>`_)
@@ -92,36 +99,6 @@ Miscellaneous Changes of Minor Interest
   This is no longer a fatal error and the key will be treated as a name. (`DM-30685 <https://jira.lsstcorp.org/browse/DM-30685>`_)
 - Add ``split`` transfer mode that can be used when some files are inside the datastore and some files are outside the datastore.
   This is equivalent to using `None` and ``direct`` mode dynamically. (`DM-31251 <https://jira.lsstcorp.org/browse/DM-31251>`_)
-
-
-Butler Datastores
------------------
-
-API Changes
-~~~~~~~~~~~
-
-- A new method ``Datastore.knows()`` has been added to allow a user to ask the datastore whether it knows about a specific dataset but without requiring a check to see if the artifact itself exists.
-  Use ``Datastore.exists()`` to check that the datastore knows about a dataset and the artifact exists. (`DM-30335 <https://jira.lsstcorp.org/browse/DM-30335>`_)
-
-
-Performance Enhancement
-~~~~~~~~~~~~~~~~~~~~~~~
-
-- FileDatastore: Improve removing of datasets from the trash by at least a factor of 10. (`DM-29849 <https://jira.lsstcorp.org/browse/DM-29849>`_)
-
-
-Butler Registry
----------------
-
-New Features
-~~~~~~~~~~~~
-
-- Support UUIDs as the primary keys in registry and allow for reproducible UUIDs.
-
-  This change will significantly simplify transferring of data between butler repositories. (`DM-29196 <https://jira.lsstcorp.org/browse/DM-29196>`_)
-- Allow registry methods such as ``queryDatasets`` to use a glob-style string when specifying collection or dataset type names. (`DM-30200 <https://jira.lsstcorp.org/browse/DM-30200>`_)
-- Add support for updating and replacing dimension records. (`DM-30866 <https://jira.lsstcorp.org/browse/DM-30866>`_)
-
 
 Butler v22.0 2021-04-01
 =======================
