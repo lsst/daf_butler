@@ -1,1 +1,0 @@
-Use cached summary information to simplify queries involving datasets and provide better diagnostics when those queries yield no results.

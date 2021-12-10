@@ -1,2 +1,0 @@
-Add a confirmation step to ``butler prune-collection`` to help prevent
-accidental removal of collections.

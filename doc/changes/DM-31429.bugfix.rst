@@ -1,1 +1,0 @@
-Replace UNION ALL with UNION for subqueries for simpler query plans.

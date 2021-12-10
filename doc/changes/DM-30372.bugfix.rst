@@ -1,4 +1,0 @@
-Fix butler repository creation when a seed config has specified a registry manager override.
-
-Previously only that manager was recorded rather than the full set.
-We always require a full set to be recorded to prevent breakage of a butler when a default changes.
