@@ -189,12 +189,15 @@ class StorageClass:
             self._converters_by_type = {}
 
             for candidate_type_str, converter_str in self.converters.items():
-                try:
-                    candidate_type = doImportType(candidate_type_str)
-                except ImportError as e:
-                    log.info("Unable to import type %s associated with storage class %s (%s)",
-                             candidate_type_str, self.name, e)
-                    continue
+                if hasattr(builtins, candidate_type_str):
+                    candidate_type = getattr(builtins, candidate_type_str)
+                else:
+                    try:
+                        candidate_type = doImportType(candidate_type_str)
+                    except ImportError as e:
+                        log.info("Unable to import type %s associated with storage class %s (%s)",
+                                 candidate_type_str, self.name, e)
+                        continue
 
                 try:
                     converter = doImportType(converter_str)

@@ -23,6 +23,8 @@ import os
 import pickle
 import unittest
 
+from lsst.utils.introspection import get_full_type_name
+
 from lsst.daf.butler import StorageClass, StorageClassFactory, StorageClassConfig, StorageClassDelegate
 
 """Tests related to the StorageClass infrastructure.
@@ -224,6 +226,38 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertFalse(sc.components)
         sc2 = pickle.loads(pickle.dumps(sc))
         self.assertEqual(sc2, sc)
+
+    @classmethod
+    def _convert_type(cls, data):
+        # Test helper function.
+        return {"key": data}
+
+    def testConverters(self):
+        """Test conversion maps."""
+
+        className = "TestConverters"
+        converters = {
+            "lsst.daf.butler.tests.MetricsExample": "lsst.daf.butler.tests.MetricsExampleModel.from_metrics",
+            # Add some entries that will fail to import.
+            "lsst.daf.butler.bad.type": "lsst.daf.butler.tests.MetricsExampleModel.from_metrics",
+            "lsst.daf.butler.tests.MetricsExampleModel": "lsst.daf.butler.bad.function",
+            "list": get_full_type_name(self._convert_type),
+        }
+        sc = StorageClass(className, pytype=dict, converters=converters)
+        sc2 = StorageClass("Test2", pytype=set)
+        sc3 = StorageClass("Test3", pytype="lsst.daf.butler.tests.MetricsExample")
+
+        self.assertTrue(sc.can_convert(sc))
+        self.assertFalse(sc.can_convert(sc2))
+        self.assertTrue(sc.can_convert(sc3))
+
+        self.assertIsNone(sc.coerce_type(None))
+
+        converted = sc.coerce_type([1, 2, 3])
+        self.assertEqual(converted, {"key": [1, 2, 3]})
+
+        with self.assertRaises(TypeError):
+            sc.coerce_type(set([1, 2, 3]))
 
 
 if __name__ == "__main__":
