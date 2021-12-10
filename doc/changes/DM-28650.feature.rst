@@ -1,3 +1,0 @@
-Add ``butler transfer-datasets`` command-line tool and associated ``Butler.transfer_from()`` API.
-
-This can be used to transfer datasets between different butlers, with the caveat that dimensions and dataset types must be pre-defined in the receiving butler repository.

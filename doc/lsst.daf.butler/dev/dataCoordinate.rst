@@ -53,7 +53,7 @@ So (prior to DM-24938) we were stuck in an unpleasant tradeoff space when queryi
 
  - or we could do a lot of expensive follow-up queries for `DimensionRecord`\ s we might not need in order to be able to use an ``ExpandedDataCoordinate`` and keep it that information we got for free.
 
-That led to the third version, which right now looks like it will be squashed away in the history of ``DM-24938`` or its subtask-issues and never see the light of the master branch.
+That led to the third version, which right now looks like it will be squashed away in the history of ``DM-24938`` or its subtask-issues and never see the light of the main branch.
 In that version, I made ``DataCoordinate`` a non-mapping ABC that implemented only `__getitem__`, and added intermediate ABCs ``MinimalDataCoordinate`` (mapping with required dimension keys), ``CompleteDataCoordinate`` (mapping with all-dimensions keys), and ``ExpandedDataCoordinate`` (subclass of ``CompleteDataCoordinate`` that adds ``DimensionRecord``\ s for all elements).
 Concrete implementations of each of these were private and constructed only via static or class methods on the public ABCs, and it was all very clean in an OO-heavy, strongly typed sense.
 It was also involved some multiple inheritance (including diamonds) down at the implementation level, but of the sort that still feels okay because the pure ABCs were are the right places in the hierarchy and super() did what you want and if it smelled a little like Java it smelled like _nice_ Java.

@@ -1,1 +1,0 @@
-Fix problem in ButlerURI where transferring a file from one URI to another would overwrite the existing file even if they were the same actual file (for example because of soft links in the directory hierarchy).

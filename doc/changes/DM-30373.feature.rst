@@ -1,1 +1,0 @@
-Add new ``butler collection-chain`` subcommand for creating collection chains from the command line.

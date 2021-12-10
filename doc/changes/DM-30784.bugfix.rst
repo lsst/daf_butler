@@ -1,1 +1,0 @@
-Fix ``Butler.transfer_from()`` such that it registers any missing dataset types and also skips any datasets that do not have associated datastore artifacts.
