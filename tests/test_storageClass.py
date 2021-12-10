@@ -247,9 +247,18 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         sc2 = StorageClass("Test2", pytype=set)
         sc3 = StorageClass("Test3", pytype="lsst.daf.butler.tests.MetricsExample")
 
+        self.assertIn("lsst.daf.butler.tests.MetricsExample", repr(sc))
+        # Initially the converter list is not filtered.
+        self.assertIn("lsst.daf.butler.bad.type", repr(sc))
+        self.assertNotIn("converters", repr(sc2))
+
         self.assertTrue(sc.can_convert(sc))
         self.assertFalse(sc.can_convert(sc2))
         self.assertTrue(sc.can_convert(sc3))
+
+        # After we've processed the converters the bad ones will no longer
+        # be reported.
+        self.assertNotIn("lsst.daf.butler.bad.type", repr(sc))
 
         self.assertIsNone(sc.coerce_type(None))
 

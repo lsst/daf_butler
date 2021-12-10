@@ -188,7 +188,8 @@ class StorageClass:
         if self._converters_by_type is None:
             self._converters_by_type = {}
 
-            for candidate_type_str, converter_str in self.converters.items():
+            # Loop over list because the dict can be edited in loop.
+            for candidate_type_str, converter_str in list(self.converters.items()):
                 if hasattr(builtins, candidate_type_str):
                     candidate_type = getattr(builtins, candidate_type_str)
                 else:
@@ -197,6 +198,7 @@ class StorageClass:
                     except ImportError as e:
                         log.info("Unable to import type %s associated with storage class %s (%s)",
                                  candidate_type_str, self.name, e)
+                        del self.converters[candidate_type_str]
                         continue
 
                 try:
@@ -205,6 +207,7 @@ class StorageClass:
                     log.info("Unable to import conversion function %s associated with storage class %s "
                              "required to convert type %s (%s)",
                              candidate_type_str, self.name, candidate_type_str, e)
+                    del self.converters[candidate_type_str]
                     continue
                 self._converters_by_type[candidate_type] = converter
         return self._converters_by_type
