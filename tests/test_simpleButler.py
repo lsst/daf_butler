@@ -27,6 +27,7 @@ from typing import Any
 import unittest
 import uuid
 import re
+import json
 
 try:
     import numpy as np
@@ -585,6 +586,10 @@ class SimpleButlerTestCase(unittest.TestCase):
                     json_str = r.to_json(minimal=minimal)
                     r_json = type(r).from_json(json_str, registry=butler.registry)
                     self.assertEqual(r_json, r)
+                    # check with direct method
+                    simple = r.to_simple()
+                    fromDirect = type(simple).direct(**json.loads(json_str))
+                    self.assertEqual(simple, fromDirect)
                     # Also check equality of each of the components as dicts
                     self.assertEqual(r_json.toDict(), r.toDict())
 

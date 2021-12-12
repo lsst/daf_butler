@@ -21,24 +21,111 @@
 
 from __future__ import annotations
 
-__all__ = ("Quantum",)
+__all__ = ("Quantum", "SerializedQuantum", "DimensionRecordsAccumulator")
 
 from typing import (
     Any,
     Iterable,
     List,
     Mapping,
+    MutableMapping,
     Optional,
     Tuple,
     Type,
     Union,
+    Dict
 )
+
+from pydantic import BaseModel
 
 from lsst.utils import doImportType
 
 from .datasets import DatasetRef, DatasetType
 from .dimensions import DataCoordinate
 from .named import NamedKeyDict, NamedKeyMapping
+from .dimensions import (SerializedDataCoordinate, DimensionUniverse, SerializedDimensionRecord,
+                         DimensionRecord)
+from .datasets import SerializedDatasetRef, SerializedDatasetType
+
+
+def _reconstructDatasetRef(simple: SerializedDatasetRef, type_: Optional[DatasetType],
+                           ids: Iterable[int],
+                           dimensionRecords: Optional[Dict[int, SerializedDimensionRecord]],
+                           reconstitutedDimensions: Dict[int, Tuple[str, DimensionRecord]],
+                           universe: DimensionUniverse) -> DatasetRef:
+    """Reconstruct a DatasetRef stored in a Serialized Quantum
+    """
+    # Reconstruct the dimension records
+    records = {}
+    for dId in ids:
+        # if the dimension record has been loaded previously use that,
+        # otherwise load it from the dict of Serialized DimensionRecords
+        if (recId := reconstitutedDimensions.get(dId)) is None:
+            if dimensionRecords is None:
+                raise ValueError("Cannot construct from a SerializedQuantum with no dimension records. "
+                                 "Reconstituted Dimensions must be supplied and populated in method call.")
+            tmpSerialized = dimensionRecords[dId]
+            reconstructedDim = DimensionRecord.from_simple(tmpSerialized, universe=universe)
+            definition = tmpSerialized.definition
+            reconstitutedDimensions[dId] = (definition, reconstructedDim)
+        else:
+            definition, reconstructedDim = recId
+        records[definition] = reconstructedDim
+    # turn the serialized form into an object and attach the dimension records
+    rebuiltDatasetRef = DatasetRef.from_simple(simple, universe, datasetType=type_)
+    if records:
+        object.__setattr__(rebuiltDatasetRef, 'dataId',
+                           rebuiltDatasetRef.dataId.expanded(records))
+    return rebuiltDatasetRef
+
+
+class SerializedQuantum(BaseModel):
+    """Simplified model of a `Quantum` suitable for serialization."""
+
+    taskName: str
+    dataId: Optional[SerializedDataCoordinate]
+    datasetTypeMapping: Mapping[str, SerializedDatasetType]
+    initInputs: Mapping[str, Tuple[SerializedDatasetRef, List[int]]]
+    inputs: Mapping[str, List[Tuple[SerializedDatasetRef, List[int]]]]
+    outputs: Mapping[str, List[Tuple[SerializedDatasetRef, List[int]]]]
+    dimensionRecords: Optional[Dict[int, SerializedDimensionRecord]] = None
+
+    @classmethod
+    def direct(cls, *,
+               taskName: str,
+               dataId: Optional[Dict],
+               datasetTypeMapping: Mapping[str, Dict],
+               initInputs: Mapping[str, Tuple[Dict, List[int]]],
+               inputs: Mapping[str, List[Tuple[Dict, List[int]]]],
+               outputs: Mapping[str, List[Tuple[Dict, List[int]]]],
+               dimensionRecords: Optional[Dict[int, Dict]]
+               ) -> SerializedQuantum:
+        """Construct a `SerializedQuantum` directly without validators.
+
+        This differs from the pydantic "construct" method in that the arguments
+        are explicitly what the model requires, and it will recurse through
+        members, constructing them from their corresponding `direct` methods.
+
+        This method should only be called when the inputs are trusted.
+        """
+        node = SerializedQuantum.__new__(cls)
+        setter = object.__setattr__
+        setter(node, 'taskName', taskName)
+        setter(node, 'dataId',
+               dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
+        setter(node, "datasetTypeMapping",
+               {k: SerializedDatasetType.direct(**v) for k, v in datasetTypeMapping.items()})
+        setter(node, "initInputs",
+               {k: (SerializedDatasetRef.direct(**v), refs) for k, (v, refs) in initInputs.items()})
+        setter(node, "inputs",
+               {k: [(SerializedDatasetRef.direct(**ref), id) for ref, id in v] for k, v in inputs.items()})
+        setter(node, "outputs",
+               {k: [(SerializedDatasetRef.direct(**ref), id) for ref, id in v] for k, v in outputs.items()})
+        setter(node, "dimensionRecords", dimensionRecords if dimensionRecords is None else
+               {int(k): SerializedDimensionRecord.direct(**v) for k, v in dimensionRecords.items()})
+        setter(node, '__fields_set__', {'taskName', 'dataId', 'datasetTypeMapping', 'initInputs', 'inputs',
+                                        'outputs', 'dimensionRecords'})
+        return node
 
 
 class Quantum:
@@ -100,6 +187,207 @@ class Quantum:
         self._initInputs = NamedKeyDict[DatasetType, DatasetRef](initInputs).freeze()
         self._inputs = NamedKeyDict[DatasetType, List[DatasetRef]](inputs).freeze()
         self._outputs = NamedKeyDict[DatasetType, List[DatasetRef]](outputs).freeze()
+
+    def to_simple(self, accumulator: Optional[DimensionRecordsAccumulator] = None) -> SerializedQuantum:
+        """Convert this class to a simple python type.
+
+        This makes it suitable for serialization.
+
+        Parameters
+        ----------
+        accumulator : `DimensionRecordsAccumulator`, optional
+            This accumulator can be used to aggregate dimension records accross
+            multiple Quanta. If this is None, the default, dimension records
+            are serialized with this Quantum. If an accumulator is supplied it
+            is assumed something else is responsible for serializing the
+            records, and they will not be stored with the SerializedQuantum.
+
+        Returns
+        -------
+        simple : `SerializedQuantum`
+           This object converted to a serializable representation.
+        """
+        typeMapping = {}
+        initInputs = {}
+
+        if accumulator is None:
+            accumulator = DimensionRecordsAccumulator()
+            writeDimensionRecords = True
+        else:
+            writeDimensionRecords = False
+
+        # collect the init inputs for serialization, recording the types into
+        # their own mapping, used throughout to minimize saving the same object
+        # multiple times. String name of the type used to index mappings.
+        for key, value in self._initInputs.items():
+            # add the type to the typeMapping
+            typeMapping[key.name] = key.to_simple()
+            # convert to a simple DatasetRef representation
+            simple = value.to_simple()
+            # extract the dimension records
+            recIds = []
+            if simple.dataId is not None and simple.dataId.records is not None:
+                # for each dimension record get a id by adding it to the
+                # record accumulator.
+                for rec in value.dataId.records.values():
+                    if rec is not None:
+                        recordId = accumulator.addRecord(rec)
+                        recIds.append(recordId)
+                # Set properties to None to save space
+                simple.dataId.records = None
+            simple.datasetType = None
+            initInputs[key.name] = (simple, recIds)
+
+        # container for all the SerializedDatasetRefs, keyed on the
+        # DatasetType name.
+        inputs = {}
+
+        # collect the inputs
+        for key, values in self._inputs.items():
+            # collect type if it is not already in the mapping
+            if key.name not in typeMapping:
+                typeMapping[key.name] = key.to_simple()
+            # for each input type there are a list of inputs, collect them
+            tmp = []
+            for e in values:
+                simp = e.to_simple()
+                # This container will hold ids (hashes) that point to all the
+                # dimension records within the SerializedDatasetRef dataId
+                # These dimension records repeat in almost every DatasetRef
+                # So it is hugely wasteful in terms of disk and cpu time to
+                # store them over and over again.
+                recIds = []
+                if simp.dataId is not None and simp.dataId.records is not None:
+                    for rec in e.dataId.records.values():
+                        # for each dimension record get a id by adding it to
+                        # the record accumulator.
+                        if rec is not None:
+                            recordId = accumulator.addRecord(rec)
+                            recIds.append(recordId)
+                    # Set the records to None to avoid serializing them
+                    simp.dataId.records = None
+                # Dataset type is the same as the key in _inputs, no need
+                # to serialize it out multiple times, set it to None
+                simp.datasetType = None
+                # append a tuple of the simplified SerializedDatasetRef, along
+                # with the list of all the keys for the dimension records
+                # needed for reconstruction.
+                tmp.append((simp, recIds))
+            inputs[key.name] = tmp
+
+        # container for all the SerializedDatasetRefs, keyed on the
+        # DatasetType name.
+        outputs = {}
+        for key, values in self._outputs.items():
+            # collect type if it is not already in the mapping
+            if key.name not in typeMapping:
+                typeMapping[key.name] = key.to_simple()
+            # for each output type there are a list of inputs, collect them
+            tmp = []
+            for e in values:
+                simp = e.to_simple()
+                # This container will hold ids (hashes) that point to all the
+                # dimension records within the SerializedDatasetRef dataId
+                # These dimension records repeat in almost every DatasetRef
+                # So it is hugely wasteful in terms of disk and cpu time to
+                # store them over and over again.
+                recIds = []
+                if simp.dataId is not None and simp.dataId.records is not None:
+                    for rec in e.dataId.records.values():
+                        # for each dimension record get a id by adding it to
+                        # the record accumulator.
+                        if rec is not None:
+                            recordId = accumulator.addRecord(rec)
+                            recIds.append(recordId)
+                    # Set the records to None to avoid serializing them
+                    simp.dataId.records = None
+                # Dataset type is the same as the key in _outputs, no need
+                # to serialize it out multiple times, set it to None
+                simp.datasetType = None
+                # append a tuple of the simplified SerializedDatasetRef, along
+                # with the list of all the keys for the dimension records
+                # needed for reconstruction.
+                tmp.append((simp, recIds))
+            outputs[key.name] = tmp
+
+        dimensionRecords: Optional[Mapping[int, SerializedDimensionRecord]]
+        if writeDimensionRecords:
+            dimensionRecords = accumulator.makeSerializedDimensionRecordMapping()
+        else:
+            dimensionRecords = None
+
+        return SerializedQuantum(taskName=self._taskName,
+                                 dataId=self.dataId.to_simple() if self.dataId is not None else None,
+                                 datasetTypeMapping=typeMapping,
+                                 initInputs=initInputs,
+                                 inputs=inputs,
+                                 outputs=outputs,
+                                 dimensionRecords=dimensionRecords)
+
+    @classmethod
+    def from_simple(cls, simple: SerializedQuantum, universe: DimensionUniverse,
+                    reconstitutedDimensions: Optional[Dict[int, Tuple[str, DimensionRecord]]] = None
+                    ) -> Quantum:
+        """Construct a new object from a simplified form.
+
+        Generally this is data returned from the `to_simple` method.
+
+        Parameters
+        ----------
+        simple : SerializedQuantum
+            The value returned by a call to `to_simple`
+        universe : `DimensionUniverse`
+            The special graph of all known dimensions.
+        reconstitutedDimensions : `dict` of `int` to `DimensionRecord` or None
+            A mapping of ids to dimension records to be used when populating
+            dimensions for this Quantum. If supplied it will be used in place
+            of the dimension Records stored with the SerializedQuantum, if a
+            required dimension has already been loaded. Otherwise the record
+            will be unpersisted from the SerializedQuatnum and added to the
+            reconstitutedDimensions dict (if not None). Defaults to None.
+        """
+        loadedTypes: MutableMapping[str, DatasetType] = {}
+        initInputs: MutableMapping[DatasetType, DatasetRef] = {}
+        if reconstitutedDimensions is None:
+            reconstitutedDimensions = {}
+
+        # Unpersist all the init inputs
+        for key, (value, dimensionIds) in simple.initInputs.items():
+            # If a datasetType has already been created use that instead of
+            # unpersisting.
+            if (type_ := loadedTypes.get(key)) is None:
+                type_ = loadedTypes.setdefault(key,
+                                               DatasetType.from_simple(simple.datasetTypeMapping[key],
+                                                                       universe=universe))
+            # reconstruct the dimension records
+            rebuiltDatasetRef = _reconstructDatasetRef(value, type_, dimensionIds, simple.dimensionRecords,
+                                                       reconstitutedDimensions, universe)
+            initInputs[type_] = rebuiltDatasetRef
+
+        # containers for the dataset refs
+        inputs: MutableMapping[DatasetType, List[DatasetRef]] = {}
+        outputs: MutableMapping[DatasetType, List[DatasetRef]] = {}
+
+        for container, simpleRefs in ((inputs, simple.inputs), (outputs, simple.outputs)):
+            for key, values in simpleRefs.items():
+                # If a datasetType has already been created use that instead of
+                # unpersisting.
+                if (type_ := loadedTypes.get(key)) is None:
+                    type_ = loadedTypes.setdefault(key,
+                                                   DatasetType.from_simple(simple.datasetTypeMapping[key],
+                                                                           universe=universe))
+                # reconstruct the list of DatasetRefs for this DatasetType
+                tmp: List[DatasetRef] = []
+                for v, recIds in values:
+                    rebuiltDatasetRef = _reconstructDatasetRef(v, type_, recIds, simple.dimensionRecords,
+                                                               reconstitutedDimensions, universe)
+                    tmp.append(rebuiltDatasetRef)
+                container[type_] = tmp
+
+        dataId = DataCoordinate.from_simple(simple.dataId,
+                                            universe=universe) if simple.dataId is not None else None
+        return Quantum(taskName=simple.taskName, dataId=dataId, initInputs=initInputs, inputs=inputs,
+                       outputs=outputs)
 
     @property
     def taskClass(self) -> Optional[Type]:
@@ -191,3 +479,44 @@ class Quantum:
                        ) -> Quantum:
         return Quantum(taskName=taskName, taskClass=taskClass, dataId=dataId, initInputs=initInputs,
                        inputs=inputs, outputs=outputs)
+
+
+class DimensionRecordsAccumulator:
+    """Class used to accumulate dimension records for serialization.
+
+    This class generates an auto increment key for each unique dimension record
+    added to it. This allows serialization of dimension records to occur once
+    for each record but be refereed to multiple times.
+    """
+
+    def __init__(self) -> None:
+        self._counter = 0
+        self.mapping: MutableMapping[DimensionRecord, Tuple[int, SerializedDimensionRecord]] = {}
+
+    def addRecord(self, record: DimensionRecord) -> int:
+        """Add a dimension record to the accumulator if it has not already been
+        added. When a record is inserted for the first time it is assigned
+        a unique integer key.
+
+        This function returns the key associated with the record (either the
+        newly allocated key, or the existing one)
+
+        Paramters
+        ---------
+        record : `DimensionRecord`
+            The record to add to the accumulator
+
+        Returns
+        -------
+        accumulatorKey : int
+            The key that is associated with the supplied record
+        """
+        if (mappingValue := self.mapping.get(record)) is None:
+            simple = record.to_simple()
+            mappingValue = (self._counter, simple)
+            self._counter += 1
+            self.mapping[record] = mappingValue
+        return mappingValue[0]
+
+    def makeSerializedDimensionRecordMapping(self) -> Mapping[int, SerializedDimensionRecord]:
+        return {id_: serializeRef for id_, serializeRef in self.mapping.values()}

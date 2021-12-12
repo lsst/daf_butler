@@ -32,6 +32,8 @@ databases, a "schema" is also another term for a namespace.
 """
 from __future__ import annotations
 
+from lsst import sphgeom
+
 __all__ = ("TableSpec", "FieldSpec", "ForeignKeySpec", "Base64Bytes", "Base64Region",
            "AstropyTimeNsecTai", "GUID")
 
@@ -127,6 +129,15 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
         # native `bytes`.
         return b64decode(value.encode("ascii")) if value is not None else None
 
+    @property
+    def python_type(self) -> Type[bytes]:
+        return bytes
+
+
+# create an alias, for use below to disambiguate between the built in
+# sqlachemy type
+LocalBase64Bytes = Base64Bytes
+
 
 class Base64Region(Base64Bytes):
     """A SQLAlchemy custom type for Python `sphgeom.Region`.
@@ -145,6 +156,10 @@ class Base64Region(Base64Bytes):
         if value is None:
             return None
         return Region.decode(super().process_result_value(value, dialect))
+
+    @property
+    def python_type(self) -> Type[sphgeom.Region]:
+        return sphgeom.Region
 
 
 class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
@@ -370,7 +385,13 @@ class FieldSpec:
         type : `type`
             Python type associated with this field's (SQL) `dtype`.
         """
-        return self.dtype().python_type
+        # to construct these objects, nbytes keyword is needed
+        if issubclass(self.dtype, LocalBase64Bytes):
+            # satisfy mypy for something that must be true
+            assert self.nbytes is not None
+            return self.dtype(nbytes=self.nbytes).python_type
+        else:
+            return self.dtype().python_type  # type: ignore
 
 
 @dataclass

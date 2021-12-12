@@ -89,6 +89,29 @@ class SerializedDatasetRef(BaseModel):
             raise ValueError(f"datasetType ({values[d]}) can not be set if component is given ({v}).")
         return v
 
+    @classmethod
+    def direct(cls, *, id: Optional[Union[str, int]] = None, datasetType: Optional[Dict[str, Any]] = None,
+               dataId: Optional[Dict[str, Any]] = None, run: str = None, component: Optional[str] = None
+               ) -> SerializedDatasetRef:
+        """Construct a `SerializedDatasetRef` directly without validators.
+
+        This differs from the pydantic "construct" method in that the arguments
+        are explicitly what the model requires, and it will recurse through
+        members, constructing them from their corresponding `direct` methods.
+
+        This method should only be called when the inputs are trusted.
+        """
+        node = SerializedDatasetRef.__new__(cls)
+        setter = object.__setattr__
+        setter(node, 'id', uuid.UUID(id) if isinstance(id, str) else id)
+        setter(node, 'datasetType',
+               datasetType if datasetType is None else SerializedDatasetType.direct(**datasetType))
+        setter(node, 'dataId', dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
+        setter(node, 'run', run)
+        setter(node, 'component', component)
+        setter(node, '__fields_set__', {'id', 'datasetType', 'dataId', 'run', 'component'})
+        return node
+
 
 DatasetId = Union[int, uuid.UUID]
 """A type-annotation alias for dataset ID which could be either integer or
@@ -249,7 +272,8 @@ class DatasetRef:
     @classmethod
     def from_simple(cls, simple: SerializedDatasetRef,
                     universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None) -> DatasetRef:
+                    registry: Optional[Registry] = None,
+                    datasetType: Optional[DatasetType] = None) -> DatasetRef:
         """Construct a new object from simplified form.
 
         Generally this is data returned from the `to_simple` method.
@@ -265,6 +289,11 @@ class DatasetRef:
             Registry to use to convert simple form of a DatasetRef to
             a full `DatasetRef`. Can be `None` if a full description of
             the type is provided along with a universe.
+        datasetType : DatasetType, optional
+            If datasetType is supplied, this will be used as the datasetType
+            object in the resulting DatasetRef instead of being read from
+            the `SerializedDatasetRef`. This is useful when many refs share
+            the same type as memory can be saved. Defaults to None.
 
         Returns
         -------
@@ -295,10 +324,13 @@ class DatasetRef:
             # this is for mypy
             raise ValueError("Unable to determine a usable universe")
 
-        if simple.datasetType is None:
+        if simple.datasetType is None and datasetType is None:
             # mypy
             raise ValueError("The DatasetType must be specified to construct a DatasetRef")
-        datasetType = DatasetType.from_simple(simple.datasetType, universe=universe, registry=registry)
+        if datasetType is None:
+            if simple.datasetType is None:
+                raise ValueError("Cannot determine Dataset type of this serialized class")
+            datasetType = DatasetType.from_simple(simple.datasetType, universe=universe, registry=registry)
 
         if simple.dataId is None:
             # mypy

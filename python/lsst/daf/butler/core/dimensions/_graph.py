@@ -58,6 +58,21 @@ class SerializedDimensionGraph(BaseModel):
 
     names: List[str]
 
+    @classmethod
+    def direct(cls, *, names: List[str]) -> SerializedDimensionGraph:
+        """Construct a `SerializedDimensionGraph` directly without validators.
+
+        This differs from the pydantic "construct" method in that the arguments
+        are explicitly what the model requires, and it will recurse through
+        members, constructing them from their corresponding `direct` methods.
+
+        This method should only be called when the inputs are trusted.
+        """
+        node = SerializedDimensionGraph.__new__(cls)
+        object.__setattr__(node, 'names', names)
+        object.__setattr__(node, '__fields_set__', {'names'})
+        return node
+
 
 @immutable
 class DimensionGraph:

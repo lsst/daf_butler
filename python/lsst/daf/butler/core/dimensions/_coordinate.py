@@ -73,6 +73,25 @@ class SerializedDataCoordinate(BaseModel):
     dataId: Dict[str, DataIdValue]
     records: Optional[Dict[str, SerializedDimensionRecord]] = None
 
+    @classmethod
+    def direct(cls, *, dataId: Dict[str, DataIdValue], records: Dict[str, Dict]) -> SerializedDataCoordinate:
+        """Construct a `SerializedDataCoordinate` directly without validators.
+
+        This differs from the pydantic "construct" method in that the arguments
+        are explicitly what the model requires, and it will recurse through
+        members, constructing them from their corresponding `direct` methods.
+
+        This method should only be called when the inputs are trusted.
+        """
+        node = SerializedDataCoordinate.__new__(cls)
+        setter = object.__setattr__
+        setter(node, 'dataId', dataId)
+        setter(node, 'records',
+               records if records is None else
+               {k: SerializedDimensionRecord.direct(**v) for k, v in records.items()})
+        setter(node, '__fields_set__', {'dataId', 'records'})
+        return node
+
 
 def _intersectRegions(*args: Region) -> Optional[Region]:
     """Return the intersection of several regions.
