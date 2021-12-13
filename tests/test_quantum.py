@@ -68,11 +68,9 @@ class QuantumTestCase(unittest.TestCase):
 
         visit = universe['visit']
         region = Circle()
-        hashed = hash(visit).to_bytes(30, 'little')
-        visit_record_42 = visit.RecordClass(id=42, instrument='test', name='test_visit', region=region,
-                                            hash=hashed)
-        visit_record_42 = visit.RecordClass(id=43, instrument='test', name='test_visit', region=region,
-                                            hash=hashed)
+        # create a synthetic value to mock as a visit hash
+        visit_record_42 = visit.RecordClass(id=42, instrument='test', name='test_visit', region=region,)
+        visit_record_42 = visit.RecordClass(id=43, instrument='test', name='test_visit', region=region,)
 
         records42 = {instrument: instrumentRecord, band: bandRecord,
                      physical_filter: physical_filter_record,
