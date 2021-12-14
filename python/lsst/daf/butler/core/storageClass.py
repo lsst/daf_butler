@@ -196,17 +196,17 @@ class StorageClass:
                     try:
                         candidate_type = doImportType(candidate_type_str)
                     except ImportError as e:
-                        log.info("Unable to import type %s associated with storage class %s (%s)",
-                                 candidate_type_str, self.name, e)
+                        log.warning("Unable to import type %s associated with storage class %s (%s)",
+                                    candidate_type_str, self.name, e)
                         del self.converters[candidate_type_str]
                         continue
 
                 try:
                     converter = doImportType(converter_str)
                 except ImportError as e:
-                    log.info("Unable to import conversion function %s associated with storage class %s "
-                             "required to convert type %s (%s)",
-                             candidate_type_str, self.name, candidate_type_str, e)
+                    log.warning("Unable to import conversion function %s associated with storage class %s "
+                                "required to convert type %s (%s)",
+                                candidate_type_str, self.name, candidate_type_str, e)
                     del self.converters[candidate_type_str]
                     continue
                 self._converters_by_type[candidate_type] = converter
