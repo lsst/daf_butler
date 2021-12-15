@@ -206,7 +206,13 @@ class StorageClass:
                 except ImportError as e:
                     log.warning("Unable to import conversion function %s associated with storage class %s "
                                 "required to convert type %s (%s)",
-                                candidate_type_str, self.name, candidate_type_str, e)
+                                converter_str, self.name, candidate_type_str, e)
+                    del self.converters[candidate_type_str]
+                    continue
+                if not callable(converter):
+                    log.warning("Conversion function %s associated with storage class %s to "
+                                "convert type %s is not a callable.", converter_str, self.name,
+                                candidate_type_str)
                     del self.converters[candidate_type_str]
                     continue
                 self._converters_by_type[candidate_type] = converter
@@ -461,7 +467,12 @@ class StorageClass:
         # Check each registered converter.
         for candidate_type, converter in self.converters_by_type.items():
             if isinstance(incorrect, candidate_type):
-                return converter(incorrect)
+                try:
+                    return converter(incorrect)
+                except Exception:
+                    log.error("Converter %s failed to convert type %s",
+                              get_full_type_name(converter), get_full_type_name(incorrect))
+                    raise
         raise TypeError("Type does not match and no valid converter found to convert"
                         f" '{type(incorrect)}' to '{self.pytype}'")
 

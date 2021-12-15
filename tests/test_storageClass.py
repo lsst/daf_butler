@@ -22,6 +22,7 @@
 import os
 import pickle
 import unittest
+import logging
 
 from lsst.utils.introspection import get_full_type_name
 
@@ -241,9 +242,11 @@ class StorageClassFactoryTestCase(unittest.TestCase):
             # Add some entries that will fail to import.
             "lsst.daf.butler.bad.type": "lsst.daf.butler.tests.MetricsExampleModel.from_metrics",
             "lsst.daf.butler.tests.MetricsExampleModel": "lsst.daf.butler.bad.function",
+            "lsst.daf.butler.Butler": "lsst.daf.butler.core.location.__all__",
             "list": get_full_type_name(self._convert_type),
         }
         sc = StorageClass(className, pytype=dict, converters=converters)
+        self.assertEqual(len(sc.converters), 5)  # Pre-filtering
         sc2 = StorageClass("Test2", pytype=set)
         sc3 = StorageClass("Test3", pytype="lsst.daf.butler.tests.MetricsExample")
 
@@ -259,6 +262,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         # After we've processed the converters the bad ones will no longer
         # be reported.
         self.assertNotIn("lsst.daf.butler.bad.type", repr(sc))
+        self.assertEqual(len(sc.converters), 2)
 
         self.assertIsNone(sc.coerce_type(None))
 
@@ -266,7 +270,9 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertEqual(converted, {"key": [1, 2, 3]})
 
         with self.assertRaises(TypeError):
-            sc.coerce_type(set([1, 2, 3]))
+            with self.assertLogs(level=logging.ERROR) as cm:
+                sc.coerce_type(set([1, 2, 3]))
+            self.assertIn("Converter list failed to convert", cm.output[0])
 
 
 if __name__ == "__main__":
