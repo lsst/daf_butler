@@ -1,0 +1,12 @@
+It is now possible to register type conversion functions with storage classes.
+This can allow a dataset type definition to change storage class in the registry whilst allowing datasets that have already been serialized using one python type to be returned using the new python type.
+The ``storageClasses.yaml`` definitions can now look like:
+
+.. code-block:: yaml
+
+   TaskMetadata:
+     pytype: lsst.pipe.base.TaskMetadata
+     converters:
+       lsst.daf.base.PropertySet: lsst.pipe.base.TaskMetadata.from_metadata
+
+Declares that if a ``TaskMetadata`` is expected then a ``PropertySet`` can be converted to the correct python type.
