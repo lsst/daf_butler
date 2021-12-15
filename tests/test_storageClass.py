@@ -230,7 +230,9 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
     @classmethod
     def _convert_type(cls, data):
-        # Test helper function.
+        # Test helper function. Fail if the list is empty.
+        if not len(data):
+            raise RuntimeError("Deliberate failure.")
         return {"key": data}
 
     def testConverters(self):
@@ -269,10 +271,15 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         converted = sc.coerce_type([1, 2, 3])
         self.assertEqual(converted, {"key": [1, 2, 3]})
 
+        # Try to coerce a type that is not supported.
         with self.assertRaises(TypeError):
-            with self.assertLogs(level=logging.ERROR) as cm:
-                sc.coerce_type(set([1, 2, 3]))
-            self.assertIn("Converter list failed to convert", cm.output[0])
+            sc.coerce_type(set([1, 2, 3]))
+
+        # Coerce something that will fail to convert.
+        with self.assertLogs(level=logging.ERROR) as cm:
+            with self.assertRaises(RuntimeError):
+                sc.coerce_type([])
+        self.assertIn("failed to convert type list", cm.output[0])
 
 
 if __name__ == "__main__":
