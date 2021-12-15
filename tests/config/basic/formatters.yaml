@@ -36,3 +36,4 @@ instrument<DummyHSC>:
 StructuredCompositeReadComp: lsst.daf.butler.tests.testFormatters.MetricsExampleFormatter
 StructuredCompositeReadCompNoDisassembly: lsst.daf.butler.tests.testFormatters.MetricsExampleFormatter
 StructuredDataDataTest: lsst.daf.butler.tests.testFormatters.MetricsExampleDataFormatter
+StructuredDataNoComponentsModel: lsst.daf.butler.formatters.json.JsonFormatter

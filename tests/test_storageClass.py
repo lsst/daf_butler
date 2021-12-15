@@ -22,6 +22,9 @@
 import os
 import pickle
 import unittest
+import logging
+
+from lsst.utils.introspection import get_full_type_name
 
 from lsst.daf.butler import StorageClass, StorageClassFactory, StorageClassConfig, StorageClassDelegate
 
@@ -224,6 +227,59 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertFalse(sc.components)
         sc2 = pickle.loads(pickle.dumps(sc))
         self.assertEqual(sc2, sc)
+
+    @classmethod
+    def _convert_type(cls, data):
+        # Test helper function. Fail if the list is empty.
+        if not len(data):
+            raise RuntimeError("Deliberate failure.")
+        return {"key": data}
+
+    def testConverters(self):
+        """Test conversion maps."""
+
+        className = "TestConverters"
+        converters = {
+            "lsst.daf.butler.tests.MetricsExample": "lsst.daf.butler.tests.MetricsExampleModel.from_metrics",
+            # Add some entries that will fail to import.
+            "lsst.daf.butler.bad.type": "lsst.daf.butler.tests.MetricsExampleModel.from_metrics",
+            "lsst.daf.butler.tests.MetricsExampleModel": "lsst.daf.butler.bad.function",
+            "lsst.daf.butler.Butler": "lsst.daf.butler.core.location.__all__",
+            "list": get_full_type_name(self._convert_type),
+        }
+        sc = StorageClass(className, pytype=dict, converters=converters)
+        self.assertEqual(len(sc.converters), 5)  # Pre-filtering
+        sc2 = StorageClass("Test2", pytype=set)
+        sc3 = StorageClass("Test3", pytype="lsst.daf.butler.tests.MetricsExample")
+
+        self.assertIn("lsst.daf.butler.tests.MetricsExample", repr(sc))
+        # Initially the converter list is not filtered.
+        self.assertIn("lsst.daf.butler.bad.type", repr(sc))
+        self.assertNotIn("converters", repr(sc2))
+
+        self.assertTrue(sc.can_convert(sc))
+        self.assertFalse(sc.can_convert(sc2))
+        self.assertTrue(sc.can_convert(sc3))
+
+        # After we've processed the converters the bad ones will no longer
+        # be reported.
+        self.assertNotIn("lsst.daf.butler.bad.type", repr(sc))
+        self.assertEqual(len(sc.converters), 2)
+
+        self.assertIsNone(sc.coerce_type(None))
+
+        converted = sc.coerce_type([1, 2, 3])
+        self.assertEqual(converted, {"key": [1, 2, 3]})
+
+        # Try to coerce a type that is not supported.
+        with self.assertRaises(TypeError):
+            sc.coerce_type(set([1, 2, 3]))
+
+        # Coerce something that will fail to convert.
+        with self.assertLogs(level=logging.ERROR) as cm:
+            with self.assertRaises(RuntimeError):
+                sc.coerce_type([])
+        self.assertIn("failed to convert type list", cm.output[0])
 
 
 if __name__ == "__main__":

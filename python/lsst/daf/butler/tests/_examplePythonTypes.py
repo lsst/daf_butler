@@ -25,10 +25,14 @@ large external dependencies on python classes such as afw or serialization
 formats such as FITS or HDF5.
 """
 
-__all__ = ("ListDelegate", "MetricsDelegate", "MetricsExample", "registerMetricsExample")
+__all__ = ("ListDelegate", "MetricsDelegate", "MetricsExample", "registerMetricsExample",
+           "MetricsExampleModel")
 
 
 import copy
+from typing import Optional, Any, Dict, List
+
+from pydantic import BaseModel
 from lsst.daf.butler import StorageClassDelegate, StorageClass
 
 
@@ -232,6 +236,19 @@ class MetricsExample:
         if "data" in exportDict:
             data = exportDict["data"]
         return cls(exportDict["summary"], exportDict["output"], data)
+
+
+class MetricsExampleModel(BaseModel):
+    """A variant of `MetricsExample` based on model."""
+
+    summary: Optional[Dict[str, Any]]
+    output: Optional[Dict[str, Any]]
+    data: Optional[List[Any]]
+
+    @classmethod
+    def from_metrics(cls, metrics: MetricsExample) -> "MetricsExampleModel":
+        """Create a model based on an example."""
+        return cls.parse_obj(metrics.exportAsDict())
 
 
 class ListDelegate(StorageClassDelegate):
