@@ -26,12 +26,7 @@ __all__ = [
 ]
 
 from abc import abstractmethod
-from typing import (
-    Iterable,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, Iterable, Optional, Tuple
 
 from ._versioning import VersionedExtension
 

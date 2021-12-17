@@ -23,25 +23,16 @@ from __future__ import annotations
 __all__ = ["AmbiguousDatasetError", "DatasetId", "DatasetRef", "SerializedDatasetRef"]
 
 import uuid
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
-
-from pydantic import BaseModel, StrictStr, ConstrainedInt, validator
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from lsst.utils.classes import immutable
-from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
+from pydantic import BaseModel, ConstrainedInt, StrictStr, validator
+
 from ..configSupport import LookupKey
+from ..dimensions import DataCoordinate, DimensionGraph, DimensionUniverse, SerializedDataCoordinate
+from ..json import from_json_pydantic, to_json_pydantic
 from ..named import NamedKeyDict
 from .type import DatasetType, SerializedDatasetType
-from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:
     from ...registry import Registry
@@ -90,9 +81,15 @@ class SerializedDatasetRef(BaseModel):
         return v
 
     @classmethod
-    def direct(cls, *, id: Optional[Union[str, int]] = None, datasetType: Optional[Dict[str, Any]] = None,
-               dataId: Optional[Dict[str, Any]] = None, run: str = None, component: Optional[str] = None
-               ) -> SerializedDatasetRef:
+    def direct(
+        cls,
+        *,
+        id: Optional[Union[str, int]] = None,
+        datasetType: Optional[Dict[str, Any]] = None,
+        dataId: Optional[Dict[str, Any]] = None,
+        run: str = None,
+        component: Optional[str] = None,
+    ) -> SerializedDatasetRef:
         """Construct a `SerializedDatasetRef` directly without validators.
 
         This differs from the pydantic "construct" method in that the arguments
@@ -103,13 +100,16 @@ class SerializedDatasetRef(BaseModel):
         """
         node = SerializedDatasetRef.__new__(cls)
         setter = object.__setattr__
-        setter(node, 'id', uuid.UUID(id) if isinstance(id, str) else id)
-        setter(node, 'datasetType',
-               datasetType if datasetType is None else SerializedDatasetType.direct(**datasetType))
-        setter(node, 'dataId', dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
-        setter(node, 'run', run)
-        setter(node, 'component', component)
-        setter(node, '__fields_set__', {'id', 'datasetType', 'dataId', 'run', 'component'})
+        setter(node, "id", uuid.UUID(id) if isinstance(id, str) else id)
+        setter(
+            node,
+            "datasetType",
+            datasetType if datasetType is None else SerializedDatasetType.direct(**datasetType),
+        )
+        setter(node, "dataId", dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
+        setter(node, "run", run)
+        setter(node, "component", component)
+        setter(node, "__fields_set__", {"id", "datasetType", "dataId", "run", "component"})
         return node
 
 
@@ -157,14 +157,21 @@ class DatasetRef:
     """
 
     _serializedType = SerializedDatasetRef
-    __slots__ = ("id", "datasetType", "dataId", "run",)
+    __slots__ = (
+        "id",
+        "datasetType",
+        "dataId",
+        "run",
+    )
 
     def __init__(
         self,
-        datasetType: DatasetType, dataId: DataCoordinate, *,
+        datasetType: DatasetType,
+        dataId: DataCoordinate,
+        *,
         id: Optional[DatasetId] = None,
         run: Optional[str] = None,
-        conform: bool = True
+        conform: bool = True,
     ):
         self.id = id
         self.datasetType = datasetType
@@ -174,8 +181,10 @@ class DatasetRef:
             self.dataId = dataId
         if self.id is not None:
             if run is None:
-                raise ValueError(f"Cannot provide id without run for dataset with id={id}, "
-                                 f"type={datasetType}, and dataId={dataId}.")
+                raise ValueError(
+                    f"Cannot provide id without run for dataset with id={id}, "
+                    f"type={datasetType}, and dataId={dataId}."
+                )
             self.run = run
         else:
             if run is not None:
@@ -202,7 +211,7 @@ class DatasetRef:
         # __repr__ - is much harder to users to read, while its __str__ just
         # produces a dict that can also be passed to DatasetRef's constructor.
         if self.id is not None:
-            return (f"DatasetRef({self.datasetType!r}, {self.dataId!s}, id={self.id}, run={self.run!r})")
+            return f"DatasetRef({self.datasetType!r}, {self.dataId!s}, id={self.id}, run={self.run!r})"
         else:
             return f"DatasetRef({self.datasetType!r}, {self.dataId!s})"
 
@@ -258,9 +267,10 @@ class DatasetRef:
             return SerializedDatasetRef(**simple)
 
         # Convert to a dict form
-        as_dict: Dict[str, Any] = {"datasetType": self.datasetType.to_simple(minimal=minimal),
-                                   "dataId": self.dataId.to_simple(),
-                                   }
+        as_dict: Dict[str, Any] = {
+            "datasetType": self.datasetType.to_simple(minimal=minimal),
+            "dataId": self.dataId.to_simple(),
+        }
 
         # Only include the id entry if it is defined
         if self.id is not None:
@@ -270,10 +280,13 @@ class DatasetRef:
         return SerializedDatasetRef(**as_dict)
 
     @classmethod
-    def from_simple(cls, simple: SerializedDatasetRef,
-                    universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None,
-                    datasetType: Optional[DatasetType] = None) -> DatasetRef:
+    def from_simple(
+        cls,
+        simple: SerializedDatasetRef,
+        universe: Optional[DimensionUniverse] = None,
+        registry: Optional[Registry] = None,
+        datasetType: Optional[DatasetType] = None,
+    ) -> DatasetRef:
         """Construct a new object from simplified form.
 
         Generally this is data returned from the `to_simple` method.
@@ -336,8 +349,7 @@ class DatasetRef:
             # mypy
             raise ValueError("The DataId must be specified to construct a DatasetRef")
         dataId = DataCoordinate.from_simple(simple.dataId, universe=universe)
-        return cls(datasetType, dataId,
-                   id=simple.id, run=simple.run)
+        return cls(datasetType, dataId, id=simple.id, run=simple.run)
 
     to_json = to_json_pydantic
     from_json = classmethod(from_json_pydantic)
@@ -383,8 +395,7 @@ class DatasetRef:
         ref : `DatasetRef`
             A new `DatasetRef`.
         """
-        return DatasetRef(datasetType=self.datasetType, dataId=self.dataId,
-                          id=id, run=run, conform=False)
+        return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, id=id, run=run, conform=False)
 
     def unresolved(self) -> DatasetRef:
         """Return unresolved `DatasetRef`.
@@ -423,9 +434,9 @@ class DatasetRef:
             A new `DatasetRef` with the given data ID.
         """
         assert dataId == self.dataId
-        return DatasetRef(datasetType=self.datasetType, dataId=dataId,
-                          id=self.id, run=self.run,
-                          conform=False)
+        return DatasetRef(
+            datasetType=self.datasetType, dataId=dataId, id=self.id, run=self.run, conform=False
+        )
 
     def isComponent(self) -> bool:
         """Indicate whether this `DatasetRef` refers to a component.
@@ -470,8 +481,7 @@ class DatasetRef:
         # assume it will  return False if the type doesn't match the key type
         # of the Mapping.
         if "instrument" in self.dataId:  # type: ignore
-            names = tuple(n.clone(dataId={"instrument": self.dataId["instrument"]})
-                          for n in names) + names
+            names = tuple(n.clone(dataId={"instrument": self.dataId["instrument"]}) for n in names) + names
 
         return names
 
@@ -511,8 +521,9 @@ class DatasetRef:
             Raised if ``ref.id`` is `None`.
         """
         if self.id is None:
-            raise AmbiguousDatasetError(f"ID for dataset {self} is `None`; "
-                                        f"a resolved reference is required.")
+            raise AmbiguousDatasetError(
+                f"ID for dataset {self} is `None`; " f"a resolved reference is required."
+            )
         return self.id
 
     def makeCompositeRef(self) -> DatasetRef:
@@ -529,8 +540,9 @@ class DatasetRef:
         """
         # Assume that the data ID does not need to be standardized
         # and should match whatever this ref already has.
-        return DatasetRef(self.datasetType.makeCompositeDatasetType(), self.dataId,
-                          id=self.id, run=self.run, conform=False)
+        return DatasetRef(
+            self.datasetType.makeCompositeDatasetType(), self.dataId, id=self.id, run=self.run, conform=False
+        )
 
     def makeComponentRef(self, name: str) -> DatasetRef:
         """Create a `DatasetRef` that corresponds to a component.
@@ -549,8 +561,13 @@ class DatasetRef:
         """
         # Assume that the data ID does not need to be standardized
         # and should match whatever this ref already has.
-        return DatasetRef(self.datasetType.makeComponentDatasetType(name), self.dataId,
-                          id=self.id, run=self.run, conform=False)
+        return DatasetRef(
+            self.datasetType.makeComponentDatasetType(name),
+            self.dataId,
+            id=self.id,
+            run=self.run,
+            conform=False,
+        )
 
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).

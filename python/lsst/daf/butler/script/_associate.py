@@ -24,8 +24,7 @@ from ..script import QueryDatasets
 
 
 def associate(repo, collection, dataset_type, collections, where, find_first):
-    """Add existing datasets to a CHAINED collection.
-    """
+    """Add existing datasets to a CHAINED collection."""
 
     butler = Butler(repo, writeable=True)
 
@@ -38,7 +37,7 @@ def associate(repo, collection, dataset_type, collections, where, find_first):
         where=where,
         find_first=find_first,
         show_uri=False,
-        repo=None
+        repo=None,
     )
 
     butler.registry.associate(collection, results.getDatasets())

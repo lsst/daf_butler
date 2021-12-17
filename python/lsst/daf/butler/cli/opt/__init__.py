@@ -20,5 +20,5 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .arguments import *
-from .options import *
 from .optionGroups import *
+from .options import *

@@ -28,8 +28,13 @@ from .. import Butler
 from ..core import DatasetType
 
 
-def register_dataset_type(repo: str, dataset_type: str, storage_class: str,
-                          dimensions: Tuple[str, ...], is_calibration: bool = False) -> bool:
+def register_dataset_type(
+    repo: str,
+    dataset_type: str,
+    storage_class: str,
+    dimensions: Tuple[str, ...],
+    is_calibration: bool = False,
+) -> bool:
     """Register a new dataset type.
 
     Parameters
@@ -71,9 +76,13 @@ def register_dataset_type(repo: str, dataset_type: str, storage_class: str,
     # constructor so we have to do the conversion here.
     graph = butler.registry.dimensions.extract(dimensions)
 
-    datasetType = DatasetType(dataset_type, graph, storage_class,
-                              parentStorageClass=None,
-                              isCalibration=is_calibration,
-                              universe=butler.registry.dimensions)
+    datasetType = DatasetType(
+        dataset_type,
+        graph,
+        storage_class,
+        parentStorageClass=None,
+        isCalibration=is_calibration,
+        universe=butler.registry.dimensions,
+    )
 
     return butler.registry.registerDatasetType(datasetType)

@@ -24,9 +24,17 @@
 import os.path
 import unittest
 
-from lsst.daf.butler import DatasetType, DatasetRef, FileTemplates, DimensionUniverse, \
-    FileTemplate, FileTemplatesConfig, StorageClass, FileTemplateValidationError, \
-    DimensionGraph
+from lsst.daf.butler import (
+    DatasetRef,
+    DatasetType,
+    DimensionGraph,
+    DimensionUniverse,
+    FileTemplate,
+    FileTemplates,
+    FileTemplatesConfig,
+    FileTemplateValidationError,
+    StorageClass,
+)
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -36,8 +44,9 @@ PlaceHolder = StorageClass("PlaceHolder")
 class TestFileTemplates(unittest.TestCase):
     """Test creation of paths from templates."""
 
-    def makeDatasetRef(self, datasetTypeName, dataId=None, storageClassName="DefaultStorageClass",
-                       run="run2", conform=True):
+    def makeDatasetRef(
+        self, datasetTypeName, dataId=None, storageClassName="DefaultStorageClass", run="run2", conform=True
+    ):
         """Make a simple DatasetRef"""
         if dataId is None:
             dataId = self.dataId
@@ -46,9 +55,12 @@ class TestFileTemplates(unittest.TestCase):
         compositeName, componentName = DatasetType.splitDatasetTypeName(datasetTypeName)
         parentStorageClass = PlaceHolder if componentName else None
 
-        datasetType = DatasetType(datasetTypeName, DimensionGraph(self.universe, names=dataId.keys()),
-                                  StorageClass(storageClassName),
-                                  parentStorageClass=parentStorageClass)
+        datasetType = DatasetType(
+            datasetTypeName,
+            DimensionGraph(self.universe, names=dataId.keys()),
+            StorageClass(storageClassName),
+            parentStorageClass=parentStorageClass,
+        )
         return DatasetRef(datasetType, dataId, id=1, run=run, conform=conform)
 
     def setUp(self):
@@ -62,33 +74,45 @@ class TestFileTemplates(unittest.TestCase):
 
     def testBasic(self):
         tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter}"
-        self.assertTemplate(tmplstr,
-                            "run2/calexp/00052/Most_Amazing_U_Filter_Ever",
-                            self.makeDatasetRef("calexp", conform=False))
+        self.assertTemplate(
+            tmplstr,
+            "run2/calexp/00052/Most_Amazing_U_Filter_Ever",
+            self.makeDatasetRef("calexp", conform=False),
+        )
         tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter}-trail"
-        self.assertTemplate(tmplstr,
-                            "run2/calexp/00052/Most_Amazing_U_Filter_Ever-trail",
-                            self.makeDatasetRef("calexp", conform=False))
+        self.assertTemplate(
+            tmplstr,
+            "run2/calexp/00052/Most_Amazing_U_Filter_Ever-trail",
+            self.makeDatasetRef("calexp", conform=False),
+        )
 
         tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
-        self.assertTemplate(tmplstr,
-                            "run2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run2",
-                            self.makeDatasetRef("calexp", conform=False))
-        self.assertTemplate(tmplstr,
-                            "run_2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run_2",
-                            self.makeDatasetRef("calexp", run="run/2", conform=False))
+        self.assertTemplate(
+            tmplstr,
+            "run2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run2",
+            self.makeDatasetRef("calexp", conform=False),
+        )
+        self.assertTemplate(
+            tmplstr,
+            "run_2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run_2",
+            self.makeDatasetRef("calexp", run="run/2", conform=False),
+        )
 
         # Retain any "/" in run
         tmplstr = "{run:/}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
-        self.assertTemplate(tmplstr,
-                            "run/2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run_2",
-                            self.makeDatasetRef("calexp", run="run/2", conform=False))
+        self.assertTemplate(
+            tmplstr,
+            "run/2/calexp/00052/Most_Amazing_U_Filter_Ever-trail-run_2",
+            self.makeDatasetRef("calexp", run="run/2", conform=False),
+        )
 
         # Check that "." are replaced in the file basename, but not directory.
         dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "g.10"}
-        self.assertTemplate(tmplstr,
-                            "run.2/calexp/00052/g_10-trail-run_2",
-                            self.makeDatasetRef("calexp", run="run.2", dataId=dataId, conform=False))
+        self.assertTemplate(
+            tmplstr,
+            "run.2/calexp/00052/g_10-trail-run_2",
+            self.makeDatasetRef("calexp", run="run.2", dataId=dataId, conform=False),
+        )
 
         with self.assertRaises(FileTemplateValidationError):
             FileTemplate("no fields at all")
@@ -102,20 +126,20 @@ class TestFileTemplates(unittest.TestCase):
     def testRunOrCollectionNeeded(self):
         tmplstr = "{datasetType}/{visit:05d}/{physical_filter}"
         with self.assertRaises(FileTemplateValidationError):
-            self.assertTemplate(tmplstr,
-                                "run2/calexp/00052/U",
-                                self.makeDatasetRef("calexp"))
+            self.assertTemplate(tmplstr, "run2/calexp/00052/U", self.makeDatasetRef("calexp"))
 
     def testOptional(self):
         """Optional units in templates."""
         ref = self.makeDatasetRef("calexp", conform=False)
         tmplstr = "{run}/{datasetType}/v{visit:05d}_f{physical_filter:?}"
-        self.assertTemplate(tmplstr, "run2/calexp/v00052_fMost_Amazing_U_Filter_Ever",
-                            self.makeDatasetRef("calexp", conform=False))
+        self.assertTemplate(
+            tmplstr,
+            "run2/calexp/v00052_fMost_Amazing_U_Filter_Ever",
+            self.makeDatasetRef("calexp", conform=False),
+        )
 
         du = {"visit": 48, "tract": 265, "skymap": "big", "instrument": "dummy"}
-        self.assertTemplate(tmplstr, "run2/calexpT/v00048",
-                            self.makeDatasetRef("calexpT", du, conform=False))
+        self.assertTemplate(tmplstr, "run2/calexpT/v00048", self.makeDatasetRef("calexpT", du, conform=False))
 
         # Ensure that this returns a relative path even if the first field
         # is optional
@@ -158,22 +182,29 @@ class TestFileTemplates(unittest.TestCase):
     def testFields(self):
         # Template, mandatory fields, optional non-special fields,
         # special fields, optional special fields
-        testData = (("{run}/{datasetType}/{visit:05d}/{physical_filter}-trail",
-                     set(["visit", "physical_filter"]),
-                     set(),
-                     set(["run", "datasetType"]),
-                     set()),
-                    ("{run}/{component:?}_{visit}",
-                     set(["visit"]),
-                     set(),
-                     set(["run"]),
-                     set(["component"]),),
-                    ("{run}/{component:?}_{visit:?}_{physical_filter}_{instrument}_{datasetType}",
-                     set(["physical_filter", "instrument"]),
-                     set(["visit"]),
-                     set(["run", "datasetType"]),
-                     set(["component"]),),
-                    )
+        testData = (
+            (
+                "{run}/{datasetType}/{visit:05d}/{physical_filter}-trail",
+                set(["visit", "physical_filter"]),
+                set(),
+                set(["run", "datasetType"]),
+                set(),
+            ),
+            (
+                "{run}/{component:?}_{visit}",
+                set(["visit"]),
+                set(),
+                set(["run"]),
+                set(["component"]),
+            ),
+            (
+                "{run}/{component:?}_{visit:?}_{physical_filter}_{instrument}_{datasetType}",
+                set(["physical_filter", "instrument"]),
+                set(["visit"]),
+                set(["run", "datasetType"]),
+                set(["component"]),
+            ),
+        )
         for tmplstr, mandatory, optional, special, optionalSpecial in testData:
             with self.subTest(template=tmplstr):
                 tmpl = FileTemplate(tmplstr)
@@ -222,8 +253,9 @@ class TestFileTemplates(unittest.TestCase):
         # The order should be: dataset type name, dimension, storage class
         # This one will not match name but might match storage class.
         # It should match dimensions
-        refDims = self.makeDatasetRef("nomatch", dataId={"instrument": "LSST", "physical_filter": "z"},
-                                      storageClassName="StorageClassX")
+        refDims = self.makeDatasetRef(
+            "nomatch", dataId={"instrument": "LSST", "physical_filter": "z"}, storageClassName="StorageClassX"
+        )
         tmplDims = templates.getTemplate(refDims)
         self.assertIsInstance(tmplDims, FileTemplate)
         self.assertNotEqual(tmplDims, tmplSc)
@@ -240,8 +272,9 @@ class TestFileTemplates(unittest.TestCase):
         self.assertNotEqual(tmplPvi, tmplPviHsc)
 
         # Have instrument match and dimensions look up with no name match
-        refNoPviHsc = self.makeDatasetRef("pvix", dataId={"instrument": "HSC", "physical_filter": "z"},
-                                          storageClassName="StorageClassX")
+        refNoPviHsc = self.makeDatasetRef(
+            "pvix", dataId={"instrument": "HSC", "physical_filter": "z"}, storageClassName="StorageClassX"
+        )
         tmplNoPviHsc = templates.getTemplate(refNoPviHsc)
         self.assertNotEqual(tmplNoPviHsc, tmplDims)
         self.assertNotEqual(tmplNoPviHsc, tmplPviHsc)
@@ -274,43 +307,49 @@ class TestFileTemplates(unittest.TestCase):
         templates = FileTemplates(config1, universe=self.universe)
 
         entities = {}
-        entities["calexp"] = self.makeDatasetRef("calexp", storageClassName="StorageClassX",
-                                                 dataId={"instrument": "dummy", "physical_filter": "i",
-                                                         "visit": 52})
+        entities["calexp"] = self.makeDatasetRef(
+            "calexp",
+            storageClassName="StorageClassX",
+            dataId={"instrument": "dummy", "physical_filter": "i", "visit": 52},
+        )
 
         with self.assertLogs(level="WARNING") as cm:
             templates.validateTemplates(entities.values(), logFailures=True)
         self.assertIn("Unchecked keys", cm.output[0])
         self.assertIn("StorageClassX", cm.output[0])
 
-        entities["pvi"] = self.makeDatasetRef("pvi", storageClassName="StorageClassX",
-                                              dataId={"instrument": "dummy", "physical_filter": "i"})
-        entities["StorageClassX"] = self.makeDatasetRef("storageClass",
-                                                        storageClassName="StorageClassX",
-                                                        dataId={"instrument": "dummy", "visit": 2})
-        entities["calexp.wcs"] = self.makeDatasetRef("calexp.wcs",
-                                                     storageClassName="StorageClassX",
-                                                     dataId={"instrument": "dummy",
-                                                             "physical_filter": "i", "visit": 23},
-                                                     conform=False)
+        entities["pvi"] = self.makeDatasetRef(
+            "pvi", storageClassName="StorageClassX", dataId={"instrument": "dummy", "physical_filter": "i"}
+        )
+        entities["StorageClassX"] = self.makeDatasetRef(
+            "storageClass", storageClassName="StorageClassX", dataId={"instrument": "dummy", "visit": 2}
+        )
+        entities["calexp.wcs"] = self.makeDatasetRef(
+            "calexp.wcs",
+            storageClassName="StorageClassX",
+            dataId={"instrument": "dummy", "physical_filter": "i", "visit": 23},
+            conform=False,
+        )
 
-        entities["instrument+physical_filter"] = self.makeDatasetRef("filter_inst",
-                                                                     storageClassName="StorageClassX",
-                                                                     dataId={"physical_filter": "i",
-                                                                             "instrument": "SCUBA"})
-        entities["hsc+pvi"] = self.makeDatasetRef("pvi", storageClassName="StorageClassX",
-                                                  dataId={"physical_filter": "i", "instrument": "HSC"})
+        entities["instrument+physical_filter"] = self.makeDatasetRef(
+            "filter_inst",
+            storageClassName="StorageClassX",
+            dataId={"physical_filter": "i", "instrument": "SCUBA"},
+        )
+        entities["hsc+pvi"] = self.makeDatasetRef(
+            "pvi", storageClassName="StorageClassX", dataId={"physical_filter": "i", "instrument": "HSC"}
+        )
 
-        entities["hsc+instrument+physical_filter"] = self.makeDatasetRef("filter_inst",
-                                                                         storageClassName="StorageClassX",
-                                                                         dataId={"physical_filter": "i",
-                                                                                 "instrument": "HSC"})
+        entities["hsc+instrument+physical_filter"] = self.makeDatasetRef(
+            "filter_inst",
+            storageClassName="StorageClassX",
+            dataId={"physical_filter": "i", "instrument": "HSC"},
+        )
 
         templates.validateTemplates(entities.values(), logFailures=True)
 
         # Rerun but with a failure
-        entities["pvi"] = self.makeDatasetRef("pvi", storageClassName="StorageClassX",
-                                              dataId={"band": "i"})
+        entities["pvi"] = self.makeDatasetRef("pvi", storageClassName="StorageClassX", dataId={"band": "i"})
         with self.assertRaises(FileTemplateValidationError):
             with self.assertLogs(level="FATAL"):
                 templates.validateTemplates(entities.values(), logFailures=True)

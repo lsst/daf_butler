@@ -76,8 +76,10 @@ def collectionChain(repo, mode, parent, children, doc, flatten):
                 doc = None
             butler.registry.registerCollection(parent, CollectionType.CHAINED, doc)
         else:
-            raise RuntimeError(f"Mode '{mode}' requires that the collection exists "
-                               f"but collection '{parent}' is not known to this registry") from None
+            raise RuntimeError(
+                f"Mode '{mode}' requires that the collection exists "
+                f"but collection '{parent}' is not known to this registry"
+            ) from None
 
     current = list(butler.registry.getCollectionChain(parent))
 

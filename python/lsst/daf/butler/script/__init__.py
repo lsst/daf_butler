@@ -19,18 +19,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from ._associate import associate  # depends on QueryDatasets
+from ._pruneDatasets import pruneDatasets  # depends on QueryDatasets
 from .butlerImport import butlerImport
 from .certifyCalibrations import certifyCalibrations
-from .createRepo import createRepo
 from .collectionChain import collectionChain
 from .configDump import configDump
 from .configValidate import configValidate
+from .createRepo import createRepo
+from .exportCalibs import exportCalibs
+from .ingest_files import ingest_files
+from .pruneCollection import pruneCollection  # depends on QueryDatasets
 from .queryCollections import queryCollections
 from .queryDataIds import queryDataIds
 from .queryDatasets import QueryDatasets
-from ._associate import associate # depends on QueryDatasets
-from .pruneCollection import pruneCollection # depends on QueryDatasets
-from ._pruneDatasets import pruneDatasets # depends on QueryDatasets
 from .queryDatasetTypes import queryDatasetTypes
 from .queryDimensionRecords import queryDimensionRecords
 from .register_dataset_type import register_dataset_type
@@ -39,5 +41,3 @@ from .removeDatasetType import removeDatasetType
 from .removeRuns import removeRuns
 from .retrieveArtifacts import retrieveArtifacts
 from .transferDatasets import transferDatasets
-from .ingest_files import ingest_files
-from .exportCalibs import exportCalibs

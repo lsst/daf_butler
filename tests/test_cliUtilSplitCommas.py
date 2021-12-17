@@ -22,11 +22,11 @@
 """Unit tests for the daf_butler shared CLI options.
 """
 
-import click
 import unittest
 from unittest.mock import MagicMock
 
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner, split_commas
+import click
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg, split_commas
 
 mock = MagicMock()
 
@@ -38,7 +38,6 @@ def cli(list_of_values):
 
 
 class SplitCommasTestCase(unittest.TestCase):
-
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -46,15 +45,16 @@ class SplitCommasTestCase(unittest.TestCase):
         """test the split_commas callback by itself"""
         ctx = "unused"
         param = "unused"
-        self.assertEqual(split_commas(ctx, param, ("one,two", "three,four")), # noqa E231
-                         ("one", "two", "three", "four"))
+        self.assertEqual(
+            split_commas(ctx, param, ("one,two", "three,four")), ("one", "two", "three", "four")  # noqa E231
+        )
         self.assertEqual(split_commas(ctx, param, None), None)
 
     def test_single(self):
         """test the split_commas callback in an option with one value"""
         result = self.runner.invoke(cli, ["-l", "one"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
-        mock.assert_called_with(("one", ))
+        mock.assert_called_with(("one",))
 
     def test_multiple(self):
         """test the split_commas callback in an option with two single

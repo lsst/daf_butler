@@ -23,22 +23,14 @@ from __future__ import annotations
 __all__ = ()  # all symbols intentionally private; for internal package use.
 
 import enum
-from typing import (
-    Optional,
-    Tuple,
-)
+from typing import Optional, Tuple
 
-from ....core import (
-    DimensionUniverse,
-    Dimension,
-    DimensionElement,
-    DimensionGraph,
-)
+from ....core import Dimension, DimensionElement, DimensionGraph, DimensionUniverse
 
 
 class ExpressionConstant(enum.Enum):
-    """Enumeration for constants recognized in all expressions.
-    """
+    """Enumeration for constants recognized in all expressions."""
+
     NULL = "null"
     INGEST_DATE = "ingest_date"
 
@@ -96,7 +88,7 @@ def categorizeElementId(universe: DimensionUniverse, name: str) -> Tuple[Dimensi
         so at least its message should generally be propagated up to a context
         where the error can be interpreted by a human.
     """
-    table, sep, column = name.partition('.')
+    table, sep, column = name.partition(".")
     if column:
         try:
             element = universe[table]
@@ -180,10 +172,10 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> Tuple[DimensionEl
         elif len(matches) > 1:
             raise ValueError(
                 f"Timespan exists in more than one dimesion element: {matches},"
-                " qualify timespan with specific dimension name.")
+                " qualify timespan with specific dimension name."
+            )
         else:
-            raise ValueError(
-                f"Cannot find any temporal dimension element for '{name}'.")
+            raise ValueError(f"Cannot find any temporal dimension element for '{name}'.")
     elif "." not in name:
         # No dot, can be either a dimension name or a field name (in any of
         # the known elements)
@@ -199,10 +191,10 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> Tuple[DimensionEl
             elif len(matches) > 1:
                 raise ValueError(
                     f"Metadata '{name}' exists in more than one dimension element: {matches},"
-                    " qualify metadata name with dimension name.")
+                    " qualify metadata name with dimension name."
+                )
             else:
-                raise ValueError(
-                    f"Metadata '{name}' cannot be found in any dimension.")
+                raise ValueError(f"Metadata '{name}' cannot be found in any dimension.")
     else:
         # qualified name, must be a dimension element and a field
         elem_name, _, field_name = name.partition(".")
@@ -216,8 +208,10 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> Tuple[DimensionEl
             # Primary key is optional
             field_name = None
         else:
-            if not (field_name in element.metadata.names
-                    or (isinstance(element, Dimension) and field_name in element.alternateKeys.names)):
+            if not (
+                field_name in element.metadata.names
+                or (isinstance(element, Dimension) and field_name in element.alternateKeys.names)
+            ):
                 raise ValueError(f"Field '{field_name}' does not exist in '{element}'.")
 
     return element, field_name

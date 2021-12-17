@@ -19,33 +19,43 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DatasetTestHelper", "DatastoreTestHelper",
-           "BadWriteFormatter", "BadNoWriteFormatter", "MultiDetectorFormatter")
+__all__ = (
+    "DatasetTestHelper",
+    "DatastoreTestHelper",
+    "BadWriteFormatter",
+    "BadNoWriteFormatter",
+    "MultiDetectorFormatter",
+)
 
 import os
-from lsst.daf.butler import DatasetType, DatasetRef, StorageClass
+
+from lsst.daf.butler import DatasetRef, DatasetType, StorageClass
 from lsst.daf.butler.formatters.yaml import YamlFormatter
 
 
 class DatasetTestHelper:
     """Helper methods for Datasets"""
 
-    def makeDatasetRef(self, datasetTypeName, dimensions, storageClass, dataId, *, id=None, run=None,
-                       conform=True):
+    def makeDatasetRef(
+        self, datasetTypeName, dimensions, storageClass, dataId, *, id=None, run=None, conform=True
+    ):
         """Make a DatasetType and wrap it in a DatasetRef for a test"""
-        return self._makeDatasetRef(datasetTypeName, dimensions, storageClass, dataId, id=id, run=run,
-                                    conform=conform)
+        return self._makeDatasetRef(
+            datasetTypeName, dimensions, storageClass, dataId, id=id, run=run, conform=conform
+        )
 
-    def _makeDatasetRef(self, datasetTypeName, dimensions, storageClass, dataId, *, id=None, run=None,
-                        conform=True):
+    def _makeDatasetRef(
+        self, datasetTypeName, dimensions, storageClass, dataId, *, id=None, run=None, conform=True
+    ):
         # helper for makeDatasetRef
 
         # Pretend we have a parent if this looks like a composite
         compositeName, componentName = DatasetType.splitDatasetTypeName(datasetTypeName)
         parentStorageClass = StorageClass("component") if componentName else None
 
-        datasetType = DatasetType(datasetTypeName, dimensions, storageClass,
-                                  parentStorageClass=parentStorageClass)
+        datasetType = DatasetType(
+            datasetTypeName, dimensions, storageClass, parentStorageClass=parentStorageClass
+        )
         if id is None:
             self.id += 1
             id = self.id
@@ -121,7 +131,6 @@ class BadNoWriteFormatter(BadWriteFormatter):
 
 
 class MultiDetectorFormatter(YamlFormatter):
-
     def _writeFile(self, inMemoryDataset):
         raise NotImplementedError("Can not write")
 

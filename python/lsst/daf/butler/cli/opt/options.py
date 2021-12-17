@@ -20,11 +20,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import click
 from functools import partial
 
-from ..utils import MWOptionDecorator, MWPath, split_commas, split_kv, unwrap, yaml_presets
+import click
 from lsst.daf.butler.registry import CollectionType
+
+from ..utils import MWOptionDecorator, MWPath, split_commas, split_kv, unwrap, yaml_presets
 
 
 class CollectionTypeCallback:
@@ -46,153 +47,185 @@ class CollectionTypeCallback:
         return tuple(CollectionType.from_name(item) for item in split_commas(context, param, value))
 
 
-collection_type_option = MWOptionDecorator("--collection-type",
-                                           callback=CollectionTypeCallback.makeCollectionTypes,
-                                           multiple=True,
-                                           help="If provided, only list collections of this type.",
-                                           type=click.Choice(CollectionTypeCallback.collectionTypes,
-                                                             case_sensitive=False))
+collection_type_option = MWOptionDecorator(
+    "--collection-type",
+    callback=CollectionTypeCallback.makeCollectionTypes,
+    multiple=True,
+    help="If provided, only list collections of this type.",
+    type=click.Choice(CollectionTypeCallback.collectionTypes, case_sensitive=False),
+)
 
 
-collections_option = MWOptionDecorator("--collections",
-                                       help=unwrap("""One or more expressions that fully or partially identify
+collections_option = MWOptionDecorator(
+    "--collections",
+    help=unwrap(
+        """One or more expressions that fully or partially identify
                                                    the collections to search for datasets. If not provided all
-                                                   datasets are returned."""),
-                                       multiple=True,
-                                       callback=split_commas)
+                                                   datasets are returned."""
+    ),
+    multiple=True,
+    callback=split_commas,
+)
 
 
-components_option = MWOptionDecorator("--components/--no-components",
-                                      default=None,
-                                      help=unwrap("""For --components, apply all expression patterns to
+components_option = MWOptionDecorator(
+    "--components/--no-components",
+    default=None,
+    help=unwrap(
+        """For --components, apply all expression patterns to
                                                   component dataset type names as well. For --no-components,
                                                   never apply patterns to components. Default (where neither
                                                   is specified) is to apply patterns to components only if
                                                   their parent datasets were not matched by the expression.
                                                   Fully-specified component datasets (`str` or `DatasetType`
-                                                  instances) are always included."""))
+                                                  instances) are always included."""
+    ),
+)
 
 
-config_option = MWOptionDecorator("-c", "--config",
-                                  callback=split_kv,
-                                  help="Config override, as a key-value pair.",
-                                  metavar="TEXT=TEXT",
-                                  multiple=True)
+config_option = MWOptionDecorator(
+    "-c",
+    "--config",
+    callback=split_kv,
+    help="Config override, as a key-value pair.",
+    metavar="TEXT=TEXT",
+    multiple=True,
+)
 
 
-config_file_option = MWOptionDecorator("-C", "--config-file",
-                                       help=unwrap("""Path to a pex config override to be included after the
-                                       Instrument config overrides are applied."""))
+config_file_option = MWOptionDecorator(
+    "-C",
+    "--config-file",
+    help=unwrap(
+        """Path to a pex config override to be included after the
+                                       Instrument config overrides are applied."""
+    ),
+)
 
 
 confirm_option = MWOptionDecorator(
     "--confirm/--no-confirm",
     default=True,
-    help="Print expected action and a confirmation prompt before executing. Default is --confirm."
+    help="Print expected action and a confirmation prompt before executing. Default is --confirm.",
 )
 
 
-dataset_type_option = MWOptionDecorator("-d", "--dataset-type",
-                                        callback=split_commas,
-                                        help="Specific DatasetType(s) to validate.",
-                                        multiple=True)
+dataset_type_option = MWOptionDecorator(
+    "-d", "--dataset-type", callback=split_commas, help="Specific DatasetType(s) to validate.", multiple=True
+)
 
 
 datasets_option = MWOptionDecorator("--datasets")
 
 
 logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "VERBOSE", "DEBUG"]
-log_level_option = MWOptionDecorator("--log-level",
-                                     callback=partial(split_kv,
-                                                      choice=click.Choice(logLevelChoices,
-                                                                          case_sensitive=False),
-                                                      normalize=True,
-                                                      unseparated_okay=True,
-                                                      add_to_default=True),
-                                     help="The logging level. "
-                                          f"Supported levels are [{'|'.join(logLevelChoices)}]",
-                                     is_eager=True,
-                                     metavar="LEVEL|COMPONENT=LEVEL",
-                                     multiple=True)
+log_level_option = MWOptionDecorator(
+    "--log-level",
+    callback=partial(
+        split_kv,
+        choice=click.Choice(logLevelChoices, case_sensitive=False),
+        normalize=True,
+        unseparated_okay=True,
+        add_to_default=True,
+    ),
+    help="The logging level. " f"Supported levels are [{'|'.join(logLevelChoices)}]",
+    is_eager=True,
+    metavar="LEVEL|COMPONENT=LEVEL",
+    multiple=True,
+)
 
 
-long_log_option = MWOptionDecorator("--long-log",
-                                    help="Make log messages appear in long format.",
-                                    is_flag=True)
+long_log_option = MWOptionDecorator(
+    "--long-log", help="Make log messages appear in long format.", is_flag=True
+)
 
-log_file_option = MWOptionDecorator("--log-file",
-                                    default=None,
-                                    multiple=True,
-                                    callback=split_commas,
-                                    type=MWPath(file_okay=True, dir_okay=False, writable=True),
-                                    help="File(s) to write log messages. If the path ends with '.json' then"
-                                    " JSON log records will be written, else formatted text log records"
-                                    " will be written. This file can exist and records will be appended.")
+log_file_option = MWOptionDecorator(
+    "--log-file",
+    default=None,
+    multiple=True,
+    callback=split_commas,
+    type=MWPath(file_okay=True, dir_okay=False, writable=True),
+    help="File(s) to write log messages. If the path ends with '.json' then"
+    " JSON log records will be written, else formatted text log records"
+    " will be written. This file can exist and records will be appended.",
+)
 
-log_label_option = MWOptionDecorator("--log-label",
-                                     default=None,
-                                     multiple=True,
-                                     callback=split_kv,
-                                     type=str,
-                                     help="Keyword=value pairs to add to MDC of log records.")
+log_label_option = MWOptionDecorator(
+    "--log-label",
+    default=None,
+    multiple=True,
+    callback=split_kv,
+    type=str,
+    help="Keyword=value pairs to add to MDC of log records.",
+)
 
-log_tty_option = MWOptionDecorator("--log-tty/--no-log-tty",
-                                   default=True,
-                                   help="Log to terminal (default). If false logging to terminal is"
-                                   " disabled.")
+log_tty_option = MWOptionDecorator(
+    "--log-tty/--no-log-tty",
+    default=True,
+    help="Log to terminal (default). If false logging to terminal is" " disabled.",
+)
 
-options_file_option = MWOptionDecorator("--options-file", "-@",
-                                        expose_value=False,  # This option should not be forwarded
-                                        help=unwrap("""URI to YAML file containing overrides
+options_file_option = MWOptionDecorator(
+    "--options-file",
+    "-@",
+    expose_value=False,  # This option should not be forwarded
+    help=unwrap(
+        """URI to YAML file containing overrides
                                                     of command line options. The YAML should be organized
                                                     as a hierarchy with subcommand names at the top
-                                                    level options for that subcommand below."""),
-                                        callback=yaml_presets)
+                                                    level options for that subcommand below."""
+    ),
+    callback=yaml_presets,
+)
 
 
-processes_option = MWOptionDecorator("-j", "--processes",
-                                     default=1,
-                                     help="Number of processes to use.",
-                                     type=click.IntRange(min=1))
+processes_option = MWOptionDecorator(
+    "-j", "--processes", default=1, help="Number of processes to use.", type=click.IntRange(min=1)
+)
 
 
 regex_option = MWOptionDecorator("--regex")
 
 
-register_dataset_types_option = MWOptionDecorator("--register-dataset-types",
-                                                  help=unwrap("""Register DatasetTypes that do not already
-                                                              exist in the Registry."""),
-                                                  is_flag=True)
+register_dataset_types_option = MWOptionDecorator(
+    "--register-dataset-types",
+    help=unwrap(
+        """Register DatasetTypes that do not already
+                                                              exist in the Registry."""
+    ),
+    is_flag=True,
+)
 
-run_option = MWOptionDecorator("--output-run",
-                               help="The name of the run datasets should be output to.")
-
-
-transfer_option = MWOptionDecorator("-t", "--transfer",
-                                    default="auto",  # set to `None` if using `required=True`
-                                    help="The external data transfer mode.",
-                                    type=click.Choice(["auto", "link", "symlink", "hardlink", "copy", "move",
-                                                       "relsymlink", "direct"],
-                                                      case_sensitive=False))
+run_option = MWOptionDecorator("--output-run", help="The name of the run datasets should be output to.")
 
 
-verbose_option = MWOptionDecorator("-v", "--verbose",
-                                   help="Increase verbosity.",
-                                   is_flag=True)
+transfer_option = MWOptionDecorator(
+    "-t",
+    "--transfer",
+    default="auto",  # set to `None` if using `required=True`
+    help="The external data transfer mode.",
+    type=click.Choice(
+        ["auto", "link", "symlink", "hardlink", "copy", "move", "relsymlink", "direct"], case_sensitive=False
+    ),
+)
 
 
-where_option = MWOptionDecorator("--where",
-                                 help="A string expression similar to a SQL WHERE clause.")
+verbose_option = MWOptionDecorator("-v", "--verbose", help="Increase verbosity.", is_flag=True)
+
+
+where_option = MWOptionDecorator("--where", help="A string expression similar to a SQL WHERE clause.")
 
 
 order_by_option = MWOptionDecorator(
     "--order-by",
-    help=unwrap("""One or more comma-separated names used to order records. Names can be dimension names,
+    help=unwrap(
+        """One or more comma-separated names used to order records. Names can be dimension names,
                 metadata names optionally prefixed by a dimension name and dot, or
                 timestamp_begin/timestamp_end (with optional dimension name). To reverse ordering for a name
-                prefix it with a minus sign."""),
+                prefix it with a minus sign."""
+    ),
     multiple=True,
-    callback=split_commas
+    callback=split_commas,
 )
 
 
@@ -200,12 +233,12 @@ limit_option = MWOptionDecorator(
     "--limit",
     help=unwrap("Limit the number of records, by default all records are shown."),
     type=int,
-    default=0
+    default=0,
 )
 
 offset_option = MWOptionDecorator(
     "--offset",
     help=unwrap("Skip initial number of records, only used when --limit is specified."),
     type=int,
-    default=0
+    default=0,
 )

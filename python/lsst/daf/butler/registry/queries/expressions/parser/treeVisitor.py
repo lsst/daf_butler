@@ -21,13 +21,14 @@
 
 from __future__ import annotations
 
-__all__ = ['TreeVisitor']
+__all__ = ["TreeVisitor"]
 
 from abc import abstractmethod
-from typing import Generic, List, Optional, Tuple, TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Generic, List, Optional, Tuple, TypeVar
 
 if TYPE_CHECKING:
     import astropy.time
+
     from .exprTree import Node
 
 
@@ -46,6 +47,7 @@ class TreeVisitor(Generic[T]):
     from the `Node.visit` method and it will also be passed as an argument
     to other methods of the visitor.
     """
+
     @abstractmethod
     def visitNumericLiteral(self, value: str, node: Node) -> T:
         """Visit NumericLiteral node.

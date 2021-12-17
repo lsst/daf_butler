@@ -26,10 +26,10 @@ __all__ = (
     "CollectionSearch",
 )
 
-from pydantic import BaseModel
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import (
+    TYPE_CHECKING,
     AbstractSet,
     Any,
     Callable,
@@ -39,20 +39,18 @@ from typing import (
     Sequence,
     Set,
     Tuple,
-    TYPE_CHECKING,
     Union,
 )
 
 import sqlalchemy
-
 from lsst.utils.iteration import ensure_iterable
+from pydantic import BaseModel
+
 from ..core import DatasetType
 from ..core.utils import globToRegex
 from ._collectionType import CollectionType
 
 if TYPE_CHECKING:
-    from .interfaces import CollectionManager, CollectionRecord
-
     # Workaround for `...` not having an exposed type in Python, borrowed from
     # https://github.com/python/typing/issues/684#issuecomment-548203158
     # Along with that, we need to either use `Ellipsis` instead of `...` for
@@ -64,6 +62,8 @@ if TYPE_CHECKING:
     # to `lsst.daf.butler.registry`.  Putting these in __all__ is bad for
     # Sphinx, and probably more confusing than helpful overall.
     from enum import Enum
+
+    from .interfaces import CollectionManager, CollectionRecord
 
     class EllipsisType(Enum):
         Ellipsis = "..."
@@ -86,13 +86,16 @@ class CategorizedWildcard:
     """
 
     @classmethod
-    def fromExpression(cls, expression: Any, *,
-                       allowAny: bool = True,
-                       allowPatterns: bool = True,
-                       coerceUnrecognized: Optional[Callable[[Any], Union[Tuple[str, Any], str]]] = None,
-                       coerceItemValue: Optional[Callable[[Any], Any]] = None,
-                       defaultItemValue: Optional[Any] = None,
-                       ) -> Union[CategorizedWildcard, EllipsisType]:
+    def fromExpression(
+        cls,
+        expression: Any,
+        *,
+        allowAny: bool = True,
+        allowPatterns: bool = True,
+        coerceUnrecognized: Optional[Callable[[Any], Union[Tuple[str, Any], str]]] = None,
+        coerceItemValue: Optional[Callable[[Any], Any]] = None,
+        defaultItemValue: Optional[Any] = None,
+    ) -> Union[CategorizedWildcard, EllipsisType]:
         """Categorize a wildcard expression.
 
         Parameters
@@ -156,18 +159,26 @@ class CategorizedWildcard:
             # This is already a CategorizedWildcard.  Make sure it meets the
             # reqs. implied by the kwargs we got.
             if not allowPatterns and expression.patterns:
-                raise TypeError(f"Regular expression(s) {expression.patterns} "
-                                f"are not allowed in this context.")
+                raise TypeError(
+                    f"Regular expression(s) {expression.patterns} " f"are not allowed in this context."
+                )
             if defaultItemValue is not None and expression.strings:
                 if expression.items:
-                    raise TypeError("Incompatible preprocessed expression: an ordered sequence of str is "
-                                    "needed, but the original order was lost in the preprocessing.")
-                return cls(strings=[], patterns=expression.patterns,
-                           items=[(k, defaultItemValue) for k in expression.strings])
+                    raise TypeError(
+                        "Incompatible preprocessed expression: an ordered sequence of str is "
+                        "needed, but the original order was lost in the preprocessing."
+                    )
+                return cls(
+                    strings=[],
+                    patterns=expression.patterns,
+                    items=[(k, defaultItemValue) for k in expression.strings],
+                )
             elif defaultItemValue is None and expression.items:
                 if expression.strings:
-                    raise TypeError("Incompatible preprocessed expression: an ordered sequence of items is "
-                                    "needed, but the original order was lost in the preprocessing.")
+                    raise TypeError(
+                        "Incompatible preprocessed expression: an ordered sequence of items is "
+                        "needed, but the original order was lost in the preprocessing."
+                    )
                 return cls(strings=[k for k, _ in expression.items], patterns=expression.patterns, items=[])
             else:
                 # Original expression was created with keyword arguments that
@@ -230,8 +241,9 @@ class CategorizedWildcard:
                         try:
                             v = coerceItemValue(v)
                         except Exception as err:
-                            raise TypeError(f"Could not coerce tuple item value '{v}' for key '{k}'."
-                                            ) from err
+                            raise TypeError(
+                                f"Could not coerce tuple item value '{v}' for key '{k}'."
+                            ) from err
                     self.items.append((k, v))
                     return None
             if alreadyCoerced:
@@ -260,8 +272,9 @@ class CategorizedWildcard:
         del process
         return self
 
-    def makeWhereExpression(self, column: sqlalchemy.sql.ColumnElement
-                            ) -> Optional[sqlalchemy.sql.ColumnElement]:
+    def makeWhereExpression(
+        self, column: sqlalchemy.sql.ColumnElement
+    ) -> Optional[sqlalchemy.sql.ColumnElement]:
         """Transform the wildcard into a SQLAlchemy boolean expression suitable
         for use in a WHERE clause.
 
@@ -280,8 +293,10 @@ class CategorizedWildcard:
             possible.
         """
         if self.items:
-            raise NotImplementedError("Expressions that are processed into items cannot be transformed "
-                                      "automatically into queries.")
+            raise NotImplementedError(
+                "Expressions that are processed into items cannot be transformed "
+                "automatically into queries."
+            )
         if self.patterns:
             raise NotImplementedError("Regular expression patterns are not yet supported here.")
         terms = []
@@ -395,6 +410,7 @@ class CollectionSearch(BaseModel, Sequence[str]):
     `CollectionSearch` constructed from an equivalent expression, regardless of
     how different the original expressions appear.
     """
+
     __root__: Tuple[str, ...]
 
     @classmethod
@@ -439,7 +455,9 @@ class CollectionSearch(BaseModel, Sequence[str]):
         return cls(__root__=tuple(deduplicated))
 
     def iter(
-        self, manager: CollectionManager, *,
+        self,
+        manager: CollectionManager,
+        *,
         datasetType: Optional[DatasetType] = None,
         collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
         done: Optional[Set[str]] = None,
@@ -494,8 +512,7 @@ class CollectionSearch(BaseModel, Sequence[str]):
                 )
 
     def explicitNames(self) -> Iterator[str]:
-        """Iterate over collection names that were specified explicitly.
-        """
+        """Iterate over collection names that were specified explicitly."""
         yield from self.__root__
 
     def __iter__(self) -> Iterator[str]:  # type: ignore
@@ -550,6 +567,7 @@ class CollectionQuery:
     iterators into a form that can be used to call those `Registry` methods
     multiple times.
     """
+
     def __init__(
         self,
         search: Union[CollectionSearch, EllipsisType] = Ellipsis,
@@ -597,15 +615,18 @@ class CollectionQuery:
         )
         if wildcard is Ellipsis:
             return cls()
-        assert not wildcard.items, \
-            "We should no longer be transforming to (str, DatasetTypeRestriction) tuples."
+        assert (
+            not wildcard.items
+        ), "We should no longer be transforming to (str, DatasetTypeRestriction) tuples."
         return cls(
             search=CollectionSearch.fromExpression(wildcard.strings),
             patterns=tuple(wildcard.patterns),
         )
 
     def iter(
-        self, manager: CollectionManager, *,
+        self,
+        manager: CollectionManager,
+        *,
         collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
         flattenChains: bool = True,
         includeChains: Optional[bool] = None,
@@ -668,8 +689,7 @@ class CollectionQuery:
                     )
 
     def explicitNames(self) -> Iterator[str]:
-        """Iterate over collection names that were specified explicitly.
-        """
+        """Iterate over collection names that were specified explicitly."""
         if isinstance(self._search, CollectionSearch):
             yield from self._search.explicitNames()
 

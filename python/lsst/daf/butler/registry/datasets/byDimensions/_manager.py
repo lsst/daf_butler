@@ -5,34 +5,26 @@ __all__ = (
     "ByDimensionsDatasetRecordStorageManagerUUID",
 )
 
-from typing import (
-    Any,
-    Dict,
-    Iterator,
-    Optional,
-    Tuple,
-    Type,
-    TYPE_CHECKING,
-)
-
 import copy
-import sqlalchemy
+from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional, Tuple, Type
 
-from lsst.daf.butler import (
-    DatasetId,
-    DatasetRef,
-    DatasetType,
-    ddl,
-    DimensionUniverse,
-)
+import sqlalchemy
+from lsst.daf.butler import DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
 from lsst.daf.butler.registry import ConflictingDefinitionError, OrphanedRecordError
 from lsst.daf.butler.registry.interfaces import (
     DatasetIdGenEnum,
     DatasetRecordStorage,
     DatasetRecordStorageManager,
-    VersionTuple
+    VersionTuple,
 )
 
+from ...summaries import CollectionSummary
+from ._storage import (
+    ByDimensionsDatasetRecordStorage,
+    ByDimensionsDatasetRecordStorageInt,
+    ByDimensionsDatasetRecordStorageUUID,
+)
+from .summaries import CollectionSummaryManager
 from .tables import (
     addDatasetForeignKey,
     makeCalibTableName,
@@ -41,14 +33,6 @@ from .tables import (
     makeTagTableName,
     makeTagTableSpec,
 )
-from .summaries import CollectionSummaryManager
-from ._storage import (
-    ByDimensionsDatasetRecordStorage,
-    ByDimensionsDatasetRecordStorageInt,
-    ByDimensionsDatasetRecordStorageUUID
-)
-from ...summaries import CollectionSummary
-
 
 if TYPE_CHECKING:
     from lsst.daf.butler.registry.interfaces import (
@@ -58,6 +42,7 @@ if TYPE_CHECKING:
         DimensionRecordStorageManager,
         StaticTablesContext,
     )
+
     from .tables import StaticDatasetTablesTuple
 
 
@@ -67,8 +52,7 @@ _VERSION_UUID = VersionTuple(1, 0, 0)
 
 
 class MissingDatabaseTableError(RuntimeError):
-    """Exception raised when a table is not found in a database.
-    """
+    """Exception raised when a table is not found in a database."""
 
 
 class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
@@ -108,8 +92,10 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     summaries : `CollectionSummaryManager`
         Structure containing tables that summarize the contents of collections.
     """
+
     def __init__(
-        self, *,
+        self,
+        *,
         db: Database,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
@@ -128,7 +114,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     def initialize(
         cls,
         db: Database,
-        context: StaticTablesContext, *,
+        context: StaticTablesContext,
+        *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
     ) -> DatasetRecordStorageManager:
@@ -149,8 +136,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         return cls._version
 
     @classmethod
-    def makeStaticTableSpecs(cls, collections: Type[CollectionManager],
-                             universe: DimensionUniverse) -> StaticDatasetTablesTuple:
+    def makeStaticTableSpecs(
+        cls, collections: Type[CollectionManager], universe: DimensionUniverse
+    ) -> StaticDatasetTablesTuple:
         """Construct all static tables used by the classes in this package.
 
         Static tables are those that are present in all Registries and do not
@@ -168,8 +156,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         specs : `StaticDatasetTablesTuple`
             A named tuple containing `ddl.TableSpec` instances.
         """
-        return makeStaticTableSpecs(collections, universe=universe,
-                                    dtype=cls.getIdColumnType(), autoincrement=cls._autoincrement)
+        return makeStaticTableSpecs(
+            collections, universe=universe, dtype=cls.getIdColumnType(), autoincrement=cls._autoincrement
+        )
 
     @classmethod
     def getIdColumnType(cls) -> type:
@@ -177,12 +166,19 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         return cls._idColumnType
 
     @classmethod
-    def addDatasetForeignKey(cls, tableSpec: ddl.TableSpec, *, name: str = "dataset",
-                             constraint: bool = True, onDelete: Optional[str] = None,
-                             **kwargs: Any) -> ddl.FieldSpec:
+    def addDatasetForeignKey(
+        cls,
+        tableSpec: ddl.TableSpec,
+        *,
+        name: str = "dataset",
+        constraint: bool = True,
+        onDelete: Optional[str] = None,
+        **kwargs: Any,
+    ) -> ddl.FieldSpec:
         # Docstring inherited from DatasetRecordStorageManager.
-        return addDatasetForeignKey(tableSpec, cls.getIdColumnType(), name=name, onDelete=onDelete,
-                                    constraint=constraint, **kwargs)
+        return addDatasetForeignKey(
+            tableSpec, cls.getIdColumnType(), name=name, onDelete=onDelete, constraint=constraint, **kwargs
+        )
 
     def refresh(self) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -193,31 +189,43 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             name = row[c.name]
             dimensions = self._dimensions.loadDimensionGraph(row[c.dimensions_key])
             calibTableName = row[c.calibration_association_table]
-            datasetType = DatasetType(name, dimensions, row[c.storage_class],
-                                      isCalibration=(calibTableName is not None))
+            datasetType = DatasetType(
+                name, dimensions, row[c.storage_class], isCalibration=(calibTableName is not None)
+            )
             tags = self._db.getExistingTable(
                 row[c.tag_association_table],
-                makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType()))
+                makeTagTableSpec(datasetType, type(self._collections), self.getIdColumnType()),
+            )
             if tags is None:
                 raise MissingDatabaseTableError(
                     f"Table {row[c.tag_association_table]} is missing from database schema."
                 )
             if calibTableName is not None:
-                calibs = self._db.getExistingTable(row[c.calibration_association_table],
-                                                   makeCalibTableSpec(datasetType, type(self._collections),
-                                                                      self._db.getTimespanRepresentation(),
-                                                                      self.getIdColumnType()))
+                calibs = self._db.getExistingTable(
+                    row[c.calibration_association_table],
+                    makeCalibTableSpec(
+                        datasetType,
+                        type(self._collections),
+                        self._db.getTimespanRepresentation(),
+                        self.getIdColumnType(),
+                    ),
+                )
                 if calibs is None:
                     raise MissingDatabaseTableError(
                         f"Table {row[c.calibration_association_table]} is missing from database schema."
                     )
             else:
                 calibs = None
-            storage = self._recordStorageType(db=self._db, datasetType=datasetType,
-                                              static=self._static, summaries=self._summaries,
-                                              tags=tags, calibs=calibs,
-                                              dataset_type_id=row["id"],
-                                              collections=self._collections)
+            storage = self._recordStorageType(
+                db=self._db,
+                datasetType=datasetType,
+                static=self._static,
+                summaries=self._summaries,
+                tags=tags,
+                calibs=calibs,
+                dataset_type_id=row["id"],
+                collections=self._collections,
+            )
             byName[datasetType.name] = storage
             byId[storage._dataset_type_id] = storage
         self._byName = byName
@@ -234,8 +242,10 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         try:
             self._db.delete(self._static.dataset_type, ["name"], {"name": name})
         except sqlalchemy.exc.IntegrityError as e:
-            raise OrphanedRecordError(f"Dataset type {name} can not be removed."
-                                      " It is associated with datasets that must be removed first.") from e
+            raise OrphanedRecordError(
+                f"Dataset type {name} can not be removed."
+                " It is associated with datasets that must be removed first."
+            ) from e
 
         # Now refresh everything -- removal is rare enough that this does
         # not need to be fast.
@@ -255,14 +265,16 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     def register(self, datasetType: DatasetType) -> Tuple[DatasetRecordStorage, bool]:
         # Docstring inherited from DatasetRecordStorageManager.
         if datasetType.isComponent():
-            raise ValueError("Component dataset types can not be stored in registry."
-                             f" Rejecting {datasetType.name}")
+            raise ValueError(
+                "Component dataset types can not be stored in registry." f" Rejecting {datasetType.name}"
+            )
         storage = self._byName.get(datasetType.name)
         if storage is None:
             dimensionsKey = self._dimensions.saveDimensionGraph(datasetType.dimensions)
             tagTableName = makeTagTableName(datasetType, dimensionsKey)
-            calibTableName = (makeCalibTableName(datasetType, dimensionsKey)
-                              if datasetType.isCalibration() else None)
+            calibTableName = (
+                makeCalibTableName(datasetType, dimensionsKey) if datasetType.isCalibration() else None
+            )
             # The order is important here, we want to create tables first and
             # only register them if this operation is successful. We cannot
             # wrap it into a transaction because database class assumes that
@@ -274,8 +286,12 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             if calibTableName is not None:
                 calibs = self._db.ensureTableExists(
                     calibTableName,
-                    makeCalibTableSpec(datasetType, type(self._collections),
-                                       self._db.getTimespanRepresentation(), self.getIdColumnType()),
+                    makeCalibTableSpec(
+                        datasetType,
+                        type(self._collections),
+                        self._db.getTimespanRepresentation(),
+                        self.getIdColumnType(),
+                    ),
                 )
             else:
                 calibs = None
@@ -293,17 +309,24 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 returning=["id", "tag_association_table"],
             )
             assert row is not None
-            storage = self._recordStorageType(db=self._db, datasetType=datasetType,
-                                              static=self._static, summaries=self._summaries,
-                                              tags=tags, calibs=calibs,
-                                              dataset_type_id=row["id"],
-                                              collections=self._collections)
+            storage = self._recordStorageType(
+                db=self._db,
+                datasetType=datasetType,
+                static=self._static,
+                summaries=self._summaries,
+                tags=tags,
+                calibs=calibs,
+                dataset_type_id=row["id"],
+                collections=self._collections,
+            )
             self._byName[datasetType.name] = storage
             self._byId[storage._dataset_type_id] = storage
         else:
             if datasetType != storage.datasetType:
-                raise ConflictingDefinitionError(f"Given dataset type {datasetType} is inconsistent "
-                                                 f"with database definition {storage.datasetType}.")
+                raise ConflictingDefinitionError(
+                    f"Given dataset type {datasetType} is inconsistent "
+                    f"with database definition {storage.datasetType}."
+                )
             inserted = False
         return storage, bool(inserted)
 
@@ -313,13 +336,13 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
 
     def getDatasetRef(self, id: DatasetId) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
-        sql = sqlalchemy.sql.select(
-            self._static.dataset.columns.dataset_type_id,
-            self._static.dataset.columns[self._collections.getRunForeignKeyName()],
-        ).select_from(
-            self._static.dataset
-        ).where(
-            self._static.dataset.columns.id == id
+        sql = (
+            sqlalchemy.sql.select(
+                self._static.dataset.columns.dataset_type_id,
+                self._static.dataset.columns[self._collections.getRunForeignKeyName()],
+            )
+            .select_from(self._static.dataset)
+            .where(self._static.dataset.columns.id == id)
         )
         row = self._db.query(sql).mappings().fetchone()
         if row is None:
@@ -333,7 +356,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             recordsForType.datasetType,
             dataId=recordsForType.getDataId(id=id),
             id=id,
-            run=self._collections[row[self._collections.getRunForeignKeyName()]].name
+            run=self._collections[row[self._collections.getRunForeignKeyName()]].name,
         )
 
     def getCollectionSummary(self, collection: CollectionRecord) -> CollectionSummary:
@@ -361,6 +384,7 @@ class ByDimensionsDatasetRecordStorageManager(ByDimensionsDatasetRecordStorageMa
     """Implementation of ByDimensionsDatasetRecordStorageManagerBase which uses
     auto-incremental integer for dataset primary key.
     """
+
     _version: VersionTuple = _VERSION_INT
     _recordStorageType: Type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageInt
     _autoincrement: bool = True
@@ -377,6 +401,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStora
     """Implementation of ByDimensionsDatasetRecordStorageManagerBase which uses
     UUID for dataset primary key.
     """
+
     _version: VersionTuple = _VERSION_UUID
     _recordStorageType: Type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageUUID
     _autoincrement: bool = False

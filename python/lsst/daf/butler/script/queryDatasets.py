@@ -20,15 +20,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from astropy.table import Table as AstropyTable
+import uuid
 from collections import defaultdict, namedtuple
 from typing import Dict
+
 import numpy as np
-import uuid
+from astropy.table import Table as AstropyTable
 
 from .. import Butler
 from ..cli.utils import sortAstropyTable
-
 
 _RefInfo = namedtuple("_RefInfo", ["datasetRef", "uri"])
 
@@ -71,6 +71,7 @@ class _Table:
         table : `astropy.table._Table`
             The table with the provided column names and rows.
         """
+
         def _id_type(datasetRef):
             if isinstance(datasetRef.id, uuid.UUID):
                 return str
@@ -84,26 +85,31 @@ class _Table:
 
         refInfo = next(iter(self.datasetRefs))
         dimensions = list(refInfo.datasetRef.dataId.full.keys())
-        columnNames = ["type", "run", "id",
-                       *[str(item) for item in dimensions]]
+        columnNames = ["type", "run", "id", *[str(item) for item in dimensions]]
 
         # Need to hint the column types for numbers since the per-row
         # constructor of Table does not work this out on its own and sorting
         # will not work properly without.
         typeMap = {float: np.float64, int: np.int64}
         idType = _id_type(refInfo.datasetRef)
-        columnTypes = [None, None, idType,
-                       *[typeMap.get(type(value)) for value in refInfo.datasetRef.dataId.full.values()]]
+        columnTypes = [
+            None,
+            None,
+            idType,
+            *[typeMap.get(type(value)) for value in refInfo.datasetRef.dataId.full.values()],
+        ]
         if refInfo.uri:
             columnNames.append("URI")
             columnTypes.append(None)
 
         rows = []
         for refInfo in self.datasetRefs:
-            row = [datasetTypeName,
-                   refInfo.datasetRef.run,
-                   str(refInfo.datasetRef.id) if idType is str else refInfo.datasetRef.id,
-                   *[value for value in refInfo.datasetRef.dataId.full.values()]]
+            row = [
+                datasetTypeName,
+                refInfo.datasetRef.run,
+                str(refInfo.datasetRef.id) if idType is str else refInfo.datasetRef.id,
+                *[value for value in refInfo.datasetRef.dataId.full.values()],
+            ]
             if refInfo.uri:
                 row.append(refInfo.uri)
             rows.append(row)
@@ -157,10 +163,9 @@ class QueryDatasets:
         if not collections:
             collections = ...
 
-        self.datasets = self.butler.registry.queryDatasets(datasetType=glob,
-                                                           collections=collections,
-                                                           where=where,
-                                                           findFirst=find_first).expanded()
+        self.datasets = self.butler.registry.queryDatasets(
+            datasetType=glob, collections=collections, where=where, findFirst=find_first
+        ).expanded()
 
     def getTables(self):
         """Get the datasets as a list of astropy tables.
@@ -175,8 +180,9 @@ class QueryDatasets:
             if not self.showUri:
                 tables[datasetRef.datasetType.name].add(datasetRef)
             else:
-                primaryURI, componentURIs = self.butler.getURIs(datasetRef, collections=datasetRef.run,
-                                                                predict=True)
+                primaryURI, componentURIs = self.butler.getURIs(
+                    datasetRef, collections=datasetRef.run, predict=True
+                )
                 if primaryURI:
                     tables[datasetRef.datasetType.name].add(datasetRef, primaryURI)
                 for name, uri in componentURIs.items():

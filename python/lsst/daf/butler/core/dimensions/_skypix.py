@@ -27,22 +27,14 @@ __all__ = (
 )
 
 from types import MappingProxyType
-from typing import (
-    AbstractSet,
-    Dict,
-    Mapping,
-    Optional,
-    Type,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, AbstractSet, Dict, Mapping, Optional, Type
 
 import sqlalchemy
-
 from lsst.sphgeom import PixelizationABC
 from lsst.utils import doImportType
+
 from .. import ddl
 from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
-
 from ..named import NamedValueAbstractSet, NamedValueSet
 from ._elements import Dimension
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
@@ -70,7 +62,8 @@ class SkyPixSystem(TopologicalFamily):
 
     def __init__(
         self,
-        name: str, *,
+        name: str,
+        *,
         maxLevel: int,
         PixelizationClass: Type[PixelizationABC],
     ):
@@ -162,19 +155,22 @@ class SkyPixDimension(Dimension):
             Storage object that should back this element in a registry.
         """
         from ...registry.dimensions.skypix import BasicSkyPixDimensionRecordStorage
+
         return BasicSkyPixDimensionRecordStorage(self)
 
     @property
     def uniqueKeys(self) -> NamedValueAbstractSet[ddl.FieldSpec]:
         # Docstring inherited from DimensionElement.
-        return NamedValueSet({
-            ddl.FieldSpec(
-                name="id",
-                dtype=sqlalchemy.BigInteger,
-                primaryKey=True,
-                nullable=False,
-            )
-        }).freeze()
+        return NamedValueSet(
+            {
+                ddl.FieldSpec(
+                    name="id",
+                    dtype=sqlalchemy.BigInteger,
+                    primaryKey=True,
+                    nullable=False,
+                )
+            }
+        ).freeze()
 
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
@@ -236,8 +232,10 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
         else:
             maxLevel = getattr(PixelizationClass, "MAX_LEVEL", None)
             if maxLevel is None:
-                raise TypeError(f"Skypix pixelization class {self._pixelizationClassName} does"
-                                " not have MAX_LEVEL but no max level has been set explicitly.")
+                raise TypeError(
+                    f"Skypix pixelization class {self._pixelizationClassName} does"
+                    " not have MAX_LEVEL but no max level has been set explicitly."
+                )
         system = SkyPixSystem(
             self.name,
             maxLevel=maxLevel,

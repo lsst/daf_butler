@@ -25,30 +25,19 @@ from __future__ import annotations
 
 __all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
 
-import time
 import logging
+import time
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
 from urllib.parse import urlencode
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
 
-from lsst.daf.butler import DatasetId, DatasetRef, StoredDatastoreItemInfo, StorageClass, ButlerURI
+from lsst.daf.butler import ButlerURI, DatasetId, DatasetRef, StorageClass, StoredDatastoreItemInfo
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
+
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import (Config, DatasetType,
-                                 LookupKey)
+    from lsst.daf.butler import Config, DatasetType, LookupKey
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
@@ -59,6 +48,7 @@ class StoredMemoryItemInfo(StoredDatastoreItemInfo):
     """Internal InMemoryDatastore Metadata associated with a stored
     DatasetRef.
     """
+
     __slots__ = {"timestamp", "storageClass", "parentID"}
 
     timestamp: float
@@ -110,9 +100,12 @@ class InMemoryDatastore(GenericBaseDatastore):
     records: Dict[DatasetId, StoredMemoryItemInfo]
     """Internal records about stored datasets."""
 
-    def __init__(self, config: Union[Config, str],
-                 bridgeManager: DatastoreRegistryBridgeManager,
-                 butlerRoot: Optional[str] = None):
+    def __init__(
+        self,
+        config: Union[Config, str],
+        bridgeManager: DatastoreRegistryBridgeManager,
+        butlerRoot: Optional[str] = None,
+    ):
         super().__init__(config, bridgeManager)
 
         # Name ourselves with the timestamp the datastore
@@ -172,8 +165,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore.
         return self._bridge
 
-    def addStoredItemInfo(self, refs: Iterable[DatasetRef],
-                          infos: Iterable[StoredMemoryItemInfo]) -> None:
+    def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredMemoryItemInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore.
         for ref, info in zip(refs, infos):
             if ref.id is None:
@@ -337,17 +329,19 @@ class InMemoryDatastore(GenericBaseDatastore):
         if readStorageClass != writeStorageClass:
 
             if component is None:
-                raise ValueError("Storage class inconsistency ({} vs {}) but no"
-                                 " component requested".format(readStorageClass.name,
-                                                               writeStorageClass.name))
+                raise ValueError(
+                    "Storage class inconsistency ({} vs {}) but no"
+                    " component requested".format(readStorageClass.name, writeStorageClass.name)
+                )
 
             # Concrete composite written as a single object (we hope)
             inMemoryDataset = writeStorageClass.delegate().getComponent(inMemoryDataset, component)
 
         # Since there is no formatter to process parameters, they all must be
         # passed to the assembler.
-        return self._post_process_get(inMemoryDataset, readStorageClass, parameters,
-                                      isComponent=component is not None)
+        return self._post_process_get(
+            inMemoryDataset, readStorageClass, parameters, isComponent=component is not None
+        )
 
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to the store.
@@ -386,8 +380,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Store time we received this content, to allow us to optionally
         # expire it. Instead of storing a filename here, we include the
         # ID of this datasetRef so we can find it from components.
-        itemInfo = StoredMemoryItemInfo(time.time(), ref.datasetType.storageClass,
-                                        parentID=ref.id)
+        itemInfo = StoredMemoryItemInfo(time.time(), ref.datasetType.storageClass, parentID=ref.id)
 
         # We have to register this content with registry.
         # Currently this assumes we have a file so we need to use stub entries
@@ -397,8 +390,9 @@ class InMemoryDatastore(GenericBaseDatastore):
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
 
-    def getURIs(self, ref: DatasetRef,
-                predict: bool = False) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+    def getURIs(
+        self, ref: DatasetRef, predict: bool = False
+    ) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
         """Return URIs associated with dataset.
 
         Parameters
@@ -480,10 +474,14 @@ class InMemoryDatastore(GenericBaseDatastore):
             raise AssertionError(f"Unexpectedly got no URI for in-memory datastore for {ref}")
         return primary
 
-    def retrieveArtifacts(self, refs: Iterable[DatasetRef],
-                          destination: ButlerURI, transfer: str = "auto",
-                          preserve_path: bool = True,
-                          overwrite: Optional[bool] = False) -> List[ButlerURI]:
+    def retrieveArtifacts(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ButlerURI,
+        transfer: str = "auto",
+        preserve_path: bool = True,
+        overwrite: Optional[bool] = False,
+    ) -> List[ButlerURI]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Notes
@@ -538,8 +536,9 @@ class InMemoryDatastore(GenericBaseDatastore):
             self.bridge.moveToTrash([ref])
         except Exception as e:
             if ignore_errors:
-                log.warning("Error encountered moving dataset %s to trash in datastore %s: %s",
-                            ref, self.name, e)
+                log.warning(
+                    "Error encountered moving dataset %s to trash in datastore %s: %s", ref, self.name, e
+                )
             else:
                 raise
 
@@ -572,9 +571,12 @@ class InMemoryDatastore(GenericBaseDatastore):
                     continue
                 except Exception as e:
                     if ignore_errors:
-                        log.warning("Emptying trash in datastore %s but encountered an "
-                                    "error with dataset %s: %s",
-                                    self.name, ref.id, e)
+                        log.warning(
+                            "Emptying trash in datastore %s but encountered an " "error with dataset %s: %s",
+                            self.name,
+                            ref.id,
+                            e,
+                        )
                         continue
                     else:
                         raise
@@ -590,8 +592,9 @@ class InMemoryDatastore(GenericBaseDatastore):
                 # Remove this entry
                 self.removeStoredItemInfo(ref)
 
-    def validateConfiguration(self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]],
-                              logFailures: bool = False) -> None:
+    def validateConfiguration(
+        self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]], logFailures: bool = False
+    ) -> None:
         """Validate some of the configuration for this datastore.
 
         Parameters

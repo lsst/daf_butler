@@ -19,14 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import unittest
-import os
-import contextlib
 import collections
+import contextlib
 import itertools
+import os
+import unittest
 from pathlib import Path
 
-from lsst.daf.butler import ConfigSubset, Config
+from lsst.daf.butler import Config, ConfigSubset
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -103,15 +103,17 @@ class ConfigTestCase(unittest.TestCase):
     """Tests of simple Config"""
 
     def testBadConfig(self):
-        for badArg in ([],  # Bad argument
-                       __file__,  # Bad file extension for existing file
-                       ):
+        for badArg in (
+            [],  # Bad argument
+            __file__,  # Bad file extension for existing file
+        ):
             with self.assertRaises(RuntimeError):
                 Config(badArg)
-        for badArg in ("file.fits",  # File that does not exist with bad extension
-                       "b/c/d/",  # Directory that does not exist
-                       "file.yaml",  # Good extension for missing file
-                       ):
+        for badArg in (
+            "file.fits",  # File that does not exist with bad extension
+            "b/c/d/",  # Directory that does not exist
+            "file.yaml",  # Good extension for missing file
+        ):
             with self.assertRaises(FileNotFoundError):
                 Config(badArg)
 
@@ -340,11 +342,13 @@ class ConfigTestCase(unittest.TestCase):
             self.assertEqual(c[k], v)
 
         # Check that lists still work even if assigned a dict
-        c = Config({"cls": "lsst.daf.butler",
-                    "formatters": {"calexp.wcs": "{component}",
-                                   "calexp": "{datasetType}"},
-                    "datastores": [{"datastore": {"cls": "datastore1"}},
-                                   {"datastore": {"cls": "datastore2"}}]})
+        c = Config(
+            {
+                "cls": "lsst.daf.butler",
+                "formatters": {"calexp.wcs": "{component}", "calexp": "{datasetType}"},
+                "datastores": [{"datastore": {"cls": "datastore1"}}, {"datastore": {"cls": "datastore2"}}],
+            }
+        )
         c[".datastores.1.datastore"] = {"cls": "datastore2modified"}
         self.assertEqual(c[".datastores.0.datastore.cls"], "datastore1")
         self.assertEqual(c[".datastores.1.datastore.cls"], "datastore2modified")
@@ -404,7 +408,7 @@ class ConfigTestCase(unittest.TestCase):
 testing: hello
 formatters:
   calexp: 3""",
-            "json": '{"testing": "hello", "formatters": {"calexp": 3}}'
+            "json": '{"testing": "hello", "formatters": {"calexp": 3}}',
         }
 
         for format, string in serialized.items():
@@ -434,8 +438,7 @@ formatters:
 
 
 class ConfigSubsetTestCase(unittest.TestCase):
-    """Tests for ConfigSubset
-    """
+    """Tests for ConfigSubset"""
 
     def setUp(self):
         self.testDir = os.path.abspath(os.path.dirname(__file__))
@@ -494,8 +497,7 @@ class ConfigSubsetTestCase(unittest.TestCase):
 
     def testExternalHierarchy(self):
         """Test that we can provide external config parameters in hierarchy"""
-        c = ConfigTest({"comp": {"item1": 6, "item2": "a", "a": "b",
-                                 "item3": 7}, "item4": 8})
+        c = ConfigTest({"comp": {"item1": 6, "item2": "a", "a": "b", "item3": 7}, "item4": 8})
         self.assertIn("a", c)
         self.assertEqual(c["a"], "b")
         self.assertNotIn("item4", c)
@@ -527,14 +529,24 @@ class ConfigSubsetTestCase(unittest.TestCase):
         self.assertEqual(len(c.filesRead), 1)
 
         # and a search path that will also include the file
-        c = ConfigTestAbsPath(searchPaths=(self.configDir, self.configDir2,))
+        c = ConfigTestAbsPath(
+            searchPaths=(
+                self.configDir,
+                self.configDir2,
+            )
+        )
         self.assertEqual(c["item11"], 11)
         self.assertEqual(len(c.filesRead), 1)
 
         # Same as above but this time with relative path and two search paths
         # to ensure the count changes
         ConfigTestAbsPath.defaultConfigFile = ConfigTest.defaultConfigFile
-        c = ConfigTestAbsPath(searchPaths=(self.configDir, self.configDir2,))
+        c = ConfigTestAbsPath(
+            searchPaths=(
+                self.configDir,
+                self.configDir2,
+            )
+        )
         self.assertEqual(len(c.filesRead), 2)
 
         # Reset the class
@@ -659,7 +671,6 @@ resource:
 
 
 class FileWriteConfigTestCase(unittest.TestCase):
-
     def setUp(self):
         self.tmpdir = makeTestTempDir(TESTDIR)
 

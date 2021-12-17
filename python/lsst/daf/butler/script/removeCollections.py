@@ -20,10 +20,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from astropy.table import Table
 from dataclasses import dataclass
 from functools import partial
 from typing import Callable
+
+from astropy.table import Table
+
 from .. import Butler
 from ..registry import CollectionType, MissingCollectionError
 
@@ -35,6 +37,7 @@ class RemoveCollectionResult:
     which can not be removed by this command. Also holds the callback funciton
     to execute the remove upon user confirmation.
     """
+
     # the callback function to do the removal
     onConfirmation: Callable[[], None]
     # astropy table describing data that will be removed.
@@ -47,6 +50,7 @@ class RemoveCollectionResult:
 class CollectionInfo:
     """Lightweight container to hold the name and type of non-run
     collections, as well as the names of run collections."""
+
     nonRunCollections: Table
     runCollections: Table
 
@@ -75,12 +79,14 @@ def _getCollectionInfo(
     try:
         names = list(
             butler.registry.queryCollections(
-                collectionTypes=frozenset((
-                    CollectionType.RUN,
-                    CollectionType.TAGGED,
-                    CollectionType.CHAINED,
-                    CollectionType.CALIBRATION,
-                )),
+                collectionTypes=frozenset(
+                    (
+                        CollectionType.RUN,
+                        CollectionType.TAGGED,
+                        CollectionType.CHAINED,
+                        CollectionType.CALIBRATION,
+                    )
+                ),
                 expression=collection,
                 includeChains=True,
             )

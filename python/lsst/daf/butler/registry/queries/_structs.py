@@ -25,10 +25,10 @@ __all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local t
 from dataclasses import dataclass
 from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, Union
 
+from lsst.sphgeom import Region
+from lsst.utils.classes import cached_getter, immutable
 from sqlalchemy.sql import ColumnElement
 
-from lsst.utils.classes import cached_getter, immutable
-from lsst.sphgeom import Region
 from ...core import (
     DataCoordinate,
     DatasetType,
@@ -44,12 +44,9 @@ from ...core import (
     SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
-from ..interfaces import (
-    CollectionManager,
-    DatasetRecordStorageManager,
-    DimensionRecordStorageManager,
-)
+from ..interfaces import CollectionManager, DatasetRecordStorageManager, DimensionRecordStorageManager
 from ..summaries import GovernorDimensionRestriction
+
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
 from .expressions import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
@@ -69,6 +66,7 @@ class QueryWhereExpression:
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.
     """
+
     def __init__(self, expression: Optional[str] = None, bind: Optional[Mapping[str, Any]] = None):
         if expression:
             try:
@@ -128,11 +126,9 @@ class QueryWhereExpression:
                     raise RuntimeError(
                         f"Bind parameter key {identifier!r} conflicts with a dimension element."
                     )
-                table, sep, column = identifier.partition('.')
+                table, sep, column = identifier.partition(".")
                 if column and table in graph.universe.getStaticElements().names:
-                    raise RuntimeError(
-                        f"Bind parameter key {identifier!r} looks like a dimension column."
-                    )
+                    raise RuntimeError(f"Bind parameter key {identifier!r} looks like a dimension column.")
         restriction = GovernorDimensionRestriction(NamedKeyDict())
         summary: InspectionSummary
         if self._tree is not None:
@@ -147,6 +143,7 @@ class QueryWhereExpression:
                 # to disjunctive normal form.
                 expr = NormalFormExpression.fromTree(self._tree, NormalForm.DISJUNCTIVE)
                 from .expressions import CheckVisitor
+
                 # Check the expression for consistency and completeness.
                 visitor = CheckVisitor(dataId, graph, self._bind.keys(), defaults)
                 try:
@@ -166,9 +163,11 @@ class QueryWhereExpression:
                 dataId = visitor.dataId
             else:
                 from .expressions import InspectionVisitor
+
                 summary = self._tree.visit(InspectionVisitor(graph.universe, self._bind.keys()))
         else:
             from .expressions import InspectionSummary
+
             summary = InspectionSummary()
         return QueryWhereClause(
             self._tree,
@@ -242,8 +241,8 @@ class QueryWhereClause:
 
 @dataclass(frozen=True)
 class OrderByClauseColumn:
-    """Information about single column in ORDER BY clause.
-    """
+    """Information about single column in ORDER BY clause."""
+
     element: DimensionElement
     """Dimension element for data in this column (`DimensionElement`)."""
 
@@ -265,6 +264,7 @@ class OrderByClause:
     graph : `DimensionGraph`
         Dimensions used by a query.
     """
+
     def __init__(self, order_by: Iterable[str], graph: DimensionGraph):
 
         self.order_by_columns = []
@@ -280,8 +280,9 @@ class OrderByClause:
                 OrderByClauseColumn(element=element, column=column, ordering=ascending)
             )
 
-        self.elements = NamedValueSet(column.element for column in self.order_by_columns
-                                      if column.column is not None)
+        self.elements = NamedValueSet(
+            column.element for column in self.order_by_columns if column.column is not None
+        )
 
     order_by_columns: Iterable[OrderByClauseColumn]
     """Columns that appear in the ORDER BY
@@ -336,16 +337,21 @@ class QuerySummary:
         some valid queries that resemble common mistakes (e.g. queries for
         visits without specifying an instrument).
     """
-    def __init__(self, requested: DimensionGraph, *,
-                 dataId: Optional[DataCoordinate] = None,
-                 expression: Optional[Union[str, QueryWhereExpression]] = None,
-                 whereRegion: Optional[Region] = None,
-                 bind: Optional[Mapping[str, Any]] = None,
-                 defaults: Optional[DataCoordinate] = None,
-                 datasets: Iterable[DatasetType] = (),
-                 order_by: Optional[Iterable[str]] = None,
-                 limit: Optional[Tuple[int, Optional[int]]] = None,
-                 check: bool = True):
+
+    def __init__(
+        self,
+        requested: DimensionGraph,
+        *,
+        dataId: Optional[DataCoordinate] = None,
+        expression: Optional[Union[str, QueryWhereExpression]] = None,
+        whereRegion: Optional[Region] = None,
+        bind: Optional[Mapping[str, Any]] = None,
+        defaults: Optional[DataCoordinate] = None,
+        datasets: Iterable[DatasetType] = (),
+        order_by: Optional[Iterable[str]] = None,
+        limit: Optional[Tuple[int, Optional[int]]] = None,
+        check: bool = True,
+    ):
         self.requested = requested
         if expression is None:
             expression = QueryWhereExpression(None, bind)
@@ -353,8 +359,9 @@ class QuerySummary:
             expression = QueryWhereExpression(expression, bind)
         elif bind is not None:
             raise TypeError("New bind parameters passed, but expression is already a QueryWhereExpression.")
-        self.where = expression.attach(self.requested, dataId=dataId, region=whereRegion, defaults=defaults,
-                                       check=check)
+        self.where = expression.attach(
+            self.requested, dataId=dataId, region=whereRegion, defaults=defaults, check=check
+        )
         self.datasets = NamedValueSet(datasets).freeze()
         self.order_by = None if order_by is None else OrderByClause(order_by, requested)
         self.limit = limit
@@ -376,8 +383,7 @@ class QuerySummary:
 
     @property
     def universe(self) -> DimensionUniverse:
-        """All known dimensions (`DimensionUniverse`).
-        """
+        """All known dimensions (`DimensionUniverse`)."""
         return self.requested.universe
 
     @property  # type: ignore
@@ -403,7 +409,7 @@ class QuerySummary:
                 # We can only perform those filters against SkyPix dimensions,
                 # so if what we have isn't one, add the common SkyPix dimension
                 # to the query; the element we have will be joined to that.
-                element, = result
+                (element,) = result
                 if not isinstance(element, SkyPixDimension):
                     result.add(self.universe.commonSkyPix)
             else:
@@ -499,6 +505,7 @@ class QueryColumns:
     Takes no parameters at construction, as expected usage is to add elements
     to its container attributes incrementally.
     """
+
     def __init__(self) -> None:
         self.keys = NamedKeyDict()
         self.timespans = NamedKeyDict()
@@ -542,12 +549,11 @@ class QueryColumns:
     """
 
     def isEmpty(self) -> bool:
-        """Return `True` if this query has no columns at all.
-        """
+        """Return `True` if this query has no columns at all."""
         return not (self.keys or self.timespans or self.regions or self.datasets is not None)
 
     def getKeyColumn(self, dimension: Union[Dimension, str]) -> ColumnElement:
-        """ Return one of the columns in self.keys for the given dimension.
+        """Return one of the columns in self.keys for the given dimension.
 
         The column selected is an implentation detail but is guaranteed to
         be deterministic and consistent across multiple calls.

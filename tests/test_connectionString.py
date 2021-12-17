@@ -22,13 +22,13 @@
 """Tests for ConnectionStringBuilder.
 """
 
-import unittest
+import glob
 import os
 import os.path
-import glob
+import unittest
 
-from lsst.daf.butler.registry import RegistryConfig, DbAuthError
 import lsst.daf.butler.registry.connectionString as ConnectionStringModule
+from lsst.daf.butler.registry import DbAuthError, RegistryConfig
 from lsst.daf.butler.registry.connectionString import ConnectionStringFactory
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -36,6 +36,7 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 class ConnectionStringBuilderTestCase(unittest.TestCase):
     """Tests for ConnectionStringBuilder."""
+
     configDir = os.path.join(TESTDIR, "config", "dbAuth")
     configFiles = glob.glob(os.path.join(configDir, "registryConf*"))
     credentialsFile = os.path.join(configDir, "db-auth.yaml")
@@ -49,29 +50,27 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
         ConnectionStringModule.DB_AUTH_PATH = self.resetDbAuthPathValue
 
     def testBuilder(self):
-        """Tests ConnectionStringFactory returns correct connection strings.
-        """
+        """Tests ConnectionStringFactory returns correct connection strings."""
         regConfigs = [RegistryConfig(os.path.join(self.configDir, name)) for name in self.configFiles]
 
         conStrFactory = ConnectionStringFactory()
         for regConf, fileName in zip(regConfigs, self.configFiles):
             conStr = conStrFactory.fromConfig(regConf)
             with self.subTest(confFile=fileName):
-                self.assertEqual(str(conStr), regConf['expected'],
-                                 "test connection string built from config")
+                self.assertEqual(str(conStr), regConf["expected"], "test connection string built from config")
 
     def testRelVsAbsPath(self):
         """Tests that relative and absolute paths are preserved."""
-        regConf = RegistryConfig(os.path.join(self.configDir, 'registryConf1.yaml'))
-        regConf['db'] = 'sqlite:///relative/path/conf1.sqlite3'
+        regConf = RegistryConfig(os.path.join(self.configDir, "registryConf1.yaml"))
+        regConf["db"] = "sqlite:///relative/path/conf1.sqlite3"
         conStrFactory = ConnectionStringFactory()
         conStr = conStrFactory.fromConfig(regConf)
-        self.assertEqual(str(conStr), 'sqlite:///relative/path/conf1.sqlite3')
+        self.assertEqual(str(conStr), "sqlite:///relative/path/conf1.sqlite3")
 
     def testRaises(self):
         """Test that DbAuthError propagates through the class."""
         ConnectionStringModule.DB_AUTH_PATH = os.path.join(self.configDir, "badDbAuth2.yaml")
-        regConf = RegistryConfig(os.path.join(self.configDir, 'registryConf2.yaml'))
+        regConf = RegistryConfig(os.path.join(self.configDir, "registryConf2.yaml"))
         conStrFactory = ConnectionStringFactory()
         with self.assertRaises(DbAuthError):
             conStrFactory.fromConfig(regConf)

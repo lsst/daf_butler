@@ -23,8 +23,9 @@ import astropy.time
 from .. import Butler, CollectionType, Timespan
 
 
-def certifyCalibrations(repo, input_collection, output_collection, dataset_type_name,
-                        begin_date, end_date, search_all_inputs):
+def certifyCalibrations(
+    repo, input_collection, output_collection, dataset_type_name, begin_date, end_date, search_all_inputs
+):
     """Certify a set of calibrations with a validity range.
 
     Parameters
@@ -55,8 +56,8 @@ def certifyCalibrations(repo, input_collection, output_collection, dataset_type_
     butler = Butler(repo, writeable=True)
     registry = butler.registry
     timespan = Timespan(
-        begin=astropy.time.Time(begin_date, scale='tai') if begin_date is not None else None,
-        end=astropy.time.Time(end_date, scale='tai') if end_date is not None else None,
+        begin=astropy.time.Time(begin_date, scale="tai") if begin_date is not None else None,
+        end=astropy.time.Time(end_date, scale="tai") if end_date is not None else None,
     )
     if not search_all_inputs:
         try:

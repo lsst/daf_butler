@@ -22,23 +22,19 @@
 """Unit tests for daf_butler CLI query-collections command.
 """
 
-from astropy.table import Table
-from numpy import array
 import os
 import unittest
 from typing import List
 
-from lsst.daf.butler import (
-    Butler,
-    CollectionType,
-)
+from astropy.table import Table
+from lsst.daf.butler import Butler, CollectionType
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_collections
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.script import queryCollections
 from lsst.daf.butler.tests import CliCmdTestBase, DatastoreMock
 from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
-
+from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -49,34 +45,32 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
 
     @staticmethod
     def defaultExpected():
-        return dict(repo=None,
-                    collection_type=tuple(CollectionType.__members__.values()),
-                    chains="TABLE",
-                    glob=())
+        return dict(
+            repo=None, collection_type=tuple(CollectionType.__members__.values()), chains="TABLE", glob=()
+        )
 
     @staticmethod
     def command():
         return query_collections
 
     def test_minimal(self):
-        """Test only the required parameters, and omit the optional parameters.
-        """
-        self.run_test(["query-collections", "here"],
-                      self.makeExpected(repo="here"))
+        """Test only the required parameters, and omit the optional parameters."""
+        self.run_test(["query-collections", "here"], self.makeExpected(repo="here"))
 
     def test_all(self):
         """Test all parameters"""
-        self.run_test(["query-collections", "here", "foo*",
-                       "--collection-type", "TAGGED",
-                       "--collection-type", "RUN"],
-                      self.makeExpected(repo="here",
-                                        glob=("foo*",),
-                                        collection_type=(CollectionType.TAGGED, CollectionType.RUN),
-                                        chains="TABLE"))
+        self.run_test(
+            ["query-collections", "here", "foo*", "--collection-type", "TAGGED", "--collection-type", "RUN"],
+            self.makeExpected(
+                repo="here",
+                glob=("foo*",),
+                collection_type=(CollectionType.TAGGED, CollectionType.RUN),
+                chains="TABLE",
+            ),
+        )
 
 
 class QueryCollectionsScriptTest(ButlerTestHelper, unittest.TestCase):
-
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -93,29 +87,25 @@ class QueryCollectionsScriptTest(ButlerTestHelper, unittest.TestCase):
             # query-collections.
             result = self.runner.invoke(cli, ["query-collections", "here"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            expected = Table((("ingest/run", "tag"), ("RUN", "TAGGED")),
-                             names=("Name", "Type"))
+            expected = Table((("ingest/run", "tag"), ("RUN", "TAGGED")), names=("Name", "Type"))
             self.assertAstropyTablesEqual(readTable(result.output), expected)
 
             # Verify that with a glob argument, that only collections whose
             # name matches with the specified pattern are returned.
             result = self.runner.invoke(cli, ["query-collections", "here", "t*"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            expected = Table((("tag",), ("TAGGED",)),
-                             names=("Name", "Type"))
+            expected = Table((("tag",), ("TAGGED",)), names=("Name", "Type"))
             self.assertAstropyTablesEqual(readTable(result.output), expected)
 
             # Verify that with a collection type argument, only collections of
             # that type are returned.
             result = self.runner.invoke(cli, ["query-collections", "here", "--collection-type", "RUN"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            expected = Table((("ingest/run",), ("RUN",)),
-                             names=("Name", "Type"))
+            expected = Table((("ingest/run",), ("RUN",)), names=("Name", "Type"))
             self.assertAstropyTablesEqual(readTable(result.output), expected)
 
 
 class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
-
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -144,10 +134,10 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             registry1.registerCollection("calibration1", CollectionType.CALIBRATION)
 
             # Create the collection chain
-            self.assertChain(["chain2", "calibration1", "run1"],
-                             "[calibration1, run1]")
-            self.assertChain(["--mode", "redefine", "chain1", "tag1", "run1", "chain2"],
-                             "[tag1, run1, chain2]")
+            self.assertChain(["chain2", "calibration1", "run1"], "[calibration1, run1]")
+            self.assertChain(
+                ["--mode", "redefine", "chain1", "tag1", "run1", "chain2"], "[tag1, run1, chain2]"
+            )
 
             # Use the script function to test the query-collections TREE
             # option, because the astropy.table.Table.read method, which we are
@@ -158,51 +148,67 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             table = queryCollections("here", glob=(), collection_type=CollectionType.all(), chains="TREE")
 
             # self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            expected = Table(array((("imported_g", "RUN"),
-                                    ("imported_r", "RUN"),
-                                    ("run1", "RUN"),
-                                    ("tag1", "TAGGED"),
-                                    ("calibration1", "CALIBRATION"),
-                                    ("chain2", "CHAINED"),
-                                    ("  calibration1", "CALIBRATION"),
-                                    ("  run1", "RUN"),
-                                    ("chain1", "CHAINED"),
-                                    ("  tag1", "TAGGED"),
-                                    ("  run1", "RUN"),
-                                    ("  chain2", "CHAINED"),
-                                    ("    calibration1", "CALIBRATION"),
-                                    ("    run1", "RUN"))),
-                             names=("Name", "Type"))
+            expected = Table(
+                array(
+                    (
+                        ("imported_g", "RUN"),
+                        ("imported_r", "RUN"),
+                        ("run1", "RUN"),
+                        ("tag1", "TAGGED"),
+                        ("calibration1", "CALIBRATION"),
+                        ("chain2", "CHAINED"),
+                        ("  calibration1", "CALIBRATION"),
+                        ("  run1", "RUN"),
+                        ("chain1", "CHAINED"),
+                        ("  tag1", "TAGGED"),
+                        ("  run1", "RUN"),
+                        ("  chain2", "CHAINED"),
+                        ("    calibration1", "CALIBRATION"),
+                        ("    run1", "RUN"),
+                    )
+                ),
+                names=("Name", "Type"),
+            )
             self.assertAstropyTablesEqual(table, expected)
 
             result = self.runner.invoke(cli, ["query-collections", "here"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            expected = Table(array((
-                ("imported_g", "RUN", ""),
-                ("imported_r", "RUN", ""),
-                ("run1", "RUN", ""),
-                ("tag1", "TAGGED", ""),
-                ("calibration1", "CALIBRATION", ""),
-                ("chain2", "CHAINED", "[calibration1, run1]"),
-                ("chain1", "CHAINED", "[tag1, run1, chain2]"))),
-                names=("Name", "Type", "Definition"))
+            expected = Table(
+                array(
+                    (
+                        ("imported_g", "RUN", ""),
+                        ("imported_r", "RUN", ""),
+                        ("run1", "RUN", ""),
+                        ("tag1", "TAGGED", ""),
+                        ("calibration1", "CALIBRATION", ""),
+                        ("chain2", "CHAINED", "[calibration1, run1]"),
+                        ("chain1", "CHAINED", "[tag1, run1, chain2]"),
+                    )
+                ),
+                names=("Name", "Type", "Definition"),
+            )
             table = readTable(result.output)
             self.assertAstropyTablesEqual(readTable(result.output), expected)
 
             result = self.runner.invoke(cli, ["query-collections", "here", "--chains", "FLATTEN"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            expected = Table(array((
-                ("imported_g", "RUN"),
-                ("imported_r", "RUN"),
-                ("run1", "RUN"),
-                ("tag1", "TAGGED"),
-                ("calibration1", "CALIBRATION"),
-                ("calibration1", "CALIBRATION"),
-                ("run1", "RUN"),
-                ("tag1", "TAGGED"),
-                ("run1", "RUN"),
-                ("calibration1", "CALIBRATION"))),
-                names=("Name", "Type"))
+            expected = Table(
+                array(
+                    (
+                        ("imported_g", "RUN"),
+                        ("imported_r", "RUN"),
+                        ("run1", "RUN"),
+                        ("tag1", "TAGGED"),
+                        ("calibration1", "CALIBRATION"),
+                        ("calibration1", "CALIBRATION"),
+                        ("run1", "RUN"),
+                        ("tag1", "TAGGED"),
+                        ("run1", "RUN"),
+                        ("calibration1", "CALIBRATION"),
+                    )
+                ),
+                names=("Name", "Type"),
+            )
             self.assertAstropyTablesEqual(readTable(result.output), expected)
 
             # Add a couple more run collections for chain testing
@@ -210,26 +216,22 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             registry1.registerRun("run3")
             registry1.registerRun("run4")
 
-            self.assertChain(["--mode", "pop", "chain1"],
-                             "[run1, chain2]")
+            self.assertChain(["--mode", "pop", "chain1"], "[run1, chain2]")
 
-            self.assertChain(["--mode", "extend", "chain1", "run2", "run3"],
-                             "[run1, chain2, run2, run3]")
+            self.assertChain(["--mode", "extend", "chain1", "run2", "run3"], "[run1, chain2, run2, run3]")
 
-            self.assertChain(["--mode", "remove", "chain1", "chain2", "run2"],
-                             "[run1, run3]")
+            self.assertChain(["--mode", "remove", "chain1", "chain2", "run2"], "[run1, run3]")
 
-            self.assertChain(["--mode", "prepend", "chain1", "chain2", "run2"],
-                             "[chain2, run2, run1, run3]")
+            self.assertChain(["--mode", "prepend", "chain1", "chain2", "run2"], "[chain2, run2, run1, run3]")
 
-            self.assertChain(["--mode", "pop", "chain1", "1", "3"],
-                             "[chain2, run1]")
+            self.assertChain(["--mode", "pop", "chain1", "1", "3"], "[chain2, run1]")
 
-            self.assertChain(["--mode", "redefine", "chain1", "chain2", "run2", "run3,run4", "--flatten"],
-                             "[calibration1, run1, run2, run3, run4]")
+            self.assertChain(
+                ["--mode", "redefine", "chain1", "chain2", "run2", "run3,run4", "--flatten"],
+                "[calibration1, run1, run2, run3, run4]",
+            )
 
-            self.assertChain(["--mode", "pop", "chain1", "--", "-1", "-3"],
-                             "[calibration1, run1, run3]")
+            self.assertChain(["--mode", "pop", "chain1", "--", "-1", "-3"], "[calibration1, run1, run3]")
 
 
 if __name__ == "__main__":

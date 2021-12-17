@@ -25,23 +25,20 @@ from __future__ import annotations
 
 __all__ = ("CompositesConfig", "CompositesMap")
 
-import yaml
 import logging
+from typing import TYPE_CHECKING, Union
 
-from typing import (
-    TYPE_CHECKING,
-    Union,
-)
+import yaml
 
-from .configSupport import processLookupConfigs
 from .config import ConfigSubset
+from .configSupport import processLookupConfigs
 
 if TYPE_CHECKING:
-    from .dimensions import DimensionUniverse
     from .._butlerConfig import ButlerConfig
-    from .datasets import DatasetRef, DatasetType
-    from .storageClass import StorageClass
     from .configSupport import LookupKey
+    from .datasets import DatasetRef, DatasetType
+    from .dimensions import DimensionUniverse
+    from .storageClass import StorageClass
 
 log = logging.getLogger(__name__)
 
@@ -80,8 +77,7 @@ class CompositesMap:
         in lookup keys.
     """
 
-    def __init__(self, config: Union[str, ButlerConfig, CompositesConfig], *,
-                 universe: DimensionUniverse):
+    def __init__(self, config: Union[str, ButlerConfig, CompositesConfig], *, universe: DimensionUniverse):
         if not isinstance(config, CompositesConfig):
             config = CompositesConfig(config)
         assert isinstance(config, CompositesConfig)

@@ -38,6 +38,7 @@ class RemoveRunsResult:
     to how many of that dataset will be deleted. Also contains the callback
     function to execute the remove upon user confirmation.
     """
+
     # the callback function to do the removal
     onConfirmation: Callable[[], None]
     # list of the run collections that will be removed

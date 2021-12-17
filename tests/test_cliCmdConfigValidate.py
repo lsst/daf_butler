@@ -1,4 +1,3 @@
-
 # This file is part of daf_butler.
 #
 # Developed for the LSST Data Management System.
@@ -66,9 +65,17 @@ class ConfigValidateUseTest(unittest.TestCase):
             result = self.runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             # verify the just-created repo validates without error
-            result = self.runner.invoke(butler.cli, ["config-validate", "here",
-                                                     "--ignore", "storageClasses,repoTransferFormats",
-                                                     "-i", "dimensions"])
+            result = self.runner.invoke(
+                butler.cli,
+                [
+                    "config-validate",
+                    "here",
+                    "--ignore",
+                    "storageClasses,repoTransferFormats",
+                    "-i",
+                    "dimensions",
+                ],
+            )
             self.assertEqual(result.exit_code, 0, result.stdout)
             self.assertEqual(result.stdout, "No problems encountered with configuration.\n")
 

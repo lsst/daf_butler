@@ -25,7 +25,6 @@ __all__ = ["CachingDimensionRecordStorage"]
 from typing import Any, Dict, Iterable, Mapping, Optional, Set, Union
 
 import sqlalchemy
-
 from lsst.utils import doImportType
 
 from ...core import (
@@ -60,6 +59,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         The other storage to cache fetches from and to delegate all other
         operations to.
     """
+
     def __init__(self, nested: DatabaseDimensionRecordStorage):
         self._nested = nested
         self._cache: Dict[DataCoordinate, Optional[DimensionRecord]] = {}
@@ -68,7 +68,8 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def initialize(
         cls,
         db: Database,
-        element: DatabaseDimensionElement, *,
+        element: DatabaseDimensionElement,
+        *,
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
@@ -93,7 +94,8 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def join(
         self,
-        builder: QueryBuilder, *,
+        builder: QueryBuilder,
+        *,
         regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:

@@ -21,8 +21,8 @@
 
 import unittest
 
-from lsst.daf.butler.tests import CliCmdTestBase
 from lsst.daf.butler.cli.cmd import create
+from lsst.daf.butler.tests import CliCmdTestBase
 
 
 class CreateTest(CliCmdTestBase, unittest.TestCase):
@@ -31,22 +31,17 @@ class CreateTest(CliCmdTestBase, unittest.TestCase):
 
     @staticmethod
     def defaultExpected():
-        return dict(repo=None,
-                    seed_config=None,
-                    dimension_config=None,
-                    standalone=False,
-                    override=False,
-                    outfile=None)
+        return dict(
+            repo=None, seed_config=None, dimension_config=None, standalone=False, override=False, outfile=None
+        )
 
     @staticmethod
     def command():
         return create
 
     def test_minimal(self):
-        """Test only required parameters.
-        """
-        self.run_test(["create", "here"],
-                      self.makeExpected(repo="here"))
+        """Test only required parameters."""
+        self.run_test(["create", "here"], self.makeExpected(repo="here"))
 
     def test_requiredMissing(self):
         """Test that if the required parameter is missing it fails"""
@@ -55,18 +50,28 @@ class CreateTest(CliCmdTestBase, unittest.TestCase):
     def test_all(self):
         """Test all parameters."""
 
-        self.run_test(["create", "here",
-                       "--seed-config", "foo",
-                       "--dimension-config", "/bar/dim.yaml",
-                       "--standalone",
-                       "--override",
-                       "--outfile", "bar"],
-                      self.makeExpected(repo="here",
-                                        seed_config="foo",
-                                        dimension_config="/bar/dim.yaml",
-                                        standalone=True,
-                                        override=True,
-                                        outfile="bar"))
+        self.run_test(
+            [
+                "create",
+                "here",
+                "--seed-config",
+                "foo",
+                "--dimension-config",
+                "/bar/dim.yaml",
+                "--standalone",
+                "--override",
+                "--outfile",
+                "bar",
+            ],
+            self.makeExpected(
+                repo="here",
+                seed_config="foo",
+                dimension_config="/bar/dim.yaml",
+                standalone=True,
+                override=True,
+                outfile="bar",
+            ),
+        )
 
 
 if __name__ == "__main__":

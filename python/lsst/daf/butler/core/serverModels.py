@@ -29,22 +29,13 @@ __all__ = (
 
 """Models used for client/server communication."""
 
-from typing import (
-    Any,
-    ClassVar,
-    Dict,
-    List,
-    Mapping,
-    Optional,
-    Union,
-)
-
 import re
-
-from pydantic import BaseModel, Field, validator
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Union
 
 from lsst.utils.iteration import ensure_iterable
-from .dimensions import SerializedDataCoordinate, DataIdValue
+from pydantic import BaseModel, Field, validator
+
+from .dimensions import DataIdValue, SerializedDataCoordinate
 from .utils import globToRegex
 
 # Simple scalar python types.
@@ -243,10 +234,7 @@ class QueryBaseModel(BaseModel):
 class QueryDatasetsModel(QueryBaseModel):
     """Information needed for a registry dataset query."""
 
-    datasetType: ExpressionQueryParameter = Field(
-        ...,
-        title="Dataset types to query. Can match all."
-    )
+    datasetType: ExpressionQueryParameter = Field(..., title="Dataset types to query. Can match all.")
     collections: Optional[ExpressionQueryParameter] = Collections
     dimensions: Optional[List[str]] = OptionalDimensions
     dataId: Optional[SerializedDataCoordinate] = DataId

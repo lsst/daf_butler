@@ -21,7 +21,7 @@
 
 import datetime
 import logging
-from typing import Tuple, Optional, Dict
+from typing import Dict, Optional, Tuple
 
 try:
     import lsst.log as lsstLog
@@ -29,7 +29,8 @@ except ModuleNotFoundError:
     lsstLog = None
 
 from lsst.utils.logging import VERBOSE
-from ..core.logging import JsonLogFormatter, ButlerMDC
+
+from ..core.logging import ButlerMDC, JsonLogFormatter
 
 
 class PrecisionLogFormatter(logging.Formatter):
@@ -48,7 +49,7 @@ class PrecisionLogFormatter(logging.Formatter):
         if datefmt:
             s = ct.strftime(datefmt)
         else:
-            s = ct.isoformat(sep='T', timespec='milliseconds')
+            s = ct.isoformat(sep="T", timespec="milliseconds")
         return s
 
 
@@ -86,8 +87,13 @@ class CliLog:
     that need to be closed on reset."""
 
     @classmethod
-    def initLog(cls, longlog: bool, log_tty: bool = True, log_file: Tuple[str, ...] = (),
-                log_label: Optional[Dict[str, str]] = None):
+    def initLog(
+        cls,
+        longlog: bool,
+        log_tty: bool = True,
+        log_file: Tuple[str, ...] = (),
+        log_label: Optional[Dict[str, str]] = None,
+    ):
         """Initialize logging. This should only be called once per program
         execution. After the first call this will log a warning and return.
 
@@ -143,10 +149,11 @@ class CliLog:
             formatter = PrecisionLogFormatter(fmt=cls.pylog_longLogFmt, style="{")
             defaultHandler.setFormatter(formatter)
 
-            logging.basicConfig(level=logging.INFO,
-                                force=True,
-                                handlers=[defaultHandler],
-                                )
+            logging.basicConfig(
+                level=logging.INFO,
+                force=True,
+                handlers=[defaultHandler],
+            )
 
         else:
             logging.basicConfig(level=logging.INFO, format=cls.pylog_normalFmt, style="{")
@@ -311,17 +318,21 @@ class CliLog:
 
     class ComponentSettings:
         """Container for log level values for a logging component."""
+
         def __init__(self, component):
             self.component = component
             self.pythonLogLevel = logging.getLogger(component).level
-            self.lsstLogLevel = (lsstLog.Log.getLogger(component or "").getLevel()
-                                 if lsstLog is not None else None)
+            self.lsstLogLevel = (
+                lsstLog.Log.getLogger(component or "").getLevel() if lsstLog is not None else None
+            )
             if self.lsstLogLevel == -1:
                 self.lsstLogLevel = CliLog.defaultLsstLogLevel
 
         def __repr__(self):
-            return (f"ComponentSettings(component={self.component}, pythonLogLevel={self.pythonLogLevel}, "
-                    f"lsstLogLevel={self.lsstLogLevel})")
+            return (
+                f"ComponentSettings(component={self.component}, pythonLogLevel={self.pythonLogLevel}, "
+                f"lsstLogLevel={self.lsstLogLevel})"
+            )
 
     @classmethod
     def _recordComponentSetting(cls, component):

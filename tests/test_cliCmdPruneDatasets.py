@@ -22,34 +22,33 @@
 """Unit tests for daf_butler CLI prune-datasets subcommand.
 """
 
-from astropy.table import Table
 import unittest
 from unittest.mock import patch
 
+# Tests require the SqlRegistry
+import lsst.daf.butler.registries.sql
+import lsst.daf.butler.script
+from astropy.table import Table
 from lsst.daf.butler import Butler
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cmd.commands import (
-    pruneDatasets_wouldRemoveMsg,
-    pruneDatasets_wouldDisassociateMsg,
-    pruneDatasets_wouldDisassociateAndRemoveMsg,
-    pruneDatasets_willRemoveMsg,
     pruneDatasets_askContinueMsg,
-    pruneDatasets_didRemoveAforementioned,
     pruneDatasets_didNotRemoveAforementioned,
+    pruneDatasets_didRemoveAforementioned,
     pruneDatasets_didRemoveMsg,
-    pruneDatasets_noDatasetsFound,
-    pruneDatasets_errPurgeAndDisassociate,
-    pruneDatasets_errQuietWithDryRun,
     pruneDatasets_errNoCollectionRestriction,
     pruneDatasets_errPruneOnNotRun,
+    pruneDatasets_errPurgeAndDisassociate,
+    pruneDatasets_errQuietWithDryRun,
+    pruneDatasets_noDatasetsFound,
+    pruneDatasets_willRemoveMsg,
+    pruneDatasets_wouldDisassociateAndRemoveMsg,
+    pruneDatasets_wouldDisassociateMsg,
+    pruneDatasets_wouldRemoveMsg,
 )
-from lsst.daf.butler.cli.utils import astropyTablesToStr, clickResultMsg, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, astropyTablesToStr, clickResultMsg
 from lsst.daf.butler.registry import CollectionType
-import lsst.daf.butler.script
 from lsst.daf.butler.script import QueryDatasets
-
-# Tests require the SqlRegistry
-import lsst.daf.butler.registries.sql
 
 doFindTables = True
 
@@ -82,15 +81,15 @@ class PruneDatasetsTestCase(unittest.TestCase):
 
     @staticmethod
     def makeQueryDatasetsArgs(*, repo, **kwargs):
-        expectedArgs = dict(repo=repo, collections=(), where=None, find_first=True, show_uri=False,
-                            glob=tuple())
+        expectedArgs = dict(
+            repo=repo, collections=(), where=None, find_first=True, show_uri=False, glob=tuple()
+        )
         expectedArgs.update(kwargs)
         return expectedArgs
 
     @staticmethod
     def makePruneDatasetsArgs(**kwargs):
-        expectedArgs = dict(refs=tuple(), disassociate=False, tags=(), purge=False, run=None,
-                            unstore=False)
+        expectedArgs = dict(refs=tuple(), disassociate=False, tags=(), purge=False, run=None, unstore=False)
         expectedArgs.update(kwargs)
         return expectedArgs
 
@@ -110,18 +109,20 @@ class PruneDatasetsTestCase(unittest.TestCase):
     # Mock the pruneDatasets butler command so we can test for expected calls
     # to it, without dealing with setting up a full repo with data for it.
     @patch.object(Butler, "pruneDatasets")
-    def run_test(self,
-                 mockPruneDatasets,
-                 mockQueryDatasets_init,
-                 mockQueryDatasets_getDatasets,
-                 mockQueryDatasets_getTables,
-                 cliArgs,
-                 exMsgs,
-                 exPruneDatasetsCallArgs,
-                 exGetTablesCalled,
-                 exQueryDatasetsCallArgs,
-                 invokeInput=None,
-                 exPruneDatasetsExitCode=0):
+    def run_test(
+        self,
+        mockPruneDatasets,
+        mockQueryDatasets_init,
+        mockQueryDatasets_getDatasets,
+        mockQueryDatasets_getTables,
+        cliArgs,
+        exMsgs,
+        exPruneDatasetsCallArgs,
+        exGetTablesCalled,
+        exQueryDatasetsCallArgs,
+        invokeInput=None,
+        exPruneDatasetsExitCode=0,
+    ):
         """Execute the test.
 
         Makes a temporary repo, invokes ``prune-datasets``. Verifies expected
@@ -209,73 +210,84 @@ class PruneDatasetsTestCase(unittest.TestCase):
 
         Verify that with the default flags that the subcommand says what it
         will do, prompts for input, and says that it's done."""
-        self.run_test(cliArgs=["myCollection", "--unstore"],
-                      exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(),
-                                                                         unstore=True),
-                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                                         collections=("myCollection",)),
-                      exGetTablesCalled=True,
-                      exMsgs=(pruneDatasets_willRemoveMsg,
-                              pruneDatasets_askContinueMsg,
-                              astropyTablesToStr(getTables()),
-                              pruneDatasets_didRemoveAforementioned),
-                      invokeInput="yes")
+        self.run_test(
+            cliArgs=["myCollection", "--unstore"],
+            exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(), unstore=True),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
+            exGetTablesCalled=True,
+            exMsgs=(
+                pruneDatasets_willRemoveMsg,
+                pruneDatasets_askContinueMsg,
+                astropyTablesToStr(getTables()),
+                pruneDatasets_didRemoveAforementioned,
+            ),
+            invokeInput="yes",
+        )
 
     def test_defaults_doNotContinue(self):
         """Test running with the default values but not continuing.
 
         Verify that with the default flags that the subcommand says what it
         will do, prompts for input, and aborts when told not to continue."""
-        self.run_test(cliArgs=["myCollection", "--unstore"],
-                      exPruneDatasetsCallArgs=None,
-                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                                         collections=("myCollection",)),
-                      exGetTablesCalled=True,
-                      exMsgs=(pruneDatasets_willRemoveMsg,
-                              pruneDatasets_askContinueMsg,
-                              pruneDatasets_didNotRemoveAforementioned),
-                      invokeInput="no")
+        self.run_test(
+            cliArgs=["myCollection", "--unstore"],
+            exPruneDatasetsCallArgs=None,
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
+            exGetTablesCalled=True,
+            exMsgs=(
+                pruneDatasets_willRemoveMsg,
+                pruneDatasets_askContinueMsg,
+                pruneDatasets_didNotRemoveAforementioned,
+            ),
+            invokeInput="no",
+        )
 
     def test_dryRun_unstore(self):
         """Test the --dry-run flag with --unstore.
 
         Verify that with the dry-run flag the subcommand says what it would
         remove, but does not remove the datasets."""
-        self.run_test(cliArgs=["myCollection", "--dry-run", "--unstore"],
-                      exPruneDatasetsCallArgs=None,
-                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                                         collections=("myCollection",)),
-                      exGetTablesCalled=True,
-                      exMsgs=(pruneDatasets_wouldRemoveMsg,
-                              astropyTablesToStr(getTables())))
+        self.run_test(
+            cliArgs=["myCollection", "--dry-run", "--unstore"],
+            exPruneDatasetsCallArgs=None,
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
+            exGetTablesCalled=True,
+            exMsgs=(pruneDatasets_wouldRemoveMsg, astropyTablesToStr(getTables())),
+        )
 
     def test_dryRun_disassociate(self):
         """Test the --dry-run flag with --disassociate.
 
         Verify that with the dry-run flag the subcommand says what it would
-        remove, but does not remove the datasets. """
+        remove, but does not remove the datasets."""
         collection = "myCollection"
-        self.run_test(cliArgs=[collection, "--dry-run", "--disassociate", "tag1"],
-                      exPruneDatasetsCallArgs=None,
-                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                                         collections=(collection,)),
-                      exGetTablesCalled=True,
-                      exMsgs=(pruneDatasets_wouldDisassociateMsg.format(collections=(collection,)),
-                              astropyTablesToStr(getTables())))
+        self.run_test(
+            cliArgs=[collection, "--dry-run", "--disassociate", "tag1"],
+            exPruneDatasetsCallArgs=None,
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=(collection,)),
+            exGetTablesCalled=True,
+            exMsgs=(
+                pruneDatasets_wouldDisassociateMsg.format(collections=(collection,)),
+                astropyTablesToStr(getTables()),
+            ),
+        )
 
     def test_dryRun_unstoreAndDisassociate(self):
         """Test the --dry-run flag with --unstore and --disassociate.
 
         Verify that with the dry-run flag the subcommand says what it would
-        remove, but does not remove the datasets. """
+        remove, but does not remove the datasets."""
         collection = "myCollection"
-        self.run_test(cliArgs=[collection, "--dry-run", "--unstore", "--disassociate", "tag1"],
-                      exPruneDatasetsCallArgs=None,
-                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                                         collections=(collection,)),
-                      exGetTablesCalled=True,
-                      exMsgs=(pruneDatasets_wouldDisassociateAndRemoveMsg.format(collections=(collection,)),
-                              astropyTablesToStr(getTables())))
+        self.run_test(
+            cliArgs=[collection, "--dry-run", "--unstore", "--disassociate", "tag1"],
+            exPruneDatasetsCallArgs=None,
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=(collection,)),
+            exGetTablesCalled=True,
+            exMsgs=(
+                pruneDatasets_wouldDisassociateAndRemoveMsg.format(collections=(collection,)),
+                astropyTablesToStr(getTables()),
+            ),
+        )
 
     def test_noConfirm(self):
         """Test the --no-confirm flag.
@@ -283,46 +295,48 @@ class PruneDatasetsTestCase(unittest.TestCase):
         Verify that with the no-confirm flag the subcommand does not ask for
         a confirmation, prints the did remove message and the tables that were
         passed for removal."""
-        self.run_test(cliArgs=["myCollection", "--no-confirm", "--unstore"],
-                      exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(),
-                                                                         unstore=True),
-                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                                         collections=("myCollection",)),
-                      exGetTablesCalled=True,
-                      exMsgs=(pruneDatasets_didRemoveMsg,
-                              astropyTablesToStr(getTables())))
+        self.run_test(
+            cliArgs=["myCollection", "--no-confirm", "--unstore"],
+            exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(), unstore=True),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
+            exGetTablesCalled=True,
+            exMsgs=(pruneDatasets_didRemoveMsg, astropyTablesToStr(getTables())),
+        )
 
     def test_quiet(self):
         """Test the --quiet flag.
 
         Verify that with the quiet flag and the no-confirm flags set that no
         output is produced by the subcommand."""
-        self.run_test(cliArgs=["myCollection", "--quiet", "--unstore"],
-                      exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(), unstore=True),
-                      exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                                         collections=("myCollection",)),
-                      exGetTablesCalled=True,
-                      exMsgs=None)
+        self.run_test(
+            cliArgs=["myCollection", "--quiet", "--unstore"],
+            exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(refs=getDatasets(), unstore=True),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",)),
+            exGetTablesCalled=True,
+            exMsgs=None,
+        )
 
     def test_quietWithDryRun(self):
-        """Test for an error using the --quiet flag with --dry-run.
-        """
-        self.run_test(cliArgs=["--quiet", "--dry-run", "--unstore"],
-                      exPruneDatasetsCallArgs=None,
-                      exQueryDatasetsCallArgs=None,
-                      exGetTablesCalled=False,
-                      exMsgs=(pruneDatasets_errQuietWithDryRun,),
-                      exPruneDatasetsExitCode=1)
+        """Test for an error using the --quiet flag with --dry-run."""
+        self.run_test(
+            cliArgs=["--quiet", "--dry-run", "--unstore"],
+            exPruneDatasetsCallArgs=None,
+            exQueryDatasetsCallArgs=None,
+            exGetTablesCalled=False,
+            exMsgs=(pruneDatasets_errQuietWithDryRun,),
+            exPruneDatasetsExitCode=1,
+        )
 
     def test_noCollections(self):
-        """Test for an error if no collections are indicated.
-        """
-        self.run_test(cliArgs=["--find-all", "--unstore"],
-                      exPruneDatasetsCallArgs=None,
-                      exQueryDatasetsCallArgs=None,
-                      exGetTablesCalled=False,
-                      exMsgs=(pruneDatasets_errNoCollectionRestriction,),
-                      exPruneDatasetsExitCode=1)
+        """Test for an error if no collections are indicated."""
+        self.run_test(
+            cliArgs=["--find-all", "--unstore"],
+            exPruneDatasetsCallArgs=None,
+            exQueryDatasetsCallArgs=None,
+            exGetTablesCalled=False,
+            exMsgs=(pruneDatasets_errNoCollectionRestriction,),
+            exPruneDatasetsExitCode=1,
+        )
 
     def test_noDatasets(self):
         """Test for expected outputs when no datasets are found."""
@@ -330,29 +344,35 @@ class PruneDatasetsTestCase(unittest.TestCase):
         reset = doFindTables
         try:
             doFindTables = False
-            self.run_test(cliArgs=["myCollection", "--unstore"],
-                          exPruneDatasetsCallArgs=None,
-                          exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                                             collections=("myCollection",)),
-                          exGetTablesCalled=True,
-                          exMsgs=(pruneDatasets_noDatasetsFound,))
+            self.run_test(
+                cliArgs=["myCollection", "--unstore"],
+                exPruneDatasetsCallArgs=None,
+                exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
+                    repo=self.repo, collections=("myCollection",)
+                ),
+                exGetTablesCalled=True,
+                exMsgs=(pruneDatasets_noDatasetsFound,),
+            )
         finally:
             doFindTables = reset
 
     def test_purgeWithDisassociate(self):
         """Verify there is an error when --purge and --disassociate are both
-        passed in. """
+        passed in."""
         self.run_test(
             cliArgs=["--purge", "run", "--disassociate", "tag1", "tag2"],
             exPruneDatasetsCallArgs=None,
             exQueryDatasetsCallArgs=None,  # should not make it far enough to call this.
-            exGetTablesCalled=False,       # ...or this.
+            exGetTablesCalled=False,  # ...or this.
             exMsgs=(pruneDatasets_errPurgeAndDisassociate,),
-            exPruneDatasetsExitCode=1
+            exPruneDatasetsExitCode=1,
         )
 
-    @patch.object(lsst.daf.butler.registries.sql.SqlRegistry, "getCollectionType",
-                  side_effect=lambda x: CollectionType.RUN)
+    @patch.object(
+        lsst.daf.butler.registries.sql.SqlRegistry,
+        "getCollectionType",
+        side_effect=lambda x: CollectionType.RUN,
+    )
     def test_purgeImpliedArgs(self, mockGetCollectionType):
         """Verify the arguments implied by --purge.
 
@@ -366,50 +386,53 @@ class PruneDatasetsTestCase(unittest.TestCase):
             cliArgs=["--purge", "run"],
             invokeInput="yes",
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
-                purge=True,
-                run="run",
-                refs=getDatasets(),
-                disassociate=True,
-                unstore=True
+                purge=True, run="run", refs=getDatasets(), disassociate=True, unstore=True
             ),
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                               collections=("run",),
-                                                               find_first=True),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
+                repo=self.repo, collections=("run",), find_first=True
+            ),
             exGetTablesCalled=True,
-            exMsgs=(pruneDatasets_willRemoveMsg,
-                    pruneDatasets_askContinueMsg,
-                    astropyTablesToStr(getTables()),
-                    pruneDatasets_didRemoveAforementioned)
+            exMsgs=(
+                pruneDatasets_willRemoveMsg,
+                pruneDatasets_askContinueMsg,
+                astropyTablesToStr(getTables()),
+                pruneDatasets_didRemoveAforementioned,
+            ),
         )
 
-    @patch.object(lsst.daf.butler.registries.sql.SqlRegistry, "getCollectionType",
-                  side_effect=lambda x: CollectionType.RUN)
+    @patch.object(
+        lsst.daf.butler.registries.sql.SqlRegistry,
+        "getCollectionType",
+        side_effect=lambda x: CollectionType.RUN,
+    )
     def test_purgeImpliedArgsWithCollections(self, mockGetCollectionType):
         """Verify the arguments implied by --purge, with a COLLECTIONS."""
         self.run_test(
             cliArgs=["myCollection", "--purge", "run"],
             invokeInput="yes",
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
-                purge=True,
-                run="run",
-                disassociate=True,
-                unstore=True,
-                refs=getDatasets()
+                purge=True, run="run", disassociate=True, unstore=True, refs=getDatasets()
             ),
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo, collections=("myCollection",),
-                                                               find_first=True),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
+                repo=self.repo, collections=("myCollection",), find_first=True
+            ),
             exGetTablesCalled=True,
-            exMsgs=(pruneDatasets_willRemoveMsg,
-                    pruneDatasets_askContinueMsg,
-                    astropyTablesToStr(getTables()),
-                    pruneDatasets_didRemoveAforementioned)
+            exMsgs=(
+                pruneDatasets_willRemoveMsg,
+                pruneDatasets_askContinueMsg,
+                astropyTablesToStr(getTables()),
+                pruneDatasets_didRemoveAforementioned,
+            ),
         )
 
-    @patch.object(lsst.daf.butler.registries.sql.SqlRegistry, "getCollectionType",
-                  side_effect=lambda x: CollectionType.TAGGED)
+    @patch.object(
+        lsst.daf.butler.registries.sql.SqlRegistry,
+        "getCollectionType",
+        side_effect=lambda x: CollectionType.TAGGED,
+    )
     def test_purgeOnNonRunCollection(self, mockGetCollectionType):
         """Verify calling run on a non-run collection fails with expected
-        error message. """
+        error message."""
         collectionName = "myTaggedCollection"
         self.run_test(
             cliArgs=["--purge", collectionName],
@@ -436,16 +459,13 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=["--disassociate", "tag1", "--disassociate", "tag2", "--no-confirm"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
-                tags=("tag1", "tag2"),
-                disassociate=True,
-                refs=getDatasets()
+                tags=("tag1", "tag2"), disassociate=True, refs=getDatasets()
             ),
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                               collections=("tag1", "tag2"),
-                                                               find_first=True),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
+                repo=self.repo, collections=("tag1", "tag2"), find_first=True
+            ),
             exGetTablesCalled=True,
-            exMsgs=(pruneDatasets_didRemoveMsg,
-                    astropyTablesToStr(getTables()))
+            exMsgs=(pruneDatasets_didRemoveMsg, astropyTablesToStr(getTables())),
         )
 
     def test_disassociateImpliedArgsWithCollections(self):
@@ -454,16 +474,13 @@ class PruneDatasetsTestCase(unittest.TestCase):
         self.run_test(
             cliArgs=["myCollection", "--disassociate", "tag1", "--disassociate", "tag2", "--no-confirm"],
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
-                tags=("tag1", "tag2"),
-                disassociate=True,
-                refs=getDatasets()
+                tags=("tag1", "tag2"), disassociate=True, refs=getDatasets()
             ),
-            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(repo=self.repo,
-                                                               collections=("myCollection",),
-                                                               find_first=True),
+            exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
+                repo=self.repo, collections=("myCollection",), find_first=True
+            ),
             exGetTablesCalled=True,
-            exMsgs=(pruneDatasets_didRemoveMsg,
-                    astropyTablesToStr(getTables()))
+            exMsgs=(pruneDatasets_didRemoveMsg, astropyTablesToStr(getTables())),
         )
 
 

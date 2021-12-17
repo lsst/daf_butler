@@ -19,11 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from astropy.table import Table
 import logging
 import os
-from .. import Butler, CollectionType
 
+from astropy.table import Table
+
+from .. import Butler, CollectionType
 
 log = logging.getLogger(__name__)
 
@@ -59,8 +60,9 @@ def parseCalibrationCollection(registry, collection, datasetTypes):
     exportCollections = []
     exportDatasets = []
     for calibType in datasetTypes:
-        associations = registry.queryDatasetAssociations(calibType, collections=collection,
-                                                         collectionTypes=[CollectionType.CALIBRATION])
+        associations = registry.queryDatasetAssociations(
+            calibType, collections=collection, collectionTypes=[CollectionType.CALIBRATION]
+        )
         for result in associations:
             exportDatasets.append(result.ref)
             exportCollections.append(result.ref.run)
@@ -96,24 +98,28 @@ def exportCalibs(repo, directory, collections):
     """
     butler = Butler(repo, writeable=False)
 
-    calibTypes = [datasetType for datasetType in butler.registry.queryDatasetTypes(...)
-                  if datasetType.isCalibration()]
+    calibTypes = [
+        datasetType for datasetType in butler.registry.queryDatasetTypes(...) if datasetType.isCalibration()
+    ]
 
     collectionsToExport = []
     datasetsToExport = []
 
-    for collection in butler.registry.queryCollections(collections, flattenChains=True, includeChains=True,
-                                                       collectionTypes={CollectionType.CALIBRATION,
-                                                                        CollectionType.CHAINED}):
+    for collection in butler.registry.queryCollections(
+        collections,
+        flattenChains=True,
+        includeChains=True,
+        collectionTypes={CollectionType.CALIBRATION, CollectionType.CHAINED},
+    ):
         log.info("Checking collection: %s", collection)
 
         # Get collection information.
         collectionsToExport.append(collection)
         collectionType = butler.registry.getCollectionType(collection)
         if collectionType == CollectionType.CALIBRATION:
-            exportCollections, exportDatasets = parseCalibrationCollection(butler.registry,
-                                                                           collection,
-                                                                           calibTypes)
+            exportCollections, exportDatasets = parseCalibrationCollection(
+                butler.registry, collection, calibTypes
+            )
             collectionsToExport.extend(exportCollections)
             datasetsToExport.extend(exportDatasets)
 
@@ -138,10 +144,15 @@ def exportCalibs(repo, directory, collections):
     requiredDimensions = set()
     for ref in sortedDatasets:
         requiredDimensions.update(ref.dimensions.names)
-    dimensionColumns = {dimensionName: [ref.dataId.get(dimensionName, "") for ref in sortedDatasets]
-                        for dimensionName in requiredDimensions}
+    dimensionColumns = {
+        dimensionName: [ref.dataId.get(dimensionName, "") for ref in sortedDatasets]
+        for dimensionName in requiredDimensions
+    }
 
-    return Table({"calibrationType": [ref.datasetType.name for ref in sortedDatasets],
-                  "run": [ref.run for ref in sortedDatasets],
-                  **dimensionColumns
-                  })
+    return Table(
+        {
+            "calibrationType": [ref.datasetType.name for ref in sortedDatasets],
+            "run": [ref.run for ref in sortedDatasets],
+            **dimensionColumns,
+        }
+    )

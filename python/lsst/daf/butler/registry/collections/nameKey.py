@@ -22,24 +22,18 @@ from __future__ import annotations
 
 __all__ = ["NameKeyCollectionManager"]
 
-from typing import (
-    Any,
-    Optional,
-    Type,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, Any, Optional, Type
 
 import sqlalchemy
 
+from ...core import TimespanDatabaseRepresentation, ddl
+from ..interfaces import VersionTuple
 from ._base import (
     CollectionTablesTuple,
     DefaultCollectionManager,
-    makeRunTableSpec,
     makeCollectionChainTableSpec,
+    makeRunTableSpec,
 )
-
-from ...core import TimespanDatabaseRepresentation, ddl
-from ..interfaces import VersionTuple
 
 if TYPE_CHECKING:
     from ..interfaces import CollectionRecord, Database, DimensionRecordStorageManager, StaticTablesContext
@@ -80,7 +74,8 @@ class NameKeyCollectionManager(DefaultCollectionManager):
     def initialize(
         cls,
         db: Database,
-        context: StaticTablesContext, *,
+        context: StaticTablesContext,
+        *,
         dimensions: DimensionRecordStorageManager,
     ) -> NameKeyCollectionManager:
         # Docstring inherited from CollectionManager.
@@ -102,33 +97,49 @@ class NameKeyCollectionManager(DefaultCollectionManager):
         return f"{prefix}_name"
 
     @classmethod
-    def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
-                                onDelete: Optional[str] = None,
-                                constraint: bool = True,
-                                **kwargs: Any) -> ddl.FieldSpec:
+    def addCollectionForeignKey(
+        cls,
+        tableSpec: ddl.TableSpec,
+        *,
+        prefix: str = "collection",
+        onDelete: Optional[str] = None,
+        constraint: bool = True,
+        **kwargs: Any,
+    ) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
         original = _KEY_FIELD_SPEC
-        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype,
-                             length=original.length, **kwargs)
+        copy = ddl.FieldSpec(
+            cls.getCollectionForeignKeyName(prefix), dtype=original.dtype, length=original.length, **kwargs
+        )
         tableSpec.fields.add(copy)
         if constraint:
-            tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
-                                                            target=(original.name,), onDelete=onDelete))
+            tableSpec.foreignKeys.append(
+                ddl.ForeignKeySpec(
+                    "collection", source=(copy.name,), target=(original.name,), onDelete=onDelete
+                )
+            )
         return copy
 
     @classmethod
-    def addRunForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "run",
-                         onDelete: Optional[str] = None,
-                         constraint: bool = True,
-                         **kwargs: Any) -> ddl.FieldSpec:
+    def addRunForeignKey(
+        cls,
+        tableSpec: ddl.TableSpec,
+        *,
+        prefix: str = "run",
+        onDelete: Optional[str] = None,
+        constraint: bool = True,
+        **kwargs: Any,
+    ) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
         original = _KEY_FIELD_SPEC
-        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype,
-                             length=original.length, **kwargs)
+        copy = ddl.FieldSpec(
+            cls.getRunForeignKeyName(prefix), dtype=original.dtype, length=original.length, **kwargs
+        )
         tableSpec.fields.add(copy)
         if constraint:
-            tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),
-                                                            target=(original.name,), onDelete=onDelete))
+            tableSpec.foreignKeys.append(
+                ddl.ForeignKeySpec("run", source=(copy.name,), target=(original.name,), onDelete=onDelete)
+            )
         return copy
 
     def _getByName(self, name: str) -> Optional[CollectionRecord]:

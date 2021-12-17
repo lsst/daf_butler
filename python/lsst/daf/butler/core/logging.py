@@ -19,20 +19,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler",
-           "ButlerLogRecord", "JsonLogFormatter")
+__all__ = ("ButlerMDC", "ButlerLogRecords", "ButlerLogRecordHandler", "ButlerLogRecord", "JsonLogFormatter")
 
-import logging
 import datetime
+import logging
 import traceback
 from contextlib import contextmanager
-from typing import List, Union, Optional, ClassVar, Iterable, Iterator, Dict, IO, Any, Generator
+from logging import Formatter, LogRecord, StreamHandler
+from typing import IO, Any, ClassVar, Dict, Generator, Iterable, Iterator, List, Optional, Union
 
-from logging import LogRecord, StreamHandler, Formatter
-from pydantic import BaseModel, PrivateAttr
-
-from lsst.utils.iteration import isplit
 from lsst.utils.introspection import get_full_type_name
+from lsst.utils.iteration import isplit
+from pydantic import BaseModel, PrivateAttr
 
 _LONG_LOG_FORMAT = "{levelname} {asctime} {name} {filename}:{lineno} - {message}"
 """Default format for log records."""
@@ -47,8 +45,7 @@ class MDCDict(dict):
     """
 
     def __getitem__(self, name: str) -> str:
-        """Return value for a given key or empty string for missing key.
-        """
+        """Return value for a given key or empty string for missing key."""
         return self.get(name, "")
 
     def __str__(self) -> str:
@@ -135,8 +132,7 @@ class ButlerMDC:
 
     @classmethod
     def add_mdc_log_record_factory(cls) -> None:
-        """Add a log record factory that adds a MDC record to `LogRecord`.
-        """
+        """Add a log record factory that adds a MDC record to `LogRecord`."""
         old_factory = logging.getLogRecordFactory()
 
         def record_factory(*args: Any, **kwargs: Any) -> LogRecord:
@@ -199,8 +195,17 @@ class ButlerLogRecord(BaseModel):
             The record from which to extract the relevant information.
         """
         # The properties that are one-to-one mapping.
-        simple = ("name", "levelno", "levelname", "filename", "pathname",
-                  "lineno", "funcName", "process", "processName")
+        simple = (
+            "name",
+            "levelno",
+            "levelname",
+            "filename",
+            "pathname",
+            "lineno",
+            "funcName",
+            "process",
+            "processName",
+        )
 
         record_dict = {k: getattr(record, k) for k in simple}
 
@@ -213,8 +218,7 @@ class ButlerLogRecord(BaseModel):
         # Always use UTC because in distributed systems we can't be sure
         # what timezone localtime is and it's easier to compare logs if
         # every system is using the same time.
-        record_dict["asctime"] = datetime.datetime.fromtimestamp(record.created,
-                                                                 tz=datetime.timezone.utc)
+        record_dict["asctime"] = datetime.datetime.fromtimestamp(record.created, tz=datetime.timezone.utc)
 
         # Sometimes exception information is included so must be
         # extracted.
@@ -265,8 +269,7 @@ Record = Union[LogRecord, ButlerLogRecord]
 # Do not inherit from MutableSequence since mypy insists on the values
 # being Any even though we wish to constrain them to Record.
 class ButlerLogRecords(BaseModel):
-    """Class representing a collection of `ButlerLogRecord`.
-    """
+    """Class representing a collection of `ButlerLogRecord`."""
 
     __root__: List[ButlerLogRecord]
     _log_format: Optional[str] = PrivateAttr(None)
@@ -345,8 +348,10 @@ class ButlerLogRecords(BaseModel):
             max = 32
             if len(startdata) > max:
                 startdata = f"{startdata[:max]!r}..."
-            raise ValueError("Unrecognized JSON log format. Expected '{' or '[' but got"
-                             f" {first_char!r} from {error_type} content starting with {startdata!r}")
+            raise ValueError(
+                "Unrecognized JSON log format. Expected '{' or '[' but got"
+                f" {first_char!r} from {error_type} content starting with {startdata!r}"
+            )
 
         # Assume a record per line.
         return False
@@ -511,8 +516,7 @@ class ButlerLogRecords(BaseModel):
 
 
 class ButlerLogRecordHandler(StreamHandler):
-    """Python log handler that accumulates records.
-    """
+    """Python log handler that accumulates records."""
 
     def __init__(self) -> None:
         super().__init__()

@@ -21,11 +21,10 @@
 
 
 import random
-from typing import List, Optional, Union
 import unittest
+from typing import List, Optional, Union
 
 import astropy.time
-
 from lsst.daf.butler.registry.queries.expressions import (
     Node,
     NormalForm,
@@ -33,7 +32,6 @@ from lsst.daf.butler.registry.queries.expressions import (
     ParserYacc,
     TreeVisitor,
 )
-
 from lsst.daf.butler.registry.queries.expressions.normalForm import TransformationVisitor
 
 
@@ -41,6 +39,7 @@ class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):
     """A `TreeVisitor` implementation that evaluates boolean expressions given
     boolean values for identifiers.
     """
+
     def __init__(self, **kwargs: bool):
         self.values = kwargs
 
@@ -108,8 +107,7 @@ class BooleanEvaluationTreeVisitor(TreeVisitor[bool]):
 
 
 class NormalFormExpressionTestCase(unittest.TestCase):
-    """Tests for `NormalFormExpression` and its helper classes.
-    """
+    """Tests for `NormalFormExpression` and its helper classes."""
 
     def check(
         self,

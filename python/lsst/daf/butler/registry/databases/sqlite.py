@@ -22,23 +22,24 @@ from __future__ import annotations
 
 __all__ = ["SqliteDatabase"]
 
-from contextlib import closing
 import copy
-from typing import Any, ContextManager, Dict, Iterable, List, Optional
-from dataclasses import dataclass
 import os
-import urllib.parse
-
 import sqlite3
+import urllib.parse
+from contextlib import closing
+from dataclasses import dataclass
+from typing import Any, ContextManager, Dict, Iterable, List, Optional
+
 import sqlalchemy
 import sqlalchemy.ext.compiler
 
-from ..interfaces import Database, StaticTablesContext
 from ...core import ddl
+from ..interfaces import Database, StaticTablesContext
 
 
-def _onSqlite3Connect(dbapiConnection: sqlite3.Connection,
-                      connectionRecord: sqlalchemy.pool._ConnectionRecord) -> None:
+def _onSqlite3Connect(
+    dbapiConnection: sqlite3.Connection, connectionRecord: sqlalchemy.pool._ConnectionRecord
+) -> None:
     assert isinstance(dbapiConnection, sqlite3.Connection)
     # Prevent pysqlite from emitting BEGIN and COMMIT statements.
     dbapiConnection.isolation_level = None
@@ -62,6 +63,7 @@ class _Replace(sqlalchemy.sql.Insert):
     """A SQLAlchemy query that compiles to INSERT ... ON CONFLICT REPLACE
     on the primary key constraint for the table.
     """
+
     pass
 
 
@@ -73,29 +75,30 @@ class _Replace(sqlalchemy.sql.Insert):
 # static typing by calling everything "Any".
 @sqlalchemy.ext.compiler.compiles(_Replace, "sqlite")
 def _replace(insert: Any, compiler: Any, **kwargs: Any) -> Any:
-    """Generate an INSERT ... ON CONFLICT REPLACE query.
-    """
+    """Generate an INSERT ... ON CONFLICT REPLACE query."""
     result = compiler.visit_insert(insert, **kwargs)
     preparer = compiler.preparer
     pk_columns = ", ".join([preparer.format_column(col) for col in insert.table.primary_key])
     result += f" ON CONFLICT ({pk_columns})"
-    columns = [preparer.format_column(col) for col in insert.table.columns
-               if col.name not in insert.table.primary_key]
+    columns = [
+        preparer.format_column(col)
+        for col in insert.table.columns
+        if col.name not in insert.table.primary_key
+    ]
     updates = ", ".join([f"{col} = excluded.{col}" for col in columns])
     result += f" DO UPDATE SET {updates}"
     return result
 
 
 class _Ensure(sqlalchemy.sql.Insert):
-    """A SQLAlchemy query that compiles to INSERT ... ON CONFLICT DO NOTHING.
-    """
+    """A SQLAlchemy query that compiles to INSERT ... ON CONFLICT DO NOTHING."""
+
     pass
 
 
 @sqlalchemy.ext.compiler.compiles(_Ensure, "sqlite")
 def _ensure(insert: Any, compiler: Any, **kwargs: Any) -> Any:
-    """Generate an INSERT ... ON CONFLICT DO NOTHING query.
-    """
+    """Generate an INSERT ... ON CONFLICT DO NOTHING query."""
     result = compiler.visit_insert(insert, **kwargs)
     result += " ON CONFLICT DO NOTHING"
     return result
@@ -149,8 +152,14 @@ class SqliteDatabase(Database):
     across databases well enough to define it.
     """
 
-    def __init__(self, *, engine: sqlalchemy.engine.Engine, origin: int,
-                 namespace: Optional[str] = None, writeable: bool = True):
+    def __init__(
+        self,
+        *,
+        engine: sqlalchemy.engine.Engine,
+        origin: int,
+        namespace: Optional[str] = None,
+        writeable: bool = True,
+    ):
         super().__init__(origin=origin, engine=engine, namespace=namespace)
         # Get the filename from a call to 'PRAGMA database_list'.
         with engine.connect() as connection:
@@ -177,8 +186,9 @@ class SqliteDatabase(Database):
         return "sqlite:///" + os.path.join(root, "gen3.sqlite3")
 
     @classmethod
-    def makeEngine(cls, uri: Optional[str] = None, *, filename: Optional[str] = None,
-                   writeable: bool = True) -> sqlalchemy.engine.Engine:
+    def makeEngine(
+        cls, uri: Optional[str] = None, *, filename: Optional[str] = None, writeable: bool = True
+    ) -> sqlalchemy.engine.Engine:
         """Create a `sqlalchemy.engine.Engine` from a SQLAlchemy URI or
         filename.
 
@@ -238,9 +248,9 @@ class SqliteDatabase(Database):
                 raise NotImplementedError("Read-only :memory: databases are not supported.")
         else:
             if writeable:
-                target += '?mode=rwc&uri=true'
+                target += "?mode=rwc&uri=true"
             else:
-                target += '?mode=ro&uri=true'
+                target += "?mode=ro&uri=true"
 
         def creator() -> sqlite3.Connection:
             return sqlite3.connect(target, check_same_thread=False, uri=True)
@@ -252,12 +262,19 @@ class SqliteDatabase(Database):
         try:
             return engine
         except sqlalchemy.exc.OperationalError as err:
-            raise RuntimeError(f"Error creating connection with uri='{uri}', filename='{filename}', "
-                               f"target={target}.") from err
+            raise RuntimeError(
+                f"Error creating connection with uri='{uri}', filename='{filename}', " f"target={target}."
+            ) from err
 
     @classmethod
-    def fromEngine(cls, engine: sqlalchemy.engine.Engine, *, origin: int,
-                   namespace: Optional[str] = None, writeable: bool = True) -> Database:
+    def fromEngine(
+        cls,
+        engine: sqlalchemy.engine.Engine,
+        *,
+        origin: int,
+        namespace: Optional[str] = None,
+        writeable: bool = True,
+    ) -> Database:
         return cls(engine=engine, origin=origin, writeable=writeable, namespace=namespace)
 
     def isWriteable(self) -> bool:
@@ -269,8 +286,9 @@ class SqliteDatabase(Database):
         else:
             return "SQLite3@:memory:"
 
-    def _lockTables(self, connection: sqlalchemy.engine.Connection,
-                    tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+    def _lockTables(
+        self, connection: sqlalchemy.engine.Connection, tables: Iterable[sqlalchemy.schema.Table] = ()
+    ) -> None:
         # Docstring inherited.
         # Our SQLite database always acquires full-database locks at the
         # beginning of a transaction, so there's no need to acquire table-level
@@ -294,12 +312,14 @@ class SqliteDatabase(Database):
                 create = True
         return super().declareStaticTables(create=create)
 
-    def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
-                          **kwargs: Any) -> sqlalchemy.schema.Column:
+    def _convertFieldSpec(
+        self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData, **kwargs: Any
+    ) -> sqlalchemy.schema.Column:
         if spec.autoincrement:
             if not spec.primaryKey:
-                raise RuntimeError(f"Autoincrement field {table}.{spec.name} that is not a "
-                                   f"primary key is not supported.")
+                raise RuntimeError(
+                    f"Autoincrement field {table}.{spec.name} that is not a " f"primary key is not supported."
+                )
             if spec.dtype != sqlalchemy.Integer:
                 # SQLite's autoincrement is really limited; it only works if
                 # the column type is exactly "INTEGER".  But it also doesn't
@@ -317,18 +337,23 @@ class SqliteDatabase(Database):
         constraints = []
         if spec.isStringType():
             name = self.shrinkDatabaseEntityName("_".join([table, "len", spec.name]))
-            constraints.append(sqlalchemy.CheckConstraint(f"length({spec.name})<={spec.length}"
-                                                          # Oracle converts
-                                                          # empty strings to
-                                                          # NULL so check
-                                                          f" AND length({spec.name})>=1",
-                                                          name=name))
+            constraints.append(
+                sqlalchemy.CheckConstraint(
+                    f"length({spec.name})<={spec.length}"
+                    # Oracle converts
+                    # empty strings to
+                    # NULL so check
+                    f" AND length({spec.name})>=1",
+                    name=name,
+                )
+            )
 
         constraints.extend(super()._makeColumnConstraints(table, spec))
         return constraints
 
-    def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
-                          **kwargs: Any) -> sqlalchemy.schema.Table:
+    def _convertTableSpec(
+        self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData, **kwargs: Any
+    ) -> sqlalchemy.schema.Table:
         primaryKeyFieldNames = set(field.name for field in spec.fields if field.primaryKey)
         autoincrFieldNames = set(field.name for field in spec.fields if field.autoincrement)
         if len(autoincrFieldNames) > 1:
@@ -342,7 +367,7 @@ class SqliteDatabase(Database):
             # the autoincrement field, not the rest of the primary key.  In
             # practice, that means the single-column table's records are those
             # for which origin == self.origin.
-            autoincrFieldName, = autoincrFieldNames
+            (autoincrFieldName,) = autoincrFieldNames
             otherPrimaryKeyFieldNames = primaryKeyFieldNames - autoincrFieldNames
             if otherPrimaryKeyFieldNames != {"origin"}:
                 # We need the only other field in the key to be 'origin'.
@@ -352,16 +377,20 @@ class SqliteDatabase(Database):
                 )
             self._autoincr[name] = _AutoincrementCompoundKeyWorkaround(
                 table=self._convertTableSpec(f"_autoinc_{name}", _AUTOINCR_TABLE_SPEC, metadata, **kwargs),
-                column=autoincrFieldName
+                column=autoincrFieldName,
             )
         if not spec.recycleIds:
             kwargs = dict(kwargs, sqlite_autoincrement=True)
         return super()._convertTableSpec(name, spec, metadata, **kwargs)
 
-    def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
-               select: Optional[sqlalchemy.sql.Select] = None,
-               names: Optional[Iterable[str]] = None,
-               ) -> Optional[List[int]]:
+    def insert(
+        self,
+        table: sqlalchemy.schema.Table,
+        *rows: dict,
+        returnIds: bool = False,
+        select: Optional[sqlalchemy.sql.Select] = None,
+        names: Optional[Iterable[str]] = None,
+    ) -> Optional[List[int]]:
         self.assertTableWriteable(table, f"Cannot insert into read-only table {table}.")
         autoincr = self._autoincr.get(table.name)
         if autoincr is not None:
@@ -383,8 +412,9 @@ class SqliteDatabase(Database):
                 # We need to insert only the values that correspond to
                 # ``origin == self.origin`` into the single-column table, to
                 # make sure we don't generate conflicting keys there later.
-                rowsForAutoincrTable = [dict(id=row[autoincr.column])
-                                        for row in rows if row["origin"] == self.origin]
+                rowsForAutoincrTable = [
+                    dict(id=row[autoincr.column]) for row in rows if row["origin"] == self.origin
+                ]
                 # Insert into the autoincr table and the target table inside
                 # a transaction.  The main-table insertion can take care of
                 # returnIds for us.

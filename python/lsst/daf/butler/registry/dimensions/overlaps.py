@@ -21,24 +21,14 @@
 
 from __future__ import annotations
 
-__all__ = (
-    "CrossFamilyDimensionOverlapStorage",
-)
+__all__ = ("CrossFamilyDimensionOverlapStorage",)
 
 import logging
-from typing import (
-    Iterable,
-    Optional,
-    Tuple,
-)
+from typing import Iterable, Optional, Tuple
 
 import sqlalchemy
 
-from ...core import (
-    addDimensionForeignKey,
-    DatabaseDimensionElement,
-    ddl,
-)
+from ...core import DatabaseDimensionElement, addDimensionForeignKey, ddl
 from ..interfaces import (
     Database,
     DatabaseDimensionOverlapStorage,
@@ -46,7 +36,6 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
-
 
 _LOG = logging.getLogger(__name__)
 
@@ -78,6 +67,7 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
     At present, this class (like its ABC) is just a stub that creates the
     tables it will use, but does nothing else.
     """
+
     def __init__(
         self,
         db: Database,
@@ -134,8 +124,9 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
     _SUMMARY_TABLE_NAME_SPEC = "{0.name}_{1.name}_overlap_summary"
 
     @classmethod
-    def _makeSummaryTableSpec(cls, elements: Tuple[DatabaseDimensionElement, DatabaseDimensionElement]
-                              ) -> ddl.TableSpec:
+    def _makeSummaryTableSpec(
+        cls, elements: Tuple[DatabaseDimensionElement, DatabaseDimensionElement]
+    ) -> ddl.TableSpec:
         """Create a specification for the table that records which combinations
         of skypix dimension and governor value have materialized overlaps.
 
@@ -159,8 +150,9 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
     _OVERLAP_TABLE_NAME_SPEC = "{0.name}_{1.name}_overlap"
 
     @classmethod
-    def _makeOverlapTableSpec(cls, elements: Tuple[DatabaseDimensionElement, DatabaseDimensionElement]
-                              ) -> ddl.TableSpec:
+    def _makeOverlapTableSpec(
+        cls, elements: Tuple[DatabaseDimensionElement, DatabaseDimensionElement]
+    ) -> ddl.TableSpec:
         """Create a specification for the table that holds materialized
         overlap rows.
 

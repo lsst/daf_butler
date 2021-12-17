@@ -23,12 +23,11 @@
 
 import unittest
 
-from lsst.daf.butler import Constraints, ConstraintsConfig, StorageClass, ValidationError, DimensionUniverse
+from lsst.daf.butler import Constraints, ConstraintsConfig, DimensionUniverse, StorageClass, ValidationError
 from lsst.daf.butler.tests import DatasetTestHelper
 
 
 class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
-
     def setUp(self):
         self.id = 0
 
@@ -36,15 +35,13 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         self.universe = DimensionUniverse()
         dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
         sc = StorageClass("DummySC", dict, None)
-        self.calexpA = self.makeDatasetRef("calexp", dimensions, sc,
-                                           {"instrument": "A", "physical_filter": "u"},
-                                           conform=False)
+        self.calexpA = self.makeDatasetRef(
+            "calexp", dimensions, sc, {"instrument": "A", "physical_filter": "u"}, conform=False
+        )
 
         dimensions = self.universe.extract(("visit", "detector", "instrument"))
-        self.pviA = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "A", "visit": 1},
-                                        conform=False)
-        self.pviB = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "B", "visit": 2},
-                                        conform=False)
+        self.pviA = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "A", "visit": 1}, conform=False)
+        self.pviB = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "B", "visit": 2}, conform=False)
 
     def testSimpleAccept(self):
         config = ConstraintsConfig({"accept": ["calexp", "ExposureF"]})
@@ -76,8 +73,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertFalse(constraints.isAcceptable(self.pviB))
 
         # Accept PVI for instrument B but not instrument A
-        config = ConstraintsConfig({"accept": ["calexp",
-                                               {"instrument<B>": ["pvi"]}]})
+        config = ConstraintsConfig({"accept": ["calexp", {"instrument<B>": ["pvi"]}]})
         constraints = Constraints(config, universe=self.universe)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))

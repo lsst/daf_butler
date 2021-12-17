@@ -28,8 +28,9 @@ from .. import Butler
 log = logging.getLogger(__name__)
 
 
-def retrieveArtifacts(repo, destination, dataset_type, collections, where, find_first,
-                      transfer, preserve_path, clobber):
+def retrieveArtifacts(
+    repo, destination, dataset_type, collections, where, find_first, transfer, preserve_path, clobber
+):
     """Parameters are those required for querying datasets plus a destination
     URI.
 
@@ -71,13 +72,15 @@ def retrieveArtifacts(repo, destination, dataset_type, collections, where, find_
 
     # Need to store in list so we can count the number to give some feedback
     # to caller.
-    refs = list(butler.registry.queryDatasets(datasetType=dataset_type,
-                                              collections=collections,
-                                              where=where,
-                                              findFirst=find_first))
+    refs = list(
+        butler.registry.queryDatasets(
+            datasetType=dataset_type, collections=collections, where=where, findFirst=find_first
+        )
+    )
 
     log.info("Number of datasets matching query: %d", len(refs))
 
-    transferred = butler.retrieveArtifacts(refs, destination=destination, transfer=transfer,
-                                           preserve_path=preserve_path, overwrite=clobber)
+    transferred = butler.retrieveArtifacts(
+        refs, destination=destination, transfer=transfer, preserve_path=preserve_path, overwrite=clobber
+    )
     return transferred

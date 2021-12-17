@@ -22,13 +22,12 @@
 import os
 import unittest
 
-from lsst.daf.butler import CompositesConfig, CompositesMap, StorageClass, DatasetType, DimensionUniverse
+from lsst.daf.butler import CompositesConfig, CompositesMap, DatasetType, DimensionUniverse, StorageClass
 
 TESTDIR = os.path.dirname(__file__)
 
 
 class TestCompositesConfig(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.configFile = os.path.join(TESTDIR, "config", "basic", "composites.yaml")

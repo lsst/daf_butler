@@ -22,12 +22,11 @@
 """Tests for AstropyTableFormatter.
 """
 
-import unittest
 import os
+import unittest
+
 import numpy
-
 from astropy.table import Table
-
 from lsst.daf.butler import Butler, DatasetType
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
@@ -35,17 +34,15 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class AstropyTableFormatterTestCase(unittest.TestCase):
-    """Test for AstropyTableFormatter.
-    """
+    """Test for AstropyTableFormatter."""
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
         Butler.makeRepo(self.root)
         ints = [1, 2, 3]
-        names = ['one', 'two', 'three']
+        names = ["one", "two", "three"]
         transcendentals = [3.14, 2.718, 0.643]
-        self.table = Table([ints, names, transcendentals],
-                           names=['ints', 'names', 'transcendentals'])
+        self.table = Table([ints, names, transcendentals], names=["ints", "names", "transcendentals"])
 
     def tearDown(self):
         removeTestTempDir(self.root)
@@ -53,13 +50,12 @@ class AstropyTableFormatterTestCase(unittest.TestCase):
 
     def testAstropyTableFormatter(self):
         butler = Butler(self.root, run="testrun")
-        datasetType = DatasetType("table", [], "AstropyTable",
-                                  universe=butler.registry.dimensions)
+        datasetType = DatasetType("table", [], "AstropyTable", universe=butler.registry.dimensions)
         butler.registry.registerDatasetType(datasetType)
         ref = butler.put(self.table, datasetType)
         uri = butler.getURI(ref)
-        self.assertEqual(uri.getExtension(), '.ecsv')
-        table = butler.get('table')
+        self.assertEqual(uri.getExtension(), ".ecsv")
+        table = butler.get("table")
         self.assertTrue(numpy.all(table == self.table))
 
 

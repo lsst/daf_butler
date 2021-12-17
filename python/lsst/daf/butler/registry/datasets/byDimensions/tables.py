@@ -31,27 +31,19 @@ __all__ = (
     "StaticDatasetTablesTuple",
 )
 
-from typing import (
-    Any,
-    List,
-    Optional,
-    Type,
-    Union,
-)
-
 from collections import namedtuple
+from typing import Any, List, Optional, Type, Union
 
 import sqlalchemy
-
 from lsst.daf.butler import (
     DatasetType,
-    ddl,
     DimensionUniverse,
     GovernorDimension,
+    TimespanDatabaseRepresentation,
+    addDimensionForeignKey,
+    ddl,
 )
-from lsst.daf.butler import addDimensionForeignKey, TimespanDatabaseRepresentation
 from lsst.daf.butler.registry.interfaces import CollectionManager
-
 
 DATASET_TYPE_NAME_LENGTH = 128
 
@@ -61,15 +53,19 @@ StaticDatasetTablesTuple = namedtuple(
     [
         "dataset_type",
         "dataset",
-    ]
+    ],
 )
 
 
-def addDatasetForeignKey(tableSpec: ddl.TableSpec, dtype: type, *,
-                         name: str = "dataset",
-                         onDelete: Optional[str] = None,
-                         constraint: bool = True,
-                         **kwargs: Any) -> ddl.FieldSpec:
+def addDatasetForeignKey(
+    tableSpec: ddl.TableSpec,
+    dtype: type,
+    *,
+    name: str = "dataset",
+    onDelete: Optional[str] = None,
+    constraint: bool = True,
+    **kwargs: Any,
+) -> ddl.FieldSpec:
     """Add a foreign key column for datasets and (optionally) a constraint to
     a table.
 
@@ -107,16 +103,18 @@ def addDatasetForeignKey(tableSpec: ddl.TableSpec, dtype: type, *,
     idFieldSpec = ddl.FieldSpec(f"{name}_id", dtype=dtype, **kwargs)
     tableSpec.fields.add(idFieldSpec)
     if constraint:
-        tableSpec.foreignKeys.append(ddl.ForeignKeySpec("dataset", source=(idFieldSpec.name,),
-                                                        target=("id",), onDelete=onDelete))
+        tableSpec.foreignKeys.append(
+            ddl.ForeignKeySpec("dataset", source=(idFieldSpec.name,), target=("id",), onDelete=onDelete)
+        )
     return idFieldSpec
 
 
-def makeStaticTableSpecs(collections: Type[CollectionManager],
-                         universe: DimensionUniverse,
-                         dtype: type,
-                         autoincrement: bool,
-                         ) -> StaticDatasetTablesTuple:
+def makeStaticTableSpecs(
+    collections: Type[CollectionManager],
+    universe: DimensionUniverse,
+    dtype: type,
+    autoincrement: bool,
+) -> StaticDatasetTablesTuple:
     """Construct all static tables used by the classes in this package.
 
     Static tables are those that are present in all Registries and do not
@@ -170,16 +168,13 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                         "datasets of this type.  Storage classes are "
                         "generally associated with a Python class, and are "
                         "enumerated in butler configuration."
-                    )
+                    ),
                 ),
                 ddl.FieldSpec(
                     name="dimensions_key",
                     dtype=sqlalchemy.BigInteger,
                     nullable=False,
-                    doc=(
-                        "Unique key for the set of dimensions that identifies "
-                        "datasets of this type."
-                    ),
+                    doc=("Unique key for the set of dimensions that identifies " "datasets of this type."),
                 ),
                 ddl.FieldSpec(
                     name="tag_association_table",
@@ -219,10 +214,7 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                     name="dataset_type_id",
                     dtype=sqlalchemy.BigInteger,
                     nullable=False,
-                    doc=(
-                        "Reference to the associated entry in the dataset_type "
-                        "table."
-                    ),
+                    doc=("Reference to the associated entry in the dataset_type " "table."),
                 ),
                 ddl.FieldSpec(
                     name="ingest_date",
@@ -235,7 +227,7 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
             ],
             foreignKeys=[
                 ddl.ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",)),
-            ]
+            ],
         ),
     )
     # Add foreign key fields programmatically.
@@ -284,8 +276,9 @@ def makeCalibTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
     return f"dataset_calibs_{dimensionsKey:08d}"
 
 
-def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManager],
-                     dtype: type, *, constraints: bool = True) -> ddl.TableSpec:
+def makeTagTableSpec(
+    datasetType: DatasetType, collections: Type[CollectionManager], dtype: type, *, constraints: bool = True
+) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag
     table used by the classes in this package.
 
@@ -330,8 +323,9 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
     addDatasetForeignKey(tableSpec, dtype, primaryKey=True, onDelete="CASCADE", constraint=constraints)
     # Add foreign key fields to collection table (part of the primary key and
     # the data ID unique constraint).
-    collectionFieldSpec = collections.addCollectionForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE",
-                                                              constraint=constraints)
+    collectionFieldSpec = collections.addCollectionForeignKey(
+        tableSpec, primaryKey=True, onDelete="CASCADE", constraint=constraints
+    )
     constraint.append(collectionFieldSpec.name)
     # Add foreign key constraint to the collection_summary_dataset_type table.
     if constraints:
@@ -343,8 +337,9 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
             )
         )
     for dimension in datasetType.dimensions.required:
-        fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False,
-                                           constraint=constraints)
+        fieldSpec = addDimensionForeignKey(
+            tableSpec, dimension=dimension, nullable=False, primaryKey=False, constraint=constraints
+        )
         constraint.append(fieldSpec.name)
         # If this is a governor dimension, add a foreign key constraint to the
         # collection_summary_<dimension> table.
@@ -361,9 +356,12 @@ def makeTagTableSpec(datasetType: DatasetType, collections: Type[CollectionManag
     return tableSpec
 
 
-def makeCalibTableSpec(datasetType: DatasetType, collections: Type[CollectionManager],
-                       TimespanReprClass: Type[TimespanDatabaseRepresentation],
-                       dtype: type) -> ddl.TableSpec:
+def makeCalibTableSpec(
+    datasetType: DatasetType,
+    collections: Type[CollectionManager],
+    TimespanReprClass: Type[TimespanDatabaseRepresentation],
+    dtype: type,
+) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag +
     validity range table used by the classes in this package.
 
@@ -400,7 +398,7 @@ def makeCalibTableSpec(datasetType: DatasetType, collections: Type[CollectionMan
         ],
         foreignKeys=[
             ddl.ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",)),
-        ]
+        ],
     )
     # Record fields that should go in the temporal lookup index/constraint,
     # starting with the dataset type.

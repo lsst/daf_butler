@@ -27,6 +27,7 @@ __all__ = ("BUTLER_ROOT_TAG", "replaceRoot")
 
 import os.path
 from typing import Optional, Union
+
 from ._butlerUri import ButlerURI
 
 BUTLER_ROOT_TAG = "<butlerRoot>"
@@ -69,8 +70,10 @@ def replaceRoot(configRoot: str, butlerRoot: Optional[Union[ButlerURI, str]]) ->
 
     # None or empty string indicate a problem
     if not butlerRoot:
-        raise ValueError(f"Required to replace {BUTLER_ROOT_TAG} in '{configRoot}' "
-                         "but a replacement has not been defined")
+        raise ValueError(
+            f"Required to replace {BUTLER_ROOT_TAG} in '{configRoot}' "
+            "but a replacement has not been defined"
+        )
 
     # Use absolute file path if this refers to a local file, else use
     # unchanged since all other URI schemes are absolute

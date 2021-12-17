@@ -21,29 +21,20 @@
 
 from __future__ import annotations
 
-__all__ = (
-    "CollectionSummaryManager",
-)
+__all__ = ("CollectionSummaryManager",)
 
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generic,
-    TypeVar,
-)
+from typing import Any, Callable, Dict, Generic, TypeVar
 
 import sqlalchemy
-
 from lsst.daf.butler import (
     DatasetType,
-    ddl,
     GovernorDimension,
     NamedKeyDict,
     NamedKeyMapping,
     NamedValueSet,
+    addDimensionForeignKey,
+    ddl,
 )
-from lsst.daf.butler import addDimensionForeignKey
 from lsst.daf.butler.registry.interfaces import (
     ChainedCollectionRecord,
     CollectionManager,
@@ -52,6 +43,7 @@ from lsst.daf.butler.registry.interfaces import (
     DimensionRecordStorageManager,
     StaticTablesContext,
 )
+
 from ..._collectionType import CollectionType
 from ...summaries import CollectionSummary, GovernorDimensionRestriction
 
@@ -71,6 +63,7 @@ class CollectionSummaryTables(Generic[_T]):
         Mapping of table [specifications] that summarize which governor
         dimension values are present in the data IDs of each collection.
     """
+
     def __init__(
         self,
         datasetType: _T,
@@ -106,8 +99,9 @@ class CollectionSummaryTables(Generic[_T]):
             ddl.FieldSpec("dataset_type_id", dtype=sqlalchemy.BigInteger, primaryKey=True)
         )
         datasetTypeTableSpec.foreignKeys.append(
-            ddl.ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",),
-                               onDelete="CASCADE")
+            ddl.ForeignKeySpec(
+                "dataset_type", source=("dataset_type_id",), target=("id",), onDelete="CASCADE"
+            )
         )
         # Specs for collection_summary_<dimension>.
         dimensionTableSpecs = NamedKeyDict[GovernorDimension, ddl.TableSpec]()
@@ -137,9 +131,11 @@ class CollectionSummaryManager:
     tables : `CollectionSummaryTables`
         Struct containing the tables that hold collection summaries.
     """
+
     def __init__(
         self,
-        db: Database, *,
+        db: Database,
+        *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
         tables: CollectionSummaryTables[sqlalchemy.sql.Table],
@@ -155,7 +151,8 @@ class CollectionSummaryManager:
     def initialize(
         cls,
         db: Database,
-        context: StaticTablesContext, *,
+        context: StaticTablesContext,
+        *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
     ) -> CollectionSummaryManager:
@@ -182,10 +179,12 @@ class CollectionSummaryManager:
         specs = CollectionSummaryTables.makeTableSpecs(collections, dimensions)
         tables = CollectionSummaryTables(
             datasetType=context.addTable("collection_summary_dataset_type", specs.datasetType),
-            dimensions=NamedKeyDict({
-                dimension: context.addTable(f"collection_summary_{dimension.name}", spec)
-                for dimension, spec in specs.dimensions.items()
-            }).freeze(),
+            dimensions=NamedKeyDict(
+                {
+                    dimension: context.addTable(f"collection_summary_{dimension.name}", spec)
+                    for dimension, spec in specs.dimensions.items()
+                }
+            ).freeze(),
         )
         return cls(
             db=db,
@@ -227,16 +226,13 @@ class CollectionSummaryManager:
             {
                 "dataset_type_id": dataset_type_id,
                 self._collectionKeyName: collection.key,
-            }
+            },
         )
         for dimension, values in governors.items():
             if values:
                 self._db.ensure(
                     self._tables.dimensions[dimension.name],
-                    *[{
-                        self._collectionKeyName: collection.key,
-                        dimension.name: v
-                    } for v in values],
+                    *[{self._collectionKeyName: collection.key, dimension.name: v} for v in values],
                 )
         # Update the in-memory cache, too.  These changes will remain even if
         # the database inserts above are rolled back by some later exception in
@@ -338,10 +334,7 @@ class CollectionSummaryManager:
             # colletion.
             if collection.type is CollectionType.CHAINED:
                 assert isinstance(collection, ChainedCollectionRecord)
-                child_summaries = [
-                    self.get(self._collections.find(child))
-                    for child in collection.children
-                ]
+                child_summaries = [self.get(self._collections.find(child)) for child in collection.children]
                 if child_summaries:
                     summary = CollectionSummary.union(*child_summaries)
                 else:

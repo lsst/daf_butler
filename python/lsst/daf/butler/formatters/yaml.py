@@ -21,18 +21,13 @@
 
 from __future__ import annotations
 
-__all__ = ("YamlFormatter", )
+__all__ = ("YamlFormatter",)
 
 import builtins
-import yaml
 import dataclasses
+from typing import TYPE_CHECKING, Any, Optional, Type
 
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Optional,
-    Type,
-)
+import yaml
 
 from .file import FileFormatter
 
@@ -41,8 +36,8 @@ if TYPE_CHECKING:
 
 
 class YamlFormatter(FileFormatter):
-    """Interface for reading and writing Python objects to and from YAML files.
-    """
+    """Interface for reading and writing Python objects to and from YAML files."""
+
     extension = ".yaml"
 
     unsupportedParameters = None
@@ -172,8 +167,9 @@ class YamlFormatter(FileFormatter):
             serialized = yaml.safe_dump(inMemoryDataset)
         return serialized.encode()
 
-    def _coerceType(self, inMemoryDataset: Any, writeStorageClass: StorageClass,
-                    readStorageClass: StorageClass) -> Any:
+    def _coerceType(
+        self, inMemoryDataset: Any, writeStorageClass: StorageClass, readStorageClass: StorageClass
+    ) -> Any:
         """Coerce the supplied inMemoryDataset to the correct python type.
 
         Parameters
@@ -192,8 +188,9 @@ class YamlFormatter(FileFormatter):
         """
         if inMemoryDataset is not None and not hasattr(builtins, readStorageClass.pytype.__name__):
             if readStorageClass.isComposite():
-                inMemoryDataset = readStorageClass.delegate().assemble(inMemoryDataset,
-                                                                       pytype=readStorageClass.pytype)
+                inMemoryDataset = readStorageClass.delegate().assemble(
+                    inMemoryDataset, pytype=readStorageClass.pytype
+                )
                 return readStorageClass.coerce_type(inMemoryDataset)
             elif not isinstance(inMemoryDataset, readStorageClass.pytype):
                 if not isinstance(inMemoryDataset, writeStorageClass.pytype):

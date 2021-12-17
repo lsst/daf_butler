@@ -19,14 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import unittest
-import pickle
 import copy
+import pickle
+import unittest
 
 from lsst.daf.butler import (
     DataCoordinate,
-    DatasetType,
     DatasetRef,
+    DatasetType,
     DimensionUniverse,
     StorageClass,
     StorageClassFactory,
@@ -37,8 +37,8 @@ from lsst.daf.butler import (
 
 
 class DatasetTypeTestCase(unittest.TestCase):
-    """Test for DatasetType.
-    """
+    """Test for DatasetType."""
+
     def setUp(self):
         self.universe = DimensionUniverse()
 
@@ -57,15 +57,12 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(datasetType.dimensions, dimensions)
 
         with self.assertRaises(ValueError, msg="Construct component without parent storage class"):
-            DatasetType(DatasetType.nameWithComponent(datasetTypeName, "comp"),
-                        dimensions, storageClass)
+            DatasetType(DatasetType.nameWithComponent(datasetTypeName, "comp"), dimensions, storageClass)
         with self.assertRaises(ValueError, msg="Construct non-component with parent storage class"):
-            DatasetType(datasetTypeName,
-                        dimensions, storageClass, parentStorageClass="NotAllowed")
+            DatasetType(datasetTypeName, dimensions, storageClass, parentStorageClass="NotAllowed")
 
     def testConstructor2(self):
-        """Test construction from StorageClass name.
-        """
+        """Test construction from StorageClass name."""
         datasetTypeName = "test"
         storageClass = StorageClass("test_constructor2")
         StorageClassFactory().registerStorageClass(storageClass)
@@ -85,8 +82,9 @@ class DatasetTypeTestCase(unittest.TestCase):
 
         # Construct storage class with all the good names included as
         # components so that we can test internal consistency
-        storageClass = StorageClass("test_StructuredData",
-                                    components={n: StorageClass("component") for n in goodNames})
+        storageClass = StorageClass(
+            "test_StructuredData", components={n: StorageClass("component") for n in goodNames}
+        )
 
         for name in goodNames:
             composite = DatasetType(name, dimensions, storageClass)
@@ -112,45 +110,168 @@ class DatasetTypeTestCase(unittest.TestCase):
         parent = StorageClass("test")
         dimensionsA = self.universe.extract(["instrument"])
         dimensionsB = self.universe.extract(["skymap"])
-        self.assertEqual(DatasetType("a", dimensionsA, storageA,),
-                         DatasetType("a", dimensionsA, storageA,))
-        self.assertEqual(DatasetType("a", dimensionsA, "test_a",),
-                         DatasetType("a", dimensionsA, storageA,))
-        self.assertEqual(DatasetType("a", dimensionsA, storageA,),
-                         DatasetType("a", dimensionsA, "test_a",))
-        self.assertEqual(DatasetType("a", dimensionsA, "test_a",),
-                         DatasetType("a", dimensionsA, "test_a",))
-        self.assertEqual(DatasetType("a.b", dimensionsA, "test_b", parentStorageClass=parent),
-                         DatasetType("a.b", dimensionsA, "test_b", parentStorageClass=parent))
-        self.assertEqual(DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent"),
-                         DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent"))
-        self.assertNotEqual(DatasetType("a", dimensionsA, storageA,),
-                            DatasetType("b", dimensionsA, storageA,))
-        self.assertNotEqual(DatasetType("a", dimensionsA, storageA,),
-                            DatasetType("b", dimensionsA, "test_a",))
-        self.assertNotEqual(DatasetType("a", dimensionsA, storageA,),
-                            DatasetType("a", dimensionsA, storageB,))
-        self.assertNotEqual(DatasetType("a", dimensionsA, storageA,),
-                            DatasetType("a", dimensionsA, "test_b",))
-        self.assertNotEqual(DatasetType("a", dimensionsA, storageA,),
-                            DatasetType("a", dimensionsB, storageA,))
-        self.assertNotEqual(DatasetType("a", dimensionsA, storageA,),
-                            DatasetType("a", dimensionsB, "test_a",))
-        self.assertNotEqual(DatasetType("a.b", dimensionsA, "test_b", parentStorageClass=storageA),
-                            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass=storageB))
-        self.assertNotEqual(DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageA"),
-                            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageB"))
+        self.assertEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+        )
+        self.assertEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                "test_a",
+            ),
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+        )
+        self.assertEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+            DatasetType(
+                "a",
+                dimensionsA,
+                "test_a",
+            ),
+        )
+        self.assertEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                "test_a",
+            ),
+            DatasetType(
+                "a",
+                dimensionsA,
+                "test_a",
+            ),
+        )
+        self.assertEqual(
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass=parent),
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass=parent),
+        )
+        self.assertEqual(
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent"),
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent"),
+        )
+        self.assertNotEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+            DatasetType(
+                "b",
+                dimensionsA,
+                storageA,
+            ),
+        )
+        self.assertNotEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+            DatasetType(
+                "b",
+                dimensionsA,
+                "test_a",
+            ),
+        )
+        self.assertNotEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageB,
+            ),
+        )
+        self.assertNotEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+            DatasetType(
+                "a",
+                dimensionsA,
+                "test_b",
+            ),
+        )
+        self.assertNotEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+            DatasetType(
+                "a",
+                dimensionsB,
+                storageA,
+            ),
+        )
+        self.assertNotEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+            DatasetType(
+                "a",
+                dimensionsB,
+                "test_a",
+            ),
+        )
+        self.assertNotEqual(
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass=storageA),
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass=storageB),
+        )
+        self.assertNotEqual(
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageA"),
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageB"),
+        )
 
     def testJson(self):
         storageA = StorageClass("test_a")
         dimensionsA = self.universe.extract(["instrument"])
-        self.assertEqual(DatasetType("a", dimensionsA, storageA,),
-                         DatasetType.from_json(DatasetType("a", dimensionsA, storageA,).to_json(),
-                                               self.universe))
-        self.assertEqual(DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent"),
-                         DatasetType.from_json(DatasetType("a.b", dimensionsA, "test_b",
-                                                           parentStorageClass="parent").to_json(),
-                                               self.universe))
+        self.assertEqual(
+            DatasetType(
+                "a",
+                dimensionsA,
+                storageA,
+            ),
+            DatasetType.from_json(
+                DatasetType(
+                    "a",
+                    dimensionsA,
+                    storageA,
+                ).to_json(),
+                self.universe,
+            ),
+        )
+        self.assertEqual(
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent"),
+            DatasetType.from_json(
+                DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent").to_json(),
+                self.universe,
+            ),
+        )
 
     def testSorting(self):
         """Can we sort a DatasetType"""
@@ -185,7 +306,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         storageD = StorageClass("test_d")
         for name in ["a", "b"]:
             for storageClass in [storageC, storageD]:
-                for dimensions in [("instrument", ), ("skymap", )]:
+                for dimensions in [("instrument",), ("skymap",)]:
                     datasetType = DatasetType(name, self.universe.extract(dimensions), storageClass)
                     datasetTypeCopy = DatasetType(name, self.universe.extract(dimensions), storageClass)
                     types.extend((datasetType, datasetTypeCopy))
@@ -195,16 +316,21 @@ class DatasetTypeTestCase(unittest.TestCase):
         # also check that hashes of instances constructed with StorageClass
         # name matches hashes of instances constructed with instances
         dimensions = self.universe.extract(["instrument"])
-        self.assertEqual(hash(DatasetType("a", dimensions, storageC)),
-                         hash(DatasetType("a", dimensions, "test_c")))
-        self.assertEqual(hash(DatasetType("a", dimensions, "test_c")),
-                         hash(DatasetType("a", dimensions, "test_c")))
-        self.assertNotEqual(hash(DatasetType("a", dimensions, storageC)),
-                            hash(DatasetType("a", dimensions, "test_d")))
-        self.assertNotEqual(hash(DatasetType("a", dimensions, storageD)),
-                            hash(DatasetType("a", dimensions, "test_c")))
-        self.assertNotEqual(hash(DatasetType("a", dimensions, "test_c")),
-                            hash(DatasetType("a", dimensions, "test_d")))
+        self.assertEqual(
+            hash(DatasetType("a", dimensions, storageC)), hash(DatasetType("a", dimensions, "test_c"))
+        )
+        self.assertEqual(
+            hash(DatasetType("a", dimensions, "test_c")), hash(DatasetType("a", dimensions, "test_c"))
+        )
+        self.assertNotEqual(
+            hash(DatasetType("a", dimensions, storageC)), hash(DatasetType("a", dimensions, "test_d"))
+        )
+        self.assertNotEqual(
+            hash(DatasetType("a", dimensions, storageD)), hash(DatasetType("a", dimensions, "test_c"))
+        )
+        self.assertNotEqual(
+            hash(DatasetType("a", dimensions, "test_c")), hash(DatasetType("a", dimensions, "test_d"))
+        )
 
     def testDeepCopy(self):
         """Test that we can copy a dataset type."""
@@ -223,15 +349,17 @@ class DatasetTypeTestCase(unittest.TestCase):
 
         # And again with a composite
         componentStorageClass = StorageClass("copy_component")
-        componentDatasetType = DatasetType(DatasetType.nameWithComponent(datasetTypeName, "comp"),
-                                           dimensions, componentStorageClass,
-                                           parentStorageClass=storageClass)
+        componentDatasetType = DatasetType(
+            DatasetType.nameWithComponent(datasetTypeName, "comp"),
+            dimensions,
+            componentStorageClass,
+            parentStorageClass=storageClass,
+        )
         dcopy = copy.deepcopy(componentDatasetType)
         self.assertEqual(dcopy, componentDatasetType)
 
     def testPickle(self):
-        """Test pickle support.
-        """
+        """Test pickle support."""
         storageClass = StorageClass("test_pickle")
         datasetTypeName = "test"
         dimensions = self.universe.extract(("instrument", "visit"))
@@ -255,46 +383,53 @@ class DatasetTypeTestCase(unittest.TestCase):
         # And again with a composite
         componentStorageClass = StorageClass("pickle_component")
         StorageClassFactory().registerStorageClass(componentStorageClass)
-        componentDatasetType = DatasetType(DatasetType.nameWithComponent(datasetTypeName, "comp"),
-                                           dimensions, componentStorageClass,
-                                           parentStorageClass=storageClass)
+        componentDatasetType = DatasetType(
+            DatasetType.nameWithComponent(datasetTypeName, "comp"),
+            dimensions,
+            componentStorageClass,
+            parentStorageClass=storageClass,
+        )
         datasetTypeOut = pickle.loads(pickle.dumps(componentDatasetType))
         self.assertIsInstance(datasetTypeOut, DatasetType)
         self.assertEqual(componentDatasetType.name, datasetTypeOut.name)
         self.assertEqual(componentDatasetType.dimensions.names, datasetTypeOut.dimensions.names)
         self.assertEqual(componentDatasetType.storageClass, datasetTypeOut.storageClass)
         self.assertEqual(componentDatasetType.parentStorageClass, datasetTypeOut.parentStorageClass)
-        self.assertEqual(datasetTypeOut.parentStorageClass.name,
-                         storageClass.name)
+        self.assertEqual(datasetTypeOut.parentStorageClass.name, storageClass.name)
         self.assertEqual(datasetTypeOut, componentDatasetType)
 
         # Now with a string and not a real storage class to test that
         # pickling doesn't force the StorageClass to be resolved
-        componentDatasetType = DatasetType(DatasetType.nameWithComponent(datasetTypeName, "comp"),
-                                           dimensions, "StrangeComponent",
-                                           parentStorageClass="UnknownParent")
+        componentDatasetType = DatasetType(
+            DatasetType.nameWithComponent(datasetTypeName, "comp"),
+            dimensions,
+            "StrangeComponent",
+            parentStorageClass="UnknownParent",
+        )
         datasetTypeOut = pickle.loads(pickle.dumps(componentDatasetType))
         self.assertEqual(datasetTypeOut, componentDatasetType)
-        self.assertEqual(datasetTypeOut._parentStorageClassName,
-                         componentDatasetType._parentStorageClassName)
+        self.assertEqual(datasetTypeOut._parentStorageClassName, componentDatasetType._parentStorageClassName)
 
         # Now with a storage class that is created by the factory
         factoryStorageClassClass = StorageClassFactory.makeNewStorageClass("ParentClass")
         factoryComponentStorageClassClass = StorageClassFactory.makeNewStorageClass("ComponentClass")
-        componentDatasetType = DatasetType(DatasetType.nameWithComponent(datasetTypeName, "comp"),
-                                           dimensions, factoryComponentStorageClassClass(),
-                                           parentStorageClass=factoryStorageClassClass())
+        componentDatasetType = DatasetType(
+            DatasetType.nameWithComponent(datasetTypeName, "comp"),
+            dimensions,
+            factoryComponentStorageClassClass(),
+            parentStorageClass=factoryStorageClassClass(),
+        )
         datasetTypeOut = pickle.loads(pickle.dumps(componentDatasetType))
         self.assertEqual(datasetTypeOut, componentDatasetType)
-        self.assertEqual(datasetTypeOut._parentStorageClassName,
-                         componentDatasetType._parentStorageClassName)
+        self.assertEqual(datasetTypeOut._parentStorageClassName, componentDatasetType._parentStorageClassName)
 
     def test_composites(self):
         """Test components within composite DatasetTypes."""
         storageClassA = StorageClass("compA")
         storageClassB = StorageClass("compB")
-        storageClass = StorageClass("test_composite", components={"compA": storageClassA,
-                                                                  "compB": storageClassB})
+        storageClass = StorageClass(
+            "test_composite", components={"compA": storageClassA, "compB": storageClassB}
+        )
         self.assertTrue(storageClass.isComposite())
         self.assertFalse(storageClassA.isComposite())
         self.assertFalse(storageClassB.isComposite())
@@ -322,28 +457,28 @@ class DatasetTypeTestCase(unittest.TestCase):
 
 
 class DatasetRefTestCase(unittest.TestCase):
-    """Test for DatasetRef.
-    """
+    """Test for DatasetRef."""
 
     def setUp(self):
         self.universe = DimensionUniverse()
         datasetTypeName = "test"
         self.componentStorageClass1 = StorageClass("Component1")
         self.componentStorageClass2 = StorageClass("Component2")
-        self.parentStorageClass = StorageClass("Parent", components={"a": self.componentStorageClass1,
-                                                                     "b": self.componentStorageClass2})
+        self.parentStorageClass = StorageClass(
+            "Parent", components={"a": self.componentStorageClass1, "b": self.componentStorageClass2}
+        )
         dimensions = self.universe.extract(("instrument", "visit"))
         self.dataId = dict(instrument="DummyCam", visit=42)
         self.datasetType = DatasetType(datasetTypeName, dimensions, self.parentStorageClass)
 
     def testConstructor(self):
-        """Test that construction preserves and validates values.
-        """
+        """Test that construction preserves and validates values."""
         # Construct an unresolved ref.
         ref = DatasetRef(self.datasetType, self.dataId)
         self.assertEqual(ref.datasetType, self.datasetType)
-        self.assertEqual(ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe),
-                         msg=ref.dataId)
+        self.assertEqual(
+            ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe), msg=ref.dataId
+        )
         self.assertIsInstance(ref.dataId, DataCoordinate)
         # Constructing an unresolved ref with run and/or components should
         # fail.
@@ -357,8 +492,9 @@ class DatasetRefTestCase(unittest.TestCase):
         # else.
         ref = DatasetRef(self.datasetType, self.dataId, id=1, run=run)
         self.assertEqual(ref.datasetType, self.datasetType)
-        self.assertEqual(ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe),
-                         msg=ref.dataId)
+        self.assertEqual(
+            ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe), msg=ref.dataId
+        )
         self.assertIsInstance(ref.dataId, DataCoordinate)
         self.assertEqual(ref.id, 1)
         self.assertEqual(ref.run, run)

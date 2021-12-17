@@ -26,13 +26,7 @@ from __future__ import annotations
 __all__ = ("FileFormatter",)
 
 from abc import abstractmethod
-
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Optional,
-    Type,
-)
+from typing import TYPE_CHECKING, Any, Optional, Type
 
 from lsst.daf.butler import Formatter
 
@@ -41,8 +35,7 @@ if TYPE_CHECKING:
 
 
 class FileFormatter(Formatter):
-    """Interface for reading and writing files on a POSIX file system.
-    """
+    """Interface for reading and writing files on a POSIX file system."""
 
     extension: Optional[str] = None
     """Default file extension to use for writing files. None means that no
@@ -118,9 +111,11 @@ class FileFormatter(Formatter):
                 # it will be an error if no valid converter is available
                 # for this pytype.
                 if not readStorageClass.can_convert(fileDescriptor.storageClass):
-                    raise ValueError(f"Storage class inconsistency ({readStorageClass.name,} vs"
-                                     f" {fileDescriptor.storageClass.name}) but no"
-                                     " component requested or converter registered")
+                    raise ValueError(
+                        f"Storage class inconsistency ({readStorageClass.name,} vs"
+                        f" {fileDescriptor.storageClass.name}) but no"
+                        " component requested or converter registered"
+                    )
             else:
                 # Concrete composite written as a single file (we hope)
                 try:
@@ -135,8 +130,9 @@ class FileFormatter(Formatter):
 
         return data
 
-    def _coerceType(self, inMemoryDataset: Any, writeStorageClass: StorageClass,
-                    readStorageClass: StorageClass) -> Any:
+    def _coerceType(
+        self, inMemoryDataset: Any, writeStorageClass: StorageClass, readStorageClass: StorageClass
+    ) -> Any:
         """Coerce the supplied inMemoryDataset to the correct python type.
 
         Parameters
@@ -221,12 +217,11 @@ class FileFormatter(Formatter):
         NotImplementedError
             Formatter does not support reading from bytes.
         """
-        if not hasattr(self, '_fromBytes'):
+        if not hasattr(self, "_fromBytes"):
             raise NotImplementedError("Type does not support reading from bytes.")
 
         # mypy can not understand that the previous line protects this call
-        data = self._fromBytes(serializedDataset,  # type: ignore
-                               self.fileDescriptor.storageClass.pytype)
+        data = self._fromBytes(serializedDataset, self.fileDescriptor.storageClass.pytype)  # type: ignore
 
         # Assemble the requested dataset and potentially return only its
         # component coercing it to its appropriate pytype
@@ -237,8 +232,9 @@ class FileFormatter(Formatter):
         if data is None and component is None:
             nbytes = len(serializedDataset)
             s = "s" if nbytes != 1 else ""
-            raise ValueError(f"Unable to unpersist {nbytes} byte{s} from "
-                             f"URI {self.fileDescriptor.location.uri}")
+            raise ValueError(
+                f"Unable to unpersist {nbytes} byte{s} from " f"URI {self.fileDescriptor.location.uri}"
+            )
 
         return data
 
@@ -279,7 +275,7 @@ class FileFormatter(Formatter):
         NotImplementedError
             Formatter does not support reading from bytes.
         """
-        if not hasattr(self, '_toBytes'):
+        if not hasattr(self, "_toBytes"):
             raise NotImplementedError("Type does not support reading from bytes.")
 
         # mypy can not understand that the previous line protects this call

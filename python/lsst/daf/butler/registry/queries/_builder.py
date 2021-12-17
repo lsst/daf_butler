@@ -27,22 +27,13 @@ from typing import AbstractSet, Any, Iterable, List, Optional
 
 import sqlalchemy.sql
 
-from ...core import (
-    DimensionElement,
-    SkyPixDimension,
-    Dimension,
-    DatasetType,
-    SimpleQuery,
-)
-
+from ...core import DatasetType, Dimension, DimensionElement, SimpleQuery, SkyPixDimension, ddl
 from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
-from ...core import ddl
-
 from .._collectionType import CollectionType
-from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns, RegistryManagers
-from .expressions import convertExpressionToSql
+from ..wildcards import CollectionQuery, CollectionSearch
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
-from ..wildcards import CollectionSearch, CollectionQuery
+from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryManagers
+from .expressions import convertExpressionToSql
 
 
 class QueryBuilder:
@@ -61,6 +52,7 @@ class QueryBuilder:
         explain why the query is known to return no results even before it is
         executed.  Queries with a non-empty list will never be executed.
     """
+
     def __init__(self, summary: QuerySummary, managers: RegistryManagers, doomed_by: Iterable[str] = ()):
         self.summary = summary
         self._simpleQuery = SimpleQuery()
@@ -102,8 +94,9 @@ class QueryBuilder:
         )
         self._elements[element] = fromClause
 
-    def joinDataset(self, datasetType: DatasetType, collections: Any, *,
-                    isResult: bool = True, findFirst: bool = False) -> bool:
+    def joinDataset(
+        self, datasetType: DatasetType, collections: Any, *, isResult: bool = True, findFirst: bool = False
+    ) -> bool:
         """Add a dataset search or constraint to the query.
 
         Unlike other `QueryBuilder` join methods, this *must* be called
@@ -176,8 +169,9 @@ class QueryBuilder:
             calibration_collections = []
             other_collections = []
         rejections: List[str] = []
-        for rank, collectionRecord in enumerate(collections.iter(self._managers.collections,
-                                                                 collectionTypes=collectionTypes)):
+        for rank, collectionRecord in enumerate(
+            collections.iter(self._managers.collections, collectionTypes=collectionTypes)
+        ):
             # Only include collections that (according to collection summaries)
             # might have datasets of this type and governor dimensions
             # consistent with the query's WHERE clause.
@@ -321,23 +315,21 @@ class QueryBuilder:
                 windowSelectCols += windowDataIdCols
                 assert {c.name for c in windowSelectCols} == baseColumnNames
                 windowSelectCols.append(
-                    sqlalchemy.sql.func.row_number().over(
-                        partition_by=windowDataIdCols,
-                        order_by=search.columns["rank"]
-                    ).label("rownum")
+                    sqlalchemy.sql.func.row_number()
+                    .over(partition_by=windowDataIdCols, order_by=search.columns["rank"])
+                    .label("rownum")
                 )
-                window = sqlalchemy.sql.select(
-                    *windowSelectCols
-                ).select_from(search).alias(
-                    f"{datasetType.name}_window"
+                window = (
+                    sqlalchemy.sql.select(*windowSelectCols)
+                    .select_from(search)
+                    .alias(f"{datasetType.name}_window")
                 )
-                subquery = sqlalchemy.sql.select(
-                    *[window.columns[name].label(name) for name in baseColumnNames]
-                ).select_from(
-                    window
-                ).where(
-                    window.columns["rownum"] == 1
-                ).alias(datasetType.name)
+                subquery = (
+                    sqlalchemy.sql.select(*[window.columns[name].label(name) for name in baseColumnNames])
+                    .select_from(window)
+                    .where(window.columns["rownum"] == 1)
+                    .alias(datasetType.name)
+                )
             else:
                 subquery = subquery.alias(datasetType.name)
             columns = DatasetQueryColumns(
@@ -351,8 +343,13 @@ class QueryBuilder:
         self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
         return not self._doomed_by
 
-    def joinTable(self, table: sqlalchemy.sql.FromClause, dimensions: NamedValueAbstractSet[Dimension], *,
-                  datasets: Optional[DatasetQueryColumns] = None) -> None:
+    def joinTable(
+        self,
+        table: sqlalchemy.sql.FromClause,
+        dimensions: NamedValueAbstractSet[Dimension],
+        *,
+        datasets: Optional[DatasetQueryColumns] = None,
+    ) -> None:
         """Join an arbitrary table to the query via dimension relationships.
 
         External calls to this method should only be necessary for tables whose
@@ -380,13 +377,14 @@ class QueryBuilder:
         joinOn = self.startJoin(table, dimensions, dimensions.names)
         self.finishJoin(table, joinOn)
         if datasets is not None:
-            assert self._columns.datasets is None, \
-                "At most one result dataset type can be returned by a query."
+            assert (
+                self._columns.datasets is None
+            ), "At most one result dataset type can be returned by a query."
             self._columns.datasets = datasets
 
-    def startJoin(self, table: sqlalchemy.sql.FromClause, dimensions: Iterable[Dimension],
-                  columnNames: Iterable[str]
-                  ) -> List[sqlalchemy.sql.ColumnElement]:
+    def startJoin(
+        self, table: sqlalchemy.sql.FromClause, dimensions: Iterable[Dimension], columnNames: Iterable[str]
+    ) -> List[sqlalchemy.sql.ColumnElement]:
         """Begin a join on dimensions.
 
         Must be followed by call to `finishJoin`.
@@ -419,8 +417,9 @@ class QueryBuilder:
             columnsInQuery.append(columnInTable)
         return joinOn
 
-    def finishJoin(self, table: sqlalchemy.sql.FromClause, joinOn: List[sqlalchemy.sql.ColumnElement]
-                   ) -> None:
+    def finishJoin(
+        self, table: sqlalchemy.sql.FromClause, joinOn: List[sqlalchemy.sql.ColumnElement]
+    ) -> None:
         """Complete a join on dimensions.
 
         Must be preceded by call to `startJoin`.
@@ -541,17 +540,20 @@ class QueryBuilder:
             self._joinMissingDimensionElements()
         self._addWhereClause()
         if self._columns.isEmpty():
-            return EmptyQuery(self.summary.requested.universe, managers=self._managers,
-                              doomed_by=self._doomed_by)
-        return DirectQuery(graph=self.summary.requested,
-                           uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
-                           whereRegion=self.summary.where.dataId.region,
-                           simpleQuery=self._simpleQuery,
-                           columns=self._columns,
-                           order_by_columns=self._order_by_columns(),
-                           limit=self.summary.limit,
-                           managers=self._managers,
-                           doomed_by=self._doomed_by)
+            return EmptyQuery(
+                self.summary.requested.universe, managers=self._managers, doomed_by=self._doomed_by
+            )
+        return DirectQuery(
+            graph=self.summary.requested,
+            uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
+            whereRegion=self.summary.where.dataId.region,
+            simpleQuery=self._simpleQuery,
+            columns=self._columns,
+            order_by_columns=self._order_by_columns(),
+            limit=self.summary.limit,
+            managers=self._managers,
+            doomed_by=self._doomed_by,
+        )
 
     def _order_by_columns(self) -> Iterable[OrderByColumn]:
         """Generate columns to be used for ORDER BY clause.
@@ -602,9 +604,13 @@ class QueryBuilder:
                 add_to_select = True
 
             order_by_columns.append(
-                OrderByColumn(column=column, ordering=order_by_column.ordering,
-                              add_to_select=add_to_select, field_spec=field_spec,
-                              dimension=dimension)
+                OrderByColumn(
+                    column=column,
+                    ordering=order_by_column.ordering,
+                    add_to_select=add_to_select,
+                    field_spec=field_spec,
+                    dimension=dimension,
+                )
             )
 
         return order_by_columns

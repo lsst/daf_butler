@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ("EphemeralDatastoreRegistryBridge",)
 
 from contextlib import contextmanager
-from typing import Iterable, Iterator, Set, Tuple, TYPE_CHECKING, Optional, Type
+from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Set, Tuple, Type
 
 from lsst.daf.butler import DatasetId
 from lsst.daf.butler.registry.interfaces import (
@@ -54,6 +54,7 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
     to use in-database temporary tables instead in the future to support
     "in-datastore" constraints in `Registry.queryDatasets`.
     """
+
     def __init__(self, datastoreName: str):
         super().__init__(datastoreName)
         self._datasetIds: Set[DatasetId] = set()
@@ -78,19 +79,24 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
         return ref.getCheckedId() in self._datasetIds and ref.getCheckedId() not in self._trashedIds
 
     @contextmanager
-    def emptyTrash(self, records_table: Optional[OpaqueTableStorage] = None,
-                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
-                   record_column: Optional[str] = None,
-                   ) -> Iterator[Tuple[Iterable[Tuple[DatasetIdRef,
-                                                      Optional[StoredDatastoreItemInfo]]],
-                                       Optional[Set[str]]]]:
+    def emptyTrash(
+        self,
+        records_table: Optional[OpaqueTableStorage] = None,
+        record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
+        record_column: Optional[str] = None,
+    ) -> Iterator[
+        Tuple[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]], Optional[Set[str]]]
+    ]:
         # Docstring inherited from DatastoreRegistryBridge
         matches: Iterable[Tuple[FakeDatasetRef, Optional[StoredDatastoreItemInfo]]] = ()
         if isinstance(records_table, OpaqueTableStorage):
             if record_class is None:
                 raise ValueError("Record class must be provided if records table is given.")
-            matches = ((FakeDatasetRef(id), record_class.from_record(record))
-                       for id in self._trashedIds for record in records_table.fetch(dataset_id=id))
+            matches = (
+                (FakeDatasetRef(id), record_class.from_record(record))
+                for id in self._trashedIds
+                for record in records_table.fetch(dataset_id=id)
+            )
         else:
             matches = ((FakeDatasetRef(id), None) for id in self._trashedIds)
 

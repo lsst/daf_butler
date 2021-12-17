@@ -21,18 +21,10 @@
 
 from __future__ import annotations
 
-__all__ = ("MappingFactory", )
+__all__ = ("MappingFactory",)
 
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    List,
-    Set,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Dict, Iterable, List, Set, Tuple, Type, Union
+
 from lsst.utils.introspection import get_class_of
 
 from .config import Config
@@ -88,8 +80,9 @@ class MappingFactory:
         """
         return set(self._registry)
 
-    def getClassFromRegistryWithMatch(self, targetClasses: Iterable[Any]) -> Tuple[LookupKey, Type,
-                                                                                   Dict[Any, Any]]:
+    def getClassFromRegistryWithMatch(
+        self, targetClasses: Iterable[Any]
+    ) -> Tuple[LookupKey, Type, Dict[Any, Any]]:
         """Get the class stored in the registry along with the matching key.
 
         Parameters
@@ -115,7 +108,7 @@ class MappingFactory:
             registry.
         """
         attempts: List[Any] = []
-        for t in (targetClasses):
+        for t in targetClasses:
             if t is None:
                 attempts.append(t)
             else:
@@ -157,8 +150,9 @@ class MappingFactory:
         _, cls, _ = self.getClassFromRegistryWithMatch(targetClasses)
         return cls
 
-    def getFromRegistryWithMatch(self, targetClasses: Iterable[Any], *args: Any,
-                                 **kwargs: Any) -> Tuple[LookupKey, Any]:
+    def getFromRegistryWithMatch(
+        self, targetClasses: Iterable[Any], *args: Any, **kwargs: Any
+    ) -> Tuple[LookupKey, Any]:
         """Get a new instance of the registry object along with matching key.
 
         Parameters
@@ -225,8 +219,9 @@ class MappingFactory:
         _, instance = self.getFromRegistryWithMatch(targetClasses, *args, **kwargs)
         return instance
 
-    def placeInRegistry(self, registryKey: Any, typeName: Union[str, Type],
-                        overwrite: bool = False, **kwargs: Any) -> None:
+    def placeInRegistry(
+        self, registryKey: Any, typeName: Union[str, Type], overwrite: bool = False, **kwargs: Any
+    ) -> None:
         """Register a class name with the associated type.
 
         Parameters
@@ -256,12 +251,15 @@ class MappingFactory:
             if str(self._registry[key]) == str(typeName):
                 return
 
-            raise KeyError("Item with key {} already registered with different value"
-                           " ({} != {})".format(key, self._registry[key], typeName))
+            raise KeyError(
+                "Item with key {} already registered with different value"
+                " ({} != {})".format(key, self._registry[key], typeName)
+            )
 
-        self._registry[key] = {"type": typeName,
-                               "kwargs": dict(**kwargs),
-                               }
+        self._registry[key] = {
+            "type": typeName,
+            "kwargs": dict(**kwargs),
+        }
 
     @staticmethod
     def _getNameKey(typeOrName: Any) -> LookupKey:

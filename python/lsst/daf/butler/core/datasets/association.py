@@ -24,8 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from .ref import DatasetRef
 from ..timespan import Timespan
+from .ref import DatasetRef
 
 
 @dataclass

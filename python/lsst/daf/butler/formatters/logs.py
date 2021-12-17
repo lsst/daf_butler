@@ -19,15 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("ButlerLogRecordsFormatter", )
+__all__ = ("ButlerLogRecordsFormatter",)
 
-from typing import (
-    Any,
-    Optional,
-    Type,
-)
+from typing import Any, Optional, Type
 
 from lsst.daf.butler.core.logging import ButlerLogRecords
+
 from .json import JsonFormatter
 
 

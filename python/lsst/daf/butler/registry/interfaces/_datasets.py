@@ -23,33 +23,18 @@ from __future__ import annotations
 
 __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage", "DatasetIdGenEnum")
 
-from abc import ABC, abstractmethod
 import enum
-from typing import (
-    Any,
-    Iterable,
-    Iterator,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-)
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Tuple
 
-from ...core import (
-    DataCoordinate,
-    DatasetId,
-    DatasetRef,
-    DatasetType,
-    ddl,
-    SimpleQuery,
-    Timespan,
-)
+from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ..summaries import CollectionSummary
+    from ._collections import CollectionManager, CollectionRecord, RunRecord
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
-    from ._collections import CollectionManager, CollectionRecord, RunRecord
 
 
 class DatasetIdGenEnum(enum.Enum):
@@ -82,12 +67,17 @@ class DatasetRecordStorage(ABC):
     datasetType : `DatasetType`
         Dataset type whose records this object manages.
     """
+
     def __init__(self, datasetType: DatasetType):
         self.datasetType = datasetType
 
     @abstractmethod
-    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate],
-               idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
+    def insert(
+        self,
+        run: RunRecord,
+        dataIds: Iterable[DataCoordinate],
+        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+    ) -> Iterator[DatasetRef]:
         """Insert one or more dataset entries into the database.
 
         Parameters
@@ -113,9 +103,13 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
-                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-                reuseIds: bool = False) -> Iterator[DatasetRef]:
+    def import_(
+        self,
+        run: RunRecord,
+        datasets: Iterable[DatasetRef],
+        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+        reuseIds: bool = False,
+    ) -> Iterator[DatasetRef]:
         """Insert one or more dataset entries into the database.
 
         Parameters
@@ -157,8 +151,9 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def find(self, collection: CollectionRecord, dataId: DataCoordinate,
-             timespan: Optional[Timespan] = None) -> Optional[DatasetRef]:
+    def find(
+        self, collection: CollectionRecord, dataId: DataCoordinate, timespan: Optional[Timespan] = None
+    ) -> Optional[DatasetRef]:
         """Search a collection for a dataset with the given data ID.
 
         Parameters
@@ -249,8 +244,9 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def certify(self, collection: CollectionRecord, datasets: Iterable[DatasetRef],
-                timespan: Timespan) -> None:
+    def certify(
+        self, collection: CollectionRecord, datasets: Iterable[DatasetRef], timespan: Timespan
+    ) -> None:
         """Associate one or more datasets with a calibration collection and a
         validity range within it.
 
@@ -281,8 +277,13 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def decertify(self, collection: CollectionRecord, timespan: Timespan, *,
-                  dataIds: Optional[Iterable[DataCoordinate]] = None) -> None:
+    def decertify(
+        self,
+        collection: CollectionRecord,
+        timespan: Timespan,
+        *,
+        dataIds: Optional[Iterable[DataCoordinate]] = None,
+    ) -> None:
         """Remove or adjust datasets to clear a validity range within a
         calibration collection.
 
@@ -309,13 +310,15 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def select(self, *collections: CollectionRecord,
-               dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
-               id: SimpleQuery.Select.Or[Optional[DatasetId]] = SimpleQuery.Select,
-               run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
-               timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
-               ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
-               ) -> SimpleQuery:
+    def select(
+        self,
+        *collections: CollectionRecord,
+        dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
+        id: SimpleQuery.Select.Or[Optional[DatasetId]] = SimpleQuery.Select,
+        run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
+        timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
+        ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
+    ) -> SimpleQuery:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
         this `DatasetType`.
 
@@ -382,7 +385,8 @@ class DatasetRecordStorageManager(VersionedExtension):
     def initialize(
         cls,
         db: Database,
-        context: StaticTablesContext, *,
+        context: StaticTablesContext,
+        *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
     ) -> DatasetRecordStorageManager:
@@ -442,9 +446,15 @@ class DatasetRecordStorageManager(VersionedExtension):
 
     @classmethod
     @abstractmethod
-    def addDatasetForeignKey(cls, tableSpec: ddl.TableSpec, *,
-                             name: str = "dataset", constraint: bool = True, onDelete: Optional[str] = None,
-                             **kwargs: Any) -> ddl.FieldSpec:
+    def addDatasetForeignKey(
+        cls,
+        tableSpec: ddl.TableSpec,
+        *,
+        name: str = "dataset",
+        constraint: bool = True,
+        onDelete: Optional[str] = None,
+        **kwargs: Any,
+    ) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the dataset
         table.
 

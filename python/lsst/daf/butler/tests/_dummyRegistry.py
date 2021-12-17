@@ -19,29 +19,27 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DummyRegistry", )
+__all__ = ("DummyRegistry",)
 
 
 from typing import Any, Iterable, Iterator, Optional, Type
 
 import sqlalchemy
-
-from lsst.daf.butler import ddl, DatasetRef, DimensionUniverse
+from lsst.daf.butler import DatasetRef, DimensionUniverse, ddl
+from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 from lsst.daf.butler.registry.interfaces import (
     Database,
     DatasetRecordStorageManager,
     DatastoreRegistryBridge,
     DatastoreRegistryBridgeManager,
-    OpaqueTableStorageManager,
     OpaqueTableStorage,
+    OpaqueTableStorageManager,
     StaticTablesContext,
-    VersionTuple
+    VersionTuple,
 )
-from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 
 
 class DummyOpaqueTableStorage(OpaqueTableStorage):
-
     def __init__(self, name: str, spec: ddl.TableSpec):
         super().__init__(name=name)
         self._rows = []
@@ -55,8 +53,9 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
             for constraint in uniqueConstraints:
                 matching = list(self.fetch(**{k: d[k] for k in constraint}))
                 if len(matching) != 0:
-                    raise RuntimeError(f"Unique constraint {constraint} violation "
-                                       "in external table {self.name}.")
+                    raise RuntimeError(
+                        f"Unique constraint {constraint} violation " "in external table {self.name}."
+                    )
             self._rows.append(d)
 
     def fetch(self, **where: Any) -> Iterator[dict]:
@@ -96,7 +95,6 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
 
 
 class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
-
     def __init__(self):
         self._storages = {}
 
@@ -125,18 +123,22 @@ class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
 
 
 class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
-
-    def __init__(self, opaque: OpaqueTableStorageManager, universe: DimensionUniverse,
-                 datasetIdColumnType: type):
+    def __init__(
+        self, opaque: OpaqueTableStorageManager, universe: DimensionUniverse, datasetIdColumnType: type
+    ):
         super().__init__(opaque=opaque, universe=universe, datasetIdColumnType=datasetIdColumnType)
         self._bridges = {}
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext, *,
-                   opaque: OpaqueTableStorageManager,
-                   datasets: Type[DatasetRecordStorageManager],
-                   universe: DimensionUniverse,
-                   ) -> DatastoreRegistryBridgeManager:
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext,
+        *,
+        opaque: OpaqueTableStorageManager,
+        datasets: Type[DatasetRecordStorageManager],
+        universe: DimensionUniverse,
+    ) -> DatastoreRegistryBridgeManager:
         # Docstring inherited from DatastoreRegistryBridgeManager
         # Not used, but needed to satisfy ABC requirement.
         return cls(opaque=opaque, universe=universe, datasetIdColumnType=datasets.getIdColumnType())
@@ -166,13 +168,14 @@ class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
 
 
 class DummyRegistry:
-    """Dummy Registry, for Datastore test purposes.
-    """
+    """Dummy Registry, for Datastore test purposes."""
+
     def __init__(self):
         self._opaque = DummyOpaqueTableStorageManager()
         self.dimensions = DimensionUniverse()
         self._datastoreBridges = DummyDatastoreRegistryBridgeManager(
-            self._opaque, self.dimensions, sqlalchemy.BigInteger)
+            self._opaque, self.dimensions, sqlalchemy.BigInteger
+        )
 
     def getDatastoreBridgeManager(self):
         return self._datastoreBridges

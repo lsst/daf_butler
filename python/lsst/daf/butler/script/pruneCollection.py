@@ -20,17 +20,19 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from astropy.table import Table
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Union
-from .. import Butler
+
+from astropy.table import Table
+
 from .. import (
+    Butler,
+    PurgeUnsupportedPruneCollectionsError,
     PurgeWithoutUnstorePruneCollectionsError,
     RunWithoutPurgePruneCollectionsError,
-    PurgeUnsupportedPruneCollectionsError,
 )
-from . import QueryDatasets
 from ..registry import CollectionType
+from . import QueryDatasets
 
 
 class PruneCollectionResult:
@@ -45,12 +47,9 @@ class PruneCollectionResult:
         self.confirm: bool = confirm
 
 
-def pruneCollection(repo: str,
-                    collection: str,
-                    purge: bool,
-                    unstore: bool,
-                    unlink: List[str],
-                    confirm: bool) -> Table:
+def pruneCollection(
+    repo: str, collection: str, purge: bool, unstore: bool, unlink: List[str], confirm: bool
+) -> Table:
     """Remove a collection and possibly prune datasets within it.
 
     Parameters
@@ -80,6 +79,7 @@ def pruneCollection(repo: str,
     class CollectionInfo:
         """Lightweight container to hold the type of collection and the number
         of datasets in the collection if applicable."""
+
         count: Optional[int]
         type: str
 
@@ -89,12 +89,14 @@ def pruneCollection(repo: str,
         butler = Butler(repo)
         collectionNames = list(
             butler.registry.queryCollections(
-                collectionTypes=frozenset((
-                    CollectionType.RUN,
-                    CollectionType.TAGGED,
-                    CollectionType.CHAINED,
-                    CollectionType.CALIBRATION,
-                )),
+                collectionTypes=frozenset(
+                    (
+                        CollectionType.RUN,
+                        CollectionType.TAGGED,
+                        CollectionType.CHAINED,
+                        CollectionType.CALIBRATION,
+                    )
+                ),
                 expression=(collection,),
                 includeChains=True,
             )
@@ -134,7 +136,7 @@ def pruneCollection(repo: str,
                 [v.type for v in collections.values()],
                 [v.count if v.count is not None else "-" for v in collections.values()],
             ],
-            names=("Collection", "Collection Type", "Number of Datasets")
+            names=("Collection", "Collection Type", "Number of Datasets"),
         )
 
     def doRemove() -> None:
@@ -148,7 +150,8 @@ def pruneCollection(repo: str,
             raise TypeError(f"Cannot prune RUN collection {e.collectionType.name} without --purge.") from e
         except PurgeUnsupportedPruneCollectionsError as e:
             raise TypeError(
-                f"Cannot prune {e.collectionType} collection {e.collectionType.name} with --purge.") from e
+                f"Cannot prune {e.collectionType} collection {e.collectionType.name} with --purge."
+            ) from e
 
     result.onConfirmation = doRemove
     return result

@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
+
 """Interfaces for the objects that manage opaque (logical) tables within a
 `Registry`.
 """
@@ -26,12 +27,7 @@ from __future__ import annotations
 __all__ = ["OpaqueTableStorageManager", "OpaqueTableStorage"]
 
 from abc import ABC, abstractmethod
-from typing import (
-    Any,
-    Iterable,
-    Iterator,
-    Optional,
-)
+from typing import Any, Iterable, Iterator, Optional
 
 from ...core.ddl import TableSpec
 from ._database import Database, StaticTablesContext
@@ -47,6 +43,7 @@ class OpaqueTableStorage(ABC):
     name : `str`
         Name of the opaque table.
     """
+
     def __init__(self, name: str):
         self.name = name
 

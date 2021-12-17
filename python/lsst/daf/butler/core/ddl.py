@@ -34,27 +34,34 @@ from __future__ import annotations
 
 from lsst import sphgeom
 
-__all__ = ("TableSpec", "FieldSpec", "ForeignKeySpec", "Base64Bytes", "Base64Region",
-           "AstropyTimeNsecTai", "GUID")
+__all__ = (
+    "TableSpec",
+    "FieldSpec",
+    "ForeignKeySpec",
+    "Base64Bytes",
+    "Base64Region",
+    "AstropyTimeNsecTai",
+    "GUID",
+)
 
-from base64 import b64encode, b64decode
 import logging
-from math import ceil
-from dataclasses import dataclass
-from typing import Any, Callable, Iterable, List, Optional, Set, Tuple, Type, TYPE_CHECKING, Union
 import uuid
+from base64 import b64decode, b64encode
+from dataclasses import dataclass
+from math import ceil
+from typing import TYPE_CHECKING, Any, Callable, Iterable, List, Optional, Set, Tuple, Type, Union
 
-import sqlalchemy
-from sqlalchemy.dialects.postgresql import UUID
 import astropy.time
-
-from lsst.utils.iteration import ensure_iterable
+import sqlalchemy
 from lsst.sphgeom import Region
+from lsst.utils.iteration import ensure_iterable
+from sqlalchemy.dialects.postgresql import UUID
+
+from . import time_utils
 from .config import Config
 from .exceptions import ValidationError
-from . import time_utils
-from .utils import stripIfNotNone
 from .named import NamedValueSet
+from .utils import stripIfNotNone
 
 if TYPE_CHECKING:
     from .timespan import TimespanDatabaseRepresentation
@@ -84,13 +91,16 @@ class SchemaValidationError(ValidationError):
             ``config``, ``err``, or any keyword-only argument accepted by
             the decorated function.
         """
+
         def decorate(func: Callable) -> Callable:
             def decorated(self: Any, config: Config, *args: Any, **kwargs: Any) -> Any:
                 try:
                     return func(self, config, *args, **kwargs)
                 except caught as err:
                     raise cls(message.format(config=str(config), err=err))
+
             return decorated
+
         return decorate
 
 
@@ -105,12 +115,11 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
     cache_ok = True
 
     def __init__(self, nbytes: int, *args: Any, **kwargs: Any):
-        length = 4*ceil(nbytes/3) if self.impl == sqlalchemy.String else None
+        length = 4 * ceil(nbytes / 3) if self.impl == sqlalchemy.String else None
         super().__init__(*args, length=length, **kwargs)
         self.nbytes = nbytes
 
-    def process_bind_param(self, value: Optional[bytes], dialect: sqlalchemy.engine.Dialect
-                           ) -> Optional[str]:
+    def process_bind_param(self, value: Optional[bytes], dialect: sqlalchemy.engine.Dialect) -> Optional[str]:
         # 'value' is native `bytes`.  We want to encode that to base64 `bytes`
         # and then ASCII `str`, because `str` is what SQLAlchemy expects for
         # String fields.
@@ -122,8 +131,9 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
             )
         return b64encode(value).decode("ascii")
 
-    def process_result_value(self, value: Optional[str], dialect: sqlalchemy.engine.Dialect
-                             ) -> Optional[bytes]:
+    def process_result_value(
+        self, value: Optional[str], dialect: sqlalchemy.engine.Dialect
+    ) -> Optional[bytes]:
         # 'value' is a `str` that must be ASCII because it's base64-encoded.
         # We want to transform that to base64-encoded `bytes` and then
         # native `bytes`.
@@ -145,14 +155,16 @@ class Base64Region(Base64Bytes):
     Maps Python `sphgeom.Region` to a base64-encoded `sqlalchemy.String`.
     """
 
-    def process_bind_param(self, value: Optional[Region], dialect: sqlalchemy.engine.Dialect
-                           ) -> Optional[str]:
+    def process_bind_param(
+        self, value: Optional[Region], dialect: sqlalchemy.engine.Dialect
+    ) -> Optional[str]:
         if value is None:
             return None
         return super().process_bind_param(value.encode(), dialect)
 
-    def process_result_value(self, value: Optional[str], dialect: sqlalchemy.engine.Dialect
-                             ) -> Optional[Region]:
+    def process_result_value(
+        self, value: Optional[str], dialect: sqlalchemy.engine.Dialect
+    ) -> Optional[Region]:
         if value is None:
             return None
         return Region.decode(super().process_result_value(value, dialect))
@@ -173,8 +185,9 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
 
     cache_ok = True
 
-    def process_bind_param(self, value: Optional[astropy.time.Time], dialect: sqlalchemy.engine.Dialect
-                           ) -> Optional[int]:
+    def process_bind_param(
+        self, value: Optional[astropy.time.Time], dialect: sqlalchemy.engine.Dialect
+    ) -> Optional[int]:
         if value is None:
             return None
         if not isinstance(value, astropy.time.Time):
@@ -182,8 +195,9 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
         value = time_utils.TimeConverter().astropy_to_nsec(value)
         return value
 
-    def process_result_value(self, value: Optional[int], dialect: sqlalchemy.engine.Dialect
-                             ) -> Optional[astropy.time.Time]:
+    def process_result_value(
+        self, value: Optional[int], dialect: sqlalchemy.engine.Dialect
+    ) -> Optional[astropy.time.Time]:
         # value is nanoseconds since epoch, or None
         if value is None:
             return None
@@ -203,7 +217,7 @@ class GUID(sqlalchemy.TypeDecorator):
     cache_ok = True
 
     def load_dialect_impl(self, dialect: sqlalchemy.Dialect) -> sqlalchemy.TypeEngine:
-        if dialect.name == 'postgresql':
+        if dialect.name == "postgresql":
             return dialect.type_descriptor(UUID())
         else:
             return dialect.type_descriptor(sqlalchemy.CHAR(32))
@@ -224,7 +238,7 @@ class GUID(sqlalchemy.TypeDecorator):
         elif not isinstance(value, uuid.UUID):
             raise TypeError(f"Unexpected type of a bind value: {type(value)}")
 
-        if dialect.name == 'postgresql':
+        if dialect.name == "postgresql":
             return str(value)
         else:
             return "%.32x" % value.int
@@ -440,10 +454,12 @@ class ForeignKeySpec:
         SchemaValidationError
             Raised if configuration keys are missing or have invalid values.
         """
-        return cls(table=config["table"],
-                   source=tuple(ensure_iterable(config["source"])),
-                   target=tuple(ensure_iterable(config["target"])),
-                   onDelete=config.get("onDelete", None))
+        return cls(
+            table=config["table"],
+            source=tuple(ensure_iterable(config["source"])),
+            target=tuple(ensure_iterable(config["target"])),
+            onDelete=config.get("onDelete", None),
+        )
 
 
 @dataclass
@@ -475,7 +491,9 @@ class TableSpec:
     """
 
     def __init__(
-        self, fields: Iterable[FieldSpec], *,
+        self,
+        fields: Iterable[FieldSpec],
+        *,
         unique: Iterable[Tuple[str, ...]] = (),
         indexes: Iterable[Tuple[str, ...]] = (),
         foreignKeys: Iterable[ForeignKeySpec] = (),

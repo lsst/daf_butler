@@ -22,9 +22,9 @@
 """Unit tests for the daf_butler shared CLI options.
 """
 
-import click
 import unittest
 
+import click
 from lsst.daf.butler.cli.utils import LogCliRunner, to_upper
 
 
@@ -35,7 +35,6 @@ def cli(value):
 
 
 class ToUpperTestCase(unittest.TestCase):
-
     def setUp(self):
         self.runner = LogCliRunner()
 

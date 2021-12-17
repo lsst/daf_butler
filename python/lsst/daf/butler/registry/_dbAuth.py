@@ -26,14 +26,15 @@ import os
 import stat
 import urllib.parse
 from typing import Dict, List, Optional, Tuple, Union
+
 import yaml
 
 __all__ = ["DbAuth", "DbAuthError", "DbAuthPermissionsError"]
 
 
 class DbAuthError(RuntimeError):
-    """A problem has occurred retrieving database authentication information.
-    """
+    """A problem has occurred retrieving database authentication information."""
+
     pass
 
 
@@ -66,16 +67,20 @@ class DbAuth:
     At least one of ``path``, ``envVar``, or ``authList`` must be provided;
     generally ``path`` should be provided as a default location.
     """
-    def __init__(self, path: Optional[str] = None, envVar: Optional[str] = None,
-                 authList: Optional[List[Dict[str, str]]] = None):
+
+    def __init__(
+        self,
+        path: Optional[str] = None,
+        envVar: Optional[str] = None,
+        authList: Optional[List[Dict[str, str]]] = None,
+    ):
         if authList is not None:
             self.authList = authList
             return
         if envVar is not None and envVar in os.environ:
             secretPath = os.path.expanduser(os.environ[envVar])
         elif path is None:
-            raise DbAuthNotFoundError(
-                "No default path provided to DbAuth configuration file")
+            raise DbAuthNotFoundError("No default path provided to DbAuth configuration file")
         else:
             secretPath = os.path.expanduser(path)
         if not os.path.isfile(secretPath):
@@ -83,8 +88,8 @@ class DbAuth:
         mode = os.stat(secretPath).st_mode
         if mode & (stat.S_IRWXG | stat.S_IRWXO) != 0:
             raise DbAuthPermissionsError(
-                "DbAuth configuration file {} has incorrect permissions: "
-                "{:o}".format(secretPath, mode))
+                "DbAuth configuration file {} has incorrect permissions: " "{:o}".format(secretPath, mode)
+            )
 
         try:
             with open(secretPath) as secretFile:
@@ -95,8 +100,14 @@ class DbAuth:
     # dialectname, hose, and database are tagged as Optional only because other
     # routines delegate to this one in order to raise a consistent exception
     # for that condition.
-    def getAuth(self, dialectname: Optional[str], username: Optional[str], host: Optional[str],
-                port: Optional[Union[int, str]], database: Optional[str]) -> Tuple[Optional[str], str]:
+    def getAuth(
+        self,
+        dialectname: Optional[str],
+        username: Optional[str],
+        host: Optional[str],
+        port: Optional[Union[int, str]],
+        database: Optional[str],
+    ) -> Tuple[Optional[str], str]:
         """Retrieve a username and password for a database connection.
 
         This function matches elements from the database connection URL with
@@ -188,12 +199,13 @@ class DbAuth:
 
             # Check for same database backend type/dialect
             if components.scheme == "":
-                raise DbAuthError(
-                    "Missing database dialect in URL: " + authDict["url"])
+                raise DbAuthError("Missing database dialect in URL: " + authDict["url"])
 
             if "+" in components.scheme:
-                raise DbAuthError("Authorization dictionary URLs should only specify "
-                                  f"dialects, got: {components.scheme}. instead.")
+                raise DbAuthError(
+                    "Authorization dictionary URLs should only specify "
+                    f"dialects, got: {components.scheme}. instead."
+                )
 
             # dialect and driver are allowed in db string, since functionality
             # could change. Connecting to a DB using different driver does not
@@ -222,8 +234,7 @@ class DbAuth:
                 continue
 
             # Check port
-            if components.port is not None and \
-                    (port is None or str(port) != str(components.port)):
+            if components.port is not None and (port is None or str(port) != str(components.port)):
                 continue
 
             # Don't override username from connection string
@@ -236,7 +247,8 @@ class DbAuth:
 
         raise DbAuthNotFoundError(
             "No matching DbAuth configuration for: "
-            f"({dialectname}, {username}, {host}, {port}, {database})")
+            f"({dialectname}, {username}, {host}, {port}, {database})"
+        )
 
     def getUrl(self, url: str) -> str:
         """Fill in a username and password in a database connection URL.
@@ -267,18 +279,28 @@ class DbAuth:
         components = urllib.parse.urlparse(url)
         username, password = self.getAuth(
             components.scheme,
-            components.username, components.hostname, components.port,
-            components.path.lstrip("/"))
+            components.username,
+            components.hostname,
+            components.port,
+            components.path.lstrip("/"),
+        )
         hostname = components.hostname
         assert hostname is not None
-        if ":" in hostname:     # ipv6
+        if ":" in hostname:  # ipv6
             hostname = f"[{hostname}]"
         assert username is not None
         netloc = "{}:{}@{}".format(
-            urllib.parse.quote(username, safe=""),
-            urllib.parse.quote(password, safe=""), hostname)
+            urllib.parse.quote(username, safe=""), urllib.parse.quote(password, safe=""), hostname
+        )
         if components.port is not None:
             netloc += ":" + str(components.port)
-        return urllib.parse.urlunparse((
-            components.scheme, netloc, components.path, components.params,
-            components.query, components.fragment))
+        return urllib.parse.urlunparse(
+            (
+                components.scheme,
+                netloc,
+                components.path,
+                components.params,
+                components.query,
+                components.fragment,
+            )
+        )

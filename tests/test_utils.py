@@ -19,19 +19,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from collections import namedtuple
 import os
 import re
 import unittest
+from collections import namedtuple
 
-from lsst.daf.butler.core.utils import globToRegex
 from lsst.daf.butler import NamedKeyDict, NamedValueSet
+from lsst.daf.butler.core.utils import globToRegex
 
 TESTDIR = os.path.dirname(__file__)
 
 
 class NamedKeyDictTest(unittest.TestCase):
-
     def setUp(self):
         self.TestTuple = namedtuple("TestTuple", ("name", "id"))
         self.a = self.TestTuple(name="a", id=1)
@@ -104,7 +103,6 @@ class NamedKeyDictTest(unittest.TestCase):
 
 
 class NamedValueSetTest(unittest.TestCase):
-
     def setUp(self):
         self.TestTuple = namedtuple("TestTuple", ("name", "id"))
         self.a = self.TestTuple(name="a", id=1)
@@ -152,7 +150,6 @@ class NamedValueSetTest(unittest.TestCase):
 
 
 class GlobToRegexTestCase(unittest.TestCase):
-
     def testStarInList(self):
         """Test that if a one of the items in the expression list is a star
         (stand-alone) then ``...`` is returned (which implies no restrictions)

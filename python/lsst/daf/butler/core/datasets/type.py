@@ -23,35 +23,21 @@ from __future__ import annotations
 
 __all__ = ["DatasetType", "SerializedDatasetType"]
 
-from copy import deepcopy
 import re
-
+from copy import deepcopy
 from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple, Type, Union
 
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from pydantic import BaseModel, StrictBool, StrictStr
 
-from pydantic import BaseModel, StrictStr, StrictBool
-
-from ..storageClass import StorageClass, StorageClassFactory
-from ..dimensions import DimensionGraph, SerializedDimensionGraph
 from ..configSupport import LookupKey
+from ..dimensions import DimensionGraph, SerializedDimensionGraph
 from ..json import from_json_pydantic, to_json_pydantic
+from ..storageClass import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
-    from ..dimensions import Dimension, DimensionUniverse
     from ...registry import Registry
+    from ..dimensions import Dimension, DimensionUniverse
 
 
 def _safeMakeMappingProxyType(data: Optional[Mapping]) -> Mapping:
@@ -70,10 +56,15 @@ class SerializedDatasetType(BaseModel):
     isCalibration: StrictBool = False
 
     @classmethod
-    def direct(cls, *, name: str, storageClass: Optional[str] = None,
-               dimensions: Optional[Dict] = None,
-               parentStorageClass: Optional[str] = None, isCalibration: bool = False
-               ) -> SerializedDatasetType:
+    def direct(
+        cls,
+        *,
+        name: str,
+        storageClass: Optional[str] = None,
+        dimensions: Optional[Dict] = None,
+        parentStorageClass: Optional[str] = None,
+        isCalibration: bool = False,
+    ) -> SerializedDatasetType:
         """Construct a `SerializedDatasetType` directly without validators.
 
         This differs from PyDantics construct method in that the arguments are
@@ -84,14 +75,20 @@ class SerializedDatasetType(BaseModel):
         """
         node = SerializedDatasetType.__new__(cls)
         setter = object.__setattr__
-        setter(node, 'name', name)
-        setter(node, 'storageClass', storageClass)
-        setter(node, 'dimensions',
-               dimensions if dimensions is None else SerializedDimensionGraph.direct(**dimensions))
-        setter(node, 'parentStorageClass', parentStorageClass)
-        setter(node, 'isCalibration', isCalibration)
-        setter(node, '__fields_set__', {'name', 'storageClass', 'dimensions', 'parentStorageClass',
-                                        'isCalibration'})
+        setter(node, "name", name)
+        setter(node, "storageClass", storageClass)
+        setter(
+            node,
+            "dimensions",
+            dimensions if dimensions is None else SerializedDimensionGraph.direct(**dimensions),
+        )
+        setter(node, "parentStorageClass", parentStorageClass)
+        setter(node, "isCalibration", isCalibration)
+        setter(
+            node,
+            "__fields_set__",
+            {"name", "storageClass", "dimensions", "parentStorageClass", "isCalibration"},
+        )
         return node
 
 
@@ -138,9 +135,15 @@ class DatasetType:
     :ref:`daf_butler_organizing_datasets`
     """
 
-    __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName",
-                 "_parentStorageClass", "_parentStorageClassName",
-                 "_isCalibration")
+    __slots__ = (
+        "_name",
+        "_dimensions",
+        "_storageClass",
+        "_storageClassName",
+        "_parentStorageClass",
+        "_parentStorageClassName",
+        "_isCalibration",
+    )
 
     _serializedType = SerializedDatasetType
 
@@ -166,25 +169,30 @@ class DatasetType:
         """
         return "{}.{}".format(datasetTypeName, componentName)
 
-    def __init__(self, name: str, dimensions: Union[DimensionGraph, Iterable[Dimension]],
-                 storageClass: Union[StorageClass, str],
-                 parentStorageClass: Optional[Union[StorageClass, str]] = None, *,
-                 universe: Optional[DimensionUniverse] = None,
-                 isCalibration: bool = False):
+    def __init__(
+        self,
+        name: str,
+        dimensions: Union[DimensionGraph, Iterable[Dimension]],
+        storageClass: Union[StorageClass, str],
+        parentStorageClass: Optional[Union[StorageClass, str]] = None,
+        *,
+        universe: Optional[DimensionUniverse] = None,
+        isCalibration: bool = False,
+    ):
         if self.VALID_NAME_REGEX.match(name) is None:
             raise ValueError(f"DatasetType name '{name}' is invalid.")
         self._name = name
         if not isinstance(dimensions, DimensionGraph):
             if universe is None:
-                raise ValueError("If dimensions is not a normalized DimensionGraph, "
-                                 "a universe must be provided.")
+                raise ValueError(
+                    "If dimensions is not a normalized DimensionGraph, " "a universe must be provided."
+                )
             dimensions = universe.extract(dimensions)
         self._dimensions = dimensions
         if name in self._dimensions.universe.getGovernorDimensions().names:
             raise ValueError(f"Governor dimension name {name} cannot be used as a dataset type name.")
         if not isinstance(storageClass, (StorageClass, str)):
-            raise ValueError("StorageClass argument must be StorageClass or str. "
-                             f"Got {storageClass}")
+            raise ValueError("StorageClass argument must be StorageClass or str. " f"Got {storageClass}")
         self._storageClass: Optional[StorageClass]
         if isinstance(storageClass, StorageClass):
             self._storageClass = storageClass
@@ -197,14 +205,16 @@ class DatasetType:
         self._parentStorageClassName: Optional[str] = None
         if parentStorageClass is not None:
             if not isinstance(storageClass, (StorageClass, str)):
-                raise ValueError("Parent StorageClass argument must be StorageClass or str. "
-                                 f"Got {parentStorageClass}")
+                raise ValueError(
+                    "Parent StorageClass argument must be StorageClass or str. " f"Got {parentStorageClass}"
+                )
 
             # Only allowed for a component dataset type
             _, componentName = self.splitDatasetTypeName(self._name)
             if componentName is None:
-                raise ValueError("Can not specify a parent storage class if this is not a component"
-                                 f" ({self._name})")
+                raise ValueError(
+                    "Can not specify a parent storage class if this is not a component" f" ({self._name})"
+                )
             if isinstance(parentStorageClass, StorageClass):
                 self._parentStorageClass = parentStorageClass
                 self._parentStorageClassName = parentStorageClass.name
@@ -215,8 +225,9 @@ class DatasetType:
         # a component and is not specified when we don't
         _, componentName = self.splitDatasetTypeName(self._name)
         if parentStorageClass is None and componentName is not None:
-            raise ValueError(f"Component dataset type '{self._name}' constructed without parent"
-                             " storage class")
+            raise ValueError(
+                f"Component dataset type '{self._name}' constructed without parent" " storage class"
+            )
         if parentStorageClass is not None and componentName is None:
             raise ValueError(f"Parent storage class specified by {self._name} is not a composite")
         self._isCalibration = isCalibration
@@ -255,8 +266,7 @@ class DatasetType:
         This only uses StorageClass name which is it consistent with the
         implementation of StorageClass hash method.
         """
-        return hash((self._name, self._dimensions, self._storageClassName,
-                     self._parentStorageClassName))
+        return hash((self._name, self._dimensions, self._storageClassName, self._parentStorageClassName))
 
     def __lt__(self, other: Any) -> bool:
         """Sort using the dataset type name."""
@@ -412,10 +422,10 @@ class DatasetType:
             raise RuntimeError(f"DatasetType {self.name} must be a component to form the composite")
         composite_name, _ = self.nameAndComponent()
         if self.parentStorageClass is None:
-            raise ValueError("Parent storage class is not set. "
-                             f"Unable to create composite type from {self.name}")
-        return DatasetType(composite_name, dimensions=self.dimensions,
-                           storageClass=self.parentStorageClass)
+            raise ValueError(
+                "Parent storage class is not set. " f"Unable to create composite type from {self.name}"
+            )
+        return DatasetType(composite_name, dimensions=self.dimensions, storageClass=self.parentStorageClass)
 
     def makeComponentDatasetType(self, component: str) -> DatasetType:
         """Return a component dataset type from a composite.
@@ -433,9 +443,12 @@ class DatasetType:
             A new DatasetType instance.
         """
         # The component could be a read/write or read component
-        return DatasetType(self.componentTypeName(component), dimensions=self.dimensions,
-                           storageClass=self.storageClass.allComponents()[component],
-                           parentStorageClass=self.storageClass)
+        return DatasetType(
+            self.componentTypeName(component),
+            dimensions=self.dimensions,
+            storageClass=self.storageClass.allComponents()[component],
+            parentStorageClass=self.storageClass,
+        )
 
     def makeAllComponentDatasetTypes(self) -> List[DatasetType]:
         """Return all component dataset types for this composite.
@@ -446,8 +459,10 @@ class DatasetType:
             All the component dataset types. If this is not a composite
             then returns an empty list.
         """
-        return [self.makeComponentDatasetType(componentName)
-                for componentName in self.storageClass.allComponents()]
+        return [
+            self.makeComponentDatasetType(componentName)
+            for componentName in self.storageClass.allComponents()
+        ]
 
     def isComponent(self) -> bool:
         """Return whether this `DatasetType` refers to a component.
@@ -523,20 +538,24 @@ class DatasetType:
             as_dict = {"name": self.name}
         else:
             # Convert to a dict form
-            as_dict = {"name": self.name,
-                       "storageClass": self._storageClassName,
-                       "isCalibration": self._isCalibration,
-                       "dimensions": self.dimensions.to_simple(),
-                       }
+            as_dict = {
+                "name": self.name,
+                "storageClass": self._storageClassName,
+                "isCalibration": self._isCalibration,
+                "dimensions": self.dimensions.to_simple(),
+            }
 
             if self._parentStorageClassName is not None:
                 as_dict["parentStorageClass"] = self._parentStorageClassName
         return SerializedDatasetType(**as_dict)
 
     @classmethod
-    def from_simple(cls, simple: SerializedDatasetType,
-                    universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None) -> DatasetType:
+    def from_simple(
+        cls,
+        simple: SerializedDatasetType,
+        universe: Optional[DimensionUniverse] = None,
+        registry: Optional[Registry] = None,
+    ) -> DatasetType:
         """Construct a new object from the simplified form.
 
         This is usually data returned from the `to_simple` method.
@@ -561,8 +580,9 @@ class DatasetType:
         if simple.storageClass is None:
             # Treat this as minimalist representation
             if registry is None:
-                raise ValueError(f"Unable to convert a DatasetType name '{simple}' to DatasetType"
-                                 " without a Registry")
+                raise ValueError(
+                    f"Unable to convert a DatasetType name '{simple}' to DatasetType" " without a Registry"
+                )
             return registry.getDatasetType(simple.name)
 
         if universe is None and registry is None:
@@ -580,27 +600,33 @@ class DatasetType:
             # mypy hint
             raise ValueError(f"Dimensions must be specified in {simple}")
 
-        return cls(name=simple.name,
-                   dimensions=DimensionGraph.from_simple(simple.dimensions, universe=universe),
-                   storageClass=simple.storageClass,
-                   isCalibration=simple.isCalibration,
-                   parentStorageClass=simple.parentStorageClass,
-                   universe=universe)
+        return cls(
+            name=simple.name,
+            dimensions=DimensionGraph.from_simple(simple.dimensions, universe=universe),
+            storageClass=simple.storageClass,
+            isCalibration=simple.isCalibration,
+            parentStorageClass=simple.parentStorageClass,
+            universe=universe,
+        )
 
     to_json = to_json_pydantic
     from_json = classmethod(from_json_pydantic)
 
-    def __reduce__(self) -> Tuple[Callable, Tuple[Type[DatasetType],
-                                                  Tuple[str, DimensionGraph, str, Optional[str]],
-                                                  Dict[str, bool]]]:
+    def __reduce__(
+        self,
+    ) -> Tuple[
+        Callable, Tuple[Type[DatasetType], Tuple[str, DimensionGraph, str, Optional[str]], Dict[str, bool]]
+    ]:
         """Support pickling.
 
         StorageClass instances can not normally be pickled, so we pickle
         StorageClass name instead of instance.
         """
-        return _unpickle_via_factory, (self.__class__, (self.name, self.dimensions, self._storageClassName,
-                                                        self._parentStorageClassName),
-                                       {"isCalibration": self._isCalibration})
+        return _unpickle_via_factory, (
+            self.__class__,
+            (self.name, self.dimensions, self._storageClassName, self._parentStorageClassName),
+            {"isCalibration": self._isCalibration},
+        )
 
     def __deepcopy__(self, memo: Any) -> DatasetType:
         """Support for deep copy method.
@@ -611,12 +637,13 @@ class DatasetType:
         registered with StorageClassFactory (this happens in unit tests).
         Instead we re-implement ``__deepcopy__`` method.
         """
-        return DatasetType(name=deepcopy(self.name, memo),
-                           dimensions=deepcopy(self.dimensions, memo),
-                           storageClass=deepcopy(self._storageClass or self._storageClassName, memo),
-                           parentStorageClass=deepcopy(self._parentStorageClass
-                                                       or self._parentStorageClassName, memo),
-                           isCalibration=deepcopy(self._isCalibration, memo))
+        return DatasetType(
+            name=deepcopy(self.name, memo),
+            dimensions=deepcopy(self.dimensions, memo),
+            storageClass=deepcopy(self._storageClass or self._storageClassName, memo),
+            parentStorageClass=deepcopy(self._parentStorageClass or self._parentStorageClassName, memo),
+            isCalibration=deepcopy(self._isCalibration, memo),
+        )
 
 
 def _unpickle_via_factory(factory: Callable, args: Any, kwargs: Any) -> DatasetType:

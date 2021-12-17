@@ -26,18 +26,30 @@ import inspect
 import os.path
 import unittest
 
+from lsst.daf.butler import (
+    Config,
+    DataCoordinate,
+    DatasetType,
+    DimensionGraph,
+    DimensionUniverse,
+    FileDescriptor,
+    Formatter,
+    FormatterFactory,
+    Location,
+    StorageClass,
+)
 from lsst.daf.butler.tests import DatasetTestHelper
-from lsst.daf.butler import (Formatter, FormatterFactory, StorageClass, DatasetType, Config,
-                             FileDescriptor, Location, DataCoordinate, DimensionUniverse, DimensionGraph)
-from lsst.daf.butler.tests.testFormatters import (DoNothingFormatter, MultipleExtensionsFormatter,
-                                                  SingleExtensionFormatter)
+from lsst.daf.butler.tests.testFormatters import (
+    DoNothingFormatter,
+    MultipleExtensionsFormatter,
+    SingleExtensionFormatter,
+)
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
-    """Tests of the formatter factory infrastructure.
-    """
+    """Tests of the formatter factory infrastructure."""
 
     def setUp(self):
         self.id = 0
@@ -46,8 +58,9 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.dataId = DataCoordinate.makeEmpty(self.universe)
 
         # Dummy FileDescriptor for testing getFormatter
-        self.fileDescriptor = FileDescriptor(Location("/a/b/c", "d"),
-                                             StorageClass("DummyStorageClass", dict, None))
+        self.fileDescriptor = FileDescriptor(
+            Location("/a/b/c", "d"), StorageClass("DummyStorageClass", dict, None)
+        )
 
     def assertIsFormatter(self, formatter):
         """Check that the supplied parameter is either a Formatter instance
@@ -83,18 +96,21 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
     def testExtensionValidation(self):
         """Test extension validation"""
 
-        for file, single_ok, multi_ok in (("e.fits", True, True),
-                                          ("e.fit", False, True),
-                                          ("e.fits.fz", False, True),
-                                          ("e.txt", False, False),
-                                          ("e.1.4.fits", True, True),
-                                          ("e.3.fit", False, True),
-                                          ("e.1.4.fits.gz", False, True),
-                                          ):
+        for file, single_ok, multi_ok in (
+            ("e.fits", True, True),
+            ("e.fit", False, True),
+            ("e.fits.fz", False, True),
+            ("e.txt", False, False),
+            ("e.1.4.fits", True, True),
+            ("e.3.fit", False, True),
+            ("e.1.4.fits.gz", False, True),
+        ):
             loc = Location("/a/b/c", file)
 
-            for formatter, passes in ((SingleExtensionFormatter, single_ok),
-                                      (MultipleExtensionsFormatter, multi_ok)):
+            for formatter, passes in (
+                (SingleExtensionFormatter, single_ok),
+                (MultipleExtensionsFormatter, multi_ok),
+            ):
                 if passes:
                     formatter.validateExtension(loc)
                 else:
@@ -102,8 +118,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
                         formatter.validateExtension(loc)
 
     def testRegistry(self):
-        """Check that formatters can be stored in the registry.
-        """
+        """Check that formatters can be stored in the registry."""
         formatterTypeName = "lsst.daf.butler.tests.deferredFormatter.DeferredFormatter"
         storageClassName = "Image"
         self.factory.registerFormatter(storageClassName, formatterTypeName)
@@ -118,6 +133,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         # Defer the import so that we ensure that the infrastructure loaded
         # it on demand previously
         from lsst.daf.butler.tests.deferredFormatter import DeferredFormatter
+
         self.assertEqual(type(f), DeferredFormatter)
 
         with self.assertRaises(TypeError):
@@ -134,8 +150,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
             self.factory.getFormatter(storageClassName, self.fileDescriptor, self.dataId)
 
     def testRegistryWithStorageClass(self):
-        """Test that the registry can be given a StorageClass object.
-        """
+        """Test that the registry can be given a StorageClass object."""
         formatterTypeName = "lsst.daf.butler.formatters.yaml.YamlFormatter"
         storageClassName = "TestClass"
         sc = StorageClass(storageClassName, dict, None)
@@ -161,12 +176,12 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
 
         # This might defer the import, pytest may have already loaded it
         from lsst.daf.butler.formatters.yaml import YamlFormatter
+
         self.assertEqual(type(f), YamlFormatter)
 
         with self.assertRaises(KeyError):
             # Attempt to overwrite using a different value
-            self.factory.registerFormatter(storageClassName,
-                                           "lsst.daf.butler.formatters.json.JsonFormatter")
+            self.factory.registerFormatter(storageClassName, "lsst.daf.butler.formatters.json.JsonFormatter")
 
     def testRegistryConfig(self):
         configFile = os.path.join(TESTDIR, "config", "basic", "posixDatastore.yaml")
@@ -177,41 +192,41 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         # one in the config file.
         dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
         sc = StorageClass("DummySC", dict, None)
-        refPviHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyHSC",
-                                                                "physical_filter": "v"},
-                                        conform=False)
+        refPviHsc = self.makeDatasetRef(
+            "pvi", dimensions, sc, {"instrument": "DummyHSC", "physical_filter": "v"}, conform=False
+        )
         refPviHscFmt = self.factory.getFormatterClass(refPviHsc)
         self.assertIsFormatter(refPviHscFmt)
         self.assertIn("JsonFormatter", refPviHscFmt.name())
 
-        refPviNotHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyNotHSC",
-                                                                   "physical_filter": "v"},
-                                           conform=False)
+        refPviNotHsc = self.makeDatasetRef(
+            "pvi", dimensions, sc, {"instrument": "DummyNotHSC", "physical_filter": "v"}, conform=False
+        )
         refPviNotHscFmt = self.factory.getFormatterClass(refPviNotHsc)
         self.assertIsFormatter(refPviNotHscFmt)
         self.assertIn("PickleFormatter", refPviNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using Dimensions
-        refPvixHsc = self.makeDatasetRef("pvix", dimensions, sc, {"instrument": "DummyHSC",
-                                                                  "physical_filter": "v"},
-                                         conform=False)
+        refPvixHsc = self.makeDatasetRef(
+            "pvix", dimensions, sc, {"instrument": "DummyHSC", "physical_filter": "v"}, conform=False
+        )
         refPvixNotHscFmt = self.factory.getFormatterClass(refPvixHsc)
         self.assertIsFormatter(refPvixNotHscFmt)
         self.assertIn("PickleFormatter", refPvixNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using StorageClass
         dimensionsNoV = DimensionGraph(self.universe, names=("physical_filter", "instrument"))
-        refPvixNotHscDims = self.makeDatasetRef("pvix", dimensionsNoV, sc, {"instrument": "DummyHSC",
-                                                                            "physical_filter": "v"},
-                                                conform=False)
+        refPvixNotHscDims = self.makeDatasetRef(
+            "pvix", dimensionsNoV, sc, {"instrument": "DummyHSC", "physical_filter": "v"}, conform=False
+        )
         refPvixNotHscDims_fmt = self.factory.getFormatterClass(refPvixNotHscDims)
         self.assertIsFormatter(refPvixNotHscDims_fmt)
         self.assertIn("YamlFormatter", refPvixNotHscDims_fmt.name())
 
         # Check that parameters are stored
-        refParam = self.makeDatasetRef("paramtest", dimensions, sc, {"instrument": "DummyNotHSC",
-                                                                     "physical_filter": "v"},
-                                       conform=False)
+        refParam = self.makeDatasetRef(
+            "paramtest", dimensions, sc, {"instrument": "DummyNotHSC", "physical_filter": "v"}, conform=False
+        )
         lookup, refParam_fmt, kwargs = self.factory.getFormatterClassWithMatch(refParam)
         self.assertIn("writeParameters", kwargs)
         expected = {"max": 5, "min": 2, "comment": "Additional commentary", "recipe": "recipe1"}
@@ -221,10 +236,13 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         f = self.factory.getFormatter(refParam, self.fileDescriptor, self.dataId)
         self.assertEqual(f.writeParameters, expected)
 
-        f = self.factory.getFormatter(refParam, self.fileDescriptor, self.dataId,
-                                      writeParameters={"min": 22, "extra": 50})
-        self.assertEqual(f.writeParameters, {"max": 5, "min": 22, "comment": "Additional commentary",
-                                             "extra": 50, "recipe": "recipe1"})
+        f = self.factory.getFormatter(
+            refParam, self.fileDescriptor, self.dataId, writeParameters={"min": 22, "extra": 50}
+        )
+        self.assertEqual(
+            f.writeParameters,
+            {"max": 5, "min": 22, "comment": "Additional commentary", "extra": 50, "recipe": "recipe1"},
+        )
 
         self.assertIn("recipe1", f.writeRecipes)
         self.assertEqual(f.writeParameters["recipe"], "recipe1")
@@ -235,8 +253,9 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
 
         with self.assertRaises(RuntimeError):
             # "mode" is a required recipe parameter
-            self.factory.getFormatter(refParam, self.fileDescriptor, self.dataId,
-                                      writeRecipes={"recipe3": {"notmode": 1}})
+            self.factory.getFormatter(
+                refParam, self.fileDescriptor, self.dataId, writeRecipes={"recipe3": {"notmode": 1}}
+            )
 
 
 if __name__ == "__main__":

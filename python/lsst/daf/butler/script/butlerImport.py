@@ -50,9 +50,11 @@ def butlerImport(repo, directory, export_file, transfer, skip_dimensions, reuse_
     if skip_dimensions is not None:
         skip_dimensions = set(skip_dimensions)
 
-    butler.import_(directory=directory,
-                   filename=export_file,
-                   transfer=transfer,
-                   format="yaml",
-                   skip_dimensions=skip_dimensions,
-                   reuseIds=reuse_ids)
+    butler.import_(
+        directory=directory,
+        filename=export_file,
+        transfer=transfer,
+        format="yaml",
+        skip_dimensions=skip_dimensions,
+        reuseIds=reuse_ids,
+    )

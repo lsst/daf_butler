@@ -23,20 +23,20 @@ from __future__ import annotations
 
 __all__ = ("DimensionConfig",)
 
-from typing import Iterator, Iterable, Optional, Union
+from typing import Iterable, Iterator, Optional, Union
 
-from ..config import Config, ConfigSubset
 from .. import ddl
 from .._butlerUri import ButlerURI
 from .._topology import TopologicalSpace
-from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
-from ._governor import GovernorDimensionConstructionVisitor
-from ._packer import DimensionPackerConstructionVisitor
-from ._skypix import SkyPixConstructionVisitor
+from ..config import Config, ConfigSubset
 from ._database import (
     DatabaseDimensionElementConstructionVisitor,
     DatabaseTopologicalFamilyConstructionVisitor,
 )
+from ._governor import GovernorDimensionConstructionVisitor
+from ._packer import DimensionPackerConstructionVisitor
+from ._skypix import SkyPixConstructionVisitor
+from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 
 class DimensionConfig(ConfigSubset):
@@ -85,15 +85,19 @@ class DimensionConfig(ConfigSubset):
     requiredKeys = ("version", "elements", "skypix")
     defaultConfigFile = "dimensions.yaml"
 
-    def __init__(self, other: Union[Config, ButlerURI, str, None] = None, validate: bool = True,
-                 searchPaths: Optional[Iterable[Union[str, ButlerURI]]] = None):
+    def __init__(
+        self,
+        other: Union[Config, ButlerURI, str, None] = None,
+        validate: bool = True,
+        searchPaths: Optional[Iterable[Union[str, ButlerURI]]] = None,
+    ):
         # if argument is not None then do not load/merge defaults
         mergeDefaults = other is None
-        super().__init__(other=other, validate=validate, mergeDefaults=mergeDefaults,
-                         searchPaths=searchPaths)
+        super().__init__(other=other, validate=validate, mergeDefaults=mergeDefaults, searchPaths=searchPaths)
 
-    def _updateWithConfigsFromPath(self, searchPaths: Iterable[Union[str, ButlerURI]],
-                                   configFile: str) -> None:
+    def _updateWithConfigsFromPath(
+        self, searchPaths: Iterable[Union[str, ButlerURI]], configFile: str
+    ) -> None:
         """Search the supplied paths reading config from first found.
 
         Raises
@@ -184,9 +188,7 @@ class DimensionConfig(ConfigSubset):
                         f"Unsupported config key(s) for governor {name}: {unsupported & subconfig.keys()}."
                     )
                 if not subconfig.get("cached", True):
-                    raise RuntimeError(
-                        f"Governor dimension {name} is always cached."
-                    )
+                    raise RuntimeError(f"Governor dimension {name} is always cached.")
                 yield GovernorDimensionConstructionVisitor(
                     name=name,
                     storage=subconfig["storage"],

@@ -20,18 +20,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
-from typing import Tuple, Iterable
 import unittest
+from typing import Iterable, Tuple
 
-from lsst.daf.butler import (Quantum,
-                             DimensionUniverse,
-                             NamedKeyDict,
-                             StorageClass,
-                             DatasetType,
-                             DatasetRef,
-                             SerializedQuantum,
-                             DataCoordinate,
-                             DimensionRecordsAccumulator)
+from lsst.daf.butler import (
+    DataCoordinate,
+    DatasetRef,
+    DatasetType,
+    DimensionRecordsAccumulator,
+    DimensionUniverse,
+    NamedKeyDict,
+    Quantum,
+    SerializedQuantum,
+    StorageClass,
+)
 from lsst.sphgeom import Circle
 
 """Tests for Quantum.
@@ -43,8 +45,7 @@ class MockTask:
 
 
 class QuantumTestCase(unittest.TestCase):
-    """Test for Quantum.
-    """
+    """Test for Quantum."""
 
     def _buildFullQuantum(self, taskName, addRecords=False) -> Tuple[Quantum, Iterable[DatasetType]]:
         universe = DimensionUniverse()
@@ -54,59 +55,89 @@ class QuantumTestCase(unittest.TestCase):
 
         storageClass = StorageClass("testref_StructuredData")
 
-        instrument = universe['instrument']
+        instrument = universe["instrument"]
         instrumentRecord = instrument.RecordClass(name="test")
 
-        band = universe['band']
+        band = universe["band"]
         bandRecord = band.RecordClass(name="r")
 
-        physical_filter = universe['physical_filter']
-        physical_filter_record = physical_filter.RecordClass(name='r', instrument='test')
+        physical_filter = universe["physical_filter"]
+        physical_filter_record = physical_filter.RecordClass(name="r", instrument="test")
 
-        visit_system = universe['visit_system']
-        visit_system_record = visit_system.RecordClass(id=9, instrument='test', name='test_visit_system')
+        visit_system = universe["visit_system"]
+        visit_system_record = visit_system.RecordClass(id=9, instrument="test", name="test_visit_system")
 
-        visit = universe['visit']
+        visit = universe["visit"]
         region = Circle()
         # create a synthetic value to mock as a visit hash
-        visit_record_42 = visit.RecordClass(id=42, instrument='test', name='test_visit', region=region,)
-        visit_record_42 = visit.RecordClass(id=43, instrument='test', name='test_visit', region=region,)
+        visit_record_42 = visit.RecordClass(
+            id=42,
+            instrument="test",
+            name="test_visit",
+            region=region,
+        )
+        visit_record_42 = visit.RecordClass(
+            id=43,
+            instrument="test",
+            name="test_visit",
+            region=region,
+        )
 
-        records42 = {instrument: instrumentRecord, band: bandRecord,
-                     physical_filter: physical_filter_record,
-                     visit_system: visit_system_record, visit: visit_record_42}
+        records42 = {
+            instrument: instrumentRecord,
+            band: bandRecord,
+            physical_filter: physical_filter_record,
+            visit_system: visit_system_record,
+            visit: visit_record_42,
+        }
 
-        records43 = {instrument: instrumentRecord, band: bandRecord,
-                     physical_filter: physical_filter_record,
-                     visit_system: visit_system_record, visit: visit_record_42}
+        records43 = {
+            instrument: instrumentRecord,
+            band: bandRecord,
+            physical_filter: physical_filter_record,
+            visit_system: visit_system_record,
+            visit: visit_record_42,
+        }
 
-        dataId42 = DataCoordinate.standardize(dict(instrument='test', visit=42),  # type: ignore
-                                              universe=universe)
-        dataId43 = DataCoordinate.standardize(dict(instrument='test', visit=43),  # type: ignore
-                                              universe=universe)
+        dataId42 = DataCoordinate.standardize(
+            dict(instrument="test", visit=42), universe=universe  # type: ignore
+        )
+        dataId43 = DataCoordinate.standardize(
+            dict(instrument="test", visit=43), universe=universe  # type: ignore
+        )
 
         if addRecords:
             dataId42 = dataId42.expanded(records42)  # type: ignore
             dataId43 = dataId43.expanded(records43)  # type: ignore
 
-        datasetTypeInit = DatasetType(datasetTypeNameInit, universe.extract(("instrument", "visit")),
-                                      storageClass)
-        datasetTypeInput = DatasetType(datasetTypeNameInput, universe.extract(("instrument", "visit")),
-                                       storageClass)
-        datasetTypeOutput = DatasetType(datasetTypeNameOutput, universe.extract(("instrument", "visit")),
-                                        storageClass)
-        predictedInputs = {datasetTypeInput: [DatasetRef(datasetTypeInput, dataId42),
-                                              DatasetRef(datasetTypeInput, dataId43)]}
-        outputs = {datasetTypeOutput: [DatasetRef(datasetTypeOutput, dataId42),
-                                       DatasetRef(datasetTypeOutput, dataId43)]}
+        datasetTypeInit = DatasetType(
+            datasetTypeNameInit, universe.extract(("instrument", "visit")), storageClass
+        )
+        datasetTypeInput = DatasetType(
+            datasetTypeNameInput, universe.extract(("instrument", "visit")), storageClass
+        )
+        datasetTypeOutput = DatasetType(
+            datasetTypeNameOutput, universe.extract(("instrument", "visit")), storageClass
+        )
+        predictedInputs = {
+            datasetTypeInput: [DatasetRef(datasetTypeInput, dataId42), DatasetRef(datasetTypeInput, dataId43)]
+        }
+        outputs = {
+            datasetTypeOutput: [
+                DatasetRef(datasetTypeOutput, dataId42),
+                DatasetRef(datasetTypeOutput, dataId43),
+            ]
+        }
         initInputs = {datasetTypeInit: DatasetRef(datasetTypeInit, dataId42)}
 
-        return Quantum(taskName=taskName, inputs=predictedInputs, outputs=outputs,
-                       initInputs=initInputs), [datasetTypeInit, datasetTypeInput, datasetTypeOutput]
+        return Quantum(taskName=taskName, inputs=predictedInputs, outputs=outputs, initInputs=initInputs), [
+            datasetTypeInit,
+            datasetTypeInput,
+            datasetTypeOutput,
+        ]
 
     def testConstructor(self):
-        """Test of constructor.
-        """
+        """Test of constructor."""
         # Quantum specific arguments
         taskName = "some.task.object"  # can't use a real PipelineTask due to inverted package dependency
 

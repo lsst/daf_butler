@@ -19,8 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import unittest
 import itertools
+import unittest
 import warnings
 
 import astropy.time
@@ -45,15 +45,14 @@ class TimespanTestCase(unittest.TestCase):
     """
 
     def setUp(self):
-        start = astropy.time.Time('2020-01-01T00:00:00', format="isot", scale="tai")
+        start = astropy.time.Time("2020-01-01T00:00:00", format="isot", scale="tai")
         offset = astropy.time.TimeDelta(60, format="sec")
-        self.timestamps = [start + offset*n for n in range(3)]
+        self.timestamps = [start + offset * n for n in range(3)]
         self.timespans = [Timespan(begin=None, end=None)]
         self.timespans.extend(Timespan(begin=None, end=t) for t in self.timestamps)
         self.timespans.extend(Timespan(begin=t, end=None) for t in self.timestamps)
         self.timespans.extend(Timespan(begin=t, end=t) for t in self.timestamps)
-        self.timespans.extend(Timespan(begin=a, end=b)
-                              for a, b in itertools.combinations(self.timestamps, 2))
+        self.timespans.extend(Timespan(begin=a, end=b) for a, b in itertools.combinations(self.timestamps, 2))
 
     def testEmpty(self):
         """Test various ways to construct an empty timespan, and that
@@ -76,8 +75,7 @@ class TimespanTestCase(unittest.TestCase):
             Timespan(self.timestamps[0], Timespan.EMPTY),
         )
         self.assertEqual(
-            Timespan.makeEmpty(),
-            Timespan(self.timestamps[0], self.timestamps[0], padInstantaneous=False)
+            Timespan.makeEmpty(), Timespan(self.timestamps[0], self.timestamps[0], padInstantaneous=False)
         )
         empty = Timespan.makeEmpty()
         for t in self.timestamps:
@@ -99,14 +97,13 @@ class TimespanTestCase(unittest.TestCase):
                 self.assertFalse(t > empty)
 
     def testFromInstant(self):
-        """Test construction of instantaneous timespans.
-        """
-        self.assertEqual(Timespan.fromInstant(self.timestamps[0]),
-                         Timespan(self.timestamps[0], self.timestamps[0]))
+        """Test construction of instantaneous timespans."""
+        self.assertEqual(
+            Timespan.fromInstant(self.timestamps[0]), Timespan(self.timestamps[0], self.timestamps[0])
+        )
 
     def testInvalid(self):
-        """Test that we reject timespans that should not exist.
-        """
+        """Test that we reject timespans that should not exist."""
         with self.assertRaises(ValueError):
             Timespan(TimeConverter().max_time, None)
         with self.assertRaises(ValueError):
@@ -200,10 +197,14 @@ class TimespanTestCase(unittest.TestCase):
         ts2 = Timespan(begin=None, end=ts1.end)
         self.assertNotEqual(ts1, ts2)
 
-        t1 = Timespan(begin=astropy.time.Time(2456461.0, val2=0.06580758101851847, format="jd", scale="tai"),
-                      end=astropy.time.Time(2456461.0, val2=0.06617994212962963, format="jd", scale="tai"))
-        t2 = Timespan(begin=astropy.time.Time(2456461.0, val2=0.06580758101851858, format="jd", scale="tai"),
-                      end=astropy.time.Time(2456461.0, val2=0.06617994212962963, format="jd", scale="tai"))
+        t1 = Timespan(
+            begin=astropy.time.Time(2456461.0, val2=0.06580758101851847, format="jd", scale="tai"),
+            end=astropy.time.Time(2456461.0, val2=0.06617994212962963, format="jd", scale="tai"),
+        )
+        t2 = Timespan(
+            begin=astropy.time.Time(2456461.0, val2=0.06580758101851858, format="jd", scale="tai"),
+            end=astropy.time.Time(2456461.0, val2=0.06617994212962963, format="jd", scale="tai"),
+        )
         self.assertEqual(t1, t2)
 
         # Ensure that == and != work properly
@@ -212,10 +213,14 @@ class TimespanTestCase(unittest.TestCase):
 
     def testTimescales(self):
         """Test time scale conversion occurs on comparison."""
-        ts1 = Timespan(begin=astropy.time.Time('2013-06-17 13:34:45.775000', scale='tai', format='iso'),
-                       end=astropy.time.Time('2013-06-17 13:35:17.947000', scale='tai', format='iso'))
-        ts2 = Timespan(begin=astropy.time.Time('2013-06-17T13:34:10.775', scale='utc', format='isot'),
-                       end=astropy.time.Time('2013-06-17T13:34:42.947', scale='utc', format='isot'))
+        ts1 = Timespan(
+            begin=astropy.time.Time("2013-06-17 13:34:45.775000", scale="tai", format="iso"),
+            end=astropy.time.Time("2013-06-17 13:35:17.947000", scale="tai", format="iso"),
+        )
+        ts2 = Timespan(
+            begin=astropy.time.Time("2013-06-17T13:34:10.775", scale="utc", format="isot"),
+            end=astropy.time.Time("2013-06-17T13:34:42.947", scale="utc", format="isot"),
+        )
         self.assertEqual(ts1, ts2, f"Compare {ts1} with {ts2}")
 
     def testFuture(self):
@@ -227,10 +232,14 @@ class TimespanTestCase(unittest.TestCase):
             warnings.simplefilter("ignore", category=astropy.utils.exceptions.AstropyWarning)
             if erfa is not None:
                 warnings.simplefilter("ignore", category=erfa.ErfaWarning)
-            ts1 = Timespan(begin=astropy.time.Time(self.timestamps[0], scale='utc', format='iso'),
-                           end=astropy.time.Time('2099-06-17 13:35:17.947000', scale='utc', format='iso'))
-            ts2 = Timespan(begin=astropy.time.Time(self.timestamps[0], scale='utc', format='iso'),
-                           end=astropy.time.Time('2099-06-17 13:35:17.947000', scale='utc', format='iso'))
+            ts1 = Timespan(
+                begin=astropy.time.Time(self.timestamps[0], scale="utc", format="iso"),
+                end=astropy.time.Time("2099-06-17 13:35:17.947000", scale="utc", format="iso"),
+            )
+            ts2 = Timespan(
+                begin=astropy.time.Time(self.timestamps[0], scale="utc", format="iso"),
+                end=astropy.time.Time("2099-06-17 13:35:17.947000", scale="utc", format="iso"),
+            )
 
         # unittest can't test for no warnings so we run the test and
         # trigger our own warning and count all the warnings
@@ -240,8 +249,10 @@ class TimespanTestCase(unittest.TestCase):
         self.assertEqual(str(cm.warning), "deliberate")
 
     def testJson(self):
-        ts1 = Timespan(begin=astropy.time.Time('2013-06-17 13:34:45.775000', scale='tai', format='iso'),
-                       end=astropy.time.Time('2013-06-17 13:35:17.947000', scale='tai', format='iso'))
+        ts1 = Timespan(
+            begin=astropy.time.Time("2013-06-17 13:34:45.775000", scale="tai", format="iso"),
+            end=astropy.time.Time("2013-06-17 13:35:17.947000", scale="tai", format="iso"),
+        )
         json_str = ts1.to_json()
         ts_json = Timespan.from_json(json_str)
         self.assertEqual(ts_json, ts1)

@@ -23,24 +23,20 @@ from __future__ import annotations
 
 __all__ = ()
 
-from contextlib import contextmanager
 import io
 import os
 import shutil
 import tempfile
+from contextlib import contextmanager
 from typing import Optional
 
 import astropy
 from astropy.table import Table as AstropyTable
 from astropy.utils.diff import report_diff_values
 
-from .. import (
-    Butler,
-    Config,
-    StorageClassFactory,
-)
-from ..tests import addDatasetType, MetricsExample
+from .. import Butler, Config, StorageClassFactory
 from ..registry import CollectionType
+from ..tests import MetricsExample, addDatasetType
 
 
 def makeTestTempDir(default_base: str) -> str:
@@ -159,10 +155,12 @@ def readTable(textTable):
     table : `astropy.table.Table`
         The table as an astropy table.
     """
-    return AstropyTable.read(textTable,
-                             format="ascii",
-                             data_start=2,  # skip the header row and the header row underlines.
-                             fill_values=[("", 0, "")])
+    return AstropyTable.read(
+        textTable,
+        format="ascii",
+        data_start=2,  # skip the header row and the header row underlines.
+        fill_values=[("", 0, "")],
+    )
 
 
 class MetricTestRepo:
@@ -179,23 +177,19 @@ class MetricTestRepo:
 
     @staticmethod
     def _makeExampleMetrics():
-        """Make an object to put into the repository.
-        """
-        return MetricsExample({"AM1": 5.2, "AM2": 30.6},
-                              {"a": [1, 2, 3],
-                               "b": {"blue": 5, "red": "green"}},
-                              [563, 234, 456.7, 752, 8, 9, 27])
+        """Make an object to put into the repository."""
+        return MetricsExample(
+            {"AM1": 5.2, "AM2": 30.6},
+            {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
+            [563, 234, 456.7, 752, 8, 9, 27],
+        )
 
     @staticmethod
     def _makeDimensionData(id, name, datetimeBegin=None, datetimeEnd=None):
         """Make a dict of dimensional data with default values to insert into
         the registry.
         """
-        data = dict(instrument="DummyCamComp",
-                    id=id,
-                    name=name,
-                    physical_filter="d-r",
-                    visit_system=1)
+        data = dict(instrument="DummyCamComp", id=id, name=name, physical_filter="d-r", visit_system=1)
         if datetimeBegin:
             data["datetime_begin"] = datetimeBegin
             data["datetime_end"] = datetimeEnd
@@ -216,31 +210,42 @@ class MetricTestRepo:
         self.butler.registry.registerCollection(tag, CollectionType.TAGGED)
 
         # Create and register a DatasetType
-        self.datasetType = addDatasetType(self.butler, "test_metric_comp", ("instrument", "visit"),
-                                          "StructuredCompositeReadComp")
+        self.datasetType = addDatasetType(
+            self.butler, "test_metric_comp", ("instrument", "visit"), "StructuredCompositeReadComp"
+        )
 
         # Add needed Dimensions
         self.butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        self.butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
-                                                                     "name": "d-r",
-                                                                     "band": "R"})
-        self.butler.registry.insertDimensionData("visit_system", {"instrument": "DummyCamComp",
-                                                                  "id": 1,
-                                                                  "name": "default"})
+        self.butler.registry.insertDimensionData(
+            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
+        )
+        self.butler.registry.insertDimensionData(
+            "visit_system", {"instrument": "DummyCamComp", "id": 1, "name": "default"}
+        )
         visitStart = astropy.time.Time("2020-01-01 08:00:00.123456789", scale="tai")
         visitEnd = astropy.time.Time("2020-01-01 08:00:36.66", scale="tai")
-        self.butler.registry.insertDimensionData("visit", dict(instrument="DummyCamComp",
-                                                               id=423,
-                                                               name="fourtwentythree",
-                                                               physical_filter="d-r",
-                                                               visit_system=1,
-                                                               datetimeBegin=visitStart,
-                                                               datetimeEnd=visitEnd))
-        self.butler.registry.insertDimensionData("visit", dict(instrument="DummyCamComp",
-                                                               id=424,
-                                                               name="fourtwentyfour",
-                                                               physical_filter="d-r",
-                                                               visit_system=1))
+        self.butler.registry.insertDimensionData(
+            "visit",
+            dict(
+                instrument="DummyCamComp",
+                id=423,
+                name="fourtwentythree",
+                physical_filter="d-r",
+                visit_system=1,
+                datetimeBegin=visitStart,
+                datetimeEnd=visitEnd,
+            ),
+        )
+        self.butler.registry.insertDimensionData(
+            "visit",
+            dict(
+                instrument="DummyCamComp",
+                id=424,
+                name="fourtwentyfour",
+                physical_filter="d-r",
+                visit_system=1,
+            ),
+        )
 
         self.addDataset({"instrument": "DummyCamComp", "visit": 423})
         self.addDataset({"instrument": "DummyCamComp", "visit": 424})
@@ -267,7 +272,4 @@ class MetricTestRepo:
         if run:
             self.butler.registry.registerCollection(run, type=CollectionType.RUN)
         metric = self._makeExampleMetrics()
-        self.butler.put(metric,
-                        self.datasetType if datasetType is None else datasetType,
-                        dataId,
-                        run=run)
+        self.butler.put(metric, self.datasetType if datasetType is None else datasetType, dataId, run=run)

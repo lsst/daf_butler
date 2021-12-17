@@ -23,10 +23,7 @@ from __future__ import annotations
 
 __all__ = ("Location", "LocationFactory")
 
-from typing import (
-    Optional,
-    Union,
-)
+from typing import Optional, Union
 
 from ._butlerUri import ButlerURI
 
@@ -48,8 +45,7 @@ class Location:
 
     __slots__ = ("_datastoreRootUri", "_path", "_uri")
 
-    def __init__(self, datastoreRootUri: Union[None, ButlerURI, str],
-                 path: Union[ButlerURI, str]):
+    def __init__(self, datastoreRootUri: Union[None, ButlerURI, str], path: Union[ButlerURI, str]):
         # Be careful not to force a relative local path to absolute path
         path_uri = ButlerURI(path, forceAbsolute=False)
 
@@ -200,8 +196,7 @@ class LocationFactory:
     """
 
     def __init__(self, datastoreRoot: Union[ButlerURI, str]):
-        self._datastoreRootUri = ButlerURI(datastoreRoot, forceAbsolute=True,
-                                           forceDirectory=True)
+        self._datastoreRootUri = ButlerURI(datastoreRoot, forceAbsolute=True, forceDirectory=True)
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}@{self._datastoreRootUri}"

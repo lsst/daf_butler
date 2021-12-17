@@ -22,32 +22,18 @@ from __future__ import annotations
 
 __all__ = ["TableDimensionRecordStorage"]
 
-from collections import defaultdict
 import itertools
 import logging
-from typing import (
-    AbstractSet,
-    Any,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Set,
-    Union,
-)
 import warnings
+from collections import defaultdict
+from typing import AbstractSet, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Set, Union
 
 import sqlalchemy
 
 from ...core import (
-    addDimensionForeignKey,
     DatabaseDimensionElement,
     DataCoordinate,
     DataCoordinateIterable,
-    ddl,
     DimensionElement,
     DimensionRecord,
     GovernorDimension,
@@ -59,6 +45,8 @@ from ...core import (
     SkyPixSystem,
     SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
+    addDimensionForeignKey,
+    ddl,
 )
 from ..interfaces import (
     Database,
@@ -69,7 +57,6 @@ from ..interfaces import (
 )
 from ..queries import QueryBuilder
 from ..wildcards import Ellipsis, EllipsisType
-
 
 _LOG = logging.getLogger(__name__)
 
@@ -101,15 +88,23 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         joins to skypix dimensions.  Should be `None` if (and only if)
         ``element.spatial is None``.
     """
-    def __init__(self, db: Database, element: DatabaseDimensionElement, *, table: sqlalchemy.schema.Table,
-                 skyPixOverlap: Optional[_SkyPixOverlapStorage] = None):
+
+    def __init__(
+        self,
+        db: Database,
+        element: DatabaseDimensionElement,
+        *,
+        table: sqlalchemy.schema.Table,
+        skyPixOverlap: Optional[_SkyPixOverlapStorage] = None,
+    ):
         self._db = db
         self._table = table
         self._element = element
         self._fetchColumns: Dict[str, sqlalchemy.sql.ColumnElement] = {
             dimension.name: self._table.columns[name]
-            for dimension, name in zip(self._element.dimensions,
-                                       self._element.RecordClass.fields.dimensions.names)
+            for dimension, name in zip(
+                self._element.dimensions, self._element.RecordClass.fields.dimensions.names
+            )
         }
         self._skyPixOverlap = skyPixOverlap
         self._otherOverlaps: List[DatabaseDimensionOverlapStorage] = []
@@ -118,7 +113,8 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def initialize(
         cls,
         db: Database,
-        element: DatabaseDimensionElement, *,
+        element: DatabaseDimensionElement,
+        *,
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
@@ -169,7 +165,8 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def join(
         self,
-        builder: QueryBuilder, *,
+        builder: QueryBuilder,
+        *,
         regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
@@ -184,8 +181,9 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             )
             regionsInTable = self._db.getSpatialRegionRepresentation().fromSelectable(self._table)
             regions[self.element] = regionsInTable
-        joinOn = builder.startJoin(self._table, self.element.dimensions,
-                                   self.element.RecordClass.fields.dimensions.names)
+        joinOn = builder.startJoin(
+            self._table, self.element.dimensions, self.element.RecordClass.fields.dimensions.names
+        )
         if timespans is not None:
             timespanInTable = self._db.getTimespanRepresentation().fromSelectable(self._table)
             for timespanInQuery in timespans.values():
@@ -210,8 +208,11 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             # Some of our generated queries may contain cartesian joins, this
             # is not a serious issue as it is properly constrained, so we want
             # to suppress sqlalchemy warnings.
-            warnings.filterwarnings("ignore", message="SELECT statement has a cartesian product",
-                                    category=sqlalchemy.exc.SAWarning)
+            warnings.filterwarnings(
+                "ignore",
+                message="SELECT statement has a cartesian product",
+                category=sqlalchemy.exc.SAWarning,
+            )
             for row in self._db.query(query.combine()):
                 values = row._asdict()
                 if self.element.temporal is not None:
@@ -322,6 +323,7 @@ class _SkyPixOverlapStorage:
     figure out how best to ask for overlap rows when an exact match isn't
     available.
     """
+
     def __init__(
         self,
         db: Database,
@@ -341,7 +343,8 @@ class _SkyPixOverlapStorage:
     def initialize(
         cls,
         db: Database,
-        element: DatabaseDimensionElement, *,
+        element: DatabaseDimensionElement,
+        *,
         context: Optional[StaticTablesContext],
         governor: GovernorDimensionRecordStorage,
     ) -> _SkyPixOverlapStorage:
@@ -371,8 +374,9 @@ class _SkyPixOverlapStorage:
             cls._OVERLAP_TABLE_NAME_SPEC.format(element=element),
             cls._makeOverlapTableSpec(element),
         )
-        return _SkyPixOverlapStorage(db, element, summaryTable=summaryTable, overlapTable=overlapTable,
-                                     governor=governor)
+        return _SkyPixOverlapStorage(
+            db, element, summaryTable=summaryTable, overlapTable=overlapTable, governor=governor
+        )
 
     _SUMMARY_TABLE_NAME_SPEC = "{element.name}_skypix_overlap_summary"
 
@@ -452,7 +456,12 @@ class _SkyPixOverlapStorage:
                 # This index has the same fields as the PK, in a different
                 # order, to facilitate queries that know skypix_index and want
                 # to find the other element.
-                ("skypix_system", "skypix_level", "skypix_index",) + tuple(element.graph.required.names),
+                (
+                    "skypix_system",
+                    "skypix_level",
+                    "skypix_index",
+                )
+                + tuple(element.graph.required.names),
             },
             foreignKeys=[
                 # Foreign key to summary table.  This makes sure we don't
@@ -534,8 +543,9 @@ class _SkyPixOverlapStorage:
         # approach possible, but we'll focus on correct before we focus on
         # fast, and enabling a new overlap combination should be a very rare
         # operation anyway, and never one we do in parallel.
-        with self._db.transaction(lock=[self._governor.table, storage._table,
-                                        self._summaryTable, self._overlapTable]):
+        with self._db.transaction(
+            lock=[self._governor.table, storage._table, self._summaryTable, self._overlapTable]
+        ):
             result, inserted = self._db.sync(
                 self._summaryTable,
                 keys={
@@ -550,7 +560,7 @@ class _SkyPixOverlapStorage:
                     skypix.name,
                     self.element.name,
                     self._governor.element.name,
-                    governorValue
+                    governorValue,
                 )
                 self._fill(storage=storage, skypix=skypix, governorValue=governorValue)
             else:
@@ -559,11 +569,12 @@ class _SkyPixOverlapStorage:
                     skypix.name,
                     self.element.name,
                     self._governor.element.name,
-                    governorValue
+                    governorValue,
                 )
 
     def _fill(
-        self, *,
+        self,
+        *,
         storage: TableDimensionRecordStorage,
         skypix: SkyPixDimension,
         governorValue: str,
@@ -593,8 +604,9 @@ class _SkyPixOverlapStorage:
         # (e.g. {instrument}).  But we know the implementation of `fetch` for
         # `TableDimensionRecordStorage will use this iterable to do exactly
         # what we want.
-        governorDataId = DataCoordinate.standardize({self._governor.element.name: governorValue},
-                                                    graph=self._governor.element.graph)
+        governorDataId = DataCoordinate.standardize(
+            {self._governor.element.name: governorValue}, graph=self._governor.element.graph
+        )
         for record in storage.fetch(DataCoordinateIterable.fromScalar(governorDataId)):
             if record.region is None:
                 continue
@@ -639,7 +651,9 @@ class _SkyPixOverlapStorage:
             grouped[getattr(record, self._governor.element.name)].append(record)
         _LOG.debug(
             "Precomputing new skypix overlaps for %s where %s in %s.",
-            self.element.name, self._governor.element.name, grouped.keys()
+            self.element.name,
+            self._governor.element.name,
+            grouped.keys(),
         )
         # Make sure the set of combinations to materialize does not change
         # while we are materializing the ones we have, by locking the summary
@@ -652,12 +666,14 @@ class _SkyPixOverlapStorage:
             gvCol = self._summaryTable.columns[self._governor.element.name]
             sysCol = self._summaryTable.columns.skypix_system
             lvlCol = self._summaryTable.columns.skypix_level
-            query = sqlalchemy.sql.select(
-                gvCol, sysCol, lvlCol,
-            ).select_from(
-                self._summaryTable
-            ).where(
-                gvCol.in_(list(grouped.keys()))
+            query = (
+                sqlalchemy.sql.select(
+                    gvCol,
+                    sysCol,
+                    lvlCol,
+                )
+                .select_from(self._summaryTable)
+                .where(gvCol.in_(list(grouped.keys())))
             )
             # Group results by governor value, then skypix system.
             skypix: Dict[str, NamedKeyDict[SkyPixSystem, List[int]]] = {
@@ -693,7 +709,10 @@ class _SkyPixOverlapStorage:
                 overlapRecords.extend(self._compute(group, skypix[gv], gv))
             _LOG.debug(
                 "Inserting %d new skypix overlap rows for %s where %s in %s.",
-                len(overlapRecords), self.element.name, self._governor.element.name, grouped.keys()
+                len(overlapRecords),
+                self.element.name,
+                self._governor.element.name,
+                grouped.keys(),
             )
             self._db.insert(self._overlapTable, *overlapRecords)
 
@@ -747,15 +766,16 @@ class _SkyPixOverlapStorage:
                 # Divide those indices by powers of 4 (and remove duplicates)
                 # work our way up to the last (coarsest) level.
                 for lastLevel, nextLevel in zip(levels[:-1], levels[1:]):
-                    factor = 4**(lastLevel - nextLevel)
-                    indices[nextLevel] = {index//factor for index in indices[lastLevel]}
+                    factor = 4 ** (lastLevel - nextLevel)
+                    indices[nextLevel] = {index // factor for index in indices[lastLevel]}
                 for level in levels:
                     yield from (
                         {
                             "skypix_level": level,
                             "skypix_index": index,
                             **baseOverlapRecord,  # type: ignore
-                        } for index in indices[level]
+                        }
+                        for index in indices[level]
                     )
 
     def select(
@@ -796,12 +816,10 @@ class _SkyPixOverlapStorage:
             gvCol = self._summaryTable.columns[self._governor.element.name]
             if governorValues is not Ellipsis:
                 summaryWhere.append(gvCol.in_(list(governorValues)))
-            summaryQuery = sqlalchemy.sql.select(
-                gvCol
-            ).select_from(
-                self._summaryTable
-            ).where(
-                sqlalchemy.sql.and_(*summaryWhere)
+            summaryQuery = (
+                sqlalchemy.sql.select(gvCol)
+                .select_from(self._summaryTable)
+                .where(sqlalchemy.sql.and_(*summaryWhere))
             )
             materializedGovernorValues = {row._mapping[gvCol] for row in self._db.query(summaryQuery)}
             if governorValues is Ellipsis:
@@ -824,12 +842,10 @@ class _SkyPixOverlapStorage:
             overlapWhere.append(
                 self._overlapTable.columns[self._governor.element.name].in_(list(governorValues))
             )
-        overlapQuery = sqlalchemy.sql.select(
-            *columns
-        ).select_from(
-            self._overlapTable
-        ).where(
-            sqlalchemy.sql.and_(*overlapWhere)
+        overlapQuery = (
+            sqlalchemy.sql.select(*columns)
+            .select_from(self._overlapTable)
+            .where(sqlalchemy.sql.and_(*overlapWhere))
         )
         return overlapQuery.alias(f"{self.element.name}_{skypix.name}_overlap")
 

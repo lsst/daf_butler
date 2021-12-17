@@ -22,15 +22,15 @@
 """Unit tests for daf_butler CLI query-collections command.
 """
 
-from astropy.table import Table as AstropyTable
-from numpy import array
 import unittest
 
+from astropy.table import Table as AstropyTable
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_dataset_types
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.tests import CliCmdTestBase
 from lsst.daf.butler.tests.utils import ButlerTestHelper, readTable
+from numpy import array
 
 
 class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
@@ -39,20 +39,15 @@ class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
 
     @staticmethod
     def defaultExpected():
-        return dict(repo=None,
-                    verbose=False,
-                    glob=(),
-                    components=None)
+        return dict(repo=None, verbose=False, glob=(), components=None)
 
     @staticmethod
     def command():
         return query_dataset_types
 
     def test_minimal(self):
-        """Test only required parameters.
-        """
-        self.run_test(["query-dataset-types", "here"],
-                      self.makeExpected(repo="here"))
+        """Test only required parameters."""
+        self.run_test(["query-dataset-types", "here"], self.makeExpected(repo="here"))
 
     def test_requiredMissing(self):
         """Test that if the required parameter is missing it fails"""
@@ -60,14 +55,17 @@ class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
 
     def test_all(self):
         """Test all parameters."""
-        self.run_test(["query-dataset-types", "here", "--verbose", "foo*", "--components"],
-                      self.makeExpected(repo="here", verbose=True, glob=("foo*", ), components=True))
-        self.run_test(["query-dataset-types", "here", "--verbose", "foo*", "--no-components"],
-                      self.makeExpected(repo="here", verbose=True, glob=("foo*", ), components=False))
+        self.run_test(
+            ["query-dataset-types", "here", "--verbose", "foo*", "--components"],
+            self.makeExpected(repo="here", verbose=True, glob=("foo*",), components=True),
+        )
+        self.run_test(
+            ["query-dataset-types", "here", "--verbose", "foo*", "--no-components"],
+            self.makeExpected(repo="here", verbose=True, glob=("foo*",), components=False),
+        )
 
 
 class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
-
     def testQueryDatasetTypes(self):
         self.maxDiff = None
         datasetName = "test"
@@ -80,20 +78,40 @@ class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
             result = runner.invoke(cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             # Create the dataset type.
-            result = runner.invoke(cli, ["register-dataset-type", "here", datasetName,
-                                         storageClassName, instrumentDimension, visitDimension])
+            result = runner.invoke(
+                cli,
+                [
+                    "register-dataset-type",
+                    "here",
+                    datasetName,
+                    storageClassName,
+                    instrumentDimension,
+                    visitDimension,
+                ],
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             # Okay to create it again identically.
-            result = runner.invoke(cli, ["register-dataset-type", "here", datasetName,
-                                         storageClassName, instrumentDimension, visitDimension])
+            result = runner.invoke(
+                cli,
+                [
+                    "register-dataset-type",
+                    "here",
+                    datasetName,
+                    storageClassName,
+                    instrumentDimension,
+                    visitDimension,
+                ],
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             # Not okay to create a different version of it.
-            result = runner.invoke(cli, ["register-dataset-type", "here", datasetName,
-                                         storageClassName, instrumentDimension])
+            result = runner.invoke(
+                cli, ["register-dataset-type", "here", datasetName, storageClassName, instrumentDimension]
+            )
             self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
             # Not okay to try to create a component dataset type.
-            result = runner.invoke(cli, ["register-dataset-type", "here", "a.b",
-                                         storageClassName, instrumentDimension])
+            result = runner.invoke(
+                cli, ["register-dataset-type", "here", "a.b", storageClassName, instrumentDimension]
+            )
             self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
             # check not-verbose output:
             result = runner.invoke(cli, ["query-dataset-types", "here"])
@@ -106,11 +124,16 @@ class QueryDatasetTypesScriptTest(ButlerTestHelper, unittest.TestCase):
             # check verbose output:
             result = runner.invoke(cli, ["query-dataset-types", "here", "--verbose"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            expected = AstropyTable(array((
-                "test",
-                "['band', 'instrument', 'physical_filter', 'visit_system', 'visit']",
-                storageClassName)),
-                names=("name", "dimensions", "storage class"))
+            expected = AstropyTable(
+                array(
+                    (
+                        "test",
+                        "['band', 'instrument', 'physical_filter', 'visit_system', 'visit']",
+                        storageClassName,
+                    )
+                ),
+                names=("name", "dimensions", "storage class"),
+            )
             self.assertAstropyTablesEqual(readTable(result.output), expected)
 
             # Now remove and check that it was removed

@@ -38,8 +38,8 @@ from typing import (
     Iterator,
     List,
     Optional,
-    overload,
     Sequence,
+    overload,
 )
 
 import sqlalchemy
@@ -131,10 +131,13 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
             ``self``, after removing any duplicates.  May be ``self`` if it is
             already a `DataCoordinateSet`.
         """
-        return DataCoordinateSet(frozenset(self), graph=self.graph,
-                                 hasFull=self.hasFull(),
-                                 hasRecords=self.hasRecords(),
-                                 check=False)
+        return DataCoordinateSet(
+            frozenset(self),
+            graph=self.graph,
+            hasFull=self.hasFull(),
+            hasRecords=self.hasRecords(),
+            check=False,
+        )
 
     def toSequence(self) -> DataCoordinateSequence:
         """Transform this iterable into a `DataCoordinateSequence`.
@@ -146,10 +149,9 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
             ``self``, in the same order.  May be ``self`` if it is already a
             `DataCoordinateSequence`.
         """
-        return DataCoordinateSequence(tuple(self), graph=self.graph,
-                                      hasFull=self.hasFull(),
-                                      hasRecords=self.hasRecords(),
-                                      check=False)
+        return DataCoordinateSequence(
+            tuple(self), graph=self.graph, hasFull=self.hasFull(), hasRecords=self.hasRecords(), check=False
+        )
 
     def constrain(self, query: SimpleQuery, columns: Callable[[str], sqlalchemy.sql.ColumnElement]) -> None:
         """Constrain a SQL query to include or relate to only known data IDs.
@@ -168,10 +170,9 @@ class DataCoordinateIterable(Iterable[DataCoordinate]):
         toOrTogether: List[sqlalchemy.sql.ColumnElement] = []
         for dataId in self:
             toOrTogether.append(
-                sqlalchemy.sql.and_(*[
-                    columns(dimension.name) == dataId[dimension.name]
-                    for dimension in self.graph.required
-                ])
+                sqlalchemy.sql.and_(
+                    *[columns(dimension.name) == dataId[dimension.name] for dimension in self.graph.required]
+                )
             )
         query.where.append(sqlalchemy.sql.or_(*toOrTogether))
 
@@ -288,9 +289,15 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         checking will occur.
     """
 
-    def __init__(self, dataIds: Collection[DataCoordinate], graph: DimensionGraph, *,
-                 hasFull: Optional[bool] = None, hasRecords: Optional[bool] = None,
-                 check: bool = True):
+    def __init__(
+        self,
+        dataIds: Collection[DataCoordinate],
+        graph: DimensionGraph,
+        *,
+        hasFull: Optional[bool] = None,
+        hasRecords: Optional[bool] = None,
+        check: bool = True,
+    ):
         self._dataIds = dataIds
         self._graph = graph
         if check:
@@ -332,20 +339,26 @@ class _DataCoordinateCollectionBase(DataCoordinateIterable):
         # Override base class to pass in attributes instead of results of
         # method calls for _hasFull and _hasRecords - those can be None,
         # and hence defer checking if that's what the user originally wanted.
-        return DataCoordinateSet(frozenset(self._dataIds), graph=self._graph,
-                                 hasFull=self._hasFull,
-                                 hasRecords=self._hasRecords,
-                                 check=False)
+        return DataCoordinateSet(
+            frozenset(self._dataIds),
+            graph=self._graph,
+            hasFull=self._hasFull,
+            hasRecords=self._hasRecords,
+            check=False,
+        )
 
     def toSequence(self) -> DataCoordinateSequence:
         # Docstring inherited from DataCoordinateIterable.
         # Override base class to pass in attributes instead of results of
         # method calls for _hasFull and _hasRecords - those can be None,
         # and hence defer checking if that's what the user originally wanted.
-        return DataCoordinateSequence(tuple(self._dataIds), graph=self._graph,
-                                      hasFull=self._hasFull,
-                                      hasRecords=self._hasRecords,
-                                      check=False)
+        return DataCoordinateSequence(
+            tuple(self._dataIds),
+            graph=self._graph,
+            hasFull=self._hasFull,
+            hasRecords=self._hasRecords,
+            check=False,
+        )
 
     def __iter__(self) -> Iterator[DataCoordinate]:
         return iter(self._dataIds)
@@ -450,9 +463,15 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
     elements are contributed by each operand).
     """
 
-    def __init__(self, dataIds: AbstractSet[DataCoordinate], graph: DimensionGraph, *,
-                 hasFull: Optional[bool] = None, hasRecords: Optional[bool] = None,
-                 check: bool = True):
+    def __init__(
+        self,
+        dataIds: AbstractSet[DataCoordinate],
+        graph: DimensionGraph,
+        *,
+        hasFull: Optional[bool] = None,
+        hasRecords: Optional[bool] = None,
+        check: bool = True,
+    ):
         super().__init__(dataIds, graph, hasFull=hasFull, hasRecords=hasRecords, check=check)
 
     _dataIds: AbstractSet[DataCoordinate]
@@ -463,15 +482,14 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         return str(set(self._dataIds))
 
     def __repr__(self) -> str:
-        return (f"DataCoordinateSet({set(self._dataIds)}, {self._graph!r}, "
-                f"hasFull={self._hasFull}, hasRecords={self._hasRecords})")
+        return (
+            f"DataCoordinateSet({set(self._dataIds)}, {self._graph!r}, "
+            f"hasFull={self._hasFull}, hasRecords={self._hasRecords})"
+        )
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, DataCoordinateSet):
-            return (
-                self._graph == other._graph
-                and self._dataIds == other._dataIds
-            )
+            return self._graph == other._graph and self._dataIds == other._dataIds
         return False
 
     def __le__(self, other: DataCoordinateSet) -> bool:
@@ -661,9 +679,7 @@ class DataCoordinateSet(_DataCoordinateCollectionBase):
         if graph == self.graph:
             return self
         return DataCoordinateSet(
-            {dataId.subset(graph) for dataId in self._dataIds},
-            graph,
-            **self._subsetKwargs(graph)
+            {dataId.subset(graph) for dataId in self._dataIds}, graph, **self._subsetKwargs(graph)
         )
 
 
@@ -700,9 +716,15 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         checking will occur.
     """
 
-    def __init__(self, dataIds: Sequence[DataCoordinate], graph: DimensionGraph, *,
-                 hasFull: Optional[bool] = None, hasRecords: Optional[bool] = None,
-                 check: bool = True):
+    def __init__(
+        self,
+        dataIds: Sequence[DataCoordinate],
+        graph: DimensionGraph,
+        *,
+        hasFull: Optional[bool] = None,
+        hasRecords: Optional[bool] = None,
+        check: bool = True,
+    ):
         super().__init__(tuple(dataIds), graph, hasFull=hasFull, hasRecords=hasRecords, check=check)
 
     _dataIds: Sequence[DataCoordinate]
@@ -713,15 +735,14 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         return str(tuple(self._dataIds))
 
     def __repr__(self) -> str:
-        return (f"DataCoordinateSequence({tuple(self._dataIds)}, {self._graph!r}, "
-                f"hasFull={self._hasFull}, hasRecords={self._hasRecords})")
+        return (
+            f"DataCoordinateSequence({tuple(self._dataIds)}, {self._graph!r}, "
+            f"hasFull={self._hasFull}, hasRecords={self._hasRecords})"
+        )
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, DataCoordinateSequence):
-            return (
-                self._graph == other._graph
-                and self._dataIds == other._dataIds
-            )
+            return self._graph == other._graph and self._dataIds == other._dataIds
         return False
 
     @overload
@@ -735,9 +756,9 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
     def __getitem__(self, index: Any) -> Any:  # noqa: F811
         r = self._dataIds[index]
         if isinstance(index, slice):
-            return DataCoordinateSequence(r, self._graph,
-                                          hasFull=self._hasFull, hasRecords=self._hasRecords,
-                                          check=False)
+            return DataCoordinateSequence(
+                r, self._graph, hasFull=self._hasFull, hasRecords=self._hasRecords, check=False
+            )
         return r
 
     def toSequence(self) -> DataCoordinateSequence:
@@ -765,7 +786,5 @@ class DataCoordinateSequence(_DataCoordinateCollectionBase, Sequence[DataCoordin
         if graph == self.graph:
             return self
         return DataCoordinateSequence(
-            tuple(dataId.subset(graph) for dataId in self._dataIds),
-            graph,
-            **self._subsetKwargs(graph)
+            tuple(dataId.subset(graph) for dataId in self._dataIds), graph, **self._subsetKwargs(graph)
         )

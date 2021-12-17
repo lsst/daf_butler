@@ -24,17 +24,9 @@ from __future__ import annotations
 __all__ = ("ButlerRepoIndex",)
 
 import os
+from typing import ClassVar, Dict, Set
 
-from typing import (
-    ClassVar,
-    Dict,
-    Set,
-)
-
-from .core import (
-    ButlerURI,
-    Config,
-)
+from .core import ButlerURI, Config
 
 
 class ButlerRepoIndex:

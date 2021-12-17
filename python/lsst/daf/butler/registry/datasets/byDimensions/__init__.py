@@ -19,5 +19,5 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ._storage import *
 from ._manager import *
+from ._storage import *

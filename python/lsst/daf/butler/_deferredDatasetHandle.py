@@ -27,21 +27,21 @@ from __future__ import annotations
 __all__ = ("DeferredDatasetHandle",)
 
 import dataclasses
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from .core import DatasetRef, DataCoordinate
     from ._butler import Butler
+    from .core import DataCoordinate, DatasetRef
 
 
 @dataclasses.dataclass(frozen=True)
 class DeferredDatasetHandle:
-    """Proxy class that provides deferred loading of a dataset from a butler.
-    """
+    """Proxy class that provides deferred loading of a dataset from a butler."""
 
-    def get(self, *, component: Optional[str] = None, parameters: Optional[dict] = None,
-            **kwargs: dict) -> Any:
-        """ Retrieves the dataset pointed to by this handle
+    def get(
+        self, *, component: Optional[str] = None, parameters: Optional[dict] = None, **kwargs: dict
+    ) -> Any:
+        """Retrieves the dataset pointed to by this handle
 
         This handle may be used multiple times, possibly with different
         parameters.

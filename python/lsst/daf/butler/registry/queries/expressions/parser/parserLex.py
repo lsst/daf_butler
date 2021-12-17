@@ -75,8 +75,7 @@ class ParserLexError(Exception):
 
 
 class ParserLex:
-    """Class which defines PLY lexer.
-    """
+    """Class which defines PLY lexer."""
 
     @classmethod
     def make_lexer(cls, reflags=0, **kwargs):
@@ -114,41 +113,51 @@ class ParserLex:
 
     # List of token names.
     tokens = (
-        'NUMERIC_LITERAL',
-        'TIME_LITERAL',
-        'STRING_LITERAL',
-        'RANGE_LITERAL',
+        "NUMERIC_LITERAL",
+        "TIME_LITERAL",
+        "STRING_LITERAL",
+        "RANGE_LITERAL",
         # 'DURATION_LITERAL',
-        'QUALIFIED_IDENTIFIER',
-        'SIMPLE_IDENTIFIER',
-        'LPAREN', 'RPAREN',
-        'EQ', 'NE', 'LT', 'LE', 'GT', 'GE',
-        'ADD', 'SUB', 'MUL', 'DIV', 'MOD',
-        'COMMA'
+        "QUALIFIED_IDENTIFIER",
+        "SIMPLE_IDENTIFIER",
+        "LPAREN",
+        "RPAREN",
+        "EQ",
+        "NE",
+        "LT",
+        "LE",
+        "GT",
+        "GE",
+        "ADD",
+        "SUB",
+        "MUL",
+        "DIV",
+        "MOD",
+        "COMMA",
     ) + tuple(reserved.values())
 
     # Regular expression rules for simple tokens
-    t_LPAREN = r'\('
-    t_RPAREN = r'\)'
-    t_EQ = '='
-    t_NE = '!='
-    t_LT = '<'
-    t_LE = '<='
-    t_GT = '>'
-    t_GE = '>='
-    t_ADD = r'\+'
-    t_SUB = '-'
-    t_MUL = r'\*'
-    t_DIV = '/'
-    t_MOD = '%'
-    t_COMMA = ','
+    t_LPAREN = r"\("
+    t_RPAREN = r"\)"
+    t_EQ = "="
+    t_NE = "!="
+    t_LT = "<"
+    t_LE = "<="
+    t_GT = ">"
+    t_GE = ">="
+    t_ADD = r"\+"
+    t_SUB = "-"
+    t_MUL = r"\*"
+    t_DIV = "/"
+    t_MOD = "%"
+    t_COMMA = ","
 
     # A string containing ignored characters (spaces and tabs)
-    t_ignore = ' \t'
+    t_ignore = " \t"
 
     # Define a rule so we can track line numbers
     def t_newline(self, t):
-        r'\n+'
+        r"\n+"
         t.lexer.lineno += len(t.value)
 
     # quoted string prefixed with 'T'
@@ -180,15 +189,15 @@ class ParserLex:
     # numbers are used as strings by parser, do not convert
     def t_NUMERIC_LITERAL(self, t):
         r"""\d+(\.\d*)?(e[-+]?\d+)?   #  1, 1., 1.1, 1e10, 1.1e-10, etc.
-            |
-            \.\d+(e[-+]?\d+)?         #  .1, .1e10, .1e+10
+        |
+        \.\d+(e[-+]?\d+)?         #  .1, .1e10, .1e+10
         """
         return t
 
     # qualified identifiers have one or two dots
     def t_QUALIFIED_IDENTIFIER(self, t):
         r"[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*){1,2}"
-        t.type = 'QUALIFIED_IDENTIFIER'
+        t.type = "QUALIFIED_IDENTIFIER"
         return t
 
     # we only support ASCII in identifier names

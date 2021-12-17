@@ -22,20 +22,19 @@ from __future__ import annotations
 
 __all__ = ["RegistryTests"]
 
-from abc import ABC, abstractmethod
-from collections import defaultdict, namedtuple
-from datetime import datetime, timedelta
 import itertools
 import logging
 import os
 import re
-from typing import Iterator
 import unittest
 import uuid
+from abc import ABC, abstractmethod
+from collections import defaultdict, namedtuple
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Iterator, Optional, Type, Union
 
 import astropy.time
 import sqlalchemy
-from typing import Optional, Type, Union, TYPE_CHECKING
 
 try:
     import numpy as np
@@ -43,6 +42,7 @@ except ImportError:
     np = None
 
 import lsst.sphgeom
+
 from ...core import (
     DataCoordinate,
     DataCoordinateSet,
@@ -52,23 +52,19 @@ from ...core import (
     DimensionGraph,
     NamedValueSet,
     StorageClass,
-    ddl,
     Timespan,
+    ddl,
 )
-from ..interfaces import DatasetIdGenEnum
-from ..summaries import CollectionSummary
 from .._collectionType import CollectionType
 from .._config import RegistryConfig
-
 from .._exceptions import (
     ConflictingDefinitionError,
     InconsistentDataIdError,
     MissingCollectionError,
     OrphanedRecordError,
 )
-
-
-from ..interfaces import ButlerAttributeExistsError
+from ..interfaces import ButlerAttributeExistsError, DatasetIdGenEnum
+from ..summaries import CollectionSummary
 
 if TYPE_CHECKING:
     from .._registry import Registry
@@ -94,8 +90,7 @@ class RegistryTests(ABC):
     @classmethod
     @abstractmethod
     def getDataDir(cls) -> str:
-        """Return the root directory containing test data YAML files.
-        """
+        """Return the root directory containing test data YAML files."""
         raise NotImplementedError()
 
     def makeRegistryConfig(self) -> RegistryConfig:
@@ -116,8 +111,7 @@ class RegistryTests(ABC):
 
     @abstractmethod
     def makeRegistry(self) -> Registry:
-        """Return the Registry instance to be tested.
-        """
+        """Return the Registry instance to be tested."""
         raise NotImplementedError()
 
     def loadData(self, registry: Registry, filename: str):
@@ -125,7 +119,8 @@ class RegistryTests(ABC):
         which should be a YAML import/export file.
         """
         from ...transfers import YamlRepoImportBackend
-        with open(os.path.join(self.getDataDir(), filename), 'r') as stream:
+
+        with open(os.path.join(self.getDataDir(), filename), "r") as stream:
             backend = YamlRepoImportBackend(stream, registry)
         backend.register()
         backend.load(datastore=None)
@@ -163,7 +158,7 @@ class RegistryTests(ABC):
                     ddl.FieldSpec("name", dtype=sqlalchemy.String, length=16, nullable=False),
                     ddl.FieldSpec("count", dtype=sqlalchemy.SmallInteger, nullable=True),
                 ],
-            )
+            ),
         )
         rows = [
             {"id": 1, "name": "one", "count": None},
@@ -183,10 +178,16 @@ class RegistryTests(ABC):
         # Two IN clauses, each longer than 1k batch size, first with
         # duplicates, second has matching elements in different batches (after
         # sorting).
-        self.assertEqual(rows[0:2], list(registry.fetchOpaqueData(
-            table,
-            id=list(range(1000)) + list(range(100, 0, -1)),
-            name=["one"] + [f"q{i}" for i in range(2200)] + ["two"])))
+        self.assertEqual(
+            rows[0:2],
+            list(
+                registry.fetchOpaqueData(
+                    table,
+                    id=list(range(1000)) + list(range(100, 0, -1)),
+                    name=["one"] + [f"q{i}" for i in range(2200)] + ["two"],
+                )
+            ),
+        )
         self.assertEqual([], list(registry.fetchOpaqueData(table, id=1, name="two")))
         registry.deleteOpaqueData(table, id=3)
         self.assertCountEqual(rows[:2], list(registry.fetchOpaqueData(table)))
@@ -237,19 +238,23 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         dimensionName = "instrument"
         dimension = registry.dimensions[dimensionName]
-        dimensionValue = {"name": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2,
-                          "class_name": "lsst.obs.base.Instrument"}
+        dimensionValue = {
+            "name": "DummyCam",
+            "visit_max": 10,
+            "exposure_max": 10,
+            "detector_max": 2,
+            "class_name": "lsst.obs.base.Instrument",
+        }
         registry.insertDimensionData(dimensionName, dimensionValue)
         # Inserting the same value twice should fail
         with self.assertRaises(sqlalchemy.exc.IntegrityError):
             registry.insertDimensionData(dimensionName, dimensionValue)
         # expandDataId should retrieve the record we just inserted
         self.assertEqual(
-            registry.expandDataId(
-                instrument="DummyCam",
-                graph=dimension.graph
-            ).records[dimensionName].toDict(),
-            dimensionValue
+            registry.expandDataId(instrument="DummyCam", graph=dimension.graph)
+            .records[dimensionName]
+            .toDict(),
+            dimensionValue,
         )
         # expandDataId should raise if there is no record with the given ID.
         with self.assertRaises(LookupError):
@@ -268,16 +273,20 @@ class RegistryTests(ABC):
         registry.insertDimensionData(dimensionName2, dimensionValue2)
         # expandDataId should retrieve the record we just inserted.
         self.assertEqual(
-            registry.expandDataId(
-                instrument="DummyCam", physical_filter="DummyCam_i",
-                graph=dimension2.graph
-            ).records[dimensionName2].toDict(),
-            dimensionValue2
+            registry.expandDataId(instrument="DummyCam", physical_filter="DummyCam_i", graph=dimension2.graph)
+            .records[dimensionName2]
+            .toDict(),
+            dimensionValue2,
         )
         # Use syncDimensionData to insert a new record successfully.
         dimensionName3 = "detector"
-        dimensionValue3 = {"instrument": "DummyCam", "id": 1, "full_name": "one",
-                           "name_in_raft": "zero", "purpose": "SCIENCE"}
+        dimensionValue3 = {
+            "instrument": "DummyCam",
+            "id": 1,
+            "full_name": "one",
+            "name_in_raft": "zero",
+            "purpose": "SCIENCE",
+        }
         self.assertTrue(registry.syncDimensionData(dimensionName3, dimensionValue3))
         # Sync that again.  Note that one field ("raft") is NULL, and that
         # should be okay.
@@ -287,8 +296,13 @@ class RegistryTests(ABC):
         with self.assertRaises(ConflictingDefinitionError):
             registry.syncDimensionData(
                 dimensionName3,
-                {"instrument": "DummyCam", "id": 1, "full_name": "one",
-                 "name_in_raft": "four", "purpose": "SCIENCE"}
+                {
+                    "instrument": "DummyCam",
+                    "id": 1,
+                    "full_name": "one",
+                    "name_in_raft": "four",
+                    "purpose": "SCIENCE",
+                },
             )
 
     @unittest.skipIf(np is None, "numpy not available.")
@@ -355,7 +369,7 @@ class RegistryTests(ABC):
         registry.registerRun(run)
         datasetType = registry.getDatasetType("bias")
         dataId = {"instrument": "Cam1", "detector": 2}
-        ref, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
+        (ref,) = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
         self.assertEqual(ref, outRef)
@@ -365,15 +379,14 @@ class RegistryTests(ABC):
         self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
     def testFindDataset(self):
-        """Tests for `Registry.findDataset`.
-        """
+        """Tests for `Registry.findDataset`."""
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         run = "test"
         datasetType = registry.getDatasetType("bias")
         dataId = {"instrument": "Cam1", "detector": 4}
         registry.registerRun(run)
-        inputRef, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
+        (inputRef,) = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
         outputRef = registry.findDataset(datasetType, dataId, collections=[run])
         self.assertEqual(outputRef, inputRef)
         # Check that retrieval with invalid dataId raises
@@ -382,9 +395,9 @@ class RegistryTests(ABC):
             registry.findDataset(datasetType, dataId, collections=run)
         # Check that different dataIds match to different datasets
         dataId1 = {"instrument": "Cam1", "detector": 1}
-        inputRef1, = registry.insertDatasets(datasetType, dataIds=[dataId1], run=run)
+        (inputRef1,) = registry.insertDatasets(datasetType, dataIds=[dataId1], run=run)
         dataId2 = {"instrument": "Cam1", "detector": 2}
-        inputRef2, = registry.insertDatasets(datasetType, dataIds=[dataId2], run=run)
+        (inputRef2,) = registry.insertDatasets(datasetType, dataIds=[dataId2], run=run)
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=run), inputRef1)
         self.assertEqual(registry.findDataset(datasetType, dataId2, collections=run), inputRef2)
         self.assertNotEqual(registry.findDataset(datasetType, dataId1, collections=run), inputRef2)
@@ -416,8 +429,7 @@ class RegistryTests(ABC):
             registry.removeDatasetType(DatasetType.nameWithComponent("flat", "image"))
 
     def testImportDatasetsUUID(self):
-        """Test for `Registry._importDatasets` with UUID dataset ID.
-        """
+        """Test for `Registry._importDatasets` with UUID dataset ID."""
         if not self.datasetsManager.endswith(".ByDimensionsDatasetRecordStorageManagerUUID"):
             self.skipTest(f"Unexpected dataset manager {self.datasetsManager}")
 
@@ -433,7 +445,7 @@ class RegistryTests(ABC):
 
         dataset_id = uuid.uuid4()
         ref = DatasetRef(datasetTypeBias, dataIdBias1, id=dataset_id, run="run0")
-        ref1, = registry._importDatasets([ref])
+        (ref1,) = registry._importDatasets([ref])
         # UUID is used without change
         self.assertEqual(ref.id, ref1.id)
 
@@ -457,12 +469,12 @@ class RegistryTests(ABC):
 
                 # Use integer dataset ID to force UUID calculation in _import
                 ref = DatasetRef(datasetTypeBias, dataIdBias1, id=0, run=f"run{run}")
-                ref1, = registry._importDatasets([ref], idGenerationMode=idGenMode)
+                (ref1,) = registry._importDatasets([ref], idGenerationMode=idGenMode)
                 self.assertIsInstance(ref1.id, uuid.UUID)
                 self.assertEqual(ref1.id.version, 5)
 
                 # Importing it again is OK
-                ref2, = registry._importDatasets([ref1])
+                (ref2,) = registry._importDatasets([ref1])
                 self.assertEqual(ref2.id, ref1.id)
 
                 # Cannot import to different run with the same ID
@@ -474,14 +486,13 @@ class RegistryTests(ABC):
                 if idGenMode is DatasetIdGenEnum.DATAID_TYPE:
                     # Cannot import same DATAID_TYPE ref into a new run
                     with self.assertRaises(ConflictingDefinitionError):
-                        ref2, = registry._importDatasets([ref], idGenerationMode=idGenMode)
+                        (ref2,) = registry._importDatasets([ref], idGenerationMode=idGenMode)
                 else:
                     # DATAID_TYPE_RUN ref can be imported into a new run
-                    ref2, = registry._importDatasets([ref], idGenerationMode=idGenMode)
+                    (ref2,) = registry._importDatasets([ref], idGenerationMode=idGenMode)
 
     def testImportDatasetsInt(self):
-        """Test for `Registry._importDatasets` with integer dataset ID.
-        """
+        """Test for `Registry._importDatasets` with integer dataset ID."""
         if not self.datasetsManager.endswith(".ByDimensionsDatasetRecordStorageManager"):
             self.skipTest(f"Unexpected dataset manager {self.datasetsManager}")
 
@@ -497,7 +508,7 @@ class RegistryTests(ABC):
         dataset_id = 999999999
 
         ref = DatasetRef(datasetTypeBias, dataIdBias1, id=dataset_id, run=run)
-        ref1, = registry._importDatasets([ref])
+        (ref1,) = registry._importDatasets([ref])
         # Should make new integer ID.
         self.assertNotEqual(ref1.id, ref.id)
 
@@ -508,72 +519,64 @@ class RegistryTests(ABC):
 
         # Ingesting different dataId with the same dataset ID should work
         ref3 = DatasetRef(datasetTypeBias, dataIdBias2, id=ref1.id, run=run)
-        ref4, = registry._importDatasets([ref3])
+        (ref4,) = registry._importDatasets([ref3])
         self.assertNotEqual(ref4.id, ref1.id)
 
         ref3 = DatasetRef(datasetTypeFlat, dataIdFlat1, id=ref1.id, run=run)
-        ref4, = registry._importDatasets([ref3])
+        (ref4,) = registry._importDatasets([ref3])
         self.assertNotEqual(ref4.id, ref1.id)
 
     def testDatasetTypeComponentQueries(self):
-        """Test component options when querying for dataset types.
-        """
+        """Test component options when querying for dataset types."""
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
         # Test querying for dataset types with different inputs.
         # First query for all dataset types; components should only be included
         # when components=True.
-        self.assertEqual(
-            {"bias", "flat"},
-            NamedValueSet(registry.queryDatasetTypes()).names
-        )
-        self.assertEqual(
-            {"bias", "flat"},
-            NamedValueSet(registry.queryDatasetTypes(components=False)).names
-        )
+        self.assertEqual({"bias", "flat"}, NamedValueSet(registry.queryDatasetTypes()).names)
+        self.assertEqual({"bias", "flat"}, NamedValueSet(registry.queryDatasetTypes(components=False)).names)
         self.assertLess(
             {"bias", "flat", "bias.wcs", "flat.photoCalib"},
-            NamedValueSet(registry.queryDatasetTypes(components=True)).names
+            NamedValueSet(registry.queryDatasetTypes(components=True)).names,
         )
         # Use a pattern that can match either parent or components.  Again,
         # components are only returned if components=True.
+        self.assertEqual({"bias"}, NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"))).names)
         self.assertEqual(
-            {"bias"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"))).names
-        )
-        self.assertEqual(
-            {"bias"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=False)).names
+            {"bias"}, NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=False)).names
         )
         self.assertLess(
             {"bias", "bias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=True)).names
+            NamedValueSet(registry.queryDatasetTypes(re.compile("^bias.*"), components=True)).names,
         )
         # This pattern matches only a component.  In this case we also return
         # that component dataset type if components=None.
         self.assertEqual(
-            {"bias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"))).names
+            {"bias.wcs"}, NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"))).names
         )
         self.assertEqual(
             set(),
-            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=False)).names
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=False)).names,
         )
         self.assertEqual(
             {"bias.wcs"},
-            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=True)).names
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r"^bias\.wcs"), components=True)).names,
         )
         # Add a dataset type using a StorageClass that we'll then remove; check
         # that this does not affect our ability to query for dataset types
         # (though it will warn).
         tempStorageClass = StorageClass(
             name="TempStorageClass",
-            components={"data", registry.storageClasses.getStorageClass("StructuredDataDict")}
+            components={"data", registry.storageClasses.getStorageClass("StructuredDataDict")},
         )
         registry.storageClasses.registerStorageClass(tempStorageClass)
-        datasetType = DatasetType("temporary", dimensions=["instrument"], storageClass=tempStorageClass,
-                                  universe=registry.dimensions)
+        datasetType = DatasetType(
+            "temporary",
+            dimensions=["instrument"],
+            storageClass=tempStorageClass,
+            universe=registry.dimensions,
+        )
         registry.registerDatasetType(datasetType)
         registry.storageClasses._unregisterStorageClass(tempStorageClass.name)
         datasetType._storageClass = None
@@ -601,8 +604,7 @@ class RegistryTests(ABC):
         self.assertEqual({"temporary"}, startsWithTemp.names)
 
     def testComponentLookups(self):
-        """Test searching for component datasets via their parents.
-        """
+        """Test searching for component datasets via their parents."""
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
@@ -612,13 +614,13 @@ class RegistryTests(ABC):
         collection = "imported_g"
         parentType = registry.getDatasetType("bias")
         childType = registry.getDatasetType("bias.wcs")
-        parentRefResolved = registry.findDataset(parentType, collections=collection,
-                                                 instrument="Cam1", detector=1)
+        parentRefResolved = registry.findDataset(
+            parentType, collections=collection, instrument="Cam1", detector=1
+        )
         self.assertIsInstance(parentRefResolved, DatasetRef)
         self.assertEqual(childType, parentRefResolved.makeComponentRef("wcs").datasetType)
         # Search for a single dataset with findDataset.
-        childRef1 = registry.findDataset("bias.wcs", collections=collection,
-                                         dataId=parentRefResolved.dataId)
+        childRef1 = registry.findDataset("bias.wcs", collections=collection, dataId=parentRefResolved.dataId)
         self.assertEqual(childRef1, parentRefResolved.makeComponentRef("wcs"))
         # Search for detector data IDs constrained by component dataset
         # existence with queryDataIds.
@@ -635,21 +637,21 @@ class RegistryTests(ABC):
                     for d in (1, 2, 3)
                 },
                 parentType.dimensions,
-            )
+            ),
         )
         # Search for multiple datasets of a single type with queryDatasets.
-        childRefs2 = set(registry.queryDatasets(
-            "bias.wcs",
-            collections=collection,
-        ))
+        childRefs2 = set(
+            registry.queryDatasets(
+                "bias.wcs",
+                collections=collection,
+            )
+        )
         self.assertEqual(
-            {ref.unresolved() for ref in childRefs2},
-            {DatasetRef(childType, dataId) for dataId in dataIds}
+            {ref.unresolved() for ref in childRefs2}, {DatasetRef(childType, dataId) for dataId in dataIds}
         )
 
     def testCollections(self):
-        """Tests for registry methods that manage collections.
-        """
+        """Tests for registry methods that manage collections."""
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
@@ -675,7 +677,7 @@ class RegistryTests(ABC):
         self.assertEqual(set(registry.queryCollections(collectionTypes=CollectionType.RUN)), {run1, run2})
         self.assertEqual(
             set(registry.queryCollections(collectionTypes={CollectionType.TAGGED, CollectionType.RUN})),
-            {tag1, run1, run2}
+            {tag1, run1, run2},
         )
         self.assertEqual(registry.getCollectionDocumentation(tag1), "doc for tag1")
         registry.associate(tag1, [ref1, ref2])
@@ -730,10 +732,7 @@ class RegistryTests(ABC):
             registry.setCollectionChain(chain1, [tag1, chain1])
         # Add the child collections.
         registry.setCollectionChain(chain1, [tag1, run2])
-        self.assertEqual(
-            list(registry.getCollectionChain(chain1)),
-            [tag1, run2]
-        )
+        self.assertEqual(list(registry.getCollectionChain(chain1)), [tag1, run2])
         # Searching for dataId1 or dataId2 in the chain should return ref1 and
         # ref2, because both are in tag1.
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain1), ref1)
@@ -753,12 +752,12 @@ class RegistryTests(ABC):
         # Query for collections matching a regex.
         self.assertCountEqual(
             list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),
-            ["imported_r", "imported_g"]
+            ["imported_r", "imported_g"],
         )
         # Query for collections matching a regex or an explicit str.
         self.assertCountEqual(
             list(registry.queryCollections([re.compile("imported_."), "chain1"], flattenChains=False)),
-            ["imported_r", "imported_g", "chain1"]
+            ["imported_r", "imported_g", "chain1"],
         )
         # Search for bias with dataId1 should find it via tag1 in chain2,
         # recursing, because is not in run1.
@@ -799,8 +798,7 @@ class RegistryTests(ABC):
             registry.getCollectionType(tag1)
 
     def testCollectionChainFlatten(self):
-        """Test that Registry.setCollectionChain obeys its 'flatten' option.
-        """
+        """Test that Registry.setCollectionChain obeys its 'flatten' option."""
         registry = self.makeRegistry()
         registry.registerCollection("inner", CollectionType.CHAINED)
         registry.registerCollection("innermost", CollectionType.RUN)
@@ -868,8 +866,7 @@ class RegistryTests(ABC):
 
         # need a bunch of dimensions and datasets for test
         registry.insertDimensionData(
-            "instrument",
-            dict(name="DummyCam", visit_max=25, exposure_max=300, detector_max=6)
+            "instrument", dict(name="DummyCam", visit_max=25, exposure_max=300, detector_max=6)
         )
         registry.insertDimensionData(
             "physical_filter",
@@ -877,8 +874,7 @@ class RegistryTests(ABC):
             dict(instrument="DummyCam", name="dummy_i", band="i"),
         )
         registry.insertDimensionData(
-            "detector",
-            *[dict(instrument="DummyCam", id=i, full_name=str(i)) for i in range(1, 6)]
+            "detector", *[dict(instrument="DummyCam", id=i, full_name=str(i)) for i in range(1, 6)]
         )
         registry.insertDimensionData(
             "visit_system",
@@ -917,13 +913,17 @@ class RegistryTests(ABC):
         registry.registerCollection(tagged2)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
-        rawType = DatasetType(name="RAW",
-                              dimensions=registry.dimensions.extract(("instrument", "exposure", "detector")),
-                              storageClass=storageClass)
+        rawType = DatasetType(
+            name="RAW",
+            dimensions=registry.dimensions.extract(("instrument", "exposure", "detector")),
+            storageClass=storageClass,
+        )
         registry.registerDatasetType(rawType)
-        calexpType = DatasetType(name="CALEXP",
-                                 dimensions=registry.dimensions.extract(("instrument", "visit", "detector")),
-                                 storageClass=storageClass)
+        calexpType = DatasetType(
+            name="CALEXP",
+            dimensions=registry.dimensions.extract(("instrument", "visit", "detector")),
+            storageClass=storageClass,
+        )
         registry.registerDatasetType(calexpType)
 
         # add pre-existing datasets
@@ -931,12 +931,12 @@ class RegistryTests(ABC):
             for detector in (1, 2, 3):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
-                ref, = registry.insertDatasets(rawType, dataIds=[dataId], run=run1)
+                (ref,) = registry.insertDatasets(rawType, dataIds=[dataId], run=run1)
                 # exposures 100 and 101 appear in both run1 and tagged2.
                 # 100 has different datasets in the different collections
                 # 101 has the same dataset in both collections.
                 if exposure == 100:
-                    ref, = registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
+                    (ref,) = registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
                 if exposure in (100, 101):
                     registry.associate(tagged2, [ref])
         # Add pre-existing datasets to tagged2.
@@ -944,12 +944,11 @@ class RegistryTests(ABC):
             for detector in (3, 4, 5):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
-                ref, = registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
+                (ref,) = registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
                 registry.associate(tagged2, [ref])
 
         dimensions = DimensionGraph(
-            registry.dimensions,
-            dimensions=(rawType.dimensions.required | calexpType.dimensions.required)
+            registry.dimensions, dimensions=(rawType.dimensions.required | calexpType.dimensions.required)
         )
         # Test that single dim string works as well as list of str
         rows = registry.queryDataIds("visit", datasets=rawType, collections=run1).expanded().toSet()
@@ -957,53 +956,59 @@ class RegistryTests(ABC):
         self.assertEqual(rows, rowsI)
         # with empty expression
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1).expanded().toSet()
-        self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
+        self.assertEqual(len(rows), 4 * 3)  # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
             packer1 = registry.dimensions.makePacker("visit_detector", dataId)
             packer2 = registry.dimensions.makePacker("exposure_detector", dataId)
-            self.assertEqual(packer1.unpack(packer1.pack(dataId)),
-                             DataCoordinate.standardize(dataId, graph=packer1.dimensions))
-            self.assertEqual(packer2.unpack(packer2.pack(dataId)),
-                             DataCoordinate.standardize(dataId, graph=packer2.dimensions))
+            self.assertEqual(
+                packer1.unpack(packer1.pack(dataId)),
+                DataCoordinate.standardize(dataId, graph=packer1.dimensions),
+            )
+            self.assertEqual(
+                packer2.unpack(packer2.pack(dataId)),
+                DataCoordinate.standardize(dataId, graph=packer2.dimensions),
+            )
             self.assertNotEqual(packer1.pack(dataId), packer2.pack(dataId))
-        self.assertCountEqual(set(dataId["exposure"] for dataId in rows),
-                              (100, 101, 110, 111))
+        self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101, 110, 111))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 11))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # second collection
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=tagged2).toSet()
-        self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
+        self.assertEqual(len(rows), 4 * 3)  # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
-        self.assertCountEqual(set(dataId["exposure"] for dataId in rows),
-                              (100, 101, 200, 201))
+        self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101, 200, 201))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 20))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # with two input datasets
         rows = registry.queryDataIds(dimensions, datasets=rawType, collections=[run1, tagged2]).toSet()
-        self.assertEqual(len(set(rows)), 6*3)   # 6 exposures times 3 detectors; set needed to de-dupe
+        self.assertEqual(len(set(rows)), 6 * 3)  # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
-        self.assertCountEqual(set(dataId["exposure"] for dataId in rows),
-                              (100, 101, 110, 111, 200, 201))
+        self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101, 110, 111, 200, 201))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 11, 20))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # limit to single visit
-        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
-                                     where="visit = 10", instrument="DummyCam").toSet()
-        self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
+        rows = registry.queryDataIds(
+            dimensions, datasets=rawType, collections=run1, where="visit = 10", instrument="DummyCam"
+        ).toSet()
+        self.assertEqual(len(rows), 2 * 3)  # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # more limiting expression, using link names instead of Table.column
-        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
-                                     where="visit = 10 and detector > 1 and 'DummyCam'=instrument").toSet()
-        self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
+        rows = registry.queryDataIds(
+            dimensions,
+            datasets=rawType,
+            collections=run1,
+            where="visit = 10 and detector > 1 and 'DummyCam'=instrument",
+        ).toSet()
+        self.assertEqual(len(rows), 2 * 2)  # 2 exposures times 2 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (2, 3))
@@ -1016,15 +1021,21 @@ class RegistryTests(ABC):
             registry.queryDataIds(dimensions, collections=run1)
 
         # expression excludes everything
-        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
-                                     where="visit > 1000", instrument="DummyCam").toSet()
+        rows = registry.queryDataIds(
+            dimensions, datasets=rawType, collections=run1, where="visit > 1000", instrument="DummyCam"
+        ).toSet()
         self.assertEqual(len(rows), 0)
 
         # Selecting by physical_filter, this is not in the dimensions, but it
         # is a part of the full expression so it should work too.
-        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
-                                     where="physical_filter = 'dummy_r'", instrument="DummyCam").toSet()
-        self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
+        rows = registry.queryDataIds(
+            dimensions,
+            datasets=rawType,
+            collections=run1,
+            where="physical_filter = 'dummy_r'",
+            instrument="DummyCam",
+        ).toSet()
+        self.assertEqual(len(rows), 2 * 3)  # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (110, 111))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (11,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
@@ -1036,25 +1047,18 @@ class RegistryTests(ABC):
         # need a bunch of dimensions and datasets for test, we want
         # "band" in the test so also have to add physical_filter
         # dimensions
-        registry.insertDimensionData(
-            "instrument",
-            dict(instrument="DummyCam")
-        )
+        registry.insertDimensionData("instrument", dict(instrument="DummyCam"))
         registry.insertDimensionData(
             "physical_filter",
             dict(instrument="DummyCam", name="dummy_r", band="r"),
             dict(instrument="DummyCam", name="dummy_i", band="i"),
         )
-        registry.insertDimensionData(
-            "skymap",
-            dict(name="DummyMap", hash="sha!".encode("utf8"))
-        )
+        registry.insertDimensionData("skymap", dict(name="DummyMap", hash="sha!".encode("utf8")))
         for tract in range(10):
             registry.insertDimensionData("tract", dict(skymap="DummyMap", id=tract))
             registry.insertDimensionData(
                 "patch",
-                *[dict(skymap="DummyMap", tract=tract, id=patch, cell_x=0, cell_y=0)
-                  for patch in range(10)]
+                *[dict(skymap="DummyMap", tract=tract, id=patch, cell_x=0, cell_y=0) for patch in range(10)],
             )
 
         # dataset types
@@ -1062,25 +1066,30 @@ class RegistryTests(ABC):
         registry.registerRun(run)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
-        calexpType = DatasetType(name="deepCoadd_calexp",
-                                 dimensions=registry.dimensions.extract(("skymap", "tract", "patch",
-                                                                         "band")),
-                                 storageClass=storageClass)
+        calexpType = DatasetType(
+            name="deepCoadd_calexp",
+            dimensions=registry.dimensions.extract(("skymap", "tract", "patch", "band")),
+            storageClass=storageClass,
+        )
         registry.registerDatasetType(calexpType)
-        mergeType = DatasetType(name="deepCoadd_mergeDet",
-                                dimensions=registry.dimensions.extract(("skymap", "tract", "patch")),
-                                storageClass=storageClass)
+        mergeType = DatasetType(
+            name="deepCoadd_mergeDet",
+            dimensions=registry.dimensions.extract(("skymap", "tract", "patch")),
+            storageClass=storageClass,
+        )
         registry.registerDatasetType(mergeType)
-        measType = DatasetType(name="deepCoadd_meas",
-                               dimensions=registry.dimensions.extract(("skymap", "tract", "patch",
-                                                                       "band")),
-                               storageClass=storageClass)
+        measType = DatasetType(
+            name="deepCoadd_meas",
+            dimensions=registry.dimensions.extract(("skymap", "tract", "patch", "band")),
+            storageClass=storageClass,
+        )
         registry.registerDatasetType(measType)
 
         dimensions = DimensionGraph(
             registry.dimensions,
-            dimensions=(calexpType.dimensions.required | mergeType.dimensions.required
-                        | measType.dimensions.required)
+            dimensions=(
+                calexpType.dimensions.required | mergeType.dimensions.required | measType.dimensions.required
+            ),
         )
 
         # add pre-existing datasets
@@ -1093,9 +1102,8 @@ class RegistryTests(ABC):
                     registry.insertDatasets(calexpType, dataIds=[dataId], run=run)
 
         # with empty expression
-        rows = registry.queryDataIds(dimensions,
-                                     datasets=[calexpType, mergeType], collections=run).toSet()
-        self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
+        rows = registry.queryDataIds(dimensions, datasets=[calexpType, mergeType], collections=run).toSet()
+        self.assertEqual(len(rows), 3 * 4 * 2)  # 4 tracts x 4 patches x 2 filters
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("skymap", "tract", "patch", "band"))
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
@@ -1103,33 +1111,36 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
-        rows = registry.queryDataIds(dimensions,
-                                     datasets=[calexpType, mergeType], collections=run,
-                                     where="tract IN (1, 5) AND patch IN (2, 7)", skymap="DummyMap").toSet()
-        self.assertEqual(len(rows), 2*2*2)   # 2 tracts x 2 patches x 2 filters
+        rows = registry.queryDataIds(
+            dimensions,
+            datasets=[calexpType, mergeType],
+            collections=run,
+            where="tract IN (1, 5) AND patch IN (2, 7)",
+            skymap="DummyMap",
+        ).toSet()
+        self.assertEqual(len(rows), 2 * 2 * 2)  # 2 tracts x 2 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 7))
         self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i", "r"))
 
         # limit to single filter
-        rows = registry.queryDataIds(dimensions,
-                                     datasets=[calexpType, mergeType], collections=run,
-                                     where="band = 'i'").toSet()
-        self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
+        rows = registry.queryDataIds(
+            dimensions, datasets=[calexpType, mergeType], collections=run, where="band = 'i'"
+        ).toSet()
+        self.assertEqual(len(rows), 3 * 4 * 1)  # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 4, 6, 7))
         self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i",))
 
         # expression excludes everything, specifying non-existing skymap is
         # not a fatal error, it's operator error
-        rows = registry.queryDataIds(dimensions,
-                                     datasets=[calexpType, mergeType], collections=run,
-                                     where="skymap = 'Mars'").toSet()
+        rows = registry.queryDataIds(
+            dimensions, datasets=[calexpType, mergeType], collections=run, where="skymap = 'Mars'"
+        ).toSet()
         self.assertEqual(len(rows), 0)
 
     def testSpatialJoin(self):
-        """Test queries that involve spatial overlap joins.
-        """
+        """Test queries that involve spatial overlap joins."""
         registry = self.makeRegistry()
         self.loadData(registry, "hsc-rc2-subset.yaml")
 
@@ -1159,12 +1170,10 @@ class RegistryTests(ABC):
                 # Construct expected set of overlapping data IDs via a
                 # brute-force comparison of the regions we've already fetched.
                 expected = {
-                    DataCoordinate.standardize(
-                        {**dataId1.byName(), **dataId2.byName()},
-                        graph=graph
+                    DataCoordinate.standardize({**dataId1.byName(), **dataId2.byName()}, graph=graph)
+                    for (dataId1, region1), (dataId2, region2) in itertools.product(
+                        regions[element1.name].items(), regions[element2.name].items()
                     )
-                    for (dataId1, region1), (dataId2, region2)
-                    in itertools.product(regions[element1.name].items(), regions[element2.name].items())
                     if not region1.isDisjointFrom(region2)
                 }
                 self.assertGreater(len(expected), 2, msg="Test that we aren't just comparing empty sets.")
@@ -1179,10 +1188,7 @@ class RegistryTests(ABC):
             for dataId, region in regions.items():
                 for begin, end in commonSkyPix.pixelization.envelope(region):
                     expected.update(
-                        DataCoordinate.standardize(
-                            {commonSkyPix.name: index, **dataId.byName()},
-                            graph=graph
-                        )
+                        DataCoordinate.standardize({commonSkyPix.name: index, **dataId.byName()}, graph=graph)
                         for index in range(begin, end)
                     )
             self.assertGreater(len(expected), 2, msg="Test that we aren't just comparing empty sets.")
@@ -1205,13 +1211,14 @@ class RegistryTests(ABC):
         rows = registry.queryDataIds(["band"]).toSet()
         self.assertCountEqual(
             rows,
-            [DataCoordinate.standardize(band="i", universe=registry.dimensions),
-             DataCoordinate.standardize(band="r", universe=registry.dimensions)]
+            [
+                DataCoordinate.standardize(band="i", universe=registry.dimensions),
+                DataCoordinate.standardize(band="r", universe=registry.dimensions),
+            ],
         )
 
     def testAttributeManager(self):
-        """Test basic functionality of attribute manager.
-        """
+        """Test basic functionality of attribute manager."""
         # number of attributes with schema versions in a fresh database,
         # 6 managers with 3 records per manager, plus config for dimensions
         VERSION_COUNT = 6 * 3 + 1
@@ -1279,27 +1286,25 @@ class RegistryTests(ABC):
                 registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r"),
                 registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r"),
                 registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
-            ]
+            ],
         )
         self.assertCountEqual(
-            list(registry.queryDatasets("bias", collections=["imported_g", "imported_r"],
-                                        findFirst=True)),
+            list(registry.queryDatasets("bias", collections=["imported_g", "imported_r"], findFirst=True)),
             [
                 registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
                 registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g"),
                 registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g"),
                 registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
-            ]
+            ],
         )
         self.assertCountEqual(
-            list(registry.queryDatasets("bias", collections=["imported_r", "imported_g"],
-                                        findFirst=True)),
+            list(registry.queryDatasets("bias", collections=["imported_r", "imported_g"], findFirst=True)),
             [
                 registry.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g"),
                 registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r"),
                 registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r"),
                 registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
-            ]
+            ],
         )
 
     def testQueryResults(self):
@@ -1320,8 +1325,9 @@ class RegistryTests(ABC):
         # - the data IDs we expect to obtain from the first queries:
         expectedDataIds = DataCoordinateSet(
             {
-                DataCoordinate.standardize(instrument="Cam1", detector=d, physical_filter=p,
-                                           universe=registry.dimensions)
+                DataCoordinate.standardize(
+                    instrument="Cam1", detector=d, physical_filter=p, universe=registry.dimensions
+                )
                 for d, p in itertools.product({1, 2, 3}, {"Cam1-G", "Cam1-R1", "Cam1-R2"})
             },
             graph=expectedGraph,
@@ -1331,12 +1337,15 @@ class RegistryTests(ABC):
         # - the flat datasets we expect to find from those data IDs, in just
         #   one collection (so deduplication is irrelevant):
         expectedFlats = [
-            registry.findDataset(flat, instrument="Cam1", detector=1, physical_filter="Cam1-R1",
-                                 collections="imported_r"),
-            registry.findDataset(flat, instrument="Cam1", detector=2, physical_filter="Cam1-R1",
-                                 collections="imported_r"),
-            registry.findDataset(flat, instrument="Cam1", detector=3, physical_filter="Cam1-R2",
-                                 collections="imported_r"),
+            registry.findDataset(
+                flat, instrument="Cam1", detector=1, physical_filter="Cam1-R1", collections="imported_r"
+            ),
+            registry.findDataset(
+                flat, instrument="Cam1", detector=2, physical_filter="Cam1-R1", collections="imported_r"
+            ),
+            registry.findDataset(
+                flat, instrument="Cam1", detector=3, physical_filter="Cam1-R2", collections="imported_r"
+            ),
         ]
         # - the data IDs we expect to extract from that:
         expectedSubsetDataIds = expectedDataIds.subset(expectedSubsetGraph)
@@ -1378,31 +1387,22 @@ class RegistryTests(ABC):
         self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
         self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
         self.assertCountEqual(
-            list(
-                subsetDataIds.findDatasets(
-                    bias,
-                    collections=["imported_r", "imported_g"],
-                    findFirst=False
-                )
-            ),
-            expectedAllBiases
+            list(subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=False)),
+            expectedAllBiases,
         )
         self.assertCountEqual(
-            list(
-                subsetDataIds.findDatasets(
-                    bias,
-                    collections=["imported_r", "imported_g"],
-                    findFirst=True
-                )
-            ), expectedDeduplicatedBiases
+            list(subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=True)),
+            expectedDeduplicatedBiases,
         )
         # Materialize the bias dataset queries (only) by putting the results
         # into temporary tables, then repeat those tests.
-        with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                        findFirst=False).materialize() as biases:
+        with subsetDataIds.findDatasets(
+            bias, collections=["imported_r", "imported_g"], findFirst=False
+        ).materialize() as biases:
             self.assertCountEqual(list(biases), expectedAllBiases)
-        with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                        findFirst=True).materialize() as biases:
+        with subsetDataIds.findDatasets(
+            bias, collections=["imported_r", "imported_g"], findFirst=True
+        ).materialize() as biases:
             self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
         # Materialize the data ID subset query, but not the dataset queries.
         with subsetDataIds.materialize() as subsetDataIds:
@@ -1411,28 +1411,25 @@ class RegistryTests(ABC):
             self.assertCountEqual(
                 list(
                     subsetDataIds.findDatasets(
-                        bias,
-                        collections=["imported_r", "imported_g"],
-                        findFirst=False
+                        bias, collections=["imported_r", "imported_g"], findFirst=False
                     )
                 ),
-                expectedAllBiases
+                expectedAllBiases,
             )
             self.assertCountEqual(
                 list(
-                    subsetDataIds.findDatasets(
-                        bias,
-                        collections=["imported_r", "imported_g"],
-                        findFirst=True
-                    )
-                ), expectedDeduplicatedBiases
+                    subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=True)
+                ),
+                expectedDeduplicatedBiases,
             )
             # Materialize the dataset queries, too.
-            with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                            findFirst=False).materialize() as biases:
+            with subsetDataIds.findDatasets(
+                bias, collections=["imported_r", "imported_g"], findFirst=False
+            ).materialize() as biases:
                 self.assertCountEqual(list(biases), expectedAllBiases)
-            with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                            findFirst=True).materialize() as biases:
+            with subsetDataIds.findDatasets(
+                bias, collections=["imported_r", "imported_g"], findFirst=True
+            ).materialize() as biases:
                 self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
         # Materialize the original query, but none of the follow-up queries.
         with dataIds.materialize() as dataIds:
@@ -1453,28 +1450,25 @@ class RegistryTests(ABC):
             self.assertCountEqual(
                 list(
                     subsetDataIds.findDatasets(
-                        bias,
-                        collections=["imported_r", "imported_g"],
-                        findFirst=False
+                        bias, collections=["imported_r", "imported_g"], findFirst=False
                     )
                 ),
-                expectedAllBiases
+                expectedAllBiases,
             )
             self.assertCountEqual(
                 list(
-                    subsetDataIds.findDatasets(
-                        bias,
-                        collections=["imported_r", "imported_g"],
-                        findFirst=True
-                    )
-                ), expectedDeduplicatedBiases
+                    subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=True)
+                ),
+                expectedDeduplicatedBiases,
             )
             # Materialize just the bias dataset queries.
-            with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                            findFirst=False).materialize() as biases:
+            with subsetDataIds.findDatasets(
+                bias, collections=["imported_r", "imported_g"], findFirst=False
+            ).materialize() as biases:
                 self.assertCountEqual(list(biases), expectedAllBiases)
-            with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                            findFirst=True).materialize() as biases:
+            with subsetDataIds.findDatasets(
+                bias, collections=["imported_r", "imported_g"], findFirst=True
+            ).materialize() as biases:
                 self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
             # Materialize the subset data ID query, but not the dataset
             # queries.
@@ -1484,29 +1478,28 @@ class RegistryTests(ABC):
                 self.assertCountEqual(
                     list(
                         subsetDataIds.findDatasets(
-                            bias,
-                            collections=["imported_r", "imported_g"],
-                            findFirst=False
+                            bias, collections=["imported_r", "imported_g"], findFirst=False
                         )
                     ),
-                    expectedAllBiases
+                    expectedAllBiases,
                 )
                 self.assertCountEqual(
                     list(
                         subsetDataIds.findDatasets(
-                            bias,
-                            collections=["imported_r", "imported_g"],
-                            findFirst=True
+                            bias, collections=["imported_r", "imported_g"], findFirst=True
                         )
-                    ), expectedDeduplicatedBiases
+                    ),
+                    expectedDeduplicatedBiases,
                 )
                 # Materialize the bias dataset queries, too, so now we're
                 # materializing every single step.
-                with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                                findFirst=False).materialize() as biases:
+                with subsetDataIds.findDatasets(
+                    bias, collections=["imported_r", "imported_g"], findFirst=False
+                ).materialize() as biases:
                     self.assertCountEqual(list(biases), expectedAllBiases)
-                with subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"],
-                                                findFirst=True).materialize() as biases:
+                with subsetDataIds.findDatasets(
+                    bias, collections=["imported_r", "imported_g"], findFirst=True
+                ).materialize() as biases:
                     self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
 
     def testEmptyDimensionsQueries(self):
@@ -1527,8 +1520,7 @@ class RegistryTests(ABC):
         (dataset2,) = registry.insertDatasets(schema, dataIds=[dataId], run=run2)
         # Query directly for both of the datasets, and each one, one at a time.
         self.checkQueryResults(
-            registry.queryDatasets(schema, collections=[run1, run2], findFirst=False),
-            [dataset1, dataset2]
+            registry.queryDatasets(schema, collections=[run1, run2], findFirst=False), [dataset1, dataset2]
         )
         self.checkQueryResults(
             registry.queryDatasets(schema, collections=[run1, run2], findFirst=True),
@@ -1613,10 +1605,7 @@ class RegistryTests(ABC):
                 [dataset2],
             )
             with dataIds.materialize() as dataIds:
-                self.checkQueryResults(
-                    dataIds,
-                    [dataId]
-                )
+                self.checkQueryResults(dataIds, [dataId])
                 self.checkQueryResults(
                     dataIds.findDatasets(schema, collections=[run1, run2], findFirst=False),
                     [dataset1, dataset2],
@@ -1639,8 +1628,7 @@ class RegistryTests(ABC):
         """
 
         def unpack_range_set(ranges: lsst.sphgeom.RangeSet) -> Iterator[int]:
-            """Unpack a sphgeom.RangeSet into the integers it contains.
-            """
+            """Unpack a sphgeom.RangeSet into the integers it contains."""
             for begin, end in ranges:
                 yield from range(begin, end)
 
@@ -1675,8 +1663,7 @@ class RegistryTests(ABC):
         # htm6 trixels that overlap the original's bounding circle.  Make a new
         # parent that's the convex hull of the new children.
         child_regions_large = [
-            range_set_hull(htm6.envelope(c.getBoundingCircle()), htm6)
-            for c in child_regions_small
+            range_set_hull(htm6.envelope(c.getBoundingCircle()), htm6) for c in child_regions_small
         ]
         assert all(large.contains(small) for large, small in zip(child_regions_large, child_regions_small))
         parent_region_large = lsst.sphgeom.ConvexPolygon(
@@ -1717,28 +1704,22 @@ class RegistryTests(ABC):
         # as tract/patch dimension records.
         skymap_name = "testing_v1"
         registry.insertDimensionData(
-            "skymap", {
+            "skymap",
+            {
                 "name": skymap_name,
                 "hash": bytes([42]),
                 "tract_max": 1,
                 "patch_nx_max": 2,
                 "patch_ny_max": 2,
-            }
+            },
         )
-        registry.insertDimensionData(
-            "tract",
-            {"skymap": skymap_name, "id": 0, "region": parent_region_large}
-        )
+        registry.insertDimensionData("tract", {"skymap": skymap_name, "id": 0, "region": parent_region_large})
         registry.insertDimensionData(
             "patch",
-            *[{
-                "skymap": skymap_name,
-                "tract": 0,
-                "id": n,
-                "cell_x": n % 2,
-                "cell_y": n // 2,
-                "region": c
-            } for n, c in enumerate(child_regions_large)]
+            *[
+                {"skymap": skymap_name, "tract": 0, "id": n, "cell_x": n % 2, "cell_y": n // 2, "region": c}
+                for n, c in enumerate(child_regions_large)
+            ],
         )
         # Add at dataset that uses these dimensions to make sure that modifying
         # them doesn't disrupt foreign keys (need to make sure DB doesn't
@@ -1762,23 +1743,25 @@ class RegistryTests(ABC):
         self.assertEqual(
             {0},
             {
-                data_id["tract"] for data_id in registry.queryDataIds(
+                data_id["tract"]
+                for data_id in registry.queryDataIds(
                     ["tract"],
                     skymap=skymap_name,
                     dataId={registry.dimensions.commonSkyPix.name: parent_difference_indices[0]},
                 )
-            }
+            },
         )
         for patch_id, patch_difference_indices in enumerate(child_difference_indices):
             self.assertIn(
                 patch_id,
                 {
-                    data_id["patch"] for data_id in registry.queryDataIds(
+                    data_id["patch"]
+                    for data_id in registry.queryDataIds(
                         ["patch"],
                         skymap=skymap_name,
                         dataId={registry.dimensions.commonSkyPix.name: patch_difference_indices[0]},
                     )
-                }
+                },
             )
         # Use sync to update the tract region and insert to update the patch
         # regions, to the "small" suite.
@@ -1790,15 +1773,11 @@ class RegistryTests(ABC):
         self.assertEqual(updated, {"region": parent_region_large})
         registry.insertDimensionData(
             "patch",
-            *[{
-                "skymap": skymap_name,
-                "tract": 0,
-                "id": n,
-                "cell_x": n % 2,
-                "cell_y": n // 2,
-                "region": c
-            } for n, c in enumerate(child_regions_small)],
-            replace=True
+            *[
+                {"skymap": skymap_name, "tract": 0, "id": n, "cell_x": n % 2, "cell_y": n // 2, "region": c}
+                for n, c in enumerate(child_regions_small)
+            ],
+            replace=True,
         )
         # Query again; there now should be no such overlaps, because the
         # database has the "small" suite of regions.
@@ -1815,12 +1794,13 @@ class RegistryTests(ABC):
             self.assertNotIn(
                 patch_id,
                 {
-                    data_id["patch"] for data_id in registry.queryDataIds(
+                    data_id["patch"]
+                    for data_id in registry.queryDataIds(
                         ["patch"],
                         skymap=skymap_name,
                         dataId={registry.dimensions.commonSkyPix.name: patch_difference_indices[0]},
                     )
-                }
+                },
             )
         # Update back to the large regions and query one more time.
         updated = registry.syncDimensionData(
@@ -1831,36 +1811,34 @@ class RegistryTests(ABC):
         self.assertEqual(updated, {"region": parent_region_small})
         registry.insertDimensionData(
             "patch",
-            *[{
-                "skymap": skymap_name,
-                "tract": 0,
-                "id": n,
-                "cell_x": n % 2,
-                "cell_y": n // 2,
-                "region": c
-            } for n, c in enumerate(child_regions_large)],
-            replace=True
+            *[
+                {"skymap": skymap_name, "tract": 0, "id": n, "cell_x": n % 2, "cell_y": n // 2, "region": c}
+                for n, c in enumerate(child_regions_large)
+            ],
+            replace=True,
         )
         self.assertEqual(
             {0},
             {
-                data_id["tract"] for data_id in registry.queryDataIds(
+                data_id["tract"]
+                for data_id in registry.queryDataIds(
                     ["tract"],
                     skymap=skymap_name,
                     dataId={registry.dimensions.commonSkyPix.name: parent_difference_indices[0]},
                 )
-            }
+            },
         )
         for patch_id, patch_difference_indices in enumerate(child_difference_indices):
             self.assertIn(
                 patch_id,
                 {
-                    data_id["patch"] for data_id in registry.queryDataIds(
+                    data_id["patch"]
+                    for data_id in registry.queryDataIds(
                         ["patch"],
                         skymap=skymap_name,
                         dataId={registry.dimensions.commonSkyPix.name: patch_difference_indices[0]},
                     )
-                }
+                },
             )
 
     def testCalibrationCollections(self):
@@ -1874,11 +1852,11 @@ class RegistryTests(ABC):
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
         # Set up some timestamps.
-        t1 = astropy.time.Time('2020-01-01T01:00:00', format="isot", scale="tai")
-        t2 = astropy.time.Time('2020-01-01T02:00:00', format="isot", scale="tai")
-        t3 = astropy.time.Time('2020-01-01T03:00:00', format="isot", scale="tai")
-        t4 = astropy.time.Time('2020-01-01T04:00:00', format="isot", scale="tai")
-        t5 = astropy.time.Time('2020-01-01T05:00:00', format="isot", scale="tai")
+        t1 = astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")
+        t2 = astropy.time.Time("2020-01-01T02:00:00", format="isot", scale="tai")
+        t3 = astropy.time.Time("2020-01-01T03:00:00", format="isot", scale="tai")
+        t4 = astropy.time.Time("2020-01-01T04:00:00", format="isot", scale="tai")
+        t5 = astropy.time.Time("2020-01-01T05:00:00", format="isot", scale="tai")
         allTimespans = [
             Timespan(a, b) for a, b in itertools.combinations([None, t1, t2, t3, t4, t5, None], r=2)
         ]
@@ -1947,28 +1925,39 @@ class RegistryTests(ABC):
                 DatasetAssociation(ref=bias3a, collection=collection, timespan=Timespan(begin=t1, end=t3)),
                 DatasetAssociation(ref=bias2b, collection=collection, timespan=Timespan(begin=t4, end=None)),
                 DatasetAssociation(ref=bias3b, collection=collection, timespan=Timespan(begin=t4, end=None)),
-            ]
+            ],
         )
 
         class Ambiguous:
-            """Tag class to denote lookups that are expected to be ambiguous.
-            """
+            """Tag class to denote lookups that are expected to be ambiguous."""
+
             pass
 
-        def assertLookup(detector: int, timespan: Timespan,
-                         expected: Optional[Union[DatasetRef, Type[Ambiguous]]]) -> None:
+        def assertLookup(
+            detector: int, timespan: Timespan, expected: Optional[Union[DatasetRef, Type[Ambiguous]]]
+        ) -> None:
             """Local function that asserts that a bias lookup returns the given
             expected result.
             """
             if expected is Ambiguous:
                 with self.assertRaises(RuntimeError):
-                    registry.findDataset("bias", collections=collection, instrument="Cam1",
-                                         detector=detector, timespan=timespan)
+                    registry.findDataset(
+                        "bias",
+                        collections=collection,
+                        instrument="Cam1",
+                        detector=detector,
+                        timespan=timespan,
+                    )
             else:
                 self.assertEqual(
                     expected,
-                    registry.findDataset("bias", collections=collection, instrument="Cam1",
-                                         detector=detector, timespan=timespan)
+                    registry.findDataset(
+                        "bias",
+                        collections=collection,
+                        instrument="Cam1",
+                        detector=detector,
+                        timespan=timespan,
+                    ),
                 )
 
         # Systematically test lookups against expected results.
@@ -2065,26 +2054,33 @@ class RegistryTests(ABC):
         # Decertify everything, this time with explicit data IDs, then check
         # that no lookups succeed.
         registry.decertify(
-            collection, "bias", Timespan(None, None),
+            collection,
+            "bias",
+            Timespan(None, None),
             dataIds=[
                 dict(instrument="Cam1", detector=2),
                 dict(instrument="Cam1", detector=3),
-            ]
+            ],
         )
         for detector in (2, 3):
             for timespan in allTimespans:
                 assertLookup(detector=detector, timespan=timespan, expected=None)
         # Certify bias2a and bias3a over (-∞, ∞), check that all lookups return
         # those.
-        registry.certify(collection, [bias2a, bias3a], Timespan(None, None),)
+        registry.certify(
+            collection,
+            [bias2a, bias3a],
+            Timespan(None, None),
+        )
         for timespan in allTimespans:
             assertLookup(detector=2, timespan=timespan, expected=bias2a)
             assertLookup(detector=3, timespan=timespan, expected=bias3a)
         # Decertify just bias2 over [t2, t4).
         # This should split a single certification row into two (and leave the
         # other existing row, for bias3a, alone).
-        registry.decertify(collection, "bias", Timespan(t2, t4),
-                           dataIds=[dict(instrument="Cam1", detector=2)])
+        registry.decertify(
+            collection, "bias", Timespan(t2, t4), dataIds=[dict(instrument="Cam1", detector=2)]
+        )
         for timespan in allTimespans:
             assertLookup(detector=3, timespan=timespan, expected=bias3a)
             overlapsBefore = timespan.overlaps(Timespan(None, t2))
@@ -2098,8 +2094,7 @@ class RegistryTests(ABC):
             assertLookup(detector=2, timespan=timespan, expected=expected)
 
     def testSkipCalibs(self):
-        """Test how queries handle skipping of calibration collections.
-        """
+        """Test how queries handle skipping of calibration collections."""
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
@@ -2124,15 +2119,15 @@ class RegistryTests(ABC):
         with self.assertRaises(NotImplementedError):
             registry.queryDatasets("bias", collections=coll_list, findFirst=True)
         with self.assertRaises(NotImplementedError):
-            registry.queryDataIds(["instrument", "detector", "exposure"], datasets="bias",
-                                  collections=coll_list).count()
+            registry.queryDataIds(
+                ["instrument", "detector", "exposure"], datasets="bias", collections=coll_list
+            ).count()
 
         # chain will skip
         datasets = list(registry.queryDatasets("bias", collections=chain))
         self.assertGreater(len(datasets), 0)
 
-        dataIds = list(registry.queryDataIds(["instrument", "detector"], datasets="bias",
-                                             collections=chain))
+        dataIds = list(registry.queryDataIds(["instrument", "detector"], datasets="bias", collections=chain))
         self.assertGreater(len(dataIds), 0)
 
         # glob will skip too
@@ -2194,18 +2189,19 @@ class RegistryTests(ABC):
 
             # same with bind using datetime or astropy Time
             where = f"ingest_date {op} ingest_time"
-            datasets = list(registry.queryDatasets(..., collections=..., where=where,
-                                                   bind={"ingest_time": dt}))
+            datasets = list(
+                registry.queryDatasets(..., collections=..., where=where, bind={"ingest_time": dt})
+            )
             self.assertEqual(len(datasets), expect_len)
 
             dt_astropy = astropy.time.Time(dt, format="datetime")
-            datasets = list(registry.queryDatasets(..., collections=..., where=where,
-                                                   bind={"ingest_time": dt_astropy}))
+            datasets = list(
+                registry.queryDatasets(..., collections=..., where=where, bind={"ingest_time": dt_astropy})
+            )
             self.assertEqual(len(datasets), expect_len)
 
     def testTimespanQueries(self):
-        """Test query expressions involving timespans.
-        """
+        """Test query expressions involving timespans."""
         registry = self.makeRegistry()
         self.loadData(registry, "hsc-rc2-subset.yaml")
         # All exposures in the database; mapping from ID to timespan.
@@ -2215,10 +2211,10 @@ class RegistryTests(ABC):
         ids = sorted(visits.keys())
         self.assertGreater(len(ids), 20)
         # Pick some quasi-random indexes into `ids` to play with.
-        i1 = int(len(ids)*0.1)
-        i2 = int(len(ids)*0.3)
-        i3 = int(len(ids)*0.6)
-        i4 = int(len(ids)*0.8)
+        i1 = int(len(ids) * 0.1)
+        i2 = int(len(ids) * 0.3)
+        i3 = int(len(ids) * 0.6)
+        i4 = int(len(ids) * 0.8)
         # Extract some times from those: just before the beginning of i1 (which
         # should be after the end of the exposure before), exactly the
         # beginning of i2, just after the beginning of i3 (and before its end),
@@ -2245,10 +2241,10 @@ class RegistryTests(ABC):
             results as a sorted, deduplicated list of visit IDs.
             """
             return sorted(
-                {dataId["visit"] for dataId in registry.queryDataIds("visit",
-                                                                     instrument="HSC",
-                                                                     bind=bind,
-                                                                     where=where)}
+                {
+                    dataId["visit"]
+                    for dataId in registry.queryDataIds("visit", instrument="HSC", bind=bind, where=where)
+                }
             )
 
         # Try a bunch of timespan queries, mixing up the bounds themselves,
@@ -2262,28 +2258,27 @@ class RegistryTests(ABC):
         self.assertEqual(ids[i1:i2], query("(t1, t2) OVERLAPS visit.timespan"))
         self.assertEqual(ids[:i2], query("visit.timespan < (t2, t4)"))
         # t3 is in the middle of i3, so this should include i3.
-        self.assertEqual(ids[i2:i3 + 1], query("visit.timespan OVERLAPS ts23"))
+        self.assertEqual(ids[i2 : i3 + 1], query("visit.timespan OVERLAPS ts23"))
         # This one should not include t3 by the same reasoning.
-        self.assertEqual(ids[i3 + 1:], query("visit.timespan > (t1, t3)"))
+        self.assertEqual(ids[i3 + 1 :], query("visit.timespan > (t1, t3)"))
         # t4 is exactly at the end of i4, so this should include i4.
-        self.assertEqual(ids[i3:i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}', t4)"))
+        self.assertEqual(ids[i3 : i4 + 1], query(f"visit.timespan OVERLAPS (T'{t3.tai.isot}', t4)"))
         # i4's upper bound of t4 is exclusive so this should not include t4.
-        self.assertEqual(ids[i4 + 1:], query("visit.timespan OVERLAPS (t4, NULL)"))
+        self.assertEqual(ids[i4 + 1 :], query("visit.timespan OVERLAPS (t4, NULL)"))
 
         # Now some timespan vs. time scalar queries.
         self.assertEqual(ids[:i2], query("visit.timespan < t2"))
         self.assertEqual(ids[:i2], query("t2 > visit.timespan"))
-        self.assertEqual(ids[i3 + 1:], query("visit.timespan > t3"))
-        self.assertEqual(ids[i3 + 1:], query("t3 < visit.timespan"))
-        self.assertEqual(ids[i3:i3+1], query("visit.timespan OVERLAPS t3"))
-        self.assertEqual(ids[i3:i3+1], query(f"T'{t3.tai.isot}' OVERLAPS visit.timespan"))
+        self.assertEqual(ids[i3 + 1 :], query("visit.timespan > t3"))
+        self.assertEqual(ids[i3 + 1 :], query("t3 < visit.timespan"))
+        self.assertEqual(ids[i3 : i3 + 1], query("visit.timespan OVERLAPS t3"))
+        self.assertEqual(ids[i3 : i3 + 1], query(f"T'{t3.tai.isot}' OVERLAPS visit.timespan"))
 
         # Empty timespans should not overlap anything.
         self.assertEqual([], query("visit.timespan OVERLAPS (t3, t2)"))
 
     def testCollectionSummaries(self):
-        """Test recording and retrieval of collection summaries.
-        """
+        """Test recording and retrieval of collection summaries."""
         self.maxDiff = None
         registry = self.makeRegistry()
         # Importing datasets from yaml should go through the code path where
@@ -2312,8 +2307,9 @@ class RegistryTests(ABC):
         registry.associate(tag, registry.queryDatasets(flat, collections="imported_g"))
         calibs = "calibs"
         registry.registerCollection(calibs, CollectionType.CALIBRATION)
-        registry.certify(calibs, registry.queryDatasets(flat, collections="imported_g"),
-                         timespan=Timespan(None, None))
+        registry.certify(
+            calibs, registry.queryDatasets(flat, collections="imported_g"), timespan=Timespan(None, None)
+        )
         expected2 = expected1.copy()
         expected2.datasetTypes.discard("bias")
         self.assertEqual(registry.getCollectionSummary(tag), expected2)
@@ -2334,8 +2330,11 @@ class RegistryTests(ABC):
         # There is no data to back this query, but it should still return
         # zero records instead of raising.
         self.assertFalse(
-            set(registry.queryDataIds(["visit", "detector"],
-                                      where="instrument='Cam1' AND skymap='not_here' AND tract=0")),
+            set(
+                registry.queryDataIds(
+                    ["visit", "detector"], where="instrument='Cam1' AND skymap='not_here' AND tract=0"
+                )
+            ),
         )
 
     def testBindInQueryDatasets(self):
@@ -2403,7 +2402,7 @@ class RegistryTests(ABC):
                         universe=registry.dimensions,
                         storageClass="Image",
                     ),
-                    collections=...
+                    collections=...,
                 ),
                 ["nonexistent"],
             ),
@@ -2429,10 +2428,9 @@ class RegistryTests(ABC):
             # Want all expected snippets to appear in at least one message.
             self.assertTrue(
                 any(
-                    all(snippet in message for snippet in snippets)
-                    for message in query.explain_no_results()
+                    all(snippet in message for snippet in snippets) for message in query.explain_no_results()
                 ),
-                messages
+                messages,
             )
 
         # These queries yield no results due to problems that can be identified
@@ -2452,10 +2450,9 @@ class RegistryTests(ABC):
             # Want all expected snippets to appear in at least one message.
             self.assertTrue(
                 any(
-                    all(snippet in message for snippet in snippets)
-                    for message in query.explain_no_results()
+                    all(snippet in message for snippet in snippets) for message in query.explain_no_results()
                 ),
-                messages
+                messages,
             )
 
         # This query yields four overlaps in the database, but one is filtered
@@ -2488,8 +2485,12 @@ class RegistryTests(ABC):
         # (currently) skips the spatial postprocess-filtering because it
         # recognizes that no spatial join is necessary.  That's not ideal, but
         # fixing it is out of scope for this ticket.
-        query4 = registry.queryDataIds(["visit", "tract"], instrument="Cam1", skymap="SkyMap1",
-                                       where="visit=1 AND detector=1 AND tract=0 AND patch=4")
+        query4 = registry.queryDataIds(
+            ["visit", "tract"],
+            instrument="Cam1",
+            skymap="SkyMap1",
+            where="visit=1 AND detector=1 AND tract=0 AND patch=4",
+        )
         self.assertFalse(set(query4))
         self.assertTrue(query4.any(execute=False, exact=False))
         self.assertTrue(query4.any(execute=True, exact=False))
@@ -2498,24 +2499,19 @@ class RegistryTests(ABC):
         self.assertEqual(query4.count(exact=True), 0)
         messages = list(query4.explain_no_results())
         self.assertTrue(messages)
-        self.assertTrue(
-            any(
-                "regions did not overlap" in message
-                for message in messages
-            )
-        )
+        self.assertTrue(any("regions did not overlap" in message for message in messages))
 
     def testQueryDataIdsOrderBy(self):
-        """Test order_by and limit on result returned by queryDataIds().
-        """
+        """Test order_by and limit on result returned by queryDataIds()."""
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
         self.loadData(registry, "spatial.yaml")
 
         def do_query(dimensions=("visit", "tract"), datasets=None, collections=None):
-            return registry.queryDataIds(dimensions, datasets=datasets, collections=collections,
-                                         instrument="Cam1", skymap="SkyMap1")
+            return registry.queryDataIds(
+                dimensions, datasets=datasets, collections=collections, instrument="Cam1", skymap="SkyMap1"
+            )
 
         # query = do_query()
         # self.assertEqual(len(list(query)), 6)
@@ -2536,29 +2532,51 @@ class RegistryTests(ABC):
             Test("-tract,visit", "tract,visit", ((1, 2), (1, 2), (0, 1), (0, 1), (0, 2), (0, 2))),
             Test("tract,-visit", "tract,visit", ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))),
             Test("-tract,-visit", "tract,visit", ((1, 2), (1, 2), (0, 2), (0, 2), (0, 1), (0, 1))),
-            Test("tract.id,visit.id", "tract,visit", ((0, 1), (0, 1), (0, 2)), limit=(3, ),),
-            Test("-tract,-visit", "tract,visit", ((1, 2), (1, 2), (0, 2)), limit=(3, )),
+            Test(
+                "tract.id,visit.id",
+                "tract,visit",
+                ((0, 1), (0, 1), (0, 2)),
+                limit=(3,),
+            ),
+            Test("-tract,-visit", "tract,visit", ((1, 2), (1, 2), (0, 2)), limit=(3,)),
             Test("tract,visit", "tract,visit", ((0, 2), (1, 2), (1, 2)), limit=(3, 3)),
-            Test("-tract,-visit", "tract,visit", ((0, 1), ), limit=(3, 5)),
-            Test("tract,visit.exposure_time", "tract,visit",
-                 ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))),
-            Test("-tract,-visit.exposure_time", "tract,visit",
-                 ((1, 2), (1, 2), (0, 1), (0, 1), (0, 2), (0, 2))),
+            Test("-tract,-visit", "tract,visit", ((0, 1),), limit=(3, 5)),
+            Test(
+                "tract,visit.exposure_time", "tract,visit", ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))
+            ),
+            Test(
+                "-tract,-visit.exposure_time", "tract,visit", ((1, 2), (1, 2), (0, 1), (0, 1), (0, 2), (0, 2))
+            ),
             Test("tract,-exposure_time", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
             Test("tract,visit.name", "tract,visit", ((0, 1), (0, 1), (0, 2), (0, 2), (1, 2), (1, 2))),
-            Test("tract,-timespan.begin,timespan.end", "tract,visit",
-                 ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2))),
+            Test(
+                "tract,-timespan.begin,timespan.end",
+                "tract,visit",
+                ((0, 2), (0, 2), (0, 1), (0, 1), (1, 2), (1, 2)),
+            ),
             Test("visit.day_obs,exposure.day_obs", "visit,exposure", ()),
             Test("visit.timespan.begin,-exposure.timespan.begin", "visit,exposure", ()),
-            Test("tract,detector", "tract,detector",
-                 ((0, 1), (0, 2), (0, 3), (0, 4), (1, 1), (1, 2), (1, 3), (1, 4)),
-                 datasets="flat", collections="imported_r"),
-            Test("tract,detector.full_name", "tract,detector",
-                 ((0, 1), (0, 2), (0, 3), (0, 4), (1, 1), (1, 2), (1, 3), (1, 4)),
-                 datasets="flat", collections="imported_r"),
-            Test("tract,detector.raft,detector.name_in_raft", "tract,detector",
-                 ((0, 1), (0, 2), (0, 3), (0, 4), (1, 1), (1, 2), (1, 3), (1, 4)),
-                 datasets="flat", collections="imported_r"),
+            Test(
+                "tract,detector",
+                "tract,detector",
+                ((0, 1), (0, 2), (0, 3), (0, 4), (1, 1), (1, 2), (1, 3), (1, 4)),
+                datasets="flat",
+                collections="imported_r",
+            ),
+            Test(
+                "tract,detector.full_name",
+                "tract,detector",
+                ((0, 1), (0, 2), (0, 3), (0, 4), (1, 1), (1, 2), (1, 3), (1, 4)),
+                datasets="flat",
+                collections="imported_r",
+            ),
+            Test(
+                "tract,detector.raft,detector.name_in_raft",
+                "tract,detector",
+                ((0, 1), (0, 2), (0, 3), (0, 4), (1, 1), (1, 2), (1, 3), (1, 4)),
+                datasets="flat",
+                collections="imported_r",
+            ),
         )
 
         for test in test_data:
@@ -2597,8 +2615,9 @@ class RegistryTests(ABC):
         with self.assertRaisesRegex(ValueError, "Timespan exists in more than one dimesion"):
             list(do_query(("exposure", "visit")).order_by("timespan.begin"))
 
-        with self.assertRaisesRegex(ValueError,
-                                    "Cannot find any temporal dimension element for 'timespan.begin'"):
+        with self.assertRaisesRegex(
+            ValueError, "Cannot find any temporal dimension element for 'timespan.begin'"
+        ):
             list(do_query(("tract")).order_by("timespan.begin"))
 
         with self.assertRaisesRegex(ValueError, "Cannot use 'timespan.begin' with non-temporal element"):
@@ -2630,7 +2649,7 @@ class RegistryTests(ABC):
             ("detector", None, (1, 2, 3, 4)),
             ("-detector", None, (4, 3, 2, 1)),
             ("raft,-name_in_raft", None, (2, 1, 4, 3)),
-            ("-detector.purpose", (1, ), (4, )),
+            ("-detector.purpose", (1,), (4,)),
             ("-purpose,detector.raft,name_in_raft", (2, 2), (2, 3)),
         )
 

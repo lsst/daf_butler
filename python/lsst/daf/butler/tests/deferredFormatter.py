@@ -21,12 +21,9 @@
 
 from __future__ import annotations
 
-__all__ = ("DeferredFormatter")
+__all__ = "DeferredFormatter"
 
-from typing import (
-    Any,
-    Optional,
-)
+from typing import Any, Optional
 
 from ..core import Formatter
 

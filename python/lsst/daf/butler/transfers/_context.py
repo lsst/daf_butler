@@ -23,26 +23,18 @@ from __future__ import annotations
 
 __all__ = ["RepoExportContext"]
 
-from typing import (
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Union,
-)
 from collections import defaultdict
+from typing import Callable, Dict, Iterable, List, Optional, Set, Union
 
 from ..core import (
     DataCoordinate,
     DatasetAssociation,
-    DimensionElement,
-    DimensionRecord,
     DatasetId,
     DatasetRef,
     DatasetType,
     Datastore,
+    DimensionElement,
+    DimensionRecord,
     FileDataset,
 )
 from ..registry import CollectionType, Registry
@@ -74,8 +66,15 @@ class RepoExportContext:
         Transfer mode to pass to `Datastore.export`.
     """
 
-    def __init__(self, registry: Registry, datastore: Datastore, backend: RepoExportBackend, *,
-                 directory: Optional[str] = None, transfer: Optional[str] = None):
+    def __init__(
+        self,
+        registry: Registry,
+        datastore: Datastore,
+        backend: RepoExportBackend,
+        *,
+        directory: Optional[str] = None,
+        transfer: Optional[str] = None,
+    ):
         self._registry = registry
         self._datastore = datastore
         self._backend = backend
@@ -83,8 +82,9 @@ class RepoExportContext:
         self._transfer = transfer
         self._records: Dict[DimensionElement, Dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
         self._dataset_ids: Set[DatasetId] = set()
-        self._datasets: Dict[DatasetType, Dict[str, List[FileDataset]]] \
-            = defaultdict(lambda: defaultdict(list))
+        self._datasets: Dict[DatasetType, Dict[str, List[FileDataset]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
         self._collections: Dict[str, CollectionRecord] = {}
 
     def saveCollection(self, name: str) -> None:
@@ -112,8 +112,9 @@ class RepoExportContext:
         """
         self._collections[name] = self._registry._get_collection_record(name)
 
-    def saveDimensionData(self, element: Union[str, DimensionElement],
-                          records: Iterable[Union[dict, DimensionRecord]]) -> None:
+    def saveDimensionData(
+        self, element: Union[str, DimensionElement], records: Iterable[Union[dict, DimensionRecord]]
+    ) -> None:
         """Export the given dimension records associated with one or more data
         IDs.
 
@@ -138,8 +139,12 @@ class RepoExportContext:
                 )
             self._records[element].setdefault(record.dataId, record)
 
-    def saveDataIds(self, dataIds: Iterable[DataCoordinate], *,
-                    elements: Optional[Iterable[Union[str, DimensionElement]]] = None) -> None:
+    def saveDataIds(
+        self,
+        dataIds: Iterable[DataCoordinate],
+        *,
+        elements: Optional[Iterable[Union[str, DimensionElement]]] = None,
+    ) -> None:
         """Export the dimension records associated with one or more data IDs.
 
         Parameters
@@ -155,8 +160,11 @@ class RepoExportContext:
             records for all dimensions will be exported.
         """
         if elements is None:
-            elements = frozenset(element for element in self._registry.dimensions.getStaticElements()
-                                 if element.hasTable() and element.viewOf is None)
+            elements = frozenset(
+                element
+                for element in self._registry.dimensions.getStaticElements()
+                if element.hasTable() and element.viewOf is None
+            )
         else:
             elements = set()
             for element in elements:
@@ -175,9 +183,13 @@ class RepoExportContext:
                 if record is not None and record.definition in elements:
                     self._records[record.definition].setdefault(record.dataId, record)
 
-    def saveDatasets(self, refs: Iterable[DatasetRef], *,
-                     elements: Optional[Iterable[Union[str, DimensionElement]]] = None,
-                     rewrite: Optional[Callable[[FileDataset], FileDataset]] = None) -> None:
+    def saveDatasets(
+        self,
+        refs: Iterable[DatasetRef],
+        *,
+        elements: Optional[Iterable[Union[str, DimensionElement]]] = None,
+        rewrite: Optional[Callable[[FileDataset], FileDataset]] = None,
+    ) -> None:
         """Export one or more datasets.
 
         This automatically exports any `DatasetType`, `~CollectionType.RUN`
@@ -269,8 +281,9 @@ class RepoExportContext:
         # deterministically, too, which probably involves more data ID sorting.
         datasetAssociations = self._computeDatasetAssociations()
         for collection in sorted(datasetAssociations):
-            self._backend.saveDatasetAssociations(collection, self._collections[collection].type,
-                                                  sorted(datasetAssociations[collection]))
+            self._backend.saveDatasetAssociations(
+                collection, self._collections[collection].type, sorted(datasetAssociations[collection])
+            )
         self._backend.finish()
 
     def _computeSortedCollections(self) -> List[str]:
@@ -300,12 +313,14 @@ class RepoExportContext:
         # Append these to 'result' and remove them from 'chains' as we go.
         while chains:
             unblocked = {
-                parent for parent, children in chains.items()
+                parent
+                for parent, children in chains.items()
                 if not any(child in chains.keys() for child in children)
             }
             if not unblocked:
-                raise RuntimeError("Apparent cycle in CHAINED collection "
-                                   f"dependencies involving {unblocked}.")
+                raise RuntimeError(
+                    "Apparent cycle in CHAINED collection " f"dependencies involving {unblocked}."
+                )
             result.extend(sorted(unblocked))
             for name in unblocked:
                 del chains[name]

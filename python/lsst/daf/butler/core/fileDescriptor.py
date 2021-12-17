@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ("FileDescriptor",)
 
-from typing import Any, Dict, Mapping, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional
 
 if TYPE_CHECKING:
     from .location import Location
@@ -48,10 +48,13 @@ class FileDescriptor:
 
     __slots__ = ("location", "storageClass", "_readStorageClass", "parameters")
 
-    def __init__(self, location: Location,
-                 storageClass: StorageClass,
-                 readStorageClass: Optional[StorageClass] = None,
-                 parameters: Optional[Mapping[str, Any]] = None):
+    def __init__(
+        self,
+        location: Location,
+        storageClass: StorageClass,
+        readStorageClass: Optional[StorageClass] = None,
+        parameters: Optional[Mapping[str, Any]] = None,
+    ):
         self.location = location
         self._readStorageClass = readStorageClass
         self.storageClass = storageClass

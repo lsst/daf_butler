@@ -42,6 +42,7 @@ class NameShrinker:
         hence the number of characters preserved from the beginning of the
         original name is ``maxLength - hashSize*2 - 1``.
     """
+
     def __init__(self, maxLength: int, hashSize: int = 4):
         self.maxLength = maxLength
         self.hashSize = hashSize
@@ -55,7 +56,7 @@ class NameShrinker:
             return original
         message = hashlib.blake2b(digest_size=self.hashSize)
         message.update(original.encode("ascii"))
-        trunc = self.maxLength - 2*self.hashSize - 1
+        trunc = self.maxLength - 2 * self.hashSize - 1
         shrunk = f"{original[:trunc]}_{message.digest().hex()}"
         assert len(shrunk) == self.maxLength
         self._names[shrunk] = original

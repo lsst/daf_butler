@@ -24,20 +24,21 @@ daf_butler but some only runs if lsst.log.Log can be imported so these parts of
 it can't be tested there because daf_butler does not directly depend on
 lsst.log, and only uses it if it has been setup by another package."""
 
-import click
-from collections import namedtuple
-from functools import partial
-from io import StringIO
 import logging
 import re
 import subprocess
-import unittest
 import tempfile
+import unittest
+from collections import namedtuple
+from functools import partial
+from io import StringIO
 
+import click
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cliLog import CliLog
-from lsst.daf.butler.cli.utils import clickResultMsg, command_test_env, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg, command_test_env
 from lsst.daf.butler.core.logging import ButlerLogRecords
+
 try:
     import lsst.log as lsstLog
 except ModuleNotFoundError:
@@ -49,32 +50,31 @@ except ModuleNotFoundError:
 @click.option("--expected-pybutler-level", type=int)
 @click.option("--expected-lsstroot-level", type=int)
 @click.option("--expected-lsstbutler-level", type=int)
-def command_log_settings_test(expected_pyroot_level,
-                              expected_pybutler_level,
-                              expected_lsstroot_level,
-                              expected_lsstbutler_level):
+def command_log_settings_test(
+    expected_pyroot_level, expected_pybutler_level, expected_lsstroot_level, expected_lsstbutler_level
+):
 
     LogLevel = namedtuple("LogLevel", ("expected", "actual", "name"))
 
-    logLevels = [LogLevel(expected_pyroot_level,
-                          logging.getLogger().level,
-                          "pyRoot"),
-                 LogLevel(expected_pybutler_level,
-                          logging.getLogger("lsst.daf.butler").level,
-                          "pyButler")]
+    logLevels = [
+        LogLevel(expected_pyroot_level, logging.getLogger().level, "pyRoot"),
+        LogLevel(expected_pybutler_level, logging.getLogger("lsst.daf.butler").level, "pyButler"),
+    ]
     if lsstLog is not None:
-        logLevels.extend([LogLevel(expected_lsstroot_level,
-                                   lsstLog.getLogger("").getLevel(),
-                                   "lsstRoot"),
-                          LogLevel(expected_lsstbutler_level,
-                                   lsstLog.getLogger("lsst.daf.butler").getLevel(),
-                                   "lsstButler")])
+        logLevels.extend(
+            [
+                LogLevel(expected_lsstroot_level, lsstLog.getLogger("").getLevel(), "lsstRoot"),
+                LogLevel(
+                    expected_lsstbutler_level, lsstLog.getLogger("lsst.daf.butler").getLevel(), "lsstButler"
+                ),
+            ]
+        )
     for expected, actual, name in logLevels:
         if expected != actual:
-            raise(click.ClickException(f"expected {name} level to be {expected!r}, actual:{actual!r}"))
+            raise (click.ClickException(f"expected {name} level to be {expected!r}, actual:{actual!r}"))
 
 
-class CliLogTestBase():
+class CliLogTestBase:
     """Tests log initialization, reset, and setting log levels."""
 
     lsstLogHandlerId = None
@@ -96,6 +96,7 @@ class CliLogTestBase():
     class LsstLogger:
         """Keeps track of log level for a component at the time this object was
         initialized."""
+
         def __init__(self, component):
             self.logger = lsstLog.getLogger(component) if lsstLog else None
             self.initialLevel = self.logger.getLevel() if lsstLog else None
@@ -110,8 +111,9 @@ class CliLogTestBase():
         lsstRoot = self.LsstLogger("")
         lsstButler = self.LsstLogger("lsst.daf.butler")
 
-        with command_test_env(self.runner, "lsst.daf.butler.tests.cliLogTestBase",
-                                           "command-log-settings-test"):
+        with command_test_env(
+            self.runner, "lsst.daf.butler.tests.cliLogTestBase", "command-log-settings-test"
+        ):
             result = cmd()
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
@@ -121,8 +123,11 @@ class CliLogTestBase():
             self.assertEqual(lsstRoot.logger.getLevel(), lsstLog.INFO)
             # lsstLogLevel can either be the initial level, or uninitialized or
             # the defined default value.
-            expectedLsstLogLevel = ((lsstButler.initialLevel, ) if lsstButler.initialLevel != -1
-                                    else(-1, CliLog.defaultLsstLogLevel))
+            expectedLsstLogLevel = (
+                (lsstButler.initialLevel,)
+                if lsstButler.initialLevel != -1
+                else (-1, CliLog.defaultLsstLogLevel)
+            )
             self.assertIn(lsstButler.logger.getLevel(), expectedLsstLogLevel)
 
     def test_butlerCliLog(self):
@@ -131,15 +136,27 @@ class CliLogTestBase():
         of the command execution and resets the logging system to its previous
         state or expected state when command execution finishes."""
 
-        self.runTest(partial(self.runner.invoke,
-                             butlerCli,
-                             ["--log-level", "WARNING",
-                              "--log-level", "lsst.daf.butler=DEBUG",
-                              "command-log-settings-test",
-                              "--expected-pyroot-level", logging.WARNING,
-                              "--expected-pybutler-level", logging.DEBUG,
-                              "--expected-lsstroot-level", lsstLog.WARN if lsstLog else 0,
-                              "--expected-lsstbutler-level", lsstLog.DEBUG if lsstLog else 0]))
+        self.runTest(
+            partial(
+                self.runner.invoke,
+                butlerCli,
+                [
+                    "--log-level",
+                    "WARNING",
+                    "--log-level",
+                    "lsst.daf.butler=DEBUG",
+                    "command-log-settings-test",
+                    "--expected-pyroot-level",
+                    logging.WARNING,
+                    "--expected-pybutler-level",
+                    logging.DEBUG,
+                    "--expected-lsstroot-level",
+                    lsstLog.WARN if lsstLog else 0,
+                    "--expected-lsstbutler-level",
+                    lsstLog.DEBUG if lsstLog else 0,
+                ],
+            )
+        )
 
     def test_helpLogReset(self):
         """Verify that when a command does not execute, like when the help menu
@@ -162,13 +179,13 @@ class CliLogTestBase():
         # expected.
         timestampRegex = re.compile(
             r".*[A-Z]+ [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(.[0-9]{3})"
-            "?([-,+][01][0-9]:[034][05]|Z) .*")
+            "?([-,+][01][0-9]:[034][05]|Z) .*"
+        )
 
         # When longlog=False, log lines start with the module name and
         # log level, for example:
         # lsst.daf.butler.core.config DEBUG: ...
-        modulesRegex = re.compile(
-            r".* ([a-z]+\.)+[a-z]+ [A-Z]+: .*")
+        modulesRegex = re.compile(r".* ([a-z]+\.)+[a-z]+ [A-Z]+: .*")
 
         with self.runner.isolated_filesystem():
             for longlog in (True, False):
@@ -188,15 +205,18 @@ class CliLogTestBase():
                 output.seek(0)
                 startedWithModule = any(modulesRegex.match(line) for line in output.readlines())
                 if longlog:
-                    self.assertTrue(startedWithTimestamp,
-                                    msg=f"did not find timestamp in: \n{output.getvalue()}")
-                    self.assertFalse(startedWithModule,
-                                     msg=f"found lines starting with module in: \n{output.getvalue()}")
+                    self.assertTrue(
+                        startedWithTimestamp, msg=f"did not find timestamp in: \n{output.getvalue()}"
+                    )
+                    self.assertFalse(
+                        startedWithModule, msg=f"found lines starting with module in: \n{output.getvalue()}"
+                    )
                 else:
-                    self.assertFalse(startedWithTimestamp,
-                                     msg=f"found timestamp in: \n{output.getvalue()}")
-                    self.assertTrue(startedWithModule,
-                                    msg=f"did not find lines starting with module in: \n{output.getvalue()}")
+                    self.assertFalse(startedWithTimestamp, msg=f"found timestamp in: \n{output.getvalue()}")
+                    self.assertTrue(
+                        startedWithModule,
+                        msg=f"did not find lines starting with module in: \n{output.getvalue()}",
+                    )
 
     def testFileLogging(self):
         """Test --log-file option."""
@@ -207,9 +227,18 @@ class CliLogTestBase():
                 filename = fd.name
                 fd.close()
 
-                args = ("--log-level", "DEBUG", "--log-file", filename,
-                        "--log-label", "k1=v1,k2=v2", "--log-label", "k3=v3",
-                        "create", f"here{i}")
+                args = (
+                    "--log-level",
+                    "DEBUG",
+                    "--log-file",
+                    filename,
+                    "--log-label",
+                    "k1=v1,k2=v2",
+                    "--log-label",
+                    "k3=v3",
+                    "create",
+                    f"here{i}",
+                )
 
                 result = self.runner.invoke(butlerCli, args)
                 self.assertEqual(result.exit_code, 0, clickResultMsg(result))

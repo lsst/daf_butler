@@ -23,10 +23,10 @@ from __future__ import annotations
 
 __all__ = ["DimensionGraph", "SerializedDimensionGraph"]
 
-from pydantic import BaseModel
 import itertools
 from types import MappingProxyType
 from typing import (
+    TYPE_CHECKING,
     AbstractSet,
     Any,
     Dict,
@@ -37,20 +37,21 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    TYPE_CHECKING,
     Union,
 )
 
 from lsst.utils.classes import cached_getter, immutable
-from ..named import NamedValueAbstractSet, NamedValueSet
-from .._topology import TopologicalSpace, TopologicalFamily
+from pydantic import BaseModel
+
+from .._topology import TopologicalFamily, TopologicalSpace
 from ..json import from_json_pydantic, to_json_pydantic
+from ..named import NamedValueAbstractSet, NamedValueSet
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ._universe import DimensionUniverse
-    from ._elements import DimensionElement, Dimension
-    from ._governor import GovernorDimension
     from ...registry import Registry
+    from ._elements import Dimension, DimensionElement
+    from ._governor import GovernorDimension
+    from ._universe import DimensionUniverse
 
 
 class SerializedDimensionGraph(BaseModel):
@@ -69,8 +70,8 @@ class SerializedDimensionGraph(BaseModel):
         This method should only be called when the inputs are trusted.
         """
         node = SerializedDimensionGraph.__new__(cls)
-        object.__setattr__(node, 'names', names)
-        object.__setattr__(node, '__fields_set__', {'names'})
+        object.__setattr__(node, "names", names)
+        object.__setattr__(node, "__fields_set__", {"names"})
         return node
 
 
@@ -124,7 +125,7 @@ class DimensionGraph:
         universe: DimensionUniverse,
         dimensions: Optional[Iterable[Dimension]] = None,
         names: Optional[Iterable[str]] = None,
-        conform: bool = True
+        conform: bool = True,
     ) -> DimensionGraph:
         conformedNames: Set[str]
         if names is None:
@@ -157,8 +158,9 @@ class DimensionGraph:
         self.dimensions = NamedValueSet(universe.sorted(conformedNames)).freeze()
         # Make a set that includes both the dimensions and any
         # DimensionElements whose dependencies are in self.dimensions.
-        self.elements = NamedValueSet(e for e in universe.getStaticElements()
-                                      if e.required.names <= self.dimensions.names).freeze()
+        self.elements = NamedValueSet(
+            e for e in universe.getStaticElements() if e.required.names <= self.dimensions.names
+        ).freeze()
         self._finish()
         return self
 
@@ -166,6 +168,7 @@ class DimensionGraph:
         # Make a set containing just the governor dimensions in this graph.
         # Need local import to avoid cycle.
         from ._governor import GovernorDimension
+
         self.governors = NamedValueSet(
             d for d in self.dimensions if isinstance(d, GovernorDimension)
         ).freeze()
@@ -185,10 +188,12 @@ class DimensionGraph:
         self.required = required.freeze()
         self.implied = implied.freeze()
 
-        self.topology = MappingProxyType({
-            space: NamedValueSet(e.topology[space] for e in self.elements if space in e.topology).freeze()
-            for space in TopologicalSpace.__members__.values()
-        })
+        self.topology = MappingProxyType(
+            {
+                space: NamedValueSet(e.topology[space] for e in self.elements if space in e.topology).freeze()
+                for space in TopologicalSpace.__members__.values()
+            }
+        )
 
         # Build mappings from dimension to index; this is really for
         # DataCoordinate, but we put it in DimensionGraph because many
@@ -232,9 +237,12 @@ class DimensionGraph:
         return SerializedDimensionGraph(names=list(self.names))
 
     @classmethod
-    def from_simple(cls, names: SerializedDimensionGraph,
-                    universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None) -> DimensionGraph:
+    def from_simple(
+        cls,
+        names: SerializedDimensionGraph,
+        universe: Optional[DimensionUniverse] = None,
+        registry: Optional[Registry] = None,
+    ) -> DimensionGraph:
         """Construct a new object from the simplified form.
 
         This is assumed to support data data returned from the `to_simple`

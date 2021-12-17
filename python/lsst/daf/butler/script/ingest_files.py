@@ -23,28 +23,32 @@ from __future__ import annotations
 __all__ = ("ingest_files",)
 
 import logging
-from typing import Optional, Tuple, Dict, Any, List, TYPE_CHECKING
 from collections import defaultdict
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from astropy.table import Table
-
 from lsst.utils import doImport
 
 from .. import Butler, DatasetIdGenEnum
-from ..core import FileDataset, DatasetRef, ButlerURI
+from ..core import ButlerURI, DatasetRef, FileDataset
 
 if TYPE_CHECKING:
-    from ..core import DimensionUniverse, DatasetType
+    from ..core import DatasetType, DimensionUniverse
 
 log = logging.getLogger(__name__)
 
 
-def ingest_files(repo: str, dataset_type: str, run: str, table_file: str,
-                 data_id: Tuple[str, ...] = (),
-                 formatter: Optional[str] = None,
-                 id_generation_mode: str = "UNIQUE",
-                 prefix: Optional[str] = None,
-                 transfer: str = "auto") -> None:
+def ingest_files(
+    repo: str,
+    dataset_type: str,
+    run: str,
+    table_file: str,
+    data_id: Tuple[str, ...] = (),
+    formatter: Optional[str] = None,
+    id_generation_mode: str = "UNIQUE",
+    prefix: Optional[str] = None,
+    transfer: str = "auto",
+) -> None:
     """Ingest files from a table.
 
     Parameters
@@ -109,9 +113,13 @@ def ingest_files(repo: str, dataset_type: str, run: str, table_file: str,
     butler.ingest(*datasets, transfer=transfer, run=run, idGenerationMode=id_gen_mode)
 
 
-def extract_datasets_from_table(table: Table, common_data_id: Dict, datasetType: DatasetType,
-                                formatter: Optional[str] = None,
-                                prefix: Optional[str] = None,) -> List[FileDataset]:
+def extract_datasets_from_table(
+    table: Table,
+    common_data_id: Dict,
+    datasetType: DatasetType,
+    formatter: Optional[str] = None,
+    prefix: Optional[str] = None,
+) -> List[FileDataset]:
     """Extract datasets from the supplied table.
 
     Parameters
@@ -169,9 +177,14 @@ def extract_datasets_from_table(table: Table, common_data_id: Dict, datasetType:
         refs_by_file[path_uri].append(ref)
         n_dataset_refs += 1
 
-    datasets = [FileDataset(path=file_uri,
-                            refs=refs,
-                            formatter=formatter,) for file_uri, refs in refs_by_file.items()]
+    datasets = [
+        FileDataset(
+            path=file_uri,
+            refs=refs,
+            formatter=formatter,
+        )
+        for file_uri, refs in refs_by_file.items()
+    ]
 
     log.info("Ingesting %d dataset ref(s) from %d file(s)", n_dataset_refs, len(datasets))
 

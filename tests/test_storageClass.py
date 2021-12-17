@@ -19,14 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import logging
 import os
 import pickle
 import unittest
-import logging
 
+from lsst.daf.butler import StorageClass, StorageClassConfig, StorageClassDelegate, StorageClassFactory
 from lsst.utils.introspection import get_full_type_name
-
-from lsst.daf.butler import StorageClass, StorageClassFactory, StorageClassConfig, StorageClassDelegate
 
 """Tests related to the StorageClass infrastructure.
 """
@@ -36,12 +35,12 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 class PythonType:
     """A dummy class to test the registry of Python types."""
+
     pass
 
 
 class StorageClassFactoryTestCase(unittest.TestCase):
-    """Tests of the storage class infrastructure.
-    """
+    """Tests of the storage class infrastructure."""
 
     def testCreation(self):
         """Test that we can dynamically create storage class subclasses.
@@ -82,8 +81,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
         # Check we can create a storageClass using the name of an importable
         # type.
-        sc2 = StorageClass("TestImage2",
-                           "lsst.daf.butler.core.storageClass.StorageClassFactory")
+        sc2 = StorageClass("TestImage2", "lsst.daf.butler.core.storageClass.StorageClassFactory")
         self.assertIsInstance(sc2.pytype(), StorageClassFactory)
         self.assertIn("butler.core", repr(sc2))
 
@@ -99,7 +97,11 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
         sc1.validateParameters()
         sc1.validateParameters({"a": None, "b": None})
-        sc1.validateParameters(["a", ])
+        sc1.validateParameters(
+            [
+                "a",
+            ]
+        )
         with self.assertRaises(KeyError):
             sc1.validateParameters({"a", "c"})
 
@@ -124,21 +126,20 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertNotEqual(scp, scp2)
 
         # Now with components
-        sc5 = StorageClass("Composite", pytype=PythonType,
-                           components={"comp1": sc1, "comp2": sc3})
-        sc6 = StorageClass("Composite", pytype=PythonType,
-                           components={"comp1": sc1, "comp2": sc3})
+        sc5 = StorageClass("Composite", pytype=PythonType, components={"comp1": sc1, "comp2": sc3})
+        sc6 = StorageClass("Composite", pytype=PythonType, components={"comp1": sc1, "comp2": sc3})
         self.assertEqual(sc5, sc6)
         self.assertNotEqual(sc5, sc3)
-        sc7 = StorageClass("Composite", pytype=PythonType,
-                           components={"comp1": sc4, "comp2": sc3})
+        sc7 = StorageClass("Composite", pytype=PythonType, components={"comp1": sc4, "comp2": sc3})
         self.assertNotEqual(sc5, sc7)
-        sc8 = StorageClass("Composite", pytype=PythonType,
-                           components={"comp2": sc3, "comp3": sc3})
+        sc8 = StorageClass("Composite", pytype=PythonType, components={"comp2": sc3, "comp3": sc3})
         self.assertNotEqual(sc5, sc8)
-        sc9 = StorageClass("Composite", pytype=PythonType,
-                           components={"comp1": sc1, "comp2": sc3},
-                           delegate="lsst.daf.butler.Butler")
+        sc9 = StorageClass(
+            "Composite",
+            pytype=PythonType,
+            components={"comp1": sc1, "comp2": sc3},
+            delegate="lsst.daf.butler.Butler",
+        )
         self.assertNotEqual(sc5, sc9)
 
     def testRegistry(self):
@@ -218,8 +219,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertIsInstance(sc(), StorageClass)
 
     def testPickle(self):
-        """Test that we can pickle storageclasses.
-        """
+        """Test that we can pickle storageclasses."""
         className = "TestImage"
         sc = StorageClass(className, pytype=dict)
         self.assertIsInstance(sc, StorageClass)

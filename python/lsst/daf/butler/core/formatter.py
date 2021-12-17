@@ -23,12 +23,13 @@ from __future__ import annotations
 
 __all__ = ("Formatter", "FormatterFactory", "FormatterParameter")
 
+import contextlib
+import copy
+import logging
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
-import contextlib
-import logging
-import copy
 from typing import (
+    TYPE_CHECKING,
     AbstractSet,
     Any,
     ClassVar,
@@ -38,18 +39,19 @@ from typing import (
     Set,
     Tuple,
     Type,
-    TYPE_CHECKING,
     Union,
 )
+
 from lsst.utils.introspection import get_full_type_name
-from .configSupport import processLookupConfigs, LookupKey
-from .mappingFactory import MappingFactory
+
+from .config import Config
+from .configSupport import LookupKey, processLookupConfigs
+from .datasets import DatasetRef, DatasetType
+from .dimensions import DimensionUniverse
 from .fileDescriptor import FileDescriptor
 from .location import Location
-from .config import Config
-from .dimensions import DimensionUniverse
+from .mappingFactory import MappingFactory
 from .storageClass import StorageClass
-from .datasets import DatasetType, DatasetRef
 
 log = logging.getLogger(__name__)
 
@@ -104,9 +106,13 @@ class Formatter(metaclass=ABCMeta):
     assigned to the ``extension`` property will be automatically included in
     the list of supported extensions."""
 
-    def __init__(self, fileDescriptor: FileDescriptor, dataId: DataCoordinate,
-                 writeParameters: Optional[Dict[str, Any]] = None,
-                 writeRecipes: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        fileDescriptor: FileDescriptor,
+        dataId: DataCoordinate,
+        writeParameters: Optional[Dict[str, Any]] = None,
+        writeRecipes: Optional[Dict[str, Any]] = None,
+    ):
         if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
         assert dataId is not None, "dataId is now required for formatter initialization"
@@ -116,8 +122,10 @@ class Formatter(metaclass=ABCMeta):
         # Check that the write parameters are allowed
         if writeParameters:
             if self.supportedWriteParameters is None:
-                raise ValueError("This formatter does not accept any write parameters. "
-                                 f"Got: {', '.join(writeParameters)}")
+                raise ValueError(
+                    "This formatter does not accept any write parameters. "
+                    f"Got: {', '.join(writeParameters)}"
+                )
             else:
                 given = set(writeParameters)
                 unknown = given - self.supportedWriteParameters
@@ -249,8 +257,7 @@ class Formatter(metaclass=ABCMeta):
             pass
         return True
 
-    def fromBytes(self, serializedDataset: bytes,
-                  component: Optional[str] = None) -> object:
+    def fromBytes(self, serializedDataset: bytes, component: Optional[str] = None) -> object:
         """Read serialized data into a Dataset or its component.
 
         Parameters
@@ -406,8 +413,10 @@ class Formatter(metaclass=ABCMeta):
             if file.endswith(ext):
                 return
 
-        raise ValueError(f"Extension '{location.getExtension()}' on '{location}' "
-                         f"is not supported by Formatter '{cls.__name__}' (supports: {supported})")
+        raise ValueError(
+            f"Extension '{location.getExtension()}' on '{location}' "
+            f"is not supported by Formatter '{cls.__name__}' (supports: {supported})"
+        )
 
     def predictPath(self) -> str:
         """Return the path that would be returned by write.
@@ -590,15 +599,18 @@ class FormatterFactory:
         # Extract any default parameter settings
         defaultParameters = contents.get(self.defaultKey, {})
         if not isinstance(defaultParameters, Mapping):
-            raise RuntimeError("Default formatter parameters in config can not be a single string"
-                               f" (got: {type(defaultParameters)})")
+            raise RuntimeError(
+                "Default formatter parameters in config can not be a single string"
+                f" (got: {type(defaultParameters)})"
+            )
 
         # Extract any global write recipes -- these are indexed by
         # Formatter class name.
         writeRecipes = contents.get(self.writeRecipesKey, {})
         if isinstance(writeRecipes, str):
-            raise RuntimeError(f"The formatters.{self.writeRecipesKey} section must refer to a dict"
-                               f" not '{writeRecipes}'")
+            raise RuntimeError(
+                f"The formatters.{self.writeRecipesKey} section must refer to a dict" f" not '{writeRecipes}'"
+            )
 
         for key, f in contents.items():
             # default is handled in a special way
@@ -647,8 +659,7 @@ class FormatterFactory:
         """
         return self._mappingFactory.getLookupKeys()
 
-    def getFormatterClassWithMatch(self, entity: Entity) -> Tuple[LookupKey, Type[Formatter],
-                                                                  Dict[str, Any]]:
+    def getFormatterClassWithMatch(self, entity: Entity) -> Tuple[LookupKey, Type[Formatter], Dict[str, Any]]:
         """Get the matching formatter class along with the registry key.
 
         Parameters
@@ -671,8 +682,12 @@ class FormatterFactory:
         """
         names = (LookupKey(name=entity),) if isinstance(entity, str) else entity._lookupNames()
         matchKey, formatter, formatter_kwargs = self._mappingFactory.getClassFromRegistryWithMatch(names)
-        log.debug("Retrieved formatter %s from key '%s' for entity '%s'", get_full_type_name(formatter),
-                  matchKey, entity)
+        log.debug(
+            "Retrieved formatter %s from key '%s' for entity '%s'",
+            get_full_type_name(formatter),
+            matchKey,
+            entity,
+        )
 
         return matchKey, formatter, formatter_kwargs
 
@@ -721,8 +736,12 @@ class FormatterFactory:
         """
         names = (LookupKey(name=entity),) if isinstance(entity, str) else entity._lookupNames()
         matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(names, *args, **kwargs)
-        log.debug("Retrieved formatter %s from key '%s' for entity '%s'", get_full_type_name(formatter),
-                  matchKey, entity)
+        log.debug(
+            "Retrieved formatter %s from key '%s' for entity '%s'",
+            get_full_type_name(formatter),
+            matchKey,
+            entity,
+        )
 
         return matchKey, formatter
 
@@ -750,9 +769,14 @@ class FormatterFactory:
         _, formatter = self.getFormatterWithMatch(entity, *args, **kwargs)
         return formatter
 
-    def registerFormatter(self, type_: Union[LookupKey, str, StorageClass, DatasetType],
-                          formatter: str, *, overwrite: bool = False,
-                          **kwargs: Any) -> None:
+    def registerFormatter(
+        self,
+        type_: Union[LookupKey, str, StorageClass, DatasetType],
+        formatter: str,
+        *,
+        overwrite: bool = False,
+        **kwargs: Any,
+    ) -> None:
         """Register a `Formatter`.
 
         Parameters

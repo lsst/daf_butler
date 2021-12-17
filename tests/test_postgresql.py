@@ -19,15 +19,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
-from contextlib import contextmanager
+import gc
 import itertools
+import os
 import secrets
 import unittest
-import gc
 import warnings
+from contextlib import contextmanager
 
 import astropy.time
+
 try:
     # It's possible but silly to have testing.postgresql installed without
     # having the postgresql server installed (because then nothing in
@@ -38,8 +39,7 @@ except ImportError:
     testing = None
 
 import sqlalchemy
-
-from lsst.daf.butler import ddl, Timespan
+from lsst.daf.butler import Timespan, ddl
 from lsst.daf.butler.registry import Registry
 from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase, _RangeTimespanType
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
@@ -61,7 +61,6 @@ def _startServer(root):
 
 @unittest.skipUnless(testing is not None, "testing.postgresql module not found")
 class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
-
     @classmethod
     def setUpClass(cls):
         cls.root = makeTestTempDir(TESTDIR)
@@ -80,8 +79,9 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
         return PostgresqlDatabase.fromUri(origin=origin, uri=self.server.url(), namespace=namespace)
 
     def getNewConnection(self, database: PostgresqlDatabase, *, writeable: bool) -> PostgresqlDatabase:
-        return PostgresqlDatabase.fromUri(origin=database.origin, uri=self.server.url(),
-                                          namespace=database.namespace, writeable=writeable)
+        return PostgresqlDatabase.fromUri(
+            origin=database.origin, uri=self.server.url(), namespace=database.namespace, writeable=writeable
+        )
 
     @contextmanager
     def asReadOnly(self, database: PostgresqlDatabase) -> PostgresqlDatabase:
@@ -104,10 +104,7 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
                 ddl.TableSpec(
                     fields=[
                         ddl.FieldSpec(
-                            fieldName1,
-                            dtype=sqlalchemy.BigInteger,
-                            autoincrement=True,
-                            primaryKey=True
+                            fieldName1, dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True
                         ),
                         ddl.FieldSpec(
                             fieldName2,
@@ -117,7 +114,7 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
                         ),
                     ],
                     unique={(fieldName2,)},
-                )
+                ),
             )
         # Add another table, this time dynamically, with a foreign key to the
         # first table.
@@ -126,10 +123,7 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
             ddl.TableSpec(
                 fields=[
                     ddl.FieldSpec(
-                        fieldName1 + "_b",
-                        dtype=sqlalchemy.BigInteger,
-                        autoincrement=True,
-                        primaryKey=True
+                        fieldName1 + "_b", dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True
                     ),
                     ddl.FieldSpec(
                         fieldName2 + "_b",
@@ -140,14 +134,14 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
                 ],
                 foreignKeys=[
                     ddl.ForeignKeySpec(tableName, source=(fieldName2 + "_b",), target=(fieldName2,)),
-                ]
-            )
+                ],
+            ),
         )
 
     def test_RangeTimespanType(self):
-        start = astropy.time.Time('2020-01-01T00:00:00', format="isot", scale="tai")
+        start = astropy.time.Time("2020-01-01T00:00:00", format="isot", scale="tai")
         offset = astropy.time.TimeDelta(60, format="sec")
-        timestamps = [start + offset*n for n in range(3)]
+        timestamps = [start + offset * n for n in range(3)]
         timespans = [Timespan(begin=None, end=None)]
         timespans.extend(Timespan(begin=None, end=t) for t in timestamps)
         timespans.extend(Timespan(begin=t, end=None) for t in timestamps)
@@ -161,25 +155,23 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
                         ddl.FieldSpec(name="id", dtype=sqlalchemy.Integer, primaryKey=True),
                         ddl.FieldSpec(name="timespan", dtype=_RangeTimespanType),
                     ],
-                )
+                ),
             )
         rows = [{"id": n, "timespan": t} for n, t in enumerate(timespans)]
         db.insert(tbl, *rows)
 
         # Test basic round-trip through database.
-        self.assertEqual(
-            rows,
-            [row._asdict() for row in db.query(tbl.select().order_by(tbl.columns.id))]
-        )
+        self.assertEqual(rows, [row._asdict() for row in db.query(tbl.select().order_by(tbl.columns.id))])
 
         # Test that Timespan's Python methods are consistent with our usage of
         # half-open ranges and PostgreSQL operators on ranges.
         def subquery(alias: str) -> sqlalchemy.sql.FromClause:
-            return sqlalchemy.sql.select(
-                tbl.columns.id.label("id"), tbl.columns.timespan.label("timespan")
-            ).select_from(
-                tbl
-            ).alias(alias)
+            return (
+                sqlalchemy.sql.select(tbl.columns.id.label("id"), tbl.columns.timespan.label("timespan"))
+                .select_from(tbl)
+                .alias(alias)
+            )
+
         sq1 = subquery("sq1")
         sq2 = subquery("sq2")
         query = sqlalchemy.sql.select(
@@ -198,8 +190,9 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
         # SQLAlchemy issues a warning about cartesian product of two tables,
         # which we do intentionally. Disable that warning temporarily.
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message=".*cartesian product",
-                                    category=sqlalchemy.exc.SAWarning)
+            warnings.filterwarnings(
+                "ignore", message=".*cartesian product", category=sqlalchemy.exc.SAWarning
+            )
             dbResults = {
                 (row[columns.n1], row[columns.n2]): row[columns.overlaps]
                 for row in db.query(query).mappings()
@@ -254,9 +247,9 @@ class PostgresqlRegistryNameKeyCollMgrTestCase(PostgresqlRegistryTests, unittest
     This test case uses NameKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManager.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
-    datasetsManager = \
-        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
 class PostgresqlRegistrySynthIntKeyCollMgrTestCase(PostgresqlRegistryTests, unittest.TestCase):
@@ -265,9 +258,9 @@ class PostgresqlRegistrySynthIntKeyCollMgrTestCase(PostgresqlRegistryTests, unit
     This test case uses SynthIntKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManager.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
-    datasetsManager = \
-        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
 class PostgresqlRegistryNameKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, unittest.TestCase):
@@ -276,9 +269,11 @@ class PostgresqlRegistryNameKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, unit
     This test case uses NameKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManagerUUID.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
-    datasetsManager = \
+    datasetsManager = (
         "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    )
 
 
 class PostgresqlRegistrySynthIntKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, unittest.TestCase):
@@ -287,9 +282,11 @@ class PostgresqlRegistrySynthIntKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, 
     This test case uses SynthIntKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManagerUUID.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
-    datasetsManager = \
+    datasetsManager = (
         "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    )
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ import unittest
 from unittest.mock import patch
 
 from lsst.daf.butler.cli.butler import cli as butlerCli
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 
 
 class AssociateTestCase(unittest.TestCase):
@@ -42,10 +42,8 @@ class AssociateTestCase(unittest.TestCase):
 
     @patch("lsst.daf.butler.script.associate")
     def test_defaults(self, mockAssociate):
-        """Test the expected default values & types for optional options.
-        """
-        result = self.runner.invoke(
-            butlerCli, ["associate", "myRepo", "myCollection"])
+        """Test the expected default values & types for optional options."""
+        result = self.runner.invoke(butlerCli, ["associate", "myRepo", "myCollection"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         mockAssociate.assert_called_once_with(
             repo="myRepo",
@@ -53,19 +51,27 @@ class AssociateTestCase(unittest.TestCase):
             dataset_type=tuple(),
             collections=tuple(),
             where=None,
-            find_first=False
+            find_first=False,
         )
 
     @patch("lsst.daf.butler.script.associate")
     def test_values(self, mockAssociate):
-        """Test expected values & types when passing in options.
-        """
+        """Test expected values & types when passing in options."""
         result = self.runner.invoke(
-            butlerCli, ["associate", "myRepo", "myCollection",
-                        "--dataset-type", "myDatasetType",
-                        "--collections", "myCollection,otherCollection",
-                        "--where", "'a=b'",
-                        "--find-first"])
+            butlerCli,
+            [
+                "associate",
+                "myRepo",
+                "myCollection",
+                "--dataset-type",
+                "myDatasetType",
+                "--collections",
+                "myCollection,otherCollection",
+                "--where",
+                "'a=b'",
+                "--find-first",
+            ],
+        )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         mockAssociate.assert_called_once_with(
             repo="myRepo",
@@ -73,7 +79,7 @@ class AssociateTestCase(unittest.TestCase):
             dataset_type=("myDatasetType",),
             collections=("myCollection", "otherCollection"),
             where="'a=b'",
-            find_first=True
+            find_first=True,
         )
 
 

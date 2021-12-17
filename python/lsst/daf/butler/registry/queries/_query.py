@@ -22,39 +22,29 @@ from __future__ import annotations
 
 __all__ = ("Query",)
 
-from abc import ABC, abstractmethod
-from contextlib import contextmanager
 import dataclasses
 import enum
 import itertools
-from typing import (
-    ContextManager,
-    Dict,
-    Iterable,
-    Iterator,
-    Mapping,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-)
+from abc import ABC, abstractmethod
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, ContextManager, Dict, Iterable, Iterator, Mapping, Optional, Tuple
 
 import sqlalchemy
-
 from lsst.sphgeom import Region
 
 from ...core import (
-    addDimensionForeignKey,
     DataCoordinate,
     DatasetRef,
     DatasetType,
-    ddl,
     Dimension,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
-    SpatialRegionDatabaseRepresentation,
     SimpleQuery,
+    SpatialRegionDatabaseRepresentation,
+    addDimensionForeignKey,
+    ddl,
 )
 from ..interfaces import Database
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryManagers
@@ -65,8 +55,8 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True)
 class OrderByColumn:
-    """Information about single column in ORDER BY clause.
-    """
+    """Information about single column in ORDER BY clause."""
+
     column: sqlalchemy.sql.ColumnElement
     """Name of the column or `None` for primary key (`str` or `None`)"""
 
@@ -110,7 +100,7 @@ class OrderByColumn:
             ordering=self.ordering,
             add_to_select=False,
             field_spec=None,
-            dimension=self.dimension
+            dimension=self.dimension,
         )
 
 
@@ -139,12 +129,15 @@ class Query(ABC):
     backend for other objects that provide more natural interfaces for one or
     both of these, not as part of a public interface to query results.
     """
-    def __init__(self, *,
-                 graph: DimensionGraph,
-                 whereRegion: Optional[Region],
-                 managers: RegistryManagers,
-                 doomed_by: Iterable[str] = (),
-                 ):
+
+    def __init__(
+        self,
+        *,
+        graph: DimensionGraph,
+        whereRegion: Optional[Region],
+        managers: RegistryManagers,
+        doomed_by: Iterable[str] = (),
+    ):
         self.graph = graph
         self.whereRegion = whereRegion
         self.managers = managers
@@ -277,13 +270,12 @@ class Query(ABC):
                 filtered_count += 1
             return filtered_count
         else:
-            return db.query(
-                sql.with_only_columns([sqlalchemy.sql.func.count()]).order_by(None)
-            ).scalar()
+            return db.query(sql.with_only_columns([sqlalchemy.sql.func.count()]).order_by(None)).scalar()
 
     def any(
         self,
-        db: Database, *,
+        db: Database,
+        *,
         region: Optional[Region] = None,
         execute: bool = True,
         exact: bool = True,
@@ -332,7 +324,8 @@ class Query(ABC):
 
     def explain_no_results(
         self,
-        db: Database, *,
+        db: Database,
+        *,
         region: Optional[Region] = None,
         followup: bool = True,
     ) -> Iterator[str]:
@@ -364,6 +357,7 @@ class Query(ABC):
         ``exact=True`` for the latter two).
         """
         from ._builder import QueryBuilder
+
         if self._doomed_by:
             yield from self._doomed_by
             return
@@ -422,8 +416,9 @@ class Query(ABC):
         """
         raise NotImplementedError()
 
-    def rows(self, db: Database, *, region: Optional[Region] = None
-             ) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
+    def rows(
+        self, db: Database, *, region: Optional[Region] = None
+    ) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
         """Execute the query and yield result rows, applying `predicate`.
 
         Parameters
@@ -456,8 +451,9 @@ class Query(ABC):
                 continue
             yield row
 
-    def extractDimensionsTuple(self, row: Optional[sqlalchemy.engine.RowProxy],
-                               dimensions: Iterable[Dimension]) -> tuple:
+    def extractDimensionsTuple(
+        self, row: Optional[sqlalchemy.engine.RowProxy], dimensions: Iterable[Dimension]
+    ) -> tuple:
         """Extract a tuple of data ID values from a result row.
 
         Parameters
@@ -478,10 +474,13 @@ class Query(ABC):
             return ()
         return tuple(row._mapping[self.getDimensionColumn(dimension.name)] for dimension in dimensions)
 
-    def extractDataId(self, row: Optional[sqlalchemy.engine.RowProxy], *,
-                      graph: Optional[DimensionGraph] = None,
-                      records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
-                      ) -> DataCoordinate:
+    def extractDataId(
+        self,
+        row: Optional[sqlalchemy.engine.RowProxy],
+        *,
+        graph: Optional[DimensionGraph] = None,
+        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+    ) -> DataCoordinate:
         """Extract a data ID from a result row.
 
         Parameters
@@ -514,8 +513,7 @@ class Query(ABC):
         if not graph:
             return DataCoordinate.makeEmpty(self.graph.universe)
         dataId = DataCoordinate.fromFullValues(
-            graph,
-            self.extractDimensionsTuple(row, itertools.chain(graph.required, graph.implied))
+            graph, self.extractDimensionsTuple(row, itertools.chain(graph.required, graph.implied))
         )
         if records is not None:
             recordsForRow = {}
@@ -526,10 +524,12 @@ class Query(ABC):
         else:
             return dataId
 
-    def extractDatasetRef(self, row: sqlalchemy.engine.RowProxy,
-                          dataId: Optional[DataCoordinate] = None,
-                          records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
-                          ) -> DatasetRef:
+    def extractDatasetRef(
+        self,
+        row: sqlalchemy.engine.RowProxy,
+        dataId: Optional[DataCoordinate] = None,
+        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+    ) -> DatasetRef:
         """Extract a `DatasetRef` from a result row.
 
         Parameters
@@ -556,12 +556,13 @@ class Query(ABC):
         if dataId is None:
             dataId = self.extractDataId(row, graph=datasetColumns.datasetType.dimensions, records=records)
         runRecord = self.managers.collections[row._mapping[datasetColumns.runKey]]
-        return DatasetRef(datasetColumns.datasetType, dataId, id=row._mapping[datasetColumns.id],
-                          run=runRecord.name)
+        return DatasetRef(
+            datasetColumns.datasetType, dataId, id=row._mapping[datasetColumns.id], run=runRecord.name
+        )
 
-    def _makeSubsetQueryColumns(self, *, graph: Optional[DimensionGraph] = None,
-                                datasets: bool = True,
-                                unique: bool = False) -> Tuple[DimensionGraph, Optional[QueryColumns]]:
+    def _makeSubsetQueryColumns(
+        self, *, graph: Optional[DimensionGraph] = None, datasets: bool = True, unique: bool = False
+    ) -> Tuple[DimensionGraph, Optional[QueryColumns]]:
         """Helper method for subclass implementations of `subset`.
 
         Parameters
@@ -591,8 +592,11 @@ class Query(ABC):
         """
         if graph is None:
             graph = self.graph
-        if (graph == self.graph and (self.getDatasetColumns() is None or datasets)
-                and (self.isUnique() or not unique)):
+        if (
+            graph == self.graph
+            and (self.getDatasetColumns() is None or datasets)
+            and (self.isUnique() or not unique)
+        ):
             return graph, None
         columns = QueryColumns()
         for dimension in graph.dimensions:
@@ -629,9 +633,9 @@ class Query(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def subset(self, *, graph: Optional[DimensionGraph] = None,
-               datasets: bool = True,
-               unique: bool = False) -> Query:
+    def subset(
+        self, *, graph: Optional[DimensionGraph] = None, datasets: bool = True, unique: bool = False
+    ) -> Query:
         """Return a new `Query` whose columns and/or rows are (mostly) subset
         of this one's.
 
@@ -773,16 +777,20 @@ class DirectQuery(Query):
         explain why the query is known to return no results even before it is
         executed.  Queries with a non-empty list will never be executed.
     """
-    def __init__(self, *,
-                 simpleQuery: SimpleQuery,
-                 columns: QueryColumns,
-                 uniqueness: DirectQueryUniqueness,
-                 graph: DimensionGraph,
-                 whereRegion: Optional[Region],
-                 managers: RegistryManagers,
-                 order_by_columns: Iterable[OrderByColumn] = (),
-                 limit: Optional[Tuple[int, Optional[int]]] = None,
-                 doomed_by: Iterable[str] = ()):
+
+    def __init__(
+        self,
+        *,
+        simpleQuery: SimpleQuery,
+        columns: QueryColumns,
+        uniqueness: DirectQueryUniqueness,
+        graph: DimensionGraph,
+        whereRegion: Optional[Region],
+        managers: RegistryManagers,
+        order_by_columns: Iterable[OrderByColumn] = (),
+        limit: Optional[Tuple[int, Optional[int]]] = None,
+        doomed_by: Iterable[str] = (),
+    ):
         super().__init__(graph=graph, whereRegion=whereRegion, managers=managers, doomed_by=doomed_by)
         assert not simpleQuery.columns, "Columns should always be set on a copy in .sql"
         assert not columns.isEmpty(), "EmptyQuery must be used when a query would have no columns."
@@ -904,8 +912,9 @@ class DirectQuery(Query):
             self.managers.collections.addRunForeignKey(spec, nullable=False, constraint=constraints)
 
         # may need few extra columns from ORDER BY
-        spec.fields.update(column.field_spec for column in self._order_by_columns
-                           if column.field_spec is not None)
+        spec.fields.update(
+            column.field_spec for column in self._order_by_columns if column.field_spec is not None
+        )
 
         return spec
 
@@ -918,20 +927,22 @@ class DirectQuery(Query):
             if not self._doomed_by:
                 db.insert(table, select=self.sql, names=spec.fields.names)
             order_by_columns = [column.materialized(table) for column in self._order_by_columns]
-            yield MaterializedQuery(table=table,
-                                    spatial=self.spatial,
-                                    datasetType=self.datasetType,
-                                    isUnique=self.isUnique(),
-                                    graph=self.graph,
-                                    whereRegion=self.whereRegion,
-                                    managers=self.managers,
-                                    doomed_by=self._doomed_by,
-                                    order_by_columns=order_by_columns)
+            yield MaterializedQuery(
+                table=table,
+                spatial=self.spatial,
+                datasetType=self.datasetType,
+                isUnique=self.isUnique(),
+                graph=self.graph,
+                whereRegion=self.whereRegion,
+                managers=self.managers,
+                doomed_by=self._doomed_by,
+                order_by_columns=order_by_columns,
+            )
             session.dropTemporaryTable(table)
 
-    def subset(self, *, graph: Optional[DimensionGraph] = None,
-               datasets: bool = True,
-               unique: bool = False) -> Query:
+    def subset(
+        self, *, graph: Optional[DimensionGraph] = None, datasets: bool = True, unique: bool = False
+    ) -> Query:
         # Docstring inherited from Query.
         graph, columns = self._makeSubsetQueryColumns(graph=graph, datasets=datasets, unique=unique)
         if columns is None:
@@ -951,6 +962,7 @@ class DirectQuery(Query):
     def makeBuilder(self, summary: Optional[QuerySummary] = None) -> QueryBuilder:
         # Docstring inherited from Query.
         from ._builder import QueryBuilder
+
         if summary is None:
             summary = QuerySummary(self.graph, whereRegion=self.whereRegion)
         if not summary.requested.issubset(self.graph):
@@ -960,8 +972,9 @@ class DirectQuery(Query):
                 f"({self.graph.dimensions})."
             )
         builder = QueryBuilder(summary, managers=self.managers, doomed_by=self._doomed_by)
-        builder.joinTable(self.sql.alias(), dimensions=self.graph.dimensions,
-                          datasets=self.getDatasetColumns())
+        builder.joinTable(
+            self.sql.alias(), dimensions=self.graph.dimensions, datasets=self.getDatasetColumns()
+        )
         return builder
 
 
@@ -1001,18 +1014,21 @@ class MaterializedQuery(Query):
         Optional list of column names to use in ORDER BY clause, names can be
         prefixed with minus sign for descending ordering.
     """
-    def __init__(self, *,
-                 table: sqlalchemy.schema.Table,
-                 spatial: Iterable[DimensionElement],
-                 datasetType: Optional[DatasetType],
-                 isUnique: bool,
-                 graph: DimensionGraph,
-                 whereRegion: Optional[Region],
-                 managers: RegistryManagers,
-                 doomed_by: Iterable[str] = (),
-                 order_by_columns: Iterable[OrderByColumn] = ()):
-        super().__init__(graph=graph, whereRegion=whereRegion, managers=managers,
-                         doomed_by=doomed_by)
+
+    def __init__(
+        self,
+        *,
+        table: sqlalchemy.schema.Table,
+        spatial: Iterable[DimensionElement],
+        datasetType: Optional[DatasetType],
+        isUnique: bool,
+        graph: DimensionGraph,
+        whereRegion: Optional[Region],
+        managers: RegistryManagers,
+        doomed_by: Iterable[str] = (),
+        order_by_columns: Iterable[OrderByColumn] = (),
+    ):
+        super().__init__(graph=graph, whereRegion=whereRegion, managers=managers, doomed_by=doomed_by)
         self._table = table
         self._spatial = tuple(spatial)
         self._datasetType = datasetType
@@ -1073,9 +1089,9 @@ class MaterializedQuery(Query):
         # Docstring inherited from Query.
         yield self
 
-    def subset(self, *, graph: Optional[DimensionGraph] = None,
-               datasets: bool = True,
-               unique: bool = False) -> Query:
+    def subset(
+        self, *, graph: Optional[DimensionGraph] = None, datasets: bool = True, unique: bool = False
+    ) -> Query:
         # Docstring inherited from Query.
         graph, columns = self._makeSubsetQueryColumns(graph=graph, datasets=datasets, unique=unique)
         if columns is None:
@@ -1097,6 +1113,7 @@ class MaterializedQuery(Query):
     def makeBuilder(self, summary: Optional[QuerySummary] = None) -> QueryBuilder:
         # Docstring inherited from Query.
         from ._builder import QueryBuilder
+
         if summary is None:
             summary = QuerySummary(self.graph, whereRegion=self.whereRegion)
         if not summary.requested.issubset(self.graph):
@@ -1126,6 +1143,7 @@ class EmptyQuery(Query):
         explain why the query is known to return no results even before it is
         executed.  Queries with a non-empty list will never be executed.
     """
+
     def __init__(
         self,
         universe: DimensionUniverse,
@@ -1163,8 +1181,9 @@ class EmptyQuery(Query):
         # Docstring inherited from Query.
         return None
 
-    def rows(self, db: Database, *, region: Optional[Region] = None
-             ) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
+    def rows(
+        self, db: Database, *, region: Optional[Region] = None
+    ) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
         if not self._doomed_by:
             yield None
 
@@ -1178,9 +1197,9 @@ class EmptyQuery(Query):
         # Docstring inherited from Query.
         yield self
 
-    def subset(self, *, graph: Optional[DimensionGraph] = None,
-               datasets: bool = True,
-               unique: bool = False) -> Query:
+    def subset(
+        self, *, graph: Optional[DimensionGraph] = None, datasets: bool = True, unique: bool = False
+    ) -> Query:
         # Docstring inherited from Query.
         assert graph is None or graph.issubset(self.graph)
         return self
@@ -1188,6 +1207,7 @@ class EmptyQuery(Query):
     def makeBuilder(self, summary: Optional[QuerySummary] = None) -> QueryBuilder:
         # Docstring inherited from Query.
         from ._builder import QueryBuilder
+
         if summary is None:
             summary = QuerySummary(self.graph)
         if not summary.requested.issubset(self.graph):

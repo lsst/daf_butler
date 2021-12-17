@@ -27,18 +27,19 @@ __all__ = ("Config", "ConfigSubset")
 
 import collections
 import copy
+import io
 import json
 import logging
-import pprint
 import os
-import yaml
+import pprint
 import sys
 from pathlib import Path
-from yaml.representer import Representer
-import io
-from typing import Any, Dict, List, Sequence, Optional, ClassVar, IO, Tuple, Union
+from typing import IO, Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
 
+import yaml
 from lsst.utils import doImport
+from yaml.representer import Representer
+
 from ._butlerUri import ButlerURI
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
@@ -59,8 +60,7 @@ except AttributeError:
 
 
 def _doUpdate(d, u):
-    if not isinstance(u, collections.abc.Mapping) or \
-            not isinstance(d, collections.abc.MutableMapping):
+    if not isinstance(u, collections.abc.Mapping) or not isinstance(d, collections.abc.MutableMapping):
         raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
     for k, v in u.items():
         if isinstance(v, collections.abc.Mapping):
@@ -457,8 +457,11 @@ class Config(collections.abc.MutableMapping):
                                 if specific.exists():
                                     found = specific
                             else:
-                                log.warning("Do not understand search path entry '%s' of type %s",
-                                            dir, type(dir).__name__)
+                                log.warning(
+                                    "Do not understand search path entry '%s' of type %s",
+                                    dir,
+                                    type(dir).__name__,
+                                )
                     if not found:
                         raise RuntimeError(f"Unable to find referenced include file: {fileName}")
 
@@ -507,20 +510,25 @@ class Config(collections.abc.MutableMapping):
                 d = key[0]
                 key = key[1:]
             else:
-                return [key, ]
+                return [
+                    key,
+                ]
             escaped = f"\\{d}"
             temp = None
             if escaped in key:
                 # Complain at the attempt to escape the escape
                 doubled = fr"\{escaped}"
                 if doubled in key:
-                    raise ValueError(f"Escaping an escaped delimiter ({doubled} in {key})"
-                                     " is not yet supported.")
+                    raise ValueError(
+                        f"Escaping an escaped delimiter ({doubled} in {key})" " is not yet supported."
+                    )
                 # Replace with a character that won't be in the string
                 temp = "\r"
                 if temp in key or d == temp:
-                    raise ValueError(f"Can not use character {temp!r} in hierarchical key or as"
-                                     " delimiter if escaping the delimiter")
+                    raise ValueError(
+                        f"Can not use character {temp!r} in hierarchical key or as"
+                        " delimiter if escaping the delimiter"
+                    )
                 key = key.replace(escaped, temp)
             hierarchy = key.split(d)
             if temp:
@@ -530,7 +538,9 @@ class Config(collections.abc.MutableMapping):
             return list(key)
         else:
             # Not sure what this is so try it anyway
-            return [key, ]
+            return [
+                key,
+            ]
 
     def _getKeyHierarchy(self, name):
         """Retrieve the key hierarchy for accessing the Config.
@@ -548,7 +558,9 @@ class Config(collections.abc.MutableMapping):
             of any nominal delimiter.
         """
         if name in self._data:
-            keys = [name, ]
+            keys = [
+                name,
+            ]
         else:
             keys = self._splitIntoKeys(name)
         return keys
@@ -738,9 +750,11 @@ class Config(collections.abc.MutableMapping):
                 val = d[key]
                 levelKey = base + (key,) if base is not None else (key,)
                 keys.append(levelKey)
-                if isinstance(val, (collections.abc.Mapping, collections.abc.Sequence)) \
-                        and not isinstance(val, str):
+                if isinstance(val, (collections.abc.Mapping, collections.abc.Sequence)) and not isinstance(
+                    val, str
+                ):
                     getKeysAsTuples(val, keys, levelKey)
+
         keys: List[Tuple[str, ...]] = []
         getKeysAsTuples(self._data, keys, None)
         return keys
@@ -806,15 +820,17 @@ class Config(collections.abc.MutableMapping):
 
                 # try another one
                 while True:
-                    delimiter = chr(ord(delimiter)+1)
+                    delimiter = chr(ord(delimiter) + 1)
                     if not delimiter.isalnum():
                         break
 
         log.debug("Using delimiter %r", delimiter)
 
         # Form the keys, escaping the delimiter if necessary
-        strings = [delimiter + delimiter.join(str(s).replace(delimiter, f"\\{delimiter}") for s in k)
-                   for k in nameTuples]
+        strings = [
+            delimiter + delimiter.join(str(s).replace(delimiter, f"\\{delimiter}") for s in k)
+            for k in nameTuples
+        ]
         return strings
 
     def asArray(self, name):
@@ -883,9 +899,13 @@ class Config(collections.abc.MutableMapping):
                 return json.dumps(self._data, ensure_ascii=False)
         raise ValueError(f"Unsupported format for Config serialization: {format}")
 
-    def dumpToUri(self, uri: Union[ButlerURI, str], updateFile: bool = True,
-                  defaultFileName: str = "butler.yaml",
-                  overwrite: bool = True) -> None:
+    def dumpToUri(
+        self,
+        uri: Union[ButlerURI, str],
+        updateFile: bool = True,
+        defaultFileName: str = "butler.yaml",
+        overwrite: bool = True,
+    ) -> None:
         """Write the config to location pointed to by given URI.
 
         Currently supports 's3' and 'file' URI schemes.
@@ -988,8 +1008,12 @@ class Config(collections.abc.MutableMapping):
         if toUpdate:
             for key, value in toUpdate.items():
                 if key in localConfig and not overwrite:
-                    log.debug("Not overriding key '%s' with value '%s' in config %s",
-                              key, value, localConfig.__class__.__name__)
+                    log.debug(
+                        "Not overriding key '%s' with value '%s' in config %s",
+                        key,
+                        value,
+                        localConfig.__class__.__name__,
+                    )
                 else:
                     localConfig[key] = value
 
@@ -999,8 +1023,11 @@ class Config(collections.abc.MutableMapping):
             if toCopy:
                 for key in toCopy:
                     if key in localConfig and not overwrite:
-                        log.debug("Not overriding key '%s' from defaults in config %s",
-                                  key, localConfig.__class__.__name__)
+                        log.debug(
+                            "Not overriding key '%s' from defaults in config %s",
+                            key,
+                            localConfig.__class__.__name__,
+                        )
                     else:
                         localConfig[key] = localFullConfig[key]
             if toMerge:
@@ -1170,9 +1197,9 @@ class ConfigSubset(Config):
 
         if mergeDefaults and containerKey is not None and containerKey in self:
             for idx, subConfig in enumerate(self[containerKey]):
-                self[containerKey, idx] = type(self)(other=subConfig, validate=validate,
-                                                     mergeDefaults=mergeDefaults,
-                                                     searchPaths=searchPaths)
+                self[containerKey, idx] = type(self)(
+                    other=subConfig, validate=validate, mergeDefaults=mergeDefaults, searchPaths=searchPaths
+                )
 
         if validate:
             self.validate()
@@ -1210,8 +1237,7 @@ class ConfigSubset(Config):
             defaultsPaths.extend(externalPaths)
 
         # Add the package defaults as a resource
-        defaultsPaths.append(ButlerURI(f"resource://{cls.resourcesPackage}/configs",
-                                       forceDirectory=True))
+        defaultsPaths.append(ButlerURI(f"resource://{cls.resourcesPackage}/configs", forceDirectory=True))
         return defaultsPaths
 
     def _updateWithConfigsFromPath(self, searchPaths, configFile):

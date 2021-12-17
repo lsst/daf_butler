@@ -24,11 +24,7 @@ from __future__ import annotations
 __all__ = ["RepoExportBackend", "RepoImportBackend", "RepoTransferFormatConfig"]
 
 from abc import ABC, abstractmethod
-from typing import (
-    Iterable,
-    Optional,
-    Set,
-)
+from typing import Iterable, Optional, Set
 
 from ..core import (
     ConfigSubset,
@@ -39,7 +35,6 @@ from ..core import (
     DimensionRecord,
     FileDataset,
 )
-
 from ..registry import CollectionType
 from ..registry.interfaces import CollectionRecord, DatasetIdGenEnum
 
@@ -48,6 +43,7 @@ class RepoTransferFormatConfig(ConfigSubset):
     """The section of butler configuration that associates repo import/export
     backends with file formats.
     """
+
     component = "repo_transfer_formats"
     defaultConfigFile = "repo_transfer_formats.yaml"
 
@@ -107,8 +103,9 @@ class RepoExportBackend(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def saveDatasetAssociations(self, collection: str, collectionType: CollectionType,
-                                associations: Iterable[DatasetAssociation]) -> None:
+    def saveDatasetAssociations(
+        self, collection: str, collectionType: CollectionType, associations: Iterable[DatasetAssociation]
+    ) -> None:
         """Export the dataset-collection associations for a single collection.
 
         Parameters
@@ -127,8 +124,7 @@ class RepoExportBackend(ABC):
 
     @abstractmethod
     def finish(self) -> None:
-        """Complete the export process.
-        """
+        """Complete the export process."""
         raise NotImplementedError()
 
 
@@ -150,11 +146,16 @@ class RepoImportBackend(ABC):
         """
 
     @abstractmethod
-    def load(self, datastore: Optional[Datastore], *,
-             directory: Optional[str] = None, transfer: Optional[str] = None,
-             skip_dimensions: Optional[Set] = None,
-             idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-             reuseIds: bool = False) -> None:
+    def load(
+        self,
+        datastore: Optional[Datastore],
+        *,
+        directory: Optional[str] = None,
+        transfer: Optional[str] = None,
+        skip_dimensions: Optional[Set] = None,
+        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+        reuseIds: bool = False,
+    ) -> None:
         """Import information associated with the backend into the given
         registry and datastore.
 

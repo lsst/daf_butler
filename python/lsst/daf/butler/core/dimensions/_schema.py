@@ -20,21 +20,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = (
-    "addDimensionForeignKey",
-)
+__all__ = ("addDimensionForeignKey",)
 
 import copy
-
-from typing import Tuple, Type, TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple, Type
 
 from .. import ddl
-from ..named import NamedValueSet
 from .._topology import SpatialRegionDatabaseRepresentation
+from ..named import NamedValueSet
 from ..timespan import TimespanDatabaseRepresentation
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ._elements import DimensionElement, Dimension
+    from ._elements import Dimension, DimensionElement
 
 
 def _makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
@@ -67,9 +64,14 @@ def _makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
     return ddl.ForeignKeySpec(table=dimension.name, source=tuple(source), target=tuple(target))
 
 
-def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
-                           primaryKey: bool, nullable: bool = False, constraint: bool = True
-                           ) -> ddl.FieldSpec:
+def addDimensionForeignKey(
+    tableSpec: ddl.TableSpec,
+    dimension: Dimension,
+    *,
+    primaryKey: bool,
+    nullable: bool = False,
+    constraint: bool = True,
+) -> ddl.FieldSpec:
     """Add a field and possibly a foreign key to a table specification.
 
     The field will reference the table for the given `Dimension`.

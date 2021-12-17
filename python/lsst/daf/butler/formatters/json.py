@@ -21,17 +21,11 @@
 
 from __future__ import annotations
 
-__all__ = ("JsonFormatter", )
+__all__ = ("JsonFormatter",)
 
 import builtins
 import json
-
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Optional,
-    Type,
-)
+from typing import TYPE_CHECKING, Any, Optional, Type
 
 from .file import FileFormatter
 
@@ -40,8 +34,8 @@ if TYPE_CHECKING:
 
 
 class JsonFormatter(FileFormatter):
-    """Interface for reading and writing Python objects to and from JSON files.
-    """
+    """Interface for reading and writing Python objects to and from JSON files."""
+
     extension = ".json"
 
     unsupportedParameters = None
@@ -136,8 +130,9 @@ class JsonFormatter(FileFormatter):
             inMemoryDataset = inMemoryDataset._asdict()
         return json.dumps(inMemoryDataset, ensure_ascii=False).encode()
 
-    def _coerceType(self, inMemoryDataset: Any, writeStorageClass: StorageClass,
-                    readStorageClass: StorageClass) -> Any:
+    def _coerceType(
+        self, inMemoryDataset: Any, writeStorageClass: StorageClass, readStorageClass: StorageClass
+    ) -> Any:
         """Coerce the supplied inMemoryDataset to the correct python type.
 
         Parameters
@@ -156,8 +151,9 @@ class JsonFormatter(FileFormatter):
         """
         if inMemoryDataset is not None and not hasattr(builtins, readStorageClass.pytype.__name__):
             if readStorageClass.isComposite():
-                inMemoryDataset = readStorageClass.delegate().assemble(inMemoryDataset,
-                                                                       pytype=readStorageClass.pytype)
+                inMemoryDataset = readStorageClass.delegate().assemble(
+                    inMemoryDataset, pytype=readStorageClass.pytype
+                )
             elif not isinstance(inMemoryDataset, readStorageClass.pytype):
                 # JSON data are returned as simple python types.
                 # The content will match the written storage class.

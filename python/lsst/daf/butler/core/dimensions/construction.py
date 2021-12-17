@@ -22,20 +22,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import (
-    AbstractSet,
-    Dict,
-    Iterable,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, AbstractSet, Dict, Iterable
 
-from ..named import NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
+from ..named import NamedValueSet
 
 if TYPE_CHECKING:
+    from ._config import DimensionConfig
     from ._elements import Dimension, DimensionElement
     from ._packer import DimensionPackerFactory
-    from ._config import DimensionConfig
 
 
 class DimensionConstructionVisitor(ABC):
@@ -123,8 +118,9 @@ class DimensionConstructionBuilder:
         self,
         version: int,
         commonSkyPixName: str,
-        config: DimensionConfig, *,
-        visitors: Iterable[DimensionConstructionVisitor] = ()
+        config: DimensionConfig,
+        *,
+        visitors: Iterable[DimensionConstructionVisitor] = (),
     ) -> None:
         self.dimensions = NamedValueSet()
         self.elements = NamedValueSet()
@@ -163,8 +159,11 @@ class DimensionConstructionBuilder:
         called only once, by `DimensionUniverse` itself.
         """
         while self._todo:
-            unblocked = [name for name, visitor in self._todo.items()
-                         if not visitor.hasDependenciesIn(self._todo.keys())]
+            unblocked = [
+                name
+                for name, visitor in self._todo.items()
+                if not visitor.hasDependenciesIn(self._todo.keys())
+            ]
             unblocked.sort()  # Break ties lexicographically.
             if not unblocked:
                 raise RuntimeError(f"Cycle or unmet dependency in dimension elements: {self._todo.keys()}.")

@@ -34,8 +34,7 @@ except ModuleNotFoundError:
     lsstLog = None
 
 
-class CliLogTestCase(CliLogTestBase,
-                     unittest.TestCase):
+class CliLogTestCase(CliLogTestBase, unittest.TestCase):
     """Test log initialization, reset, and setting log levels on python
     `logging` and also `lsst.log` if it is setup.
 
@@ -44,11 +43,11 @@ class CliLogTestCase(CliLogTestBase,
     `lsst.log` is setup then this will test use of `lsst.log`. This test also
     runs in obs_base which does provide coverage of python `logging` and
     `lsst.log` in CI."""
+
     pass
 
 
 class ConvertPyLogLevelTestCase(unittest.TestCase):
-
     def test_convertToPyLogLevel(self):
         self.assertEqual(logging.CRITICAL, CliLog._getPyLogLevel("CRITICAL"))
         self.assertEqual(logging.ERROR, CliLog._getPyLogLevel("ERROR"))

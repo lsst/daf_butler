@@ -22,32 +22,26 @@ from __future__ import annotations
 
 __all__ = ["SynthIntKeyCollectionManager"]
 
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    Optional,
-    Type,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Type
 
 import sqlalchemy
 
+from ...core import TimespanDatabaseRepresentation, ddl
+from ..interfaces import CollectionRecord, VersionTuple
 from ._base import (
     CollectionTablesTuple,
     DefaultCollectionManager,
-    makeRunTableSpec,
     makeCollectionChainTableSpec,
+    makeRunTableSpec,
 )
-from ...core import TimespanDatabaseRepresentation, ddl
-from ..interfaces import CollectionRecord, VersionTuple
 
 if TYPE_CHECKING:
     from ..interfaces import Database, DimensionRecordStorageManager, StaticTablesContext
 
 
-_KEY_FIELD_SPEC = ddl.FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True,
-                                autoincrement=True)
+_KEY_FIELD_SPEC = ddl.FieldSpec(
+    "collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True, autoincrement=True
+)
 
 
 # This has to be updated on every schema change
@@ -89,6 +83,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
     dimensions : `DimensionRecordStorageManager`
         Manager object for the dimensions in this `Registry`.
     """
+
     def __init__(
         self,
         db: Database,
@@ -103,7 +98,8 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
     def initialize(
         cls,
         db: Database,
-        context: StaticTablesContext, *,
+        context: StaticTablesContext,
+        *,
         dimensions: DimensionRecordStorageManager,
     ) -> SynthIntKeyCollectionManager:
         # Docstring inherited from CollectionManager.
@@ -125,33 +121,49 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
         return f"{prefix}_id"
 
     @classmethod
-    def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
-                                onDelete: Optional[str] = None,
-                                constraint: bool = True,
-                                **kwargs: Any) -> ddl.FieldSpec:
+    def addCollectionForeignKey(
+        cls,
+        tableSpec: ddl.TableSpec,
+        *,
+        prefix: str = "collection",
+        onDelete: Optional[str] = None,
+        constraint: bool = True,
+        **kwargs: Any,
+    ) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
         original = _KEY_FIELD_SPEC
-        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype,
-                             autoincrement=False, **kwargs)
+        copy = ddl.FieldSpec(
+            cls.getCollectionForeignKeyName(prefix), dtype=original.dtype, autoincrement=False, **kwargs
+        )
         tableSpec.fields.add(copy)
         if constraint:
-            tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
-                                                            target=(original.name,), onDelete=onDelete))
+            tableSpec.foreignKeys.append(
+                ddl.ForeignKeySpec(
+                    "collection", source=(copy.name,), target=(original.name,), onDelete=onDelete
+                )
+            )
         return copy
 
     @classmethod
-    def addRunForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "run",
-                         onDelete: Optional[str] = None,
-                         constraint: bool = True,
-                         **kwargs: Any) -> ddl.FieldSpec:
+    def addRunForeignKey(
+        cls,
+        tableSpec: ddl.TableSpec,
+        *,
+        prefix: str = "run",
+        onDelete: Optional[str] = None,
+        constraint: bool = True,
+        **kwargs: Any,
+    ) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
         original = _KEY_FIELD_SPEC
-        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype,
-                             autoincrement=False, **kwargs)
+        copy = ddl.FieldSpec(
+            cls.getRunForeignKeyName(prefix), dtype=original.dtype, autoincrement=False, **kwargs
+        )
         tableSpec.fields.add(copy)
         if constraint:
-            tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),
-                                                            target=(original.name,), onDelete=onDelete))
+            tableSpec.foreignKeys.append(
+                ddl.ForeignKeySpec("run", source=(copy.name,), target=(original.name,), onDelete=onDelete)
+            )
         return copy
 
     def _setRecordCache(self, records: Iterable[CollectionRecord]) -> None:
@@ -165,14 +177,12 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
             self._nameCache[record.name] = record
 
     def _addCachedRecord(self, record: CollectionRecord) -> None:
-        """Add single record to cache.
-        """
+        """Add single record to cache."""
         self._records[record.key] = record
         self._nameCache[record.name] = record
 
     def _removeCachedRecord(self, record: CollectionRecord) -> None:
-        """Remove single record from cache.
-        """
+        """Remove single record from cache."""
         del self._records[record.key]
         del self._nameCache[record.name]
 

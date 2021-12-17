@@ -26,8 +26,8 @@ import os
 import unittest
 import unittest.mock
 
-from lsst.daf.butler.tests import CliCmdTestBase
 from lsst.daf.butler.cli.cmd import butler_import
+from lsst.daf.butler.tests import CliCmdTestBase
 
 
 class ImportTestCase(CliCmdTestBase, unittest.TestCase):
@@ -36,37 +36,31 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
     @staticmethod
     def defaultExpected():
-        return dict(repo=None,
-                    transfer="auto",
-                    directory=None,
-                    skip_dimensions=(),
-                    export_file=None,
-                    reuse_ids=False)
+        return dict(
+            repo=None, transfer="auto", directory=None, skip_dimensions=(), export_file=None, reuse_ids=False
+        )
 
     @staticmethod
     def command():
         return butler_import
 
     def test_minimal(self):
-        """Test only the required parameters, and omit the optional parameters.
-        """
-        self.run_test(["import", "here", "foo"],
-                      self.makeExpected(repo="here", directory="foo"))
+        """Test only the required parameters, and omit the optional parameters."""
+        self.run_test(["import", "here", "foo"], self.makeExpected(repo="here", directory="foo"))
 
     def test_almostAll(self):
         """Test all the parameters, except export_file which gets its own test
         case below.
         """
-        self.run_test(["import", "here", "foo",
-                       "--transfer", "symlink"],
-                      self.makeExpected(repo="here", directory="foo",
-                                        transfer="symlink"))
+        self.run_test(
+            ["import", "here", "foo", "--transfer", "symlink"],
+            self.makeExpected(repo="here", directory="foo", transfer="symlink"),
+        )
 
     def test_missingArgument(self):
         """Verify the command fails if either of the positional arguments,
         REPO or DIRECTORY, is missing."""
-        self.run_missing(["import", "foo"],
-                         r"Error: Missing argument ['\"]DIRECTORY['\"].")
+        self.run_missing(["import", "foo"], r"Error: Missing argument ['\"]DIRECTORY['\"].")
 
 
 class ExportFileCase(CliCmdTestBase, unittest.TestCase):
@@ -81,11 +75,7 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
 
     @staticmethod
     def defaultExpected():
-        return dict(repo=None,
-                    transfer="auto",
-                    directory=None,
-                    export_file=None,
-                    reuse_ids=False)
+        return dict(repo=None, transfer="auto", directory=None, export_file=None, reuse_ids=False)
 
     @staticmethod
     def command():
@@ -102,8 +92,7 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
         ExportFileCase.didRead = kwargs["export_file"].read()
 
     def test_exportFile(self):
-        """Test all the parameters, except export_file.
-        """
+        """Test all the parameters, except export_file."""
         # export_file is ANY in makeExpected because that variable is opened by
         # click and the open handle is passed to the command function as a
         # TestIOWrapper. It doesn't work to test it with
@@ -113,12 +102,25 @@ class ExportFileCase(CliCmdTestBase, unittest.TestCase):
         with self.runner.isolated_filesystem():
             with open("output.yaml", "w") as f:
                 f.write("foobarbaz")
-            self.run_test(["import", "here", "foo",
-                           "--skip-dimensions", "instrument", "-s", "detector",
-                           "--export-file", os.path.abspath("output.yaml")],
-                          self.makeExpected(repo="here", directory="foo",
-                                            skip_dimensions=("instrument", "detector"),
-                                            export_file=unittest.mock.ANY))
+            self.run_test(
+                [
+                    "import",
+                    "here",
+                    "foo",
+                    "--skip-dimensions",
+                    "instrument",
+                    "-s",
+                    "detector",
+                    "--export-file",
+                    os.path.abspath("output.yaml"),
+                ],
+                self.makeExpected(
+                    repo="here",
+                    directory="foo",
+                    skip_dimensions=("instrument", "detector"),
+                    export_file=unittest.mock.ANY,
+                ),
+            )
             self.assertEqual("foobarbaz", ExportFileCase.didRead)
 
 

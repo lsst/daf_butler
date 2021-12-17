@@ -19,20 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from . import interfaces, managers, queries, summaries, wildcards
+from ._collectionType import *
 from ._config import *
+from ._dbAuth import *
 from ._defaults import *
 from ._exceptions import *
 from ._registry import *
-from ._dbAuth import *
-from ._collectionType import *
-
-from . import wildcards
-from .wildcards import CollectionSearch
-from . import interfaces
 from .interfaces import DatasetIdGenEnum
-from . import managers
-from . import queries
-from . import summaries
+from .wildcards import CollectionSearch
 
 # Some modules intentionally not imported, either because they are purely
 # internal (e.g. nameShrinker.py) or they contain implementations that are

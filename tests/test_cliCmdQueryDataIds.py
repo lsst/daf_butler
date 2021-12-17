@@ -22,15 +22,13 @@
 """Unit tests for daf_butler CLI query-collections command.
 """
 
-from astropy.table import Table as AstropyTable
-from numpy import array
 import os
 import unittest
 
-from lsst.daf.butler import Butler
-from lsst.daf.butler import script
-from lsst.daf.butler.tests.utils import ButlerTestHelper, makeTestTempDir, MetricTestRepo, removeTestTempDir
-
+from astropy.table import Table as AstropyTable
+from lsst.daf.butler import Butler, script
+from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
+from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -43,19 +41,22 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
     def _queryDataIds(repo, dimensions=(), collections=(), datasets=None, where=None):
         """Helper to populate the call to script.queryDataIds with default
         values."""
-        return script.queryDataIds(repo=repo,
-                                   dimensions=dimensions,
-                                   collections=collections,
-                                   datasets=datasets,
-                                   where=where,
-                                   order_by=None,
-                                   limit=0,
-                                   offset=0)
+        return script.queryDataIds(
+            repo=repo,
+            dimensions=dimensions,
+            collections=collections,
+            datasets=datasets,
+            where=where,
+            order_by=None,
+            limit=0,
+            offset=0,
+        )
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
-        self.repo = MetricTestRepo(root=self.root,
-                                   configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+        self.repo = MetricTestRepo(
+            root=self.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml")
+        )
 
     def tearDown(self):
         removeTestTempDir(self.root)
@@ -64,11 +65,8 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         """Test getting a dimension."""
         res = self._queryDataIds(self.root, dimensions=("visit",))
         expected = AstropyTable(
-            array((
-                ("R", "DummyCamComp", "d-r", 1, 423),
-                ("R", "DummyCamComp", "d-r", 1, 424)
-            )),
-            names=("band", "instrument", "physical_filter", "visit_system", "visit")
+            array((("R", "DummyCamComp", "d-r", 1, 423), ("R", "DummyCamComp", "d-r", 1, 424))),
+            names=("band", "instrument", "physical_filter", "visit_system", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
 
@@ -79,13 +77,12 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
     def testWhere(self):
         """Test with a WHERE constraint."""
-        res = self._queryDataIds(self.root, dimensions=("visit",),
-                                 where="instrument='DummyCamComp' AND visit=423")
+        res = self._queryDataIds(
+            self.root, dimensions=("visit",), where="instrument='DummyCamComp' AND visit=423"
+        )
         expected = AstropyTable(
-            array((
-                ("R", "DummyCamComp", "d-r", 1, 423),
-            )),
-            names=("band", "instrument", "physical_filter", "visit_system", "visit")
+            array((("R", "DummyCamComp", "d-r", 1, 423),)),
+            names=("band", "instrument", "physical_filter", "visit_system", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
 
@@ -94,33 +91,35 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
         # Add a dataset in a different collection
         self.butler = Butler(self.root, run="foo")
-        self.repo.butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425,
-                                                                "name": "fourtwentyfive",
-                                                                "physical_filter": "d-r",
-                                                                "visit_system": 1})
-        self.repo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425},
-                             run="foo")
+        self.repo.butler.registry.insertDimensionData(
+            "visit",
+            {
+                "instrument": "DummyCamComp",
+                "id": 425,
+                "name": "fourtwentyfive",
+                "physical_filter": "d-r",
+                "visit_system": 1,
+            },
+        )
+        self.repo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425}, run="foo")
 
         # Verify the new dataset is not found in the "ingest/run" collection.
-        res = self._queryDataIds(repo=self.root, dimensions=("visit",), collections=("ingest/run",),
-                                 datasets="test_metric_comp")
+        res = self._queryDataIds(
+            repo=self.root, dimensions=("visit",), collections=("ingest/run",), datasets="test_metric_comp"
+        )
         expected = AstropyTable(
-            array((
-                ("R", "DummyCamComp", "d-r", 1, 423),
-                ("R", "DummyCamComp", "d-r", 1, 424)
-            )),
-            names=("band", "instrument", "physical_filter", "visit_system", "visit")
+            array((("R", "DummyCamComp", "d-r", 1, 423), ("R", "DummyCamComp", "d-r", 1, 424))),
+            names=("band", "instrument", "physical_filter", "visit_system", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
 
         # Verify the new dataset is found in the "foo" collection.
-        res = self._queryDataIds(repo=self.root, dimensions=("visit",), collections=("foo",),
-                                 datasets="test_metric_comp")
+        res = self._queryDataIds(
+            repo=self.root, dimensions=("visit",), collections=("foo",), datasets="test_metric_comp"
+        )
         expected = AstropyTable(
-            array((
-                ("R", "DummyCamComp", "d-r", 1, 425),
-            )),
-            names=("band", "instrument", "physical_filter", "visit_system", "visit")
+            array((("R", "DummyCamComp", "d-r", 1, 425),)),
+            names=("band", "instrument", "physical_filter", "visit_system", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
 
