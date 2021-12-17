@@ -1,0 +1,1 @@
+Add a butler command line command called ``butler remove-runs`` that can remove RUN collections and contained datasets.
