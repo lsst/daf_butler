@@ -1,0 +1,2 @@
+In the butler presets file, use option names that match the butler CLI command option names (without leading dashes).
+Fail if option names used in the presets file do not match options for the current butler command.

@@ -23,14 +23,18 @@
 """Unit tests for daf_butler CLI config-dump command.
 """
 
+import click
 import os.path
+import os
 import unittest
 import yaml
 
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.cmd import config_dump
+from lsst.daf.butler.cli.opt import options_file_option
 from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
 from lsst.daf.butler.tests import CliCmdTestBase
+
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -145,6 +149,47 @@ class ConfigDumpUseTest(unittest.TestCase):
             # Look for datastore information
             self.assertNotIn("formatters", cfg)
             self.assertIn("managers", cfg)
+
+            configfile = "overrides.yaml"
+            outfile = "repodef.yaml"
+            # Check that a misspelled command option causes an error:
+            with open(configfile, "w") as f:
+                f.write(yaml.dump({"config-dump": {"fil": outfile}}))
+            result = self.runner.invoke(butler.cli, ["config-dump", "here", f"-@{configfile}"])
+            self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
+
+            # Check that an option that declares a different command argument
+            # name is mapped correctly.
+            # Note that the option `config-dump --file`
+            # becomes the `outfile` argument in `def config_dump(..., outfile)`
+            # and we use the option name "file" in the presets file.
+            with open(configfile, "w") as f:
+                f.write(yaml.dump({"config-dump": {"file": outfile}}))
+            result = self.runner.invoke(butler.cli, ["config-dump", "here", f"-@{configfile}"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertTrue(os.path.exists(outfile))
+
+    def test_presetsDashedName(self):
+        """Test file overrides when the option has a dash in its name.
+        """
+
+        # Instead of using `butler config-dump` as we do in other tests,
+        # create a small command for testing, because config-dump does
+        # not have any options with dashes in the name.
+        @click.command()
+        @click.option("--test-option")
+        @options_file_option()
+        def cmd(test_option):
+            print(test_option)
+
+        configfile = "overrides.yaml"
+        val = "foo"
+        with self.runner.isolated_filesystem():
+            with open(configfile, "w") as f:
+                f.write(yaml.dump({"cmd": {"test-option": val}}))
+            result = self.runner.invoke(cmd, ["-@", configfile])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertTrue(val in result.output)
 
 
 if __name__ == "__main__":

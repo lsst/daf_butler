@@ -733,17 +733,55 @@ def yaml_presets(ctx, param, value):
     ----------
     ctx : `click.context`
         The context for the click operation. Used to extract the subcommand
-        name.
+        name and translate option & argument names.
     param : `str`
         The parameter name.
     value : `object`
         The value of the parameter.
     """
+
+    def _name_for_option(ctx: click.Context, option: str) -> str:
+        """Use a CLI option name to find the name of the argument to the
+        command function.
+
+        Parameters
+        ----------
+        ctx : `click.Context`
+            The context for the click operation.
+        option : `str`
+            The option/argument name from the yaml file.
+
+        Returns
+        -------
+        name : str
+            The name of the argument to use when calling the click.command
+            function, as it should appear in the `ctx.default_map`.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the option name from the yaml file does not exist in the
+            command parameters. This catches misspellings and incorrect useage
+            in the yaml file.
+        """
+        for param in ctx.command.params:
+            # Remove leading dashes: they are not used for option names in the
+            # yaml file.
+            if option in [opt.lstrip("-") for opt in param.opts]:
+                return param.name
+        raise RuntimeError(f"'{option}' is not a valid option for {ctx.info_name}")
+
     ctx.default_map = ctx.default_map or {}
     cmd_name = ctx.info_name
     if value:
         try:
             overrides = _read_yaml_presets(value, cmd_name)
+            options = list(overrides.keys())
+            for option in options:
+                name = _name_for_option(ctx, option)
+                if name == option:
+                    continue
+                overrides[name] = overrides.pop(option)
         except Exception as e:
             raise click.BadOptionUsage(param.name, f"Error reading overrides file: {e}", ctx)
         # Override the defaults for this subcommand
