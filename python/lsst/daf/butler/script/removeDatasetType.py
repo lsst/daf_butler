@@ -21,7 +21,7 @@
 
 __all__ = ("removeDatasetType",)
 
-from .. import Butler
+from .._butler import Butler
 
 
 def removeDatasetType(repo, dataset_type_name):

@@ -22,8 +22,9 @@
 
 from enum import Enum, auto
 
-from .. import Butler, CollectionType
-from . import QueryDatasets
+from .._butler import Butler
+from ..registry import CollectionType
+from .queryDatasets import QueryDatasets
 
 
 class PruneDatasetsResult:

@@ -19,8 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .. import Butler, CollectionType
-from ..script import QueryDatasets
+from .._butler import Butler
+from ..registry import CollectionType
+from .queryDatasets import QueryDatasets
 
 
 def associate(repo, collection, dataset_type, collections, where, find_first):

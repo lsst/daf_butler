@@ -21,7 +21,7 @@
 
 from astropy.table import Table
 
-from .. import Butler
+from .._butler import Butler
 from ..core import Timespan
 
 

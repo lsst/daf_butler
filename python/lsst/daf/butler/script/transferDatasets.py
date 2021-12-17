@@ -24,7 +24,7 @@ __all__ = ("transferDatasets",)
 import logging
 from typing import Tuple
 
-from .. import Butler
+from .._butler import Butler
 from ..registry.queries import DatasetQueryResults
 
 log = logging.getLogger(__name__)

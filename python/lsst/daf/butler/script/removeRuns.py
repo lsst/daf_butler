@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Dict, List, Mapping, Sequence, Tuple
 
-from .. import Butler
+from .._butler import Butler
 from ..registry import CollectionType, MissingCollectionError
 from ..registry.queries import DatasetQueryResults
 

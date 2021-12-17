@@ -29,8 +29,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from astropy.table import Table
 from lsst.utils import doImport
 
-from .. import Butler, DatasetIdGenEnum
+from .._butler import Butler
 from ..core import ButlerURI, DatasetRef, FileDataset
+from ..registry import DatasetIdGenEnum
 
 if TYPE_CHECKING:
     from ..core import DatasetType, DimensionUniverse

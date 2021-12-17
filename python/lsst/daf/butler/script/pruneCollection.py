@@ -25,14 +25,14 @@ from typing import Callable, Dict, List, Optional, Union
 
 from astropy.table import Table
 
-from .. import (
+from .._butler import (
     Butler,
     PurgeUnsupportedPruneCollectionsError,
     PurgeWithoutUnstorePruneCollectionsError,
     RunWithoutPurgePruneCollectionsError,
 )
 from ..registry import CollectionType
-from . import QueryDatasets
+from .queryDatasets import QueryDatasets
 
 
 class PruneCollectionResult:

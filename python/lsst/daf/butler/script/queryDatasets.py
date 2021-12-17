@@ -27,7 +27,7 @@ from typing import Dict
 import numpy as np
 from astropy.table import Table as AstropyTable
 
-from .. import Butler
+from .._butler import Butler
 from ..cli.utils import sortAstropyTable
 
 _RefInfo = namedtuple("_RefInfo", ["datasetRef", "uri"])

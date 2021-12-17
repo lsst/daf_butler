@@ -22,7 +22,8 @@
 import click
 
 from ..utils import OptionGroup, unwrap, where_help
-from . import collections_option, dataset_type_option, glob_argument, repo_argument, where_option
+from .arguments import glob_argument, repo_argument
+from .options import collections_option, dataset_type_option, where_option
 
 
 class query_datasets_options(OptionGroup):  # noqa: N801

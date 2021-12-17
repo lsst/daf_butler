@@ -26,7 +26,7 @@ from typing import Callable
 
 from astropy.table import Table
 
-from .. import Butler
+from .._butler import Butler
 from ..registry import CollectionType, MissingCollectionError
 
 

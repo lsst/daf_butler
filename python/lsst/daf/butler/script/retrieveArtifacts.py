@@ -23,7 +23,7 @@ __all__ = ("retrieveArtifacts",)
 
 import logging
 
-from .. import Butler
+from .._butler import Butler
 
 log = logging.getLogger(__name__)
 

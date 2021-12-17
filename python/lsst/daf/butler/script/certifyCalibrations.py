@@ -20,7 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import astropy.time
 
-from .. import Butler, CollectionType, Timespan
+from .._butler import Butler
+from ..core import Timespan
+from ..registry import CollectionType
 
 
 def certifyCalibrations(

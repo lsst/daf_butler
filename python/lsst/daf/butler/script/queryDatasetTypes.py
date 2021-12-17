@@ -25,7 +25,7 @@ from typing import Any, List
 from astropy.table import Table
 from numpy import array
 
-from .. import Butler
+from .._butler import Butler
 
 
 def queryDatasetTypes(repo, verbose, glob, components):

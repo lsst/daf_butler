@@ -21,8 +21,8 @@
 
 from __future__ import annotations
 
-from .. import Butler, CollectionType
-from ..registry import MissingCollectionError
+from .._butler import Butler
+from ..registry import CollectionType, MissingCollectionError
 
 
 def collectionChain(repo, mode, parent, children, doc, flatten):

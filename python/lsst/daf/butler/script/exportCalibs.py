@@ -24,7 +24,8 @@ import os
 
 from astropy.table import Table
 
-from .. import Butler, CollectionType
+from .._butler import Butler
+from ..registry import CollectionType
 
 log = logging.getLogger(__name__)
 

@@ -19,7 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .. import Butler, Config
+from .._butler import Butler
+from ..core import Config
 
 
 def createRepo(repo, seed_config=None, dimension_config=None, standalone=False, override=False, outfile=None):

@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .. import Butler
+from .._butler import Butler
 
 
 def butlerImport(repo, directory, export_file, transfer, skip_dimensions, reuse_ids):

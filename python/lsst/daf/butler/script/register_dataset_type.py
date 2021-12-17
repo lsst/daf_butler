@@ -24,7 +24,7 @@ __all__ = ("register_dataset_type",)
 
 from typing import Tuple
 
-from .. import Butler
+from .._butler import Butler
 from ..core import DatasetType
 
 

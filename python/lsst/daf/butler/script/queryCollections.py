@@ -26,7 +26,7 @@ import itertools
 from astropy.table import Table
 from numpy import array
 
-from .. import Butler
+from .._butler import Butler
 
 
 def queryCollections(repo, glob, collection_type, chains):
