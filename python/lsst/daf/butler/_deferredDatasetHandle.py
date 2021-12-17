@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True)
 class DeferredDatasetHandle:
-    """Proxy class that provides deferred loading of a dataset from a butler."""
+    """Proxy class that provides deferred loading of datasets from a butler."""
 
     def get(
         self, *, component: Optional[str] = None, parameters: Optional[dict] = None, **kwargs: dict

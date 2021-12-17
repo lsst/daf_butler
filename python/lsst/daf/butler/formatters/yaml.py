@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 
 class YamlFormatter(FileFormatter):
-    """Interface for reading and writing Python objects to and from YAML files."""
+    """Formatter implementation for YAML files."""
 
     extension = ".yaml"
 

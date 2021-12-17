@@ -252,7 +252,9 @@ class Registry(ABC):
     @property
     @abstractmethod
     def dimensions(self) -> DimensionUniverse:
-        """All dimensions recognized by this `Registry` (`DimensionUniverse`)."""
+        """Definitions of all dimensions recognized by this `Registry`
+        (`DimensionUniverse`).
+        """
         raise NotImplementedError()
 
     @property

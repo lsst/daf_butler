@@ -804,7 +804,18 @@ class DatabaseTests(ABC):
             return TimespanReprClass.update(ts, result=result)
 
         def convertRowFromSelect(row: dict) -> dict:
-            """Convert a row from the database into one containing a Timespan."""
+            """Convert a row from the database into one containing a Timespan.
+
+            Parameters
+            ----------
+            row : `dict`
+                Original row.
+
+            Returns
+            -------
+            row : `dict`
+                The updated row.
+            """
             result = row.copy()
             timespan = TimespanReprClass.extract(result)
             for name in TimespanReprClass.getFieldNames():

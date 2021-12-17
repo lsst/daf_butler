@@ -33,7 +33,9 @@ __all__ = ["DbAuth", "DbAuthError", "DbAuthPermissionsError"]
 
 
 class DbAuthError(RuntimeError):
-    """A problem has occurred retrieving database authentication information."""
+    """Exception raised when a problem has occurred retrieving database
+    authentication information.
+    """
 
     pass
 

@@ -54,7 +54,7 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
         return query_collections
 
     def test_minimal(self):
-        """Test only the required parameters, and omit the optional parameters."""
+        """Test only required parameters, and omit optional parameters."""
         self.run_test(["query-collections", "here"], self.makeExpected(repo="here"))
 
     def test_all(self):

@@ -46,10 +46,10 @@ abortedMsg = "Aborted."
 def remove_collections(**kwargs):
     """Remove one or more non-RUN collections.
 
-    This command can be used to remove only non-RUN collections. If RUN collections
-    are found when searching for collections (and the --no-confirm flag is not
-    used), then they will be shown in a separate table during confirmation, but
-    they will not be removed.
+    This command can be used to remove only non-RUN collections. If RUN
+    collections are found when searching for collections (and the --no-confirm
+    flag is not used), then they will be shown in a separate table during
+    confirmation, but they will not be removed.
     """
     confirm = kwargs.pop("confirm")
     result = script.removeCollections(**kwargs)

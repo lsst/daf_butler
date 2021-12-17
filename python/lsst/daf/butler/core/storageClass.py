@@ -217,9 +217,9 @@ class StorageClass:
                     # variables can be accessed. This make mypy believe it
                     # is impossible for the return value to not be a callable
                     # so we must ignore the warning.
-                    log.warning(
-                        "Conversion function %s associated with storage class %s to "  # type: ignore
-                        "convert type %s is not a callable.",
+                    log.warning(  # type: ignore
+                        "Conversion function %s associated with storage class "
+                        "%s to convert type %s is not a callable.",
                         converter_str,
                         self.name,
                         candidate_type_str,

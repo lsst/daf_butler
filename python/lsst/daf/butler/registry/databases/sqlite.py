@@ -91,7 +91,9 @@ def _replace(insert: Any, compiler: Any, **kwargs: Any) -> Any:
 
 
 class _Ensure(sqlalchemy.sql.Insert):
-    """A SQLAlchemy query that compiles to INSERT ... ON CONFLICT DO NOTHING."""
+    """A SQLAlchemy query that compiles to
+    ``INSERT ... ON CONFLICT DO NOTHING``.
+    """
 
     pass
 

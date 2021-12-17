@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 
 class JsonFormatter(FileFormatter):
-    """Interface for reading and writing Python objects to and from JSON files."""
+    """Formatter implementation for JSON files."""
 
     extension = ".json"
 

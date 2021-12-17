@@ -104,7 +104,9 @@ class SplitKvTestCase(unittest.TestCase):
         )
 
     def test_dashSeparator(self):
-        """Test that specifying a separator is accepted and converts to a dict."""
+        """Test that specifying a separator is accepted and converts arguments
+        to a dict.
+        """
         self.assertEqual(
             split_kv("context", "param", "first-1,second-2", separator="-"), {"first": "1", "second": "2"}
         )

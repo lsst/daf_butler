@@ -204,7 +204,9 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
     def testWhere(self):
-        """Test using the where clause to reduce the number of rows returned."""
+        """Test using the where clause to reduce the number of rows returned by
+        queryDatasets.
+        """
         tables = self._queryDatasets(repo=self.root, where="instrument='DummyCamComp' AND visit=423")
 
         expectedTables = (

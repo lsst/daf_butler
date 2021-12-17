@@ -72,7 +72,9 @@ class DimensionRecordStorage(ABC):
     @property
     @abstractmethod
     def element(self) -> DimensionElement:
-        """The element whose records this instance holds (`DimensionElement`)."""
+        """The element whose records this instance managers
+        (`DimensionElement`).
+        """
         raise NotImplementedError()
 
     @abstractmethod

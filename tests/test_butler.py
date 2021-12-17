@@ -102,7 +102,8 @@ class TransactionTestError(Exception):
 
 
 class ButlerConfigTests(unittest.TestCase):
-    """Simple tests for ButlerConfig that are not tested in other test cases."""
+    """Simple tests for ButlerConfig that are not tested in any other test
+    cases."""
 
     def testSearchPath(self):
         configFile = os.path.join(TESTDIR, "config", "basic", "butler.yaml")

@@ -1929,7 +1929,7 @@ class RegistryTests(ABC):
         )
 
         class Ambiguous:
-            """Tag class to denote lookups that are expected to be ambiguous."""
+            """Tag class to denote lookups that should be ambiguous."""
 
             pass
 

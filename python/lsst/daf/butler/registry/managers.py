@@ -224,7 +224,9 @@ class RegistryManagerInstances(
         DatastoreRegistryBridgeManager,
     ]
 ):
-    """A struct used to pass around the manager objects that back a `Registry`."""
+    """A struct used to pass around the manager instances that back a
+    `Registry`.
+    """
 
     @classmethod
     def initialize(

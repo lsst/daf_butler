@@ -45,7 +45,7 @@ class ImportTestCase(CliCmdTestBase, unittest.TestCase):
         return butler_import
 
     def test_minimal(self):
-        """Test only the required parameters, and omit the optional parameters."""
+        """Test only required parameters, and omit optional parameters."""
         self.run_test(["import", "here", "foo"], self.makeExpected(repo="here", directory="foo"))
 
     def test_almostAll(self):
