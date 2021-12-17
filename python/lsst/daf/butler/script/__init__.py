@@ -36,6 +36,7 @@ from .queryDimensionRecords import queryDimensionRecords
 from .register_dataset_type import register_dataset_type
 from .removeCollections import removeCollections
 from .removeDatasetType import removeDatasetType
+from .removeRuns import removeRuns
 from .retrieveArtifacts import retrieveArtifacts
 from .transferDatasets import transferDatasets
 from .ingest_files import ingest_files
