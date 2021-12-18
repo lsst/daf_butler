@@ -1847,24 +1847,24 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
     def testTransferUuidToUuid(self):
         self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions." "ByDimensionsDatasetRecordStorageManagerUUID",
-            "lsst.daf.butler.registry.datasets.byDimensions." "ByDimensionsDatasetRecordStorageManagerUUID",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
         )
         # Setting id_gen_map should have no effect here
         self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
 
     def testTransferIntToInt(self):
         self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions." "ByDimensionsDatasetRecordStorageManager",
-            "lsst.daf.butler.registry.datasets.byDimensions." "ByDimensionsDatasetRecordStorageManager",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager",
         )
         # int dataset ID only allows UNIQUE
         self.assertButlerTransfers()
 
     def testTransferIntToUuid(self):
         self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions." "ByDimensionsDatasetRecordStorageManager",
-            "lsst.daf.butler.registry.datasets.byDimensions." "ByDimensionsDatasetRecordStorageManagerUUID",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
         )
         self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
 
@@ -1874,8 +1874,8 @@ class PosixDatastoreTransfers(unittest.TestCase):
         This is how execution butler works.
         """
         self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions." "ByDimensionsDatasetRecordStorageManagerUUID",
-            "lsst.daf.butler.registry.datasets.byDimensions." "ByDimensionsDatasetRecordStorageManagerUUID",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
         )
 
         # Configure the source butler to allow trust.
@@ -1889,8 +1889,8 @@ class PosixDatastoreTransfers(unittest.TestCase):
         This is how execution butler works.
         """
         self.create_butlers(
-            "lsst.daf.butler.registry.datasets.byDimensions." "ByDimensionsDatasetRecordStorageManagerUUID",
-            "lsst.daf.butler.registry.datasets.byDimensions." "ByDimensionsDatasetRecordStorageManagerUUID",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
         )
 
         # Configure the source butler to allow trust.

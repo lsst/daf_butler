@@ -1108,7 +1108,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
                             self.assertEqual(
                                 childDatastore.exists(ref),
                                 expected,
-                                f"Testing presence of ingested {ref} in datastore" f" {childDatastore.name}",
+                                f"Testing presence of ingested {ref} in datastore {childDatastore.name}",
                             )
 
                         datastore.remove(ref)

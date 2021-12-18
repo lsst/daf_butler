@@ -128,7 +128,7 @@ log_level_option = MWOptionDecorator(
         unseparated_okay=True,
         add_to_default=True,
     ),
-    help="The logging level. " f"Supported levels are [{'|'.join(logLevelChoices)}]",
+    help=f"The logging level. Supported levels are [{'|'.join(logLevelChoices)}]",
     is_eager=True,
     metavar="LEVEL|COMPONENT=LEVEL",
     multiple=True,
@@ -162,7 +162,7 @@ log_label_option = MWOptionDecorator(
 log_tty_option = MWOptionDecorator(
     "--log-tty/--no-log-tty",
     default=True,
-    help="Log to terminal (default). If false logging to terminal is" " disabled.",
+    help="Log to terminal (default). If false logging to terminal is disabled.",
 )
 
 options_file_option = MWOptionDecorator(

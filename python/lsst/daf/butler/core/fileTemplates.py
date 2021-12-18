@@ -108,7 +108,7 @@ class FileTemplates:
         defaultValue = contents.get(self.defaultKey, default)
         if defaultValue and not isinstance(defaultValue, str):
             raise RuntimeError(
-                "Default template value should be str or False, or None. " f"Got '{defaultValue}'"
+                f"Default template value should be str or False, or None. Got '{defaultValue}'"
             )
         self.default = FileTemplate(defaultValue) if isinstance(defaultValue, str) and defaultValue else None
 
@@ -351,7 +351,7 @@ class FileTemplate:
     def __init__(self, template: str):
         if not isinstance(template, str):
             raise FileTemplateValidationError(
-                f"Template ('{template}') does " "not contain any format specifiers"
+                f"Template ('{template}') does not contain any format specifiers"
             )
         self.template = template
 
@@ -592,14 +592,14 @@ class FileTemplate:
         withSpecials = self.fields(specials=True, optionals=True)
         if not withSpecials & self.mandatoryFields:
             raise FileTemplateValidationError(
-                f"Template '{self}' is missing a mandatory field" f" from {self.mandatoryFields}"
+                f"Template '{self}' is missing a mandatory field from {self.mandatoryFields}"
             )
 
         # Check that there are some dimension fields in the template
         allfields = self.fields(optionals=True)
         if not allfields:
             raise FileTemplateValidationError(
-                f"Template '{self}' does not seem to have any fields" " corresponding to dimensions."
+                f"Template '{self}' does not seem to have any fields corresponding to dimensions."
             )
 
         # If we do not have dimensions available then all we can do is shrug
@@ -619,7 +619,7 @@ class FileTemplate:
             if entity.isComponent():  # type: ignore
                 if "component" not in withSpecials:
                     raise FileTemplateValidationError(
-                        f"Template '{self}' has no component but " f"{entity} refers to a component."
+                        f"Template '{self}' has no component but {entity} refers to a component."
                     )
             else:
                 mandatorySpecials = self.fields(specials=True)

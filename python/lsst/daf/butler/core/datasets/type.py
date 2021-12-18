@@ -185,14 +185,14 @@ class DatasetType:
         if not isinstance(dimensions, DimensionGraph):
             if universe is None:
                 raise ValueError(
-                    "If dimensions is not a normalized DimensionGraph, " "a universe must be provided."
+                    "If dimensions is not a normalized DimensionGraph, a universe must be provided."
                 )
             dimensions = universe.extract(dimensions)
         self._dimensions = dimensions
         if name in self._dimensions.universe.getGovernorDimensions().names:
             raise ValueError(f"Governor dimension name {name} cannot be used as a dataset type name.")
         if not isinstance(storageClass, (StorageClass, str)):
-            raise ValueError("StorageClass argument must be StorageClass or str. " f"Got {storageClass}")
+            raise ValueError(f"StorageClass argument must be StorageClass or str. Got {storageClass}")
         self._storageClass: Optional[StorageClass]
         if isinstance(storageClass, StorageClass):
             self._storageClass = storageClass
@@ -206,14 +206,14 @@ class DatasetType:
         if parentStorageClass is not None:
             if not isinstance(storageClass, (StorageClass, str)):
                 raise ValueError(
-                    "Parent StorageClass argument must be StorageClass or str. " f"Got {parentStorageClass}"
+                    f"Parent StorageClass argument must be StorageClass or str. Got {parentStorageClass}"
                 )
 
             # Only allowed for a component dataset type
             _, componentName = self.splitDatasetTypeName(self._name)
             if componentName is None:
                 raise ValueError(
-                    "Can not specify a parent storage class if this is not a component" f" ({self._name})"
+                    f"Can not specify a parent storage class if this is not a component ({self._name})"
                 )
             if isinstance(parentStorageClass, StorageClass):
                 self._parentStorageClass = parentStorageClass
@@ -226,7 +226,7 @@ class DatasetType:
         _, componentName = self.splitDatasetTypeName(self._name)
         if parentStorageClass is None and componentName is not None:
             raise ValueError(
-                f"Component dataset type '{self._name}' constructed without parent" " storage class"
+                f"Component dataset type '{self._name}' constructed without parent storage class"
             )
         if parentStorageClass is not None and componentName is None:
             raise ValueError(f"Parent storage class specified by {self._name} is not a composite")
@@ -423,7 +423,7 @@ class DatasetType:
         composite_name, _ = self.nameAndComponent()
         if self.parentStorageClass is None:
             raise ValueError(
-                "Parent storage class is not set. " f"Unable to create composite type from {self.name}"
+                f"Parent storage class is not set. Unable to create composite type from {self.name}"
             )
         return DatasetType(composite_name, dimensions=self.dimensions, storageClass=self.parentStorageClass)
 
@@ -581,7 +581,7 @@ class DatasetType:
             # Treat this as minimalist representation
             if registry is None:
                 raise ValueError(
-                    f"Unable to convert a DatasetType name '{simple}' to DatasetType" " without a Registry"
+                    f"Unable to convert a DatasetType name '{simple}' to DatasetType without a Registry"
                 )
             return registry.getDatasetType(simple.name)
 

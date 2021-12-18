@@ -417,7 +417,7 @@ class SqlRegistry(Registry):
         if collections is None:
             if not self.defaults.collections:
                 raise TypeError(
-                    "No collections provided to findDataset, " "and no defaults from registry construction."
+                    "No collections provided to findDataset, and no defaults from registry construction."
                 )
             collections = self.defaults.collections
         else:
@@ -454,7 +454,7 @@ class SqlRegistry(Registry):
         if run is None:
             if self.defaults.run is None:
                 raise TypeError(
-                    "No run provided to insertDatasets, " "and no default from registry construction."
+                    "No run provided to insertDatasets, and no default from registry construction."
                 )
             run = self.defaults.run
         runRecord = self._managers.collections.find(run)
@@ -517,7 +517,7 @@ class SqlRegistry(Registry):
         if run is None:
             if self.defaults.run is None:
                 raise TypeError(
-                    "No run provided to ingestDatasets, " "and no default from registry construction."
+                    "No run provided to ingestDatasets, and no default from registry construction."
                 )
             run = self.defaults.run
 
@@ -570,7 +570,7 @@ class SqlRegistry(Registry):
                 storage.delete(refsForType)
             except sqlalchemy.exc.IntegrityError as err:
                 raise OrphanedRecordError(
-                    "One or more datasets is still " "present in one or more Datastores."
+                    "One or more datasets is still present in one or more Datastores."
                 ) from err
 
     @transactional
@@ -601,7 +601,7 @@ class SqlRegistry(Registry):
         collectionRecord = self._managers.collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
             raise TypeError(
-                f"Collection '{collection}' has type {collectionRecord.type.name}; " "expected TAGGED."
+                f"Collection '{collection}' has type {collectionRecord.type.name}; expected TAGGED."
             )
         for datasetType, refsForType in progress.iter_item_chunks(
             DatasetRef.groupByType(refs).items(), desc="Disassociating datasets by type"
@@ -914,7 +914,7 @@ class SqlRegistry(Registry):
         if collections is None:
             if not self.defaults.collections:
                 raise TypeError(
-                    "No collections provided to findDataset, " "and no defaults from registry construction."
+                    "No collections provided to findDataset, and no defaults from registry construction."
                 )
             collections = self.defaults.collections
         elif findFirst:
@@ -1124,7 +1124,7 @@ class SqlRegistry(Registry):
         if collections is None:
             if not self.defaults.collections:
                 raise TypeError(
-                    "No collections provided to findDataset, " "and no defaults from registry construction."
+                    "No collections provided to findDataset, and no defaults from registry construction."
                 )
             collections = self.defaults.collections
         else:

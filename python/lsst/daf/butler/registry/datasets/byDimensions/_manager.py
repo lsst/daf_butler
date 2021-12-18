@@ -266,7 +266,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         if datasetType.isComponent():
             raise ValueError(
-                "Component dataset types can not be stored in registry." f" Rejecting {datasetType.name}"
+                f"Component dataset types can not be stored in registry. Rejecting {datasetType.name}"
             )
         storage = self._byName.get(datasetType.name)
         if storage is None:

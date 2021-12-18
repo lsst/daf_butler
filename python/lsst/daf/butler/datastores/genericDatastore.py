@@ -188,7 +188,7 @@ class GenericBaseDatastore(Datastore):
         if not self.constraints.isAcceptable(ref):
             # Raise rather than use boolean return value.
             raise DatasetTypeNotSupportedError(
-                f"Dataset {ref} has been rejected by this datastore via" " configuration."
+                f"Dataset {ref} has been rejected by this datastore via configuration."
             )
 
         return

@@ -244,7 +244,7 @@ class Timespan:
         nsec = converter.astropy_to_nsec(time)
         if nsec == converter.max_nsec - 1:
             raise ValueError(
-                f"Cannot construct near-instantaneous timespan at {time}; " "within one ns of maximum time."
+                f"Cannot construct near-instantaneous timespan at {time}; within one ns of maximum time."
             )
         return Timespan(None, None, _nsec=(nsec, nsec + 1))
 

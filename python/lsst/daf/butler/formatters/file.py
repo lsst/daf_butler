@@ -233,7 +233,7 @@ class FileFormatter(Formatter):
             nbytes = len(serializedDataset)
             s = "s" if nbytes != 1 else ""
             raise ValueError(
-                f"Unable to unpersist {nbytes} byte{s} from " f"URI {self.fileDescriptor.location.uri}"
+                f"Unable to unpersist {nbytes} byte{s} from URI {self.fileDescriptor.location.uri}"
             )
 
         return data

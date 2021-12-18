@@ -572,7 +572,7 @@ class InMemoryDatastore(GenericBaseDatastore):
                 except Exception as e:
                     if ignore_errors:
                         log.warning(
-                            "Emptying trash in datastore %s but encountered an " "error with dataset %s: %s",
+                            "Emptying trash in datastore %s but encountered an error with dataset %s: %s",
                             self.name,
                             ref.id,
                             e,

@@ -376,7 +376,7 @@ class DbAuthTestCase(unittest.TestCase):
         )
         self.assertEqual(
             auth.getUrl("postgresql://host.example.com:5432/my_database"),
-            "postgresql://foo%3A%C3%A9tude:bar%2C.%40%25%26%2F" "%2A%5B%5D@host.example.com:5432/my_database",
+            "postgresql://foo%3A%C3%A9tude:bar%2C.%40%25%26%2F%2A%5B%5D@host.example.com:5432/my_database",
         )
 
 

@@ -609,7 +609,7 @@ class FormatterFactory:
         writeRecipes = contents.get(self.writeRecipesKey, {})
         if isinstance(writeRecipes, str):
             raise RuntimeError(
-                f"The formatters.{self.writeRecipesKey} section must refer to a dict" f" not '{writeRecipes}'"
+                f"The formatters.{self.writeRecipesKey} section must refer to a dict not '{writeRecipes}'"
             )
 
         for key, f in contents.items():

@@ -521,9 +521,7 @@ class DatasetRef:
             Raised if ``ref.id`` is `None`.
         """
         if self.id is None:
-            raise AmbiguousDatasetError(
-                f"ID for dataset {self} is `None`; " f"a resolved reference is required."
-            )
+            raise AmbiguousDatasetError(f"ID for dataset {self} is `None`; a resolved reference is required.")
         return self.id
 
     def makeCompositeRef(self) -> DatasetRef:

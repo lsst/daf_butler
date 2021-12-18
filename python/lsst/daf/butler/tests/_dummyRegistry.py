@@ -54,7 +54,7 @@ class DummyOpaqueTableStorage(OpaqueTableStorage):
                 matching = list(self.fetch(**{k: d[k] for k in constraint}))
                 if len(matching) != 0:
                     raise RuntimeError(
-                        f"Unique constraint {constraint} violation " "in external table {self.name}."
+                        f"Unique constraint {constraint} violation in external table {self.name}."
                     )
             self._rows.append(d)
 

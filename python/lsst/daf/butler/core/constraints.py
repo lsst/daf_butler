@@ -86,7 +86,7 @@ class Constraints:
 
         if self.matchAllKey in self._accept and self.matchAllKey in self._reject:
             raise ConstraintsValidationError(
-                "Can not explicitly accept 'all' and reject 'all'" " in one configuration"
+                "Can not explicitly accept 'all' and reject 'all' in one configuration"
             )
 
     def __str__(self) -> str:

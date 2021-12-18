@@ -160,7 +160,7 @@ class CategorizedWildcard:
             # reqs. implied by the kwargs we got.
             if not allowPatterns and expression.patterns:
                 raise TypeError(
-                    f"Regular expression(s) {expression.patterns} " f"are not allowed in this context."
+                    f"Regular expression(s) {expression.patterns} are not allowed in this context."
                 )
             if defaultItemValue is not None and expression.strings:
                 if expression.items:

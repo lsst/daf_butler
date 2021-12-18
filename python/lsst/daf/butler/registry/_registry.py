@@ -134,7 +134,7 @@ class Registry(ABC):
             raise ValueError("Can not instantiate the abstract base Registry from config")
         if not issubclass(registry_cls, Registry):
             raise TypeError(
-                f"Registry class obtained from config {registry_cls_name} is " "not a Registry class."
+                f"Registry class obtained from config {registry_cls_name} is not a Registry class."
             )
         return registry_cls, config
 

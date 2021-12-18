@@ -399,9 +399,7 @@ class StorageClass:
                 raise ValueError("Specified a parameter subset but it was empty")
             subset = set(subset)
             if not subset.issubset(known):
-                raise ValueError(
-                    f"Requested subset ({subset}) is not a subset of" f" known parameters ({known})"
-                )
+                raise ValueError(f"Requested subset ({subset}) is not a subset of known parameters ({known})")
             wanted = subset
         else:
             wanted = known

@@ -390,7 +390,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         if self._cache_directory:
             if not self._cache_directory.isLocal:
                 raise ValueError(
-                    "Cache directory must be on a local file system. " f"Got: {self._cache_directory}"
+                    f"Cache directory must be on a local file system. Got: {self._cache_directory}"
                 )
             # Ensure that the cache directory is created. We assume that
             # someone specifying a permanent cache directory will be expecting
@@ -421,7 +421,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         self._expiration_threshold: Optional[int] = threshold
         if self._expiration_threshold is None and self._expiration_mode is not None:
             raise ValueError(
-                "Cache expiration threshold must be set for expiration mode " f"{self._expiration_mode}"
+                f"Cache expiration threshold must be set for expiration mode {self._expiration_mode}"
             )
 
         log.debug(

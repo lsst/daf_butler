@@ -120,7 +120,7 @@ class LookupKey:
             if not isinstance(dimensions, DimensionGraph):
                 if universe is None:
                     raise ValueError(
-                        f"Cannot construct LookupKey for dimensions={dimensions} " "without universe."
+                        f"Cannot construct LookupKey for dimensions={dimensions} without universe."
                     )
                 else:
                     self._dimensions = universe.extract(dimensions)

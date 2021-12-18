@@ -377,7 +377,7 @@ class ChainedDatastore(Datastore):
         if not self.constraints.isAcceptable(ref):
             # Raise rather than use boolean return value.
             raise DatasetTypeNotSupportedError(
-                f"Dataset {ref} has been rejected by this datastore via" " configuration."
+                f"Dataset {ref} has been rejected by this datastore via configuration."
             )
 
         isPermanent = False
@@ -476,7 +476,7 @@ class ChainedDatastore(Datastore):
                 prepDataForChild = datastore._prepIngest(*okForChild, transfer=transfer)
             except NotImplementedError:
                 log.debug(
-                    "Skipping ingest for datastore %s because transfer " "mode %s is not supported.",
+                    "Skipping ingest for datastore %s because transfer mode %s is not supported.",
                     datastore.name,
                     transfer,
                 )
@@ -600,7 +600,7 @@ class ChainedDatastore(Datastore):
         primary, components = self.getURIs(ref, predict)
         if primary is None or components:
             raise RuntimeError(
-                f"Dataset ({ref}) includes distinct URIs for components. " "Use Datastore.getURIs() instead."
+                f"Dataset ({ref}) includes distinct URIs for components. Use Datastore.getURIs() instead."
             )
         return primary
 

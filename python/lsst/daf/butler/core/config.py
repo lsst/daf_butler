@@ -520,7 +520,7 @@ class Config(collections.abc.MutableMapping):
                 doubled = fr"\{escaped}"
                 if doubled in key:
                     raise ValueError(
-                        f"Escaping an escaped delimiter ({doubled} in {key})" " is not yet supported."
+                        f"Escaping an escaped delimiter ({doubled} in {key}) is not yet supported."
                     )
                 # Replace with a character that won't be in the string
                 temp = "\r"

@@ -311,7 +311,7 @@ class FileDatastore(GenericBaseDatastore):
                 self.root.mkdir()
             except Exception as e:
                 raise ValueError(
-                    f"Can not create datastore root '{self.root}', check permissions." f" Got error: {e}"
+                    f"Can not create datastore root '{self.root}', check permissions. Got error: {e}"
                 ) from e
 
     def __str__(self) -> str:
@@ -728,7 +728,7 @@ class FileDatastore(GenericBaseDatastore):
             )
         except KeyError as e:
             raise DatasetTypeNotSupportedError(
-                f"Unable to find formatter for {ref} in datastore " f"{self.name}"
+                f"Unable to find formatter for {ref} in datastore {self.name}"
             ) from e
 
         # Now that we know the formatter, update the location
@@ -839,7 +839,7 @@ class FileDatastore(GenericBaseDatastore):
             relpath = srcUri.relative_to(self.root)
             if not relpath:
                 raise RuntimeError(
-                    f"Transfer is none but source file ({srcUri}) is not " f"within datastore ({self.root})"
+                    f"Transfer is none but source file ({srcUri}) is not within datastore ({self.root})"
                 )
 
             # Return the relative path within the datastore for internal
@@ -909,7 +909,7 @@ class FileDatastore(GenericBaseDatastore):
                 pathInStore = srcUri.relative_to(self.root)
                 if pathInStore is None and transfer is None:
                     raise RuntimeError(
-                        f"Unexpectedly learned that {srcUri} is " f"not within datastore {self.root}"
+                        f"Unexpectedly learned that {srcUri} is not within datastore {self.root}"
                     )
                 if pathInStore:
                     tgtLocation = self.locationFactory.fromPath(pathInStore)
@@ -918,9 +918,7 @@ class FileDatastore(GenericBaseDatastore):
                     # instead.
                     tgtLocation = None
                 else:
-                    raise RuntimeError(
-                        f"Unexpected transfer mode encountered: {transfer} for" f" URI {srcUri}"
-                    )
+                    raise RuntimeError(f"Unexpected transfer mode encountered: {transfer} for URI {srcUri}")
         elif transfer == "direct":
             # Want to store the full URI to the resource directly in
             # datastore. This is useful for referring to permanent archive
@@ -1092,7 +1090,7 @@ class FileDatastore(GenericBaseDatastore):
                 formatter.write(inMemoryDataset)
             except Exception as e:
                 raise RuntimeError(
-                    f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} " f"to location {uri}"
+                    f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to location {uri}"
                 ) from e
             log.debug("Successfully wrote python object to local file at %s", uri)
         else:
@@ -1110,7 +1108,7 @@ class FileDatastore(GenericBaseDatastore):
                     pass
                 except Exception as e:
                     raise RuntimeError(
-                        f"Failed to serialize dataset {ref} " f"of type {type(inMemoryDataset)} to bytes."
+                        f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to bytes."
                     ) from e
                 else:
                     log.debug("Writing bytes directly to %s", uri)
@@ -1444,7 +1442,7 @@ class FileDatastore(GenericBaseDatastore):
                 n_found = sum(chunk_result.values())
                 n_found_total += n_found
                 log.verbose(
-                    "Number of datasets found in datastore for chunk %d = %d/%d" " (running total: %d/%d)",
+                    "Number of datasets found in datastore for chunk %d = %d/%d (running total: %d/%d)",
                     n_chunks,
                     n_found,
                     n_results,
@@ -1679,7 +1677,7 @@ class FileDatastore(GenericBaseDatastore):
         primary, components = self.getURIs(ref, predict)
         if primary is None or components:
             raise RuntimeError(
-                f"Dataset ({ref}) includes distinct URIs for components. " "Use Datastore.getURIs() instead."
+                f"Dataset ({ref}) includes distinct URIs for components. Use Datastore.getURIs() instead."
             )
         return primary
 
@@ -1937,7 +1935,7 @@ class FileDatastore(GenericBaseDatastore):
                     break
             else:
                 raise FileNotFoundError(
-                    f"Component {refComponent} not found " f"for ref {ref} in datastore {self.name}"
+                    f"Component {refComponent} not found for ref {ref} in datastore {self.name}"
                 )
 
             # Do not need the component itself if already disassembled
@@ -2306,7 +2304,7 @@ class FileDatastore(GenericBaseDatastore):
         # or complain about it and warn?
         if missing_ids and not source_datastore.trustGetRequest:
             raise ValueError(
-                f"Some datasets are missing from source datastore {source_datastore}:" f" {missing_ids}"
+                f"Some datasets are missing from source datastore {source_datastore}: {missing_ids}"
             )
 
         # Need to map these missing IDs to a DatasetRef so we can guess
@@ -2506,9 +2504,7 @@ class FileDatastore(GenericBaseDatastore):
     ) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
         if transfer is not None and directory is None:
-            raise RuntimeError(
-                f"Cannot export using transfer mode {transfer} with no " "export directory given"
-            )
+            raise RuntimeError(f"Cannot export using transfer mode {transfer} with no export directory given")
 
         # Force the directory to be a URI object
         directoryUri: Optional[ButlerURI] = None

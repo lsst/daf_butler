@@ -174,7 +174,7 @@ def makeStaticTableSpecs(
                     name="dimensions_key",
                     dtype=sqlalchemy.BigInteger,
                     nullable=False,
-                    doc=("Unique key for the set of dimensions that identifies " "datasets of this type."),
+                    doc="Unique key for the set of dimensions that identifies datasets of this type.",
                 ),
                 ddl.FieldSpec(
                     name="tag_association_table",
@@ -214,7 +214,7 @@ def makeStaticTableSpecs(
                     name="dataset_type_id",
                     dtype=sqlalchemy.BigInteger,
                     nullable=False,
-                    doc=("Reference to the associated entry in the dataset_type " "table."),
+                    doc=("Reference to the associated entry in the dataset_type table."),
                 ),
                 ddl.FieldSpec(
                     name="ingest_date",

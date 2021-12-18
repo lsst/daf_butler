@@ -121,7 +121,7 @@ def butler_import(*args, **kwargs):
     "insulating the repo from changes in package defaults.",
 )
 @click.option(
-    "--override", is_flag=True, help="Allow values in the supplied config to override all " "repo settings."
+    "--override", is_flag=True, help="Allow values in the supplied config to override all repo settings."
 )
 @click.option(
     "--outfile",

@@ -319,7 +319,7 @@ class RepoExportContext:
             }
             if not unblocked:
                 raise RuntimeError(
-                    "Apparent cycle in CHAINED collection " f"dependencies involving {unblocked}."
+                    f"Apparent cycle in CHAINED collection dependencies involving {unblocked}."
                 )
             result.extend(sorted(unblocked))
             for name in unblocked:

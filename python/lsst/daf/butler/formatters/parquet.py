@@ -131,7 +131,7 @@ class _ParquetLoader:
                 for i, value in enumerate(requested):
                     if value not in self.columns.levels[i]:
                         raise ValueError(
-                            f"Unrecognized value {value!r}" f"for index {self.indexLevelNames[i]!r}."
+                            f"Unrecognized value {value!r} for index {self.indexLevelNames[i]!r}."
                         )
                 yield str(requested)
 

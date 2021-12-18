@@ -250,7 +250,7 @@ class Butler:
         if butler is not None:
             if config is not None or searchPaths is not None or writeable is not None:
                 raise TypeError(
-                    "Cannot pass 'config', 'searchPaths', or 'writeable' " "arguments with 'butler' argument."
+                    "Cannot pass 'config', 'searchPaths', or 'writeable' arguments with 'butler' argument."
                 )
             self.registry = butler.registry.copy(defaults)
             self.datastore = butler.datastore
@@ -2124,7 +2124,7 @@ class Butler:
         # Do all the importing in a single transaction.
         with self.transaction():
             for (datasetType, run), refs_to_import in progress.iter_item_chunks(
-                grouped_refs.items(), desc="Importing to registry" " by run and dataset type"
+                grouped_refs.items(), desc="Importing to registry by run and dataset type"
             ):
                 if run not in handled_collections:
                     run_doc = source_butler.registry.getCollectionDocumentation(run)

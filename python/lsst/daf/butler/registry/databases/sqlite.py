@@ -265,7 +265,7 @@ class SqliteDatabase(Database):
             return engine
         except sqlalchemy.exc.OperationalError as err:
             raise RuntimeError(
-                f"Error creating connection with uri='{uri}', filename='{filename}', " f"target={target}."
+                f"Error creating connection with uri='{uri}', filename='{filename}', target={target}."
             ) from err
 
     @classmethod
@@ -320,7 +320,7 @@ class SqliteDatabase(Database):
         if spec.autoincrement:
             if not spec.primaryKey:
                 raise RuntimeError(
-                    f"Autoincrement field {table}.{spec.name} that is not a " f"primary key is not supported."
+                    f"Autoincrement field {table}.{spec.name} that is not a primary key is not supported."
                 )
             if spec.dtype != sqlalchemy.Integer:
                 # SQLite's autoincrement is really limited; it only works if

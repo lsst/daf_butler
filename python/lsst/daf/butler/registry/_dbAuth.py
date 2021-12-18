@@ -90,7 +90,7 @@ class DbAuth:
         mode = os.stat(secretPath).st_mode
         if mode & (stat.S_IRWXG | stat.S_IRWXO) != 0:
             raise DbAuthPermissionsError(
-                "DbAuth configuration file {} has incorrect permissions: " "{:o}".format(secretPath, mode)
+                "DbAuth configuration file {} has incorrect permissions: {:o}".format(secretPath, mode)
             )
 
         try:
