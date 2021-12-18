@@ -520,8 +520,12 @@ class Butler:
         # MyPy doesn't recognize that the kwargs below are totally valid; it
         # seems to think '**defaultDataId* is a _positional_ argument!
         return cls(
-            config=config, collections=collections, run=run, writeable=writeable, **defaultDataId
-        )  # type: ignore
+            config=config,
+            collections=collections,
+            run=run,
+            writeable=writeable,
+            **defaultDataId,  # type: ignore
+        )
 
     def __reduce__(self) -> tuple:
         """Support pickling."""

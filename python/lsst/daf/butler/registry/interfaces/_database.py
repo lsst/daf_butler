@@ -143,9 +143,9 @@ class StaticTablesContext:
         is just a factory for `type` objects, not an actual type itself,
         we cannot represent this with type annotations.
         """
-        return specs._make(
+        return specs._make(  # type: ignore
             self.addTable(name, spec) for name, spec in zip(specs._fields, specs)  # type: ignore
-        )  # type: ignore
+        )
 
     def addInitializer(self, initializer: Callable[[Database], None]) -> None:
         """Add a method that does one-time initialization of a database.

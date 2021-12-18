@@ -109,8 +109,8 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> Type[SpecificSe
     model = create_model(
         f"SpecificSerializedDimensionRecord{definition.name.capitalize()}",
         __base__=SpecificSerializedDimensionRecord,
-        **members,
-    )  # type: ignore
+        **members,  # type: ignore
+    )
 
     _SIMPLE_RECORD_CLASS_CACHE[cache_key] = model
     return model
