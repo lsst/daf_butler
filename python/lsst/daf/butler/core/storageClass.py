@@ -28,27 +28,15 @@ __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 import builtins
 import copy
 import logging
-
-from typing import (
-    Any,
-    Collection,
-    Dict,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Sequence,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Collection, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union
 
 from lsst.utils import doImportType
-from lsst.utils.introspection import get_full_type_name
 from lsst.utils.classes import Singleton
-from .storageClassDelegate import StorageClassDelegate
-from .config import ConfigSubset, Config
+from lsst.utils.introspection import get_full_type_name
+
+from .config import Config, ConfigSubset
 from .configSupport import LookupKey
+from .storageClassDelegate import StorageClassDelegate
 
 log = logging.getLogger(__name__)
 
@@ -94,13 +82,16 @@ class StorageClass:
     defaultDelegate: Type = StorageClassDelegate
     defaultDelegateName: str = get_full_type_name(defaultDelegate)
 
-    def __init__(self, name: Optional[str] = None,
-                 pytype: Optional[Union[Type, str]] = None,
-                 components: Optional[Dict[str, StorageClass]] = None,
-                 derivedComponents: Optional[Dict[str, StorageClass]] = None,
-                 parameters: Optional[Union[Sequence, Set]] = None,
-                 delegate: Optional[str] = None,
-                 converters: Optional[Dict[str, str]] = None):
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        pytype: Optional[Union[Type, str]] = None,
+        components: Optional[Dict[str, StorageClass]] = None,
+        derivedComponents: Optional[Dict[str, StorageClass]] = None,
+        parameters: Optional[Union[Sequence, Set]] = None,
+        delegate: Optional[str] = None,
+        converters: Optional[Dict[str, str]] = None,
+    ):
         if name is None:
             name = self._cls_name
         if pytype is None:
@@ -142,9 +133,11 @@ class StorageClass:
 
         if components is not None:
             if len(components) == 1:
-                raise ValueError(f"Composite storage class {name} is not allowed to have"
-                                 f" only one component '{next(iter(components))}'."
-                                 " Did you mean it to be a derived component?")
+                raise ValueError(
+                    f"Composite storage class {name} is not allowed to have"
+                    f" only one component '{next(iter(components))}'."
+                    " Did you mean it to be a derived component?"
+                )
             self._components = components
         else:
             self._components = {}
@@ -196,17 +189,26 @@ class StorageClass:
                     try:
                         candidate_type = doImportType(candidate_type_str)
                     except ImportError as e:
-                        log.warning("Unable to import type %s associated with storage class %s (%s)",
-                                    candidate_type_str, self.name, e)
+                        log.warning(
+                            "Unable to import type %s associated with storage class %s (%s)",
+                            candidate_type_str,
+                            self.name,
+                            e,
+                        )
                         del self.converters[candidate_type_str]
                         continue
 
                 try:
                     converter = doImportType(converter_str)
                 except ImportError as e:
-                    log.warning("Unable to import conversion function %s associated with storage class %s "
-                                "required to convert type %s (%s)",
-                                converter_str, self.name, candidate_type_str, e)
+                    log.warning(
+                        "Unable to import conversion function %s associated with storage class %s "
+                        "required to convert type %s (%s)",
+                        converter_str,
+                        self.name,
+                        candidate_type_str,
+                        e,
+                    )
                     del self.converters[candidate_type_str]
                     continue
                 if not callable(converter):
@@ -215,9 +217,13 @@ class StorageClass:
                     # variables can be accessed. This make mypy believe it
                     # is impossible for the return value to not be a callable
                     # so we must ignore the warning.
-                    log.warning("Conversion function %s associated with storage class %s to "  # type: ignore
-                                "convert type %s is not a callable.", converter_str, self.name,
-                                candidate_type_str)
+                    log.warning(  # type: ignore
+                        "Conversion function %s associated with storage class "
+                        "%s to convert type %s is not a callable.",
+                        converter_str,
+                        self.name,
+                        candidate_type_str,
+                    )
                     del self.converters[candidate_type_str]
                     continue
                 self._converters_by_type[candidate_type] = converter
@@ -309,7 +315,7 @@ class StorageClass:
         names : `tuple` of `LookupKey`
             Tuple of a `LookupKey` using the `StorageClass` name.
         """
-        return (LookupKey(name=self.name), )
+        return (LookupKey(name=self.name),)
 
     def knownParameters(self) -> Set[str]:
         """Return set of all parameters known to this `StorageClass`.
@@ -355,11 +361,10 @@ class StorageClass:
         diff = external - self.knownParameters()
         if diff:
             s = "s" if len(diff) > 1 else ""
-            unknown = '\', \''.join(diff)
+            unknown = "', '".join(diff)
             raise KeyError(f"Parameter{s} '{unknown}' not understood by StorageClass {self.name}")
 
-    def filterParameters(self, parameters: Dict[str, Any],
-                         subset: Collection = None) -> Dict[str, Any]:
+    def filterParameters(self, parameters: Dict[str, Any], subset: Collection = None) -> Dict[str, Any]:
         """Filter out parameters that are not known to this `StorageClass`.
 
         Parameters
@@ -394,8 +399,7 @@ class StorageClass:
                 raise ValueError("Specified a parameter subset but it was empty")
             subset = set(subset)
             if not subset.issubset(known):
-                raise ValueError(f"Requested subset ({subset}) is not a subset of"
-                                 f" known parameters ({known})")
+                raise ValueError(f"Requested subset ({subset}) is not a subset of known parameters ({known})")
             wanted = subset
         else:
             wanted = known
@@ -475,11 +479,16 @@ class StorageClass:
                 try:
                     return converter(incorrect)
                 except Exception:
-                    log.error("Converter %s failed to convert type %s",
-                              get_full_type_name(converter), get_full_type_name(incorrect))
+                    log.error(
+                        "Converter %s failed to convert type %s",
+                        get_full_type_name(converter),
+                        get_full_type_name(incorrect),
+                    )
                     raise
-        raise TypeError("Type does not match and no valid converter found to convert"
-                        f" '{type(incorrect)}' to '{self.pytype}'")
+        raise TypeError(
+            "Type does not match and no valid converter found to convert"
+            f" '{type(incorrect)}' to '{self.pytype}'"
+        )
 
     def __eq__(self, other: Any) -> bool:
         """Equality checks name, pytype name, delegate name, and components."""
@@ -675,9 +684,9 @@ StorageClasses
             processStorageClass(name, sconfig)
 
     @staticmethod
-    def makeNewStorageClass(name: str,
-                            baseClass: Optional[Type[StorageClass]] = StorageClass,
-                            **kwargs: Any) -> Type[StorageClass]:
+    def makeNewStorageClass(
+        name: str, baseClass: Optional[Type[StorageClass]] = StorageClass, **kwargs: Any
+    ) -> Type[StorageClass]:
         """Create a new Python class as a subclass of `StorageClass`.
 
         Parameters
@@ -768,8 +777,10 @@ StorageClasses
         if storageClass.name in self._storageClasses:
             existing = self.getStorageClass(storageClass.name)
             if existing != storageClass:
-                raise ValueError(f"New definition for StorageClass {storageClass.name} ({storageClass}) "
-                                 f"differs from current definition ({existing})")
+                raise ValueError(
+                    f"New definition for StorageClass {storageClass.name} ({storageClass}) "
+                    f"differs from current definition ({existing})"
+                )
         else:
             self._storageClasses[storageClass.name] = storageClass
 

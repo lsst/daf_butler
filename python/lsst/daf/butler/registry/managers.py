@@ -32,19 +32,15 @@ from typing import Any, Dict, Generic, Type, TypeVar
 
 from lsst.utils import doImportType
 
-from ..core import (
-    Config,
-    DimensionConfig,
-    DimensionUniverse,
-)
+from ..core import Config, DimensionConfig, DimensionUniverse
 from ._config import RegistryConfig
 from .interfaces import (
     ButlerAttributeManager,
-    Database,
-    DimensionRecordStorageManager,
     CollectionManager,
+    Database,
     DatasetRecordStorageManager,
     DatastoreRegistryBridgeManager,
+    DimensionRecordStorageManager,
     OpaqueTableStorageManager,
     StaticTablesContext,
 )
@@ -65,8 +61,9 @@ _DIMENSIONS_ATTR = "config:dimensions.json"
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
-class _GenericRegistryManagers(Generic[_Attributes, _Dimensions, _Collections, _Datasets, _Opaque,
-                                       _Datastores]):
+class _GenericRegistryManagers(
+    Generic[_Attributes, _Dimensions, _Collections, _Datasets, _Opaque, _Datastores]
+):
     """Base struct used to pass around the manager instances or types that back
     a `Registry`.
 
@@ -99,14 +96,16 @@ class _GenericRegistryManagers(Generic[_Attributes, _Dimensions, _Collections, _
     """
 
 
-class RegistryManagerTypes(_GenericRegistryManagers[
-    Type[ButlerAttributeManager],
-    Type[DimensionRecordStorageManager],
-    Type[CollectionManager],
-    Type[DatasetRecordStorageManager],
-    Type[OpaqueTableStorageManager],
-    Type[DatastoreRegistryBridgeManager],
-]):
+class RegistryManagerTypes(
+    _GenericRegistryManagers[
+        Type[ButlerAttributeManager],
+        Type[DimensionRecordStorageManager],
+        Type[CollectionManager],
+        Type[DatasetRecordStorageManager],
+        Type[OpaqueTableStorageManager],
+        Type[DatastoreRegistryBridgeManager],
+    ]
+):
     """A struct used to pass around the types of the manager objects that back
     a `Registry`.
     """
@@ -186,10 +185,7 @@ class RegistryManagerTypes(_GenericRegistryManagers[
         # embedded dimensions configuration.
         with database.declareStaticTables(create=False) as context:
             attributes = self.attributes.initialize(database, context)
-            versions = ButlerVersionsManager(
-                attributes,
-                dict(attributes=attributes)
-            )
+            versions = ButlerVersionsManager(attributes, dict(attributes=attributes))
             # verify that configured versions are compatible with schema
             versions.checkManagersConfig()
             versions.checkManagersVersions(database.isWriteable())
@@ -218,15 +214,18 @@ class RegistryManagerTypes(_GenericRegistryManagers[
         return instances
 
 
-class RegistryManagerInstances(_GenericRegistryManagers[
-    ButlerAttributeManager,
-    DimensionRecordStorageManager,
-    CollectionManager,
-    DatasetRecordStorageManager,
-    OpaqueTableStorageManager,
-    DatastoreRegistryBridgeManager,
-]):
-    """A struct used to pass around the manager objects that back a `Registry`.
+class RegistryManagerInstances(
+    _GenericRegistryManagers[
+        ButlerAttributeManager,
+        DimensionRecordStorageManager,
+        CollectionManager,
+        DatasetRecordStorageManager,
+        OpaqueTableStorageManager,
+        DatastoreRegistryBridgeManager,
+    ]
+):
+    """A struct used to pass around the manager instances that back a
+    `Registry`.
     """
 
     @classmethod
@@ -298,12 +297,11 @@ class RegistryManagerInstances(_GenericRegistryManagers[
             # deepcopy stuff (?!) in order to find dataclasses recursively, and
             # that doesn't work on some manager objects that definitely aren't
             # supposed to be deep-copied anyway.
-            {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
+            {f.name: getattr(self, f.name) for f in dataclasses.fields(self)},
         )
 
     def refresh(self) -> None:
-        """Refresh all in-memory state by querying the database.
-        """
+        """Refresh all in-memory state by querying the database."""
         self.dimensions.clearCaches()
         self.dimensions.refresh()
         self.collections.refresh()

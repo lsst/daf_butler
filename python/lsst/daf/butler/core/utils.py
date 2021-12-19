@@ -29,16 +29,7 @@ import fnmatch
 import functools
 import logging
 import re
-from typing import (
-    Any,
-    Callable,
-    List,
-    Optional,
-    Pattern,
-    TypeVar,
-    TYPE_CHECKING,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Pattern, TypeVar, Union
 
 from lsst.utils.iteration import ensure_iterable
 
@@ -58,10 +49,12 @@ def transactional(func: F) -> F:
     This depends on the class also defining a `transaction` method
     that takes no arguments and acts as a context manager.
     """
+
     @functools.wraps(func)
     def inner(self: Any, *args: Any, **kwargs: Any) -> Any:
         with self.transaction():
             return func(self, *args, **kwargs)
+
     return inner  # type: ignore
 
 
@@ -84,8 +77,9 @@ def stripIfNotNone(s: Optional[str]) -> Optional[str]:
     return s
 
 
-def globToRegex(expressions: Union[str, EllipsisType, None,
-                                   List[str]]) -> Union[List[Union[str, Pattern]], EllipsisType]:
+def globToRegex(
+    expressions: Union[str, EllipsisType, None, List[str]]
+) -> Union[List[Union[str, Pattern]], EllipsisType]:
     """Translate glob-style search terms to regex.
 
     If a stand-alone '``*``' is found in ``expressions``, or expressions is

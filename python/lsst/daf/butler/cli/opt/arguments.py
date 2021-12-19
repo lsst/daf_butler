@@ -21,33 +21,25 @@
 
 from ..utils import MWArgumentDecorator, split_commas
 
-
 collection_argument = MWArgumentDecorator("collection")
 
-collections_argument = MWArgumentDecorator("collections",
-                                           callback=split_commas,
-                                           nargs=-1)
+collections_argument = MWArgumentDecorator("collections", callback=split_commas, nargs=-1)
 
-dimensions_argument = MWArgumentDecorator("dimensions",
-                                          callback=split_commas,
-                                          nargs=-1)
+dimensions_argument = MWArgumentDecorator("dimensions", callback=split_commas, nargs=-1)
 
-directory_argument = MWArgumentDecorator("directory",
-                                         help="DIRECTORY is the folder containing dataset files.")
+directory_argument = MWArgumentDecorator(
+    "directory", help="DIRECTORY is the folder containing dataset files."
+)
 
 
-element_argument = MWArgumentDecorator("element",
-                                       help="ELEMENT is the dimension element to obtain.")
+element_argument = MWArgumentDecorator("element", help="ELEMENT is the dimension element to obtain.")
 
 
-glob_argument = MWArgumentDecorator("glob",
-                                    callback=split_commas,
-                                    help="GLOB is one or more strings to apply to the search.",
-                                    nargs=-1)
+glob_argument = MWArgumentDecorator(
+    "glob", callback=split_commas, help="GLOB is one or more strings to apply to the search.", nargs=-1
+)
 
-locations_argument = MWArgumentDecorator("locations",
-                                         callback=split_commas,
-                                         nargs=-1)
+locations_argument = MWArgumentDecorator("locations", callback=split_commas, nargs=-1)
 
 repo_argument = MWArgumentDecorator("repo")
 

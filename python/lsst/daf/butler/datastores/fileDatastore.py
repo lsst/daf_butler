@@ -22,13 +22,10 @@ from __future__ import annotations
 
 """Generic file-based datastore code."""
 
-__all__ = ("FileDatastore", )
+__all__ = ("FileDatastore",)
 
 import hashlib
 import logging
-
-from sqlalchemy import BigInteger, String
-
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import (
@@ -46,27 +43,20 @@ from typing import (
     Union,
 )
 
-from lsst.utils.iteration import chunk_iterable
-from lsst.utils.introspection import get_class_of, get_instance_of
-from lsst.utils.timer import time_this
-
-# For VERBOSE logging usage.
-from lsst.utils.logging import getLogger, VERBOSE
-
 from lsst.daf.butler import (
     ButlerURI,
     CompositesMap,
     Config,
-    FileDataset,
     DatasetId,
     DatasetRef,
     DatasetType,
     DatasetTypeNotSupportedError,
     Datastore,
     DatastoreCacheManager,
-    DatastoreDisabledCacheManager,
     DatastoreConfig,
+    DatastoreDisabledCacheManager,
     DatastoreValidationError,
+    FileDataset,
     FileDescriptor,
     FileTemplates,
     FileTemplateValidationError,
@@ -77,20 +67,23 @@ from lsst.daf.butler import (
     Progress,
     StorageClass,
     StoredFileInfo,
+    ddl,
 )
-
-from lsst.daf.butler import ddl
-from lsst.daf.butler.registry.interfaces import (
-    ReadOnlyDatabaseError,
-    DatastoreRegistryBridge,
-)
-
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 from lsst.daf.butler.core.utils import transactional
+from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge, ReadOnlyDatabaseError
+from lsst.utils.introspection import get_class_of, get_instance_of
+from lsst.utils.iteration import chunk_iterable
+
+# For VERBOSE logging usage.
+from lsst.utils.logging import VERBOSE, getLogger
+from lsst.utils.timer import time_this
+from sqlalchemy import BigInteger, String
+
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import LookupKey, AbstractDatastoreCacheManager
+    from lsst.daf.butler import AbstractDatastoreCacheManager, LookupKey
     from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = getLogger(__name__)
@@ -104,6 +97,7 @@ class _IngestPrepData(Datastore.IngestPrepData):
     datasets : `list` of `FileDataset`
         Files to be ingested by this datastore.
     """
+
     def __init__(self, datasets: List[FileDataset]):
         super().__init__(ref for dataset in datasets for ref in dataset.refs)
         self.datasets = datasets
@@ -214,9 +208,14 @@ class FileDatastore(GenericBaseDatastore):
         will not be overridden by this method if ``overwrite`` is `False`.
         This allows explicit values set in external configs to be retained.
         """
-        Config.updateParameters(DatastoreConfig, config, full,
-                                toUpdate={"root": root},
-                                toCopy=("cls", ("records", "table")), overwrite=overwrite)
+        Config.updateParameters(
+            DatastoreConfig,
+            config,
+            full,
+            toUpdate={"root": root},
+            toCopy=("cls", ("records", "table")),
+            overwrite=overwrite,
+        )
 
     @classmethod
     def makeTableSpec(cls, datasetIdColumnType: type) -> ddl.TableSpec:
@@ -236,8 +235,12 @@ class FileDatastore(GenericBaseDatastore):
             indexes=[tuple(["path"])],
         )
 
-    def __init__(self, config: Union[DatastoreConfig, str],
-                 bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
+    def __init__(
+        self,
+        config: Union[DatastoreConfig, str],
+        bridgeManager: DatastoreRegistryBridgeManager,
+        butlerRoot: str = None,
+    ):
         super().__init__(config, bridgeManager)
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
@@ -249,34 +252,32 @@ class FileDatastore(GenericBaseDatastore):
         else:
             # We use the unexpanded root in the name to indicate that this
             # datastore can be moved without having to update registry.
-            self.name = "{}@{}".format(type(self).__name__,
-                                       self.config["root"])
+            self.name = "{}@{}".format(type(self).__name__, self.config["root"])
 
         # Support repository relocation in config
         # Existence of self.root is checked in subclass
-        self.root = ButlerURI(replaceRoot(self.config["root"], butlerRoot),
-                              forceDirectory=True, forceAbsolute=True)
+        self.root = ButlerURI(
+            replaceRoot(self.config["root"], butlerRoot), forceDirectory=True, forceAbsolute=True
+        )
 
         self.locationFactory = LocationFactory(self.root)
         self.formatterFactory = FormatterFactory()
 
         # Now associate formatters with storage classes
-        self.formatterFactory.registerFormatters(self.config["formatters"],
-                                                 universe=bridgeManager.universe)
+        self.formatterFactory.registerFormatters(self.config["formatters"], universe=bridgeManager.universe)
 
         # Read the file naming templates
-        self.templates = FileTemplates(self.config["templates"],
-                                       universe=bridgeManager.universe)
+        self.templates = FileTemplates(self.config["templates"], universe=bridgeManager.universe)
 
         # See if composites should be disassembled
-        self.composites = CompositesMap(self.config["composites"],
-                                        universe=bridgeManager.universe)
+        self.composites = CompositesMap(self.config["composites"], universe=bridgeManager.universe)
 
         tableName = self.config["records", "table"]
         try:
             # Storage of paths and formatters, keyed by dataset_id
             self._table = bridgeManager.opaque.register(
-                tableName, self.makeTableSpec(bridgeManager.datasetIdColumnType))
+                tableName, self.makeTableSpec(bridgeManager.datasetIdColumnType)
+            )
             # Interface to Registry.
             self._bridge = bridgeManager.register(self.name)
         except ReadOnlyDatabaseError:
@@ -298,11 +299,9 @@ class FileDatastore(GenericBaseDatastore):
         # Create a cache manager
         self.cacheManager: AbstractDatastoreCacheManager
         if "cached" in self.config:
-            self.cacheManager = DatastoreCacheManager(self.config["cached"],
-                                                      universe=bridgeManager.universe)
+            self.cacheManager = DatastoreCacheManager(self.config["cached"], universe=bridgeManager.universe)
         else:
-            self.cacheManager = DatastoreDisabledCacheManager("",
-                                                              universe=bridgeManager.universe)
+            self.cacheManager = DatastoreDisabledCacheManager("", universe=bridgeManager.universe)
 
         # Check existence and create directory structure if necessary
         if not self.root.exists():
@@ -311,8 +310,9 @@ class FileDatastore(GenericBaseDatastore):
             try:
                 self.root.mkdir()
             except Exception as e:
-                raise ValueError(f"Can not create datastore root '{self.root}', check permissions."
-                                 f" Got error: {e}") from e
+                raise ValueError(
+                    f"Can not create datastore root '{self.root}', check permissions. Got error: {e}"
+                ) from e
 
     def __str__(self) -> str:
         return str(self.root)
@@ -372,9 +372,9 @@ class FileDatastore(GenericBaseDatastore):
         records = self._table.fetch(dataset_id=ref.id)
         return [StoredFileInfo.from_record(record) for record in records]
 
-    def _get_stored_records_associated_with_refs(self,
-                                                 refs: Iterable[DatasetIdRef]
-                                                 ) -> Dict[DatasetId, List[StoredFileInfo]]:
+    def _get_stored_records_associated_with_refs(
+        self, refs: Iterable[DatasetIdRef]
+    ) -> Dict[DatasetId, List[StoredFileInfo]]:
         """Retrieve all records associated with the provided refs.
 
         Parameters
@@ -397,8 +397,9 @@ class FileDatastore(GenericBaseDatastore):
             records_by_ref[record["dataset_id"]].append(StoredFileInfo.from_record(record))
         return records_by_ref
 
-    def _refs_associated_with_artifacts(self, paths: List[Union[str, ButlerURI]]) -> Dict[str,
-                                                                                          Set[DatasetId]]:
+    def _refs_associated_with_artifacts(
+        self, paths: List[Union[str, ButlerURI]]
+    ) -> Dict[str, Set[DatasetId]]:
         """Return paths and associated dataset refs.
 
         Parameters
@@ -493,8 +494,7 @@ class FileDatastore(GenericBaseDatastore):
             return False
         return True
 
-    def _get_expected_dataset_locations_info(self, ref: DatasetRef) -> List[Tuple[Location,
-                                                                                  StoredFileInfo]]:
+    def _get_expected_dataset_locations_info(self, ref: DatasetRef) -> List[Tuple[Location, StoredFileInfo]]:
         """Predict the location and related file information of the requested
         dataset in this datastore.
 
@@ -548,16 +548,24 @@ class FileDatastore(GenericBaseDatastore):
             all_info.append((location, formatter, ref.datasetType.storageClass, None))
 
         # Convert the list of tuples to have StoredFileInfo as second element
-        return [(location, StoredFileInfo(formatter=formatter,
-                                          path=location.pathInStore.path,
-                                          storageClass=storageClass,
-                                          component=component,
-                                          checksum=None,
-                                          file_size=-1))
-                for location, formatter, storageClass, component in all_info]
+        return [
+            (
+                location,
+                StoredFileInfo(
+                    formatter=formatter,
+                    path=location.pathInStore.path,
+                    storageClass=storageClass,
+                    component=component,
+                    checksum=None,
+                    file_size=-1,
+                ),
+            )
+            for location, formatter, storageClass, component in all_info
+        ]
 
-    def _prepare_for_get(self, ref: DatasetRef,
-                         parameters: Optional[Mapping[str, Any]] = None) -> List[DatastoreFileGetInformation]:
+    def _prepare_for_get(
+        self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None
+    ) -> List[DatastoreFileGetInformation]:
         """Check parameters for ``get`` and obtain formatter and
         location.
 
@@ -621,10 +629,16 @@ class FileDatastore(GenericBaseDatastore):
             else:
                 readStorageClass = refStorageClass
 
-            formatter = get_instance_of(storedFileInfo.formatter,
-                                        FileDescriptor(location, readStorageClass=readStorageClass,
-                                                       storageClass=writeStorageClass, parameters=parameters),
-                                        ref.dataId)
+            formatter = get_instance_of(
+                storedFileInfo.formatter,
+                FileDescriptor(
+                    location,
+                    readStorageClass=readStorageClass,
+                    storageClass=writeStorageClass,
+                    parameters=parameters,
+                ),
+                ref.dataId,
+            )
 
             formatterParams, notFormatterParams = formatter.segregateParameters()
 
@@ -637,9 +651,17 @@ class FileDatastore(GenericBaseDatastore):
             # components came from the datastore records
             component = storedFileInfo.component if storedFileInfo.component else refComponent
 
-            fileGetInfo.append(DatastoreFileGetInformation(location, formatter, storedFileInfo,
-                                                           assemblerParams, formatterParams,
-                                                           component, readStorageClass))
+            fileGetInfo.append(
+                DatastoreFileGetInformation(
+                    location,
+                    formatter,
+                    storedFileInfo,
+                    assemblerParams,
+                    formatterParams,
+                    component,
+                    readStorageClass,
+                )
+            )
 
         return fileGetInfo
 
@@ -701,13 +723,13 @@ class FileDatastore(GenericBaseDatastore):
         # Get the formatter based on the storage class
         storageClass = ref.datasetType.storageClass
         try:
-            formatter = self.formatterFactory.getFormatter(ref,
-                                                           FileDescriptor(location,
-                                                                          storageClass=storageClass),
-                                                           ref.dataId)
+            formatter = self.formatterFactory.getFormatter(
+                ref, FileDescriptor(location, storageClass=storageClass), ref.dataId
+            )
         except KeyError as e:
-            raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref} in datastore "
-                                               f"{self.name}") from e
+            raise DatasetTypeNotSupportedError(
+                f"Unable to find formatter for {ref} in datastore {self.name}"
+            ) from e
 
         # Now that we know the formatter, update the location
         location = formatter.makeUpdatedLocation(location)
@@ -733,10 +755,12 @@ class FileDatastore(GenericBaseDatastore):
             # Also allow ButlerURI to sort it out but warn about it.
             # This can happen if you are importing from a datastore
             # that had some direct transfer datasets.
-            log.warning("Some datasets are inside the datastore and some are outside. Using 'split' "
-                        "transfer mode. This assumes that the files outside the datastore are "
-                        "still accessible to the new butler since they will not be copied into "
-                        "the target datastore.")
+            log.warning(
+                "Some datasets are inside the datastore and some are outside. Using 'split' "
+                "transfer mode. This assumes that the files outside the datastore are "
+                "still accessible to the new butler since they will not be copied into "
+                "the target datastore."
+            )
             transfer = "split"
 
         return transfer
@@ -761,8 +785,9 @@ class FileDatastore(GenericBaseDatastore):
         pathUri = ButlerURI(path, forceAbsolute=False)
         return pathUri.relative_to(self.root)
 
-    def _standardizeIngestPath(self, path: Union[str, ButlerURI], *,
-                               transfer: Optional[str] = None) -> Union[str, ButlerURI]:
+    def _standardizeIngestPath(
+        self, path: Union[str, ButlerURI], *, transfer: Optional[str] = None
+    ) -> Union[str, ButlerURI]:
         """Standardize the path of a to-be-ingested file.
 
         Parameters
@@ -805,14 +830,17 @@ class FileDatastore(GenericBaseDatastore):
             srcUri = self.root.join(path)
 
         if not srcUri.exists():
-            raise FileNotFoundError(f"Resource at {srcUri} does not exist; note that paths to ingest "
-                                    f"are assumed to be relative to {self.root} unless they are absolute.")
+            raise FileNotFoundError(
+                f"Resource at {srcUri} does not exist; note that paths to ingest "
+                f"are assumed to be relative to {self.root} unless they are absolute."
+            )
 
         if transfer is None:
             relpath = srcUri.relative_to(self.root)
             if not relpath:
-                raise RuntimeError(f"Transfer is none but source file ({srcUri}) is not "
-                                   f"within datastore ({self.root})")
+                raise RuntimeError(
+                    f"Transfer is none but source file ({srcUri}) is not within datastore ({self.root})"
+                )
 
             # Return the relative path within the datastore for internal
             # transfer
@@ -820,9 +848,14 @@ class FileDatastore(GenericBaseDatastore):
 
         return path
 
-    def _extractIngestInfo(self, path: Union[str, ButlerURI], ref: DatasetRef, *,
-                           formatter: Union[Formatter, Type[Formatter]],
-                           transfer: Optional[str] = None) -> StoredFileInfo:
+    def _extractIngestInfo(
+        self,
+        path: Union[str, ButlerURI],
+        ref: DatasetRef,
+        *,
+        formatter: Union[Formatter, Type[Formatter]],
+        transfer: Optional[str] = None,
+    ) -> StoredFileInfo:
         """Relocate (if necessary) and extract `StoredFileInfo` from a
         to-be-ingested file.
 
@@ -875,8 +908,9 @@ class FileDatastore(GenericBaseDatastore):
                 # This is required to be within the datastore.
                 pathInStore = srcUri.relative_to(self.root)
                 if pathInStore is None and transfer is None:
-                    raise RuntimeError(f"Unexpectedly learned that {srcUri} is "
-                                       f"not within datastore {self.root}")
+                    raise RuntimeError(
+                        f"Unexpectedly learned that {srcUri} is not within datastore {self.root}"
+                    )
                 if pathInStore:
                     tgtLocation = self.locationFactory.fromPath(pathInStore)
                 elif transfer == "split":
@@ -884,8 +918,7 @@ class FileDatastore(GenericBaseDatastore):
                     # instead.
                     tgtLocation = None
                 else:
-                    raise RuntimeError(f"Unexpected transfer mode encountered: {transfer} for"
-                                       f" URI {srcUri}")
+                    raise RuntimeError(f"Unexpected transfer mode encountered: {transfer} for URI {srcUri}")
         elif transfer == "direct":
             # Want to store the full URI to the resource directly in
             # datastore. This is useful for referring to permanent archive
@@ -913,8 +946,9 @@ class FileDatastore(GenericBaseDatastore):
             # of datastore.put() in that it trusts that registry would not
             # be asking to overwrite unless registry thought that the
             # overwrite was allowed.
-            tgtLocation.uri.transfer_from(srcUri, transfer=transfer, transaction=self._transaction,
-                                          overwrite=True)
+            tgtLocation.uri.transfer_from(
+                srcUri, transfer=transfer, transaction=self._transaction, overwrite=True
+            )
 
         if tgtLocation is None:
             # This means we are using direct mode
@@ -929,10 +963,14 @@ class FileDatastore(GenericBaseDatastore):
             size = targetUri.size()
             checksum = self.computeChecksum(targetUri) if self.useChecksum else None
 
-        return StoredFileInfo(formatter=formatter, path=targetPath,
-                              storageClass=ref.datasetType.storageClass,
-                              component=ref.datasetType.component(),
-                              file_size=size, checksum=checksum)
+        return StoredFileInfo(
+            formatter=formatter,
+            path=targetPath,
+            storageClass=ref.datasetType.storageClass,
+            component=ref.datasetType.component(),
+            file_size=size,
+            checksum=checksum,
+        )
 
     def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
         # Docstring inherited from Datastore._prepIngest.
@@ -962,13 +1000,15 @@ class FileDatastore(GenericBaseDatastore):
         progress = Progress("lsst.daf.butler.datastores.FileDatastore.ingest", level=logging.DEBUG)
         for dataset in progress.wrap(prepData.datasets, desc="Ingesting dataset files"):
             # Do ingest as if the first dataset ref is associated with the file
-            info = self._extractIngestInfo(dataset.path, dataset.refs[0], formatter=dataset.formatter,
-                                           transfer=transfer)
+            info = self._extractIngestInfo(
+                dataset.path, dataset.refs[0], formatter=dataset.formatter, transfer=transfer
+            )
             refsAndInfos.extend([(ref, info) for ref in dataset.refs])
         self._register_datasets(refsAndInfos)
 
-    def _calculate_ingested_datastore_name(self, srcUri: ButlerURI, ref: DatasetRef,
-                                           formatter: Union[Formatter, Type[Formatter]]) -> Location:
+    def _calculate_ingested_datastore_name(
+        self, srcUri: ButlerURI, ref: DatasetRef, formatter: Union[Formatter, Type[Formatter]]
+    ) -> Location:
         """Given a source URI and a DatasetRef, determine the name the
         dataset will have inside datastore.
 
@@ -1049,8 +1089,9 @@ class FileDatastore(GenericBaseDatastore):
             try:
                 formatter.write(inMemoryDataset)
             except Exception as e:
-                raise RuntimeError(f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} "
-                                   f"to location {uri}") from e
+                raise RuntimeError(
+                    f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to location {uri}"
+                ) from e
             log.debug("Successfully wrote python object to local file at %s", uri)
         else:
             # This is a remote URI. Some datasets can be serialized directly
@@ -1066,8 +1107,9 @@ class FileDatastore(GenericBaseDatastore):
                     # Fallback to the file writing option.
                     pass
                 except Exception as e:
-                    raise RuntimeError(f"Failed to serialize dataset {ref} "
-                                       f"of type {type(inMemoryDataset)} to bytes.") from e
+                    raise RuntimeError(
+                        f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to bytes."
+                    ) from e
                 else:
                     log.debug("Writing bytes directly to %s", uri)
                     uri.write(serializedDataset, overwrite=True)
@@ -1085,9 +1127,11 @@ class FileDatastore(GenericBaseDatastore):
                         try:
                             formatter.write(inMemoryDataset)
                         except Exception as e:
-                            raise RuntimeError(f"Failed to serialize dataset {ref} of type"
-                                               f" {type(inMemoryDataset)} to "
-                                               f"temporary location {temporary_uri}") from e
+                            raise RuntimeError(
+                                f"Failed to serialize dataset {ref} of type"
+                                f" {type(inMemoryDataset)} to "
+                                f"temporary location {temporary_uri}"
+                            ) from e
                     uri.transfer_from(temporary_uri, transfer="copy", overwrite=True)
 
                     # Cache if required
@@ -1098,9 +1142,13 @@ class FileDatastore(GenericBaseDatastore):
         # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(uri, ref, formatter=formatter)
 
-    def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
-                                   ref: DatasetRef, isComponent: bool = False,
-                                   cache_ref: Optional[DatasetRef] = None) -> Any:
+    def _read_artifact_into_memory(
+        self,
+        getInfo: DatastoreFileGetInformation,
+        ref: DatasetRef,
+        isComponent: bool = False,
+        cache_ref: Optional[DatasetRef] = None,
+    ) -> Any:
         """Read the artifact from datastore into in memory object.
 
         Parameters
@@ -1132,8 +1180,10 @@ class FileDatastore(GenericBaseDatastore):
         if cache_ref is None:
             cache_ref = ref
         if cache_ref.id != ref.id:
-            raise ValueError("The supplied cache dataset ref refers to a different dataset than expected:"
-                             f" {ref.id} != {cache_ref.id}")
+            raise ValueError(
+                "The supplied cache dataset ref refers to a different dataset than expected:"
+                f" {ref.id} != {cache_ref.id}"
+            )
 
         # Cannot recalculate checksum but can compare size as a quick check
         # Do not do this if the size is negative since that indicates
@@ -1141,9 +1191,11 @@ class FileDatastore(GenericBaseDatastore):
         recorded_size = getInfo.info.file_size
         resource_size = uri.size()
         if recorded_size >= 0 and resource_size != recorded_size:
-            raise RuntimeError("Integrity failure in Datastore. "
-                               f"Size of file {uri} ({resource_size}) "
-                               f"does not match size recorded in registry of {recorded_size}")
+            raise RuntimeError(
+                "Integrity failure in Datastore. "
+                f"Size of file {uri} ({resource_size}) "
+                f"does not match size recorded in registry of {recorded_size}"
+            )
 
         # For the general case we have choices for how to proceed.
         # 1. Always use a local file (downloading the remote resource to a
@@ -1165,15 +1217,22 @@ class FileDatastore(GenericBaseDatastore):
                     msg = ""
                 with time_this(log, msg="Reading bytes from %s%s", args=(desired_uri, msg)):
                     serializedDataset = desired_uri.read()
-            log.debug("Deserializing %s from %d bytes from location %s with formatter %s",
-                      f"component {getInfo.component}" if isComponent else "",
-                      len(serializedDataset), uri, formatter.name())
+            log.debug(
+                "Deserializing %s from %d bytes from location %s with formatter %s",
+                f"component {getInfo.component}" if isComponent else "",
+                len(serializedDataset),
+                uri,
+                formatter.name(),
+            )
             try:
-                result = formatter.fromBytes(serializedDataset,
-                                             component=getInfo.component if isComponent else None)
+                result = formatter.fromBytes(
+                    serializedDataset, component=getInfo.component if isComponent else None
+                )
             except Exception as e:
-                raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
-                                 f" ({ref.datasetType.name} from {uri}): {e}") from e
+                raise ValueError(
+                    f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
+                    f" ({ref.datasetType.name} from {uri}): {e}"
+                ) from e
         else:
             # Read from file.
 
@@ -1219,25 +1278,39 @@ class FileDatastore(GenericBaseDatastore):
                     # to use.
                     newLocation = Location(*local_uri.split()) if location_updated else None
 
-                    log.debug("Reading%s from location %s %s with formatter %s",
-                              f" component {getInfo.component}" if isComponent else "",
-                              uri, msg, formatter.name())
+                    log.debug(
+                        "Reading%s from location %s %s with formatter %s",
+                        f" component {getInfo.component}" if isComponent else "",
+                        uri,
+                        msg,
+                        formatter.name(),
+                    )
                     try:
                         with formatter._updateLocation(newLocation):
-                            with time_this(log, msg="Reading%s from location %s %s with formatter %s",
-                                           args=(f" component {getInfo.component}" if isComponent else "",
-                                                 uri, msg, formatter.name())):
+                            with time_this(
+                                log,
+                                msg="Reading%s from location %s %s with formatter %s",
+                                args=(
+                                    f" component {getInfo.component}" if isComponent else "",
+                                    uri,
+                                    msg,
+                                    formatter.name(),
+                                ),
+                            ):
                                 result = formatter.read(component=getInfo.component if isComponent else None)
                     except Exception as e:
-                        raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
-                                         f" ({ref.datasetType.name} from {uri}): {e}") from e
+                        raise ValueError(
+                            f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
+                            f" ({ref.datasetType.name} from {uri}): {e}"
+                        ) from e
 
                     # File was read successfully so can move to cache
                     if can_be_cached:
                         self.cacheManager.move_to_cache(local_uri, cache_ref)
 
-        return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
-                                      isComponent=isComponent)
+        return self._post_process_get(
+            result, getInfo.readStorageClass, getInfo.assemblerParams, isComponent=isComponent
+        )
 
     def knows(self, ref: DatasetRef) -> bool:
         """Check if the dataset is known to the datastore.
@@ -1259,11 +1332,13 @@ class FileDatastore(GenericBaseDatastore):
             return True
         return False
 
-    def _process_mexists_records(self, id_to_ref: Dict[DatasetId, DatasetRef],
-                                 records: Dict[DatasetId, List[StoredFileInfo]],
-                                 all_required: bool,
-                                 artifact_existence: Optional[Dict[ButlerURI,
-                                                                   bool]] = None) -> Dict[DatasetRef, bool]:
+    def _process_mexists_records(
+        self,
+        id_to_ref: Dict[DatasetId, DatasetRef],
+        records: Dict[DatasetId, List[StoredFileInfo]],
+        all_required: bool,
+        artifact_existence: Optional[Dict[ButlerURI, bool]] = None,
+    ) -> Dict[DatasetRef, bool]:
         """Helper function for mexists that checks the given records.
 
         Parameters
@@ -1333,8 +1408,9 @@ class FileDatastore(GenericBaseDatastore):
 
         return dataset_existence
 
-    def mexists(self, refs: Iterable[DatasetRef],
-                artifact_existence: Optional[Dict[ButlerURI, bool]] = None) -> Dict[DatasetRef, bool]:
+    def mexists(
+        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ButlerURI, bool]] = None
+    ) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
         Parameters
@@ -1353,8 +1429,7 @@ class FileDatastore(GenericBaseDatastore):
         """
         chunk_size = 10_000
         dataset_existence: Dict[DatasetRef, bool] = {}
-        log.debug("Checking for the existence of multiple artifacts in datastore in chunks of %d",
-                  chunk_size)
+        log.debug("Checking for the existence of multiple artifacts in datastore in chunks of %d", chunk_size)
         n_found_total = 0
         n_checked = 0
         n_chunks = 0
@@ -1366,16 +1441,22 @@ class FileDatastore(GenericBaseDatastore):
                 # Can treat the booleans as 0, 1 integers and sum them.
                 n_found = sum(chunk_result.values())
                 n_found_total += n_found
-                log.verbose("Number of datasets found in datastore for chunk %d = %d/%d"
-                            " (running total: %d/%d)",
-                            n_chunks, n_found, n_results, n_found_total, n_checked)
+                log.verbose(
+                    "Number of datasets found in datastore for chunk %d = %d/%d (running total: %d/%d)",
+                    n_chunks,
+                    n_found,
+                    n_results,
+                    n_found_total,
+                    n_checked,
+                )
             dataset_existence.update(chunk_result)
             n_chunks += 1
 
         return dataset_existence
 
-    def _mexists(self, refs: Iterable[DatasetRef],
-                 artifact_existence: Optional[Dict[ButlerURI, bool]] = None) -> Dict[DatasetRef, bool]:
+    def _mexists(
+        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ButlerURI, bool]] = None
+    ) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
         Parameters
@@ -1398,8 +1479,9 @@ class FileDatastore(GenericBaseDatastore):
         # The records themselves. Could be missing some entries.
         records = self._get_stored_records_associated_with_refs(refs)
 
-        dataset_existence = self._process_mexists_records(id_to_ref, records, True,
-                                                          artifact_existence=artifact_existence)
+        dataset_existence = self._process_mexists_records(
+            id_to_ref, records, True, artifact_existence=artifact_existence
+        )
 
         # Set of IDs that have been handled.
         handled_ids = {ref.id for ref in dataset_existence.keys()}
@@ -1411,8 +1493,11 @@ class FileDatastore(GenericBaseDatastore):
                 for missing in missing_ids:
                     dataset_existence[id_to_ref[missing]] = False
             else:
-                log.debug("%d out of %d datasets were not known to datastore during initial existence check.",
-                          len(missing_ids), len(requested_ids))
+                log.debug(
+                    "%d out of %d datasets were not known to datastore during initial existence check.",
+                    len(missing_ids),
+                    len(requested_ids),
+                )
 
                 # Construct data structure identical to that returned
                 # by _get_stored_records_associated_with_refs() but using
@@ -1422,8 +1507,11 @@ class FileDatastore(GenericBaseDatastore):
                     expected = self._get_expected_dataset_locations_info(id_to_ref[missing])
                     records[missing] = [info for _, info in expected]
 
-                dataset_existence.update(self._process_mexists_records(id_to_ref, records, False,
-                                                                       artifact_existence=artifact_existence))
+                dataset_existence.update(
+                    self._process_mexists_records(
+                        id_to_ref, records, False, artifact_existence=artifact_existence
+                    )
+                )
 
         return dataset_existence
 
@@ -1464,8 +1552,9 @@ class FileDatastore(GenericBaseDatastore):
 
         return True
 
-    def getURIs(self, ref: DatasetRef,
-                predict: bool = False) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+    def getURIs(
+        self, ref: DatasetRef, predict: bool = False
+    ) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
         """Return URIs associated with dataset.
 
         Parameters
@@ -1587,14 +1676,19 @@ class FileDatastore(GenericBaseDatastore):
         """
         primary, components = self.getURIs(ref, predict)
         if primary is None or components:
-            raise RuntimeError(f"Dataset ({ref}) includes distinct URIs for components. "
-                               "Use Datastore.getURIs() instead.")
+            raise RuntimeError(
+                f"Dataset ({ref}) includes distinct URIs for components. Use Datastore.getURIs() instead."
+            )
         return primary
 
-    def retrieveArtifacts(self, refs: Iterable[DatasetRef],
-                          destination: ButlerURI, transfer: str = "auto",
-                          preserve_path: bool = True,
-                          overwrite: bool = False) -> List[ButlerURI]:
+    def retrieveArtifacts(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ButlerURI,
+        transfer: str = "auto",
+        preserve_path: bool = True,
+        overwrite: bool = False,
+    ) -> List[ButlerURI]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -1650,8 +1744,7 @@ class FileDatastore(GenericBaseDatastore):
                 to_transfer[source_uri] = target_uri
 
         # In theory can now parallelize the transfer
-        log.debug("Number of artifacts to transfer to %s: %d",
-                  str(destination), len(to_transfer))
+        log.debug("Number of artifacts to transfer to %s: %d", str(destination), len(to_transfer))
         for source_uri, target_uri in to_transfer.items():
             target_uri.transfer_from(source_uri, transfer=transfer, overwrite=overwrite)
 
@@ -1743,9 +1836,9 @@ class FileDatastore(GenericBaseDatastore):
                 # a component though because it is really reading a
                 # standalone dataset -- always tell reader it is not a
                 # component.
-                components[component] = self._read_artifact_into_memory(getInfo,
-                                                                        ref.makeComponentRef(component),
-                                                                        isComponent=False)
+                components[component] = self._read_artifact_into_memory(
+                    getInfo, ref.makeComponentRef(component), isComponent=False
+                )
 
             inMemoryDataset = ref.datasetType.storageClass.delegate().assemble(components)
 
@@ -1756,15 +1849,18 @@ class FileDatastore(GenericBaseDatastore):
                 unusedParams = {}
 
             # Process parameters
-            return ref.datasetType.storageClass.delegate().handleParameters(inMemoryDataset,
-                                                                            parameters=unusedParams)
+            return ref.datasetType.storageClass.delegate().handleParameters(
+                inMemoryDataset, parameters=unusedParams
+            )
 
         elif isDisassembledReadOnlyComponent:
 
             compositeStorageClass = ref.datasetType.parentStorageClass
             if compositeStorageClass is None:
-                raise RuntimeError(f"Unable to retrieve derived component '{refComponent}' since"
-                                   "no composite storage class is available.")
+                raise RuntimeError(
+                    f"Unable to retrieve derived component '{refComponent}' since"
+                    "no composite storage class is available."
+                )
 
             if refComponent is None:
                 # Mainly for mypy
@@ -1777,8 +1873,9 @@ class FileDatastore(GenericBaseDatastore):
             # we ask the storage class delegate directly which one is best to
             # use.
             compositeDelegate = compositeStorageClass.delegate()
-            forwardedComponent = compositeDelegate.selectResponsibleComponent(refComponent,
-                                                                              set(allComponents))
+            forwardedComponent = compositeDelegate.selectResponsibleComponent(
+                refComponent, set(allComponents)
+            )
 
             # Select the relevant component
             rwInfo = allComponents[forwardedComponent]
@@ -1799,11 +1896,15 @@ class FileDatastore(GenericBaseDatastore):
 
             # We may need to put some thought into parameters for read
             # components but for now forward them on as is
-            readFormatter = type(rwInfo.formatter)(FileDescriptor(rwInfo.location,
-                                                                  readStorageClass=refStorageClass,
-                                                                  storageClass=writeStorageClass,
-                                                                  parameters=parameters),
-                                                   ref.dataId)
+            readFormatter = type(rwInfo.formatter)(
+                FileDescriptor(
+                    rwInfo.location,
+                    readStorageClass=refStorageClass,
+                    storageClass=writeStorageClass,
+                    parameters=parameters,
+                ),
+                ref.dataId,
+            )
 
             # The assembler can not receive any parameter requests for a
             # derived component at this time since the assembler will
@@ -1814,12 +1915,17 @@ class FileDatastore(GenericBaseDatastore):
 
             # Need to created a new info that specifies the derived
             # component and associated storage class
-            readInfo = DatastoreFileGetInformation(rwInfo.location, readFormatter,
-                                                   rwInfo.info, assemblerParams, {},
-                                                   refComponent, refStorageClass)
+            readInfo = DatastoreFileGetInformation(
+                rwInfo.location,
+                readFormatter,
+                rwInfo.info,
+                assemblerParams,
+                {},
+                refComponent,
+                refStorageClass,
+            )
 
-            return self._read_artifact_into_memory(readInfo, ref, isComponent=True,
-                                                   cache_ref=cache_ref)
+            return self._read_artifact_into_memory(readInfo, ref, isComponent=True, cache_ref=cache_ref)
 
         else:
             # Single file request or component from that composite file
@@ -1828,8 +1934,9 @@ class FileDatastore(GenericBaseDatastore):
                     getInfo = allComponents[lookup]
                     break
             else:
-                raise FileNotFoundError(f"Component {refComponent} not found "
-                                        f"for ref {ref} in datastore {self.name}")
+                raise FileNotFoundError(
+                    f"Component {refComponent} not found for ref {ref} in datastore {self.name}"
+                )
 
             # Do not need the component itself if already disassembled
             if isDisassembled:
@@ -1852,8 +1959,7 @@ class FileDatastore(GenericBaseDatastore):
                 # the composite storage class
                 getInfo.formatter.fileDescriptor.storageClass.validateParameters(parameters)
 
-            return self._read_artifact_into_memory(getInfo, ref, isComponent=isComponent,
-                                                   cache_ref=cache_ref)
+            return self._read_artifact_into_memory(getInfo, ref, isComponent=isComponent, cache_ref=cache_ref)
 
     @transactional
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
@@ -1985,8 +2091,10 @@ class FileDatastore(GenericBaseDatastore):
 
         for location, storedFileInfo in fileLocations:
             if not self._artifact_exists(location):
-                err_msg = f"Dataset is known to datastore {self.name} but " \
-                          f"associated artifact ({location.uri}) is missing"
+                err_msg = (
+                    f"Dataset is known to datastore {self.name} but "
+                    f"associated artifact ({location.uri}) is missing"
+                )
                 if ignore_errors:
                     log.warning(err_msg)
                     return
@@ -1998,8 +2106,13 @@ class FileDatastore(GenericBaseDatastore):
             self.bridge.moveToTrash([ref])
         except Exception as e:
             if ignore_errors:
-                log.warning("Attempted to mark dataset (%s) to be trashed in datastore %s "
-                            "but encountered an error: %s", ref, self.name, e)
+                log.warning(
+                    "Attempted to mark dataset (%s) to be trashed in datastore %s "
+                    "but encountered an error: %s",
+                    ref,
+                    self.name,
+                    e,
+                )
                 pass
             else:
                 raise
@@ -2020,8 +2133,9 @@ class FileDatastore(GenericBaseDatastore):
         # Context manager will empty trash iff we finish it without raising.
         # It will also automatically delete the relevant rows from the
         # trash table and the records table.
-        with self.bridge.emptyTrash(self._table, record_class=StoredFileInfo,
-                                    record_column="path") as trash_data:
+        with self.bridge.emptyTrash(
+            self._table, record_class=StoredFileInfo, record_column="path"
+        ) as trash_data:
             # Removing the artifacts themselves requires that the files are
             # not also associated with refs that are not to be trashed.
             # Therefore need to do a query with the file paths themselves
@@ -2038,8 +2152,9 @@ class FileDatastore(GenericBaseDatastore):
 
                 # The instance check is for mypy since up to this point it
                 # does not know the type of info.
-                path_map = self._refs_associated_with_artifacts([info.path for _, info in trashed
-                                                                 if isinstance(info, StoredFileInfo)])
+                path_map = self._refs_associated_with_artifacts(
+                    [info.path for _, info in trashed if isinstance(info, StoredFileInfo)]
+                )
 
                 for ref, info in trashed:
 
@@ -2103,33 +2218,47 @@ class FileDatastore(GenericBaseDatastore):
                         # other's files. Butler does not know about users
                         # and trash has no idea what collections these
                         # files were in (without guessing from a path).
-                        log.debug("Encountered error removing artifact %s from datastore %s: %s",
-                                  location.uri, self.name, e)
+                        log.debug(
+                            "Encountered error removing artifact %s from datastore %s: %s",
+                            location.uri,
+                            self.name,
+                            e,
+                        )
                     else:
                         raise
 
     @transactional
-    def transfer_from(self, source_datastore: Datastore, refs: Iterable[DatasetRef],
-                      local_refs: Optional[Iterable[DatasetRef]] = None,
-                      transfer: str = "auto",
-                      artifact_existence: Optional[Dict[ButlerURI, bool]] = None) -> None:
+    def transfer_from(
+        self,
+        source_datastore: Datastore,
+        refs: Iterable[DatasetRef],
+        local_refs: Optional[Iterable[DatasetRef]] = None,
+        transfer: str = "auto",
+        artifact_existence: Optional[Dict[ButlerURI, bool]] = None,
+    ) -> None:
         # Docstring inherited
         if type(self) is not type(source_datastore):
-            raise TypeError(f"Datastore mismatch between this datastore ({type(self)}) and the "
-                            f"source datastore ({type(source_datastore)}).")
+            raise TypeError(
+                f"Datastore mismatch between this datastore ({type(self)}) and the "
+                f"source datastore ({type(source_datastore)})."
+            )
 
         # Be explicit for mypy
         if not isinstance(source_datastore, FileDatastore):
-            raise TypeError("Can only transfer to a FileDatastore from another FileDatastore, not"
-                            f" {type(source_datastore)}")
+            raise TypeError(
+                "Can only transfer to a FileDatastore from another FileDatastore, not"
+                f" {type(source_datastore)}"
+            )
 
         # Stop early if "direct" transfer mode is requested. That would
         # require that the URI inside the source datastore should be stored
         # directly in the target datastore, which seems unlikely to be useful
         # since at any moment the source datastore could delete the file.
         if transfer in ("direct", "split"):
-            raise ValueError(f"Can not transfer from a source datastore using {transfer} mode since"
-                             " those files are controlled by the other datastore.")
+            raise ValueError(
+                f"Can not transfer from a source datastore using {transfer} mode since"
+                " those files are controlled by the other datastore."
+            )
 
         # Empty existence lookup if none given.
         if artifact_existence is None:
@@ -2174,14 +2303,18 @@ class FileDatastore(GenericBaseDatastore):
         # gets based on file existence. Should we transfer what we can
         # or complain about it and warn?
         if missing_ids and not source_datastore.trustGetRequest:
-            raise ValueError(f"Some datasets are missing from source datastore {source_datastore}:"
-                             f" {missing_ids}")
+            raise ValueError(
+                f"Some datasets are missing from source datastore {source_datastore}: {missing_ids}"
+            )
 
         # Need to map these missing IDs to a DatasetRef so we can guess
         # the details.
         if missing_ids:
-            log.info("Number of expected datasets missing from source datastore records: %d out of %d",
-                     len(missing_ids), len(requested_ids))
+            log.info(
+                "Number of expected datasets missing from source datastore records: %d out of %d",
+                len(missing_ids),
+                len(requested_ids),
+            )
             id_to_ref = {ref.id: ref for ref in refs if ref.id in missing_ids}
 
             # This should be chunked in case we end up having to check
@@ -2201,10 +2334,10 @@ class FileDatastore(GenericBaseDatastore):
                 # empty. This allows us to benefit from parallelism.
                 # datastore.mexists() itself does not give us access to the
                 # derived datastore record.
-                log.verbose("Checking existence of %d datasets unknown to datastore",
-                            len(records))
-                ref_exists = source_datastore._process_mexists_records(id_to_ref, records, False,
-                                                                       artifact_existence=artifact_existence)
+                log.verbose("Checking existence of %d datasets unknown to datastore", len(records))
+                ref_exists = source_datastore._process_mexists_records(
+                    id_to_ref, records, False, artifact_existence=artifact_existence
+                )
 
                 # Now go through the records and propagate the ones that exist.
                 location_factory = source_datastore.locationFactory
@@ -2212,8 +2345,7 @@ class FileDatastore(GenericBaseDatastore):
                     # Skip completely if the ref does not exist.
                     ref = id_to_ref[missing]
                     if not ref_exists[ref]:
-                        log.warning("Asked to transfer dataset %s but no file artifacts exist for it.",
-                                    ref)
+                        log.warning("Asked to transfer dataset %s but no file artifacts exist for it.", ref)
                         continue
                     # Check for file artifact to decide which parts of a
                     # disassembled composite do exist. If there is only a
@@ -2222,8 +2354,11 @@ class FileDatastore(GenericBaseDatastore):
                     if len(record_list) == 1:
                         dataset_records = record_list
                     else:
-                        dataset_records = [record for record in record_list
-                                           if artifact_existence[record.file_location(location_factory).uri]]
+                        dataset_records = [
+                            record
+                            for record in record_list
+                            if artifact_existence[record.file_location(location_factory).uri]
+                        ]
                         assert len(dataset_records) > 0, "Disassembled composite should have had some files."
 
                     # Rely on source_records being a defaultdict.
@@ -2258,8 +2393,10 @@ class FileDatastore(GenericBaseDatastore):
                         # the transfer doesn't mean it will be generally
                         # accessible to a user of this butler. For now warn
                         # but assume it will be accessible.
-                        log.warning("Transfer request for an outside-datastore artifact has been found at %s",
-                                    source_location)
+                        log.warning(
+                            "Transfer request for an outside-datastore artifact has been found at %s",
+                            source_location,
+                        )
                 else:
                     # Need to transfer it to the new location.
                     # Assume we should always overwrite. If the artifact
@@ -2267,8 +2404,9 @@ class FileDatastore(GenericBaseDatastore):
                     # was interrupted but was not able to be rolled back
                     # completely (eg pre-emption) so follow Datastore default
                     # and overwrite.
-                    target_location.uri.transfer_from(source_location.uri, transfer=transfer,
-                                                      overwrite=True, transaction=self._transaction)
+                    target_location.uri.transfer_from(
+                        source_location.uri, transfer=transfer, overwrite=True, transaction=self._transaction
+                    )
 
                 artifacts.append((target_ref, info))
 
@@ -2276,8 +2414,11 @@ class FileDatastore(GenericBaseDatastore):
 
         if already_present:
             n_skipped = len(already_present)
-            log.info("Skipped transfer of %d dataset%s already present in datastore", n_skipped,
-                     "" if n_skipped == 1 else "s")
+            log.info(
+                "Skipped transfer of %d dataset%s already present in datastore",
+                n_skipped,
+                "" if n_skipped == 1 else "s",
+            )
 
     @transactional
     def forget(self, refs: Iterable[DatasetRef]) -> None:
@@ -2286,8 +2427,9 @@ class FileDatastore(GenericBaseDatastore):
         self.bridge.forget(refs)
         self._table.delete(["dataset_id"], *[{"dataset_id": ref.getCheckedId()} for ref in refs])
 
-    def validateConfiguration(self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]],
-                              logFailures: bool = False) -> None:
+    def validateConfiguration(
+        self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]], logFailures: bool = False
+    ) -> None:
         """Validate some of the configuration for this datastore.
 
         Parameters
@@ -2337,11 +2479,13 @@ class FileDatastore(GenericBaseDatastore):
 
     def getLookupKeys(self) -> Set[LookupKey]:
         # Docstring is inherited from base class
-        return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys() | \
-            self.constraints.getLookupKeys()
+        return (
+            self.templates.getLookupKeys()
+            | self.formatterFactory.getLookupKeys()
+            | self.constraints.getLookupKeys()
+        )
 
-    def validateKey(self, lookupKey: LookupKey,
-                    entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
+    def validateKey(self, lookupKey: LookupKey, entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
         # Docstring is inherited from base class
         # The key can be valid in either formatters or templates so we can
         # only check the template if it exists
@@ -2351,13 +2495,16 @@ class FileDatastore(GenericBaseDatastore):
             except FileTemplateValidationError as e:
                 raise DatastoreValidationError(e) from e
 
-    def export(self, refs: Iterable[DatasetRef], *,
-               directory: Optional[Union[ButlerURI, str]] = None,
-               transfer: Optional[str] = "auto") -> Iterable[FileDataset]:
+    def export(
+        self,
+        refs: Iterable[DatasetRef],
+        *,
+        directory: Optional[Union[ButlerURI, str]] = None,
+        transfer: Optional[str] = "auto",
+    ) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
         if transfer is not None and directory is None:
-            raise RuntimeError(f"Cannot export using transfer mode {transfer} with no "
-                               "export directory given")
+            raise RuntimeError(f"Cannot export using transfer mode {transfer} with no export directory given")
 
         # Force the directory to be a URI object
         directoryUri: Optional[ButlerURI] = None

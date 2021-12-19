@@ -26,6 +26,7 @@ __all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
 from typing import TYPE_CHECKING
 
 from sqlalchemy.engine import url
+
 from ._dbAuth import DbAuth, DbAuthNotFoundError
 
 if TYPE_CHECKING:
@@ -50,7 +51,7 @@ class ConnectionStringFactory:
     `DB_AUTH_PATH` values.
     """
 
-    keys = ('username', 'password', 'host', 'port', 'database')
+    keys = ("username", "password", "host", "port", "database")
 
     @classmethod
     def fromConfig(cls, registryConfig: RegistryConfig) -> url.URL:
@@ -94,8 +95,9 @@ class ConnectionStringFactory:
         """
         # this import can not live on the top because of circular import issue
         from ._config import RegistryConfig
+
         regConf = RegistryConfig(registryConfig)
-        conStr = url.make_url(regConf['db'])
+        conStr = url.make_url(regConf["db"])
 
         for key in cls.keys:
             if getattr(conStr, key) is None:
@@ -109,16 +111,15 @@ class ConnectionStringFactory:
         # Allow 3rd party authentication mechanisms by assuming connection
         # string is correct when we can not recognize (dialect, host, database)
         # matching keys.
-        if any((conStr.drivername is None,
-               conStr.host is None,
-               conStr.database is None)):
+        if any((conStr.drivername is None, conStr.host is None, conStr.database is None)):
             return conStr
 
         # Ignore when credentials are not set up, or when no matches are found
         try:
             dbAuth = DbAuth(DB_AUTH_PATH, DB_AUTH_ENVVAR)
-            auth = dbAuth.getAuth(conStr.drivername, conStr.username, conStr.host,
-                                  conStr.port, conStr.database)
+            auth = dbAuth.getAuth(
+                conStr.drivername, conStr.username, conStr.host, conStr.port, conStr.database
+            )
         except DbAuthNotFoundError:
             # credentials file doesn't exist or no matches were found
             pass

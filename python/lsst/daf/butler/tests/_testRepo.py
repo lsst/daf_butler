@@ -20,23 +20,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-__all__ = ["makeTestRepo", "makeTestCollection", "addDatasetType", "expandUniqueId", "DatastoreMock",
-           "addDataIdValue",
-           ]
+__all__ = [
+    "makeTestRepo",
+    "makeTestCollection",
+    "addDatasetType",
+    "expandUniqueId",
+    "DatastoreMock",
+    "addDataIdValue",
+]
 
 import random
-from typing import (
-    Any,
-    Iterable,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-)
+from typing import Any, Iterable, Mapping, Optional, Set, Tuple
 from unittest.mock import MagicMock
 
 import sqlalchemy
-
 from lsst.daf.butler import (
     Butler,
     Config,
@@ -50,10 +47,9 @@ from lsst.daf.butler import (
 )
 
 
-def makeTestRepo(root: str,
-                 dataIds: Optional[Mapping[str, Iterable]] = None, *,
-                 config: Config = None,
-                 **kwargs) -> Butler:
+def makeTestRepo(
+    root: str, dataIds: Optional[Mapping[str, Iterable]] = None, *, config: Config = None, **kwargs
+) -> Butler:
     """Create an empty test repository.
 
     Parameters
@@ -148,8 +144,7 @@ def makeTestCollection(repo: Butler, uniqueId: Optional[str] = None) -> Butler:
     return Butler(butler=repo, run=collection)
 
 
-def _makeRecords(dataIds: Mapping[str, Iterable],
-                 universe: DimensionUniverse) -> Mapping[str, Iterable]:
+def _makeRecords(dataIds: Mapping[str, Iterable], universe: DimensionUniverse) -> Mapping[str, Iterable]:
     """Create cross-linked dimension records from a collection of
     data ID values.
 
@@ -192,8 +187,10 @@ def _makeRecords(dataIds: Mapping[str, Iterable],
                     relation = expandedIds[other.name][0]
                     value[other.name] = relation[other.primaryKey.name]
 
-    return {dimension: [universe[dimension].RecordClass(**value) for value in values]
-            for dimension, values in expandedIds.items()}
+    return {
+        dimension: [universe[dimension].RecordClass(**value) for value in values]
+        for dimension, values in expandedIds.items()
+    }
 
 
 def _fillAllKeys(dimension: Dimension, value: Any) -> Mapping[str, Any]:
@@ -256,9 +253,9 @@ def _matchAnyDataId(record: Mapping[str, Any], registry: Registry, dimension: Di
         raise RuntimeError(f"No matching values for {dimension.name} found.")
 
 
-def _fillRelationships(dimension: Dimension,
-                       dimensionInfo: Mapping[str, Any],
-                       existing: Registry) -> Mapping[str, Any]:
+def _fillRelationships(
+    dimension: Dimension, dimensionInfo: Mapping[str, Any], existing: Registry
+) -> Mapping[str, Any]:
     """Create arbitrary mappings from one dimension to all dimensions it
     depends on.
 
@@ -392,8 +389,10 @@ def addDataIdValue(butler: Butler, dimension: str, value: Any, **related: Any):
     # Bad keys ignored by registry code
     extraKeys = related.keys() - (fullDimension.required | fullDimension.implied)
     if extraKeys:
-        raise ValueError(f"Unexpected keywords {extraKeys} not found "
-                         f"in {fullDimension.required | fullDimension.implied}")
+        raise ValueError(
+            f"Unexpected keywords {extraKeys} not found "
+            f"in {fullDimension.required | fullDimension.implied}"
+        )
 
     # Define secondary keys (e.g., detector name given detector id)
     expandedValue = _fillAllKeys(fullDimension, value)
@@ -404,9 +403,11 @@ def addDataIdValue(butler: Butler, dimension: str, value: Any, **related: Any):
     try:
         butler.registry.syncDimensionData(dimension, dimensionRecord)
     except sqlalchemy.exc.IntegrityError as e:
-        raise RuntimeError("Could not create data ID value. Automatic relationship generation "
-                           "may have failed; try adding keywords to assign a specific instrument, "
-                           "physical_filter, etc. based on the nested exception message.") from e
+        raise RuntimeError(
+            "Could not create data ID value. Automatic relationship generation "
+            "may have failed; try adding keywords to assign a specific instrument, "
+            "physical_filter, etc. based on the nested exception message."
+        ) from e
 
 
 def addDatasetType(butler: Butler, name: str, dimensions: Set[str], storageClass: str) -> DatasetType:
@@ -439,8 +440,7 @@ def addDatasetType(butler: Butler, name: str, dimensions: Set[str], storageClass
     function does not need to be run for each collection.
     """
     try:
-        datasetType = DatasetType(name, dimensions, storageClass,
-                                  universe=butler.registry.dimensions)
+        datasetType = DatasetType(name, dimensions, storageClass, universe=butler.registry.dimensions)
         butler.registry.registerDatasetType(datasetType)
         return datasetType
     except KeyError as e:
@@ -463,9 +463,9 @@ class DatastoreMock:
         butler.datastore.ingest = MagicMock()
 
     @staticmethod
-    def _mock_export(refs: Iterable[DatasetRef], *,
-                     directory: Optional[str] = None,
-                     transfer: Optional[str] = None) -> Iterable[FileDataset]:
+    def _mock_export(
+        refs: Iterable[DatasetRef], *, directory: Optional[str] = None, transfer: Optional[str] = None
+    ) -> Iterable[FileDataset]:
         """A mock of `Datastore.export` that satisfies the requirement that
         the refs passed in are included in the `FileDataset` objects
         returned.
@@ -478,13 +478,14 @@ class DatastoreMock:
 
         """
         for ref in refs:
-            yield FileDataset(refs=[ref],
-                              path="mock/path",
-                              formatter="lsst.daf.butler.formatters.json.JsonFormatter")
+            yield FileDataset(
+                refs=[ref], path="mock/path", formatter="lsst.daf.butler.formatters.json.JsonFormatter"
+            )
 
     @staticmethod
-    def _mock_get(ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None
-                  ) -> Tuple[int, Optional[Mapping[str, Any]]]:
+    def _mock_get(
+        ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None
+    ) -> Tuple[int, Optional[Mapping[str, Any]]]:
         """A mock of `Datastore.get` that just returns the integer dataset ID
         value and parameters it was given.
         """

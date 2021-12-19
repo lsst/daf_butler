@@ -25,11 +25,11 @@ __all__ = ("StoredFileInfo", "StoredDatastoreItemInfo")
 
 import inspect
 from dataclasses import dataclass
-from typing import Optional, Any, Dict, TYPE_CHECKING, Type
+from typing import TYPE_CHECKING, Any, Dict, Optional, Type
 
 from ._butlerUri import ButlerURI
-from .location import Location, LocationFactory
 from .formatter import Formatter, FormatterParameter
+from .location import Location, LocationFactory
 from .storageClass import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
@@ -84,17 +84,19 @@ class StoredDatastoreItemInfo:
 class StoredFileInfo(StoredDatastoreItemInfo):
     """Datastore-private metadata associated with a Datastore file."""
 
-    __slots__ = {"formatter", "path", "storageClass", "component",
-                 "checksum", "file_size"}
+    __slots__ = {"formatter", "path", "storageClass", "component", "checksum", "file_size"}
 
     storageClassFactory = StorageClassFactory()
 
-    def __init__(self, formatter: FormatterParameter,
-                 path: str,
-                 storageClass: StorageClass,
-                 component: Optional[str],
-                 checksum: Optional[str],
-                 file_size: int):
+    def __init__(
+        self,
+        formatter: FormatterParameter,
+        path: str,
+        storageClass: StorageClass,
+        component: Optional[str],
+        checksum: Optional[str],
+        file_size: int,
+    ):
 
         # Use these shenanigans to allow us to use a frozen dataclass
         object.__setattr__(self, "path", path)
@@ -106,8 +108,9 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         if isinstance(formatter, str):
             # We trust that this string refers to a Formatter
             formatterStr = formatter
-        elif isinstance(formatter, Formatter) or \
-                (inspect.isclass(formatter) and issubclass(formatter, Formatter)):
+        elif isinstance(formatter, Formatter) or (
+            inspect.isclass(formatter) and issubclass(formatter, Formatter)
+        ):
             formatterStr = formatter.name()
         else:
             raise TypeError(f"Supplied formatter '{formatter}' is not a Formatter")
@@ -143,9 +146,15 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             # primary key.
             component = NULLSTR
 
-        return dict(dataset_id=ref.id, formatter=self.formatter, path=self.path,
-                    storage_class=self.storageClass.name, component=component,
-                    checksum=self.checksum, file_size=self.file_size)
+        return dict(
+            dataset_id=ref.id,
+            formatter=self.formatter,
+            path=self.path,
+            storage_class=self.storageClass.name,
+            component=component,
+            checksum=self.checksum,
+            file_size=self.file_size,
+        )
 
     def file_location(self, factory: LocationFactory) -> Location:
         """Return the location of artifact.
@@ -183,13 +192,14 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         """
         # Convert name of StorageClass to instance
         storageClass = cls.storageClassFactory.getStorageClass(record["storage_class"])
-        component = record["component"] if (record["component"]
-                                            and record["component"] != NULLSTR) else None
+        component = record["component"] if (record["component"] and record["component"] != NULLSTR) else None
 
-        info = StoredFileInfo(formatter=record["formatter"],
-                              path=record["path"],
-                              storageClass=storageClass,
-                              component=component,
-                              checksum=record["checksum"],
-                              file_size=record["file_size"])
+        info = StoredFileInfo(
+            formatter=record["formatter"],
+            path=record["path"],
+            storageClass=storageClass,
+            component=component,
+            checksum=record["checksum"],
+            file_size=record["file_size"],
+        )
         return info

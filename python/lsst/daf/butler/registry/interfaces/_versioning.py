@@ -26,13 +26,9 @@ __all__ = [
     "VersionedExtension",
 ]
 
-from abc import ABC, abstractmethod
 import hashlib
-from typing import (
-    Iterable,
-    NamedTuple,
-    Optional,
-)
+from abc import ABC, abstractmethod
+from typing import Iterable, NamedTuple, Optional
 
 import sqlalchemy
 
@@ -45,6 +41,7 @@ class VersionTuple(NamedTuple):
     major, minor, patch : `int`
         Version number components
     """
+
     major: int
     minor: int
     patch: int
@@ -78,14 +75,12 @@ class VersionTuple(NamedTuple):
         return cls(*version)
 
     def __str__(self) -> str:
-        """Transform version tuple into a canonical string form.
-        """
+        """Transform version tuple into a canonical string form."""
         return f"{self.major}.{self.minor}.{self.patch}"
 
 
 class VersionedExtension(ABC):
-    """Interface for extension classes with versions.
-    """
+    """Interface for extension classes with versions."""
 
     @classmethod
     @abstractmethod
@@ -141,8 +136,9 @@ class VersionedExtension(ABC):
         """
         raise NotImplementedError()
 
-    def _defaultSchemaDigest(self, tables: Iterable[sqlalchemy.schema.Table],
-                             dialect: sqlalchemy.engine.Dialect) -> str:
+    def _defaultSchemaDigest(
+        self, tables: Iterable[sqlalchemy.schema.Table], dialect: sqlalchemy.engine.Dialect
+    ) -> str:
         """Calculate digest for a schema based on list of tables schemas.
 
         Parameters
@@ -172,8 +168,7 @@ class VersionedExtension(ABC):
         """
 
         def tableSchemaRepr(table: sqlalchemy.schema.Table) -> str:
-            """Make string representation of a single table schema.
-            """
+            """Make string representation of a single table schema."""
             tableSchemaRepr = [table.name]
             schemaReps = []
             for column in table.columns:

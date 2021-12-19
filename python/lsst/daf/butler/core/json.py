@@ -23,19 +23,12 @@ from __future__ import annotations
 
 __all__ = ("to_json_generic", "from_json_generic", "to_json_pydantic", "from_json_pydantic")
 
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Optional,
-    Protocol,
-    Type,
-)
-
 import json
+from typing import TYPE_CHECKING, Any, Optional, Protocol, Type
 
 if TYPE_CHECKING:
-    from .dimensions import DimensionUniverse
     from ..registry import Registry
+    from .dimensions import DimensionUniverse
 
 
 class SupportsSimple(Protocol):
@@ -45,8 +38,9 @@ class SupportsSimple(Protocol):
         ...
 
     @classmethod
-    def from_simple(cls, simple: Any, universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None) -> SupportsSimple:
+    def from_simple(
+        cls, simple: Any, universe: Optional[DimensionUniverse] = None, registry: Optional[Registry] = None
+    ) -> SupportsSimple:
         ...
 
 
@@ -58,9 +52,12 @@ def to_json_pydantic(self: SupportsSimple, minimal: bool = False) -> str:
     return self.to_simple(minimal=minimal).json(exclude_defaults=True, exclude_unset=True)
 
 
-def from_json_pydantic(cls: Type[SupportsSimple], json_str: str,
-                       universe: Optional[DimensionUniverse] = None,
-                       registry: Optional[Registry] = None) -> SupportsSimple:
+def from_json_pydantic(
+    cls: Type[SupportsSimple],
+    json_str: str,
+    universe: Optional[DimensionUniverse] = None,
+    registry: Optional[Registry] = None,
+) -> SupportsSimple:
     """Convert from JSON to a pydantic model."""
     simple = cls._serializedType.parse_raw(json_str)
     try:
@@ -91,9 +88,12 @@ def to_json_generic(self: SupportsSimple, minimal: bool = False) -> str:
     return json.dumps(self.to_simple(minimal=minimal))
 
 
-def from_json_generic(cls: Type[SupportsSimple], json_str: str,
-                      universe: Optional[DimensionUniverse] = None,
-                      registry: Optional[Registry] = None) -> SupportsSimple:
+def from_json_generic(
+    cls: Type[SupportsSimple],
+    json_str: str,
+    universe: Optional[DimensionUniverse] = None,
+    registry: Optional[Registry] = None,
+) -> SupportsSimple:
     """Return new class from JSON string.
 
     Converts a JSON string created by `to_json` and return

@@ -24,10 +24,11 @@ from __future__ import annotations
 
 __all__ = ("ClickProgressHandler",)
 
-import click
 from typing import Any, ContextManager, Iterable, Optional, TypeVar
 
-from ..core.progress import ProgressBar, ProgressHandler, Progress
+import click
+
+from ..core.progress import Progress, ProgressBar, ProgressHandler
 
 _T = TypeVar("_T")
 
@@ -43,6 +44,7 @@ class ClickProgressHandler(ProgressHandler):
         include ``iterable``, ``length``, or ``label``, as these are passed
         directly from `get_progress_bar` arguments.
     """
+
     def __init__(self, **kwargs: Any):
         self._kwargs = kwargs
 
@@ -63,13 +65,16 @@ class ClickProgressHandler(ProgressHandler):
         """A `click` command decorator that adds a ``--progress`` option
         that installs a default-constructed instance of this progress handler.
         """
-        return click.option("--progress/--no-progress",
-                            help="Show a progress bar for slow operations when possible.",
-                            default=False,
-                            is_flag=True,
-                            callback=cls.callback)(cmd)
+        return click.option(
+            "--progress/--no-progress",
+            help="Show a progress bar for slow operations when possible.",
+            default=False,
+            is_flag=True,
+            callback=cls.callback,
+        )(cmd)
 
-    def get_progress_bar(self, iterable: Optional[Iterable[_T]], desc: Optional[str],
-                         total: Optional[int], level: int) -> ContextManager[ProgressBar[_T]]:
+    def get_progress_bar(
+        self, iterable: Optional[Iterable[_T]], desc: Optional[str], total: Optional[int], level: int
+    ) -> ContextManager[ProgressBar[_T]]:
         # Docstring inherited.
         return click.progressbar(iterable, length=total, label=desc, **self._kwargs)

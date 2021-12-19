@@ -21,13 +21,12 @@
 
 import unittest
 
-from sqlalchemy.schema import Column
-from sqlalchemy.dialects import postgresql, sqlite
-
-from lsst.daf.butler.registry.queries.expressions import convertExpressionToSql, ParserYacc
-from lsst.daf.butler.registry.queries._structs import QueryColumns
 from lsst.daf.butler import DimensionUniverse
 from lsst.daf.butler.core import NamedKeyDict, TimespanDatabaseRepresentation
+from lsst.daf.butler.registry.queries._structs import QueryColumns
+from lsst.daf.butler.registry.queries.expressions import ParserYacc, convertExpressionToSql
+from sqlalchemy.dialects import postgresql, sqlite
+from sqlalchemy.schema import Column
 
 
 class FakeDatasetRecordStorageManager:
@@ -35,8 +34,7 @@ class FakeDatasetRecordStorageManager:
 
 
 class ConvertExpressionToSqlTestCase(unittest.TestCase):
-    """A test case for convertExpressionToSql method
-    """
+    """A test case for convertExpressionToSql method"""
 
     def setUp(self):
         self.universe = DimensionUniverse()
@@ -51,8 +49,7 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
         columns = QueryColumns()
         elements = NamedKeyDict()
         column_element = convertExpressionToSql(
-            tree, self.universe, columns, elements, {},
-            TimespanDatabaseRepresentation.Compound
+            tree, self.universe, columns, elements, {}, TimespanDatabaseRepresentation.Compound
         )
         self.assertEqual(str(column_element.compile()), ":param_1 > :param_2")
         self.assertEqual(str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 0")
@@ -67,12 +64,12 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
         columns = QueryColumns()
         elements = NamedKeyDict()
         column_element = convertExpressionToSql(
-            tree, self.universe, columns, elements, {},
-            TimespanDatabaseRepresentation.Compound
+            tree, self.universe, columns, elements, {}, TimespanDatabaseRepresentation.Compound
         )
         self.assertEqual(str(column_element.compile()), ":param_1 < :param_2")
-        self.assertEqual(str(column_element.compile(compile_kwargs={"literal_binds": True})),
-                         "0 < 1577836800000000000")
+        self.assertEqual(
+            str(column_element.compile(compile_kwargs={"literal_binds": True})), "0 < 1577836800000000000"
+        )
 
     def test_ingest_date(self):
         """Test with an expression including ingest_date which is native UTC"""
@@ -85,24 +82,23 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
         columns.datasets = FakeDatasetRecordStorageManager()
         elements = NamedKeyDict()
         column_element = convertExpressionToSql(
-            tree, self.universe, columns, elements, {},
-            TimespanDatabaseRepresentation.Compound
+            tree, self.universe, columns, elements, {}, TimespanDatabaseRepresentation.Compound
         )
 
         # render it, needs specific dialect to convert column to expression
         dialect = postgresql.dialect()
-        self.assertEqual(str(column_element.compile(dialect=dialect)),
-                         "ingest_date < TIMESTAMP %(param_1)s")
-        self.assertEqual(str(column_element.compile(dialect=dialect,
-                                                    compile_kwargs={"literal_binds": True})),
-                         "ingest_date < TIMESTAMP '2020-01-01 00:00:00.000000'")
+        self.assertEqual(str(column_element.compile(dialect=dialect)), "ingest_date < TIMESTAMP %(param_1)s")
+        self.assertEqual(
+            str(column_element.compile(dialect=dialect, compile_kwargs={"literal_binds": True})),
+            "ingest_date < TIMESTAMP '2020-01-01 00:00:00.000000'",
+        )
 
         dialect = sqlite.dialect()
-        self.assertEqual(str(column_element.compile(dialect=dialect)),
-                         "datetime(ingest_date) < datetime(?)")
-        self.assertEqual(str(column_element.compile(dialect=dialect,
-                                                    compile_kwargs={"literal_binds": True})),
-                         "datetime(ingest_date) < datetime('2020-01-01 00:00:00.000000')")
+        self.assertEqual(str(column_element.compile(dialect=dialect)), "datetime(ingest_date) < datetime(?)")
+        self.assertEqual(
+            str(column_element.compile(dialect=dialect, compile_kwargs={"literal_binds": True})),
+            "datetime(ingest_date) < datetime('2020-01-01 00:00:00.000000')",
+        )
 
 
 if __name__ == "__main__":

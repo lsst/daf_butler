@@ -20,20 +20,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import click
 from typing import Mapping, Sequence
 
-from ..utils import (
-    ButlerCommand,
-)
-from ..opt import (
-    collection_argument,
-    confirm_option,
-    options_file_option,
-    repo_argument,
-)
-from ... import script
+import click
 
+from ... import script
+from ..opt import collection_argument, confirm_option, options_file_option, repo_argument
+from ..utils import ButlerCommand
 
 # messages emitted by remove-runs, defined separately for use in unit
 # tests.

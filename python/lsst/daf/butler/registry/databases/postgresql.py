@@ -22,16 +22,16 @@ from __future__ import annotations
 
 __all__ = ["PostgresqlDatabase"]
 
-from contextlib import contextmanager, closing
+from contextlib import closing, contextmanager
 from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Type, Union
 
 import psycopg2
 import sqlalchemy
 import sqlalchemy.dialects.postgresql
 
+from ...core import Timespan, TimespanDatabaseRepresentation, ddl, time_utils
 from ..interfaces import Database
 from ..nameShrinker import NameShrinker
-from ...core import ddl, time_utils, Timespan, TimespanDatabaseRepresentation
 
 
 class PostgresqlDatabase(Database):
@@ -64,8 +64,14 @@ class PostgresqlDatabase(Database):
     on the database being connected to; this is checked at connection time.
     """
 
-    def __init__(self, *, engine: sqlalchemy.engine.Engine, origin: int,
-                 namespace: Optional[str] = None, writeable: bool = True):
+    def __init__(
+        self,
+        *,
+        engine: sqlalchemy.engine.Engine,
+        origin: int,
+        namespace: Optional[str] = None,
+        writeable: bool = True,
+    ):
         super().__init__(origin=origin, engine=engine, namespace=namespace)
         with engine.connect() as connection:
             dbapi = connection.connection
@@ -93,13 +99,24 @@ class PostgresqlDatabase(Database):
         return sqlalchemy.engine.create_engine(uri)
 
     @classmethod
-    def fromEngine(cls, engine: sqlalchemy.engine.Engine, *, origin: int,
-                   namespace: Optional[str] = None, writeable: bool = True) -> Database:
+    def fromEngine(
+        cls,
+        engine: sqlalchemy.engine.Engine,
+        *,
+        origin: int,
+        namespace: Optional[str] = None,
+        writeable: bool = True,
+    ) -> Database:
         return cls(engine=engine, origin=origin, namespace=namespace, writeable=writeable)
 
     @contextmanager
-    def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
-                    lock: Iterable[sqlalchemy.schema.Table] = ()) -> Iterator[None]:
+    def transaction(
+        self,
+        *,
+        interrupting: bool = False,
+        savepoint: bool = False,
+        lock: Iterable[sqlalchemy.schema.Table] = (),
+    ) -> Iterator[None]:
         with super().transaction(interrupting=interrupting, savepoint=savepoint, lock=lock):
             assert self._session_connection is not None, "Guaranteed to have a connection in transaction"
             if not self.isWriteable():
@@ -113,8 +130,9 @@ class PostgresqlDatabase(Database):
                     cursor.execute("SET TIME ZONE 0")
             yield
 
-    def _lockTables(self, connection: sqlalchemy.engine.Connection,
-                    tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+    def _lockTables(
+        self, connection: sqlalchemy.engine.Connection, tables: Iterable[sqlalchemy.schema.Table] = ()
+    ) -> None:
         # Docstring inherited.
         for table in tables:
             connection.execute(sqlalchemy.text(f"LOCK TABLE {table.key} IN EXCLUSIVE MODE"))
@@ -131,9 +149,12 @@ class PostgresqlDatabase(Database):
     def expandDatabaseEntityName(self, shrunk: str) -> str:
         return self._shrinker.expand(shrunk)
 
-    def _convertExclusionConstraintSpec(self, table: str,
-                                        spec: Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...],
-                                        metadata: sqlalchemy.MetaData) -> sqlalchemy.schema.Constraint:
+    def _convertExclusionConstraintSpec(
+        self,
+        table: str,
+        spec: Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...],
+        metadata: sqlalchemy.MetaData,
+    ) -> sqlalchemy.schema.Constraint:
         # Docstring inherited.
         args = []
         names = ["excl"]
@@ -166,9 +187,11 @@ class PostgresqlDatabase(Database):
         # pseudo-table.  If some column in the table does not appear in the
         # INSERT list this will set it to NULL.
         excluded = query.excluded
-        data = {column.name: getattr(excluded, column.name)
-                for column in table.columns
-                if column.name not in table.primary_key}
+        data = {
+            column.name: getattr(excluded, column.name)
+            for column in table.columns
+            if column.name not in table.primary_key
+        }
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
         with self._connection() as connection:
             connection.execute(query, rows)
@@ -199,9 +222,9 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
 
     cache_ok = True
 
-    def process_bind_param(self, value: Optional[Timespan],
-                           dialect: sqlalchemy.engine.Dialect
-                           ) -> Optional[psycopg2.extras.NumericRange]:
+    def process_bind_param(
+        self, value: Optional[Timespan], dialect: sqlalchemy.engine.Dialect
+    ) -> Optional[psycopg2.extras.NumericRange]:
         if value is None:
             return None
         if not isinstance(value, Timespan):
@@ -216,9 +239,9 @@ class _RangeTimespanType(sqlalchemy.TypeDecorator):
             upper = None if value._nsec[1] == converter.max_nsec else value._nsec[1]
             return psycopg2.extras.NumericRange(lower=lower, upper=upper)
 
-    def process_result_value(self, value: Optional[psycopg2.extras.NumericRange],
-                             dialect: sqlalchemy.engine.Dialect
-                             ) -> Optional[Timespan]:
+    def process_result_value(
+        self, value: Optional[psycopg2.extras.NumericRange], dialect: sqlalchemy.engine.Dialect
+    ) -> Optional[Timespan]:
         if value is None:
             return None
         if value.isempty:
@@ -295,6 +318,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
     column : `sqlalchemy.sql.ColumnElement`
         SQLAlchemy object representing the column.
     """
+
     def __init__(self, column: sqlalchemy.sql.ColumnElement, name: str):
         self.column = column
         self._name = name
@@ -302,16 +326,19 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
     __slots__ = ("column", "_name")
 
     @classmethod
-    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
-                       ) -> Tuple[ddl.FieldSpec, ...]:
+    def makeFieldSpecs(
+        cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+    ) -> Tuple[ddl.FieldSpec, ...]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
         return (
             ddl.FieldSpec(
-                name, dtype=_RangeTimespanType, nullable=nullable,
+                name,
+                dtype=_RangeTimespanType,
+                nullable=nullable,
                 default=(None if nullable else sqlalchemy.sql.text("'(,)'::int8range")),
-                **kwargs
+                **kwargs,
             ),
         )
 
@@ -323,8 +350,9 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         return (name,)
 
     @classmethod
-    def update(cls, extent: Optional[Timespan], name: Optional[str] = None,
-               result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def update(
+        cls, extent: Optional[Timespan], name: Optional[str] = None, result: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -349,8 +377,9 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         )
 
     @classmethod
-    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
-                       ) -> _RangeTimespanRepresentation:
+    def fromSelectable(
+        cls, selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
+    ) -> _RangeTimespanRepresentation:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -370,8 +399,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         return sqlalchemy.sql.func.isempty(self.column)
 
     def __lt__(
-        self,
-        other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         if isinstance(other, sqlalchemy.sql.ColumnElement):
@@ -384,8 +412,7 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
             return self.column << other.column
 
     def __gt__(
-        self,
-        other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         if isinstance(other, sqlalchemy.sql.ColumnElement):
@@ -401,8 +428,9 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         # Docstring inherited.
         return self.column.overlaps(other.column)
 
-    def contains(self, other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
-                 ) -> sqlalchemy.sql.ColumnElement:
+    def contains(
+        self, other: Union[_RangeTimespanRepresentation, sqlalchemy.sql.ColumnElement]
+    ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited
         if isinstance(other, _RangeTimespanRepresentation):
             return self.column.contains(other.column)
@@ -411,13 +439,15 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
 
     def lower(self) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
-        return sqlalchemy.sql.functions.coalesce(sqlalchemy.sql.func.lower(self.column),
-                                                 sqlalchemy.sql.literal(0))
+        return sqlalchemy.sql.functions.coalesce(
+            sqlalchemy.sql.func.lower(self.column), sqlalchemy.sql.literal(0)
+        )
 
     def upper(self) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
-        return sqlalchemy.sql.functions.coalesce(sqlalchemy.sql.func.upper(self.column),
-                                                 sqlalchemy.sql.literal(0))
+        return sqlalchemy.sql.functions.coalesce(
+            sqlalchemy.sql.func.upper(self.column), sqlalchemy.sql.literal(0)
+        )
 
     def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
         # Docstring inherited.

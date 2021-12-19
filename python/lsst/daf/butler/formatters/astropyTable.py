@@ -19,14 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("AstropyTableFormatter", )
+__all__ = ("AstropyTableFormatter",)
 
-from typing import (
-    Any,
-    Optional,
-    Type,
-)
 import os.path
+from typing import Any, Optional, Type
 
 from .file import FileFormatter
 
@@ -35,11 +31,16 @@ class AstropyTableFormatter(FileFormatter):
     """Interface for reading and writing astropy.Table objects
     in either ECSV or FITS format
     """
+
     supportedWriteParameters = frozenset({"format"})
     # Ideally we'd also support fits, but that doesn't
     # round trip string columns correctly, so things
     # need to be fixed up on read.
-    supportedExtensions = frozenset({".ecsv", })
+    supportedExtensions = frozenset(
+        {
+            ".ecsv",
+        }
+    )
 
     @property
     def extension(self) -> str:  # type: ignore

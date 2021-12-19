@@ -23,18 +23,9 @@ from __future__ import annotations
 
 __all__ = ("SimpleQuery",)
 
-from typing import (
-    Any,
-    ClassVar,
-    List,
-    Optional,
-    Union,
-    Type,
-    TypeVar,
-)
+from typing import Any, ClassVar, List, Optional, Type, TypeVar, Union
 
 import sqlalchemy
-
 
 T = TypeVar("T")
 
@@ -64,11 +55,15 @@ class SimpleQuery:
     other value.
     """
 
-    def join(self, table: sqlalchemy.sql.FromClause, *,
-             onclause: Optional[sqlalchemy.sql.ColumnElement] = None,
-             isouter: bool = False,
-             full: bool = False,
-             **kwargs: Any) -> None:
+    def join(
+        self,
+        table: sqlalchemy.sql.FromClause,
+        *,
+        onclause: Optional[sqlalchemy.sql.ColumnElement] = None,
+        isouter: bool = False,
+        full: bool = False,
+        **kwargs: Any,
+    ) -> None:
         """Add a table or subquery join to the query.
 
         Possibly also adding SELECT columns or WHERE expressions at the same

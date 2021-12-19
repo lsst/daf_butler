@@ -43,7 +43,7 @@ class ObservationDimensionPacker(DimensionPacker):
         else:
             raise ValueError(f"Invalid dimensions for ObservationDimensionPacker: {dimensions.required}")
         self._detectorMax = record.detector_max
-        self._maxBits = (obsMax*self._detectorMax).bit_length()
+        self._maxBits = (obsMax * self._detectorMax).bit_length()
 
     @property
     def maxBits(self) -> int:
@@ -52,7 +52,7 @@ class ObservationDimensionPacker(DimensionPacker):
 
     def _pack(self, dataId: DataCoordinate) -> int:
         # Docstring inherited from DimensionPacker._pack
-        return dataId["detector"] + self._detectorMax*dataId[self._observationName]
+        return dataId["detector"] + self._detectorMax * dataId[self._observationName]
 
     def unpack(self, packedId: int) -> DataCoordinate:
         # Docstring inherited from DimensionPacker.unpack
@@ -63,5 +63,5 @@ class ObservationDimensionPacker(DimensionPacker):
                 "detector": detector,
                 self._observationName: observation,
             },
-            graph=self.dimensions
+            graph=self.dimensions,
         )

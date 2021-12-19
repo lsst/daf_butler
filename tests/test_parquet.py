@@ -37,14 +37,12 @@ except ImportError:
 from lsst.daf.butler import Butler, DatasetType
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
-
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 @unittest.skipUnless(pyarrow is not None, "Cannot test ParquetFormatter without pyarrow.")
 class ParquetFormatterTestCase(unittest.TestCase):
-    """Tests for ParquetFormatter, using local file datastore.
-    """
+    """Tests for ParquetFormatter, using local file datastore."""
 
     def setUp(self):
         """Create a new butler root for each test."""
@@ -53,8 +51,9 @@ class ParquetFormatterTestCase(unittest.TestCase):
         self.butler = Butler(self.root, run="test_run")
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
-        self.datasetType = DatasetType("data", dimensions=(), storageClass="DataFrame",
-                                       universe=self.butler.registry.dimensions)
+        self.datasetType = DatasetType(
+            "data", dimensions=(), storageClass="DataFrame", universe=self.butler.registry.dimensions
+        )
         self.butler.registry.registerDatasetType(self.datasetType)
 
     def tearDown(self):
@@ -102,12 +101,12 @@ class ParquetFormatterTestCase(unittest.TestCase):
         # Read just some columns a few different ways.
         df3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": {"filter": "g"}})
         self.assertTrue(df1.loc[:, ["g"]].equals(df3))
-        df4 = self.butler.get(self.datasetType, dataId={},
-                              parameters={"columns": {"filter": ["r"], "column": "a"}})
+        df4 = self.butler.get(
+            self.datasetType, dataId={}, parameters={"columns": {"filter": ["r"], "column": "a"}}
+        )
         self.assertTrue(df1.loc[:, [("r", "a")]].equals(df4))
-        column_list = [('g', 'a'), ('r', 'c')]
-        df5 = self.butler.get(self.datasetType, dataId={},
-                              parameters={'columns': column_list})
+        column_list = [("g", "a"), ("r", "c")]
+        df5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": column_list})
         self.assertTrue(df1.loc[:, column_list].equals(df5))
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):

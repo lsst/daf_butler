@@ -23,8 +23,8 @@ from __future__ import annotations
 __all__ = ("TimeConverter",)
 
 import logging
-from typing import Any, ClassVar
 import warnings
+from typing import Any, ClassVar
 
 import astropy.time
 import astropy.utils.exceptions
@@ -91,19 +91,23 @@ class TimeConverter(metaclass=Singleton):
             value = astropy_time.tai
         # anything before epoch or after max_time is truncated
         if value < self.epoch:
-            _LOG.warning("'%s' is earlier than epoch time '%s', epoch time will be used instead",
-                         astropy_time, self.epoch)
+            _LOG.warning(
+                "'%s' is earlier than epoch time '%s', epoch time will be used instead",
+                astropy_time,
+                self.epoch,
+            )
             value = self.epoch
         elif value > self.max_time:
-            _LOG.warning("'%s' is later than max. time '%s', max. time time will be used instead",
-                         value, self.max_time)
+            _LOG.warning(
+                "'%s' is later than max. time '%s', max. time time will be used instead", value, self.max_time
+            )
             value = self.max_time
 
         delta = value - self.epoch
         # Special care needed to preserve nanosecond precision.
         # Usually jd1 has no fractional part but just in case.
         jd1, extra_jd2 = divmod(delta.jd1, 1)
-        value = int(jd1) * self._NSEC_PER_DAY + int(round((delta.jd2 + extra_jd2)*self._NSEC_PER_DAY))
+        value = int(jd1) * self._NSEC_PER_DAY + int(round((delta.jd2 + extra_jd2) * self._NSEC_PER_DAY))
         return value
 
     def nsec_to_astropy(self, time_nsec: int) -> astropy.time.Time:
@@ -127,13 +131,13 @@ class TimeConverter(metaclass=Singleton):
         time that is outside of that range.
         """
         jd1, jd2 = divmod(time_nsec, self._NSEC_PER_DAY)
-        delta = astropy.time.TimeDelta(float(jd1), float(jd2)/self._NSEC_PER_DAY, format="jd", scale="tai")
+        delta = astropy.time.TimeDelta(float(jd1), float(jd2) / self._NSEC_PER_DAY, format="jd", scale="tai")
         value = self.epoch + delta
         return value
 
-    def times_equal(self, time1: astropy.time.Time,
-                    time2: astropy.time.Time,
-                    precision_nsec: float = 1.0) -> bool:
+    def times_equal(
+        self, time1: astropy.time.Time, time2: astropy.time.Time, precision_nsec: float = 1.0
+    ) -> bool:
         """Check that times are equal within specified precision.
 
         Parameters

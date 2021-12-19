@@ -26,11 +26,10 @@ import os
 import unittest
 from typing import List
 
+from lsst.daf.butler import ButlerURI, StorageClassFactory
 from lsst.daf.butler.cli.butler import cli
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
-from lsst.daf.butler import StorageClassFactory, ButlerURI
-from lsst.daf.butler.tests.utils import ButlerTestHelper, makeTestTempDir, MetricTestRepo, removeTestTempDir
-
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
+from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -42,8 +41,7 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
-        self.testRepo = MetricTestRepo(self.root,
-                                       configFile=self.configFile)
+        self.testRepo = MetricTestRepo(self.root, configFile=self.configFile)
 
     def tearDown(self):
         removeTestTempDir(self.root)
@@ -59,10 +57,12 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
             # When preserving the path the run will be in the directory along
             # with a . in the component name.  When not preserving paths the
             # filename will have an underscore rather than dot.
-            for counter, (preserve_path, prefix) in enumerate((("--preserve-path",
-                                                               "ingest/run/test_metric_comp."),
-                                                              ("--no-preserve-path",
-                                                               "test_metric_comp_"))):
+            for counter, (preserve_path, prefix) in enumerate(
+                (
+                    ("--preserve-path", "ingest/run/test_metric_comp."),
+                    ("--no-preserve-path", "test_metric_comp_"),
+                )
+            ):
                 destdir = f"tmp{counter}/"
                 result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir, preserve_path])
                 self.assertEqual(result.exit_code, 0, clickResultMsg(result))
@@ -76,8 +76,16 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
         runner = LogCliRunner()
         with runner.isolated_filesystem():
             destdir = "tmp1/"
-            result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir,
-                                         "--where", "instrument='DummyCamComp' AND visit=423"])
+            result = runner.invoke(
+                cli,
+                [
+                    "retrieve-artifacts",
+                    self.root,
+                    destdir,
+                    "--where",
+                    "instrument='DummyCamComp' AND visit=423",
+                ],
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             self.assertTrue(result.stdout.endswith(": 3\n"), f"Expected 3 got: {result.stdout}")
             artifacts = self.find_files(destdir)
@@ -93,8 +101,10 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
             # tests for the command line itself.
             result = runner.invoke(cli, ["retrieve-artifacts", self.root, destdir, "--transfer", "hardlink"])
             if result.exit_code != 0:
-                raise unittest.SkipTest("hardlink not supported between these directories for this test:"
-                                        f" {clickResultMsg(result)}")
+                raise unittest.SkipTest(
+                    "hardlink not supported between these directories for this test:"
+                    f" {clickResultMsg(result)}"
+                )
 
             # Running again should pass because hard links are the same
             # file.

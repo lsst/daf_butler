@@ -31,20 +31,12 @@ __all__ = [
 ]
 
 import logging
-from typing import (
-    Any,
-    Mapping,
-    MutableMapping,
-    Optional,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional
 
-from .interfaces import VersionTuple, VersionedExtension
+from .interfaces import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
-    from .interfaces import (
-        ButlerAttributeManager,
-    )
+    from .interfaces import ButlerAttributeManager
 
 
 _LOG = logging.getLogger(__name__)
@@ -54,6 +46,7 @@ class MissingVersionError(RuntimeError):
     """Exception raised when existing database is missing attributes with
     version numbers.
     """
+
     pass
 
 
@@ -61,12 +54,13 @@ class IncompatibleVersionError(RuntimeError):
     """Exception raised when configured version number is not compatible with
     database version.
     """
+
     pass
 
 
 class MissingManagerError(RuntimeError):
-    """Exception raised when manager name is missing from registry.
-    """
+    """Exception raised when manager name is missing from registry."""
+
     pass
 
 
@@ -74,12 +68,13 @@ class ManagerMismatchError(RuntimeError):
     """Exception raised when configured manager name does not match name
     stored in the database.
     """
+
     pass
 
 
 class DigestMismatchError(RuntimeError):
-    """Exception raised when schema digest is not equal to stored digest.
-    """
+    """Exception raised when schema digest is not equal to stored digest."""
+
     pass
 
 
@@ -102,6 +97,7 @@ class VersionInfo:
     changed. Intentional schema updates will need to update both configured
     schema version and schema digest.
     """
+
     def __init__(self, version: VersionTuple, digest: Optional[str] = None):
         self.version = version
         self.digest = digest
@@ -118,8 +114,8 @@ class ButlerVersionsManager:
         Mapping of extension type as defined in configuration (e.g.
         "collections") to corresponding instance of manager.
     """
-    def __init__(self, attributes: ButlerAttributeManager,
-                 managers: Mapping[str, Any]):
+
+    def __init__(self, attributes: ButlerAttributeManager, managers: Mapping[str, Any]):
         self._attributes = attributes
         self._managers: MutableMapping[str, VersionedExtension] = {}
         # we only care about managers implementing VersionedExtension interface
@@ -245,8 +241,7 @@ class ButlerVersionsManager:
 
     @property
     def _attributesEmpty(self) -> bool:
-        """True if attributes table is empty.
-        """
+        """True if attributes table is empty."""
         # There are existing repositories where attributes table was not
         # filled, we don't want to force schema migration in this case yet
         # (and we don't have tools) so we allow this as valid use case and
@@ -280,18 +275,12 @@ class ButlerVersionsManager:
                 missing.append(name)
                 continue
             if extension.extensionName() != storedMgr:
-                mismatch.append(
-                    f"{name}: configured {extension.extensionName()}, stored: {storedMgr}"
-                )
+                mismatch.append(f"{name}: configured {extension.extensionName()}, stored: {storedMgr}")
         if missing:
-            raise MissingManagerError(
-                "Cannot find stored configuration for managers: "
-                + ", ".join(missing)
-            )
+            raise MissingManagerError("Cannot find stored configuration for managers: " + ", ".join(missing))
         if mismatch:
             raise ManagerMismatchError(
-                "Configured managers do not match registry-stored names:\n"
-                + "\n".join(missing)
+                "Configured managers do not match registry-stored names:\n" + "\n".join(missing)
             )
 
     def checkManagersVersions(self, writeable: bool) -> None:

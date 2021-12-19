@@ -22,16 +22,16 @@
 """Unit tests for the daf_butler CLI plugin loader.
 """
 
-import click
-from collections import defaultdict
-from contextlib import contextmanager
 import os
 import unittest
+from collections import defaultdict
+from contextlib import contextmanager
 from unittest.mock import patch
-import yaml
 
+import click
+import yaml
 from lsst.daf.butler.cli import butler, cmd
-from lsst.daf.butler.cli.utils import command_test_env, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, command_test_env
 
 
 @click.command()
@@ -58,7 +58,6 @@ def duplicate_command_test_env(runner):
 
 
 class FailedLoadTest(unittest.TestCase):
-
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -67,8 +66,10 @@ class FailedLoadTest(unittest.TestCase):
             with self.assertLogs() as cm:
                 result = self.runner.invoke(butler.cli, "--help")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-            expectedErrMsg = "Could not import plugin from " \
-                             "test_cliPluginLoader.non_existant_command_function, skipping."
+            expectedErrMsg = (
+                "Could not import plugin from "
+                "test_cliPluginLoader.non_existant_command_function, skipping."
+            )
             self.assertIn(expectedErrMsg, " ".join(cm.output))
 
     def test_unimportableLocalPackage(self):
@@ -87,7 +88,6 @@ class FailedLoadTest(unittest.TestCase):
 
 
 class PluginLoaderTest(unittest.TestCase):
-
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -137,9 +137,12 @@ class PluginLoaderTest(unittest.TestCase):
         with duplicate_command_test_env(self.runner):
             result = self.runner.invoke(butler.cli, ["create", "test_repo"])
             self.assertEqual(result.exit_code, 1, f"output: {result.output} exception: {result.exception}")
-            self.assertEqual(result.output, "Error: Command 'create' "
-                             "exists in packages lsst.daf.butler.cli.cmd, test_cliPluginLoader. "
-                             "Duplicate commands are not supported, aborting.\n")
+            self.assertEqual(
+                result.output,
+                "Error: Command 'create' "
+                "exists in packages lsst.daf.butler.cli.cmd, test_cliPluginLoader. "
+                "Duplicate commands are not supported, aborting.\n",
+            )
 
 
 if __name__ == "__main__":

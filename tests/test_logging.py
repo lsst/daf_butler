@@ -19,21 +19,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import unittest
 import io
 import logging
 import tempfile
-from logging import StreamHandler, FileHandler
-import lsst.utils.logging
-from lsst.utils.logging import VERBOSE
+import unittest
+from logging import FileHandler, StreamHandler
 
+import lsst.utils.logging
 from lsst.daf.butler.core.logging import (
+    ButlerLogRecord,
     ButlerLogRecordHandler,
     ButlerLogRecords,
-    JsonLogFormatter,
-    ButlerLogRecord,
     ButlerMDC,
+    JsonLogFormatter,
 )
+from lsst.utils.logging import VERBOSE
 
 
 class LoggingTestCase(unittest.TestCase):
@@ -269,7 +269,6 @@ class LoggingTestCase(unittest.TestCase):
 
 
 class TestJsonLogging(unittest.TestCase):
-
     def testJsonLogStream(self):
         log = logging.getLogger(self.id())
         log.setLevel(logging.INFO)

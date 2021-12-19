@@ -24,16 +24,16 @@
 
 import logging
 import os
-import posixpath
-import unittest
-import tempfile
-import shutil
-import pickle
-import string
-import random
-import time
-import socket
 import pathlib
+import pickle
+import posixpath
+import random
+import shutil
+import socket
+import string
+import tempfile
+import time
+import unittest
 
 try:
     import boto3
@@ -43,9 +43,9 @@ except ImportError:
     boto3 = None
 
     def mock_s3(cls):
-        """A no-op decorator in case moto mock_s3 can not be imported.
-        """
+        """A no-op decorator in case moto mock_s3 can not be imported."""
         return cls
+
 
 try:
     from cheroot import wsgi
@@ -53,48 +53,57 @@ try:
 except ImportError:
     WsgiDAVApp = None
 
-import astropy.time
-from threading import Thread
 from tempfile import gettempdir
+from threading import Thread
+
+import astropy.time
+from lsst.daf.butler import (
+    Butler,
+    ButlerConfig,
+    ButlerURI,
+    CollectionSearch,
+    CollectionType,
+    Config,
+    DatasetIdGenEnum,
+    DatasetRef,
+    DatasetType,
+    FileDataset,
+    FileTemplateValidationError,
+    StorageClassFactory,
+    ValidationError,
+    script,
+)
+from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
+from lsst.daf.butler.registry import ConflictingDefinitionError, MissingCollectionError
+from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
+from lsst.resources.http import isWebdavEndpoint
+from lsst.resources.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
 from lsst.utils import doImport
 from lsst.utils.introspection import get_full_type_name
-from lsst.daf.butler import Butler, Config, ButlerConfig
-from lsst.daf.butler import StorageClassFactory
-from lsst.daf.butler import DatasetType, DatasetRef, DatasetIdGenEnum
-from lsst.daf.butler import FileTemplateValidationError, ValidationError
-from lsst.daf.butler import FileDataset
-from lsst.daf.butler import CollectionSearch, CollectionType
-from lsst.daf.butler import ButlerURI
-from lsst.daf.butler import script
-from lsst.daf.butler.registry import MissingCollectionError, ConflictingDefinitionError
-from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
-from lsst.resources.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
-from lsst.resources.http import isWebdavEndpoint
-
-from lsst.daf.butler.tests import MultiDetectorFormatter, MetricsExample
-from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 def makeExampleMetrics():
-    return MetricsExample({"AM1": 5.2, "AM2": 30.6},
-                          {"a": [1, 2, 3],
-                           "b": {"blue": 5, "red": "green"}},
-                          [563, 234, 456.7, 752, 8, 9, 27]
-                          )
+    return MetricsExample(
+        {"AM1": 5.2, "AM2": 30.6},
+        {"a": [1, 2, 3], "b": {"blue": 5, "red": "green"}},
+        [563, 234, 456.7, 752, 8, 9, 27],
+    )
 
 
 class TransactionTestError(Exception):
     """Specific error for testing transactions, to prevent misdiagnosing
     that might otherwise occur when a standard exception is used.
     """
+
     pass
 
 
 class ButlerConfigTests(unittest.TestCase):
-    """Simple tests for ButlerConfig that are not tested in other test cases.
-    """
+    """Simple tests for ButlerConfig that are not tested in any other test
+    cases."""
 
     def testSearchPath(self):
         configFile = os.path.join(TESTDIR, "config", "basic", "butler.yaml")
@@ -120,8 +129,7 @@ class ButlerPutGetTests:
 
     @staticmethod
     def addDatasetType(datasetTypeName, dimensions, storageClass, registry):
-        """Create a DatasetType and register it
-        """
+        """Create a DatasetType and register it"""
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         registry.registerDatasetType(datasetType)
         return datasetType
@@ -162,23 +170,38 @@ class ButlerPutGetTests:
 
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
-                                                                "name": "d-r",
-                                                                "band": "R"})
-        butler.registry.insertDimensionData("visit_system", {"instrument": "DummyCamComp",
-                                                             "id": 1,
-                                                             "name": "default"})
+        butler.registry.insertDimensionData(
+            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
+        )
+        butler.registry.insertDimensionData(
+            "visit_system", {"instrument": "DummyCamComp", "id": 1, "name": "default"}
+        )
         visit_start = astropy.time.Time("2020-01-01 08:00:00.123456789", scale="tai")
         visit_end = astropy.time.Time("2020-01-01 08:00:36.66", scale="tai")
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
-                                                      "name": "fourtwentythree", "physical_filter": "d-r",
-                                                      "visit_system": 1, "datetime_begin": visit_start,
-                                                      "datetime_end": visit_end})
+        butler.registry.insertDimensionData(
+            "visit",
+            {
+                "instrument": "DummyCamComp",
+                "id": 423,
+                "name": "fourtwentythree",
+                "physical_filter": "d-r",
+                "visit_system": 1,
+                "datetime_begin": visit_start,
+                "datetime_end": visit_end,
+            },
+        )
 
         # Add a second visit for some later tests
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 424,
-                                                      "name": "fourtwentyfour", "physical_filter": "d-r",
-                                                      "visit_system": 1})
+        butler.registry.insertDimensionData(
+            "visit",
+            {
+                "instrument": "DummyCamComp",
+                "id": 424,
+                "name": "fourtwentyfour",
+                "physical_filter": "d-r",
+                "visit_system": 1,
+            },
+        )
 
         # Create and store a dataset
         metric = makeExampleMetrics()
@@ -233,9 +256,9 @@ class ButlerPutGetTests:
 
                 # Check we can get components
                 if storageClass.isComposite():
-                    self.assertGetComponents(butler, ref,
-                                             ("summary", "data", "output"), metric,
-                                             collections=this_run)
+                    self.assertGetComponents(
+                        butler, ref, ("summary", "data", "output"), metric, collections=this_run
+                    )
 
                 # Can the artifacts themselves be retrieved?
                 if not butler.datastore.isEphemeral:
@@ -247,8 +270,9 @@ class ButlerPutGetTests:
                         # protection works (using "auto" for File URIs would
                         # use hard links and subsequent transfer would work
                         # because it knows they are the same file).
-                        transferred = butler.retrieveArtifacts([ref], destination,
-                                                               preserve_path=preserve_path, transfer="copy")
+                        transferred = butler.retrieveArtifacts(
+                            [ref], destination, preserve_path=preserve_path, transfer="copy"
+                        )
                         self.assertGreater(len(transferred), 0)
                         artifacts = list(ButlerURI.findFileResources([destination]))
                         self.assertEqual(set(transferred), set(artifacts))
@@ -269,8 +293,12 @@ class ButlerPutGetTests:
                         n_uris = len(secondary_uris)
                         if primary_uri:
                             n_uris += 1
-                        self.assertEqual(len(artifacts), n_uris, "Comparing expected artifacts vs actual:"
-                                         f" {artifacts} vs {primary_uri} and {secondary_uris}")
+                        self.assertEqual(
+                            len(artifacts),
+                            n_uris,
+                            "Comparing expected artifacts vs actual:"
+                            f" {artifacts} vs {primary_uri} and {secondary_uris}",
+                        )
 
                         if preserve_path:
                             # No need to run these twice
@@ -280,9 +308,9 @@ class ButlerPutGetTests:
                             with self.assertRaises(FileExistsError):
                                 butler.retrieveArtifacts([ref], destination)
 
-                            transferred_again = butler.retrieveArtifacts([ref], destination,
-                                                                         preserve_path=preserve_path,
-                                                                         overwrite=True)
+                            transferred_again = butler.retrieveArtifacts(
+                                [ref], destination, preserve_path=preserve_path, overwrite=True
+                            )
                             self.assertEqual(set(transferred_again), set(transferred))
 
                 # Now remove the dataset completely.
@@ -339,8 +367,9 @@ class ButlerPutGetTests:
                 count = butler.get(ref.datasetType.componentTypeName("counter"), dataId)
                 self.assertEqual(count, len(data))
 
-                count = butler.get(ref.datasetType.componentTypeName("counter"), dataId,
-                                   parameters={"slice": slice(stop)})
+                count = butler.get(
+                    ref.datasetType.componentTypeName("counter"), dataId, parameters={"slice": slice(stop)}
+                )
                 self.assertEqual(count, stop)
 
             compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
@@ -348,8 +377,9 @@ class ButlerPutGetTests:
             self.assertEqual(summary, metric.summary)
 
         # Create a Dataset type that has the same name but is inconsistent.
-        inconsistentDatasetType = DatasetType(datasetTypeName, dimensions,
-                                              self.storageClassFactory.getStorageClass("Config"))
+        inconsistentDatasetType = DatasetType(
+            datasetTypeName, dimensions, self.storageClassFactory.getStorageClass("Config")
+        )
 
         # Getting with a dataset type that does not match registry fails
         with self.assertRaises(ValueError):
@@ -412,16 +442,18 @@ class ButlerPutGetTests:
         butler = Butler(self.tmpConfigFile, writeable=True)
         # Create and register a DatasetType
         dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
-        datasetType = self.addDatasetType("example", dimensions,
-                                          self.storageClassFactory.getStorageClass("StructuredData"),
-                                          butler.registry)
+        datasetType = self.addDatasetType(
+            "example", dimensions, self.storageClassFactory.getStorageClass("StructuredData"), butler.registry
+        )
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
-                                                                "name": "d-r",
-                                                                "band": "R"})
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
-                                                      "name": "fourtwentythree", "physical_filter": "d-r"})
+        butler.registry.insertDimensionData(
+            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
+        )
+        butler.registry.insertDimensionData(
+            "visit",
+            {"instrument": "DummyCamComp", "id": 423, "name": "fourtwentythree", "physical_filter": "d-r"},
+        )
         dataId = {"instrument": "DummyCamComp", "visit": 423}
         # Create dataset.
         metric = makeExampleMetrics()
@@ -455,8 +487,8 @@ class ButlerPutGetTests:
 
 
 class ButlerTests(ButlerPutGetTests):
-    """Tests for Butler.
-    """
+    """Tests for Butler."""
+
     useTempRoot = True
 
     def setUp(self):
@@ -466,8 +498,7 @@ class ButlerTests(ButlerPutGetTests):
         self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
 
     def testConstructor(self):
-        """Independent test of constructor.
-        """
+        """Independent test of constructor."""
         butler = Butler(self.tmpConfigFile, run="ingest")
         self.assertIsInstance(butler, Butler)
 
@@ -475,10 +506,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(collections, {"ingest"})
 
         butler2 = Butler(butler=butler, collections=["other"])
-        self.assertEqual(
-            butler2.collections,
-            CollectionSearch.fromExpression(["other"])
-        )
+        self.assertEqual(butler2.collections, CollectionSearch.fromExpression(["other"]))
         self.assertIsNone(butler2.run)
         self.assertIs(butler.datastore, butler2.datastore)
 
@@ -593,17 +621,19 @@ class ButlerTests(ButlerPutGetTests):
 
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
-                                                                "name": "d-r",
-                                                                "band": "R"})
+        butler.registry.insertDimensionData(
+            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
+        )
         for detector in (1, 2):
-            butler.registry.insertDimensionData("detector", {"instrument": "DummyCamComp", "id": detector,
-                                                             "full_name": f"detector{detector}"})
+            butler.registry.insertDimensionData(
+                "detector", {"instrument": "DummyCamComp", "id": detector, "full_name": f"detector{detector}"}
+            )
 
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
-                                                      "name": "fourtwentythree", "physical_filter": "d-r"},
-                                                     {"instrument": "DummyCamComp", "id": 424,
-                                                      "name": "fourtwentyfour", "physical_filter": "d-r"})
+        butler.registry.insertDimensionData(
+            "visit",
+            {"instrument": "DummyCamComp", "id": 423, "name": "fourtwentythree", "physical_filter": "d-r"},
+            {"instrument": "DummyCamComp", "id": 424, "name": "fourtwentyfour", "physical_filter": "d-r"},
+        )
 
         formatter = doImport("lsst.daf.butler.formatters.yaml.YamlFormatter")
         dataRoot = os.path.join(TESTDIR, "data", "basic")
@@ -615,9 +645,7 @@ class ButlerTests(ButlerPutGetTests):
             # Create a DatasetRef for ingest
             refIn = DatasetRef(datasetType, dataId, id=None)
 
-            datasets.append(FileDataset(path=metricFile,
-                                        refs=[refIn],
-                                        formatter=formatter))
+            datasets.append(FileDataset(path=metricFile, refs=[refIn], formatter=formatter))
 
         butler.ingest(*datasets, transfer="copy")
 
@@ -643,9 +671,7 @@ class ButlerTests(ButlerPutGetTests):
             refs.append(DatasetRef(datasetType, dataId, id=None))
 
         datasets = []
-        datasets.append(FileDataset(path=metricFile,
-                                    refs=refs,
-                                    formatter=MultiDetectorFormatter))
+        datasets.append(FileDataset(path=metricFile, refs=refs, formatter=MultiDetectorFormatter))
 
         butler.ingest(*datasets, transfer="copy")
 
@@ -688,8 +714,9 @@ class ButlerTests(ButlerPutGetTests):
         # different runs.  ref3 has a different data ID.
         metric = makeExampleMetrics()
         dimensions = butler.registry.dimensions.extract(["instrument", "physical_filter"])
-        datasetType = self.addDatasetType("prune_collections_test_dataset", dimensions, storageClass,
-                                          butler.registry)
+        datasetType = self.addDatasetType(
+            "prune_collections_test_dataset", dimensions, storageClass, butler.registry
+        )
         ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
         ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
         ref3 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-R1"}, run=run1)
@@ -721,8 +748,7 @@ class ButlerTests(ButlerPutGetTests):
             butler.pruneCollection(run1, pruge=True, unstore=True)
         with self.assertRaises(Exception):
             butler.pruneCollection(run2, pruge=True, unstore=True)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
-                              [ref1, ref2, ref3])
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
         existence = butler.datastore.mexists([ref1, ref2, ref3])
         self.assertTrue(existence[ref1])
         self.assertTrue(existence[ref2])
@@ -738,8 +764,7 @@ class ButlerTests(ButlerPutGetTests):
         butler.pruneCollection(tag1)
         with self.assertRaises(MissingCollectionError):
             butler.registry.getCollectionType(tag1)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
-                              [ref1, ref2, ref3])
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
         existence = butler.datastore.mexists([ref1, ref2, ref3])
         self.assertTrue(existence[ref1])
         self.assertTrue(existence[ref2])
@@ -751,8 +776,7 @@ class ButlerTests(ButlerPutGetTests):
         butler.pruneCollection(tag1, unstore=True)
         with self.assertRaises(MissingCollectionError):
             butler.registry.getCollectionType(tag1)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
-                              [ref1, ref2, ref3])
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
         existence = butler.datastore.mexists([ref1, ref2, ref3])
         self.assertTrue(existence[ref1])
         self.assertTrue(existence[ref2])
@@ -762,8 +786,7 @@ class ButlerTests(ButlerPutGetTests):
         butler.pruneCollection(chain1)
         with self.assertRaises(MissingCollectionError):
             butler.registry.getCollectionType(chain1)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
-                              [ref1, ref2, ref3])
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
         existence = butler.datastore.mexists([ref1, ref2, ref3])
         self.assertTrue(existence[ref1])
         self.assertTrue(existence[ref2])
@@ -776,8 +799,7 @@ class ButlerTests(ButlerPutGetTests):
         butler.pruneCollection(chain1, unstore=True)
         with self.assertRaises(MissingCollectionError):
             butler.registry.getCollectionType(chain1)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
-                              [ref1, ref2, ref3])
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref1, ref2, ref3])
         existence = butler.datastore.mexists([ref1, ref2, ref3])
         self.assertFalse(existence[ref1])
         self.assertTrue(existence[ref2])
@@ -787,23 +809,20 @@ class ButlerTests(ButlerPutGetTests):
         butler.pruneCollection(run1, purge=True, unstore=True)
         with self.assertRaises(MissingCollectionError):
             butler.registry.getCollectionType(run1)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
-                              [ref2])
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [ref2])
         self.assertTrue(butler.datastore.exists(ref2))
         # Remove run2.  This removes ref2 from the registry and the datastore.
         butler.pruneCollection(run2, purge=True, unstore=True)
         with self.assertRaises(MissingCollectionError):
             butler.registry.getCollectionType(run2)
-        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
-                              [])
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)), [])
 
         # Now that the collections have been pruned we can remove the
         # dataset type
         butler.registry.removeDatasetType(datasetType.name)
 
     def testPickle(self):
-        """Test pickle support.
-        """
+        """Test pickle support."""
         butler = Butler(self.tmpConfigFile, run="ingest")
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
@@ -815,10 +834,14 @@ class ButlerTests(ButlerPutGetTests):
         butler = Butler(self.tmpConfigFile, run="ingest")
         dimensions = butler.registry.dimensions.extract(["instrument", "visit", "physical_filter"])
         dimensionEntries = [
-            ("instrument", {"instrument": "DummyCam"}, {"instrument": "DummyHSC"},
-             {"instrument": "DummyCamComp"}),
+            (
+                "instrument",
+                {"instrument": "DummyCam"},
+                {"instrument": "DummyHSC"},
+                {"instrument": "DummyCamComp"},
+            ),
             ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "R"}),
-            ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo", "physical_filter": "d-r"})
+            ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo", "physical_filter": "d-r"}),
         ]
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         # Add needed Dimensions
@@ -840,8 +863,17 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
 
         # Now that we have some dataset types registered, validate them
-        butler.validateConfiguration(ignore=["test_metric_comp", "metric3", "calexp", "DummySC",
-                                             "datasetType.component", "random_data", "random_data_2"])
+        butler.validateConfiguration(
+            ignore=[
+                "test_metric_comp",
+                "metric3",
+                "calexp",
+                "DummySC",
+                "datasetType.component",
+                "random_data",
+                "random_data_2",
+            ]
+        )
 
         # Add a new datasetType that will fail template validation
         self.addDatasetType("test_metric_comp", dimensions, storageClass, butler.registry)
@@ -853,18 +885,27 @@ class ButlerTests(ButlerPutGetTests):
         butler.validateConfiguration(datasetTypeNames=["metric4"])
 
         # Rerun validation but ignore the bad datasetType
-        butler.validateConfiguration(ignore=["test_metric_comp", "metric3", "calexp", "DummySC",
-                                             "datasetType.component", "random_data", "random_data_2"])
+        butler.validateConfiguration(
+            ignore=[
+                "test_metric_comp",
+                "metric3",
+                "calexp",
+                "DummySC",
+                "datasetType.component",
+                "random_data",
+                "random_data_2",
+            ]
+        )
 
     def testTransaction(self):
         butler = Butler(self.tmpConfigFile, run="ingest")
         datasetTypeName = "test_metric"
         dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
-        dimensionEntries = (("instrument", {"instrument": "DummyCam"}),
-                            ("physical_filter", {"instrument": "DummyCam", "name": "d-r",
-                                                 "band": "R"}),
-                            ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo",
-                                       "physical_filter": "d-r"}))
+        dimensionEntries = (
+            ("instrument", {"instrument": "DummyCam"}),
+            ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "band": "R"}),
+            ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo", "physical_filter": "d-r"}),
+        )
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         metric = makeExampleMetrics()
         dataId = {"instrument": "DummyCam", "visit": 42}
@@ -885,8 +926,7 @@ class ButlerTests(ButlerPutGetTests):
                 metricOut = butler.get(datasetTypeName, dataId)
                 self.assertEqual(metric, metricOut)
                 # Check we can get components
-                self.assertGetComponents(butler, ref,
-                                         ("summary", "data", "output"), metric)
+                self.assertGetComponents(butler, ref, ("summary", "data", "output"), metric)
                 raise TransactionTestError("This should roll back the entire transaction")
         with self.assertRaises(LookupError, msg=f"Check can't expand DataId {dataId}"):
             butler.registry.expandDataId(dataId)
@@ -941,8 +981,7 @@ class ButlerTests(ButlerPutGetTests):
             Butler(butlerConfig)
 
         with self.assertRaises(FileExistsError):
-            Butler.makeRepo(self.root, standalone=True,
-                            config=Config(self.configFile), overwrite=False)
+            Butler.makeRepo(self.root, standalone=True, config=Config(self.configFile), overwrite=False)
 
     def testStringification(self):
         butler = Butler(self.tmpConfigFile, run="ingest")
@@ -969,11 +1008,12 @@ class ButlerTests(ButlerPutGetTests):
 
         # Create dimension records.
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
-                                                                "name": "d-r",
-                                                                "band": "R"})
-        butler.registry.insertDimensionData("detector", {"instrument": "DummyCamComp",
-                                                         "id": 1, "full_name": "det1"})
+        butler.registry.insertDimensionData(
+            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
+        )
+        butler.registry.insertDimensionData(
+            "detector", {"instrument": "DummyCamComp", "id": 1, "full_name": "det1"}
+        )
 
         dimensions = butler.registry.dimensions.extract(["instrument", "exposure"])
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
@@ -983,20 +1023,24 @@ class ButlerTests(ButlerPutGetTests):
         dayobs = 20210530
 
         for i in range(n_exposures):
-            butler.registry.insertDimensionData("exposure", {"instrument": "DummyCamComp",
-                                                             "id": i, "obs_id": f"exp{i}",
-                                                             "seq_num": i, "day_obs": dayobs,
-                                                             "physical_filter": "d-r"})
+            butler.registry.insertDimensionData(
+                "exposure",
+                {
+                    "instrument": "DummyCamComp",
+                    "id": i,
+                    "obs_id": f"exp{i}",
+                    "seq_num": i,
+                    "day_obs": dayobs,
+                    "physical_filter": "d-r",
+                },
+            )
 
         # Write some data.
         for i in range(n_exposures):
-            metric = {"something": i,
-                      "other": "metric",
-                      "list": [2*x for x in range(i)]}
+            metric = {"something": i, "other": "metric", "list": [2 * x for x in range(i)]}
 
             # Use the seq_num for the put to test rewriting.
-            dataId = {"seq_num": i, "day_obs": dayobs, "instrument": "DummyCamComp",
-                      "physical_filter": "d-r"}
+            dataId = {"seq_num": i, "day_obs": dayobs, "instrument": "DummyCamComp", "physical_filter": "d-r"}
             ref = butler.put(metric, datasetTypeName, dataId=dataId)
 
             # Check that the exposure is correct in the dataId
@@ -1027,13 +1071,15 @@ class FileDatastoreButlerTests(ButlerTests):
 
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
-                                                                "name": "d-r",
-                                                                "band": "R"})
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423, "name": "v423",
-                                                      "physical_filter": "d-r"})
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425, "name": "v425",
-                                                      "physical_filter": "d-r"})
+        butler.registry.insertDimensionData(
+            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
+        )
+        butler.registry.insertDimensionData(
+            "visit", {"instrument": "DummyCamComp", "id": 423, "name": "v423", "physical_filter": "d-r"}
+        )
+        butler.registry.insertDimensionData(
+            "visit", {"instrument": "DummyCamComp", "id": 425, "name": "v425", "physical_filter": "d-r"}
+        )
 
         # Create and store a dataset
         metric = makeExampleMetrics()
@@ -1051,9 +1097,10 @@ class FileDatastoreButlerTests(ButlerTests):
         # Put with exactly the data ID keys needed
         ref = butler.put(metric, "metric1", dataId1)
         uri = butler.getURI(ref)
-        self.assertTrue(self.checkFileExists(butler.datastore.root,
-                                             "ingest/metric1/??#?/d-r/DummyCamComp_423.pickle"),
-                        f"Checking existence of {uri}")
+        self.assertTrue(
+            self.checkFileExists(butler.datastore.root, "ingest/metric1/??#?/d-r/DummyCamComp_423.pickle"),
+            f"Checking existence of {uri}",
+        )
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -1064,9 +1111,10 @@ class FileDatastoreButlerTests(ButlerTests):
         # must be consistent).
         ref = butler.put(metric, "metric2", dataId2)
         uri = butler.getURI(ref)
-        self.assertTrue(self.checkFileExists(butler.datastore.root,
-                                             "ingest/metric2/d-r/DummyCamComp_v423.pickle"),
-                        f"Checking existence of {uri}")
+        self.assertTrue(
+            self.checkFileExists(butler.datastore.root, "ingest/metric2/d-r/DummyCamComp_v423.pickle"),
+            f"Checking existence of {uri}",
+        )
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -1121,16 +1169,24 @@ class FileDatastoreButlerTests(ButlerTests):
                 # in the script folder are generally considered protected and
                 # should not be used as public api.
                 with open(exportFile, "r") as f:
-                    script.butlerImport(importDir, export_file=f, directory=exportDir,
-                                        transfer="auto", skip_dimensions=None, reuse_ids=False)
+                    script.butlerImport(
+                        importDir,
+                        export_file=f,
+                        directory=exportDir,
+                        transfer="auto",
+                        skip_dimensions=None,
+                        reuse_ids=False,
+                    )
                 importButler = Butler(importDir, run="ingest")
                 for ref in datasets:
                     with self.subTest(ref=ref):
                         # Test for existence by passing in the DatasetType and
                         # data ID separately, to avoid lookup by dataset_id.
                         self.assertTrue(importButler.datasetExists(ref.datasetType, ref.dataId))
-                self.assertEqual(list(importButler.registry.queryDimensionRecords("skymap")),
-                                 [importButler.registry.dimensions["skymap"].RecordClass(**skymapRecord)])
+                self.assertEqual(
+                    list(importButler.registry.queryDimensionRecords("skymap")),
+                    [importButler.registry.dimensions["skymap"].RecordClass(**skymapRecord)],
+                )
 
     def testRemoveRuns(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
@@ -1146,8 +1202,9 @@ class FileDatastoreButlerTests(ButlerTests):
         # put a dataset in each
         metric = makeExampleMetrics()
         dimensions = butler.registry.dimensions.extract(["instrument", "physical_filter"])
-        datasetType = self.addDatasetType("prune_collections_test_dataset", dimensions, storageClass,
-                                          butler.registry)
+        datasetType = self.addDatasetType(
+            "prune_collections_test_dataset", dimensions, storageClass, butler.registry
+        )
         ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
         ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
         uri1 = butler.getURI(ref1, collections=[run1])
@@ -1171,6 +1228,7 @@ class FileDatastoreButlerTests(ButlerTests):
 
 class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """PosixDatastore specialization of a butler"""
+
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     fullConfigKey = ".datastore.formatters"
     validationCanFail = True
@@ -1179,8 +1237,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     registryStr = "/gen3.sqlite3"
 
     def testPathConstructor(self):
-        """Independent test of constructor using PathLike.
-        """
+        """Independent test of constructor using PathLike."""
         butler = Butler(self.tmpConfigFile, run="ingest")
         self.assertIsInstance(butler, Butler)
 
@@ -1211,17 +1268,17 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         for path in pathsInStore:
             # Assume local file system
-            self.assertTrue(self.checkFileExists(datastoreRoot, path),
-                            f"Checking path {path}")
+            self.assertTrue(self.checkFileExists(datastoreRoot, path), f"Checking path {path}")
 
         for transfer in ("copy", "link", "symlink", "relsymlink"):
             with safeTestTempDir(TESTDIR) as exportDir:
-                with exportButler.export(directory=exportDir, format="yaml",
-                                         transfer=transfer) as export:
+                with exportButler.export(directory=exportDir, format="yaml", transfer=transfer) as export:
                     export.saveDatasets(datasets)
                     for path in pathsInStore:
-                        self.assertTrue(self.checkFileExists(exportDir, path),
-                                        f"Check that mode {transfer} exported files")
+                        self.assertTrue(
+                            self.checkFileExists(exportDir, path),
+                            f"Check that mode {transfer} exported files",
+                        )
 
     def testPruneDatasets(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
@@ -1238,8 +1295,9 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # different runs.  ref3 has a different data ID.
         metric = makeExampleMetrics()
         dimensions = butler.registry.dimensions.extract(["instrument", "physical_filter"])
-        datasetType = self.addDatasetType("prune_collections_test_dataset", dimensions, storageClass,
-                                          butler.registry)
+        datasetType = self.addDatasetType(
+            "prune_collections_test_dataset", dimensions, storageClass, butler.registry
+        )
         ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
         ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
         ref3 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-R1"}, run=run1)
@@ -1343,6 +1401,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """InMemoryDatastore specialization of a butler"""
+
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
     fullConfigKey = None
     useTempRoot = False
@@ -1357,12 +1416,16 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
 class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """PosixDatastore specialization"""
+
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
     datastoreStr = ["datastore='InMemory", "/FileDatastore_1/,", "/FileDatastore_2/'"]
-    datastoreName = ["InMemoryDatastore@", f"FileDatastore@{BUTLER_ROOT_TAG}/FileDatastore_1",
-                     "SecondDatastore"]
+    datastoreName = [
+        "InMemoryDatastore@",
+        f"FileDatastore@{BUTLER_ROOT_TAG}/FileDatastore_1",
+        "SecondDatastore",
+    ]
     registryStr = "/gen3.sqlite3"
 
 
@@ -1409,8 +1472,7 @@ class ButlerMakeRepoOutfileTestCase(ButlerPutGetTests, unittest.TestCase):
         self.root2 = makeTestTempDir(TESTDIR)
 
         self.tmpConfigFile = os.path.join(self.root2, "different.yaml")
-        Butler.makeRepo(self.root, config=Config(self.configFile),
-                        outfile=self.tmpConfigFile)
+        Butler.makeRepo(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
 
     def tearDown(self):
         if os.path.exists(self.root2):
@@ -1439,8 +1501,7 @@ class ButlerMakeRepoOutfileDirTestCase(ButlerMakeRepoOutfileTestCase):
         self.root2 = makeTestTempDir(TESTDIR)
 
         self.tmpConfigFile = self.root2
-        Butler.makeRepo(self.root, config=Config(self.configFile),
-                        outfile=self.tmpConfigFile)
+        Butler.makeRepo(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
 
     def testConfigExistence(self):
         # Append the yaml file else Config constructor does not know the file
@@ -1459,8 +1520,7 @@ class ButlerMakeRepoOutfileUriTestCase(ButlerMakeRepoOutfileTestCase):
         self.root2 = makeTestTempDir(TESTDIR)
 
         self.tmpConfigFile = ButlerURI(os.path.join(self.root2, "something.yaml")).geturl()
-        Butler.makeRepo(self.root, config=Config(self.configFile),
-                        outfile=self.tmpConfigFile)
+        Butler.makeRepo(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
 
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
@@ -1469,6 +1529,7 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """S3Datastore specialization of a butler; an S3 storage Datastore +
     a local in-memory SqlRegistry.
     """
+
     configFile = os.path.join(TESTDIR, "config/basic/butler-s3store.yaml")
     fullConfigKey = None
     validationCanFail = True
@@ -1502,9 +1563,7 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         This is equivalent to tempfile.mkdtemp as this is what self.root
         becomes when useTempRoot is True.
         """
-        rndstr = "".join(
-            random.choice(string.ascii_uppercase + string.digits) for _ in range(20)
-        )
+        rndstr = "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
         return rndstr + "/"
 
     def setUp(self):
@@ -1562,14 +1621,19 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
 @unittest.skipIf(WsgiDAVApp is None, "Warning: wsgidav/cheroot not found!")
 # Mock required environment variables during tests
-@unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
-                                       "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
-                                           TESTDIR, "config/testConfigs/webdav/token"),
-                                       "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs"})
+@unittest.mock.patch.dict(
+    os.environ,
+    {
+        "LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
+        "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(TESTDIR, "config/testConfigs/webdav/token"),
+        "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs",
+    },
+)
 class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
     a local in-memory SqlRegistry.
     """
+
     configFile = os.path.join(TESTDIR, "config/basic/butler-webdavstore.yaml")
     fullConfigKey = None
     validationCanFail = True
@@ -1615,9 +1679,7 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         This is equivalent to tempfile.mkdtemp as this is what self.root
         becomes when useTempRoot is True.
         """
-        rndstr = "".join(
-            random.choice(string.ascii_uppercase + string.digits) for _ in range(20)
-        )
+        rndstr = "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
         return rndstr + "/"
 
     @classmethod
@@ -1628,9 +1690,9 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
 
         cls.portNumber = cls._getfreeport()
         # Run a local webdav server on which tests will be run
-        cls.serverThread = Thread(target=cls._serveWebdav,
-                                  args=(cls, cls.portNumber, lambda: cls.stopWebdavServer),
-                                  daemon=True)
+        cls.serverThread = Thread(
+            target=cls._serveWebdav, args=(cls, cls.portNumber, lambda: cls.stopWebdavServer), daemon=True
+        )
         cls.serverThread.start()
         # Wait for it to start
         time.sleep(3)
@@ -1643,10 +1705,14 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         cls.serverThread.join()
 
     # Mock required environment variables during tests
-    @unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
-                                           "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
-                                               TESTDIR, "config/testConfigs/webdav/token"),
-                                           "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs"})
+    @unittest.mock.patch.dict(
+        os.environ,
+        {
+            "LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
+            "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(TESTDIR, "config/testConfigs/webdav/token"),
+            "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs",
+        },
+    )
     def setUp(self):
         config = Config(self.configFile)
 
@@ -1669,10 +1735,14 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         self.tmpConfigFile = posixpath.join(self.rooturi, "butler.yaml")
 
     # Mock required environment variables during tests
-    @unittest.mock.patch.dict(os.environ, {"LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
-                                           "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(
-                                               TESTDIR, "config/testConfigs/webdav/token"),
-                                           "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs"})
+    @unittest.mock.patch.dict(
+        os.environ,
+        {
+            "LSST_BUTLER_WEBDAV_AUTH": "TOKEN",
+            "LSST_BUTLER_WEBDAV_TOKEN_FILE": os.path.join(TESTDIR, "config/testConfigs/webdav/token"),
+            "LSST_BUTLER_WEBDAV_CA_BUNDLE": "/path/to/ca/certs",
+        },
+    )
     def tearDown(self):
         # Clear temporary directory
         ButlerURI(self.rooturi).remove()
@@ -1701,9 +1771,7 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
             "host": "0.0.0.0",
             "port": port,
             "provider_mapping": {"/": root_path},
-            "http_authenticator": {
-                "domain_controller": None
-            },
+            "http_authenticator": {"domain_controller": None},
             "simple_dc": {"user_mapping": {"*": True}},
             "verbose": 0,
         }
@@ -1737,7 +1805,7 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         Determines a free port using sockets.
         """
         free_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        free_socket.bind(('0.0.0.0', 0))
+        free_socket.bind(("0.0.0.0", 0))
         free_socket.listen()
         port = free_socket.getsockname()[1]
         free_socket.close()
@@ -1771,37 +1839,33 @@ class PosixDatastoreTransfers(unittest.TestCase):
     def create_butler(self, manager, label):
         config = Config(self.configFile)
         config["registry", "managers", "datasets"] = manager
-        return Butler(Butler.makeRepo(f"{self.root}/butler{label}", config=config),
-                      writeable=True)
+        return Butler(Butler.makeRepo(f"{self.root}/butler{label}", config=config), writeable=True)
 
     def create_butlers(self, manager1, manager2):
         self.source_butler = self.create_butler(manager1, "1")
         self.target_butler = self.create_butler(manager2, "2")
 
     def testTransferUuidToUuid(self):
-        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
-                            "ByDimensionsDatasetRecordStorageManagerUUID",
-                            "lsst.daf.butler.registry.datasets.byDimensions."
-                            "ByDimensionsDatasetRecordStorageManagerUUID",
-                            )
+        self.create_butlers(
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+        )
         # Setting id_gen_map should have no effect here
         self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
 
     def testTransferIntToInt(self):
-        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
-                            "ByDimensionsDatasetRecordStorageManager",
-                            "lsst.daf.butler.registry.datasets.byDimensions."
-                            "ByDimensionsDatasetRecordStorageManager",
-                            )
+        self.create_butlers(
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager",
+        )
         # int dataset ID only allows UNIQUE
         self.assertButlerTransfers()
 
     def testTransferIntToUuid(self):
-        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
-                            "ByDimensionsDatasetRecordStorageManager",
-                            "lsst.daf.butler.registry.datasets.byDimensions."
-                            "ByDimensionsDatasetRecordStorageManagerUUID",
-                            )
+        self.create_butlers(
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+        )
         self.assertButlerTransfers(id_gen_map={"random_data_2": DatasetIdGenEnum.DATAID_TYPE})
 
     def testTransferMissing(self):
@@ -1809,11 +1873,10 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         This is how execution butler works.
         """
-        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
-                            "ByDimensionsDatasetRecordStorageManagerUUID",
-                            "lsst.daf.butler.registry.datasets.byDimensions."
-                            "ByDimensionsDatasetRecordStorageManagerUUID",
-                            )
+        self.create_butlers(
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+        )
 
         # Configure the source butler to allow trust.
         self.source_butler.datastore.trustGetRequest = True
@@ -1825,11 +1888,10 @@ class PosixDatastoreTransfers(unittest.TestCase):
 
         This is how execution butler works.
         """
-        self.create_butlers("lsst.daf.butler.registry.datasets.byDimensions."
-                            "ByDimensionsDatasetRecordStorageManagerUUID",
-                            "lsst.daf.butler.registry.datasets.byDimensions."
-                            "ByDimensionsDatasetRecordStorageManagerUUID",
-                            )
+        self.create_butlers(
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+            "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID",
+        )
 
         # Configure the source butler to allow trust.
         self.source_butler.datastore.trustGetRequest = True
@@ -1859,16 +1921,18 @@ class PosixDatastoreTransfers(unittest.TestCase):
         n_exposures = 30
         for butler in (self.source_butler, self.target_butler):
             butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-            butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
-                                                                    "name": "d-r",
-                                                                    "band": "R"})
-            butler.registry.insertDimensionData("detector", {"instrument": "DummyCamComp",
-                                                             "id": 1, "full_name": "det1"})
+            butler.registry.insertDimensionData(
+                "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
+            )
+            butler.registry.insertDimensionData(
+                "detector", {"instrument": "DummyCamComp", "id": 1, "full_name": "det1"}
+            )
 
             for i in range(n_exposures):
-                butler.registry.insertDimensionData("exposure", {"instrument": "DummyCamComp",
-                                                                 "id": i, "obs_id": f"exp{i}",
-                                                                 "physical_filter": "d-r"})
+                butler.registry.insertDimensionData(
+                    "exposure",
+                    {"instrument": "DummyCamComp", "id": i, "obs_id": f"exp{i}", "physical_filter": "d-r"},
+                )
 
         # Create dataset types in the source butler.
         dimensions = butler.registry.dimensions.extract(["instrument", "exposure"])
@@ -1881,8 +1945,13 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # Will not be relevant for UUID.
         run = "distraction"
         butler = Butler(butler=self.source_butler, run=run)
-        butler.put(makeExampleMetrics(), datasetTypeName,
-                   exposure=1, instrument="DummyCamComp", physical_filter="d-r")
+        butler.put(
+            makeExampleMetrics(),
+            datasetTypeName,
+            exposure=1,
+            instrument="DummyCamComp",
+            physical_filter="d-r",
+        )
 
         # Write some example metrics to the source
         butler = Butler(butler=self.source_butler)
@@ -1900,9 +1969,11 @@ class PosixDatastoreTransfers(unittest.TestCase):
             run = runs[index]
             datasetTypeName = datasetTypeNames[i % 2]
 
-            metric_data = {"summary": {"counter": i},
-                           "output": {"text": "metric"},
-                           "data": [2*x for x in range(i)]}
+            metric_data = {
+                "summary": {"counter": i},
+                "output": {"text": "metric"},
+                "data": [2 * x for x in range(i)],
+            }
             metric = MetricsExample(**metric_data)
             dataId = {"exposure": i, "instrument": "DummyCamComp", "physical_filter": "d-r"}
             ref = butler.put(metric, datasetTypeName, dataId=dataId, run=run)
@@ -1940,22 +2011,20 @@ class PosixDatastoreTransfers(unittest.TestCase):
             datasetType = DatasetType(datasetTypeName, dimensions, badStorageClass)
             self.target_butler.registry.registerDatasetType(datasetType)
         with self.assertRaises(ConflictingDefinitionError):
-            self.target_butler.transfer_from(self.source_butler, source_refs,
-                                             id_gen_map=id_gen_map)
+            self.target_butler.transfer_from(self.source_butler, source_refs, id_gen_map=id_gen_map)
         # And remove the bad definitions.
         for datasetTypeName in datasetTypeNames:
             self.target_butler.registry.removeDatasetType(datasetTypeName)
 
         # Transfer without creating dataset types should fail.
         with self.assertRaises(KeyError):
-            self.target_butler.transfer_from(self.source_butler, source_refs,
-                                             id_gen_map=id_gen_map)
+            self.target_butler.transfer_from(self.source_butler, source_refs, id_gen_map=id_gen_map)
 
         # Now transfer them to the second butler
         with self.assertLogs(level=logging.DEBUG) as cm:
-            transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
-                                                           id_gen_map=id_gen_map,
-                                                           register_dataset_types=True)
+            transferred = self.target_butler.transfer_from(
+                self.source_butler, source_refs, id_gen_map=id_gen_map, register_dataset_types=True
+            )
         self.assertEqual(len(transferred), n_expected)
         log_output = ";".join(cm.output)
         self.assertIn("found in datastore for chunk", log_output)
@@ -1966,8 +2035,9 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # dataset_id.
         if purge:
             # This should not need to register dataset types.
-            transferred = self.target_butler.transfer_from(self.source_butler, source_refs,
-                                                           id_gen_map=id_gen_map)
+            transferred = self.target_butler.transfer_from(
+                self.source_butler, source_refs, id_gen_map=id_gen_map
+            )
             self.assertEqual(len(transferred), n_expected)
 
             # Also do an explicit low-level transfer to trigger some
@@ -1981,8 +2051,9 @@ class PosixDatastoreTransfers(unittest.TestCase):
                 self.target_butler.datastore.transfer_from(self.source_butler, source_refs)
 
             with self.assertRaises(ValueError):
-                self.target_butler.datastore.transfer_from(self.source_butler.datastore, source_refs,
-                                                           transfer="split")
+                self.target_butler.datastore.transfer_from(
+                    self.source_butler.datastore, source_refs, transfer="split"
+                )
 
         # Now try to get the same refs from the new butler.
         for ref in source_refs:
@@ -2000,8 +2071,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
             # Re-importing the run1 datasets can be problematic if they
             # use integer IDs so filter those out.
             to_transfer = [ref for ref in source_refs if ref.run == "run2"]
-            self.target_butler.transfer_from(self.source_butler, to_transfer,
-                                             id_gen_map=id_gen_map)
+            self.target_butler.transfer_from(self.source_butler, to_transfer, id_gen_map=id_gen_map)
 
 
 if __name__ == "__main__":

@@ -25,26 +25,20 @@ from __future__ import annotations
 
 __all__ = ("MatplotlibFormatter",)
 
-from typing import (
-    Any,
-    Optional,
-    Type,
-)
+from typing import Any, Optional, Type
 
 from .file import FileFormatter
 
 
 class MatplotlibFormatter(FileFormatter):
-    """Interface for writing matplotlib figures.
-    """
+    """Interface for writing matplotlib figures."""
 
     extension = ".png"
     """Matplotlib figures are always written in PNG format."""
 
     def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
         # docstring inherited from FileFormatter._readFile
-        raise NotImplementedError(
-            f"matplotlib figures cannot be read by the butler; path is {path}")
+        raise NotImplementedError(f"matplotlib figures cannot be read by the butler; path is {path}")
 
     def _writeFile(self, inMemoryDataset: Any) -> None:
         # docstring inherited from FileFormatter._writeFile

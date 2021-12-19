@@ -20,19 +20,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import copy
-import unittest
 import os.path
-import posixpath
-import pickle
 import pathlib
+import pickle
+import posixpath
+import unittest
 
-from lsst.daf.butler import LocationFactory, Location, ButlerURI
+from lsst.daf.butler import ButlerURI, Location, LocationFactory
 from lsst.resources.utils import os2posix, posix2os
 
 
 class LocationTestCase(unittest.TestCase):
-    """Tests for Location within datastore
-    """
+    """Tests for Location within datastore"""
 
     def testButlerUri(self):
         """Tests whether ButlerURI instantiates correctly given different
@@ -51,43 +50,62 @@ class LocationTestCase(unittest.TestCase):
             ("relative/file.ext", False, False, "", "", "relative/file.ext"),
             ("test/../relative/file.ext", True, False, "", "", osRelFilePath),
             ("test/../relative/file.ext", False, False, "", "", "relative/file.ext"),
-            ("relative/dir", False, True, "", "", "relative/dir/")
+            ("relative/dir", False, True, "", "", "relative/dir/"),
         ]
         # 2) implicit file scheme, tests absolute file and directory paths
-        uriStrings.extend((
-            ("/rootDir/absolute/file.ext", True, False, "file", "", '/rootDir/absolute/file.ext'),
-            ("~/relative/file.ext", True, False, "file", "", os.path.expanduser("~/relative/file.ext")),
-            ("~/relative/file.ext", False, False, "file", "", os.path.expanduser("~/relative/file.ext")),
-            ("/rootDir/absolute/", True, False, "file", "", "/rootDir/absolute/"),
-            ("/rootDir/absolute", True, True, "file", "", "/rootDir/absolute/"),
-            ("~/rootDir/absolute", True, True, "file", "", os.path.expanduser("~/rootDir/absolute/"))
-        ))
+        uriStrings.extend(
+            (
+                ("/rootDir/absolute/file.ext", True, False, "file", "", "/rootDir/absolute/file.ext"),
+                ("~/relative/file.ext", True, False, "file", "", os.path.expanduser("~/relative/file.ext")),
+                ("~/relative/file.ext", False, False, "file", "", os.path.expanduser("~/relative/file.ext")),
+                ("/rootDir/absolute/", True, False, "file", "", "/rootDir/absolute/"),
+                ("/rootDir/absolute", True, True, "file", "", "/rootDir/absolute/"),
+                ("~/rootDir/absolute", True, True, "file", "", os.path.expanduser("~/rootDir/absolute/")),
+            )
+        )
         # 3) explicit file scheme, absolute and relative file and directory URI
         posixRelFilePath = posixpath.join(testRoot, "relative/file.ext")
-        uriStrings.extend((
-            ("file:///rootDir/absolute/file.ext", True, False, "file", "", "/rootDir/absolute/file.ext"),
-            ("file:relative/file.ext", True, False, "file", "", posixRelFilePath),
-            ("file:///absolute/directory/", True, False, "file", "", "/absolute/directory/"),
-            ("file:///absolute/directory", True, True, "file", "", "/absolute/directory/")
-        ))
+        uriStrings.extend(
+            (
+                ("file:///rootDir/absolute/file.ext", True, False, "file", "", "/rootDir/absolute/file.ext"),
+                ("file:relative/file.ext", True, False, "file", "", posixRelFilePath),
+                ("file:///absolute/directory/", True, False, "file", "", "/absolute/directory/"),
+                ("file:///absolute/directory", True, True, "file", "", "/absolute/directory/"),
+            )
+        )
         # 4) S3 scheme (ensured Keys as dirs and fully specified URIs work)
-        uriStrings.extend((
-            ("s3://bucketname/rootDir/", True, False, "s3", "bucketname", "/rootDir/"),
-            ("s3://bucketname/rootDir", True, True, "s3", "bucketname", "/rootDir/"),
-            ("s3://bucketname/rootDir/relative/file.ext", True, False, "s3",
-             "bucketname", "/rootDir/relative/file.ext")
-        ))
+        uriStrings.extend(
+            (
+                ("s3://bucketname/rootDir/", True, False, "s3", "bucketname", "/rootDir/"),
+                ("s3://bucketname/rootDir", True, True, "s3", "bucketname", "/rootDir/"),
+                (
+                    "s3://bucketname/rootDir/relative/file.ext",
+                    True,
+                    False,
+                    "s3",
+                    "bucketname",
+                    "/rootDir/relative/file.ext",
+                ),
+            )
+        )
         # 5) HTTPS scheme
-        uriStrings.extend((
-            ("https://www.lsst.org/rootDir/", True, False, "https", "www.lsst.org", "/rootDir/"),
-            ("https://www.lsst.org/rootDir", True, True, "https", "www.lsst.org", "/rootDir/"),
-            ("https://www.lsst.org/rootDir/relative/file.ext", True, False, "https",
-             "www.lsst.org", "/rootDir/relative/file.ext")
-        ))
+        uriStrings.extend(
+            (
+                ("https://www.lsst.org/rootDir/", True, False, "https", "www.lsst.org", "/rootDir/"),
+                ("https://www.lsst.org/rootDir", True, True, "https", "www.lsst.org", "/rootDir/"),
+                (
+                    "https://www.lsst.org/rootDir/relative/file.ext",
+                    True,
+                    False,
+                    "https",
+                    "www.lsst.org",
+                    "/rootDir/relative/file.ext",
+                ),
+            )
+        )
 
         for uriInfo in uriStrings:
-            uri = ButlerURI(uriInfo[0], root=testRoot, forceAbsolute=uriInfo[1],
-                            forceDirectory=uriInfo[2])
+            uri = ButlerURI(uriInfo[0], root=testRoot, forceAbsolute=uriInfo[1], forceDirectory=uriInfo[2])
             with self.subTest(uri=uriInfo[0]):
                 self.assertEqual(uri.scheme, uriInfo[3], "test scheme")
                 self.assertEqual(uri.netloc, uriInfo[4], "test netloc")
@@ -98,8 +116,8 @@ class LocationTestCase(unittest.TestCase):
         uriStrings = (
             ("file://relative/file.ext", True, False, "file", "relative", "/file.ext"),
             ("file:relative/file.ext", False, False, "file", "", os.path.abspath("relative/file.ext")),
-            ("file:relative/dir/", True, True, "file", "", os.path.abspath("relative/dir")+"/"),
-            ("relative/file.ext", True, False, "", "", os.path.abspath("relative/file.ext"))
+            ("file:relative/dir/", True, True, "file", "", os.path.abspath("relative/dir") + "/"),
+            ("relative/file.ext", True, False, "", "", os.path.abspath("relative/file.ext")),
         )
 
         for uriInfo in uriStrings:
@@ -115,7 +133,7 @@ class LocationTestCase(unittest.TestCase):
             ("relative/", "newfile.fits", "relative/newfile.fits"),
             ("https://www.lsst.org/butler/", "butler.yaml", "/butler/butler.yaml"),
             ("s3://amazon/datastore/", "butler.yaml", "/datastore/butler.yaml"),
-            ("s3://amazon/datastore/mybutler.yaml", "butler.yaml", "/datastore/butler.yaml")
+            ("s3://amazon/datastore/mybutler.yaml", "butler.yaml", "/datastore/butler.yaml"),
         )
 
         for uriInfo in uriStrings:
@@ -204,19 +222,20 @@ class LocationTestCase(unittest.TestCase):
     def testUriExtensions(self):
         """Test extension extraction."""
 
-        files = (("file.fits.gz", ".fits.gz"),
-                 ("file.fits", ".fits"),
-                 ("file.fits.xz", ".fits.xz"),
-                 ("file.fits.tar", ".tar"),
-                 ("file", ""),
-                 ("flat_i_sim_1.4_blah.fits.gz", ".fits.gz"),
-                 ("flat_i_sim_1.4_blah.txt", ".txt"),
-                 ("flat_i_sim_1.4_blah.fits.fz", ".fits.fz"),
-                 ("flat_i_sim_1.4_blah.fits.txt", ".txt"),
-                 ("s3://bucket/c/a.b/", ""),
-                 ("s3://bucket/c/a.b", ".b"),
-                 ("file://localhost/c/a.b.gz", ".b.gz"),
-                 )
+        files = (
+            ("file.fits.gz", ".fits.gz"),
+            ("file.fits", ".fits"),
+            ("file.fits.xz", ".fits.xz"),
+            ("file.fits.tar", ".tar"),
+            ("file", ""),
+            ("flat_i_sim_1.4_blah.fits.gz", ".fits.gz"),
+            ("flat_i_sim_1.4_blah.txt", ".txt"),
+            ("flat_i_sim_1.4_blah.fits.fz", ".fits.fz"),
+            ("flat_i_sim_1.4_blah.fits.txt", ".txt"),
+            ("s3://bucket/c/a.b/", ""),
+            ("s3://bucket/c/a.b", ".b"),
+            ("file://localhost/c/a.b.gz", ".b.gz"),
+        )
 
         for file, expected in files:
             test_string = file
@@ -238,19 +257,19 @@ class LocationTestCase(unittest.TestCase):
         self.assertTrue(loc1.uri.geturl().startswith("file:///"))
         self.assertTrue(loc1.uri.geturl().endswith("file.ext"))
         loc1.updateExtension("fits")
-        self.assertTrue(loc1.uri.geturl().endswith("file.fits"),
-                        f"Checking 'fits' extension in {loc1.uri}")
+        self.assertTrue(loc1.uri.geturl().endswith("file.fits"), f"Checking 'fits' extension in {loc1.uri}")
         loc1.updateExtension("fits.gz")
         self.assertEqual(loc1.uri.basename(), "file.fits.gz")
-        self.assertTrue(loc1.uri.geturl().endswith("file.fits.gz"),
-                        f"Checking 'fits.gz' extension in {loc1.uri}")
+        self.assertTrue(
+            loc1.uri.geturl().endswith("file.fits.gz"), f"Checking 'fits.gz' extension in {loc1.uri}"
+        )
         self.assertEqual(loc1.getExtension(), ".fits.gz")
         loc1.updateExtension(".jpeg")
-        self.assertTrue(loc1.uri.geturl().endswith("file.jpeg"),
-                        f"Checking 'jpeg' extension in {loc1.uri}")
+        self.assertTrue(loc1.uri.geturl().endswith("file.jpeg"), f"Checking 'jpeg' extension in {loc1.uri}")
         loc1.updateExtension(None)
-        self.assertTrue(loc1.uri.geturl().endswith("file.jpeg"),
-                        f"Checking unchanged extension in {loc1.uri}")
+        self.assertTrue(
+            loc1.uri.geturl().endswith("file.jpeg"), f"Checking unchanged extension in {loc1.uri}"
+        )
         loc1.updateExtension("")
         self.assertTrue(loc1.uri.geturl().endswith("file"), f"Checking no extension in {loc1.uri}")
         self.assertEqual(loc1.getExtension(), "")
@@ -289,9 +308,11 @@ class LocationTestCase(unittest.TestCase):
 
         pathInStore = "relative/path/file.ext.gz"
 
-        for pathInStore in ("relative/path/file.ext.gz",
-                            "relative/path+2/file.ext.gz",
-                            "relative/path+3/file&.ext.gz"):
+        for pathInStore in (
+            "relative/path/file.ext.gz",
+            "relative/path+2/file.ext.gz",
+            "relative/path+3/file&.ext.gz",
+        ):
             loc1 = factory.fromPath(pathInStore)
 
             self.assertEqual(loc1.pathInStore.path, pathInStore)
@@ -325,18 +346,32 @@ class LocationTestCase(unittest.TestCase):
         """Tests split functionality."""
         testRoot = "/tmp/"
 
-        testPaths = ("/absolute/file.ext", "/absolute/",
-                     "file:///absolute/file.ext", "file:///absolute/",
-                     "s3://bucket/root/file.ext", "s3://bucket/root/",
-                     "https://www.lsst.org/root/file.ext", "https://www.lsst.org/root/",
-                     "relative/file.ext", "relative/")
+        testPaths = (
+            "/absolute/file.ext",
+            "/absolute/",
+            "file:///absolute/file.ext",
+            "file:///absolute/",
+            "s3://bucket/root/file.ext",
+            "s3://bucket/root/",
+            "https://www.lsst.org/root/file.ext",
+            "https://www.lsst.org/root/",
+            "relative/file.ext",
+            "relative/",
+        )
 
         osRelExpected = os.path.join(testRoot, "relative")
-        expected = (("file:///absolute/", "file.ext"), ("file:///absolute/", ""),
-                    ("file:///absolute/", "file.ext"), ("file:///absolute/", ""),
-                    ("s3://bucket/root/", "file.ext"), ("s3://bucket/root/", ""),
-                    ("https://www.lsst.org/root/", "file.ext"), ("https://www.lsst.org/root/", ""),
-                    (f"file://{osRelExpected}/", "file.ext"), (f"file://{osRelExpected}/", ""))
+        expected = (
+            ("file:///absolute/", "file.ext"),
+            ("file:///absolute/", ""),
+            ("file:///absolute/", "file.ext"),
+            ("file:///absolute/", ""),
+            ("s3://bucket/root/", "file.ext"),
+            ("s3://bucket/root/", ""),
+            ("https://www.lsst.org/root/", "file.ext"),
+            ("https://www.lsst.org/root/", ""),
+            (f"file://{osRelExpected}/", "file.ext"),
+            (f"file://{osRelExpected}/", ""),
+        )
 
         for p, e in zip(testPaths, expected):
             with self.subTest(path=p):

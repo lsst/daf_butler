@@ -19,10 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from astropy.table import Table as AstropyTable
 import numpy as np
+from astropy.table import Table as AstropyTable
 
-from .. import Butler
+from .._butler import Butler
 from ..cli.utils import sortAstropyTable
 
 
@@ -35,6 +35,7 @@ class _Table:
     dataIds : `iterable` [ ``DataId`` ]
         The DataIds to add to the table.
     """
+
     def __init__(self, dataIds):
         # use dict to store dataIds as keys to preserve ordering
         self.dataIds = dict.fromkeys(dataIds)
@@ -77,10 +78,9 @@ def queryDataIds(repo, dimensions, datasets, where, collections, order_by, limit
     # Docstring for supported parameters is the same as Registry.queryDataIds
 
     butler = Butler(repo)
-    results = butler.registry.queryDataIds(dimensions,
-                                           datasets=datasets,
-                                           where=where,
-                                           collections=collections)
+    results = butler.registry.queryDataIds(
+        dimensions, datasets=datasets, where=where, collections=collections
+    )
 
     if order_by:
         results.order_by(*order_by)

@@ -22,15 +22,13 @@
 """Unit tests for daf_butler CLI prune-collections subcommand.
 """
 
-from astropy.table import Table
-from typing import Sequence, Tuple, Union
-from numpy import array
 import os
 import unittest
+from typing import Sequence, Tuple, Union
 
+from astropy.table import Table
 from lsst.daf.butler import Butler, CollectionType
 from lsst.daf.butler.cli.butler import cli as butlerCli
-from lsst.daf.butler.script.removeCollections import removeCollections
 from lsst.daf.butler.cli.cmd._remove_collections import (
     abortedMsg,
     canNotRemoveFoundRuns,
@@ -39,14 +37,16 @@ from lsst.daf.butler.cli.cmd._remove_collections import (
     removedCollectionsMsg,
     willRemoveCollectionMsg,
 )
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
+from lsst.daf.butler.script.removeCollections import removeCollections
 from lsst.daf.butler.tests.utils import (
     ButlerTestHelper,
-    makeTestTempDir,
     MetricTestRepo,
+    makeTestTempDir,
     readTable,
     removeTestTempDir,
 )
+from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -55,8 +55,7 @@ RemoveCollectionRow = Tuple[str, str]
 
 
 class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
-    """Test executing remove collection.
-    """
+    """Test executing remove collection."""
 
     def setUp(self):
         self.runner = LogCliRunner()
@@ -95,6 +94,7 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
             The rows that should be in the table returned by query-collections
             after removing the collection.
         """
+
         def _query_collection_column_names(rows):
             # If there is a chained collection in the table then there is a
             # definition column, otherwise there is only the name and type
@@ -111,7 +111,10 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         expected = Table(array(before_rows), names=_query_collection_column_names(before_rows))
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
-        removal = removeCollections(repo=self.root, collection=collection,)
+        removal = removeCollections(
+            repo=self.root,
+            collection=collection,
+        )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expected = Table(array(remove_rows), names=("Collection", "Collection Type"))
         self.assertAstropyTablesEqual(removal.removeCollectionsTable, expected)
@@ -136,7 +139,10 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
             ("chained-run-1", "ingest/run"),
             ("chained-run-2", "ingest/run"),
         ):
-            result = self.runner.invoke(butlerCli, ["collection-chain", self.root, parent, child],)
+            result = self.runner.invoke(
+                butlerCli,
+                ["collection-chain", self.root, parent, child],
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
         self._verify_remove(
@@ -147,22 +153,30 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
                 ("chained-run-1", "CHAINED", "[ingest/run]"),
                 ("chained-run-2", "CHAINED", "[ingest/run]"),
             ),
-            remove_rows=(("chained-run-1", "CHAINED"), ("chained-run-2", "CHAINED"),),
-            after_rows=(("ingest/run", "RUN"), ("ingest", "TAGGED"),),
+            remove_rows=(
+                ("chained-run-1", "CHAINED"),
+                ("chained-run-2", "CHAINED"),
+            ),
+            after_rows=(
+                ("ingest/run", "RUN"),
+                ("ingest", "TAGGED"),
+            ),
         )
 
         # Test a single tagged collection:
 
         self._verify_remove(
             collection="ingest",
-            before_rows=(("ingest/run", "RUN"), ("ingest", "TAGGED"),),
+            before_rows=(
+                ("ingest/run", "RUN"),
+                ("ingest", "TAGGED"),
+            ),
             remove_rows=(("ingest", "TAGGED"),),
             after_rows=(("ingest/run", "RUN"),),
         )
 
     def testRemoveCmd(self):
-        """Test remove command outputs.
-        """
+        """Test remove command outputs."""
 
         # Test expected output with a non-existent collection:
 
@@ -175,13 +189,18 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
             ("chained-run-1", "ingest/run"),
             ("chained-run-2", "ingest/run"),
         ):
-            result = self.runner.invoke(butlerCli, ["collection-chain", self.root, parent, child],)
+            result = self.runner.invoke(
+                butlerCli,
+                ["collection-chain", self.root, parent, child],
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
         # Test aborting a removal
 
         result = self.runner.invoke(
-            butlerCli, ["remove-collections", self.root, "chained-run-1"], input="no",
+            butlerCli,
+            ["remove-collections", self.root, "chained-run-1"],
+            input="no",
         )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn(abortedMsg, result.stdout)
@@ -214,7 +233,9 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         # output
 
         result = self.runner.invoke(
-            butlerCli, ["remove-collections", self.root, "chained-run-2"], input="yes",
+            butlerCli,
+            ["remove-collections", self.root, "chained-run-2"],
+            input="yes",
         )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn(willRemoveCollectionMsg, result.stdout)
@@ -227,7 +248,9 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         result = self.runner.invoke(
             # removes run-chain (chained collection), but can not remove the
             # run collection, and emits a message that says so.
-            butlerCli, ["remove-collections", self.root, "*run*"], input="yes",
+            butlerCli,
+            ["remove-collections", self.root, "*run*"],
+            input="yes",
         )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn(canNotRemoveFoundRuns, result.stdout)
@@ -241,7 +264,8 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         result = self.runner.invoke(
             # removes run-chain (chained collection), but can not remove the
             # run collection, and emits a message that says so.
-            butlerCli, ["remove-collections", self.root, "*run*", "--no-confirm"],
+            butlerCli,
+            ["remove-collections", self.root, "*run*", "--no-confirm"],
         )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn(didNotRemoveFoundRuns, result.stdout)

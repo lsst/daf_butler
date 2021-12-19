@@ -23,31 +23,22 @@ from __future__ import annotations
 
 __all__ = ("DimensionRecord", "SerializedDimensionRecord")
 
-from typing import (
-    Any,
-    ClassVar,
-    Dict,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-    Type,
-    Union,
-)
-from pydantic import BaseModel, create_model, StrictStr, StrictInt, StrictBool, StrictFloat, Field
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Optional, Tuple, Type, Union
 
 import lsst.sphgeom
 from lsst.utils.classes import immutable
+from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
 from .._topology import SpatialRegionDatabaseRepresentation
+from ..json import from_json_pydantic, to_json_pydantic
 from ..timespan import Timespan, TimespanDatabaseRepresentation
 from ._elements import Dimension, DimensionElement
-from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ._coordinate import DataCoordinate
-    from ._schema import DimensionElementFields
-    from ._graph import DimensionUniverse
     from ...registry import Registry
+    from ._coordinate import DataCoordinate
+    from ._graph import DimensionUniverse
+    from ._schema import DimensionElementFields
 
 
 def _reconstructDimensionRecord(definition: DimensionElement, mapping: Dict[str, Any]) -> DimensionRecord:
@@ -64,17 +55,14 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
     For internal use by `DimensionRecord`.
     """
     from ._schema import DimensionElementFields
+
     fields = DimensionElementFields(definition)
     slots = list(fields.standard.names)
     if definition.spatial:
         slots.append(SpatialRegionDatabaseRepresentation.NAME)
     if definition.temporal:
         slots.append(TimespanDatabaseRepresentation.NAME)
-    d = {
-        "definition": definition,
-        "__slots__": tuple(slots),
-        "fields": fields
-    }
+    d = {"definition": definition, "__slots__": tuple(slots), "fields": fields}
     return type(definition.name + ".RecordClass", (DimensionRecord,), d)
 
 
@@ -82,12 +70,14 @@ class SpecificSerializedDimensionRecord(BaseModel, extra="forbid"):
     """Base model for a specific serialized record content."""
 
 
-_SIMPLE_RECORD_CLASS_CACHE: Dict[Tuple[DimensionElement, DimensionUniverse],
-                                 Type[SpecificSerializedDimensionRecord]] = {}
+_SIMPLE_RECORD_CLASS_CACHE: Dict[
+    Tuple[DimensionElement, DimensionUniverse], Type[SpecificSerializedDimensionRecord]
+] = {}
 
 
 def _createSimpleRecordSubclass(definition: DimensionElement) -> Type[SpecificSerializedDimensionRecord]:
     from ._schema import DimensionElementFields
+
     # Cache on the definition (which hashes as the name) and the
     # associated universe.
     cache_key = (definition, definition.universe)
@@ -97,11 +87,12 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> Type[SpecificSe
     fields = DimensionElementFields(definition)
     members = {}
     # Prefer strict typing for external data
-    type_map = {str: StrictStr,
-                float: StrictFloat,
-                bool: StrictBool,
-                int: StrictInt,
-                }
+    type_map = {
+        str: StrictStr,
+        float: StrictFloat,
+        bool: StrictBool,
+        int: StrictInt,
+    }
 
     for field in fields.standard:
         field_type = field.getPythonType()
@@ -115,8 +106,11 @@ def _createSimpleRecordSubclass(definition: DimensionElement) -> Type[SpecificSe
         members["region"] = (str, ...)
 
     # mypy does not seem to like create_model
-    model = create_model(f"SpecificSerializedDimensionRecord{definition.name.capitalize()}",
-                         __base__=SpecificSerializedDimensionRecord, **members)  # type: ignore
+    model = create_model(
+        f"SpecificSerializedDimensionRecord{definition.name.capitalize()}",
+        __base__=SpecificSerializedDimensionRecord,
+        **members,  # type: ignore
+    )
 
     _SIMPLE_RECORD_CLASS_CACHE[cache_key] = model
     return model
@@ -132,14 +126,13 @@ class SerializedDimensionRecord(BaseModel):
     )
 
     # Use strict types to prevent casting
-    record: Dict[str,
-                 Union[None, StrictFloat, StrictStr, StrictBool, StrictInt, Tuple[int, int]]] = Field(
+    record: Dict[str, Union[None, StrictFloat, StrictStr, StrictBool, StrictInt, Tuple[int, int]]] = Field(
         ...,
         title="Dimension record keys and values.",
-        example={"definition": "exposure",
-                 "record": {"instrument": "LATISS",
-                            "exposure": 2021050300044,
-                            "obs_id": "AT_O_20210503_00044"}},
+        example={
+            "definition": "exposure",
+            "record": {"instrument": "LATISS", "exposure": 2021050300044, "obs_id": "AT_O_20210503_00044"},
+        },
     )
 
     class Config:
@@ -155,14 +148,17 @@ class SerializedDimensionRecord(BaseModel):
                     "name_in_raft": "01",
                     "raft": "0",
                     "purpose": "SCIENCE",
-                }
+                },
             }
         }
 
     @classmethod
-    def direct(cls, *, definition: str, record: Dict[str, Union[None, StrictFloat, StrictStr, StrictBool,
-                                                                StrictInt, Tuple[int, int]]]
-               ) -> SerializedDimensionRecord:
+    def direct(
+        cls,
+        *,
+        definition: str,
+        record: Dict[str, Union[None, StrictFloat, StrictStr, StrictBool, StrictInt, Tuple[int, int]]],
+    ) -> SerializedDimensionRecord:
         """Construct a `SerializedDimensionRecord` directly without validators.
 
         This differs from the pydantic "construct" method in that the arguments
@@ -174,13 +170,14 @@ class SerializedDimensionRecord(BaseModel):
         node = cls.construct(definition=definition, record=record)
         node = SerializedDimensionRecord.__new__(cls)
         setter = object.__setattr__
-        setter(node, 'definition', definition)
+        setter(node, "definition", definition)
         # This method requires tuples as values of the mapping, but JSON
         # readers will read things in as lists. Be kind and transparently
         # transform to tuples
-        setter(node, 'record', {k: v if type(v) != list else tuple(v)  # type: ignore
-                                for k, v in record.items()})
-        setter(node, '__fields_set__', {'definition', 'record'})
+        setter(
+            node, "record", {k: v if type(v) != list else tuple(v) for k, v in record.items()}  # type: ignore
+        )
+        setter(node, "__fields_set__", {"definition", "record"})
         return node
 
 
@@ -254,17 +251,18 @@ class DimensionRecord:
                     Timespan(
                         kwargs.get("datetime_begin"),
                         kwargs.get("datetime_end"),
-                    )
+                    ),
                 )
 
         from ._coordinate import DataCoordinate
+
         object.__setattr__(
             self,
             "dataId",
             DataCoordinate.fromRequiredValues(
                 self.definition.graph,
-                tuple(kwargs[dimension] for dimension in self.definition.required.names)
-            )
+                tuple(kwargs[dimension] for dimension in self.definition.required.names),
+            ),
         )
 
     def __eq__(self, other: Any) -> bool:
@@ -282,8 +280,7 @@ class DimensionRecord:
 
     def __repr__(self) -> str:
         return "{}.RecordClass({})".format(
-            self.definition.name,
-            ", ".join(f"{name}={getattr(self, name)!r}" for name in self.__slots__)
+            self.definition.name, ", ".join(f"{name}={getattr(self, name)!r}" for name in self.__slots__)
         )
 
     def __reduce__(self) -> tuple:
@@ -330,9 +327,12 @@ class DimensionRecord:
         return SerializedDimensionRecord(definition=definition, record=mapping)
 
     @classmethod
-    def from_simple(cls, simple: SerializedDimensionRecord,
-                    universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None) -> DimensionRecord:
+    def from_simple(
+        cls,
+        simple: SerializedDimensionRecord,
+        universe: Optional[DimensionUniverse] = None,
+        registry: Optional[Registry] = None,
+    ) -> DimensionRecord:
         """Construct a new object from the simplified form.
 
         This is generally data returned from the `to_simple`

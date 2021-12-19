@@ -23,28 +23,17 @@ from __future__ import annotations
 
 __all__ = ["YamlRepoExportBackend", "YamlRepoImportBackend"]
 
-from datetime import datetime
-from typing import (
-    Any,
-    Dict,
-    IO,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-)
 import uuid
 import warnings
 from collections import defaultdict
+from datetime import datetime
+from typing import IO, Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Type
 
-import yaml
 import astropy.time
-
+import yaml
 from lsst.utils import doImportType
 from lsst.utils.iteration import ensure_iterable
+
 from ..core import (
     DatasetAssociation,
     DatasetId,
@@ -68,7 +57,6 @@ from ..registry.interfaces import (
 )
 from ..registry.versions import IncompatibleVersionError
 from ._interfaces import RepoExportBackend, RepoImportBackend
-
 
 EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 1)
 """Export format version.
@@ -113,11 +101,13 @@ class YamlRepoExportBackend(RepoExportBackend):
     def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord) -> None:
         # Docstring inherited from RepoExportBackend.saveDimensionData.
         data_dicts = [record.toDict(splitTimespan=True) for record in data]
-        self.data.append({
-            "type": "dimension",
-            "element": element.name,
-            "records": data_dicts,
-        })
+        self.data.append(
+            {
+                "type": "dimension",
+                "element": element.name,
+                "records": data_dicts,
+            }
+        )
 
     def saveCollection(self, record: CollectionRecord, doc: Optional[str]) -> None:
         # Docstring inherited from RepoExportBackend.saveCollections.
@@ -138,57 +128,66 @@ class YamlRepoExportBackend(RepoExportBackend):
 
     def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset) -> None:
         # Docstring inherited from RepoExportBackend.saveDatasets.
-        self.data.append({
-            "type": "dataset_type",
-            "name": datasetType.name,
-            "dimensions": [d.name for d in datasetType.dimensions],
-            "storage_class": datasetType.storageClass.name,
-            "is_calibration": datasetType.isCalibration(),
-        })
-        self.data.append({
-            "type": "dataset",
-            "dataset_type": datasetType.name,
-            "run": run,
-            "records": [
-                {
-                    "dataset_id": [ref.id for ref in sorted(dataset.refs)],
-                    "data_id": [ref.dataId.byName() for ref in sorted(dataset.refs)],
-                    "path": dataset.path,
-                    "formatter": dataset.formatter,
-                    # TODO: look up and save other collections
-                }
-                for dataset in datasets
-            ]
-        })
+        self.data.append(
+            {
+                "type": "dataset_type",
+                "name": datasetType.name,
+                "dimensions": [d.name for d in datasetType.dimensions],
+                "storage_class": datasetType.storageClass.name,
+                "is_calibration": datasetType.isCalibration(),
+            }
+        )
+        self.data.append(
+            {
+                "type": "dataset",
+                "dataset_type": datasetType.name,
+                "run": run,
+                "records": [
+                    {
+                        "dataset_id": [ref.id for ref in sorted(dataset.refs)],
+                        "data_id": [ref.dataId.byName() for ref in sorted(dataset.refs)],
+                        "path": dataset.path,
+                        "formatter": dataset.formatter,
+                        # TODO: look up and save other collections
+                    }
+                    for dataset in datasets
+                ],
+            }
+        )
 
-    def saveDatasetAssociations(self, collection: str, collectionType: CollectionType,
-                                associations: Iterable[DatasetAssociation]) -> None:
+    def saveDatasetAssociations(
+        self, collection: str, collectionType: CollectionType, associations: Iterable[DatasetAssociation]
+    ) -> None:
         # Docstring inherited from RepoExportBackend.saveDatasetAssociations.
         if collectionType is CollectionType.TAGGED:
-            self.data.append({
-                "type": "associations",
-                "collection": collection,
-                "collection_type": collectionType.name,
-                "dataset_ids": [assoc.ref.id for assoc in associations],
-            })
+            self.data.append(
+                {
+                    "type": "associations",
+                    "collection": collection,
+                    "collection_type": collectionType.name,
+                    "dataset_ids": [assoc.ref.id for assoc in associations],
+                }
+            )
         elif collectionType is CollectionType.CALIBRATION:
             idsByTimespan: Dict[Timespan, List[DatasetId]] = defaultdict(list)
             for association in associations:
                 assert association.timespan is not None
                 assert association.ref.id is not None
                 idsByTimespan[association.timespan].append(association.ref.id)
-            self.data.append({
-                "type": "associations",
-                "collection": collection,
-                "collection_type": collectionType.name,
-                "validity_ranges": [
-                    {
-                        "timespan": timespan,
-                        "dataset_ids": dataset_ids,
-                    }
-                    for timespan, dataset_ids in idsByTimespan.items()
-                ]
-            })
+            self.data.append(
+                {
+                    "type": "associations",
+                    "collection": collection,
+                    "collection_type": collectionType.name,
+                    "validity_ranges": [
+                        {
+                            "timespan": timespan,
+                            "dataset_ids": dataset_ids,
+                        }
+                        for timespan, dataset_ids in idsByTimespan.items()
+                    ],
+                }
+            )
 
     def finish(self) -> None:
         # Docstring inherited from RepoExportBackend.
@@ -262,15 +261,13 @@ class YamlRepoImportBackend(RepoImportBackend):
                             record[key] = astropy.time.Time(record[key], scale="utc")
                 element = self.registry.dimensions[data["element"]]
                 RecordClass: Type[DimensionRecord] = element.RecordClass
-                self.dimensions[element].extend(
-                    RecordClass(**r) for r in data["records"]
-                )
+                self.dimensions[element].extend(RecordClass(**r) for r in data["records"])
             elif data["type"] == "collection":
                 collectionType = CollectionType.from_name(data["collection_type"])
                 if collectionType is CollectionType.RUN:
                     self.runs[data["name"]] = (
                         data["host"],
-                        Timespan(begin=data["timespan_begin"], end=data["timespan_end"])
+                        Timespan(begin=data["timespan_begin"], end=data["timespan_end"]),
                     )
                 elif collectionType is CollectionType.CHAINED:
                     children = []
@@ -295,9 +292,13 @@ class YamlRepoImportBackend(RepoImportBackend):
                 self.runs[data["name"]] = (None, Timespan(None, None))
             elif data["type"] == "dataset_type":
                 self.datasetTypes.add(
-                    DatasetType(data["name"], dimensions=data["dimensions"],
-                                storageClass=data["storage_class"], universe=self.registry.dimensions,
-                                isCalibration=data.get("is_calibration", False))
+                    DatasetType(
+                        data["name"],
+                        dimensions=data["dimensions"],
+                        storageClass=data["storage_class"],
+                        universe=self.registry.dimensions,
+                        isCalibration=data.get("is_calibration", False),
+                    )
                 )
             elif data["type"] == "dataset":
                 # Save raw dataset data for a second loop, so we can ensure we
@@ -329,10 +330,13 @@ class YamlRepoImportBackend(RepoImportBackend):
             self.datasets[data["dataset_type"], data["run"]].extend(
                 FileDataset(
                     d.get("path"),
-                    [DatasetRef(datasetType, dataId, run=data["run"], id=refid)
-                     for dataId, refid in zip(ensure_iterable(d["data_id"]),
-                                              ensure_iterable(d["dataset_id"]))],
-                    formatter=doImportType(d.get("formatter")) if "formatter" in d else None
+                    [
+                        DatasetRef(datasetType, dataId, run=data["run"], id=refid)
+                        for dataId, refid in zip(
+                            ensure_iterable(d["data_id"]), ensure_iterable(d["dataset_id"])
+                        )
+                    ],
+                    formatter=doImportType(d.get("formatter")) if "formatter" in d else None,
                 )
                 for d in data["records"]
             )
@@ -345,18 +349,25 @@ class YamlRepoImportBackend(RepoImportBackend):
             self.registry.registerRun(run, doc=self.collectionDocs.get(run))
             # No way to add extra run info to registry yet.
         for collection, collection_type in self.collections.items():
-            self.registry.registerCollection(collection, collection_type,
-                                             doc=self.collectionDocs.get(collection))
+            self.registry.registerCollection(
+                collection, collection_type, doc=self.collectionDocs.get(collection)
+            )
         for chain, children in self.chains.items():
-            self.registry.registerCollection(chain, CollectionType.CHAINED,
-                                             doc=self.collectionDocs.get(chain))
+            self.registry.registerCollection(
+                chain, CollectionType.CHAINED, doc=self.collectionDocs.get(chain)
+            )
             self.registry.setCollectionChain(chain, children)
 
-    def load(self, datastore: Optional[Datastore], *,
-             directory: Optional[str] = None, transfer: Optional[str] = None,
-             skip_dimensions: Optional[Set] = None,
-             idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-             reuseIds: bool = False) -> None:
+    def load(
+        self,
+        datastore: Optional[Datastore],
+        *,
+        directory: Optional[str] = None,
+        transfer: Optional[str] = None,
+        skip_dimensions: Optional[Set] = None,
+        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+        reuseIds: bool = False,
+    ) -> None:
         # Docstring inherited from RepoImportBackend.load.
         for element, dimensionRecords in self.dimensions.items():
             if skip_dimensions and element in skip_dimensions:
@@ -381,8 +392,9 @@ class YamlRepoImportBackend(RepoImportBackend):
             # For now, we ignore the dataset_id we pulled from the file
             # and just insert without one to get a new autoincrement value.
             # Eventually (once we have origin in IDs) we'll preserve them.
-            resolvedRefs = self.registry._importDatasets(datasets, idGenerationMode=idGenerationMode,
-                                                         reuseIds=reuseIds)
+            resolvedRefs = self.registry._importDatasets(
+                datasets, idGenerationMode=idGenerationMode, reuseIds=reuseIds
+            )
             # Populate our dictionary that maps int dataset_id values from the
             # export file to the new DatasetRefs
             for fileId, ref in zip(dataset_ids, resolvedRefs):

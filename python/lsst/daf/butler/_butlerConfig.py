@@ -26,25 +26,15 @@ from __future__ import annotations
 
 __all__ = ("ButlerConfig",)
 
-import os
 import copy
-from typing import (
-    Optional,
-    Sequence,
-    Union,
-)
+import os
+from typing import Optional, Sequence, Union
 
-from .core import (
-    ButlerURI,
-    Config,
-    DatastoreConfig,
-    StorageClassConfig,
-)
+from .core import ButlerURI, Config, DatastoreConfig, StorageClassConfig
 from .registry import RegistryConfig
 from .transfers import RepoTransferFormatConfig
 
-CONFIG_COMPONENT_CLASSES = (RegistryConfig, StorageClassConfig,
-                            DatastoreConfig, RepoTransferFormatConfig)
+CONFIG_COMPONENT_CLASSES = (RegistryConfig, StorageClassConfig, DatastoreConfig, RepoTransferFormatConfig)
 
 
 class ButlerConfig(Config):
@@ -71,8 +61,11 @@ class ButlerConfig(Config):
         refers to a configuration file or directory.
     """
 
-    def __init__(self, other: Optional[Union[str, ButlerURI, Config]] = None,
-                 searchPaths: Sequence[Union[str, ButlerURI]] = None):
+    def __init__(
+        self,
+        other: Optional[Union[str, ButlerURI, Config]] = None,
+        searchPaths: Sequence[Union[str, ButlerURI]] = None,
+    ):
 
         self.configDir: Optional[ButlerURI] = None
 

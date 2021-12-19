@@ -21,7 +21,7 @@
 
 from astropy.table import Table
 
-from .. import Butler
+from .._butler import Butler
 from ..core import Timespan
 
 
@@ -32,11 +32,9 @@ def queryDimensionRecords(repo, element, datasets, collections, where, no_check,
 
     butler = Butler(repo)
 
-    records = butler.registry.queryDimensionRecords(element,
-                                                    datasets=datasets,
-                                                    collections=collections,
-                                                    where=where,
-                                                    check=not no_check)
+    records = butler.registry.queryDimensionRecords(
+        element, datasets=datasets, collections=collections, where=where, check=not no_check
+    )
 
     if order_by:
         records.order_by(*order_by)

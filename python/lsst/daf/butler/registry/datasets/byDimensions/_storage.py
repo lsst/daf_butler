@@ -2,21 +2,10 @@ from __future__ import annotations
 
 __all__ = ("ByDimensionsDatasetRecordStorage",)
 
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    TYPE_CHECKING,
-)
 import uuid
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 import sqlalchemy
-
 from lsst.daf.butler import (
     CollectionType,
     DataCoordinate,
@@ -26,18 +15,18 @@ from lsst.daf.butler import (
     DatasetType,
     SimpleQuery,
     Timespan,
-    ddl
+    ddl,
 )
 from lsst.daf.butler.registry import ConflictingDefinitionError, UnsupportedIdGeneratorError
-from lsst.daf.butler.registry.interfaces import DatasetRecordStorage, DatasetIdGenEnum
+from lsst.daf.butler.registry.interfaces import DatasetIdGenEnum, DatasetRecordStorage
 
 from ...summaries import GovernorDimensionRestriction
 from .tables import makeTagTableSpec
 
 if TYPE_CHECKING:
     from ...interfaces import CollectionManager, CollectionRecord, Database, RunRecord
-    from .tables import StaticDatasetTablesTuple
     from .summaries import CollectionSummaryManager
+    from .tables import StaticDatasetTablesTuple
 
 
 class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
@@ -49,14 +38,18 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
     `DatasetRecordStorageManager.register` instead.
     """
 
-    def __init__(self, *, datasetType: DatasetType,
-                 db: Database,
-                 dataset_type_id: int,
-                 collections: CollectionManager,
-                 static: StaticDatasetTablesTuple,
-                 summaries: CollectionSummaryManager,
-                 tags: sqlalchemy.schema.Table,
-                 calibs: Optional[sqlalchemy.schema.Table]):
+    def __init__(
+        self,
+        *,
+        datasetType: DatasetType,
+        db: Database,
+        dataset_type_id: int,
+        collections: CollectionManager,
+        static: StaticDatasetTablesTuple,
+        summaries: CollectionSummaryManager,
+        tags: sqlalchemy.schema.Table,
+        calibs: Optional[sqlalchemy.schema.Table],
+    ):
         super().__init__(datasetType=datasetType)
         self._dataset_type_id = dataset_type_id
         self._db = db
@@ -67,15 +60,19 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._calibs = calibs
         self._runKeyColumn = collections.getRunForeignKeyName()
 
-    def find(self, collection: CollectionRecord, dataId: DataCoordinate,
-             timespan: Optional[Timespan] = None) -> Optional[DatasetRef]:
+    def find(
+        self, collection: CollectionRecord, dataId: DataCoordinate, timespan: Optional[Timespan] = None
+    ) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
         assert dataId.graph == self.datasetType.dimensions
         if collection.type is CollectionType.CALIBRATION and timespan is None:
-            raise TypeError(f"Cannot search for dataset in CALIBRATION collection {collection.name} "
-                            f"without an input timespan.")
-        sql = self.select(collection, dataId=dataId, id=SimpleQuery.Select,
-                          run=SimpleQuery.Select, timespan=timespan)
+            raise TypeError(
+                f"Cannot search for dataset in CALIBRATION collection {collection.name} "
+                f"without an input timespan."
+            )
+        sql = self.select(
+            collection, dataId=dataId, id=SimpleQuery.Select, run=SimpleQuery.Select, timespan=timespan
+        )
         sql = sql.combine()
         results = self._db.query(sql)
         row = results.fetchone()
@@ -101,7 +98,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             datasetType=self.datasetType,
             dataId=dataId,
             id=row.id,
-            run=self._collections[row._mapping[self._runKeyColumn]].name
+            run=self._collections[row._mapping[self._runKeyColumn]].name,
         )
 
     def delete(self, datasets: Iterable[DatasetRef]) -> None:
@@ -117,8 +114,10 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
     def associate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if collection.type is not CollectionType.TAGGED:
-            raise TypeError(f"Cannot associate into collection '{collection.name}' "
-                            f"of type {collection.type.name}; must be TAGGED.")
+            raise TypeError(
+                f"Cannot associate into collection '{collection.name}' "
+                f"of type {collection.type.name}; must be TAGGED."
+            )
         protoRow = {
             self._collections.getCollectionForeignKeyName(): collection.key,
             "dataset_type_id": self._dataset_type_id,
@@ -141,21 +140,22 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
     def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if collection.type is not CollectionType.TAGGED:
-            raise TypeError(f"Cannot disassociate from collection '{collection.name}' "
-                            f"of type {collection.type.name}; must be TAGGED.")
+            raise TypeError(
+                f"Cannot disassociate from collection '{collection.name}' "
+                f"of type {collection.type.name}; must be TAGGED."
+            )
         rows = [
             {
                 "dataset_id": dataset.getCheckedId(),
-                self._collections.getCollectionForeignKeyName(): collection.key
+                self._collections.getCollectionForeignKeyName(): collection.key,
             }
             for dataset in datasets
         ]
-        self._db.delete(self._tags, ["dataset_id", self._collections.getCollectionForeignKeyName()],
-                        *rows)
+        self._db.delete(self._tags, ["dataset_id", self._collections.getCollectionForeignKeyName()], *rows)
 
-    def _buildCalibOverlapQuery(self, collection: CollectionRecord,
-                                dataIds: Optional[DataCoordinateSet],
-                                timespan: Timespan) -> SimpleQuery:
+    def _buildCalibOverlapQuery(
+        self, collection: CollectionRecord, dataIds: Optional[DataCoordinateSet], timespan: Timespan
+    ) -> SimpleQuery:
         assert self._calibs is not None
         # Start by building a SELECT query for any rows that would overlap
         # this one.
@@ -179,15 +179,20 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         )
         return query
 
-    def certify(self, collection: CollectionRecord, datasets: Iterable[DatasetRef],
-                timespan: Timespan) -> None:
+    def certify(
+        self, collection: CollectionRecord, datasets: Iterable[DatasetRef], timespan: Timespan
+    ) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if self._calibs is None:
-            raise TypeError(f"Cannot certify datasets of type {self.datasetType.name}, for which "
-                            f"DatasetType.isCalibration() is False.")
+            raise TypeError(
+                f"Cannot certify datasets of type {self.datasetType.name}, for which "
+                f"DatasetType.isCalibration() is False."
+            )
         if collection.type is not CollectionType.CALIBRATION:
-            raise TypeError(f"Cannot certify into collection '{collection.name}' "
-                            f"of type {collection.type.name}; must be CALIBRATION.")
+            raise TypeError(
+                f"Cannot certify into collection '{collection.name}' "
+                f"of type {collection.type.name}; must be CALIBRATION."
+            )
         TimespanReprClass = self._db.getTimespanRepresentation()
         protoRow = {
             self._collections.getCollectionForeignKeyName(): collection.key,
@@ -229,7 +234,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             query = self._buildCalibOverlapQuery(
                 collection,
                 DataCoordinateSet(dataIds, graph=self.datasetType.dimensions),  # type: ignore
-                timespan
+                timespan,
             )
             query.columns.append(sqlalchemy.sql.func.count())
             sql = query.combine()
@@ -249,15 +254,24 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 # Proceed with the insert.
                 self._db.insert(self._calibs, *rows)
 
-    def decertify(self, collection: CollectionRecord, timespan: Timespan, *,
-                  dataIds: Optional[Iterable[DataCoordinate]] = None) -> None:
+    def decertify(
+        self,
+        collection: CollectionRecord,
+        timespan: Timespan,
+        *,
+        dataIds: Optional[Iterable[DataCoordinate]] = None,
+    ) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if self._calibs is None:
-            raise TypeError(f"Cannot decertify datasets of type {self.datasetType.name}, for which "
-                            f"DatasetType.isCalibration() is False.")
+            raise TypeError(
+                f"Cannot decertify datasets of type {self.datasetType.name}, for which "
+                f"DatasetType.isCalibration() is False."
+            )
         if collection.type is not CollectionType.CALIBRATION:
-            raise TypeError(f"Cannot decertify from collection '{collection.name}' "
-                            f"of type {collection.type.name}; must be CALIBRATION.")
+            raise TypeError(
+                f"Cannot decertify from collection '{collection.name}' "
+                f"of type {collection.type.name}; must be CALIBRATION."
+            )
         TimespanReprClass = self._db.getTimespanRepresentation()
         # Construct a SELECT query to find all rows that overlap our inputs.
         dataIdSet: Optional[DataCoordinateSet]
@@ -298,13 +312,15 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             self._db.delete(self._calibs, ["id"], *rowsToDelete)
             self._db.insert(self._calibs, *rowsToInsert)
 
-    def select(self, *collections: CollectionRecord,
-               dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
-               id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
-               run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
-               timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
-               ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
-               ) -> SimpleQuery:
+    def select(
+        self,
+        *collections: CollectionRecord,
+        dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
+        id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
+        run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
+        timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
+        ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
+    ) -> SimpleQuery:
         # Docstring inherited from DatasetRecordStorage.
         collection_types = {collection.type for collection in collections}
         assert CollectionType.CHAINED not in collection_types, "CHAINED collections must be flattened."
@@ -350,8 +366,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # Join in the tags or calibs table, turning those 'kwargs' entries into
         # WHERE constraints or SELECT columns as appropriate.
         if collection_types == {CollectionType.CALIBRATION}:
-            assert self._calibs is not None, \
-                "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
+            assert (
+                self._calibs is not None
+            ), "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
             TimespanReprClass = self._db.getTimespanRepresentation()
             # Add the timespan column(s) to the result columns, or constrain
             # the timespan via an overlap condition.
@@ -461,17 +478,21 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # This query could return multiple rows (one for each tagged collection
         # the dataset is in, plus one for its run collection), and we don't
         # care which of those we get.
-        sql = self._tags.select().where(
-            sqlalchemy.sql.and_(
-                self._tags.columns.dataset_id == id,
-                self._tags.columns.dataset_type_id == self._dataset_type_id
+        sql = (
+            self._tags.select()
+            .where(
+                sqlalchemy.sql.and_(
+                    self._tags.columns.dataset_id == id,
+                    self._tags.columns.dataset_type_id == self._dataset_type_id,
+                )
             )
-        ).limit(1)
+            .limit(1)
+        )
         row = self._db.query(sql).mappings().fetchone()
         assert row is not None, "Should be guaranteed by caller and foreign key constraints."
         return DataCoordinate.standardize(
             {dimension.name: row[dimension.name] for dimension in self.datasetType.dimensions.required},
-            graph=self.datasetType.dimensions
+            graph=self.datasetType.dimensions,
         )
 
 
@@ -480,8 +501,12 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
     auto-incremented column for dataset IDs.
     """
 
-    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate],
-               idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
+    def insert(
+        self,
+        run: RunRecord,
+        dataIds: Iterable[DataCoordinate],
+        idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+    ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
         # We only support UNIQUE mode for integer dataset IDs
@@ -492,9 +517,13 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
         dataIdList = list(dataIds)
         yield from self._insert(run, dataIdList)
 
-    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
-                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-                reuseIds: bool = False) -> Iterator[DatasetRef]:
+    def import_(
+        self,
+        run: RunRecord,
+        datasets: Iterable[DatasetRef],
+        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+        reuseIds: bool = False,
+    ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
         # We only support UNIQUE mode for integer dataset IDs
@@ -521,10 +550,10 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
 
         yield from self._insert(run, dataIdList, datasetIdList)
 
-    def _insert(self, run: RunRecord, dataIdList: List[DataCoordinate],
-                datasetIdList: Optional[List[int]] = None) -> Iterator[DatasetRef]:
-        """Common part of implementation of `insert` and `import_` methods.
-        """
+    def _insert(
+        self, run: RunRecord, dataIdList: List[DataCoordinate], datasetIdList: Optional[List[int]] = None
+    ) -> Iterator[DatasetRef]:
+        """Common part of implementation of `insert` and `import_` methods."""
 
         # Remember any governor dimension values we see.
         governorValues = GovernorDimensionRestriction.makeEmpty(self.datasetType.dimensions.universe)
@@ -544,8 +573,9 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
                 self._db.insert(self._static.dataset, *rows)
             else:
                 # use auto-incremented IDs
-                datasetIdList = self._db.insert(self._static.dataset, *([staticRow]*len(dataIdList)),
-                                                returnIds=True)
+                datasetIdList = self._db.insert(
+                    self._static.dataset, *([staticRow] * len(dataIdList)), returnIds=True
+                )
                 assert datasetIdList is not None
             # Update the summary tables for this collection in case this is the
             # first time this dataset type or these governor values will be
@@ -579,13 +609,17 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
     dataset IDs.
     """
 
-    NS_UUID = uuid.UUID('840b31d9-05cd-5161-b2c8-00d32b280d0f')
+    NS_UUID = uuid.UUID("840b31d9-05cd-5161-b2c8-00d32b280d0f")
     """Namespace UUID used for UUID5 generation. Do not change. This was
     produced by `uuid.uuid5(uuid.NAMESPACE_DNS, "lsst.org")`.
     """
 
-    def insert(self, run: RunRecord, dataIds: Iterable[DataCoordinate],
-               idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> Iterator[DatasetRef]:
+    def insert(
+        self,
+        run: RunRecord,
+        dataIds: Iterable[DataCoordinate],
+        idMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+    ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
         # Remember any governor dimension values we see.
@@ -597,11 +631,13 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         rows = []
         for dataId in dataIds:
             dataIdList.append(dataId)
-            rows.append({
-                "id": self._makeDatasetId(run, dataId, idMode),
-                "dataset_type_id": self._dataset_type_id,
-                self._runKeyColumn: run.key,
-            })
+            rows.append(
+                {
+                    "id": self._makeDatasetId(run, dataId, idMode),
+                    "dataset_type_id": self._dataset_type_id,
+                    self._runKeyColumn: run.key,
+                }
+            )
             governorValues.update_extract(dataId)
 
         with self._db.transaction():
@@ -632,9 +668,13 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 run=run.name,
             )
 
-    def import_(self, run: RunRecord, datasets: Iterable[DatasetRef],
-                idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-                reuseIds: bool = False) -> Iterator[DatasetRef]:
+    def import_(
+        self,
+        run: RunRecord,
+        datasets: Iterable[DatasetRef],
+        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+        reuseIds: bool = False,
+    ) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorage.
 
         # Remember any governor dimension values we see.
@@ -655,8 +695,9 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         with self._db.session() as session:
 
             # insert all new rows into a temporary table
-            tableSpec = makeTagTableSpec(self.datasetType, type(self._collections),
-                                         ddl.GUID, constraints=False)
+            tableSpec = makeTagTableSpec(
+                self.datasetType, type(self._collections), ddl.GUID, constraints=False
+            )
             tmp_tags = session.makeTemporaryTable(tableSpec)
 
             collFkName = self._collections.getCollectionForeignKeyName()
@@ -664,8 +705,10 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 "dataset_type_id": self._dataset_type_id,
                 collFkName: run.key,
             }
-            tmpRows = [dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
-                       for dataset_id, dataId in dataIds.items()]
+            tmpRows = [
+                dict(protoTagsRow, dataset_id=dataset_id, **dataId.byName())
+                for dataset_id, dataId in dataIds.items()
+            ]
 
             with self._db.transaction():
 
@@ -678,16 +721,20 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
 
                 # Before we merge temporary table into dataset/tags we need to
                 # drop datasets which are already there (and do not conflict).
-                self._db.deleteWhere(tmp_tags, tmp_tags.columns.dataset_id.in_(
-                    sqlalchemy.sql.select(self._static.dataset.columns.id)
-                ))
+                self._db.deleteWhere(
+                    tmp_tags,
+                    tmp_tags.columns.dataset_id.in_(sqlalchemy.sql.select(self._static.dataset.columns.id)),
+                )
 
                 # Copy it into dataset table, need to re-label some columns.
-                self._db.insert(self._static.dataset, select=sqlalchemy.sql.select(
-                    tmp_tags.columns.dataset_id.label("id"),
-                    tmp_tags.columns.dataset_type_id,
-                    tmp_tags.columns[collFkName].label(self._runKeyColumn)
-                ))
+                self._db.insert(
+                    self._static.dataset,
+                    select=sqlalchemy.sql.select(
+                        tmp_tags.columns.dataset_id.label("id"),
+                        tmp_tags.columns.dataset_type_id,
+                        tmp_tags.columns[collFkName].label(self._runKeyColumn),
+                    ),
+                )
 
                 # Update the summary tables for this collection in case this
                 # is the first time this dataset type or these governor values
@@ -728,21 +775,20 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
 
         # Check that existing datasets have the same dataset type and
         # run.
-        query = sqlalchemy.sql.select(
-            dataset.columns.id.label("dataset_id"),
-            dataset.columns.dataset_type_id.label("dataset_type_id"),
-            tmp_tags.columns.dataset_type_id.label("new dataset_type_id"),
-            dataset.columns[self._runKeyColumn].label("run"),
-            tmp_tags.columns[collFkName].label("new run")
-        ).select_from(
-            dataset.join(
-                tmp_tags,
-                dataset.columns.id == tmp_tags.columns.dataset_id
+        query = (
+            sqlalchemy.sql.select(
+                dataset.columns.id.label("dataset_id"),
+                dataset.columns.dataset_type_id.label("dataset_type_id"),
+                tmp_tags.columns.dataset_type_id.label("new dataset_type_id"),
+                dataset.columns[self._runKeyColumn].label("run"),
+                tmp_tags.columns[collFkName].label("new run"),
             )
-        ).where(
-            sqlalchemy.sql.or_(
-                dataset.columns.dataset_type_id != tmp_tags.columns.dataset_type_id,
-                dataset.columns[self._runKeyColumn] != tmp_tags.columns[collFkName]
+            .select_from(dataset.join(tmp_tags, dataset.columns.id == tmp_tags.columns.dataset_id))
+            .where(
+                sqlalchemy.sql.or_(
+                    dataset.columns.dataset_type_id != tmp_tags.columns.dataset_type_id,
+                    dataset.columns[self._runKeyColumn] != tmp_tags.columns[collFkName],
+                )
             )
         )
         result = self._db.query(query)
@@ -753,23 +799,26 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             )
 
         # Check that matching dataset in tags table has the same DataId.
-        query = sqlalchemy.sql.select(
-            tags.columns.dataset_id,
-            tags.columns.dataset_type_id.label("type_id"),
-            tmp_tags.columns.dataset_type_id.label("new type_id"),
-            *[tags.columns[dim] for dim in self.datasetType.dimensions.required.names],
-            *[tmp_tags.columns[dim].label(f"new {dim}")
-              for dim in self.datasetType.dimensions.required.names],
-        ).select_from(
-            tags.join(
-                tmp_tags,
-                tags.columns.dataset_id == tmp_tags.columns.dataset_id
+        query = (
+            sqlalchemy.sql.select(
+                tags.columns.dataset_id,
+                tags.columns.dataset_type_id.label("type_id"),
+                tmp_tags.columns.dataset_type_id.label("new type_id"),
+                *[tags.columns[dim] for dim in self.datasetType.dimensions.required.names],
+                *[
+                    tmp_tags.columns[dim].label(f"new {dim}")
+                    for dim in self.datasetType.dimensions.required.names
+                ],
             )
-        ).where(
-            sqlalchemy.sql.or_(
-                tags.columns.dataset_type_id != tmp_tags.columns.dataset_type_id,
-                *[tags.columns[dim] != tmp_tags.columns[dim]
-                    for dim in self.datasetType.dimensions.required.names]
+            .select_from(tags.join(tmp_tags, tags.columns.dataset_id == tmp_tags.columns.dataset_id))
+            .where(
+                sqlalchemy.sql.or_(
+                    tags.columns.dataset_type_id != tmp_tags.columns.dataset_type_id,
+                    *[
+                        tags.columns[dim] != tmp_tags.columns[dim]
+                        for dim in self.datasetType.dimensions.required.names
+                    ],
+                )
             )
         )
         result = self._db.query(query)
@@ -780,25 +829,29 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             )
 
         # Check that matching run+dataId have the same dataset ID.
-        query = sqlalchemy.sql.select(
-            tags.columns.dataset_type_id.label("dataset_type_id"),
-            *[tags.columns[dim] for dim in self.datasetType.dimensions.required.names],
-            tags.columns.dataset_id,
-            tmp_tags.columns.dataset_id.label("new dataset_id"),
-            tags.columns[collFkName],
-            tmp_tags.columns[collFkName].label(f"new {collFkName}")
-        ).select_from(
-            tags.join(
-                tmp_tags,
-                sqlalchemy.sql.and_(
-                    tags.columns.dataset_type_id == tmp_tags.columns.dataset_type_id,
-                    tags.columns[collFkName] == tmp_tags.columns[collFkName],
-                    *[tags.columns[dim] == tmp_tags.columns[dim]
-                        for dim in self.datasetType.dimensions.required.names]
+        query = (
+            sqlalchemy.sql.select(
+                tags.columns.dataset_type_id.label("dataset_type_id"),
+                *[tags.columns[dim] for dim in self.datasetType.dimensions.required.names],
+                tags.columns.dataset_id,
+                tmp_tags.columns.dataset_id.label("new dataset_id"),
+                tags.columns[collFkName],
+                tmp_tags.columns[collFkName].label(f"new {collFkName}"),
+            )
+            .select_from(
+                tags.join(
+                    tmp_tags,
+                    sqlalchemy.sql.and_(
+                        tags.columns.dataset_type_id == tmp_tags.columns.dataset_type_id,
+                        tags.columns[collFkName] == tmp_tags.columns[collFkName],
+                        *[
+                            tags.columns[dim] == tmp_tags.columns[dim]
+                            for dim in self.datasetType.dimensions.required.names
+                        ],
+                    ),
                 )
             )
-        ).where(
-            tags.columns.dataset_id != tmp_tags.columns.dataset_id
+            .where(tags.columns.dataset_id != tmp_tags.columns.dataset_id)
         )
         result = self._db.query(query)
         if (row := result.first()) is not None:
@@ -807,8 +860,9 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
                 f"Existing dataset type and dataId does not match new dataset: {row._asdict()}"
             )
 
-    def _makeDatasetId(self, run: RunRecord, dataId: DataCoordinate,
-                       idGenerationMode: DatasetIdGenEnum) -> uuid.UUID:
+    def _makeDatasetId(
+        self, run: RunRecord, dataId: DataCoordinate, idGenerationMode: DatasetIdGenEnum
+    ) -> uuid.UUID:
         """Generate dataset ID for a dataset.
 
         Parameters

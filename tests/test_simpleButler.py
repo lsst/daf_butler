@@ -21,13 +21,13 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import tempfile
-from typing import Any
 import unittest
 import uuid
-import re
-import json
+from typing import Any
 
 try:
     import numpy as np
@@ -35,20 +35,10 @@ except ImportError:
     np = None
 
 import astropy.time
-
-from lsst.daf.butler import (
-    Butler,
-    ButlerConfig,
-    CollectionType,
-    DatasetRef,
-    DatasetType,
-    Registry,
-    Timespan,
-)
-from lsst.daf.butler.registry import RegistryConfig, RegistryDefaults, ConflictingDefinitionError
+from lsst.daf.butler import Butler, ButlerConfig, CollectionType, DatasetRef, DatasetType, Registry, Timespan
+from lsst.daf.butler.registry import ConflictingDefinitionError, RegistryConfig, RegistryDefaults
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
-
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -59,8 +49,7 @@ class SimpleButlerTestCase(unittest.TestCase):
     can instead utilize an in-memory SQLite Registry and a mocked Datastore.
     """
 
-    datasetsManager = \
-        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
     datasetsImportFile = "datasets.yaml"
     datasetsIdType = int
 
@@ -71,8 +60,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def makeButler(self, **kwargs: Any) -> Butler:
-        """Return new Butler instance on each call.
-        """
+        """Return new Butler instance on each call."""
         config = ButlerConfig()
 
         # make separate temporary directory for registry of this instance
@@ -124,27 +112,27 @@ class SimpleButlerTestCase(unittest.TestCase):
                 for record in butler.registry.queryDimensionRecords("visit", instrument="HSC")
             },
             {
-                (27136, 'HSC-Z'),
-                (11694, 'HSC-G'),
-                (23910, 'HSC-R'),
-                (11720, 'HSC-Y'),
-                (23900, 'HSC-R'),
-                (22646, 'HSC-Y'),
-                (1248, 'HSC-I'),
-                (19680, 'HSC-I'),
-                (1240, 'HSC-I'),
-                (424, 'HSC-Y'),
-                (19658, 'HSC-I'),
-                (344, 'HSC-Y'),
-                (1218, 'HSC-R'),
-                (1190, 'HSC-Z'),
-                (23718, 'HSC-R'),
-                (11700, 'HSC-G'),
-                (26036, 'HSC-G'),
-                (23872, 'HSC-R'),
-                (1170, 'HSC-Z'),
-                (1876, 'HSC-Y'),
-            }
+                (27136, "HSC-Z"),
+                (11694, "HSC-G"),
+                (23910, "HSC-R"),
+                (11720, "HSC-Y"),
+                (23900, "HSC-R"),
+                (22646, "HSC-Y"),
+                (1248, "HSC-I"),
+                (19680, "HSC-I"),
+                (1240, "HSC-I"),
+                (424, "HSC-Y"),
+                (19658, "HSC-I"),
+                (344, "HSC-Y"),
+                (1218, "HSC-R"),
+                (1190, "HSC-Z"),
+                (23718, "HSC-R"),
+                (11700, "HSC-G"),
+                (26036, "HSC-G"),
+                (23872, "HSC-R"),
+                (1170, "HSC-Z"),
+                (1876, "HSC-Y"),
+            },
         )
 
     def testDatasetTransfers(self):
@@ -155,12 +143,10 @@ class SimpleButlerTestCase(unittest.TestCase):
         butler1 = self.makeButler(writeable=True)
         butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
         butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
-        with tempfile.NamedTemporaryFile(mode='w', suffix=".yaml") as file:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as file:
             # Export all datasets.
             with butler1.export(filename=file.name) as exporter:
-                exporter.saveDatasets(
-                    butler1.registry.queryDatasets(..., collections=...)
-                )
+                exporter.saveDatasets(butler1.registry.queryDatasets(..., collections=...))
             # Import it all again.
             butler2 = self.makeButler(writeable=True)
             butler2.import_(filename=file.name)
@@ -185,12 +171,10 @@ class SimpleButlerTestCase(unittest.TestCase):
         butler1 = self.makeButler(writeable=True)
         butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
         butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
-        with tempfile.NamedTemporaryFile(mode='w', suffix=".yaml") as file:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as file:
             # Export all datasets.
             with butler1.export(filename=file.name) as exporter:
-                exporter.saveDatasets(
-                    butler1.registry.queryDatasets("flat.psf", collections=...)
-                )
+                exporter.saveDatasets(butler1.registry.queryDatasets("flat.psf", collections=...))
             # Import it all again.
             butler2 = self.makeButler(writeable=True)
             butler2.import_(filename=file.name)
@@ -213,18 +197,17 @@ class SimpleButlerTestCase(unittest.TestCase):
         butler1 = self.makeButler(writeable=True)
         butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
         butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
-        with tempfile.NamedTemporaryFile(mode='w', suffix=".yaml", delete=False) as file:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as file:
             # Export all datasets.
             with butler1.export(filename=file.name) as exporter:
-                exporter.saveDatasets(
-                    butler1.registry.queryDatasets(..., collections=...)
-                )
+                exporter.saveDatasets(butler1.registry.queryDatasets(..., collections=...))
             butler2 = self.makeButler(writeable=True)
             # Import it once.
             butler2.import_(filename=file.name)
             # Import it again, but ignore all dimensions
             dimensions = set(
-                dimension.name for dimension in butler2.registry.dimensions.getStaticDimensions())
+                dimension.name for dimension in butler2.registry.dimensions.getStaticDimensions()
+            )
             butler2.import_(filename=file.name, skip_dimensions=dimensions)
         datasets1 = list(butler1.registry.queryDatasets(..., collections=...))
         datasets2 = list(butler2.registry.queryDatasets(..., collections=...))
@@ -262,8 +245,7 @@ class SimpleButlerTestCase(unittest.TestCase):
             butler.import_(filename=filename, reuseIds=True)
 
     def testCollectionTransfers(self):
-        """Test exporting and then importing collections of various types.
-        """
+        """Test exporting and then importing collections of various types."""
         # Populate a registry with some datasets.
         butler1 = self.makeButler(writeable=True)
         butler1.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
@@ -280,9 +262,9 @@ class SimpleButlerTestCase(unittest.TestCase):
         # Associate some datasets into the TAGGED and CALIBRATION collections.
         flats1 = list(registry1.queryDatasets("flat", collections=...))
         registry1.associate("tag1", flats1)
-        t1 = astropy.time.Time('2020-01-01T01:00:00', format="isot", scale="tai")
-        t2 = astropy.time.Time('2020-01-01T02:00:00', format="isot", scale="tai")
-        t3 = astropy.time.Time('2020-01-01T03:00:00', format="isot", scale="tai")
+        t1 = astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")
+        t2 = astropy.time.Time("2020-01-01T02:00:00", format="isot", scale="tai")
+        t3 = astropy.time.Time("2020-01-01T03:00:00", format="isot", scale="tai")
         bias1a = registry1.findDataset("bias", instrument="Cam1", detector=1, collections="imported_g")
         bias2a = registry1.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g")
         bias3a = registry1.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g")
@@ -293,7 +275,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         registry1.certify("calibration1", [bias3b], Timespan(t2, t3))
         registry1.certify("calibration1", [bias1a], Timespan.makeEmpty())
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix=".yaml") as file:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as file:
             # Export all collections, and some datasets.
             with butler1.export(filename=file.name) as exporter:
                 # Sort results to put chain1 before chain2, which is
@@ -329,10 +311,14 @@ class SimpleButlerTestCase(unittest.TestCase):
         )
         # Check that calibration collection contents are the same.
         self.assertCountEqual(
-            [(self.comparableRef(assoc.ref), assoc.timespan)
-             for assoc in registry1.queryDatasetAssociations("bias", collections="calibration1")],
-            [(self.comparableRef(assoc.ref), assoc.timespan)
-             for assoc in registry2.queryDatasetAssociations("bias", collections="calibration1")],
+            [
+                (self.comparableRef(assoc.ref), assoc.timespan)
+                for assoc in registry1.queryDatasetAssociations("bias", collections="calibration1")
+            ],
+            [
+                (self.comparableRef(assoc.ref), assoc.timespan)
+                for assoc in registry2.queryDatasetAssociations("bias", collections="calibration1")
+            ],
         )
 
     def testButlerGet(self):
@@ -345,8 +331,9 @@ class SimpleButlerTestCase(unittest.TestCase):
 
         # Find the DatasetRef for a flat
         coll = "imported_g"
-        flat2g = butler.registry.findDataset("flat", instrument="Cam1", detector=2, physical_filter="Cam1-G",
-                                             collections=coll)
+        flat2g = butler.registry.findDataset(
+            "flat", instrument="Cam1", detector=2, physical_filter="Cam1-G", collections=coll
+        )
 
         # Create a numpy integer to check that works fine
         detector_np = np.int64(2) if np else 2
@@ -368,10 +355,19 @@ class SimpleButlerTestCase(unittest.TestCase):
             ({"name_in_raft": "b", "raft": "A"}, {"instrument": "Cam1", "physical_filter": "Cam1-G"}),
             ({"name_in_raft": "b"}, {"raft": "A", "instrument": "Cam1", "physical_filter": "Cam1-G"}),
             (None, {"name_in_raft": "b", "raft": "A", "instrument": "Cam1", "physical_filter": "Cam1-G"}),
-            ({"detector.name_in_raft": "b", "detector.raft": "A"},
-             {"instrument": "Cam1", "physical_filter": "Cam1-G"}),
-            ({"detector.name_in_raft": "b", "detector.raft": "A",
-              "instrument": "Cam1", "physical_filter": "Cam1-G"}, {}),
+            (
+                {"detector.name_in_raft": "b", "detector.raft": "A"},
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+            ),
+            (
+                {
+                    "detector.name_in_raft": "b",
+                    "detector.raft": "A",
+                    "instrument": "Cam1",
+                    "physical_filter": "Cam1-G",
+                },
+                {},
+            ),
         )
 
         for dataId, kwds in variants:
@@ -393,9 +389,9 @@ class SimpleButlerTestCase(unittest.TestCase):
         # Certify some biases into a CALIBRATION collection.
         registry = butler.registry
         registry.registerCollection("calibs", CollectionType.CALIBRATION)
-        t1 = astropy.time.Time('2020-01-01T01:00:00', format="isot", scale="tai")
-        t2 = astropy.time.Time('2020-01-01T02:00:00', format="isot", scale="tai")
-        t3 = astropy.time.Time('2020-01-01T03:00:00', format="isot", scale="tai")
+        t1 = astropy.time.Time("2020-01-01T01:00:00", format="isot", scale="tai")
+        t2 = astropy.time.Time("2020-01-01T02:00:00", format="isot", scale="tai")
+        t3 = astropy.time.Time("2020-01-01T03:00:00", format="isot", scale="tai")
         bias2a = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g")
         bias3a = registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g")
         bias2b = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r")
@@ -426,59 +422,80 @@ class SimpleButlerTestCase(unittest.TestCase):
             },
         )
         # Get some biases from raw-like data IDs.
-        bias2a_id, _ = butler.get("bias", {"instrument": "Cam1", "exposure": 3, "detector": 2},
-                                  collections="calibs")
+        bias2a_id, _ = butler.get(
+            "bias", {"instrument": "Cam1", "exposure": 3, "detector": 2}, collections="calibs"
+        )
         self.assertEqual(bias2a_id, bias2a.id)
-        bias3b_id, _ = butler.get("bias", {"instrument": "Cam1", "exposure": 4, "detector": 3},
-                                  collections="calibs")
+        bias3b_id, _ = butler.get(
+            "bias", {"instrument": "Cam1", "exposure": 4, "detector": 3}, collections="calibs"
+        )
         self.assertEqual(bias3b_id, bias3b.id)
 
         # Get using the kwarg form
-        bias3b_id, _ = butler.get("bias",
-                                  instrument="Cam1", exposure=4, detector=3,
-                                  collections="calibs")
+        bias3b_id, _ = butler.get("bias", instrument="Cam1", exposure=4, detector=3, collections="calibs")
         self.assertEqual(bias3b_id, bias3b.id)
 
         # Do it again but using the record information
-        bias2a_id, _ = butler.get("bias", {"instrument": "Cam1", "exposure.obs_id": "three",
-                                           "detector.full_name": "Ab"},
-                                  collections="calibs")
+        bias2a_id, _ = butler.get(
+            "bias",
+            {"instrument": "Cam1", "exposure.obs_id": "three", "detector.full_name": "Ab"},
+            collections="calibs",
+        )
         self.assertEqual(bias2a_id, bias2a.id)
-        bias3b_id, _ = butler.get("bias", {"exposure.obs_id": "four",
-                                           "detector.full_name": "Ba"},
-                                  collections="calibs", instrument="Cam1")
+        bias3b_id, _ = butler.get(
+            "bias",
+            {"exposure.obs_id": "four", "detector.full_name": "Ba"},
+            collections="calibs",
+            instrument="Cam1",
+        )
         self.assertEqual(bias3b_id, bias3b.id)
 
         # And again but this time using the alternate value rather than
         # the primary.
-        bias3b_id, _ = butler.get("bias", {"exposure": "four",
-                                           "detector": "Ba"},
-                                  collections="calibs", instrument="Cam1")
+        bias3b_id, _ = butler.get(
+            "bias", {"exposure": "four", "detector": "Ba"}, collections="calibs", instrument="Cam1"
+        )
         self.assertEqual(bias3b_id, bias3b.id)
 
         # And again but this time using the alternate value rather than
         # the primary and do it in the keyword arguments.
-        bias3b_id, _ = butler.get("bias",
-                                  exposure="four", detector="Ba",
-                                  collections="calibs", instrument="Cam1")
+        bias3b_id, _ = butler.get(
+            "bias", exposure="four", detector="Ba", collections="calibs", instrument="Cam1"
+        )
         self.assertEqual(bias3b_id, bias3b.id)
 
         # Now with implied record columns
-        bias3b_id, _ = butler.get("bias", day_obs=20211114, seq_num=42,
-                                  raft="B", name_in_raft="a",
-                                  collections="calibs", instrument="Cam1")
+        bias3b_id, _ = butler.get(
+            "bias",
+            day_obs=20211114,
+            seq_num=42,
+            raft="B",
+            name_in_raft="a",
+            collections="calibs",
+            instrument="Cam1",
+        )
         self.assertEqual(bias3b_id, bias3b.id)
 
         # Ensure that spurious kwargs cause an exception.
         with self.assertRaises(ValueError):
-            butler.get("bias", {"exposure.obs_id": "four", "immediate": True,
-                       "detector.full_name": "Ba"},
-                       collections="calibs", instrument="Cam1")
+            butler.get(
+                "bias",
+                {"exposure.obs_id": "four", "immediate": True, "detector.full_name": "Ba"},
+                collections="calibs",
+                instrument="Cam1",
+            )
 
         with self.assertRaises(ValueError):
-            butler.get("bias", day_obs=20211114, seq_num=42,
-                       raft="B", name_in_raft="a",
-                       collections="calibs", instrument="Cam1", immediate=True)
+            butler.get(
+                "bias",
+                day_obs=20211114,
+                seq_num=42,
+                raft="B",
+                name_in_raft="a",
+                collections="calibs",
+                instrument="Cam1",
+                immediate=True,
+            )
 
     def testRegistryDefaults(self):
         """Test that we can default the collections and some data ID keys when
@@ -510,13 +527,19 @@ class SimpleButlerTestCase(unittest.TestCase):
         # in the WHERE expression.
         queried_refs_1 = set(butler.registry.queryDatasets("flat", detector=2, physical_filter="Cam1-G"))
         self.assertEqual({ref}, queried_refs_1)
-        queried_refs_2 = set(butler.registry.queryDatasets("flat",
-                                                           where="detector=2 AND physical_filter='Cam1-G'"))
+        queried_refs_2 = set(
+            butler.registry.queryDatasets("flat", where="detector=2 AND physical_filter='Cam1-G'")
+        )
         self.assertEqual({ref}, queried_refs_2)
         # Query for data IDs with a dataset constraint.
-        queried_data_ids = set(butler.registry.queryDataIds({"instrument", "detector", "physical_filter"},
-                                                            datasets={"flat"},
-                                                            detector=2, physical_filter="Cam1-G"))
+        queried_data_ids = set(
+            butler.registry.queryDataIds(
+                {"instrument", "detector", "physical_filter"},
+                datasets={"flat"},
+                detector=2,
+                physical_filter="Cam1-G",
+            )
+        )
         self.assertEqual({ref.dataId}, queried_data_ids)
         # Add another instrument to the repo, and a dataset that uses it to
         # the `imported_g` collection.
@@ -543,8 +566,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         self.assertEqual(butler3.registry.defaults.dataId.byName(), {"instrument": "Cam2"})
 
     def testJson(self):
-        """Test JSON serialization mediated by registry.
-        """
+        """Test JSON serialization mediated by registry."""
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", self.datasetsImportFile))
@@ -630,8 +652,9 @@ class SimpleButlerUUIDTestCase(SimpleButlerTestCase):
     loads datasets from YAML file with UUIDs.
     """
 
-    datasetsManager = \
+    datasetsManager = (
         "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    )
     datasetsImportFile = "datasets-uuid.yaml"
     datasetsIdType = uuid.UUID
 
@@ -641,8 +664,9 @@ class SimpleButlerMixedUUIDTestCase(SimpleButlerTestCase):
     loads datasets from YAML file with integer IDs.
     """
 
-    datasetsManager = \
+    datasetsManager = (
         "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    )
     datasetsImportFile = "datasets.yaml"
     datasetsIdType = uuid.UUID
 

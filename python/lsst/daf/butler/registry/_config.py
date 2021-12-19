@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("RegistryConfig",)
 
-from typing import Optional, Type, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Optional, Type, Union
 
 from lsst.utils import doImportType
 
@@ -34,6 +34,7 @@ from .interfaces import Database
 
 if TYPE_CHECKING:
     import sqlalchemy
+
     from ..core import ButlerURI
 
 

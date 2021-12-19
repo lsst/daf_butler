@@ -23,15 +23,10 @@ from __future__ import annotations
 
 """Formatter associated with Python pickled objects."""
 
-__all__ = ("PickleFormatter", )
+__all__ = ("PickleFormatter",)
 
 import pickle
-
-from typing import (
-    Any,
-    Optional,
-    Type,
-)
+from typing import Any, Optional, Type
 
 from .file import FileFormatter
 
@@ -40,6 +35,7 @@ class PickleFormatter(FileFormatter):
     """Interface for reading and writing Python objects to and from pickle
     files.
     """
+
     extension = ".pickle"
 
     unsupportedParameters = None

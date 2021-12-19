@@ -26,19 +26,9 @@ from __future__ import annotations
 __all__ = ("DatasetComponent", "StorageClassDelegate")
 
 import collections.abc
-from dataclasses import dataclass
 import logging
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-    TYPE_CHECKING,
-)
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Mapping, Optional, Set, Tuple, Type
 
 if TYPE_CHECKING:
     from .storageClass import StorageClass
@@ -255,8 +245,9 @@ class StorageClassDelegate:
             raise AttributeError("Unable to get component {}".format(componentName))
         return component
 
-    def disassemble(self, composite: Any, subset: Optional[Iterable] = None,
-                    override: bool = None) -> Dict[str, Any]:
+    def disassemble(
+        self, composite: Any, subset: Optional[Iterable] = None, override: bool = None
+    ) -> Dict[str, Any]:
         """Disassembler a composite.
 
         This is a generic implementation of a disassembler.
@@ -295,12 +286,16 @@ class StorageClassDelegate:
             `StorageClassDelegate.storageClass`.
         """
         if not self.storageClass.isComposite():
-            raise TypeError("Can not disassemble something that is not a composite"
-                            f" (storage class={self.storageClass})")
+            raise TypeError(
+                "Can not disassemble something that is not a composite"
+                f" (storage class={self.storageClass})"
+            )
 
         if not self.storageClass.validateInstance(composite):
-            raise TypeError("Unexpected type mismatch between parent and StorageClass"
-                            " ({} != {})".format(type(composite), self.storageClass.pytype))
+            raise TypeError(
+                "Unexpected type mismatch between parent and StorageClass"
+                " ({} != {})".format(type(composite), self.storageClass.pytype)
+            )
 
         requested = set(self.storageClass.components)
 

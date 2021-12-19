@@ -22,10 +22,10 @@
 import abc
 import copy
 import os
-from unittest.mock import call, DEFAULT, patch
+from unittest.mock import DEFAULT, call, patch
 
-from ..cli.utils import clickResultMsg, LogCliRunner
 from ..cli import butler
+from ..cli.utils import LogCliRunner, clickResultMsg
 
 
 class CliCmdTestBase(abc.ABC):
@@ -61,7 +61,7 @@ class CliCmdTestBase(abc.ABC):
     @abc.abstractmethod
     def mockFuncName(self):
         """The qualified name of the function to mock, will be passed to
-        unittest.mock.patch, see python docs for details. """
+        unittest.mock.patch, see python docs for details."""
         pass
 
     def setUp(self):
@@ -155,7 +155,9 @@ class CliCmdTestBase(abc.ABC):
         self.assertRegex(result.stdout, expectedMsg)
 
     def test_help(self):
-        self.assertFalse(self.command().get_short_help_str().endswith("..."),
-                         msg="The command help message is being truncated to "
-                         f"\"{self.command().get_short_help_str()}\". It should be shortened, or define "
-                         "@command(short_help=\"something short and helpful\")")
+        self.assertFalse(
+            self.command().get_short_help_str().endswith("..."),
+            msg="The command help message is being truncated to "
+            f'"{self.command().get_short_help_str()}". It should be shortened, or define '
+            '@command(short_help="something short and helpful")',
+        )

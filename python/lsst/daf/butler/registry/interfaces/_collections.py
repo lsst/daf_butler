@@ -28,17 +28,11 @@ __all__ = [
 ]
 
 from abc import abstractmethod
-from typing import (
-    Any,
-    Iterator,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, Any, Iterator, Optional, Tuple
 
-from ...core import ddl, DimensionUniverse, Timespan
-from ..wildcards import CollectionSearch
+from ...core import DimensionUniverse, Timespan, ddl
 from .._collectionType import CollectionType
+from ..wildcards import CollectionSearch
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -62,6 +56,7 @@ class CollectionRecord:
     type : `CollectionType`
         Enumeration value describing the type of the collection.
     """
+
     def __init__(self, key: Any, name: str, type: CollectionType):
         self.key = key
         self.name = name
@@ -88,8 +83,7 @@ class RunRecord(CollectionRecord):
     """
 
     @abstractmethod
-    def update(self, host: Optional[str] = None,
-               timespan: Optional[Timespan] = None) -> None:
+    def update(self, host: Optional[str] = None, timespan: Optional[Timespan] = None) -> None:
         """Update the database record for this run with new execution
         information.
 
@@ -175,8 +169,9 @@ class ChainedCollectionRecord(CollectionRecord):
         ValueError
             Raised when the child collections contain a cycle.
         """
-        for record in children.iter(manager, flattenChains=True, includeChains=True,
-                                    collectionTypes={CollectionType.CHAINED}):
+        for record in children.iter(
+            manager, flattenChains=True, includeChains=True, collectionTypes={CollectionType.CHAINED}
+        ):
             if record == self:
                 raise ValueError(f"Cycle in collection chaining when defining '{self.name}'.")
         if flatten:
@@ -263,8 +258,9 @@ class CollectionManager(VersionedExtension):
 
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, context: StaticTablesContext, *,
-                   dimensions: DimensionRecordStorageManager) -> CollectionManager:
+    def initialize(
+        cls, db: Database, context: StaticTablesContext, *, dimensions: DimensionRecordStorageManager
+    ) -> CollectionManager:
         """Construct an instance of the manager.
 
         Parameters
@@ -287,10 +283,15 @@ class CollectionManager(VersionedExtension):
 
     @classmethod
     @abstractmethod
-    def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
-                                onDelete: Optional[str] = None,
-                                constraint: bool = True,
-                                **kwargs: Any) -> ddl.FieldSpec:
+    def addCollectionForeignKey(
+        cls,
+        tableSpec: ddl.TableSpec,
+        *,
+        prefix: str = "collection",
+        onDelete: Optional[str] = None,
+        constraint: bool = True,
+        **kwargs: Any,
+    ) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the collection
         table.
 
@@ -324,10 +325,15 @@ class CollectionManager(VersionedExtension):
 
     @classmethod
     @abstractmethod
-    def addRunForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "run",
-                         onDelete: Optional[str] = None,
-                         constraint: bool = True,
-                         **kwargs: Any) -> ddl.FieldSpec:
+    def addRunForeignKey(
+        cls,
+        tableSpec: ddl.TableSpec,
+        *,
+        prefix: str = "run",
+        onDelete: Optional[str] = None,
+        constraint: bool = True,
+        **kwargs: Any,
+    ) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the run
         table.
 
@@ -405,8 +411,9 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def register(self, name: str, type: CollectionType,
-                 doc: Optional[str] = None) -> Tuple[CollectionRecord, bool]:
+    def register(
+        self, name: str, type: CollectionType, doc: Optional[str] = None
+    ) -> Tuple[CollectionRecord, bool]:
         """Ensure that a collection of the given name and type are present
         in the layer this manager is associated with.
 

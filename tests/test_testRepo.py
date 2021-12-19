@@ -28,10 +28,16 @@ import shutil
 import unittest
 
 import lsst.daf.butler
-from lsst.daf.butler.tests import (makeTestRepo, makeTestCollection, addDatasetType, expandUniqueId,
-                                   MetricsExample, registerMetricsExample, addDataIdValue)
+from lsst.daf.butler.tests import (
+    MetricsExample,
+    addDataIdValue,
+    addDatasetType,
+    expandUniqueId,
+    makeTestCollection,
+    makeTestRepo,
+    registerMetricsExample,
+)
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
-
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -74,7 +80,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
     def testButlerKwargs(self):
         # outfile has the most obvious effects of any Butler.makeRepo keyword
         with safeTestTempDir(TESTDIR) as temp:
-            path = os.path.join(temp, 'oddConfig.json')
+            path = os.path.join(temp, "oddConfig.json")
             makeTestRepo(temp, {}, outfile=path)
             self.assertTrue(os.path.isfile(path))
 
@@ -84,31 +90,34 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         self.assertIn(dict(result[0]), expected)
 
     def testButlerDimensions(self):
-        self._checkButlerDimension({"instrument"},
-                                   "instrument='notACam'",
-                                   [{"instrument": "notACam"}, {"instrument": "dummyCam"}])
-        self._checkButlerDimension({"visit", "instrument"},
-                                   "visit=101",
-                                   [{"instrument": "notACam", "visit": 101},
-                                    {"instrument": "dummyCam", "visit": 101}])
-        self._checkButlerDimension({"visit", "instrument"},
-                                   "visit=102",
-                                   [{"instrument": "notACam", "visit": 102},
-                                    {"instrument": "dummyCam", "visit": 102}])
-        self._checkButlerDimension({"detector", "instrument"},
-                                   "detector=5",
-                                   [{"instrument": "notACam", "detector": 5},
-                                    {"instrument": "dummyCam", "detector": 5}])
+        self._checkButlerDimension(
+            {"instrument"}, "instrument='notACam'", [{"instrument": "notACam"}, {"instrument": "dummyCam"}]
+        )
+        self._checkButlerDimension(
+            {"visit", "instrument"},
+            "visit=101",
+            [{"instrument": "notACam", "visit": 101}, {"instrument": "dummyCam", "visit": 101}],
+        )
+        self._checkButlerDimension(
+            {"visit", "instrument"},
+            "visit=102",
+            [{"instrument": "notACam", "visit": 102}, {"instrument": "dummyCam", "visit": 102}],
+        )
+        self._checkButlerDimension(
+            {"detector", "instrument"},
+            "detector=5",
+            [{"instrument": "notACam", "detector": 5}, {"instrument": "dummyCam", "detector": 5}],
+        )
 
     def testAddDataIdValue(self):
         addDataIdValue(self.butler, "visit", 1, instrument="notACam", physical_filter="k2020")
-        self._checkButlerDimension({"visit", "instrument"},
-                                   "visit=1",
-                                   [{"instrument": "notACam", "visit": 1}])
+        self._checkButlerDimension(
+            {"visit", "instrument"}, "visit=1", [{"instrument": "notACam", "visit": 1}]
+        )
         addDataIdValue(self.butler, "visit", 2, instrument="dummyCam", physical_filter="l2019")
-        self._checkButlerDimension({"visit", "instrument"},
-                                   "visit=2",
-                                   [{"instrument": "dummyCam", "visit": 2}])
+        self._checkButlerDimension(
+            {"visit", "instrument"}, "visit=2", [{"instrument": "dummyCam", "visit": 2}]
+        )
 
         with self.assertRaises(ValueError):
             addDataIdValue(self.butler, "NotADimension", 42)
@@ -162,9 +171,11 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         try:
             config = lsst.daf.butler.Config()
             config["datastore", "cls"] = "lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore"
-            config["datastore", "datastores"] = [{
-                "cls": "lsst.daf.butler.datastores.fileDatastore.FileDatastore",
-            }]
+            config["datastore", "datastores"] = [
+                {
+                    "cls": "lsst.daf.butler.datastores.fileDatastore.FileDatastore",
+                }
+            ]
 
             repo = lsst.daf.butler.Butler.makeRepo(temp, config=config)
             butler = lsst.daf.butler.Butler(repo, run="chainedExample")
@@ -187,17 +198,24 @@ class ButlerUtilsTestSuite(unittest.TestCase):
             newButler.datasetExists("DataType1", dataId)
 
     def testExpandUniqueId(self):
-        self.assertEqual(dict(expandUniqueId(self.butler, {"instrument": "notACam"})),
-                         {"instrument": "notACam"})
-        self.assertIn(dict(expandUniqueId(self.butler, {"visit": 101})),
-                      [{"instrument": "notACam", "visit": 101},
-                       {"instrument": "dummyCam", "visit": 101}])
-        self.assertIn(dict(expandUniqueId(self.butler, {"detector": 5})),
-                      [{"instrument": "notACam", "detector": 5},
-                       {"instrument": "dummyCam", "detector": 5}])
-        self.assertIn(dict(expandUniqueId(self.butler, {"physical_filter": "k2020"})),
-                      [{"instrument": "notACam", "physical_filter": "k2020"},
-                       {"instrument": "notACam", "physical_filter": "k2020"}])
+        self.assertEqual(
+            dict(expandUniqueId(self.butler, {"instrument": "notACam"})), {"instrument": "notACam"}
+        )
+        self.assertIn(
+            dict(expandUniqueId(self.butler, {"visit": 101})),
+            [{"instrument": "notACam", "visit": 101}, {"instrument": "dummyCam", "visit": 101}],
+        )
+        self.assertIn(
+            dict(expandUniqueId(self.butler, {"detector": 5})),
+            [{"instrument": "notACam", "detector": 5}, {"instrument": "dummyCam", "detector": 5}],
+        )
+        self.assertIn(
+            dict(expandUniqueId(self.butler, {"physical_filter": "k2020"})),
+            [
+                {"instrument": "notACam", "physical_filter": "k2020"},
+                {"instrument": "notACam", "physical_filter": "k2020"},
+            ],
+        )
         with self.assertRaises(ValueError):
             expandUniqueId(self.butler, {"tract": 42})
 

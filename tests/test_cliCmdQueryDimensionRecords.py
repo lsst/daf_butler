@@ -22,23 +22,21 @@
 """Unit tests for daf_butler CLI query-collections command.
 """
 
-from astropy.table import Table as AstropyTable
-from numpy import array
 import os
 import unittest
 
-from lsst.daf.butler import StorageClassFactory
-from lsst.daf.butler import Butler
+from astropy.table import Table as AstropyTable
+from lsst.daf.butler import Butler, StorageClassFactory
 from lsst.daf.butler.cli.butler import cli as butlerCli
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.tests.utils import (
     ButlerTestHelper,
-    makeTestTempDir,
     MetricTestRepo,
+    makeTestTempDir,
     readTable,
     removeTestTempDir,
 )
-
+from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -50,44 +48,103 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     storageClassFactory = StorageClassFactory()
 
-    expectedColumnNames = ("instrument", "id", "physical_filter", "visit_system", "name", "day_obs",
-                           "exposure_time", "target_name", "observation_reason", "science_program",
-                           "zenith_angle", "region", "timespan [2]")
+    expectedColumnNames = (
+        "instrument",
+        "id",
+        "physical_filter",
+        "visit_system",
+        "name",
+        "day_obs",
+        "exposure_time",
+        "target_name",
+        "observation_reason",
+        "science_program",
+        "zenith_angle",
+        "region",
+        "timespan [2]",
+    )
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
-        self.testRepo = MetricTestRepo(self.root,
-                                       configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+        self.testRepo = MetricTestRepo(
+            self.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml")
+        )
         self.runner = LogCliRunner()
 
     def tearDown(self):
         removeTestTempDir(self.root)
 
     def testBasic(self):
-        result = self.runner.invoke(butlerCli, ["query-dimension-records",
-                                                self.root,
-                                                "visit"])
+        result = self.runner.invoke(butlerCli, ["query-dimension-records", self.root, "visit"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        rows = array((
-            ("DummyCamComp", "423", "d-r", "1", "fourtwentythree", "None", "None", "None", "None", "None",
-             "None", "None", "None .. None"),
-            ("DummyCamComp", "424", "d-r", "1", "fourtwentyfour", "None", "None", "None", "None", "None",
-             "None", "None", "None .. None")
-        ))
+        rows = array(
+            (
+                (
+                    "DummyCamComp",
+                    "423",
+                    "d-r",
+                    "1",
+                    "fourtwentythree",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None .. None",
+                ),
+                (
+                    "DummyCamComp",
+                    "424",
+                    "d-r",
+                    "1",
+                    "fourtwentyfour",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None .. None",
+                ),
+            )
+        )
         expected = AstropyTable(rows, names=self.expectedColumnNames)
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
     def testWhere(self):
-        result = self.runner.invoke(butlerCli, ["query-dimension-records",
-                                                self.root,
-                                                "visit",
-                                                "--where",
-                                                "instrument='DummyCamComp' AND visit.name='fourtwentythree'"])
+        result = self.runner.invoke(
+            butlerCli,
+            [
+                "query-dimension-records",
+                self.root,
+                "visit",
+                "--where",
+                "instrument='DummyCamComp' AND visit.name='fourtwentythree'",
+            ],
+        )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        rows = array((
-            ("DummyCamComp", "423", "d-r", "1", "fourtwentythree", "None", "None", "None", "None", "None",
-             "None", "None", "None .. None"),
-        ))
+        rows = array(
+            (
+                (
+                    "DummyCamComp",
+                    "423",
+                    "d-r",
+                    "1",
+                    "fourtwentythree",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None .. None",
+                ),
+            )
+        )
         expected = AstropyTable(rows, names=self.expectedColumnNames)
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
@@ -98,42 +155,102 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
         # try replacing the testRepo's butler with the one with the "foo" run.
         self.testRepo.butler = butler
 
-        self.testRepo.butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425,
-                                                                    "name": "fourtwentyfive",
-                                                                    "physical_filter": "d-r",
-                                                                    "visit_system": 1})
-        self.testRepo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425},
-                                 run="foo")
+        self.testRepo.butler.registry.insertDimensionData(
+            "visit",
+            {
+                "instrument": "DummyCamComp",
+                "id": 425,
+                "name": "fourtwentyfive",
+                "physical_filter": "d-r",
+                "visit_system": 1,
+            },
+        )
+        self.testRepo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425}, run="foo")
 
         # verify getting records from the "ingest/run" collection
-        result = self.runner.invoke(butlerCli, ["query-dimension-records",
-                                                self.root,
-                                                "visit",
-                                                "--collections", "ingest/run",
-                                                "--datasets", "test_metric_comp"
-                                                ])
+        result = self.runner.invoke(
+            butlerCli,
+            [
+                "query-dimension-records",
+                self.root,
+                "visit",
+                "--collections",
+                "ingest/run",
+                "--datasets",
+                "test_metric_comp",
+            ],
+        )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        rows = array((
-            ("DummyCamComp", "423", "d-r", "1", "fourtwentythree", "None", "None", "None", "None", "None",
-             "None", "None", "None .. None"),
-            ("DummyCamComp", "424", "d-r", "1", "fourtwentyfour", "None", "None", "None", "None", "None",
-             "None", "None", "None .. None")
-        ))
+        rows = array(
+            (
+                (
+                    "DummyCamComp",
+                    "423",
+                    "d-r",
+                    "1",
+                    "fourtwentythree",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None .. None",
+                ),
+                (
+                    "DummyCamComp",
+                    "424",
+                    "d-r",
+                    "1",
+                    "fourtwentyfour",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None .. None",
+                ),
+            )
+        )
         expected = AstropyTable(rows, names=self.expectedColumnNames)
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
         # verify getting records from the "foo" collection
-        result = self.runner.invoke(butlerCli, ["query-dimension-records",
-                                                self.root,
-                                                "visit",
-                                                "--collections", "foo",
-                                                "--datasets", "test_metric_comp"
-                                                ])
+        result = self.runner.invoke(
+            butlerCli,
+            [
+                "query-dimension-records",
+                self.root,
+                "visit",
+                "--collections",
+                "foo",
+                "--datasets",
+                "test_metric_comp",
+            ],
+        )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        rows = array((
-            ("DummyCamComp", "425", "d-r", "1", "fourtwentyfive", "None", "None", "None", "None", "None",
-             "None", "None", "None .. None"),
-        ))
+        rows = array(
+            (
+                (
+                    "DummyCamComp",
+                    "425",
+                    "d-r",
+                    "1",
+                    "fourtwentyfive",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None",
+                    "None .. None",
+                ),
+            )
+        )
         expected = AstropyTable(rows, names=self.expectedColumnNames)
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 

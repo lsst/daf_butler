@@ -28,32 +28,23 @@ from __future__ import annotations
 
 __all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue", "SerializedDataCoordinate")
 
-from abc import abstractmethod
 import numbers
-from typing import (
-    AbstractSet,
-    Any,
-    Dict,
-    Iterator,
-    Mapping,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-    Union,
-)
-from pydantic import BaseModel
+from abc import abstractmethod
+from typing import TYPE_CHECKING, AbstractSet, Any, Dict, Iterator, Mapping, Optional, Tuple, Union
 
 from lsst.sphgeom import Region
-from ..named import NamedKeyDict, NamedKeyMapping, NameLookupMapping, NamedValueAbstractSet
+from pydantic import BaseModel
+
+from ..json import from_json_pydantic, to_json_pydantic
+from ..named import NamedKeyDict, NamedKeyMapping, NamedValueAbstractSet, NameLookupMapping
 from ..timespan import Timespan
 from ._elements import Dimension, DimensionElement
 from ._graph import DimensionGraph
 from ._records import DimensionRecord, SerializedDimensionRecord
-from ..json import from_json_pydantic, to_json_pydantic
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ._universe import DimensionUniverse
     from ...registry import Registry
+    from ._universe import DimensionUniverse
 
 DataIdKey = Union[str, Dimension]
 """Type annotation alias for the keys that can be used to index a
@@ -85,11 +76,15 @@ class SerializedDataCoordinate(BaseModel):
         """
         node = SerializedDataCoordinate.__new__(cls)
         setter = object.__setattr__
-        setter(node, 'dataId', dataId)
-        setter(node, 'records',
-               records if records is None else
-               {k: SerializedDimensionRecord.direct(**v) for k, v in records.items()})
-        setter(node, '__fields_set__', {'dataId', 'records'})
+        setter(node, "dataId", dataId)
+        setter(
+            node,
+            "records",
+            records
+            if records is None
+            else {k: SerializedDimensionRecord.direct(**v) for k, v in records.items()},
+        )
+        setter(node, "__fields_set__", {"dataId", "records"})
         return node
 
 
@@ -168,7 +163,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         graph: Optional[DimensionGraph] = None,
         universe: Optional[DimensionUniverse] = None,
         defaults: Optional[DataCoordinate] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> DataCoordinate:
         """Standardize the supplied dataId.
 
@@ -255,8 +250,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
                 raise KeyError(f"No value in data ID ({mapping}) for required dimension {err}.") from err
         # Some backends cannot handle numpy.int64 type which is a subclass of
         # numbers.Integral; convert that to int.
-        values = tuple(int(val) if isinstance(val, numbers.Integral)  # type: ignore
-                       else val for val in values)
+        values = tuple(
+            int(val) if isinstance(val, numbers.Integral) else val for val in values  # type: ignore
+        )
         return _BasicTupleDataCoordinate(graph, values)
 
     @staticmethod
@@ -302,8 +298,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             ``graph.implied`` is empty, and ``dataId.hasRecords()`` will never
             return `True`.
         """
-        assert len(graph.required) == len(values), \
-            f"Inconsistency between dimensions {graph.required} and required values {values}."
+        assert len(graph.required) == len(
+            values
+        ), f"Inconsistency between dimensions {graph.required} and required values {values}."
         return _BasicTupleDataCoordinate(graph, values)
 
     @staticmethod
@@ -331,8 +328,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             ``graph.implied`` is empty, and ``dataId.hasRecords()`` will never
             return `True`.
         """
-        assert len(graph.dimensions) == len(values), \
-            f"Inconsistency between dimensions {graph.dimensions} and full values {values}."
+        assert len(graph.dimensions) == len(
+            values
+        ), f"Inconsistency between dimensions {graph.dimensions} and full values {values}."
         return _BasicTupleDataCoordinate(graph, values)
 
     def __hash__(self) -> int:
@@ -352,7 +350,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         terms = [f"{d}: {self[d]!r}" for d in self.graph.required.names]
         if self.hasFull() and self.graph.required != self.graph.dimensions:
             terms.append("...")
-        return "{{{}}}".format(', '.join(terms))
+        return "{{{}}}".format(", ".join(terms))
 
     def __lt__(self, other: Any) -> bool:
         # Allow DataCoordinate to be sorted
@@ -449,8 +447,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         raise NotImplementedError()
 
     @abstractmethod
-    def expanded(self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
-                 ) -> DataCoordinate:
+    def expanded(
+        self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
+    ) -> DataCoordinate:
         """Return a `DataCoordinate` that holds the given records.
 
         Guarantees that `hasRecords` returns `True`.
@@ -685,9 +684,12 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
         return SerializedDataCoordinate(dataId=dataId, records=records)
 
     @classmethod
-    def from_simple(cls, simple: SerializedDataCoordinate,
-                    universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None) -> DataCoordinate:
+    def from_simple(
+        cls,
+        simple: SerializedDataCoordinate,
+        universe: Optional[DimensionUniverse] = None,
+        registry: Optional[Registry] = None,
+    ) -> DataCoordinate:
         """Construct a new object from the simplified form.
 
         The data is assumed to be of the form returned from the `to_simple`
@@ -718,8 +720,9 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
 
         dataId = cls.standardize(simple.dataId, universe=universe)
         if simple.records:
-            dataId = dataId.expanded({k: DimensionRecord.from_simple(v, universe=universe)
-                                      for k, v in simple.records.items()})
+            dataId = dataId.expanded(
+                {k: DimensionRecord.from_simple(v, universe=universe) for k, v in simple.records.items()}
+            )
         return dataId
 
     to_json = to_json_pydantic
@@ -751,7 +754,7 @@ class _DataCoordinateFullView(NamedKeyMapping[Dimension, DataIdValue]):
 
     def __repr__(self) -> str:
         terms = [f"{d}: {self[d]!r}" for d in self._target.graph.dimensions.names]
-        return "{{{}}}".format(', '.join(terms))
+        return "{{{}}}".format(", ".join(terms))
 
     def __getitem__(self, key: DataIdKey) -> DataIdValue:
         return self._target[key]
@@ -790,7 +793,7 @@ class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, Optional[Dime
 
     def __repr__(self) -> str:
         terms = [f"{d}: {self[d]!r}" for d in self._target.graph.elements.names]
-        return "{{{}}}".format(', '.join(terms))
+        return "{{{}}}".format(", ".join(terms))
 
     def __str__(self) -> str:
         return "\n".join(str(v) for v in self.values())
@@ -899,8 +902,9 @@ class _BasicTupleDataCoordinate(DataCoordinate):
         values.update(other.full.byName() if other.hasFull() else other.byName())
         return DataCoordinate.standardize(values, graph=graph)
 
-    def expanded(self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
-                 ) -> DataCoordinate:
+    def expanded(
+        self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
+    ) -> DataCoordinate:
         # Docstring inherited from DataCoordinate
         values = self._values
         if not self.hasFull():
@@ -948,8 +952,12 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
         been fetched.
     """
 
-    def __init__(self, graph: DimensionGraph, values: Tuple[DataIdValue, ...],
-                 records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]):
+    def __init__(
+        self,
+        graph: DimensionGraph,
+        values: Tuple[DataIdValue, ...],
+        records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]],
+    ):
         super().__init__(graph, values)
         assert super().hasFull(), "This implementation requires full dimension records."
         self._records = records
@@ -960,12 +968,13 @@ class _ExpandedTupleDataCoordinate(_BasicTupleDataCoordinate):
         # Docstring inherited from DataCoordinate.
         if self._graph == graph:
             return self
-        return _ExpandedTupleDataCoordinate(graph,
-                                            tuple(self[k] for k in graph._dataCoordinateIndices.keys()),
-                                            records=self._records)
+        return _ExpandedTupleDataCoordinate(
+            graph, tuple(self[k] for k in graph._dataCoordinateIndices.keys()), records=self._records
+        )
 
-    def expanded(self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
-                 ) -> DataCoordinate:
+    def expanded(
+        self, records: NameLookupMapping[DimensionElement, Optional[DimensionRecord]]
+    ) -> DataCoordinate:
         # Docstring inherited from DataCoordinate.
         return self
 

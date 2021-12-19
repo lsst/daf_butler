@@ -29,9 +29,9 @@ __all__ = (
     "ParentDatasetQueryResults",
 )
 
-from abc import abstractmethod
-from contextlib import contextmanager, ExitStack
 import itertools
+from abc import abstractmethod
+from contextlib import ExitStack, contextmanager
 from typing import (
     Any,
     Callable,
@@ -59,7 +59,6 @@ from ...core import (
 from ..interfaces import Database, DimensionRecordStorage
 from ._query import Query
 from ._structs import QuerySummary
-
 
 QueryFactoryMethod = Callable[[Optional[Iterable[str]], Optional[Tuple[int, Optional[int]]]], Query]
 """Type of a query factory method type used by DataCoordinateQueryResults.
@@ -99,14 +98,17 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
     Instances should generally only be constructed by `Registry` methods or the
     methods of other query result objects.
     """
-    def __init__(self,
-                 db: Database,
-                 query_factory: QueryFactoryMethod,
-                 graph: DimensionGraph,
-                 *,
-                 order_by: Optional[Iterable[str]] = None,
-                 limit: Optional[Tuple[int, Optional[int]]] = None,
-                 records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None):
+
+    def __init__(
+        self,
+        db: Database,
+        query_factory: QueryFactoryMethod,
+        graph: DimensionGraph,
+        *,
+        order_by: Optional[Iterable[str]] = None,
+        limit: Optional[Tuple[int, Optional[int]]] = None,
+        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+    ):
         self._db = db
         self._query_factory = query_factory
         self._graph = graph
@@ -118,15 +120,16 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
     __slots__ = ("_db", "_query_factory", "_graph", "_order_by", "_limit", "_records", "_cached_query")
 
     @classmethod
-    def from_query(cls,
-                   db: Database,
-                   query: Query,
-                   graph: DimensionGraph,
-                   *,
-                   order_by: Optional[Iterable[str]] = None,
-                   limit: Optional[Tuple[int, Optional[int]]] = None,
-                   records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None
-                   ) -> DataCoordinateQueryResults:
+    def from_query(
+        cls,
+        db: Database,
+        query: Query,
+        graph: DimensionGraph,
+        *,
+        order_by: Optional[Iterable[str]] = None,
+        limit: Optional[Tuple[int, Optional[int]]] = None,
+        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+    ) -> DataCoordinateQueryResults:
         """Make an instance from a pre-existing query instead of a factory.
 
         Parameters
@@ -151,11 +154,11 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             conversions of `DataCoordinate.values()`) and `DimensionRecord`
             values.
         """
+
         def factory(order_by: Optional[Iterable[str]], limit: Optional[Tuple[int, Optional[int]]]) -> Query:
             return query
 
-        return DataCoordinateQueryResults(db, factory, graph, order_by=order_by,
-                                          limit=limit, records=records)
+        return DataCoordinateQueryResults(db, factory, graph, order_by=order_by, limit=limit, records=records)
 
     def __iter__(self) -> Iterator[DataCoordinate]:
         return (self._query.extractDataId(row, records=self._records) for row in self._query.rows(self._db))
@@ -163,35 +166,39 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
     def __repr__(self) -> str:
         return f"<DataCoordinate iterator with dimensions={self._graph}>"
 
-    def _clone(self, *,
-               query_factory: Optional[QueryFactoryMethod] = None,
-               query: Optional[Query] = None,
-               graph: Optional[DimensionGraph] = None,
-               order_by: Optional[Iterable[str]] = None,
-               limit: Optional[Tuple[int, Optional[int]]] = None,
-               records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
-               ) -> DataCoordinateQueryResults:
-        """Clone this instance potentially updating some attributes.
-        """
+    def _clone(
+        self,
+        *,
+        query_factory: Optional[QueryFactoryMethod] = None,
+        query: Optional[Query] = None,
+        graph: Optional[DimensionGraph] = None,
+        order_by: Optional[Iterable[str]] = None,
+        limit: Optional[Tuple[int, Optional[int]]] = None,
+        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+    ) -> DataCoordinateQueryResults:
+        """Clone this instance potentially updating some attributes."""
         graph = graph if graph is not None else self._graph
         order_by = order_by if order_by is not None else self._order_by
         limit = limit if limit is not None else self._limit
         records = records if records is not None else self._records
         if query is None:
             query_factory = query_factory or self._query_factory
-            return DataCoordinateQueryResults(self._db, query_factory, graph,
-                                              order_by=order_by, limit=limit, records=records)
+            return DataCoordinateQueryResults(
+                self._db, query_factory, graph, order_by=order_by, limit=limit, records=records
+            )
         else:
-            return DataCoordinateQueryResults.from_query(self._db, query, graph,
-                                                         order_by=order_by, limit=limit, records=records)
+            return DataCoordinateQueryResults.from_query(
+                self._db, query, graph, order_by=order_by, limit=limit, records=records
+            )
 
     @property
     def _query(self) -> Query:
         """Query representation instance (`Query`)"""
         if self._cached_query is None:
             self._cached_query = self._query_factory(self._order_by, self._limit)
-            assert self._cached_query.datasetType is None, \
-                "Query used to initialize data coordinate results should not have any datasets."
+            assert (
+                self._cached_query.datasetType is None
+            ), "Query used to initialize data coordinate results should not have any datasets."
         return self._cached_query
 
     @property
@@ -275,8 +282,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         else:
             return self
 
-    def subset(self, graph: Optional[DimensionGraph] = None, *,
-               unique: bool = False) -> DataCoordinateQueryResults:
+    def subset(
+        self, graph: Optional[DimensionGraph] = None, *, unique: bool = False
+    ) -> DataCoordinateQueryResults:
         """Return a results object containing a subset of the dimensions of
         this one, and/or a unique near-subset of its rows.
 
@@ -345,14 +353,17 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             fromClause = sql.alias("c")
             query.join(
                 fromClause,
-                onclause=sqlalchemy.sql.and_(*[
-                    columns(dimension.name) == fromClause.columns[dimension.name]
-                    for dimension in self.graph.required
-                ])
+                onclause=sqlalchemy.sql.and_(
+                    *[
+                        columns(dimension.name) == fromClause.columns[dimension.name]
+                        for dimension in self.graph.required
+                    ]
+                ),
             )
 
-    def findDatasets(self, datasetType: Union[DatasetType, str], collections: Any, *,
-                     findFirst: bool = True) -> ParentDatasetQueryResults:
+    def findDatasets(
+        self, datasetType: Union[DatasetType, str], collections: Any, *, findFirst: bool = True
+    ) -> ParentDatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
         Parameters
@@ -389,10 +400,12 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             datasetType = self._query.managers.datasets[datasetType].datasetType
         # moving component handling down into managers.
         if not datasetType.dimensions.issubset(self.graph):
-            raise ValueError(f"findDatasets requires that the dataset type have the same dimensions as "
-                             f"the DataCoordinateQueryResult used as input to the search, but "
-                             f"{datasetType.name} has dimensions {datasetType.dimensions}, while the input "
-                             f"dimensions are {self.graph}.")
+            raise ValueError(
+                f"findDatasets requires that the dataset type have the same dimensions as "
+                f"the DataCoordinateQueryResult used as input to the search, but "
+                f"{datasetType.name} has dimensions {datasetType.dimensions}, while the input "
+                f"dimensions are {self.graph}."
+            )
         if datasetType.isComponent():
             # We were given a true DatasetType instance, but it's a component.
             parentName, componentName = datasetType.nameAndComponent()
@@ -405,8 +418,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         builder = self._query.makeBuilder(summary)
         builder.joinDataset(datasetType, collections=collections, findFirst=findFirst)
         query = builder.finish(joinMissing=False)
-        return ParentDatasetQueryResults(db=self._db, query=query, components=components,
-                                         records=self._records, datasetType=datasetType)
+        return ParentDatasetQueryResults(
+            db=self._db, query=query, components=components, records=self._records, datasetType=datasetType
+        )
 
     def count(self, *, exact: bool = True) -> int:
         """Count the number of rows this query would return.
@@ -433,7 +447,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         return self._query.count(self._db, exact=exact)
 
     def any(
-        self, *,
+        self,
+        *,
         execute: bool = True,
         exact: bool = True,
     ) -> bool:
@@ -610,7 +625,8 @@ class DatasetQueryResults(Iterable[DatasetRef]):
 
     @abstractmethod
     def any(
-        self, *,
+        self,
+        *,
         execute: bool = True,
         exact: bool = True,
     ) -> bool:
@@ -689,20 +705,26 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         is in the case where the query is known to yield no results prior to
         execution).
     """
-    def __init__(self, db: Database, query: Query, *,
-                 components: Sequence[Optional[str]],
-                 records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
-                 datasetType: Optional[DatasetType] = None):
+
+    def __init__(
+        self,
+        db: Database,
+        query: Query,
+        *,
+        components: Sequence[Optional[str]],
+        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+        datasetType: Optional[DatasetType] = None,
+    ):
         self._db = db
         self._query = query
         self._components = components
         self._records = records
         if datasetType is None:
             datasetType = query.datasetType
-        assert datasetType is not None, \
-            "Query used to initialize dataset results must have a dataset."
-        assert datasetType.dimensions == query.graph, \
-            f"Query dimensions {query.graph} do not match dataset type dimesions {datasetType.dimensions}."
+        assert datasetType is not None, "Query used to initialize dataset results must have a dataset."
+        assert (
+            datasetType.dimensions == query.graph
+        ), f"Query dimensions {query.graph} do not match dataset type dimesions {datasetType.dimensions}."
         self._datasetType = datasetType
 
     __slots__ = ("_db", "_query", "_dimensions", "_components", "_records")
@@ -727,9 +749,9 @@ class ParentDatasetQueryResults(DatasetQueryResults):
     def materialize(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         with self._query.materialize(self._db) as materialized:
-            yield ParentDatasetQueryResults(self._db, materialized,
-                                            components=self._components,
-                                            records=self._records)
+            yield ParentDatasetQueryResults(
+                self._db, materialized, components=self._components, records=self._records
+            )
 
     @property
     def parentDatasetType(self) -> DatasetType:
@@ -763,15 +785,21 @@ class ParentDatasetQueryResults(DatasetQueryResults):
             Names of components to include in iteration.  `None` may be
             included (at most once) to include the parent dataset type.
         """
-        return ParentDatasetQueryResults(self._db, self._query, records=self._records,
-                                         components=components, datasetType=self._datasetType)
+        return ParentDatasetQueryResults(
+            self._db, self._query, records=self._records, components=components, datasetType=self._datasetType
+        )
 
     def expanded(self) -> ParentDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
         if self._records is None:
             records = self.dataIds.expanded()._records
-            return ParentDatasetQueryResults(self._db, self._query, records=records,
-                                             components=self._components, datasetType=self._datasetType)
+            return ParentDatasetQueryResults(
+                self._db,
+                self._query,
+                records=records,
+                components=self._components,
+                datasetType=self._datasetType,
+            )
         else:
             return self
 
@@ -780,7 +808,8 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         return len(self._components) * self._query.count(self._db, exact=exact)
 
     def any(
-        self, *,
+        self,
+        *,
         execute: bool = True,
         exact: bool = True,
     ) -> bool:
@@ -827,9 +856,7 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
     def materialize(self) -> Iterator[ChainedDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
         with ExitStack() as stack:
-            yield ChainedDatasetQueryResults(
-                [stack.enter_context(r.materialize()) for r in self._chain]
-            )
+            yield ChainedDatasetQueryResults([stack.enter_context(r.materialize()) for r in self._chain])
 
     def expanded(self) -> ChainedDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
@@ -840,7 +867,8 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
         return sum(r.count(exact=exact) for r in self._chain)
 
     def any(
-        self, *,
+        self,
+        *,
         execute: bool = True,
         exact: bool = True,
     ) -> bool:
@@ -968,6 +996,7 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
     recordStorage : `DimensionRecordStorage`
         Instance of storage class for dimension records.
     """
+
     def __init__(self, dataIds: DataCoordinateQueryResults, recordStorage: DimensionRecordStorage):
         self._dataIds = dataIds
         self._recordStorage = recordStorage

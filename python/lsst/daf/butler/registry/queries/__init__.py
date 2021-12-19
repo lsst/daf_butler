@@ -19,10 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ._query import *
 from ._builder import *
-from ._structs import *
+from ._query import *
 from ._results import *
+from ._structs import *
 
 # Symbols from other modules intentionally not lifted to package scope,
 # as they're all internal.

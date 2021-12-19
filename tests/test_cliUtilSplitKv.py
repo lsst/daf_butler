@@ -22,12 +22,12 @@
 """Unit tests for the daf_butler shared CLI options.
 """
 
-import click
-from functools import partial
 import unittest
+from functools import partial
 from unittest.mock import MagicMock
 
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner, split_kv
+import click
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg, split_kv
 
 
 class SplitKvTestCase(unittest.TestCase):
@@ -49,20 +49,27 @@ class SplitKvTestCase(unittest.TestCase):
     def test_multiple_tuple(self):
         """Test that multiple comma separated kv pairs convert to a tuple when
         return_type=tuple."""
-        self.assertEqual(split_kv("context", "param", "first=1,second=2", return_type=tuple),
-                         (("first", "1"), ("second", "2")))
+        self.assertEqual(
+            split_kv("context", "param", "first=1,second=2", return_type=tuple),
+            (("first", "1"), ("second", "2")),
+        )
 
     def test_unseparated(self):
         """Test that a value without a key converts to a kv pair with an empty
         string key."""
-        self.assertEqual(split_kv("context", "param", "first,second=2", unseparated_okay=True),
-                         {"": "first", "second": "2"})
+        self.assertEqual(
+            split_kv("context", "param", "first,second=2", unseparated_okay=True),
+            {"": "first", "second": "2"},
+        )
 
     def test_notMultiple(self):
         """Test that multiple values are rejected if multiple=False."""
-        with self.assertRaisesRegex(click.ClickException, "Could not parse key-value pair "
-                                    "'first=1,second=2' using separator '=', with multiple values not "
-                                    "allowed."):
+        with self.assertRaisesRegex(
+            click.ClickException,
+            "Could not parse key-value pair "
+            "'first=1,second=2' using separator '=', with multiple values not "
+            "allowed.",
+        ):
             split_kv("context", "param", "first=1,second=2", multiple=False)
 
     def test_wrongSeparator(self):
@@ -79,31 +86,43 @@ class SplitKvTestCase(unittest.TestCase):
     def test_unseparatedOkay(self):
         """Test that that the default key is used for values without a
         separator when unseparated_okay=True."""
-        self.assertEqual(split_kv("context", "param", "foo", unseparated_okay=True),
-                         {"": "foo"})
+        self.assertEqual(split_kv("context", "param", "foo", unseparated_okay=True), {"": "foo"})
 
     def test_unseparatedOkay_list(self):
         """Test that that the default key is used for values without a
         separator when unseparated_okay=True and the return_type is tuple."""
-        self.assertEqual(split_kv("context", "param", "foo,bar", unseparated_okay=True, return_type=tuple),
-                         (("", "foo"), ("", "bar")))
+        self.assertEqual(
+            split_kv("context", "param", "foo,bar", unseparated_okay=True, return_type=tuple),
+            (("", "foo"), ("", "bar")),
+        )
 
     def test_unseparatedOkay_defaultKey(self):
         """Test that that the default key can be set and is used for values
         without a separator when unseparated_okay=True."""
-        self.assertEqual(split_kv("context", "param", "foo", unseparated_okay=True, default_key=...),
-                         {...: "foo"})
+        self.assertEqual(
+            split_kv("context", "param", "foo", unseparated_okay=True, default_key=...), {...: "foo"}
+        )
 
     def test_dashSeparator(self):
-        """Test that specifying a separator is accepted and converts to a dict.
+        """Test that specifying a separator is accepted and converts arguments
+        to a dict.
         """
-        self.assertEqual(split_kv("context", "param", "first-1,second-2", separator="-"),
-                         {"first": "1", "second": "2"})
+        self.assertEqual(
+            split_kv("context", "param", "first-1,second-2", separator="-"), {"first": "1", "second": "2"}
+        )
 
     def test_reverseKv(self):
-        self.assertEqual(split_kv("context", "param", "first=1,second", unseparated_okay=True,
-                                  default_key="key", reverse_kv=True),
-                         {"1": "first", "second": "key"})
+        self.assertEqual(
+            split_kv(
+                "context",
+                "param",
+                "first=1,second",
+                unseparated_okay=True,
+                default_key="key",
+                reverse_kv=True,
+            ),
+            {"1": "first", "second": "key"},
+        )
 
 
 class SplitKvCmdTestCase(unittest.TestCase):
@@ -122,33 +141,39 @@ class SplitKvCmdTestCase(unittest.TestCase):
 
         result = self.runner.invoke(cli, ["--value", "first=1"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
-        mock.assert_called_with({'first': '1'})
+        mock.assert_called_with({"first": "1"})
 
         result = self.runner.invoke(cli, ["--value", "first=1,second=2"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
-        mock.assert_called_with({'first': '1', 'second': '2'})
+        mock.assert_called_with({"first": "1", "second": "2"})
 
         result = self.runner.invoke(cli, ["--value", "first=1", "--value", "second=2"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
-        mock.assert_called_with({'first': '1', 'second': '2'})
+        mock.assert_called_with({"first": "1", "second": "2"})
 
         # double separator "==" should fail:
         result = self.runner.invoke(cli, ["--value", "first==1"])
         self.assertEqual(result.exit_code, 1)
-        self.assertEqual(result.output,
-                         "Error: Could not parse key-value pair 'first==1' using separator '=', with "
-                         "multiple values allowed.\n")
+        self.assertEqual(
+            result.output,
+            "Error: Could not parse key-value pair 'first==1' using separator '=', with "
+            "multiple values allowed.\n",
+        )
 
     def test_choice(self):
         choices = ["FOO", "BAR", "BAZ"]
         mock = MagicMock()
 
         @click.command()
-        @click.option("--metasyntactic-var",
-                      callback=partial(split_kv,
-                                       unseparated_okay=True,
-                                       choice=click.Choice(choices, case_sensitive=False),
-                                       normalize=True))
+        @click.option(
+            "--metasyntactic-var",
+            callback=partial(
+                split_kv,
+                unseparated_okay=True,
+                choice=click.Choice(choices, case_sensitive=False),
+                normalize=True,
+            ),
+        )
         def cli(metasyntactic_var):
             mock(metasyntactic_var)
 
@@ -186,7 +211,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
 
         result = self.runner.invoke(cli, ["--value", "first-1"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
-        mock.assert_called_with({'first': '1'})
+        mock.assert_called_with({"first": "1"})
 
     def test_separatorFunctoolsDash(self):
         mock = MagicMock()
@@ -195,27 +220,28 @@ class SplitKvCmdTestCase(unittest.TestCase):
         @click.option("--value", callback=partial(split_kv, separator="-"), multiple=True)
         def cli(value):
             mock(value)
+
         result = self.runner.invoke(cli, ["--value", "first-1", "--value", "second-2"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
-        mock.assert_called_with({'first': '1', 'second': '2'})
+        mock.assert_called_with({"first": "1", "second": "2"})
 
     def test_separatorSpace(self):
         @click.command()
         @click.option("--value", callback=partial(split_kv, separator=" "), multiple=True)
         def cli(value):
             pass
+
         result = self.runner.invoke(cli, ["--value", "first 1"])
-        self.assertEqual(str(result.exception),
-                         "' ' is not a supported separator for key-value pairs.")
+        self.assertEqual(str(result.exception), "' ' is not a supported separator for key-value pairs.")
 
     def test_separatorComma(self):
         @click.command()
         @click.option("--value", callback=partial(split_kv, separator=","), multiple=True)
         def cli(value):
             pass
+
         result = self.runner.invoke(cli, ["--value", "first,1"])
-        self.assertEqual(str(result.exception),
-                         "',' is not a supported separator for key-value pairs.")
+        self.assertEqual(str(result.exception), "',' is not a supported separator for key-value pairs.")
 
     def test_normalizeWithoutChoice(self):
         """Test that normalize=True without Choice fails gracefully.
@@ -231,6 +257,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
         @click.option("--value", callback=partial(split_kv, normalize=True))
         def cli(value):
             mock(value)
+
         result = self.runner.invoke(cli, ["--value", "foo=bar"])
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with(dict(foo="bar"))
@@ -242,10 +269,12 @@ class SplitKvCmdTestCase(unittest.TestCase):
         mock = MagicMock()
 
         @click.command()
-        @click.option("--value",
-                      callback=partial(split_kv, add_to_default=True, unseparated_okay=True),
-                      default=["INFO"],
-                      multiple=True)
+        @click.option(
+            "--value",
+            callback=partial(split_kv, add_to_default=True, unseparated_okay=True),
+            default=["INFO"],
+            multiple=True,
+        )
         def cli(value):
             mock(value)
 
@@ -261,10 +290,9 @@ class SplitKvCmdTestCase(unittest.TestCase):
         mock = MagicMock()
 
         @click.command()
-        @click.option("--value",
-                      callback=partial(split_kv, unseparated_okay=True),
-                      default=["INFO"],
-                      multiple=True)
+        @click.option(
+            "--value", callback=partial(split_kv, unseparated_okay=True), default=["INFO"], multiple=True
+        )
         def cli(value):
             mock(value)
 

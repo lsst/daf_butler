@@ -22,9 +22,9 @@
 
 from enum import Enum, auto
 
-from . import QueryDatasets
-from .. import Butler
-from .. import CollectionType
+from .._butler import Butler
+from ..registry import CollectionType
+from .queryDatasets import QueryDatasets
 
 
 class PruneDatasetsResult:
@@ -102,8 +102,9 @@ class PruneDatasetsResult:
         return self.state is self.state.ERR_NO_OP
 
 
-def pruneDatasets(repo, collections, datasets, where, disassociate_tags, unstore, purge_run, dry_run, confirm,
-                  find_all):
+def pruneDatasets(
+    repo, collections, datasets, where, disassociate_tags, unstore, purge_run, dry_run, confirm, find_all
+):
     """Prune datasets from a repository.
 
     Parameters
@@ -188,8 +189,9 @@ def pruneDatasets(repo, collections, datasets, where, disassociate_tags, unstore
     if purge_run:
         collectionType = butler.registry.getCollectionType(purge_run)
         if collectionType is not CollectionType.RUN:
-            return PruneDatasetsResult(state=PruneDatasetsResult.State.ERR_PRUNE_ON_NOT_RUN,
-                                       errDict=dict(collection=purge_run))
+            return PruneDatasetsResult(
+                state=PruneDatasetsResult.State.ERR_PRUNE_ON_NOT_RUN, errDict=dict(collection=purge_run)
+            )
 
     datasets = QueryDatasets(
         repo=repo,
@@ -201,7 +203,7 @@ def pruneDatasets(repo, collections, datasets, where, disassociate_tags, unstore
         # But the user may specify that they want to find all (thus forcing
         # find_first to be False)
         find_first=not find_all,
-        show_uri=False
+        show_uri=False,
     )
 
     result = PruneDatasetsResult(datasets.getTables())

@@ -22,13 +22,13 @@
 """Tests for ButlerLogRecordsFormatter.
 """
 
-import unittest
-import os
 import logging
+import os
 import tempfile
+import unittest
 from logging import FileHandler
 
-from lsst.daf.butler import Butler, DatasetType, FileDataset, DatasetRef
+from lsst.daf.butler import Butler, DatasetRef, DatasetType, FileDataset
 from lsst.daf.butler.core.logging import ButlerLogRecordHandler, JsonLogFormatter
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
@@ -43,8 +43,9 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
         Butler.makeRepo(self.root)
 
         self.butler = Butler(self.root, run="testrun")
-        self.datasetType = DatasetType("test_logs", [], "ButlerLogRecords",
-                                       universe=self.butler.registry.dimensions)
+        self.datasetType = DatasetType(
+            "test_logs", [], "ButlerLogRecords", universe=self.butler.registry.dimensions
+        )
 
         self.butler.registry.registerDatasetType(self.datasetType)
 
@@ -74,10 +75,7 @@ class ButlerLogRecordsFormatterTestCase(unittest.TestCase):
         log = logging.getLogger(self.id())
         log.setLevel(logging.INFO)
 
-        tmp = tempfile.NamedTemporaryFile(mode="w",
-                                          suffix=".json",
-                                          prefix="butler-log-",
-                                          delete=False)
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="butler-log-", delete=False)
 
         handler = FileHandler(tmp.name)
         handler.setFormatter(JsonLogFormatter())

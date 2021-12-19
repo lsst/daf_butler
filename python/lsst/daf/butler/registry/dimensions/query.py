@@ -63,9 +63,11 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
     element : `DatabaseDimensionElement`
         The element whose records this storage will manage.
     """
+
     def __init__(self, db: Database, element: DatabaseDimensionElement, viewOf: str):
-        assert isinstance(element, DatabaseDimension), \
-            "An element cannot be a dependency unless it is a dimension."
+        assert isinstance(
+            element, DatabaseDimension
+        ), "An element cannot be a dependency unless it is a dimension."
         self._db = db
         self._element = element
         self._target = element.universe[viewOf]
@@ -92,7 +94,8 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def initialize(
         cls,
         db: Database,
-        element: DatabaseDimensionElement, *,
+        element: DatabaseDimensionElement,
+        *,
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
@@ -127,18 +130,14 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
             # and potentially wasteful if we apply a restrictive WHERE clause,
             # as SelectableDimensionRecordStorage.fetch will do.
             # Instead, we add DISTINCT in join() only.
-            self._query = sqlalchemy.sql.select(
-                *columns
-            ).distinct(
-            ).select_from(
-                targetTable
-            ).alias(
-                self.element.name
+            self._query = (
+                sqlalchemy.sql.select(*columns).distinct().select_from(targetTable).alias(self.element.name)
             )
 
     def join(
         self,
-        builder: QueryBuilder, *,
+        builder: QueryBuilder,
+        *,
         regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
@@ -152,20 +151,21 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
             # results.
             return
         self._ensureQuery()
-        joinOn = builder.startJoin(self._query, self.element.required,
-                                   self.element.RecordClass.fields.required.names)
+        joinOn = builder.startJoin(
+            self._query, self.element.required, self.element.RecordClass.fields.required.names
+        )
         builder.finishJoin(self._query, joinOn)
         return self._query
 
     def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
-        raise TypeError(f"Cannot insert {self.element.name} records, "
-                        f"define as part of {self._viewOf} instead.")
+        raise TypeError(
+            f"Cannot insert {self.element.name} records, define as part of {self._viewOf} instead."
+        )
 
     def sync(self, record: DimensionRecord, update: bool = False) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
-        raise TypeError(f"Cannot sync {self.element.name} records, "
-                        f"define as part of {self._viewOf} instead.")
+        raise TypeError(f"Cannot sync {self.element.name} records, define as part of {self._viewOf} instead.")
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.

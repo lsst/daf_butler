@@ -19,11 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .. import Butler, Config
+from .._butler import Butler
+from ..core import Config
 
 
-def createRepo(repo, seed_config=None, dimension_config=None, standalone=False,
-               override=False, outfile=None):
+def createRepo(repo, seed_config=None, dimension_config=None, standalone=False, override=False, outfile=None):
     """Create an empty Gen3 Butler repository.
 
     Parameters
@@ -46,5 +46,11 @@ def createRepo(repo, seed_config=None, dimension_config=None, standalone=False,
         write butler.yaml into the specified repo, by default False.
     """
     config = Config(seed_config) if seed_config is not None else None
-    Butler.makeRepo(repo, config=config, dimensionConfig=dimension_config, standalone=standalone,
-                    forceConfigRoot=not override, outfile=outfile)
+    Butler.makeRepo(
+        repo,
+        config=config,
+        dimensionConfig=dimension_config,
+        standalone=standalone,
+        forceConfigRoot=not override,
+        outfile=outfile,
+    )

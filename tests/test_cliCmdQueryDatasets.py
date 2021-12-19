@@ -22,16 +22,14 @@
 """Unit tests for daf_butler CLI query-datasets command.
 """
 
-from astropy.table import Table as AstropyTable
-from numpy import array
 import os
 import unittest
 
-from lsst.daf.butler import StorageClassFactory
-from lsst.daf.butler import script
+from astropy.table import Table as AstropyTable
+from lsst.daf.butler import StorageClassFactory, script
 from lsst.daf.butler.tests import addDatasetType
-from lsst.daf.butler.tests.utils import ButlerTestHelper, makeTestTempDir, MetricTestRepo, removeTestTempDir
-
+from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
+from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -47,8 +45,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
-        self.testRepo = MetricTestRepo(self.root,
-                                       configFile=self.configFile)
+        self.testRepo = MetricTestRepo(self.root, configFile=self.configFile)
 
     def tearDown(self):
         removeTestTempDir(self.root)
@@ -58,39 +55,132 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         tables = self._queryDatasets(repo=self.root, show_uri=True)
 
         expectedTables = (
-            AstropyTable(array((
-                ("test_metric_comp.data", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423",
-                 self.testRepo.butler.datastore.root.join(
-                     "ingest/run/test_metric_comp.data/"
-                     "test_metric_comp_v00000423_fDummyCamComp_data.yaml")),
-                ("test_metric_comp.data", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424",
-                 self.testRepo.butler.datastore.root.join(
-                     "ingest/run/test_metric_comp.data/"
-                     "test_metric_comp_v00000424_fDummyCamComp_data.yaml")))),
-                names=("type", "run", "band", "instrument", "physical_filter", "visit_system",
-                       "visit", "URI")),
-            AstropyTable(array((
-                ("test_metric_comp.output", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423",
-                    self.testRepo.butler.datastore.root.join(
-                        "ingest/run/test_metric_comp.output/"
-                        "test_metric_comp_v00000423_fDummyCamComp_output.yaml")),
-                ("test_metric_comp.output", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424",
-                    self.testRepo.butler.datastore.root.join(
-                        "ingest/run/test_metric_comp.output/"
-                        "test_metric_comp_v00000424_fDummyCamComp_output.yaml")))),
-                names=("type", "run", "band", "instrument", "physical_filter", "visit_system",
-                       "visit", "URI")),
-            AstropyTable(array((
-                ("test_metric_comp.summary", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423",
-                    self.testRepo.butler.datastore.root.join(
-                        "ingest/run/test_metric_comp.summary/"
-                        "test_metric_comp_v00000423_fDummyCamComp_summary.yaml")),
-                ("test_metric_comp.summary", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424",
-                    self.testRepo.butler.datastore.root.join(
-                        "ingest/run/test_metric_comp.summary/"
-                        "test_metric_comp_v00000424_fDummyCamComp_summary.yaml")))),
-                names=("type", "run", "band", "instrument", "physical_filter", "visit_system",
-                       "visit", "URI")),
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp.data",
+                            "ingest/run",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "423",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.data/"
+                                "test_metric_comp_v00000423_fDummyCamComp_data.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.data",
+                            "ingest/run",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.data/"
+                                "test_metric_comp_v00000424_fDummyCamComp_data.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=(
+                    "type",
+                    "run",
+                    "band",
+                    "instrument",
+                    "physical_filter",
+                    "visit_system",
+                    "visit",
+                    "URI",
+                ),
+            ),
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp.output",
+                            "ingest/run",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "423",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.output/"
+                                "test_metric_comp_v00000423_fDummyCamComp_output.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.output",
+                            "ingest/run",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.output/"
+                                "test_metric_comp_v00000424_fDummyCamComp_output.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=(
+                    "type",
+                    "run",
+                    "band",
+                    "instrument",
+                    "physical_filter",
+                    "visit_system",
+                    "visit",
+                    "URI",
+                ),
+            ),
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp.summary",
+                            "ingest/run",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "423",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.summary/"
+                                "test_metric_comp_v00000423_fDummyCamComp_summary.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.summary",
+                            "ingest/run",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.summary/"
+                                "test_metric_comp_v00000424_fDummyCamComp_summary.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=(
+                    "type",
+                    "run",
+                    "band",
+                    "instrument",
+                    "physical_filter",
+                    "visit_system",
+                    "visit",
+                    "URI",
+                ),
+            ),
         )
 
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
@@ -100,23 +190,28 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         tables = self._queryDatasets(repo=self.root)
 
         expectedTables = (
-            AstropyTable(array((
-                ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423"),
-                ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424"))),
-                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit")
+            AstropyTable(
+                array(
+                    (
+                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423"),
+                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424"),
+                    )
+                ),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit"),
             ),
         )
 
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
     def testWhere(self):
-        """Test using the where clause to reduce the number of rows returned.
+        """Test using the where clause to reduce the number of rows returned by
+        queryDatasets.
         """
         tables = self._queryDatasets(repo=self.root, where="instrument='DummyCamComp' AND visit=423")
 
         expectedTables = (
-            AstropyTable(array(
-                ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423")),
+            AstropyTable(
+                array(("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423")),
                 names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit"),
             ),
         )
@@ -127,15 +222,23 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         """Test specifying dataset type."""
         # Create and register an additional DatasetType
 
-        self.testRepo.butler.registry.insertDimensionData("visit",
-                                                          {"instrument": "DummyCamComp", "id": 425,
-                                                           "name": "fourtwentyfive", "physical_filter": "d-r",
-                                                           "visit_system": 1})
+        self.testRepo.butler.registry.insertDimensionData(
+            "visit",
+            {
+                "instrument": "DummyCamComp",
+                "id": 425,
+                "name": "fourtwentyfive",
+                "physical_filter": "d-r",
+                "visit_system": 1,
+            },
+        )
 
-        datasetType = addDatasetType(self.testRepo.butler,
-                                     "alt_test_metric_comp",
-                                     ("instrument", "visit"),
-                                     "StructuredCompositeReadComp")
+        datasetType = addDatasetType(
+            self.testRepo.butler,
+            "alt_test_metric_comp",
+            ("instrument", "visit"),
+            "StructuredCompositeReadComp",
+        )
 
         self.testRepo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425}, datasetType=datasetType)
 
@@ -143,15 +246,19 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         tables = self._queryDatasets(repo=self.root)
 
         expectedTables = (
-            AstropyTable(array((
-                ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423"),
-                ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424"))),
-                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit")
+            AstropyTable(
+                array(
+                    (
+                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423"),
+                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424"),
+                    )
+                ),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit"),
             ),
-            AstropyTable(array((
-                ("alt_test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "425"))),
-                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit")
-            )
+            AstropyTable(
+                array((("alt_test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "425"))),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit"),
+            ),
         )
 
         self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
@@ -161,116 +268,334 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
         is required for find-first."""
 
         # Add a new run, and add a dataset to shadow an existing dataset.
-        self.testRepo.addDataset(run="foo",
-                                 dataId={"instrument": "DummyCamComp", "visit": 424})
+        self.testRepo.addDataset(run="foo", dataId={"instrument": "DummyCamComp", "visit": 424})
 
         # Verify that without find-first, duplicate datasets are returned
-        tables = self._queryDatasets(repo=self.root,
-                                     collections=["foo", "ingest/run"],
-                                     show_uri=True)
+        tables = self._queryDatasets(repo=self.root, collections=["foo", "ingest/run"], show_uri=True)
 
         expectedTables = (
-            AstropyTable(array(
-                (
-                    ("test_metric_comp.data", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
-                        self.testRepo.butler.datastore.root.join(
-                            "foo/test_metric_comp.data/"
-                            "test_metric_comp_v00000424_fDummyCamComp_data.yaml")),
-                    ("test_metric_comp.data", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
-                        self.testRepo.butler.datastore.root.join(
-                            "ingest/run/test_metric_comp.data/"
-                            "test_metric_comp_v00000423_fDummyCamComp_data.yaml")),
-                    ("test_metric_comp.data", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
-                        self.testRepo.butler.datastore.root.join(
-                            "ingest/run/test_metric_comp.data/"
-                            "test_metric_comp_v00000424_fDummyCamComp_data.yaml")),
-                )),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
-                       "visit", "URI")),
-            AstropyTable(array(
-                (
-                    ("test_metric_comp.output", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
-                        self.testRepo.butler.datastore.root.join(
-                            "foo/test_metric_comp.output/"
-                            "test_metric_comp_v00000424_fDummyCamComp_output.yaml")),
-                    ("test_metric_comp.output", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
-                        self.testRepo.butler.datastore.root.join(
-                            "ingest/run/test_metric_comp.output/"
-                            "test_metric_comp_v00000423_fDummyCamComp_output.yaml")),
-                    ("test_metric_comp.output", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
-                        self.testRepo.butler.datastore.root.join(
-                            "ingest/run/test_metric_comp.output/"
-                            "test_metric_comp_v00000424_fDummyCamComp_output.yaml")),
-                )),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
-                       "visit", "URI")),
-            AstropyTable(array(
-                (
-                    ("test_metric_comp.summary", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
-                        self.testRepo.butler.datastore.root.join(
-                            "foo/test_metric_comp.summary/"
-                            "test_metric_comp_v00000424_fDummyCamComp_summary.yaml")),
-                    ("test_metric_comp.summary", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
-                        self.testRepo.butler.datastore.root.join(
-                            "ingest/run/test_metric_comp.summary/"
-                            "test_metric_comp_v00000423_fDummyCamComp_summary.yaml")),
-                    ("test_metric_comp.summary", "ingest/run", "2", "R", "DummyCamComp", "d-r", "1", "424",
-                        self.testRepo.butler.datastore.root.join(
-                            "ingest/run/test_metric_comp.summary/"
-                            "test_metric_comp_v00000424_fDummyCamComp_summary.yaml")),
-                )),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
-                       "visit", "URI")),
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp.data",
+                            "foo",
+                            "3",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "foo/test_metric_comp.data/"
+                                "test_metric_comp_v00000424_fDummyCamComp_data.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.data",
+                            "ingest/run",
+                            "1",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "423",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.data/"
+                                "test_metric_comp_v00000423_fDummyCamComp_data.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.data",
+                            "ingest/run",
+                            "2",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.data/"
+                                "test_metric_comp_v00000424_fDummyCamComp_data.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=(
+                    "type",
+                    "run",
+                    "id",
+                    "band",
+                    "instrument",
+                    "physical_filter",
+                    "visit_system",
+                    "visit",
+                    "URI",
+                ),
+            ),
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp.output",
+                            "foo",
+                            "3",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "foo/test_metric_comp.output/"
+                                "test_metric_comp_v00000424_fDummyCamComp_output.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.output",
+                            "ingest/run",
+                            "1",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "423",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.output/"
+                                "test_metric_comp_v00000423_fDummyCamComp_output.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.output",
+                            "ingest/run",
+                            "2",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.output/"
+                                "test_metric_comp_v00000424_fDummyCamComp_output.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=(
+                    "type",
+                    "run",
+                    "id",
+                    "band",
+                    "instrument",
+                    "physical_filter",
+                    "visit_system",
+                    "visit",
+                    "URI",
+                ),
+            ),
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp.summary",
+                            "foo",
+                            "3",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "foo/test_metric_comp.summary/"
+                                "test_metric_comp_v00000424_fDummyCamComp_summary.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.summary",
+                            "ingest/run",
+                            "1",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "423",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.summary/"
+                                "test_metric_comp_v00000423_fDummyCamComp_summary.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.summary",
+                            "ingest/run",
+                            "2",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.summary/"
+                                "test_metric_comp_v00000424_fDummyCamComp_summary.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=(
+                    "type",
+                    "run",
+                    "id",
+                    "band",
+                    "instrument",
+                    "physical_filter",
+                    "visit_system",
+                    "visit",
+                    "URI",
+                ),
+            ),
         )
 
         self.assertAstropyTablesEqual(tables, expectedTables)
 
         # Verify that with find first the duplicate dataset is eliminated and
         # the more recent dataset is returned.
-        tables = self._queryDatasets(repo=self.root,
-                                     collections=["foo", "ingest/run"],
-                                     show_uri=True,
-                                     find_first=True)
+        tables = self._queryDatasets(
+            repo=self.root, collections=["foo", "ingest/run"], show_uri=True, find_first=True
+        )
 
         expectedTables = (
-            AstropyTable(array(
-                (
-                    ("test_metric_comp.data", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
-                        self.testRepo.butler.datastore.root.join(
-                            "foo/test_metric_comp.data/test_metric_comp_v00000424_fDummyCamComp_data.yaml")),
-                    ("test_metric_comp.data", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
-                        self.testRepo.butler.datastore.root.join(
-                            "ingest/run/test_metric_comp.data/"
-                            "test_metric_comp_v00000423_fDummyCamComp_data.yaml")),
-                )),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
-                       "visit", "URI")),
-            AstropyTable(array(
-                (
-                    ("test_metric_comp.output", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
-                        self.testRepo.butler.datastore.root.join(
-                            "foo/test_metric_comp.output/"
-                            "test_metric_comp_v00000424_fDummyCamComp_output.yaml")),
-                    ("test_metric_comp.output", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
-                        self.testRepo.butler.datastore.root.join(
-                            "ingest/run/test_metric_comp.output/"
-                            "test_metric_comp_v00000423_fDummyCamComp_output.yaml")),
-                )),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
-                       "visit", "URI")),
-            AstropyTable(array(
-                (
-                    ("test_metric_comp.summary", "foo", "3", "R", "DummyCamComp", "d-r", "1", "424",
-                        self.testRepo.butler.datastore.root.join(
-                            "foo/test_metric_comp.summary/"
-                            "test_metric_comp_v00000424_fDummyCamComp_summary.yaml")),
-                    ("test_metric_comp.summary", "ingest/run", "1", "R", "DummyCamComp", "d-r", "1", "423",
-                        self.testRepo.butler.datastore.root.join(
-                            "ingest/run/test_metric_comp.summary/"
-                            "test_metric_comp_v00000423_fDummyCamComp_summary.yaml")),
-                )),
-                names=("type", "run", "id", "band", "instrument", "physical_filter", "visit_system",
-                       "visit", "URI")),
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp.data",
+                            "foo",
+                            "3",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "foo/test_metric_comp.data/test_metric_comp_v00000424_fDummyCamComp_data.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.data",
+                            "ingest/run",
+                            "1",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "423",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.data/"
+                                "test_metric_comp_v00000423_fDummyCamComp_data.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=(
+                    "type",
+                    "run",
+                    "id",
+                    "band",
+                    "instrument",
+                    "physical_filter",
+                    "visit_system",
+                    "visit",
+                    "URI",
+                ),
+            ),
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp.output",
+                            "foo",
+                            "3",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "foo/test_metric_comp.output/"
+                                "test_metric_comp_v00000424_fDummyCamComp_output.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.output",
+                            "ingest/run",
+                            "1",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "423",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.output/"
+                                "test_metric_comp_v00000423_fDummyCamComp_output.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=(
+                    "type",
+                    "run",
+                    "id",
+                    "band",
+                    "instrument",
+                    "physical_filter",
+                    "visit_system",
+                    "visit",
+                    "URI",
+                ),
+            ),
+            AstropyTable(
+                array(
+                    (
+                        (
+                            "test_metric_comp.summary",
+                            "foo",
+                            "3",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "424",
+                            self.testRepo.butler.datastore.root.join(
+                                "foo/test_metric_comp.summary/"
+                                "test_metric_comp_v00000424_fDummyCamComp_summary.yaml"
+                            ),
+                        ),
+                        (
+                            "test_metric_comp.summary",
+                            "ingest/run",
+                            "1",
+                            "R",
+                            "DummyCamComp",
+                            "d-r",
+                            "1",
+                            "423",
+                            self.testRepo.butler.datastore.root.join(
+                                "ingest/run/test_metric_comp.summary/"
+                                "test_metric_comp_v00000423_fDummyCamComp_summary.yaml"
+                            ),
+                        ),
+                    )
+                ),
+                names=(
+                    "type",
+                    "run",
+                    "id",
+                    "band",
+                    "instrument",
+                    "physical_filter",
+                    "visit_system",
+                    "visit",
+                    "URI",
+                ),
+            ),
         )
 
         self.assertAstropyTablesEqual(tables, expectedTables)

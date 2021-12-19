@@ -19,30 +19,25 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
+
 """The default concrete implementation of the class that manages
 attributes for `Registry`.
 """
 
 __all__ = ["DefaultButlerAttributeManager"]
 
-from typing import (
-    ClassVar,
-    Iterable,
-    Optional,
-    Tuple,
-)
+from typing import ClassVar, Iterable, Optional, Tuple
 
 import sqlalchemy
 
-from ..core.ddl import TableSpec, FieldSpec
+from ..core.ddl import FieldSpec, TableSpec
 from .interfaces import (
-    Database,
     ButlerAttributeExistsError,
     ButlerAttributeManager,
+    Database,
     StaticTablesContext,
-    VersionTuple
+    VersionTuple,
 )
-
 
 # This manager is supposed to have super-stable schema that never changes
 # but there may be cases when we need data migration on this table so we
@@ -61,6 +56,7 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
     table : `sqlalchemy.schema.Table`
         SQLAlchemy representation of the table that stores attributes.
     """
+
     def __init__(self, db: Database, table: sqlalchemy.schema.Table):
         self._db = db
         self._table = table
@@ -82,9 +78,7 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
 
     def get(self, name: str, default: Optional[str] = None) -> Optional[str]:
         # Docstring inherited from ButlerAttributeManager.
-        sql = sqlalchemy.sql.select(self._table.columns.value).where(
-            self._table.columns.name == name
-        )
+        sql = sqlalchemy.sql.select(self._table.columns.value).where(self._table.columns.name == name)
         row = self._db.query(sql).fetchone()
         if row is not None:
             return row[0]
@@ -95,16 +89,22 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
         if not name or not value:
             raise ValueError("name and value cannot be empty")
         if force:
-            self._db.replace(self._table, {
-                "name": name,
-                "value": value,
-            })
-        else:
-            try:
-                self._db.insert(self._table, {
+            self._db.replace(
+                self._table,
+                {
                     "name": name,
                     "value": value,
-                })
+                },
+            )
+        else:
+            try:
+                self._db.insert(
+                    self._table,
+                    {
+                        "name": name,
+                        "value": value,
+                    },
+                )
             except sqlalchemy.exc.IntegrityError as exc:
                 raise ButlerAttributeExistsError(f"attribute {name} already exists") from exc
 

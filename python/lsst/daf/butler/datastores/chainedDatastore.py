@@ -25,27 +25,23 @@ from __future__ import annotations
 
 __all__ = ("ChainedDatastore",)
 
-import time
-import logging
-import warnings
 import itertools
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    List,
-    Iterable,
-    Mapping,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+import logging
+import time
+import warnings
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
+from lsst.daf.butler import (
+    ButlerURI,
+    Constraints,
+    DatasetRef,
+    DatasetTypeNotSupportedError,
+    Datastore,
+    DatastoreConfig,
+    DatastoreValidationError,
+    FileDataset,
+)
 from lsst.utils import doImportType
-from lsst.daf.butler import ButlerURI, Datastore, DatastoreConfig, DatasetTypeNotSupportedError, \
-    DatastoreValidationError, Constraints, FileDataset, DatasetRef
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetType, LookupKey, StorageClass
@@ -62,6 +58,7 @@ class _IngestPrepData(Datastore.IngestPrepData):
     children : `list` of `tuple`
         Pairs of `Datastore`, `IngestPrepData` for all child datastores.
     """
+
     def __init__(self, children: List[Tuple[Datastore, Datastore.IngestPrepData]]):
         super().__init__(itertools.chain.from_iterable(data.refs.values() for _, data in children))
         self.children = children
@@ -152,8 +149,9 @@ class ChainedDatastore(Datastore):
         # child datastores to process.
 
         containerKey = cls.containerKey
-        for idx, (child, fullChild) in enumerate(zip(datastoreConfig[containerKey],
-                                                     fullDatastoreConfig[containerKey])):
+        for idx, (child, fullChild) in enumerate(
+            zip(datastoreConfig[containerKey], fullDatastoreConfig[containerKey])
+        ):
             childConfig = DatastoreConfig(child, mergeDefaults=False)
             fullChildConfig = DatastoreConfig(fullChild, mergeDefaults=False)
             datastoreClass = doImportType(fullChildConfig["cls"])
@@ -175,8 +173,12 @@ class ChainedDatastore(Datastore):
 
         return
 
-    def __init__(self, config: Union[Config, str], bridgeManager: DatastoreRegistryBridgeManager,
-                 butlerRoot: str = None):
+    def __init__(
+        self,
+        config: Union[Config, str],
+        bridgeManager: DatastoreRegistryBridgeManager,
+        butlerRoot: str = None,
+    ):
         super().__init__(config, bridgeManager)
 
         # Scan for child datastores and instantiate them with the same registry
@@ -214,12 +216,15 @@ class ChainedDatastore(Datastore):
             overrides = self.config["datastore_constraints"]
 
             if len(overrides) != len(self.datastores):
-                raise DatastoreValidationError(f"Number of registered datastores ({len(self.datastores)})"
-                                               " differs from number of constraints overrides"
-                                               f" {len(overrides)}")
+                raise DatastoreValidationError(
+                    f"Number of registered datastores ({len(self.datastores)})"
+                    " differs from number of constraints overrides"
+                    f" {len(overrides)}"
+                )
 
-            self.datastoreConstraints = [Constraints(c.get("constraints"), universe=bridgeManager.universe)
-                                         for c in overrides]
+            self.datastoreConstraints = [
+                Constraints(c.get("constraints"), universe=bridgeManager.universe) for c in overrides
+            ]
 
         else:
             self.datastoreConstraints = (None,) * len(self.datastores)
@@ -255,8 +260,9 @@ class ChainedDatastore(Datastore):
                 return True
         return False
 
-    def mexists(self, refs: Iterable[DatasetRef],
-                artifact_existence: Optional[Dict[ButlerURI, bool]] = None) -> Dict[DatasetRef, bool]:
+    def mexists(
+        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ButlerURI, bool]] = None
+    ) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
         Parameters
@@ -370,8 +376,9 @@ class ChainedDatastore(Datastore):
         # Confirm that we can accept this dataset
         if not self.constraints.isAcceptable(ref):
             # Raise rather than use boolean return value.
-            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
-                                               " configuration.")
+            raise DatasetTypeNotSupportedError(
+                f"Dataset {ref} has been rejected by this datastore via configuration."
+            )
 
         isPermanent = False
         nsuccess = 0
@@ -379,8 +386,7 @@ class ChainedDatastore(Datastore):
         nephemeral = 0
         for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
             if constraints is not None and not constraints.isAcceptable(ref):
-                log.debug("Datastore %s skipping put via configuration for ref %s",
-                          datastore.name, ref)
+                log.debug("Datastore %s skipping put via configuration for ref %s", datastore.name, ref)
                 continue
 
             if datastore.isEphemeral:
@@ -402,7 +408,7 @@ class ChainedDatastore(Datastore):
             warnings.warn(f"Put of {ref} only succeeded in ephemeral databases", stacklevel=2)
 
         if self._transaction is not None:
-            self._transaction.registerUndo('put', self.remove, ref)
+            self._transaction.registerUndo("put", self.remove, ref)
 
     def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> Optional[str]:
         # Docstring inherited from base class.
@@ -420,8 +426,10 @@ class ChainedDatastore(Datastore):
             # Everything reported "auto"
             return transfer
 
-        raise RuntimeError("Chained datastore does not yet support different transfer modes"
-                           f" from 'auto' in each child datastore (wanted {transfers})")
+        raise RuntimeError(
+            "Chained datastore does not yet support different transfer modes"
+            f" from 'auto' in each child datastore (wanted {transfers})"
+        )
 
     def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
         # Docstring inherited from Datastore._prepIngest.
@@ -431,17 +439,22 @@ class ChainedDatastore(Datastore):
         def isDatasetAcceptable(dataset: FileDataset, *, name: str, constraints: Constraints) -> bool:
             acceptable = [ref for ref in dataset.refs if constraints.isAcceptable(ref)]
             if not acceptable:
-                log.debug("Datastore %s skipping ingest via configuration for refs %s",
-                          name, ", ".join(str(ref) for ref in dataset.refs))
+                log.debug(
+                    "Datastore %s skipping ingest via configuration for refs %s",
+                    name,
+                    ", ".join(str(ref) for ref in dataset.refs),
+                )
                 return False
             else:
                 return True
 
         # Filter down to just datasets the chained datastore's own
         # configuration accepts.
-        okForParent: List[FileDataset] = [dataset for dataset in datasets
-                                          if isDatasetAcceptable(dataset, name=self.name,
-                                                                 constraints=self.constraints)]
+        okForParent: List[FileDataset] = [
+            dataset
+            for dataset in datasets
+            if isDatasetAcceptable(dataset, name=self.name, constraints=self.constraints)
+        ]
 
         # Iterate over nested datastores and call _prepIngest on each.
         # Save the results to a list:
@@ -452,16 +465,21 @@ class ChainedDatastore(Datastore):
         for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
             okForChild: List[FileDataset]
             if constraints is not None:
-                okForChild = [dataset for dataset in okForParent
-                              if isDatasetAcceptable(dataset, name=datastore.name,
-                                                     constraints=constraints)]
+                okForChild = [
+                    dataset
+                    for dataset in okForParent
+                    if isDatasetAcceptable(dataset, name=datastore.name, constraints=constraints)
+                ]
             else:
                 okForChild = okForParent
             try:
                 prepDataForChild = datastore._prepIngest(*okForChild, transfer=transfer)
             except NotImplementedError:
-                log.debug("Skipping ingest for datastore %s because transfer "
-                          "mode %s is not supported.", datastore.name, transfer)
+                log.debug(
+                    "Skipping ingest for datastore %s because transfer mode %s is not supported.",
+                    datastore.name,
+                    transfer,
+                )
                 continue
             allFailuresAreNotImplementedError = False
             children.append((datastore, prepDataForChild))
@@ -474,8 +492,9 @@ class ChainedDatastore(Datastore):
         for datastore, prepDataForChild in prepData.children:
             datastore._finishIngest(prepDataForChild, transfer=transfer)
 
-    def getURIs(self, ref: DatasetRef,
-                predict: bool = False) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+    def getURIs(
+        self, ref: DatasetRef, predict: bool = False
+    ) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
         """Return URIs associated with dataset.
 
         Parameters
@@ -580,14 +599,19 @@ class ChainedDatastore(Datastore):
         log.debug("Requesting URI for %s", ref)
         primary, components = self.getURIs(ref, predict)
         if primary is None or components:
-            raise RuntimeError(f"Dataset ({ref}) includes distinct URIs for components. "
-                               "Use Datastore.getURIs() instead.")
+            raise RuntimeError(
+                f"Dataset ({ref}) includes distinct URIs for components. Use Datastore.getURIs() instead."
+            )
         return primary
 
-    def retrieveArtifacts(self, refs: Iterable[DatasetRef],
-                          destination: ButlerURI, transfer: str = "auto",
-                          preserve_path: bool = True,
-                          overwrite: bool = False) -> List[ButlerURI]:
+    def retrieveArtifacts(
+        self,
+        refs: Iterable[DatasetRef],
+        destination: ButlerURI,
+        transfer: str = "auto",
+        preserve_path: bool = True,
+        overwrite: bool = False,
+    ) -> List[ButlerURI]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -651,10 +675,15 @@ class ChainedDatastore(Datastore):
         # Now do the transfer.
         targets: List[ButlerURI] = []
         for number, datastore_refs in grouped_by_datastore.items():
-            targets.extend(self.datastores[number].retrieveArtifacts(datastore_refs, destination,
-                                                                     transfer=transfer,
-                                                                     preserve_path=preserve_path,
-                                                                     overwrite=overwrite))
+            targets.extend(
+                self.datastores[number].retrieveArtifacts(
+                    datastore_refs,
+                    destination,
+                    transfer=transfer,
+                    preserve_path=preserve_path,
+                    overwrite=overwrite,
+                )
+            )
 
         return targets
 
@@ -731,8 +760,9 @@ class ChainedDatastore(Datastore):
         inMemoryDataset = inputDatastore.get(ref)
         self.put(inMemoryDataset, ref)
 
-    def validateConfiguration(self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]],
-                              logFailures: bool = False) -> None:
+    def validateConfiguration(
+        self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]], logFailures: bool = False
+    ) -> None:
         """Validate some of the configuration for this datastore.
 
         Parameters
@@ -770,8 +800,7 @@ class ChainedDatastore(Datastore):
             msg = ";\n".join(failures)
             raise DatastoreValidationError(msg)
 
-    def validateKey(self, lookupKey: LookupKey,
-                    entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
+    def validateKey(self, lookupKey: LookupKey, entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
         # Docstring is inherited from base class
         failures = []
         for datastore in self.datastores:

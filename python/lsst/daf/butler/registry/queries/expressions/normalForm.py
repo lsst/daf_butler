@@ -27,18 +27,9 @@ __all__ = (
     "NormalFormVisitor",
 )
 
-from abc import ABC, abstractmethod
 import enum
-from typing import (
-    Dict,
-    Generic,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-    TypeVar,
-)
+from abc import ABC, abstractmethod
+from typing import Dict, Generic, Iterator, List, Optional, Sequence, Tuple, TypeVar
 
 import astropy.time
 
@@ -249,6 +240,7 @@ class NormalFormExpression:
     form : `NormalForm`
         Enumeration value indicating the form this expression is in.
     """
+
     def __init__(self, nodes: Sequence[Sequence[Node]], form: NormalForm):
         self._form = form
         self._nodes = nodes
@@ -284,8 +276,7 @@ class NormalFormExpression:
 
     @property
     def form(self) -> NormalForm:
-        """Enumeration value indicating the form this expression is in.
-        """
+        """Enumeration value indicating the form this expression is in."""
         return self._form
 
     def visit(self, visitor: NormalFormVisitor[_T, _U, _V]) -> _V:
@@ -776,6 +767,7 @@ class Opaque(TransformationWrapper):
     precedence : `PrecedenceTier`
         Enumeration indicating how tightly this node is bound.
     """
+
     def __init__(self, node: Node, precedence: PrecedenceTier):
         self._node = node
         self._precedence = precedence
@@ -815,6 +807,7 @@ class LogicalNot(TransformationWrapper):
     guarantees that double-negatives are simplified away and NOT operations
     are moved inside any OR and AND operations at construction.
     """
+
     def __init__(self, operand: Opaque):
         self._operand = operand
 
@@ -853,6 +846,7 @@ class LogicalBinaryOperation(TransformationWrapper):
     rhs : `TransformationWrapper`
         Second operand.
     """
+
     def __init__(
         self, lhs: TransformationWrapper, operator: LogicalBinaryOperator, rhs: TransformationWrapper
     ):
@@ -1015,6 +1009,7 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
     """A `TreeVisitor` implementation that constructs a `TransformationWrapper`
     tree when applied to a `Node` tree.
     """
+
     def visitNumericLiteral(self, value: str, node: Node) -> TransformationWrapper:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
         return Opaque(node, PrecedenceTier.TOKEN)
@@ -1076,13 +1071,13 @@ class TransformationVisitor(TreeVisitor[TransformationWrapper]):
         # Docstring inherited from TreeVisitor.visitParens
         return expression
 
-    def visitTupleNode(self, items: Tuple[TransformationWrapper, ...], node: Node
-                       ) -> TransformationWrapper:
+    def visitTupleNode(self, items: Tuple[TransformationWrapper, ...], node: Node) -> TransformationWrapper:
         # Docstring inherited from TreeVisitor.visitTupleNode
         return Opaque(node, PrecedenceTier.TOKEN)
 
-    def visitPointNode(self, ra: TransformationWrapper, dec: TransformationWrapper, node: Node
-                       ) -> TransformationWrapper:
+    def visitPointNode(
+        self, ra: TransformationWrapper, dec: TransformationWrapper, node: Node
+    ) -> TransformationWrapper:
         # Docstring inherited from TreeVisitor.visitPointNode
         raise NotImplementedError("POINT() function is not supported yet")
 
@@ -1093,13 +1088,12 @@ class TreeReconstructionVisitor(NormalFormVisitor[Node, Node, Node]):
     Outside code should use `NormalFormExpression.toTree` (which delegates to
     this visitor) instead.
     """
+
     def visitBranch(self, node: Node) -> Node:
         # Docstring inherited from NormalFormVisitor.
         return node
 
-    def _visitSequence(
-        self, branches: Sequence[Node], operator: LogicalBinaryOperator
-    ) -> Node:
+    def _visitSequence(self, branches: Sequence[Node], operator: LogicalBinaryOperator) -> Node:
         """Common recursive implementation for `visitInner` and `visitOuter`.
 
         Parameters

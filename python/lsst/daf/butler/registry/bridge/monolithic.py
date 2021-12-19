@@ -22,14 +22,14 @@ from __future__ import annotations
 
 __all__ = ("MonolithicDatastoreRegistryBridgeManager", "MonolithicDatastoreRegistryBridge")
 
+import copy
 from collections import namedtuple
 from contextlib import contextmanager
-import copy
-from typing import cast, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, cast
 
 import sqlalchemy
-
-from lsst.daf.butler import DatasetRef, ddl, NamedValueSet, StoredDatastoreItemInfo
+from lsst.daf.butler import DatasetRef, NamedValueSet, StoredDatastoreItemInfo, ddl
+from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 from lsst.daf.butler.registry.interfaces import (
     DatasetIdRef,
     DatastoreRegistryBridge,
@@ -39,7 +39,6 @@ from lsst.daf.butler.registry.interfaces import (
     VersionTuple,
 )
 from lsst.daf.butler.registry.opaque import ByNameOpaqueTableStorage
-from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DimensionUniverse
@@ -55,7 +54,7 @@ _TablesTuple = namedtuple(
     [
         "dataset_location",
         "dataset_location_trash",
-    ]
+    ],
 )
 
 # This has to be updated on every schema change
@@ -88,16 +87,18 @@ def _makeTableSpecs(datasets: Type[DatasetRecordStorageManager]) -> _TablesTuple
             "table itself indicates whether the dataset is present in that "
             "Datastore. "
         ),
-        fields=NamedValueSet([
-            ddl.FieldSpec(
-                name="datastore_name",
-                dtype=sqlalchemy.String,
-                length=256,
-                primaryKey=True,
-                nullable=False,
-                doc="Name of the Datastore this entry corresponds to.",
-            ),
-        ]),
+        fields=NamedValueSet(
+            [
+                ddl.FieldSpec(
+                    name="datastore_name",
+                    dtype=sqlalchemy.String,
+                    length=256,
+                    primaryKey=True,
+                    nullable=False,
+                    doc="Name of the Datastore this entry corresponds to.",
+                ),
+            ]
+        ),
     )
     dataset_location = copy.deepcopy(dataset_location_spec)
     datasets.addDatasetForeignKey(dataset_location, primaryKey=True)
@@ -123,6 +124,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
     tables : `_TablesTuple`
         Named tuple containing `sqlalchemy.schema.Table` instances.
     """
+
     def __init__(self, datastoreName: str, *, db: Database, tables: _TablesTuple):
         super().__init__(datastoreName)
         self._db = db
@@ -172,40 +174,44 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
     def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
         # Docstring inherited from DatastoreRegistryBridge
         byId = {ref.getCheckedId(): ref for ref in refs}
-        sql = sqlalchemy.sql.select(
-            self._tables.dataset_location.columns.dataset_id
-        ).select_from(
-            self._tables.dataset_location
-        ).where(
-            sqlalchemy.sql.and_(
-                self._tables.dataset_location.columns.datastore_name == self.datastoreName,
-                self._tables.dataset_location.columns.dataset_id.in_(byId.keys())
+        sql = (
+            sqlalchemy.sql.select(self._tables.dataset_location.columns.dataset_id)
+            .select_from(self._tables.dataset_location)
+            .where(
+                sqlalchemy.sql.and_(
+                    self._tables.dataset_location.columns.datastore_name == self.datastoreName,
+                    self._tables.dataset_location.columns.dataset_id.in_(byId.keys()),
+                )
             )
         )
         for row in self._db.query(sql).fetchall():
             yield byId[row.dataset_id]
 
     @contextmanager
-    def emptyTrash(self, records_table: Optional[OpaqueTableStorage] = None,
-                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
-                   record_column: Optional[str] = None,
-                   ) -> Iterator[Tuple[Iterable[Tuple[DatasetIdRef,
-                                                      Optional[StoredDatastoreItemInfo]]],
-                                       Optional[Set[str]]]]:
+    def emptyTrash(
+        self,
+        records_table: Optional[OpaqueTableStorage] = None,
+        record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
+        record_column: Optional[str] = None,
+    ) -> Iterator[
+        Tuple[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]], Optional[Set[str]]]
+    ]:
         # Docstring inherited from DatastoreRegistryBridge
 
         if records_table is None:
             raise ValueError("This implementation requires a records table.")
 
-        assert isinstance(records_table, ByNameOpaqueTableStorage),\
-            f"Records table must support hidden attributes. Got {type(records_table)}."
+        assert isinstance(
+            records_table, ByNameOpaqueTableStorage
+        ), f"Records table must support hidden attributes. Got {type(records_table)}."
 
         if record_class is None:
             raise ValueError("Record class must be provided if records table is given.")
 
         # Helper closure to generate the common join+where clause.
-        def join_records(select: sqlalchemy.sql.Select, location_table: sqlalchemy.schema.Table
-                         ) -> sqlalchemy.sql.FromClause:
+        def join_records(
+            select: sqlalchemy.sql.Select, location_table: sqlalchemy.schema.Table
+        ) -> sqlalchemy.sql.FromClause:
             # mypy needs to be sure
             assert isinstance(records_table, ByNameOpaqueTableStorage)
             return select.select_from(
@@ -213,9 +219,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
                     location_table,
                     onclause=records_table._table.columns.dataset_id == location_table.columns.dataset_id,
                 )
-            ).where(
-                location_table.columns.datastore_name == self.datastoreName
-            )
+            ).where(location_table.columns.datastore_name == self.datastoreName)
 
         # SELECT records.dataset_id, records.path FROM records
         #    JOIN records on dataset_location.dataset_id == records.dataset_id
@@ -228,8 +232,9 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
         # Run query, transform results into a list of dicts that we can later
         # use to delete.
-        rows = [dict(**row, datastore_name=self.datastoreName)
-                for row in self._db.query(info_in_trash).mappings()]
+        rows = [
+            dict(**row, datastore_name=self.datastoreName) for row in self._db.query(info_in_trash).mappings()
+        ]
 
         # It is possible for trashed refs to be linked to artifacts that
         # are still associated with refs that are not to be trashed. We
@@ -251,23 +256,19 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
 
             # A query for paths that are referenced by datasets in the trash
             # and datasets not in the trash.
-            items_to_preserve = sqlalchemy.sql.select(
-                items_in_trash.columns[record_column]
-            ).select_from(
+            items_to_preserve = sqlalchemy.sql.select(items_in_trash.columns[record_column]).select_from(
                 items_not_in_trash.join(
                     items_in_trash,
                     onclause=items_in_trash.columns[record_column]
-                    == items_not_in_trash.columns[record_column]
+                    == items_not_in_trash.columns[record_column],
                 )
             )
-            preserved = {row[record_column]
-                         for row in self._db.query(items_to_preserve).mappings()}
+            preserved = {row[record_column] for row in self._db.query(items_to_preserve).mappings()}
 
         # Convert results to a tuple of id+info and a record of the artifacts
         # that should not be deleted from datastore. The id+info tuple is
         # solely to allow logging to report the relevant ID.
-        id_info = ((FakeDatasetRef(row["dataset_id"]), record_class.from_record(row))
-                   for row in rows)
+        id_info = ((FakeDatasetRef(row["dataset_id"]), record_class.from_record(row)) for row in rows)
 
         # Start contextmanager, return results
         yield ((id_info, preserved))
@@ -277,13 +278,14 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             return
 
         # Delete the rows from the records table
-        records_table.delete(["dataset_id"],
-                             *[{"dataset_id": row["dataset_id"]} for row in rows])
+        records_table.delete(["dataset_id"], *[{"dataset_id": row["dataset_id"]} for row in rows])
 
         # Delete those rows from the trash table.
-        self._db.delete(self._tables.dataset_location_trash, ["dataset_id", "datastore_name"],
-                        *[{"dataset_id": row["dataset_id"], "datastore_name": row["datastore_name"]}
-                          for row in rows])
+        self._db.delete(
+            self._tables.dataset_location_trash,
+            ["dataset_id", "datastore_name"],
+            *[{"dataset_id": row["dataset_id"], "datastore_name": row["datastore_name"]} for row in rows],
+        )
 
 
 class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
@@ -303,24 +305,40 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
     datasetIdColumnType : `type`
         Type for dataset ID column.
     """
-    def __init__(self, *, db: Database, tables: _TablesTuple,
-                 opaque: OpaqueTableStorageManager, universe: DimensionUniverse,
-                 datasetIdColumnType: type):
+
+    def __init__(
+        self,
+        *,
+        db: Database,
+        tables: _TablesTuple,
+        opaque: OpaqueTableStorageManager,
+        universe: DimensionUniverse,
+        datasetIdColumnType: type,
+    ):
         super().__init__(opaque=opaque, universe=universe, datasetIdColumnType=datasetIdColumnType)
         self._db = db
         self._tables = tables
         self._ephemeral: Dict[str, EphemeralDatastoreRegistryBridge] = {}
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext, *,
-                   opaque: OpaqueTableStorageManager,
-                   datasets: Type[DatasetRecordStorageManager],
-                   universe: DimensionUniverse,
-                   ) -> DatastoreRegistryBridgeManager:
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext,
+        *,
+        opaque: OpaqueTableStorageManager,
+        datasets: Type[DatasetRecordStorageManager],
+        universe: DimensionUniverse,
+    ) -> DatastoreRegistryBridgeManager:
         # Docstring inherited from DatastoreRegistryBridge
         tables = context.addTableTuple(_makeTableSpecs(datasets))
-        return cls(db=db, tables=cast(_TablesTuple, tables), opaque=opaque, universe=universe,
-                   datasetIdColumnType=datasets.getIdColumnType())
+        return cls(
+            db=db,
+            tables=cast(_TablesTuple, tables),
+            opaque=opaque,
+            universe=universe,
+            datasetIdColumnType=datasets.getIdColumnType(),
+        )
 
     def refresh(self) -> None:
         # Docstring inherited from DatastoreRegistryBridge
@@ -336,12 +354,10 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
 
     def findDatastores(self, ref: DatasetRef) -> Iterable[str]:
         # Docstring inherited from DatastoreRegistryBridge
-        sql = sqlalchemy.sql.select(
-            self._tables.dataset_location.columns.datastore_name
-        ).select_from(
-            self._tables.dataset_location
-        ).where(
-            self._tables.dataset_location.columns.dataset_id == ref.getCheckedId()
+        sql = (
+            sqlalchemy.sql.select(self._tables.dataset_location.columns.datastore_name)
+            .select_from(self._tables.dataset_location)
+            .where(self._tables.dataset_location.columns.dataset_id == ref.getCheckedId())
         )
         for row in self._db.query(sql).mappings():
             yield row[self._tables.dataset_location.columns.datastore_name]

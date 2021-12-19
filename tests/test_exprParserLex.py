@@ -29,8 +29,7 @@ from lsst.daf.butler.registry.queries.expressions import ParserLex, ParserLexErr
 
 
 class ParserLexTestCase(unittest.TestCase):
-    """A test case for ParserLex
-    """
+    """A test case for ParserLex"""
 
     def _assertToken(self, token, type, value, lineno=None, lexpos=None):
         self.assertIsNotNone(token)
@@ -48,8 +47,7 @@ class ParserLexTestCase(unittest.TestCase):
         pass
 
     def testInstantiate(self):
-        """Tests for making ParserLex instances
-        """
+        """Tests for making ParserLex instances"""
 
         default_reflags = re.IGNORECASE | re.VERBOSE
         lexer = ParserLex.make_lexer()
@@ -63,18 +61,18 @@ class ParserLexTestCase(unittest.TestCase):
         lexer = ParserLex.make_lexer()
 
         lexer.input("=!= <<= >>= +-*/()")
-        self._assertToken(lexer.token(), 'EQ', '=')
-        self._assertToken(lexer.token(), 'NE', '!=')
-        self._assertToken(lexer.token(), 'LT', '<')
-        self._assertToken(lexer.token(), 'LE', '<=')
-        self._assertToken(lexer.token(), 'GT', '>')
-        self._assertToken(lexer.token(), 'GE', '>=')
-        self._assertToken(lexer.token(), 'ADD', '+')
-        self._assertToken(lexer.token(), 'SUB', '-')
-        self._assertToken(lexer.token(), 'MUL', '*')
-        self._assertToken(lexer.token(), 'DIV', '/')
-        self._assertToken(lexer.token(), 'LPAREN', '(')
-        self._assertToken(lexer.token(), 'RPAREN', ')')
+        self._assertToken(lexer.token(), "EQ", "=")
+        self._assertToken(lexer.token(), "NE", "!=")
+        self._assertToken(lexer.token(), "LT", "<")
+        self._assertToken(lexer.token(), "LE", "<=")
+        self._assertToken(lexer.token(), "GT", ">")
+        self._assertToken(lexer.token(), "GE", ">=")
+        self._assertToken(lexer.token(), "ADD", "+")
+        self._assertToken(lexer.token(), "SUB", "-")
+        self._assertToken(lexer.token(), "MUL", "*")
+        self._assertToken(lexer.token(), "DIV", "/")
+        self._assertToken(lexer.token(), "LPAREN", "(")
+        self._assertToken(lexer.token(), "RPAREN", ")")
         self.assertIsNone(lexer.token())
 
     def testReservedTokens(self):
@@ -202,48 +200,51 @@ class ParserLexTestCase(unittest.TestCase):
         """Test for more or less complete expression"""
         lexer = ParserLex.make_lexer()
 
-        expr = ("((instrument='HSC' AND detector != 9) OR instrument='CFHT') "
-                "AND tract=8766 AND patch.cell_x > 5 AND "
-                "patch.cell_y < 4 AND band='i' "
-                "or visit IN (1..50:2)")
-        tokens = (("LPAREN", "("),
-                  ("LPAREN", "("),
-                  ("SIMPLE_IDENTIFIER", "instrument"),
-                  ("EQ", "="),
-                  ("STRING_LITERAL", "HSC"),
-                  ("AND", "AND"),
-                  ("SIMPLE_IDENTIFIER", "detector"),
-                  ("NE", "!="),
-                  ("NUMERIC_LITERAL", "9"),
-                  ("RPAREN", ")"),
-                  ("OR", "OR"),
-                  ("SIMPLE_IDENTIFIER", "instrument"),
-                  ("EQ", "="),
-                  ("STRING_LITERAL", "CFHT"),
-                  ("RPAREN", ")"),
-                  ("AND", "AND"),
-                  ("SIMPLE_IDENTIFIER", "tract"),
-                  ("EQ", "="),
-                  ("NUMERIC_LITERAL", "8766"),
-                  ("AND", "AND"),
-                  ("QUALIFIED_IDENTIFIER", "patch.cell_x"),
-                  ("GT", ">"),
-                  ("NUMERIC_LITERAL", "5"),
-                  ("AND", "AND"),
-                  ("QUALIFIED_IDENTIFIER", "patch.cell_y"),
-                  ("LT", "<"),
-                  ("NUMERIC_LITERAL", "4"),
-                  ("AND", "AND"),
-                  ("SIMPLE_IDENTIFIER", "band"),
-                  ("EQ", "="),
-                  ("STRING_LITERAL", "i"),
-                  ("OR", "OR"),
-                  ("SIMPLE_IDENTIFIER", "visit"),
-                  ("IN", "IN"),
-                  ("LPAREN", "("),
-                  ("RANGE_LITERAL", (1, 50, 2)),
-                  ("RPAREN", ")"),
-                  )
+        expr = (
+            "((instrument='HSC' AND detector != 9) OR instrument='CFHT') "
+            "AND tract=8766 AND patch.cell_x > 5 AND "
+            "patch.cell_y < 4 AND band='i' "
+            "or visit IN (1..50:2)"
+        )
+        tokens = (
+            ("LPAREN", "("),
+            ("LPAREN", "("),
+            ("SIMPLE_IDENTIFIER", "instrument"),
+            ("EQ", "="),
+            ("STRING_LITERAL", "HSC"),
+            ("AND", "AND"),
+            ("SIMPLE_IDENTIFIER", "detector"),
+            ("NE", "!="),
+            ("NUMERIC_LITERAL", "9"),
+            ("RPAREN", ")"),
+            ("OR", "OR"),
+            ("SIMPLE_IDENTIFIER", "instrument"),
+            ("EQ", "="),
+            ("STRING_LITERAL", "CFHT"),
+            ("RPAREN", ")"),
+            ("AND", "AND"),
+            ("SIMPLE_IDENTIFIER", "tract"),
+            ("EQ", "="),
+            ("NUMERIC_LITERAL", "8766"),
+            ("AND", "AND"),
+            ("QUALIFIED_IDENTIFIER", "patch.cell_x"),
+            ("GT", ">"),
+            ("NUMERIC_LITERAL", "5"),
+            ("AND", "AND"),
+            ("QUALIFIED_IDENTIFIER", "patch.cell_y"),
+            ("LT", "<"),
+            ("NUMERIC_LITERAL", "4"),
+            ("AND", "AND"),
+            ("SIMPLE_IDENTIFIER", "band"),
+            ("EQ", "="),
+            ("STRING_LITERAL", "i"),
+            ("OR", "OR"),
+            ("SIMPLE_IDENTIFIER", "visit"),
+            ("IN", "IN"),
+            ("LPAREN", "("),
+            ("RANGE_LITERAL", (1, 50, 2)),
+            ("RPAREN", ")"),
+        )
         lexer.input(expr)
         for type, value in tokens:
             self._assertToken(lexer.token(), type, value)

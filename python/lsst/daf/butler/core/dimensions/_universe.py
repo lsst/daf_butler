@@ -26,6 +26,7 @@ __all__ = ["DimensionUniverse"]
 import math
 import pickle
 from typing import (
+    TYPE_CHECKING,
     ClassVar,
     Dict,
     FrozenSet,
@@ -34,20 +35,20 @@ from typing import (
     Mapping,
     Optional,
     Set,
-    TYPE_CHECKING,
     TypeVar,
     Union,
 )
 
 from lsst.utils.classes import cached_getter, immutable
+
+from .._topology import TopologicalFamily, TopologicalSpace
 from ..config import Config
 from ..named import NamedValueAbstractSet, NamedValueSet
-from .._topology import TopologicalSpace, TopologicalFamily
 from ._config import DimensionConfig
-from ._elements import Dimension, DimensionElement
-from ._graph import DimensionGraph
-from ._governor import GovernorDimension
 from ._database import DatabaseDimensionElement
+from ._elements import Dimension, DimensionElement
+from ._governor import GovernorDimension
+from ._graph import DimensionGraph
 from ._skypix import SkyPixDimension, SkyPixSystem
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
@@ -96,7 +97,8 @@ class DimensionUniverse:
 
     def __new__(
         cls,
-        config: Optional[Config] = None, *,
+        config: Optional[Config] = None,
+        *,
         version: Optional[int] = None,
         builder: Optional[DimensionConstructionBuilder] = None,
     ) -> DimensionUniverse:
@@ -153,14 +155,10 @@ class DimensionUniverse:
 
         # Build mappings from element to index.  These are used for
         # topological-sort comparison operators in DimensionElement itself.
-        self._elementIndices = {
-            name: i for i, name in enumerate(self._elements.names)
-        }
+        self._elementIndices = {name: i for i, name in enumerate(self._elements.names)}
         # Same for dimension to index, sorted topologically across required
         # and implied.  This is used for encode/decode.
-        self._dimensionIndices = {
-            name: i for i, name in enumerate(self._dimensions.names)
-        }
+        self._dimensionIndices = {name: i for i, name in enumerate(self._dimensions.names)}
 
         return self
 
@@ -225,9 +223,7 @@ class DimensionUniverse:
         governors : `NamedValueAbstractSet` [ `GovernorDimension` ]
             A frozen set of `GovernorDimension` instances.
         """
-        return NamedValueSet(
-            d for d in self._dimensions if isinstance(d, GovernorDimension)
-        ).freeze()
+        return NamedValueSet(d for d in self._dimensions if isinstance(d, GovernorDimension)).freeze()
 
     @cached_getter
     def getDatabaseElements(self) -> NamedValueAbstractSet[DatabaseDimensionElement]:
@@ -250,8 +246,13 @@ class DimensionUniverse:
 
         (`NamedValueAbstractSet` [ `SkyPixSystem` ]).
         """
-        return NamedValueSet([family for family in self._topology[TopologicalSpace.SPATIAL]
-                              if isinstance(family, SkyPixSystem)]).freeze()
+        return NamedValueSet(
+            [
+                family
+                for family in self._topology[TopologicalSpace.SPATIAL]
+                if isinstance(family, SkyPixSystem)
+            ]
+        ).freeze()
 
     def getElementIndex(self, name: str) -> int:
         """Return the position of the named dimension element.
@@ -408,7 +409,7 @@ class DimensionUniverse:
         See `DimensionGraph.encode` and `DimensionGraph.decode` for more
         information.
         """
-        return math.ceil(len(self._dimensions)/8)
+        return math.ceil(len(self._dimensions) / 8)
 
     @classmethod
     def _unpickle(cls, version: int) -> DimensionUniverse:

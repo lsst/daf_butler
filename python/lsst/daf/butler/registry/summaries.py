@@ -25,8 +25,8 @@ __all__ = (
     "GovernorDimensionRestriction",
 )
 
-from dataclasses import dataclass
 import itertools
+from dataclasses import dataclass
 from typing import (
     AbstractSet,
     Any,
@@ -40,6 +40,7 @@ from typing import (
     Union,
     ValuesView,
 )
+
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
@@ -64,6 +65,7 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
         Mapping from governor dimension to the values it may take.  Dimensions
         not present in the mapping are not constrained at all.
     """
+
     def __init__(self, mapping: NamedKeyDict[GovernorDimension, Set[str]]):
         self._mapping = mapping
 
@@ -172,15 +174,16 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
             `GovernorDimensionRestriction` or any other mapping from dimension
             to `str` or iterable of `str`.
         """
-        for dimension in (self.keys() - other.keys()):
+        for dimension in self.keys() - other.keys():
             self._mapping.pop(dimension, None)
-        for dimension in (self.keys() & other.keys()):
+        for dimension in self.keys() & other.keys():
             self._mapping[dimension].update(ensure_iterable(other[dimension]))
         # Dimensions that are in 'other' but not in 'self' are ignored, because
         # 'self' says they are already unconstrained.
 
-    def union(self, *others: Mapping[GovernorDimension, Union[str, Iterable[str]]]
-              ) -> GovernorDimensionRestriction:
+    def union(
+        self, *others: Mapping[GovernorDimension, Union[str, Iterable[str]]]
+    ) -> GovernorDimensionRestriction:
         """Construct a restriction that permits any values permitted by any of
         the input restrictions.
 
@@ -220,8 +223,9 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
             # efficient) than adding a check to avoid it.
             self._mapping.setdefault(dimension, new_values).intersection_update(new_values)
 
-    def intersection(self, *others: Mapping[GovernorDimension, Union[str, Iterable[str]]]
-                     ) -> GovernorDimensionRestriction:
+    def intersection(
+        self, *others: Mapping[GovernorDimension, Union[str, Iterable[str]]]
+    ) -> GovernorDimensionRestriction:
         """Construct a restriction that permits only values permitted by all of
         the input restrictions.
 
@@ -260,8 +264,7 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
 
 @dataclass
 class CollectionSummary:
-    """A summary of the datasets that can be found in a collection.
-    """
+    """A summary of the datasets that can be found in a collection."""
 
     @classmethod
     def makeEmpty(cls, universe: DimensionUniverse) -> CollectionSummary:

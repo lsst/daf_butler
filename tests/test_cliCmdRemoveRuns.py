@@ -28,24 +28,22 @@ import unittest
 
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.cmd._remove_runs import (
-    noRunCollectionsMsg,
-    willRemoveRunsMsg,
-    willRemoveDatasetsMsg,
-    didRemoveRunsMsg,
-    didRemoveDatasetsMsg,
-    removedRunsMsg,
     abortedMsg,
+    didRemoveDatasetsMsg,
+    didRemoveRunsMsg,
+    noRunCollectionsMsg,
+    removedRunsMsg,
+    willRemoveDatasetsMsg,
+    willRemoveRunsMsg,
 )
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.tests.utils import MetricTestRepo
-
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class RemoveCollectionTest(unittest.TestCase):
-    """Test the butler remove-runs command.
-    """
+    """Test the butler remove-runs command."""
 
     def setUp(self):
         self.runner = LogCliRunner()

@@ -25,8 +25,9 @@ __all__ = (
     "TimespanDatabaseRepresentation",
 )
 
-from abc import abstractmethod
 import enum
+import warnings
+from abc import abstractmethod
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -46,7 +47,6 @@ from typing import (
 import astropy.time
 import astropy.utils.exceptions
 import sqlalchemy
-import warnings
 import yaml
 
 # As of astropy 4.2, the erfa interface is shipped independently and
@@ -57,14 +57,15 @@ except ImportError:
     erfa = None
 
 from lsst.utils.classes import cached_getter
+
 from . import ddl
-from .time_utils import TimeConverter
 from ._topology import TopologicalExtentDatabaseRepresentation, TopologicalSpace
 from .json import from_json_generic, to_json_generic
+from .time_utils import TimeConverter
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .dimensions import DimensionUniverse
     from ..registry import Registry
+    from .dimensions import DimensionUniverse
 
 
 class _SpecialTimespanBound(enum.Enum):
@@ -144,8 +145,13 @@ class Timespan:
     exactly when used to construct other `Timespan` instances.
     """
 
-    def __init__(self, begin: TimespanBound, end: TimespanBound, padInstantaneous: bool = True,
-                 _nsec: Optional[Tuple[int, int]] = None):
+    def __init__(
+        self,
+        begin: TimespanBound,
+        end: TimespanBound,
+        padInstantaneous: bool = True,
+        _nsec: Optional[Tuple[int, int]] = None,
+    ):
         converter = TimeConverter()
         if _nsec is None:
             begin_nsec: int
@@ -167,9 +173,7 @@ class Timespan:
             elif isinstance(end, astropy.time.Time):
                 end_nsec = converter.astropy_to_nsec(end)
             else:
-                raise TypeError(
-                    f"Unexpected value of type {type(end).__name__} for Timespan.end: {end!r}."
-                )
+                raise TypeError(f"Unexpected value of type {type(end).__name__} for Timespan.end: {end!r}.")
             if begin_nsec == end_nsec:
                 if begin_nsec == converter.max_nsec or end_nsec == converter.min_nsec:
                     with warnings.catch_warnings():
@@ -240,8 +244,7 @@ class Timespan:
         nsec = converter.astropy_to_nsec(time)
         if nsec == converter.max_nsec - 1:
             raise ValueError(
-                f"Cannot construct near-instantaneous timespan at {time}; "
-                "within one ns of maximum time."
+                f"Cannot construct near-instantaneous timespan at {time}; within one ns of maximum time."
             )
         return Timespan(None, None, _nsec=(nsec, nsec + 1))
 
@@ -507,9 +510,12 @@ class Timespan:
         return list(self._nsec)
 
     @classmethod
-    def from_simple(cls, simple: List[int],
-                    universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None) -> Timespan:
+    def from_simple(
+        cls,
+        simple: List[int],
+        universe: Optional[DimensionUniverse] = None,
+        registry: Optional[Registry] = None,
+    ) -> Timespan:
         """Construct a new object from simplified form.
 
         Designed to use the data returned from the `to_simple` method.
@@ -825,19 +831,24 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
     __slots__ = ("_nsec", "_name")
 
     @classmethod
-    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
-                       ) -> Tuple[ddl.FieldSpec, ...]:
+    def makeFieldSpecs(
+        cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+    ) -> Tuple[ddl.FieldSpec, ...]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
         return (
             ddl.FieldSpec(
-                f"{name}_begin", dtype=sqlalchemy.BigInteger, nullable=nullable,
+                f"{name}_begin",
+                dtype=sqlalchemy.BigInteger,
+                nullable=nullable,
                 default=(None if nullable else sqlalchemy.sql.text(str(TimeConverter().min_nsec))),
                 **kwargs,
             ),
             ddl.FieldSpec(
-                f"{name}_end", dtype=sqlalchemy.BigInteger, nullable=nullable,
+                f"{name}_end",
+                dtype=sqlalchemy.BigInteger,
+                nullable=nullable,
                 default=(None if nullable else sqlalchemy.sql.text(str(TimeConverter().max_nsec))),
                 **kwargs,
             ),
@@ -851,8 +862,9 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return (f"{name}_begin", f"{name}_end")
 
     @classmethod
-    def update(cls, extent: Optional[Timespan], name: Optional[str] = None,
-               result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def update(
+        cls, extent: Optional[Timespan], name: Optional[str] = None, result: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -890,13 +902,13 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return Timespan(None, None, _nsec=(begin_nsec, end_nsec))
 
     @classmethod
-    def fromSelectable(cls, selectable: sqlalchemy.sql.FromClause,
-                       name: Optional[str] = None) -> _CompoundTimespanDatabaseRepresentation:
+    def fromSelectable(
+        cls, selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
+    ) -> _CompoundTimespanDatabaseRepresentation:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
-        return cls(nsec=(selectable.columns[f"{name}_begin"], selectable.columns[f"{name}_end"]),
-                   name=name)
+        return cls(nsec=(selectable.columns[f"{name}_begin"], selectable.columns[f"{name}_end"]), name=name)
 
     @classmethod
     def fromLiteral(cls, timespan: Timespan) -> _CompoundTimespanDatabaseRepresentation:
@@ -920,8 +932,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return self._nsec[0] >= self._nsec[1]
 
     def __lt__(
-        self,
-        other: Union[_CompoundTimespanDatabaseRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: Union[_CompoundTimespanDatabaseRepresentation, sqlalchemy.sql.ColumnElement]
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         # See comments in Timespan.__lt__ for why we use these exact
@@ -932,8 +943,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
             return sqlalchemy.sql.and_(self._nsec[1] <= other._nsec[0], self._nsec[0] < other._nsec[1])
 
     def __gt__(
-        self,
-        other: Union[_CompoundTimespanDatabaseRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: Union[_CompoundTimespanDatabaseRepresentation, sqlalchemy.sql.ColumnElement]
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         # See comments in Timespan.__gt__ for why we use these exact
@@ -948,8 +958,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return sqlalchemy.sql.and_(self._nsec[1] > other._nsec[0], other._nsec[1] > self._nsec[0])
 
     def contains(
-        self,
-        other: Union[_CompoundTimespanDatabaseRepresentation, sqlalchemy.sql.ColumnElement]
+        self, other: Union[_CompoundTimespanDatabaseRepresentation, sqlalchemy.sql.ColumnElement]
     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
         if isinstance(other, sqlalchemy.sql.ColumnElement):

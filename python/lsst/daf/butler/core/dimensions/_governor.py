@@ -21,34 +21,21 @@
 
 from __future__ import annotations
 
-__all__ = (
-    "GovernorDimension",
-)
+__all__ = ("GovernorDimension",)
 
 from types import MappingProxyType
-from typing import (
-    AbstractSet,
-    Iterable,
-    Mapping,
-    Optional,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, AbstractSet, Iterable, Mapping, Optional
 
 from lsst.utils import doImportType
 
 from .. import ddl
-from ..named import NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalSpace
-
+from ..named import NamedValueAbstractSet, NamedValueSet
 from ._elements import Dimension
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
-    from ...registry.interfaces import (
-        Database,
-        GovernorDimensionRecordStorage,
-        StaticTablesContext,
-    )
+    from ...registry.interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
 
 
 class GovernorDimension(Dimension):
@@ -100,7 +87,8 @@ class GovernorDimension(Dimension):
     def __init__(
         self,
         name: str,
-        storage: dict, *,
+        storage: dict,
+        *,
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
         uniqueKeys: NamedValueAbstractSet[ddl.FieldSpec],
     ):
@@ -110,11 +98,15 @@ class GovernorDimension(Dimension):
         self._metadata = metadata
         self._uniqueKeys = uniqueKeys
         if self.primaryKey.getPythonType() is not str:
-            raise TypeError(f"Governor dimension '{name}' must have a string primary key (configured type "
-                            f"is {self.primaryKey.dtype.__name__}).")
+            raise TypeError(
+                f"Governor dimension '{name}' must have a string primary key (configured type "
+                f"is {self.primaryKey.dtype.__name__})."
+            )
         if self.primaryKey.length is not None and self.primaryKey.length > self.MAX_KEY_LENGTH:
-            raise TypeError(f"Governor dimension '{name}' must have a string primary key with length <= "
-                            f"{self.MAX_KEY_LENGTH} (configured value is {self.primaryKey.length}).")
+            raise TypeError(
+                f"Governor dimension '{name}' must have a string primary key with length <= "
+                f"{self.MAX_KEY_LENGTH} (configured value is {self.primaryKey.length})."
+            )
 
     MAX_KEY_LENGTH = 128
 
@@ -150,7 +142,8 @@ class GovernorDimension(Dimension):
 
     def makeStorage(
         self,
-        db: Database, *,
+        db: Database,
+        *,
         context: Optional[StaticTablesContext] = None,
     ) -> GovernorDimensionRecordStorage:
         """Make storage record.
@@ -172,6 +165,7 @@ class GovernorDimension(Dimension):
             Storage object that should back this element in a registry.
         """
         from ...registry.interfaces import GovernorDimensionRecordStorage
+
         cls = doImportType(self._storage["cls"])
         assert issubclass(cls, GovernorDimensionRecordStorage)
         return cls.initialize(db, self, context=context, config=self._storage)
@@ -200,7 +194,8 @@ class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
     def __init__(
         self,
         name: str,
-        storage: dict, *,
+        storage: dict,
+        *,
         metadata: Iterable[ddl.FieldSpec] = (),
         uniqueKeys: Iterable[ddl.FieldSpec] = (),
     ):

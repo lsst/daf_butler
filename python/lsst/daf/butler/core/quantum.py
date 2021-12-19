@@ -23,38 +23,31 @@ from __future__ import annotations
 
 __all__ = ("Quantum", "SerializedQuantum", "DimensionRecordsAccumulator")
 
-from typing import (
-    Any,
-    Iterable,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-    Dict
-)
-
-from pydantic import BaseModel
+from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Optional, Tuple, Type, Union
 
 from lsst.utils import doImportType
+from pydantic import BaseModel
 
-from .datasets import DatasetRef, DatasetType
-from .dimensions import DataCoordinate
+from .datasets import DatasetRef, DatasetType, SerializedDatasetRef, SerializedDatasetType
+from .dimensions import (
+    DataCoordinate,
+    DimensionRecord,
+    DimensionUniverse,
+    SerializedDataCoordinate,
+    SerializedDimensionRecord,
+)
 from .named import NamedKeyDict, NamedKeyMapping
-from .dimensions import (SerializedDataCoordinate, DimensionUniverse, SerializedDimensionRecord,
-                         DimensionRecord)
-from .datasets import SerializedDatasetRef, SerializedDatasetType
 
 
-def _reconstructDatasetRef(simple: SerializedDatasetRef, type_: Optional[DatasetType],
-                           ids: Iterable[int],
-                           dimensionRecords: Optional[Dict[int, SerializedDimensionRecord]],
-                           reconstitutedDimensions: Dict[int, Tuple[str, DimensionRecord]],
-                           universe: DimensionUniverse) -> DatasetRef:
-    """Reconstruct a DatasetRef stored in a Serialized Quantum
-    """
+def _reconstructDatasetRef(
+    simple: SerializedDatasetRef,
+    type_: Optional[DatasetType],
+    ids: Iterable[int],
+    dimensionRecords: Optional[Dict[int, SerializedDimensionRecord]],
+    reconstitutedDimensions: Dict[int, Tuple[str, DimensionRecord]],
+    universe: DimensionUniverse,
+) -> DatasetRef:
+    """Reconstruct a DatasetRef stored in a Serialized Quantum"""
     # Reconstruct the dimension records
     records = {}
     for dId in ids:
@@ -62,8 +55,10 @@ def _reconstructDatasetRef(simple: SerializedDatasetRef, type_: Optional[Dataset
         # otherwise load it from the dict of Serialized DimensionRecords
         if (recId := reconstitutedDimensions.get(dId)) is None:
             if dimensionRecords is None:
-                raise ValueError("Cannot construct from a SerializedQuantum with no dimension records. "
-                                 "Reconstituted Dimensions must be supplied and populated in method call.")
+                raise ValueError(
+                    "Cannot construct from a SerializedQuantum with no dimension records. "
+                    "Reconstituted Dimensions must be supplied and populated in method call."
+                )
             tmpSerialized = dimensionRecords[dId]
             reconstructedDim = DimensionRecord.from_simple(tmpSerialized, universe=universe)
             definition = tmpSerialized.definition
@@ -74,8 +69,7 @@ def _reconstructDatasetRef(simple: SerializedDatasetRef, type_: Optional[Dataset
     # turn the serialized form into an object and attach the dimension records
     rebuiltDatasetRef = DatasetRef.from_simple(simple, universe, datasetType=type_)
     if records:
-        object.__setattr__(rebuiltDatasetRef, 'dataId',
-                           rebuiltDatasetRef.dataId.expanded(records))
+        object.__setattr__(rebuiltDatasetRef, "dataId", rebuiltDatasetRef.dataId.expanded(records))
     return rebuiltDatasetRef
 
 
@@ -91,15 +85,17 @@ class SerializedQuantum(BaseModel):
     dimensionRecords: Optional[Dict[int, SerializedDimensionRecord]] = None
 
     @classmethod
-    def direct(cls, *,
-               taskName: str,
-               dataId: Optional[Dict],
-               datasetTypeMapping: Mapping[str, Dict],
-               initInputs: Mapping[str, Tuple[Dict, List[int]]],
-               inputs: Mapping[str, List[Tuple[Dict, List[int]]]],
-               outputs: Mapping[str, List[Tuple[Dict, List[int]]]],
-               dimensionRecords: Optional[Dict[int, Dict]]
-               ) -> SerializedQuantum:
+    def direct(
+        cls,
+        *,
+        taskName: str,
+        dataId: Optional[Dict],
+        datasetTypeMapping: Mapping[str, Dict],
+        initInputs: Mapping[str, Tuple[Dict, List[int]]],
+        inputs: Mapping[str, List[Tuple[Dict, List[int]]]],
+        outputs: Mapping[str, List[Tuple[Dict, List[int]]]],
+        dimensionRecords: Optional[Dict[int, Dict]],
+    ) -> SerializedQuantum:
         """Construct a `SerializedQuantum` directly without validators.
 
         This differs from the pydantic "construct" method in that the arguments
@@ -110,21 +106,48 @@ class SerializedQuantum(BaseModel):
         """
         node = SerializedQuantum.__new__(cls)
         setter = object.__setattr__
-        setter(node, 'taskName', taskName)
-        setter(node, 'dataId',
-               dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
-        setter(node, "datasetTypeMapping",
-               {k: SerializedDatasetType.direct(**v) for k, v in datasetTypeMapping.items()})
-        setter(node, "initInputs",
-               {k: (SerializedDatasetRef.direct(**v), refs) for k, (v, refs) in initInputs.items()})
-        setter(node, "inputs",
-               {k: [(SerializedDatasetRef.direct(**ref), id) for ref, id in v] for k, v in inputs.items()})
-        setter(node, "outputs",
-               {k: [(SerializedDatasetRef.direct(**ref), id) for ref, id in v] for k, v in outputs.items()})
-        setter(node, "dimensionRecords", dimensionRecords if dimensionRecords is None else
-               {int(k): SerializedDimensionRecord.direct(**v) for k, v in dimensionRecords.items()})
-        setter(node, '__fields_set__', {'taskName', 'dataId', 'datasetTypeMapping', 'initInputs', 'inputs',
-                                        'outputs', 'dimensionRecords'})
+        setter(node, "taskName", taskName)
+        setter(node, "dataId", dataId if dataId is None else SerializedDataCoordinate.direct(**dataId))
+        setter(
+            node,
+            "datasetTypeMapping",
+            {k: SerializedDatasetType.direct(**v) for k, v in datasetTypeMapping.items()},
+        )
+        setter(
+            node,
+            "initInputs",
+            {k: (SerializedDatasetRef.direct(**v), refs) for k, (v, refs) in initInputs.items()},
+        )
+        setter(
+            node,
+            "inputs",
+            {k: [(SerializedDatasetRef.direct(**ref), id) for ref, id in v] for k, v in inputs.items()},
+        )
+        setter(
+            node,
+            "outputs",
+            {k: [(SerializedDatasetRef.direct(**ref), id) for ref, id in v] for k, v in outputs.items()},
+        )
+        setter(
+            node,
+            "dimensionRecords",
+            dimensionRecords
+            if dimensionRecords is None
+            else {int(k): SerializedDimensionRecord.direct(**v) for k, v in dimensionRecords.items()},
+        )
+        setter(
+            node,
+            "__fields_set__",
+            {
+                "taskName",
+                "dataId",
+                "datasetTypeMapping",
+                "initInputs",
+                "inputs",
+                "outputs",
+                "dimensionRecords",
+            },
+        )
         return node
 
 
@@ -164,13 +187,16 @@ class Quantum:
 
     __slots__ = ("_taskName", "_taskClass", "_dataId", "_initInputs", "_inputs", "_outputs", "_hash")
 
-    def __init__(self, *, taskName: Optional[str] = None,
-                 taskClass: Optional[Type] = None,
-                 dataId: Optional[DataCoordinate] = None,
-                 initInputs: Optional[Union[Mapping[DatasetType, DatasetRef], Iterable[DatasetRef]]] = None,
-                 inputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
-                 outputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
-                 ):
+    def __init__(
+        self,
+        *,
+        taskName: Optional[str] = None,
+        taskClass: Optional[Type] = None,
+        dataId: Optional[DataCoordinate] = None,
+        initInputs: Optional[Union[Mapping[DatasetType, DatasetRef], Iterable[DatasetRef]]] = None,
+        inputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
+        outputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
+    ):
         if taskClass is not None:
             taskName = f"{taskClass.__module__}.{taskClass.__name__}"
         self._taskName = taskName
@@ -316,18 +342,23 @@ class Quantum:
         else:
             dimensionRecords = None
 
-        return SerializedQuantum(taskName=self._taskName,
-                                 dataId=self.dataId.to_simple() if self.dataId is not None else None,
-                                 datasetTypeMapping=typeMapping,
-                                 initInputs=initInputs,
-                                 inputs=inputs,
-                                 outputs=outputs,
-                                 dimensionRecords=dimensionRecords)
+        return SerializedQuantum(
+            taskName=self._taskName,
+            dataId=self.dataId.to_simple() if self.dataId is not None else None,
+            datasetTypeMapping=typeMapping,
+            initInputs=initInputs,
+            inputs=inputs,
+            outputs=outputs,
+            dimensionRecords=dimensionRecords,
+        )
 
     @classmethod
-    def from_simple(cls, simple: SerializedQuantum, universe: DimensionUniverse,
-                    reconstitutedDimensions: Optional[Dict[int, Tuple[str, DimensionRecord]]] = None
-                    ) -> Quantum:
+    def from_simple(
+        cls,
+        simple: SerializedQuantum,
+        universe: DimensionUniverse,
+        reconstitutedDimensions: Optional[Dict[int, Tuple[str, DimensionRecord]]] = None,
+    ) -> Quantum:
         """Construct a new object from a simplified form.
 
         Generally this is data returned from the `to_simple` method.
@@ -356,12 +387,13 @@ class Quantum:
             # If a datasetType has already been created use that instead of
             # unpersisting.
             if (type_ := loadedTypes.get(key)) is None:
-                type_ = loadedTypes.setdefault(key,
-                                               DatasetType.from_simple(simple.datasetTypeMapping[key],
-                                                                       universe=universe))
+                type_ = loadedTypes.setdefault(
+                    key, DatasetType.from_simple(simple.datasetTypeMapping[key], universe=universe)
+                )
             # reconstruct the dimension records
-            rebuiltDatasetRef = _reconstructDatasetRef(value, type_, dimensionIds, simple.dimensionRecords,
-                                                       reconstitutedDimensions, universe)
+            rebuiltDatasetRef = _reconstructDatasetRef(
+                value, type_, dimensionIds, simple.dimensionRecords, reconstitutedDimensions, universe
+            )
             initInputs[type_] = rebuiltDatasetRef
 
         # containers for the dataset refs
@@ -373,21 +405,26 @@ class Quantum:
                 # If a datasetType has already been created use that instead of
                 # unpersisting.
                 if (type_ := loadedTypes.get(key)) is None:
-                    type_ = loadedTypes.setdefault(key,
-                                                   DatasetType.from_simple(simple.datasetTypeMapping[key],
-                                                                           universe=universe))
+                    type_ = loadedTypes.setdefault(
+                        key, DatasetType.from_simple(simple.datasetTypeMapping[key], universe=universe)
+                    )
                 # reconstruct the list of DatasetRefs for this DatasetType
                 tmp: List[DatasetRef] = []
                 for v, recIds in values:
-                    rebuiltDatasetRef = _reconstructDatasetRef(v, type_, recIds, simple.dimensionRecords,
-                                                               reconstitutedDimensions, universe)
+                    rebuiltDatasetRef = _reconstructDatasetRef(
+                        v, type_, recIds, simple.dimensionRecords, reconstitutedDimensions, universe
+                    )
                     tmp.append(rebuiltDatasetRef)
                 container[type_] = tmp
 
-        dataId = DataCoordinate.from_simple(simple.dataId,
-                                            universe=universe) if simple.dataId is not None else None
-        return Quantum(taskName=simple.taskName, dataId=dataId, initInputs=initInputs, inputs=inputs,
-                       outputs=outputs)
+        dataId = (
+            DataCoordinate.from_simple(simple.dataId, universe=universe)
+            if simple.dataId is not None
+            else None
+        )
+        return Quantum(
+            taskName=simple.taskName, dataId=dataId, initInputs=initInputs, inputs=inputs, outputs=outputs
+        )
 
     @property
     def taskClass(self) -> Optional[Type]:
@@ -462,23 +499,38 @@ class Quantum:
         return hash((self.taskClass, self.dataId))
 
     def __reduce__(self) -> Union[str, Tuple[Any, ...]]:
-        return (self._reduceFactory,
-                (self.taskName, self.taskClass, self.dataId, dict(self.initInputs.items()),
-                 dict(self.inputs), dict(self.outputs)))
+        return (
+            self._reduceFactory,
+            (
+                self.taskName,
+                self.taskClass,
+                self.dataId,
+                dict(self.initInputs.items()),
+                dict(self.inputs),
+                dict(self.outputs),
+            ),
+        )
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}(taskName={self.taskName}, dataId={self.dataId})"
 
     @staticmethod
-    def _reduceFactory(taskName: Optional[str],
-                       taskClass: Optional[Type],
-                       dataId: Optional[DataCoordinate],
-                       initInputs: Optional[Union[Mapping[DatasetType, DatasetRef], Iterable[DatasetRef]]],
-                       inputs: Optional[Mapping[DatasetType, List[DatasetRef]]],
-                       outputs: Optional[Mapping[DatasetType, List[DatasetRef]]]
-                       ) -> Quantum:
-        return Quantum(taskName=taskName, taskClass=taskClass, dataId=dataId, initInputs=initInputs,
-                       inputs=inputs, outputs=outputs)
+    def _reduceFactory(
+        taskName: Optional[str],
+        taskClass: Optional[Type],
+        dataId: Optional[DataCoordinate],
+        initInputs: Optional[Union[Mapping[DatasetType, DatasetRef], Iterable[DatasetRef]]],
+        inputs: Optional[Mapping[DatasetType, List[DatasetRef]]],
+        outputs: Optional[Mapping[DatasetType, List[DatasetRef]]],
+    ) -> Quantum:
+        return Quantum(
+            taskName=taskName,
+            taskClass=taskClass,
+            dataId=dataId,
+            initInputs=initInputs,
+            inputs=inputs,
+            outputs=outputs,
+        )
 
 
 class DimensionRecordsAccumulator:

@@ -19,19 +19,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from contextlib import contextmanager
 import os
 import os.path
-import tempfile
 import stat
+import tempfile
 import unittest
+from contextlib import contextmanager
 
 import sqlalchemy
-
 from lsst.daf.butler import ddl
+from lsst.daf.butler.registry import Registry
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
-from lsst.daf.butler.registry import Registry
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -57,8 +56,7 @@ def isEmptyDatabaseActuallyWriteable(database: SqliteDatabase) -> bool:
     try:
         with database.declareStaticTables(create=True) as context:
             table = context.addTable(
-                "a",
-                ddl.TableSpec(fields=[ddl.FieldSpec("b", dtype=sqlalchemy.Integer, primaryKey=True)])
+                "a", ddl.TableSpec(fields=[ddl.FieldSpec("b", dtype=sqlalchemy.Integer, primaryKey=True)])
             )
         # Drop created table so that schema remains empty.
         database._metadata.drop_all(database._engine, tables=[table])
@@ -68,8 +66,7 @@ def isEmptyDatabaseActuallyWriteable(database: SqliteDatabase) -> bool:
 
 
 class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
-    """Tests for `SqliteDatabase` using a standard file-based database.
-    """
+    """Tests for `SqliteDatabase` using a standard file-based database."""
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)
@@ -115,8 +112,9 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
         # Test read-only connections against a read-only file.
         with removeWritePermission(filename):
             # Create a read-only database by passing in the filename.
-            roFromFilename = SqliteDatabase.fromEngine(SqliteDatabase.makeEngine(filename=filename),
-                                                       origin=0, writeable=False)
+            roFromFilename = SqliteDatabase.fromEngine(
+                SqliteDatabase.makeEngine(filename=filename), origin=0, writeable=False
+            )
             self.assertEqual(roFromFilename.filename, filename)
             self.assertEqual(roFromFilename.origin, 0)
             self.assertFalse(roFromFilename.isWriteable())
@@ -135,16 +133,14 @@ class SqliteFileDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
 
 class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
-    """Tests for `SqliteDatabase` using an in-memory database.
-    """
+    """Tests for `SqliteDatabase` using an in-memory database."""
 
     def makeEmptyDatabase(self, origin: int = 0) -> SqliteDatabase:
         engine = SqliteDatabase.makeEngine(filename=None)
         return SqliteDatabase.fromEngine(engine=engine, origin=origin)
 
     def getNewConnection(self, database: SqliteDatabase, *, writeable: bool) -> SqliteDatabase:
-        return SqliteDatabase.fromEngine(origin=database.origin, engine=database._engine,
-                                         writeable=writeable)
+        return SqliteDatabase.fromEngine(origin=database.origin, engine=database._engine, writeable=writeable)
 
     @contextmanager
     def asReadOnly(self, database: SqliteDatabase) -> SqliteDatabase:
@@ -212,9 +208,9 @@ class SqliteFileRegistryNameKeyCollMgrTestCase(SqliteFileRegistryTests, unittest
     This test case uses NameKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManager.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
-    datasetsManager = \
-        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
 class SqliteFileRegistrySynthIntKeyCollMgrTestCase(SqliteFileRegistryTests, unittest.TestCase):
@@ -223,9 +219,9 @@ class SqliteFileRegistrySynthIntKeyCollMgrTestCase(SqliteFileRegistryTests, unit
     This test case uses SynthIntKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManager.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
-    datasetsManager = \
-        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
 class SqliteFileRegistryNameKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
@@ -234,9 +230,11 @@ class SqliteFileRegistryNameKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unit
     This test case uses NameKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManagerUUID.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
-    datasetsManager = \
+    datasetsManager = (
         "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    )
 
 
 class SqliteFileRegistrySynthIntKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
@@ -245,14 +243,15 @@ class SqliteFileRegistrySynthIntKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, 
     This test case uses SynthIntKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManagerUUID.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
-    datasetsManager = \
+    datasetsManager = (
         "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    )
 
 
 class SqliteMemoryRegistryTests(RegistryTests):
-    """Tests for `Registry` backed by a SQLite in-memory database.
-    """
+    """Tests for `Registry` backed by a SQLite in-memory database."""
 
     @classmethod
     def getDataDir(cls) -> str:
@@ -281,9 +280,9 @@ class SqliteMemoryRegistryNameKeyCollMgrTestCase(unittest.TestCase, SqliteMemory
     This test case uses NameKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManager.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
-    datasetsManager = \
-        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
 class SqliteMemoryRegistrySynthIntKeyCollMgrTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
@@ -292,9 +291,9 @@ class SqliteMemoryRegistrySynthIntKeyCollMgrTestCase(unittest.TestCase, SqliteMe
     This test case uses SynthIntKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManager.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
-    datasetsManager = \
-        "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
+    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
 class SqliteMemoryRegistryNameKeyCollMgrUUIDTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
@@ -303,9 +302,11 @@ class SqliteMemoryRegistryNameKeyCollMgrUUIDTestCase(unittest.TestCase, SqliteMe
     This test case uses NameKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManagerUUID.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
-    datasetsManager = \
+    datasetsManager = (
         "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    )
 
 
 class SqliteMemoryRegistrySynthIntKeyCollMgrUUIDTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
@@ -314,9 +315,11 @@ class SqliteMemoryRegistrySynthIntKeyCollMgrUUIDTestCase(unittest.TestCase, Sqli
     This test case uses SynthIntKeyCollectionManager and
     ByDimensionsDatasetRecordStorageManagerUUID.
     """
+
     collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
-    datasetsManager = \
+    datasetsManager = (
         "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManagerUUID"
+    )
 
 
 if __name__ == "__main__":

@@ -22,26 +22,24 @@
 """Unit tests for the daf_butler shared CLI options.
 """
 
-import click
 import unittest
 from unittest.mock import MagicMock
 
-
+import click
+from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 from lsst.daf.butler.cli.utils import (
-    clickResultMsg,
     LogCliRunner,
     MWArgumentDecorator,
     MWOption,
     MWOptionDecorator,
     MWPath,
+    clickResultMsg,
     option_section,
-    unwrap
+    unwrap,
 )
-from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 
 
 class ArgumentHelpGeneratorTestCase(unittest.TestCase):
-
     def testHelp(self):
         @click.command()
         # Use custom help in the arguments so that any changes to default help
@@ -65,6 +63,7 @@ class ArgumentHelpGeneratorTestCase(unittest.TestCase):
             help
             message."""
             pass
+
         self.runTest(cli)
 
     def runTest(self, cli):
@@ -89,7 +88,6 @@ Options:
 
 
 class UnwrapStringTestCase(unittest.TestCase):
-
     def test_leadingNewline(self):
         testStr = """
             foo bar
@@ -133,7 +131,6 @@ class UnwrapStringTestCase(unittest.TestCase):
 
 
 class MWOptionTest(unittest.TestCase):
-
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -148,6 +145,7 @@ class MWOptionTest(unittest.TestCase):
         @click.option("--things", cls=MWOption, multiple=True)
         def cmd(things):
             pass
+
         result = self.runner.invoke(cmd, ["--help"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expectedOutput = """Options:
@@ -167,6 +165,7 @@ class MWOptionTest(unittest.TestCase):
             @click.option("--things", cls=MWOption, nargs=numberOfArgs)
             def cmd(things):
                 pass
+
             result = self.runner.invoke(cmd, ["--help"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             expectedOutput = f"""Options:
@@ -207,16 +206,17 @@ class MWArgumentDecoratorTest(unittest.TestCase):
                 def cmd(things, other):
                     """Cmd help text."""
                     pass
+
                 result = self.runner.invoke(cmd, ["--help"])
                 self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-                expectedOutput = (f"""Usage: cmd [OPTIONS] {'THINGS' if required else '[THINGS]'} {'... ' if numberOfArgs != 1 else ''}OTHER
+                expectedOutput = f"""Usage: cmd [OPTIONS] {'THINGS' if required else '[THINGS]'} {'... ' if numberOfArgs != 1 else ''}OTHER
 
   Cmd help text.
 
   {helpText}
 
   {self.otherHelpText}
-""")
+"""
                 self.assertIn(expectedOutput, result.output)
 
     def testUse(self):
@@ -227,6 +227,7 @@ class MWArgumentDecoratorTest(unittest.TestCase):
         @self.things_argument()
         def cli(things):
             mock(things)
+
         self.runner = click.testing.CliRunner()
         result = self.runner.invoke(cli, ("foo"))
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
@@ -254,6 +255,7 @@ class MWOptionDecoratorTest(unittest.TestCase):
         @self.test_option()
         def cli(test):
             mock(test)
+
         self.runner = click.testing.CliRunner()
         result = self.runner.invoke(cli, ("-t", "foo"))
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
@@ -268,6 +270,7 @@ class MWOptionDecoratorTest(unittest.TestCase):
         @self.test_option(multiple=False)
         def cli(test):
             mock(test)
+
         self.runner = click.testing.CliRunner()
         result = self.runner.invoke(cli, ("-t", "foo"))
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
@@ -318,13 +321,12 @@ Section break between metasyntactic variables.
 
 
 class MWPathTest(unittest.TestCase):
-
     def getCmd(self, exists):
-
         @click.command()
         @click.option("--name", type=MWPath(exists=exists))
         def cmd(name):
             pass
+
         return cmd
 
     def setUp(self):

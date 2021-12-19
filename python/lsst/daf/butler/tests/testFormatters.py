@@ -21,17 +21,18 @@
 
 from __future__ import annotations
 
-__all__ = ("FormatterTest", "DoNothingFormatter", "LenientYamlFormatter", "MetricsExampleFormatter",
-           "MultipleExtensionsFormatter", "SingleExtensionFormatter")
-
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Mapping,
-    Optional,
+__all__ = (
+    "FormatterTest",
+    "DoNothingFormatter",
+    "LenientYamlFormatter",
+    "MetricsExampleFormatter",
+    "MultipleExtensionsFormatter",
+    "SingleExtensionFormatter",
 )
 
 import json
+from typing import TYPE_CHECKING, Any, Mapping, Optional
+
 import yaml
 
 from ..core import Formatter
@@ -75,17 +76,20 @@ class FormatterTest(Formatter):
 
 class SingleExtensionFormatter(DoNothingFormatter):
     """A do nothing formatter that has a single extension registered."""
+
     extension = ".fits"
 
 
 class MultipleExtensionsFormatter(SingleExtensionFormatter):
     """A formatter that has multiple extensions registered."""
+
     supportedExtensions = frozenset({".fits.gz", ".fits.fz", ".fit"})
 
 
 class LenientYamlFormatter(YamlFormatter):
     """A test formatter that allows any file extension but always reads and
     writes YAML."""
+
     extension = ".yaml"
 
     @classmethod

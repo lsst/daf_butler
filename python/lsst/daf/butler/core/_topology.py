@@ -29,25 +29,14 @@ __all__ = (
     "TopologicalExtentDatabaseRepresentation",
 )
 
-from abc import ABC, abstractmethod
 import enum
-from typing import (
-    Any,
-    ClassVar,
-    Dict,
-    Generic,
-    Iterator,
-    Mapping,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-)
+from abc import ABC, abstractmethod
+from typing import Any, ClassVar, Dict, Generic, Iterator, Mapping, Optional, Tuple, Type, TypeVar
 
-import sqlalchemy
-
-from lsst.utils.classes import immutable
 import lsst.sphgeom
+import sqlalchemy
+from lsst.utils.classes import immutable
+
 from . import ddl
 from .named import NamedValueAbstractSet
 
@@ -115,8 +104,9 @@ class TopologicalFamily(ABC):
         return other.topology.get(self.space) == self
 
     @abstractmethod
-    def choose(self, endpoints: NamedValueAbstractSet[TopologicalRelationshipEndpoint]
-               ) -> TopologicalRelationshipEndpoint:
+    def choose(
+        self, endpoints: NamedValueAbstractSet[TopologicalRelationshipEndpoint]
+    ) -> TopologicalRelationshipEndpoint:
         """Select the best member of this family to use.
 
         These are to be used in a query join or data ID when more than one
@@ -210,8 +200,9 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
 
     @classmethod
     @abstractmethod
-    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
-                       ) -> Tuple[ddl.FieldSpec, ...]:
+    def makeFieldSpecs(
+        cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+    ) -> Tuple[ddl.FieldSpec, ...]:
         """Make objects that reflect the fields that must be added to table.
 
         Makes one or more `ddl.FieldSpec` objects that reflect the fields
@@ -262,8 +253,9 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
 
     @classmethod
     @abstractmethod
-    def update(cls, extent: Optional[_R], name: Optional[str] = None,
-               result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def update(
+        cls, extent: Optional[_R], name: Optional[str] = None, result: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Add a region to a dictionary.
 
         This region represents a database row in this representation.
@@ -326,8 +318,9 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
 
     @classmethod
     @abstractmethod
-    def fromSelectable(cls: Type[_S], selectable: sqlalchemy.sql.FromClause,
-                       name: Optional[str] = None) -> _S:
+    def fromSelectable(
+        cls: Type[_S], selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
+    ) -> _S:
         """Construct representation of a column in the table or subquery.
 
         Constructs an instance that represents a logical column (which may
@@ -429,8 +422,9 @@ class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentatio
     SPACE: ClassVar[TopologicalSpace] = TopologicalSpace.SPATIAL
 
     @classmethod
-    def makeFieldSpecs(cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
-                       ) -> Tuple[ddl.FieldSpec, ...]:
+    def makeFieldSpecs(
+        cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
+    ) -> Tuple[ddl.FieldSpec, ...]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -452,8 +446,12 @@ class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentatio
         return (name,)
 
     @classmethod
-    def update(cls, extent: Optional[lsst.sphgeom.Region], name: Optional[str] = None,
-               result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def update(
+        cls,
+        extent: Optional[lsst.sphgeom.Region],
+        name: Optional[str] = None,
+        result: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -470,8 +468,11 @@ class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentatio
         return mapping[name]
 
     @classmethod
-    def fromSelectable(cls: Type[SpatialRegionDatabaseRepresentation], selectable: sqlalchemy.sql.FromClause,
-                       name: Optional[str] = None) -> SpatialRegionDatabaseRepresentation:
+    def fromSelectable(
+        cls: Type[SpatialRegionDatabaseRepresentation],
+        selectable: sqlalchemy.sql.FromClause,
+        name: Optional[str] = None,
+    ) -> SpatialRegionDatabaseRepresentation:
         # Docstring inherited
         if name is None:
             name = cls.NAME

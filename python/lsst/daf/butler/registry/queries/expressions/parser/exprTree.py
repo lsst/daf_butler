@@ -31,15 +31,27 @@ to database directly.
 
 from __future__ import annotations
 
-__all__ = ['Node', 'BinaryOp', 'FunctionCall', 'Identifier', 'IsIn', 'NumericLiteral',
-           'Parens', 'RangeLiteral', 'StringLiteral', 'TimeLiteral', 'TupleNode',
-           'UnaryOp', 'function_call']
+__all__ = [
+    "Node",
+    "BinaryOp",
+    "FunctionCall",
+    "Identifier",
+    "IsIn",
+    "NumericLiteral",
+    "Parens",
+    "RangeLiteral",
+    "StringLiteral",
+    "TimeLiteral",
+    "TupleNode",
+    "UnaryOp",
+    "function_call",
+]
 
 # -------------------------------
 #  Imports of standard modules --
 # -------------------------------
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple
 
 # -----------------------------
 #  Imports for other modules --
@@ -51,6 +63,7 @@ from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import astropy.time
+
     from .treeVisitor import TreeVisitor
 
 # ------------------------
@@ -71,6 +84,7 @@ class Node(ABC):
     children : tuple of :py:class:`Node`
         Possibly empty list of sub-nodes.
     """
+
     def __init__(self, children: Tuple[Node, ...] = None):
         self.children = tuple(children or ())
 
@@ -100,6 +114,7 @@ class BinaryOp(Node):
     op : str
         Operator name, e.g. '+', 'OR'
     """
+
     def __init__(self, lhs: Node, op: str, rhs: Node):
         Node.__init__(self, (lhs, rhs))
         self.lhs = lhs
@@ -129,6 +144,7 @@ class UnaryOp(Node):
     operand : Node
         Operand.
     """
+
     def __init__(self, op: str, operand: Node):
         Node.__init__(self, (operand,))
         self.op = op
@@ -151,6 +167,7 @@ class StringLiteral(Node):
     value : str
         Literal value.
     """
+
     def __init__(self, value: str):
         Node.__init__(self)
         self.value = value
@@ -171,6 +188,7 @@ class TimeLiteral(Node):
     value : `astropy.time.Time`
         Literal string value.
     """
+
     def __init__(self, value: astropy.time.Time):
         Node.__init__(self)
         self.value = value
@@ -194,6 +212,7 @@ class NumericLiteral(Node):
     value : str
         Literal value.
     """
+
     def __init__(self, value: str):
         Node.__init__(self)
         self.value = value
@@ -217,6 +236,7 @@ class Identifier(Node):
     name : str
         Identifier name.
     """
+
     def __init__(self, name: str):
         Node.__init__(self)
         self.name = name
@@ -248,6 +268,7 @@ class RangeLiteral(Node):
         as stride=1 but for some consumers it may be useful to know that
         stride was missing from literal.
     """
+
     def __init__(self, start: int, stop: int, stride: Optional[int] = None):
         self.start = start
         self.stop = stop
@@ -274,6 +295,7 @@ class IsIn(Node):
     not_in : bool
         If `True` then it is NOT IN expression, otherwise it is IN expression.
     """
+
     def __init__(self, lhs: Node, values: List[Node], not_in: bool = False):
         Node.__init__(self, (lhs,) + tuple(values))
         self.lhs = lhs
@@ -291,9 +313,7 @@ class IsIn(Node):
         not_in = ""
         if self.not_in:
             not_in = "NOT "
-        return "{lhs} {not_in}IN ({values})".format(lhs=self.lhs,
-                                                    not_in=not_in,
-                                                    values=values)
+        return "{lhs} {not_in}IN ({values})".format(lhs=self.lhs, not_in=not_in, values=values)
 
 
 class Parens(Node):
@@ -304,6 +324,7 @@ class Parens(Node):
     expr : Node
         Expression inside parentheses.
     """
+
     def __init__(self, expr: Node):
         Node.__init__(self, (expr,))
         self.expr = expr
@@ -329,6 +350,7 @@ class TupleNode(Node):
     items : tuple of Node
         Expressions inside parentheses.
     """
+
     def __init__(self, items: Tuple[Node, ...]):
         Node.__init__(self, items)
         self.items = items
@@ -353,6 +375,7 @@ class FunctionCall(Node):
     args : `list` [ `Node` ]
         Arguments passed to function.
     """
+
     def __init__(self, function: str, args: List[Node]):
         Node.__init__(self, tuple(args))
         self.name = function
@@ -378,6 +401,7 @@ class PointNode(Node):
     dec : `Node`
         Node representing dec value.
     """
+
     def __init__(self, ra: Node, dec: Node):
         Node.__init__(self, (ra, dec))
         self.ra = ra

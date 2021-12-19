@@ -24,15 +24,22 @@ __all__ = ("transferDatasets",)
 import logging
 from typing import Tuple
 
-from .. import Butler
+from .._butler import Butler
 from ..registry.queries import DatasetQueryResults
 
 log = logging.getLogger(__name__)
 
 
-def transferDatasets(source: str, dest: str, dataset_type: Tuple[str, ...], collections: Tuple[str, ...],
-                     where: str, find_first: bool,
-                     transfer: str, register_dataset_types: bool) -> int:
+def transferDatasets(
+    source: str,
+    dest: str,
+    dataset_type: Tuple[str, ...],
+    collections: Tuple[str, ...],
+    where: str,
+    find_first: bool,
+    transfer: str,
+    register_dataset_types: bool,
+) -> int:
     """Transfer datasets from run in source to dest.
 
     Parameters
@@ -61,10 +68,9 @@ def transferDatasets(source: str, dest: str, dataset_type: Tuple[str, ...], coll
     dataset_type_expr = ... if not dataset_type else dataset_type
     collections_expr = ... if not collections else collections
 
-    source_refs = source_butler.registry.queryDatasets(datasetType=dataset_type_expr,
-                                                       collections=collections_expr,
-                                                       where=where,
-                                                       findFirst=find_first)
+    source_refs = source_butler.registry.queryDatasets(
+        datasetType=dataset_type_expr, collections=collections_expr, where=where, findFirst=find_first
+    )
 
     # Might need expanded results if datastore records have to be derived.
     # Not all registries return the same form for results.
@@ -74,6 +80,7 @@ def transferDatasets(source: str, dest: str, dataset_type: Tuple[str, ...], coll
     # Place results in a set to remove duplicates
     source_refs = set(source_refs)
 
-    transferred = dest_butler.transfer_from(source_butler, source_refs, transfer=transfer,
-                                            register_dataset_types=register_dataset_types)
+    transferred = dest_butler.transfer_from(
+        source_butler, source_refs, transfer=transfer, register_dataset_types=register_dataset_types
+    )
     return len(transferred)

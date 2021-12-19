@@ -27,30 +27,22 @@ __all__ = (
 )
 
 import dataclasses
-from typing import (
-    AbstractSet,
-    List,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, AbstractSet, List, Optional, Sequence, Set, Tuple
 
 from ....core import (
     DataCoordinate,
-    DimensionUniverse,
     Dimension,
     DimensionElement,
     DimensionGraph,
+    DimensionUniverse,
     GovernorDimension,
     NamedKeyDict,
     NamedValueSet,
 )
 from ...summaries import GovernorDimensionRestriction
-from .parser import Node, TreeVisitor
+from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .normalForm import NormalForm, NormalFormVisitor
-from .categorize import categorizeElementId, categorizeConstant, ExpressionConstant
+from .parser import Node, TreeVisitor
 
 if TYPE_CHECKING:
     import astropy.time
@@ -135,8 +127,7 @@ class TreeSummary(InspectionSummary):
         return self
 
     def isDataIdKeyOnly(self) -> bool:
-        """Test whether this branch is _just_ a data ID key identifier.
-        """
+        """Test whether this branch is _just_ a data ID key identifier."""
         return self.dataIdKey is not None and self.dataIdValue is None
 
     def isDataIdValueOnly(self) -> bool:
@@ -173,6 +164,7 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         Identifiers that represent bound parameter values, and hence need not
         represent in-database entities.
     """
+
     def __init__(self, universe: DimensionUniverse, bindKeys: AbstractSet[str]):
         self.universe = universe
         self.bindKeys = bindKeys
@@ -208,22 +200,18 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
             )
         else:
             return TreeSummary(
-                dimensions=NamedValueSet(element.graph.dimensions),
-                columns=NamedKeyDict({element: {column}})
+                dimensions=NamedValueSet(element.graph.dimensions), columns=NamedKeyDict({element: {column}})
             )
 
-    def visitUnaryOp(self, operator: str, operand: TreeSummary, node: Node
-                     ) -> TreeSummary:
+    def visitUnaryOp(self, operator: str, operand: TreeSummary, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitUnaryOp
         return operand
 
-    def visitBinaryOp(self, operator: str, lhs: TreeSummary, rhs: TreeSummary,
-                      node: Node) -> TreeSummary:
+    def visitBinaryOp(self, operator: str, lhs: TreeSummary, rhs: TreeSummary, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitBinaryOp
         return lhs.merge(rhs, isEq=(operator == "="))
 
-    def visitIsIn(self, lhs: TreeSummary, values: List[TreeSummary], not_in: bool,
-                  node: Node) -> TreeSummary:
+    def visitIsIn(self, lhs: TreeSummary, values: List[TreeSummary], not_in: bool, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitIsIn
         for v in values:
             lhs.merge(v)
@@ -240,8 +228,7 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
             result.merge(i)
         return result
 
-    def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node
-                          ) -> TreeSummary:
+    def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
         return TreeSummary()
 
@@ -314,8 +301,14 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
     defaults : `DataCoordinate`
         A data ID containing default for governor dimensions.
     """
-    def __init__(self, dataId: DataCoordinate, graph: DimensionGraph, bindKeys: AbstractSet[str],
-                 defaults: DataCoordinate):
+
+    def __init__(
+        self,
+        dataId: DataCoordinate,
+        graph: DimensionGraph,
+        bindKeys: AbstractSet[str],
+        defaults: DataCoordinate,
+    ):
         self.dataId = dataId
         self.graph = graph
         self.bindKeys = bindKeys

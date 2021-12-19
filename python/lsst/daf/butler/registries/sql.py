@@ -21,26 +21,12 @@
 
 from __future__ import annotations
 
-__all__ = (
-    "SqlRegistry",
-)
+__all__ = ("SqlRegistry",)
 
-from collections import defaultdict
 import contextlib
 import logging
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    TYPE_CHECKING,
-    Union,
-)
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Set, Tuple, Union
 
 import sqlalchemy
 from lsst.utils.iteration import ensure_iterable
@@ -55,7 +41,6 @@ from ..core import (
     DatasetId,
     DatasetRef,
     DatasetType,
-    ddl,
     Dimension,
     DimensionConfig,
     DimensionElement,
@@ -67,34 +52,29 @@ from ..core import (
     Progress,
     StorageClassFactory,
     Timespan,
+    ddl,
 )
 from ..core.utils import transactional
-
 from ..registry import (
-    Registry,
-    RegistryConfig,
+    CollectionSearch,
     CollectionType,
-    RegistryDefaults,
     ConflictingDefinitionError,
     InconsistentDataIdError,
     OrphanedRecordError,
-    CollectionSearch,
+    Registry,
+    RegistryConfig,
+    RegistryDefaults,
+    queries,
 )
-from ..registry import queries
-
-from ..registry.wildcards import CategorizedWildcard, CollectionQuery, Ellipsis
-from ..registry.summaries import CollectionSummary
-from ..registry.managers import RegistryManagerTypes, RegistryManagerInstances
-from ..registry.queries import Query
 from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
+from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
+from ..registry.queries import Query
+from ..registry.summaries import CollectionSummary
+from ..registry.wildcards import CategorizedWildcard, CollectionQuery, Ellipsis
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
-    from ..registry.interfaces import (
-        CollectionRecord,
-        Database,
-        DatastoreRegistryBridgeManager,
-    )
+    from ..registry.interfaces import CollectionRecord, Database, DatastoreRegistryBridgeManager
 
 
 _LOG = logging.getLogger(__name__)
@@ -120,9 +100,12 @@ class SqlRegistry(Registry):
     """
 
     @classmethod
-    def createFromConfig(cls, config: Optional[Union[RegistryConfig, str]] = None,
-                         dimensionConfig: Optional[Union[DimensionConfig, str]] = None,
-                         butlerRoot: Optional[str] = None) -> Registry:
+    def createFromConfig(
+        cls,
+        config: Optional[Union[RegistryConfig, str]] = None,
+        dimensionConfig: Optional[Union[DimensionConfig, str]] = None,
+        butlerRoot: Optional[str] = None,
+    ) -> Registry:
         """Create registry database and return `SqlRegistry` instance.
 
         This method initializes database contents, database must be empty
@@ -155,16 +138,21 @@ class SqlRegistry(Registry):
             raise TypeError(f"Incompatible Dimension configuration type: {type(dimensionConfig)}")
 
         DatabaseClass = config.getDatabaseClass()
-        database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
-                                         namespace=config.get("namespace"))
+        database = DatabaseClass.fromUri(
+            str(config.connectionString), origin=config.get("origin", 0), namespace=config.get("namespace")
+        )
         managerTypes = RegistryManagerTypes.fromConfig(config)
         managers = managerTypes.makeRepo(database, dimensionConfig)
         return cls(database, RegistryDefaults(), managers)
 
     @classmethod
-    def fromConfig(cls, config: Union[ButlerConfig, RegistryConfig, Config, str],
-                   butlerRoot: Optional[Union[str, ButlerURI]] = None, writeable: bool = True,
-                   defaults: Optional[RegistryDefaults] = None) -> Registry:
+    def fromConfig(
+        cls,
+        config: Union[ButlerConfig, RegistryConfig, Config, str],
+        butlerRoot: Optional[Union[str, ButlerURI]] = None,
+        writeable: bool = True,
+        defaults: Optional[RegistryDefaults] = None,
+    ) -> Registry:
         """Create `Registry` subclass instance from `config`.
 
         Registry database must be initialized prior to calling this method.
@@ -189,8 +177,12 @@ class SqlRegistry(Registry):
         config = cls.forceRegistryConfig(config)
         config.replaceRoot(butlerRoot)
         DatabaseClass = config.getDatabaseClass()
-        database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
-                                         namespace=config.get("namespace"), writeable=writeable)
+        database = DatabaseClass.fromUri(
+            str(config.connectionString),
+            origin=config.get("origin", 0),
+            namespace=config.get("namespace"),
+            writeable=writeable,
+        )
         managerTypes = RegistryManagerTypes.fromConfig(config)
         managers = managerTypes.loadRepo(database)
         if defaults is None:
@@ -327,8 +319,9 @@ class SqlRegistry(Registry):
         """
         self._managers.opaque[tableName].delete(where.keys(), where)
 
-    def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED,
-                           doc: Optional[str] = None) -> bool:
+    def registerCollection(
+        self, name: str, type: CollectionType = CollectionType.TAGGED, doc: Optional[str] = None
+    ) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         _, registered = self._managers.collections.register(name, type, doc=doc)
         return registered
@@ -400,27 +393,39 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.datasets.supportsIdGenerationMode(mode)
 
-    def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
-                    collections: Any = None, timespan: Optional[Timespan] = None,
-                    **kwargs: Any) -> Optional[DatasetRef]:
+    def findDataset(
+        self,
+        datasetType: Union[DatasetType, str],
+        dataId: Optional[DataId] = None,
+        *,
+        collections: Any = None,
+        timespan: Optional[Timespan] = None,
+        **kwargs: Any,
+    ) -> Optional[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if isinstance(datasetType, DatasetType):
             storage = self._managers.datasets[datasetType.name]
         else:
             storage = self._managers.datasets[datasetType]
-        dataId = DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions,
-                                            universe=self.dimensions, defaults=self.defaults.dataId,
-                                            **kwargs)
+        dataId = DataCoordinate.standardize(
+            dataId,
+            graph=storage.datasetType.dimensions,
+            universe=self.dimensions,
+            defaults=self.defaults.dataId,
+            **kwargs,
+        )
         if collections is None:
             if not self.defaults.collections:
-                raise TypeError("No collections provided to findDataset, "
-                                "and no defaults from registry construction.")
+                raise TypeError(
+                    "No collections provided to findDataset, and no defaults from registry construction."
+                )
             collections = self.defaults.collections
         else:
             collections = CollectionSearch.fromExpression(collections)
         for collectionRecord in collections.iter(self._managers.collections):
-            if (collectionRecord.type is CollectionType.CALIBRATION
-                    and (not storage.datasetType.isCalibration() or timespan is None)):
+            if collectionRecord.type is CollectionType.CALIBRATION and (
+                not storage.datasetType.isCalibration() or timespan is None
+            ):
                 continue
             result = storage.find(collectionRecord, dataId, timespan=timespan)
             if result is not None:
@@ -429,9 +434,14 @@ class SqlRegistry(Registry):
         return None
 
     @transactional
-    def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
-                       run: Optional[str] = None, expand: bool = True,
-                       idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE) -> List[DatasetRef]:
+    def insertDatasets(
+        self,
+        datasetType: Union[DatasetType, str],
+        dataIds: Iterable[DataId],
+        run: Optional[str] = None,
+        expand: bool = True,
+        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+    ) -> List[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if isinstance(datasetType, DatasetType):
             storage = self._managers.datasets.find(datasetType.name)
@@ -443,8 +453,9 @@ class SqlRegistry(Registry):
                 raise LookupError(f"DatasetType with name '{datasetType}' has not been registered.")
         if run is None:
             if self.defaults.run is None:
-                raise TypeError("No run provided to insertDatasets, "
-                                "and no default from registry construction.")
+                raise TypeError(
+                    "No run provided to insertDatasets, and no default from registry construction."
+                )
             run = self.defaults.run
         runRecord = self._managers.collections.find(run)
         if runRecord.type is not CollectionType.RUN:
@@ -452,27 +463,35 @@ class SqlRegistry(Registry):
         assert isinstance(runRecord, RunRecord)
         progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
         if expand:
-            expandedDataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions)
-                               for dataId in progress.wrap(dataIds,
-                                                           f"Expanding {storage.datasetType.name} data IDs")]
+            expandedDataIds = [
+                self.expandDataId(dataId, graph=storage.datasetType.dimensions)
+                for dataId in progress.wrap(dataIds, f"Expanding {storage.datasetType.name} data IDs")
+            ]
         else:
-            expandedDataIds = [DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions)
-                               for dataId in dataIds]
+            expandedDataIds = [
+                DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions) for dataId in dataIds
+            ]
         try:
             refs = list(storage.insert(runRecord, expandedDataIds, idGenerationMode))
         except sqlalchemy.exc.IntegrityError as err:
-            raise ConflictingDefinitionError(f"A database constraint failure was triggered by inserting "
-                                             f"one or more datasets of type {storage.datasetType} into "
-                                             f"collection '{run}'. "
-                                             f"This probably means a dataset with the same data ID "
-                                             f"and dataset type already exists, but it may also mean a "
-                                             f"dimension row is missing.") from err
+            raise ConflictingDefinitionError(
+                f"A database constraint failure was triggered by inserting "
+                f"one or more datasets of type {storage.datasetType} into "
+                f"collection '{run}'. "
+                f"This probably means a dataset with the same data ID "
+                f"and dataset type already exists, but it may also mean a "
+                f"dimension row is missing."
+            ) from err
         return refs
 
     @transactional
-    def _importDatasets(self, datasets: Iterable[DatasetRef], expand: bool = True,
-                        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
-                        reuseIds: bool = False) -> List[DatasetRef]:
+    def _importDatasets(
+        self,
+        datasets: Iterable[DatasetRef],
+        expand: bool = True,
+        idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+        reuseIds: bool = False,
+    ) -> List[DatasetRef]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         datasets = list(datasets)
         if not datasets:
@@ -497,21 +516,25 @@ class SqlRegistry(Registry):
         run = runs.pop()
         if run is None:
             if self.defaults.run is None:
-                raise TypeError("No run provided to ingestDatasets, "
-                                "and no default from registry construction.")
+                raise TypeError(
+                    "No run provided to ingestDatasets, and no default from registry construction."
+                )
             run = self.defaults.run
 
         runRecord = self._managers.collections.find(run)
         if runRecord.type is not CollectionType.RUN:
-            raise TypeError(f"Given collection '{runRecord.name}' is of type {runRecord.type.name};"
-                            " RUN collection required.")
+            raise TypeError(
+                f"Given collection '{runRecord.name}' is of type {runRecord.type.name};"
+                " RUN collection required."
+            )
         assert isinstance(runRecord, RunRecord)
 
         progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
         if expand:
             expandedDatasets = [
                 dataset.expanded(self.expandDataId(dataset.dataId, graph=storage.datasetType.dimensions))
-                for dataset in progress.wrap(datasets, f"Expanding {storage.datasetType.name} data IDs")]
+                for dataset in progress.wrap(datasets, f"Expanding {storage.datasetType.name} data IDs")
+            ]
         else:
             expandedDatasets = [
                 DatasetRef(datasetType, dataset.dataId, id=dataset.id, run=dataset.run, conform=True)
@@ -521,12 +544,14 @@ class SqlRegistry(Registry):
         try:
             refs = list(storage.import_(runRecord, expandedDatasets, idGenerationMode, reuseIds))
         except sqlalchemy.exc.IntegrityError as err:
-            raise ConflictingDefinitionError(f"A database constraint failure was triggered by inserting "
-                                             f"one or more datasets of type {storage.datasetType} into "
-                                             f"collection '{run}'. "
-                                             f"This probably means a dataset with the same data ID "
-                                             f"and dataset type already exists, but it may also mean a "
-                                             f"dimension row is missing.") from err
+            raise ConflictingDefinitionError(
+                f"A database constraint failure was triggered by inserting "
+                f"one or more datasets of type {storage.datasetType} into "
+                f"collection '{run}'. "
+                f"This probably means a dataset with the same data ID "
+                f"and dataset type already exists, but it may also mean a "
+                f"dimension row is missing."
+            ) from err
         return refs
 
     def getDataset(self, id: DatasetId) -> Optional[DatasetRef]:
@@ -537,14 +562,16 @@ class SqlRegistry(Registry):
     def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         progress = Progress("lsst.daf.butler.Registry.removeDatasets", level=logging.DEBUG)
-        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
-                                                                  desc="Removing datasets by type"):
+        for datasetType, refsForType in progress.iter_item_chunks(
+            DatasetRef.groupByType(refs).items(), desc="Removing datasets by type"
+        ):
             storage = self._managers.datasets[datasetType.name]
             try:
                 storage.delete(refsForType)
             except sqlalchemy.exc.IntegrityError as err:
-                raise OrphanedRecordError("One or more datasets is still "
-                                          "present in one or more Datastores.") from err
+                raise OrphanedRecordError(
+                    "One or more datasets is still present in one or more Datastores."
+                ) from err
 
     @transactional
     def associate(self, collection: str, refs: Iterable[DatasetRef]) -> None:
@@ -553,8 +580,9 @@ class SqlRegistry(Registry):
         collectionRecord = self._managers.collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
-        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
-                                                                  desc="Associating datasets by type"):
+        for datasetType, refsForType in progress.iter_item_chunks(
+            DatasetRef.groupByType(refs).items(), desc="Associating datasets by type"
+        ):
             storage = self._managers.datasets[datasetType.name]
             try:
                 storage.associate(collectionRecord, refsForType)
@@ -572,10 +600,12 @@ class SqlRegistry(Registry):
         progress = Progress("lsst.daf.butler.Registry.disassociate", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
-            raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}; "
-                            "expected TAGGED.")
-        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
-                                                                  desc="Disassociating datasets by type"):
+            raise TypeError(
+                f"Collection '{collection}' has type {collectionRecord.type.name}; expected TAGGED."
+            )
+        for datasetType, refsForType in progress.iter_item_chunks(
+            DatasetRef.groupByType(refs).items(), desc="Disassociating datasets by type"
+        ):
             storage = self._managers.datasets[datasetType.name]
             storage.disassociate(collectionRecord, refsForType)
 
@@ -584,14 +614,21 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         progress = Progress("lsst.daf.butler.Registry.certify", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
-        for datasetType, refsForType in progress.iter_item_chunks(DatasetRef.groupByType(refs).items(),
-                                                                  desc="Certifying datasets by type"):
+        for datasetType, refsForType in progress.iter_item_chunks(
+            DatasetRef.groupByType(refs).items(), desc="Certifying datasets by type"
+        ):
             storage = self._managers.datasets[datasetType.name]
             storage.certify(collectionRecord, refsForType, timespan)
 
     @transactional
-    def decertify(self, collection: str, datasetType: Union[str, DatasetType], timespan: Timespan, *,
-                  dataIds: Optional[Iterable[DataId]] = None) -> None:
+    def decertify(
+        self,
+        collection: str,
+        datasetType: Union[str, DatasetType],
+        timespan: Timespan,
+        *,
+        dataIds: Optional[Iterable[DataId]] = None,
+    ) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         collectionRecord = self._managers.collections.find(collection)
         if isinstance(datasetType, str):
@@ -600,8 +637,9 @@ class SqlRegistry(Registry):
             storage = self._managers.datasets[datasetType.name]
         standardizedDataIds = None
         if dataIds is not None:
-            standardizedDataIds = [DataCoordinate.standardize(d, graph=storage.datasetType.dimensions)
-                                   for d in dataIds]
+            standardizedDataIds = [
+                DataCoordinate.standardize(d, graph=storage.datasetType.dimensions) for d in dataIds
+            ]
         storage.decertify(collectionRecord, timespan, dataIds=standardizedDataIds)
 
     def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
@@ -620,17 +658,23 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.datastores.findDatastores(ref)
 
-    def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
-                     records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
-                     withDefaults: bool = True,
-                     **kwargs: Any) -> DataCoordinate:
+    def expandDataId(
+        self,
+        dataId: Optional[DataId] = None,
+        *,
+        graph: Optional[DimensionGraph] = None,
+        records: Optional[NameLookupMapping[DimensionElement, Optional[DimensionRecord]]] = None,
+        withDefaults: bool = True,
+        **kwargs: Any,
+    ) -> DataCoordinate:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if not withDefaults:
             defaults = None
         else:
             defaults = self.defaults.dataId
-        standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions,
-                                                  defaults=defaults, **kwargs)
+        standardized = DataCoordinate.standardize(
+            dataId, graph=graph, universe=self.dimensions, defaults=defaults, **kwargs
+        )
         if standardized.hasRecords():
             return standardized
         if records is None:
@@ -647,9 +691,7 @@ class SqlRegistry(Registry):
             if record is ...:
                 if isinstance(element, Dimension) and keys.get(element.name) is None:
                     if element in standardized.graph.required:
-                        raise LookupError(
-                            f"No value or null value for required dimension {element.name}."
-                        )
+                        raise LookupError(f"No value or null value for required dimension {element.name}.")
                     keys[element.name] = None
                     record = None
                 else:
@@ -680,33 +722,40 @@ class SqlRegistry(Registry):
                     raise InconsistentDataIdError(
                         f"Could not fetch record for element {element.name} via keys {keys}, ",
                         "but it is marked alwaysJoin=True; this means one or more dimensions are not "
-                        "related."
+                        "related.",
                     )
                 for d in element.implied:
                     keys.setdefault(d.name, None)
                     records.setdefault(d.name, None)
         return DataCoordinate.standardize(keys, graph=standardized.graph).expanded(records=records)
 
-    def insertDimensionData(self, element: Union[DimensionElement, str],
-                            *data: Union[Mapping[str, Any], DimensionRecord],
-                            conform: bool = True,
-                            replace: bool = False) -> None:
+    def insertDimensionData(
+        self,
+        element: Union[DimensionElement, str],
+        *data: Union[Mapping[str, Any], DimensionRecord],
+        conform: bool = True,
+        replace: bool = False,
+    ) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if conform:
             if isinstance(element, str):
                 element = self.dimensions[element]
-            records = [row if isinstance(row, DimensionRecord) else element.RecordClass(**row)
-                       for row in data]
+            records = [
+                row if isinstance(row, DimensionRecord) else element.RecordClass(**row) for row in data
+            ]
         else:
             # Ignore typing since caller said to trust them with conform=False.
             records = data  # type: ignore
         storage = self._managers.dimensions[element]  # type: ignore
         storage.insert(*records, replace=replace)
 
-    def syncDimensionData(self, element: Union[DimensionElement, str],
-                          row: Union[Mapping[str, Any], DimensionRecord],
-                          conform: bool = True,
-                          update: bool = False) -> Union[bool, Dict[str, Any]]:
+    def syncDimensionData(
+        self,
+        element: Union[DimensionElement, str],
+        row: Union[Mapping[str, Any], DimensionRecord],
+        conform: bool = True,
+        update: bool = False,
+    ) -> Union[bool, Dict[str, Any]]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if conform:
             if isinstance(element, str):
@@ -718,9 +767,13 @@ class SqlRegistry(Registry):
         storage = self._managers.dimensions[element]  # type: ignore
         return storage.sync(record, update=update)
 
-    def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None,
-                          missing: Optional[List[str]] = None,
-                          ) -> Iterator[DatasetType]:
+    def queryDatasetTypes(
+        self,
+        expression: Any = ...,
+        *,
+        components: Optional[bool] = None,
+        missing: Optional[List[str]] = None,
+    ) -> Iterator[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
         if wildcard is Ellipsis:
@@ -732,8 +785,10 @@ class SqlRegistry(Registry):
                     try:
                         componentsForDatasetType = datasetType.makeAllComponentDatasetTypes()
                     except KeyError as err:
-                        _LOG.warning(f"Could not load storage class {err} for {datasetType.name}; "
-                                     "if it has components they will not be included in query results.")
+                        _LOG.warning(
+                            f"Could not load storage class {err} for {datasetType.name}; "
+                            "if it has components they will not be included in query results."
+                        )
                     else:
                         yield from componentsForDatasetType
             return
@@ -757,8 +812,10 @@ class SqlRegistry(Registry):
                 try:
                     allDatasetTypes.extend(registeredDatasetType.makeAllComponentDatasetTypes())
                 except KeyError as err:
-                    _LOG.warning(f"Could not load storage class {err} for {registeredDatasetType.name}; "
-                                 "if it has components they will not be included in query results.")
+                    _LOG.warning(
+                        f"Could not load storage class {err} for {registeredDatasetType.name}; "
+                        "if it has components they will not be included in query results."
+                    )
                 for datasetType in allDatasetTypes:
                     if datasetType.name in done:
                         continue
@@ -791,12 +848,17 @@ class SqlRegistry(Registry):
         # ticket will take care of that.
         query = CollectionQuery.fromExpression(expression)
         collectionTypes = ensure_iterable(collectionTypes)
-        for record in query.iter(self._managers.collections, collectionTypes=frozenset(collectionTypes),
-                                 flattenChains=flattenChains, includeChains=includeChains):
+        for record in query.iter(
+            self._managers.collections,
+            collectionTypes=frozenset(collectionTypes),
+            flattenChains=flattenChains,
+            includeChains=includeChains,
+        ):
             yield record.name
 
-    def _makeQueryBuilder(self, summary: queries.QuerySummary,
-                          doomed_by: Iterable[str] = ()) -> queries.QueryBuilder:
+    def _makeQueryBuilder(
+        self, summary: queries.QuerySummary, doomed_by: Iterable[str] = ()
+    ) -> queries.QueryBuilder:
         """Return a `QueryBuilder` instance capable of constructing and
         managing more complex queries than those obtainable via `Registry`
         interfaces.
@@ -832,23 +894,28 @@ class SqlRegistry(Registry):
             doomed_by=doomed_by,
         )
 
-    def queryDatasets(self, datasetType: Any, *,
-                      collections: Any = None,
-                      dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
-                      dataId: Optional[DataId] = None,
-                      where: Optional[str] = None,
-                      findFirst: bool = False,
-                      components: Optional[bool] = None,
-                      bind: Optional[Mapping[str, Any]] = None,
-                      check: bool = True,
-                      **kwargs: Any) -> queries.DatasetQueryResults:
+    def queryDatasets(
+        self,
+        datasetType: Any,
+        *,
+        collections: Any = None,
+        dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
+        dataId: Optional[DataId] = None,
+        where: Optional[str] = None,
+        findFirst: bool = False,
+        components: Optional[bool] = None,
+        bind: Optional[Mapping[str, Any]] = None,
+        check: bool = True,
+        **kwargs: Any,
+    ) -> queries.DatasetQueryResults:
         # Docstring inherited from lsst.daf.butler.registry.Registry
 
         # Standardize the collections expression.
         if collections is None:
             if not self.defaults.collections:
-                raise TypeError("No collections provided to findDataset, "
-                                "and no defaults from registry construction.")
+                raise TypeError(
+                    "No collections provided to findDataset, and no defaults from registry construction."
+                )
             collections = self.defaults.collections
         elif findFirst:
             collections = CollectionSearch.fromExpression(collections)
@@ -864,8 +931,7 @@ class SqlRegistry(Registry):
         # and we'll run the query directly.
         composition: Optional[
             Dict[
-                DatasetType,  # parent dataset type
-                List[Optional[str]]  # component name, or None for parent
+                DatasetType, List[Optional[str]]  # parent dataset type  # component name, or None for parent
             ]
         ] = None
         if not isinstance(datasetType, DatasetType):
@@ -884,8 +950,10 @@ class SqlRegistry(Registry):
             if not composition:
                 return queries.ChainedDatasetQueryResults(
                     [],
-                    doomed_by=[f"No registered dataset type matching {t!r} found."
-                               for t in ensure_iterable(datasetType)],
+                    doomed_by=[
+                        f"No registered dataset type matching {t!r} found."
+                        for t in ensure_iterable(datasetType)
+                    ],
                 )
         elif datasetType.isComponent():
             # We were given a true DatasetType instance, but it's a component.
@@ -907,11 +975,10 @@ class SqlRegistry(Registry):
                     findFirst=findFirst,
                     check=check,
                 )
-                assert isinstance(parentResults, queries.ParentDatasetQueryResults), \
-                    "Should always be true if passing in a DatasetType instance, and we are."
-                chain.append(
-                    parentResults.withComponents(componentNames)
-                )
+                assert isinstance(
+                    parentResults, queries.ParentDatasetQueryResults
+                ), "Should always be true if passing in a DatasetType instance, and we are."
+                chain.append(parentResults.withComponents(componentNames))
             return queries.ChainedDatasetQueryResults(chain)
         # If we get here, there's no need to recurse (or we are already
         # recursing; there can only ever be one level of recursion).
@@ -941,15 +1008,19 @@ class SqlRegistry(Registry):
         query = builder.finish()
         return queries.ParentDatasetQueryResults(self._db, query, components=[None], datasetType=datasetType)
 
-    def queryDataIds(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
-                     dataId: Optional[DataId] = None,
-                     datasets: Any = None,
-                     collections: Any = None,
-                     where: Optional[str] = None,
-                     components: Optional[bool] = None,
-                     bind: Optional[Mapping[str, Any]] = None,
-                     check: bool = True,
-                     **kwargs: Any) -> queries.DataCoordinateQueryResults:
+    def queryDataIds(
+        self,
+        dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str],
+        *,
+        dataId: Optional[DataId] = None,
+        datasets: Any = None,
+        collections: Any = None,
+        where: Optional[str] = None,
+        components: Optional[bool] = None,
+        bind: Optional[Mapping[str, Any]] = None,
+        check: bool = True,
+        **kwargs: Any,
+    ) -> queries.DataCoordinateQueryResults:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         dimensions = ensure_iterable(dimensions)
         standardizedDataId = self.expandDataId(dataId, **kwargs)
@@ -978,10 +1049,10 @@ class SqlRegistry(Registry):
         elif collections:
             raise TypeError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
 
-        def query_factory(order_by: Optional[Iterable[str]] = None,
-                          limit: Optional[Tuple[int, Optional[int]]] = None) -> Query:
-            """Construct the Query object that generates query results.
-            """
+        def query_factory(
+            order_by: Optional[Iterable[str]] = None, limit: Optional[Tuple[int, Optional[int]]] = None
+        ) -> Query:
+            """Construct the Query object that generates query results."""
             summary = queries.QuerySummary(
                 requested=requestedDimensions,
                 dataId=standardizedDataId,
@@ -991,36 +1062,54 @@ class SqlRegistry(Registry):
                 check=check,
                 datasets=standardizedDatasetTypes,
                 order_by=order_by,
-                limit=limit
+                limit=limit,
             )
             builder = self._makeQueryBuilder(
-                summary,
-                doomed_by=[f"Dataset type {name} is not registered." for name in missing]
+                summary, doomed_by=[f"Dataset type {name} is not registered." for name in missing]
             )
             for datasetType in standardizedDatasetTypes:
-                builder.joinDataset(datasetType, collections, isResult=False,)
+                builder.joinDataset(
+                    datasetType,
+                    collections,
+                    isResult=False,
+                )
             return builder.finish()
 
         return queries.DataCoordinateQueryResults(self._db, query_factory, requestedDimensions)
 
-    def queryDimensionRecords(self, element: Union[DimensionElement, str], *,
-                              dataId: Optional[DataId] = None,
-                              datasets: Any = None,
-                              collections: Any = None,
-                              where: Optional[str] = None,
-                              components: Optional[bool] = None,
-                              bind: Optional[Mapping[str, Any]] = None,
-                              check: bool = True,
-                              **kwargs: Any) -> queries.DimensionRecordQueryResults:
+    def queryDimensionRecords(
+        self,
+        element: Union[DimensionElement, str],
+        *,
+        dataId: Optional[DataId] = None,
+        datasets: Any = None,
+        collections: Any = None,
+        where: Optional[str] = None,
+        components: Optional[bool] = None,
+        bind: Optional[Mapping[str, Any]] = None,
+        check: bool = True,
+        **kwargs: Any,
+    ) -> queries.DimensionRecordQueryResults:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if not isinstance(element, DimensionElement):
             try:
                 element = self.dimensions[element]
             except KeyError as e:
-                raise KeyError(f"No such dimension '{element}', available dimensions: "
-                               + str(self.dimensions.getStaticElements())) from e
-        dataIds = self.queryDataIds(element.graph, dataId=dataId, datasets=datasets, collections=collections,
-                                    where=where, components=components, bind=bind, check=check, **kwargs)
+                raise KeyError(
+                    f"No such dimension '{element}', available dimensions: "
+                    + str(self.dimensions.getStaticElements())
+                ) from e
+        dataIds = self.queryDataIds(
+            element.graph,
+            dataId=dataId,
+            datasets=datasets,
+            collections=collections,
+            where=where,
+            components=components,
+            bind=bind,
+            check=check,
+            **kwargs,
+        )
         return queries.DatabaseDimensionRecordQueryResults(dataIds, self._managers.dimensions[element])
 
     def queryDatasetAssociations(
@@ -1034,8 +1123,9 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if collections is None:
             if not self.defaults.collections:
-                raise TypeError("No collections provided to findDataset, "
-                                "and no defaults from registry construction.")
+                raise TypeError(
+                    "No collections provided to findDataset, and no defaults from registry construction."
+                )
             collections = self.defaults.collections
         else:
             collections = CollectionQuery.fromExpression(collections)
@@ -1044,18 +1134,19 @@ class SqlRegistry(Registry):
             storage = self._managers.datasets[datasetType]
         else:
             storage = self._managers.datasets[datasetType.name]
-        for collectionRecord in collections.iter(self._managers.collections,
-                                                 collectionTypes=frozenset(collectionTypes),
-                                                 flattenChains=flattenChains):
+        for collectionRecord in collections.iter(
+            self._managers.collections,
+            collectionTypes=frozenset(collectionTypes),
+            flattenChains=flattenChains,
+        ):
             query = storage.select(collectionRecord)
             for row in self._db.query(query.combine()).mappings():
                 dataId = DataCoordinate.fromRequiredValues(
                     storage.datasetType.dimensions,
-                    tuple(row[name] for name in storage.datasetType.dimensions.required.names)
+                    tuple(row[name] for name in storage.datasetType.dimensions.required.names),
                 )
                 runRecord = self._managers.collections[row[self._managers.collections.getRunForeignKeyName()]]
-                ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name,
-                                 conform=False)
+                ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name, conform=False)
                 if collectionRecord.type is CollectionType.CALIBRATION:
                     timespan = TimespanReprClass.extract(row)
                 else:

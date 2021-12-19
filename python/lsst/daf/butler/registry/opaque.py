@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
+
 """The default concrete implementations of the classes that manage
 opaque tables for `Registry`.
 """
@@ -26,27 +27,18 @@ opaque tables for `Registry`.
 __all__ = ["ByNameOpaqueTableStorage", "ByNameOpaqueTableStorageManager"]
 
 import itertools
-from typing import (
-    Any,
-    ClassVar,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-)
+from typing import Any, ClassVar, Dict, Iterable, Iterator, List, Optional
 
 import sqlalchemy
 
-from ..core.ddl import TableSpec, FieldSpec
+from ..core.ddl import FieldSpec, TableSpec
 from .interfaces import (
     Database,
-    OpaqueTableStorageManager,
     OpaqueTableStorage,
+    OpaqueTableStorageManager,
     StaticTablesContext,
-    VersionTuple
+    VersionTuple,
 )
-
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(0, 2, 0)
@@ -70,6 +62,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         created in the namespace managed by ``db`` (this is the responsibility
         of `ByNameOpaqueTableStorageManager`).
     """
+
     def __init__(self, *, db: Database, name: str, table: sqlalchemy.schema.Table):
         super().__init__(name=name)
         self._db = db
@@ -82,16 +75,16 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
     def fetch(self, **where: Any) -> Iterator[dict]:
         # Docstring inherited from OpaqueTableStorage.
 
-        def _batch_in_clause(column: sqlalchemy.schema.Column, values: Iterable[Any]
-                             ) -> Iterator[sqlalchemy.sql.expression.ClauseElement]:
-            """Split one long IN clause into a series of shorter ones.
-            """
+        def _batch_in_clause(
+            column: sqlalchemy.schema.Column, values: Iterable[Any]
+        ) -> Iterator[sqlalchemy.sql.expression.ClauseElement]:
+            """Split one long IN clause into a series of shorter ones."""
             in_limit = 1000
             # We have to remove possible duplicates from values; and in many
             # cases it should be helpful to order the items in the clause.
             values = sorted(set(values))
             for iposn in range(0, len(values), in_limit):
-                in_clause = column.in_(values[iposn:iposn + in_limit])
+                in_clause = column.in_(values[iposn : iposn + in_limit])
                 yield in_clause
 
         def _batch_in_clauses(**where: Any) -> Iterator[sqlalchemy.sql.expression.ClauseElement]:
@@ -141,6 +134,7 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
         SQLAlchemy representation of the table that records which opaque
         logical tables exist.
     """
+
     def __init__(self, db: Database, metaTable: sqlalchemy.schema.Table):
         self._db = db
         self._metaTable = metaTable

@@ -29,8 +29,7 @@ from lsst.daf.butler import ddl, time_utils
 
 
 class AstropyTimeNsecTaiTestCase(unittest.TestCase):
-    """A test case for AstropyTimeNsecTai class
-    """
+    """A test case for AstropyTimeNsecTai class"""
 
     def setUp(self):
         self.decor = ddl.AstropyTimeNsecTai()
@@ -38,8 +37,7 @@ class AstropyTimeNsecTaiTestCase(unittest.TestCase):
         self.dialect = None
 
     def test_value_none(self):
-        """Tests for converting None (to None).
-        """
+        """Tests for converting None (to None)."""
         value = self.decor.process_bind_param(None, self.dialect)
         self.assertIsNone(value)
 
@@ -47,8 +45,7 @@ class AstropyTimeNsecTaiTestCase(unittest.TestCase):
         self.assertIsNone(value)
 
     def test_time_before_epoch(self):
-        """Tests for converting None in bound parameters.
-        """
+        """Tests for converting None in bound parameters."""
         time = Time("1950-01-01T00:00:00", format="isot", scale="tai")
         value = self.decor.process_bind_param(time, self.dialect)
         self.assertEqual(value, 0)
@@ -57,8 +54,7 @@ class AstropyTimeNsecTaiTestCase(unittest.TestCase):
         self.assertEqual(value, time_utils.TimeConverter().epoch)
 
     def test_max_time(self):
-        """Tests for converting None in bound parameters.
-        """
+        """Tests for converting None in bound parameters."""
         # there are rounding issues, need more complex comparison
         time = Time("2101-01-01T00:00:00", format="isot", scale="tai")
         value = self.decor.process_bind_param(time, self.dialect)
@@ -67,8 +63,7 @@ class AstropyTimeNsecTaiTestCase(unittest.TestCase):
         self.assertEqual(value, value_max)
 
     def test_round_trip(self):
-        """Test precision of round-trip conversion.
-        """
+        """Test precision of round-trip conversion."""
         # do tests at random points between epoch and max. time
         times = [
             "1970-01-01T12:00:00.123",

@@ -28,25 +28,12 @@ __all__ = [
     "StaticTablesContext",
 ]
 
+import uuid
+import warnings
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from contextlib import contextmanager
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Type,
-    Union,
-)
-import uuid
-import warnings
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple, Type, Union
 
 import astropy.time
 import sqlalchemy
@@ -78,9 +65,11 @@ def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: Li
     """
     columnNames = [c["name"] for c in inspection]
     if spec.fields.names != set(columnNames):
-        raise DatabaseConflictError(f"Table '{name}' exists but is defined differently in the database; "
-                                    f"specification has columns {list(spec.fields.names)}, while the "
-                                    f"table in the database has {columnNames}.")
+        raise DatabaseConflictError(
+            f"Table '{name}' exists but is defined differently in the database; "
+            f"specification has columns {list(spec.fields.names)}, while the "
+            f"table in the database has {columnNames}."
+        )
 
 
 class ReadOnlyDatabaseError(RuntimeError):
@@ -127,8 +116,9 @@ class StaticTablesContext:
         """
         name = self._db._mangleTableName(name)
         if name in self._tableNames:
-            _checkExistingTableDefinition(name, spec, self._inspector.get_columns(name,
-                                                                                  schema=self._db.namespace))
+            _checkExistingTableDefinition(
+                name, spec, self._inspector.get_columns(name, schema=self._db.namespace)
+            )
         table = self._db._convertTableSpec(name, spec, self._db._metadata)
         for foreignKeySpec in spec.foreignKeys:
             self._foreignKeys.append(
@@ -153,8 +143,9 @@ class StaticTablesContext:
         is just a factory for `type` objects, not an actual type itself,
         we cannot represent this with type annotations.
         """
-        return specs._make(self.addTable(name, spec)                     # type: ignore
-                           for name, spec in zip(specs._fields, specs))  # type: ignore
+        return specs._make(  # type: ignore
+            self.addTable(name, spec) for name, spec in zip(specs._fields, specs)  # type: ignore
+        )
 
     def addInitializer(self, initializer: Callable[[Database], None]) -> None:
         """Add a method that does one-time initialization of a database.
@@ -197,6 +188,7 @@ class Session:
     lifetime of a session). Potentially most of the database API could be
     associated with a Session class.
     """
+
     def __init__(self, db: Database):
         self._db = db
 
@@ -236,15 +228,17 @@ class Session:
         """
         if name is None:
             name = f"tmp_{uuid.uuid4().hex}"
-        table = self._db._convertTableSpec(name, spec, self._db._metadata, prefixes=['TEMPORARY'],
-                                           schema=sqlalchemy.schema.BLANK_SCHEMA)
+        table = self._db._convertTableSpec(
+            name, spec, self._db._metadata, prefixes=["TEMPORARY"], schema=sqlalchemy.schema.BLANK_SCHEMA
+        )
         if table.key in self._db._tempTables:
             if table.key != name:
-                raise ValueError(f"A temporary table with name {name} (transformed to {table.key} by "
-                                 f"Database) already exists.")
+                raise ValueError(
+                    f"A temporary table with name {name} (transformed to {table.key} by "
+                    f"Database) already exists."
+                )
         for foreignKeySpec in spec.foreignKeys:
-            table.append_constraint(self._db._convertForeignKeySpec(name, foreignKeySpec,
-                                                                    self._db._metadata))
+            table.append_constraint(self._db._convertForeignKeySpec(name, foreignKeySpec, self._db._metadata))
         with self._db._connection() as connection:
             table.create(connection)
         self._db._tempTables.add(table.key)
@@ -312,8 +306,7 @@ class Database(ABC):
     ``_connection``.
     """
 
-    def __init__(self, *, origin: int, engine: sqlalchemy.engine.Engine,
-                 namespace: Optional[str] = None):
+    def __init__(self, *, origin: int, engine: sqlalchemy.engine.Engine, namespace: Optional[str] = None):
         self.origin = origin
         self.namespace = namespace
         self._engine = engine
@@ -341,8 +334,9 @@ class Database(ABC):
         return None
 
     @classmethod
-    def fromUri(cls, uri: str, *, origin: int, namespace: Optional[str] = None,
-                writeable: bool = True) -> Database:
+    def fromUri(
+        cls, uri: str, *, origin: int, namespace: Optional[str] = None, writeable: bool = True
+    ) -> Database:
         """Construct a database from a SQLAlchemy URI.
 
         Parameters
@@ -366,10 +360,9 @@ class Database(ABC):
         db : `Database`
             A new `Database` instance.
         """
-        return cls.fromEngine(cls.makeEngine(uri, writeable=writeable),
-                              origin=origin,
-                              namespace=namespace,
-                              writeable=writeable)
+        return cls.fromEngine(
+            cls.makeEngine(uri, writeable=writeable), origin=origin, namespace=namespace, writeable=writeable
+        )
 
     @classmethod
     @abstractmethod
@@ -400,8 +393,14 @@ class Database(ABC):
 
     @classmethod
     @abstractmethod
-    def fromEngine(cls, engine: sqlalchemy.engine.Engine, *, origin: int,
-                   namespace: Optional[str] = None, writeable: bool = True) -> Database:
+    def fromEngine(
+        cls,
+        engine: sqlalchemy.engine.Engine,
+        *,
+        origin: int,
+        namespace: Optional[str] = None,
+        writeable: bool = True,
+    ) -> Database:
         """Create a new `Database` from an existing `sqlalchemy.engine.Engine`.
 
         Parameters
@@ -455,8 +454,13 @@ class Database(ABC):
                 self._tempTables = set()
 
     @contextmanager
-    def transaction(self, *, interrupting: bool = False, savepoint: bool = False,
-                    lock: Iterable[sqlalchemy.schema.Table] = ()) -> Iterator:
+    def transaction(
+        self,
+        *,
+        interrupting: bool = False,
+        savepoint: bool = False,
+        lock: Iterable[sqlalchemy.schema.Table] = (),
+    ) -> Iterator:
         """Return a context manager that represents a transaction.
 
         Parameters
@@ -531,8 +535,7 @@ class Database(ABC):
 
     @contextmanager
     def _connection(self) -> Iterator[sqlalchemy.engine.Connection]:
-        """Return context manager for Connection.
-        """
+        """Return context manager for Connection."""
         if self._session_connection is not None:
             # It means that we are in Session context, but we may not be in
             # transaction context. Start a short transaction in that case.
@@ -548,8 +551,9 @@ class Database(ABC):
                 yield connection
 
     @abstractmethod
-    def _lockTables(self, connection: sqlalchemy.engine.Connection,
-                    tables: Iterable[sqlalchemy.schema.Table] = ()) -> None:
+    def _lockTables(
+        self, connection: sqlalchemy.engine.Connection, tables: Iterable[sqlalchemy.schema.Table] = ()
+    ) -> None:
         """Acquire locks on the given tables.
 
         This is an implementation hook for subclasses, called by `transaction`.
@@ -675,8 +679,7 @@ class Database(ABC):
 
     @abstractmethod
     def isWriteable(self) -> bool:
-        """Return `True` if this database can be modified by this client.
-        """
+        """Return `True` if this database can be modified by this client."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -773,8 +776,9 @@ class Database(ABC):
         # By default we return no additional constraints
         return []
 
-    def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
-                          **kwargs: Any) -> sqlalchemy.schema.Column:
+    def _convertFieldSpec(
+        self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData, **kwargs: Any
+    ) -> sqlalchemy.schema.Column:
         """Convert a `FieldSpec` to a `sqlalchemy.schema.Column`.
 
         Parameters
@@ -802,14 +806,24 @@ class Database(ABC):
             # Generate a sequence to use for auto incrementing for databases
             # that do not support it natively.  This will be ignored by
             # sqlalchemy for databases that do support it.
-            args.append(sqlalchemy.Sequence(self.shrinkDatabaseEntityName(f"{table}_seq_{spec.name}"),
-                                            metadata=metadata))
+            args.append(
+                sqlalchemy.Sequence(
+                    self.shrinkDatabaseEntityName(f"{table}_seq_{spec.name}"), metadata=metadata
+                )
+            )
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {table}.{spec.name}."
-        return sqlalchemy.schema.Column(*args, nullable=spec.nullable, primary_key=spec.primaryKey,
-                                        comment=spec.doc, server_default=spec.default, **kwargs)
+        return sqlalchemy.schema.Column(
+            *args,
+            nullable=spec.nullable,
+            primary_key=spec.primaryKey,
+            comment=spec.doc,
+            server_default=spec.default,
+            **kwargs,
+        )
 
-    def _convertForeignKeySpec(self, table: str, spec: ddl.ForeignKeySpec, metadata: sqlalchemy.MetaData,
-                               **kwargs: Any) -> sqlalchemy.schema.ForeignKeyConstraint:
+    def _convertForeignKeySpec(
+        self, table: str, spec: ddl.ForeignKeySpec, metadata: sqlalchemy.MetaData, **kwargs: Any
+    ) -> sqlalchemy.schema.ForeignKeyConstraint:
         """Convert a `ForeignKeySpec` to a
         `sqlalchemy.schema.ForeignKeyConstraint`.
 
@@ -834,19 +848,23 @@ class Database(ABC):
             SQLAlchemy representation of the constraint.
         """
         name = self.shrinkDatabaseEntityName(
-            "_".join(["fkey", table, self._mangleTableName(spec.table)]
-                     + list(spec.target) + list(spec.source))
+            "_".join(
+                ["fkey", table, self._mangleTableName(spec.table)] + list(spec.target) + list(spec.source)
+            )
         )
         return sqlalchemy.schema.ForeignKeyConstraint(
             spec.source,
             [f"{self._mangleTableName(spec.table)}.{col}" for col in spec.target],
             name=name,
-            ondelete=spec.onDelete
+            ondelete=spec.onDelete,
         )
 
-    def _convertExclusionConstraintSpec(self, table: str,
-                                        spec: Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...],
-                                        metadata: sqlalchemy.MetaData) -> sqlalchemy.schema.Constraint:
+    def _convertExclusionConstraintSpec(
+        self,
+        table: str,
+        spec: Tuple[Union[str, Type[TimespanDatabaseRepresentation]], ...],
+        metadata: sqlalchemy.MetaData,
+    ) -> sqlalchemy.schema.Constraint:
         """Convert a `tuple` from `ddl.TableSpec.exclusion` into a SQLAlchemy
         constraint representation.
 
@@ -875,8 +893,9 @@ class Database(ABC):
         """
         raise NotImplementedError(f"Database {self} does not support exclusion constraints.")
 
-    def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
-                          **kwargs: Any) -> sqlalchemy.schema.Table:
+    def _convertTableSpec(
+        self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData, **kwargs: Any
+    ) -> sqlalchemy.schema.Table:
         """Convert a `TableSpec` to a `sqlalchemy.schema.Table`.
 
         Parameters
@@ -916,8 +935,7 @@ class Database(ABC):
         allIndexes = {tuple(fieldSpec.name for fieldSpec in spec.fields if fieldSpec.primaryKey)}
         args.extend(
             sqlalchemy.schema.UniqueConstraint(
-                *columns,
-                name=self.shrinkDatabaseEntityName("_".join([name, "unq"] + list(columns)))
+                *columns, name=self.shrinkDatabaseEntityName("_".join([name, "unq"] + list(columns)))
             )
             for columns in spec.unique
         )
@@ -926,9 +944,10 @@ class Database(ABC):
             sqlalchemy.schema.Index(
                 self.shrinkDatabaseEntityName("_".join([name, "idx"] + list(columns))),
                 *columns,
-                unique=(columns in spec.unique)
+                unique=(columns in spec.unique),
             )
-            for columns in spec.indexes if columns not in allIndexes
+            for columns in spec.indexes
+            if columns not in allIndexes
         )
         allIndexes.update(spec.indexes)
         args.extend(
@@ -936,7 +955,8 @@ class Database(ABC):
                 self.shrinkDatabaseEntityName("_".join((name, "fkidx") + fk.source)),
                 *fk.source,
             )
-            for fk in spec.foreignKeys if fk.addIndex and fk.source not in allIndexes
+            for fk in spec.foreignKeys
+            if fk.addIndex and fk.source not in allIndexes
         )
 
         args.extend(self._convertExclusionConstraintSpec(name, excl, metadata) for excl in spec.exclusion)
@@ -981,8 +1001,9 @@ class Database(ABC):
         """
         # TODO: if _engine is used to make a table then it uses separate
         # connection and should not interfere with current transaction
-        assert self._session_connection is None or not self._session_connection.in_transaction(), \
-            "Table creation interrupts transactions."
+        assert (
+            self._session_connection is None or not self._session_connection.in_transaction()
+        ), "Table creation interrupts transactions."
         assert self._metadata is not None, "Static tables must be declared before dynamic tables."
         table = self.getExistingTable(name, spec)
         if table is not None:
@@ -1035,9 +1056,11 @@ class Database(ABC):
         table = self._metadata.tables.get(name if self.namespace is None else f"{self.namespace}.{name}")
         if table is not None:
             if spec.fields.names != set(table.columns.keys()):
-                raise DatabaseConflictError(f"Table '{name}' has already been defined differently; the new "
-                                            f"specification has columns {list(spec.fields.names)}, while "
-                                            f"the previous definition has {list(table.columns.keys())}.")
+                raise DatabaseConflictError(
+                    f"Table '{name}' has already been defined differently; the new "
+                    f"specification has columns {list(spec.fields.names)}, while "
+                    f"the previous definition has {list(table.columns.keys())}."
+                )
         else:
             inspector = sqlalchemy.inspect(self._engine)
             if name in inspector.get_table_names(schema=self.namespace):
@@ -1106,13 +1129,16 @@ class Database(ABC):
         """
         return SpatialRegionDatabaseRepresentation
 
-    def sync(self, table: sqlalchemy.schema.Table, *,
-             keys: Dict[str, Any],
-             compared: Optional[Dict[str, Any]] = None,
-             extra: Optional[Dict[str, Any]] = None,
-             returning: Optional[Sequence[str]] = None,
-             update: bool = False,
-             ) -> Tuple[Optional[Dict[str, Any]], Union[bool, Dict[str, Any]]]:
+    def sync(
+        self,
+        table: sqlalchemy.schema.Table,
+        *,
+        keys: Dict[str, Any],
+        compared: Optional[Dict[str, Any]] = None,
+        extra: Optional[Dict[str, Any]] = None,
+        returning: Optional[Sequence[str]] = None,
+        update: bool = False,
+    ) -> Tuple[Optional[Dict[str, Any]], Union[bool, Dict[str, Any]]]:
         """Insert into a table as necessary to ensure database contains
         values equivalent to the given ones.
 
@@ -1196,10 +1222,10 @@ class Database(ABC):
                 # Need to select some column, even if we just want to see
                 # how many rows we get back.
                 toSelect.add(next(iter(keys.keys())))
-            selectSql = sqlalchemy.sql.select(
-                *[table.columns[k].label(k) for k in toSelect]
-            ).select_from(table).where(
-                sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()])
+            selectSql = (
+                sqlalchemy.sql.select(*[table.columns[k].label(k) for k in toSelect])
+                .select_from(table)
+                .where(sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()]))
             )
             with self._connection() as connection:
                 fetched = list(connection.execute(selectSql).mappings())
@@ -1214,9 +1240,7 @@ class Database(ABC):
                     return a != b
 
                 inconsistencies = {
-                    k: existing[k]
-                    for k, v in compared.items()
-                    if safeNotEqual(existing[k], v)
+                    k: existing[k] for k, v in compared.items() if safeNotEqual(existing[k], v)
                 }
             else:
                 inconsistencies = {}
@@ -1259,11 +1283,14 @@ class Database(ABC):
                         "unique constraint or primary key used to identify the row in this call."
                     )
                 elif n > 1:
-                    raise RuntimeError(f"Keys passed to sync {keys.keys()} do not comprise a "
-                                       f"unique constraint for table {table.name}.")
+                    raise RuntimeError(
+                        f"Keys passed to sync {keys.keys()} do not comprise a "
+                        f"unique constraint for table {table.name}."
+                    )
                 elif bad:
-                    assert compared is not None, \
-                        "Should not be able to get inconsistencies without comparing."
+                    assert (
+                        compared is not None
+                    ), "Should not be able to get inconsistencies without comparing."
                     if inserted:
                         raise RuntimeError(
                             f"Conflict ({bad}) in sync after successful insert; this is "
@@ -1274,11 +1301,9 @@ class Database(ABC):
                     elif update:
                         with self._connection() as connection:
                             connection.execute(
-                                table.update().where(
-                                    sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()])
-                                ).values(
-                                    **{k: compared[k] for k in bad.keys()}
-                                )
+                                table.update()
+                                .where(sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()]))
+                                .values(**{k: compared[k] for k in bad.keys()})
                             )
                         inserted_or_updated = bad
                     else:
@@ -1308,10 +1333,14 @@ class Database(ABC):
             assert result is not None
             return {k: v for k, v in zip(returning, result)}, inserted_or_updated
 
-    def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
-               select: Optional[sqlalchemy.sql.Select] = None,
-               names: Optional[Iterable[str]] = None,
-               ) -> Optional[List[int]]:
+    def insert(
+        self,
+        table: sqlalchemy.schema.Table,
+        *rows: dict,
+        returnIds: bool = False,
+        select: Optional[sqlalchemy.sql.Select] = None,
+        names: Optional[Iterable[str]] = None,
+    ) -> Optional[List[int]]:
         """Insert one or more rows into a table, optionally returning
         autoincrement primary key values.
 
@@ -1635,8 +1664,9 @@ class Database(ABC):
         with self._connection() as connection:
             return connection.execute(sql, rows).rowcount
 
-    def query(self, sql: sqlalchemy.sql.FromClause,
-              *args: Any, **kwargs: Any) -> sqlalchemy.engine.ResultProxy:
+    def query(
+        self, sql: sqlalchemy.sql.FromClause, *args: Any, **kwargs: Any
+    ) -> sqlalchemy.engine.ResultProxy:
         """Run a SELECT query against the database.
 
         Parameters

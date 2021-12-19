@@ -23,22 +23,13 @@ from __future__ import annotations
 
 """Generic datastore code useful for most datastores."""
 
-__all__ = ("GenericBaseDatastore", )
+__all__ = ("GenericBaseDatastore",)
 
 import logging
 from abc import abstractmethod
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-)
+from typing import TYPE_CHECKING, Any, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from lsst.daf.butler import Datastore, DatasetTypeNotSupportedError
+from lsst.daf.butler import DatasetTypeNotSupportedError, Datastore
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 
 if TYPE_CHECKING:
@@ -62,8 +53,7 @@ class GenericBaseDatastore(Datastore):
         raise NotImplementedError()
 
     @abstractmethod
-    def addStoredItemInfo(self, refs: Iterable[DatasetRef],
-                          infos: Iterable[Any]) -> None:
+    def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[Any]) -> None:
         """Record internal storage information associated with one or more
         datasets.
 
@@ -132,9 +122,13 @@ class GenericBaseDatastore(Datastore):
         self.bridge.insert(registryRefs.values())
         self.addStoredItemInfo(expandedRefs, expandedItemInfos)
 
-    def _post_process_get(self, inMemoryDataset: Any, readStorageClass: StorageClass,
-                          assemblerParams: Optional[Mapping[str, Any]] = None,
-                          isComponent: bool = False) -> Any:
+    def _post_process_get(
+        self,
+        inMemoryDataset: Any,
+        readStorageClass: StorageClass,
+        assemblerParams: Optional[Mapping[str, Any]] = None,
+        isComponent: bool = False,
+    ) -> Any:
         """Given the Python object read from the datastore, manipulate
         it based on the supplied parameters and ensure the Python
         type is correct.
@@ -185,15 +179,17 @@ class GenericBaseDatastore(Datastore):
 
         # Sanity check
         if not isinstance(inMemoryDataset, storageClass.pytype):
-            raise TypeError("Inconsistency between supplied object ({}) "
-                            "and storage class type ({})".format(type(inMemoryDataset),
-                                                                 storageClass.pytype))
+            raise TypeError(
+                "Inconsistency between supplied object ({}) "
+                "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype)
+            )
 
         # Confirm that we can accept this dataset
         if not self.constraints.isAcceptable(ref):
             # Raise rather than use boolean return value.
-            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
-                                               " configuration.")
+            raise DatasetTypeNotSupportedError(
+                f"Dataset {ref} has been rejected by this datastore via configuration."
+            )
 
         return
 

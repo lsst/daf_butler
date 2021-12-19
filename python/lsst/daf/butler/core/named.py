@@ -31,6 +31,7 @@ __all__ = (
 )
 
 from abc import abstractmethod
+from types import MappingProxyType
 from typing import (
     AbstractSet,
     Any,
@@ -47,7 +48,6 @@ from typing import (
     Union,
     ValuesView,
 )
-from types import MappingProxyType
 
 
 class Named(Protocol):
@@ -176,7 +176,10 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
         Raised when multiple keys have the same name.
     """
 
-    __slots__ = ("_dict", "_names",)
+    __slots__ = (
+        "_dict",
+        "_names",
+    )
 
     def __init__(self, *args: Any):
         self._dict: Dict[K, V] = dict(*args)

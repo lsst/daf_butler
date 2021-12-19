@@ -22,30 +22,31 @@
 """Tests for MatplotlibFormatter.
 """
 
-import unittest
 import os
-from random import Random
 import tempfile
+import unittest
+from random import Random
 
 try:
     import matplotlib
+
     matplotlib.use("Agg")  # noqa:E402
     from matplotlib import pyplot
 except ImportError:
     pyplot = None
 
+import filecmp
+
 from lsst.daf.butler import Butler, DatasetType
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
-import filecmp
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-@unittest.skipIf(pyplot is None,
-                 "skipping test because matplotlib import failed")
+@unittest.skipIf(pyplot is None, "skipping test because matplotlib import failed")
 class MatplotlibFormatterTestCase(unittest.TestCase):
-    """Test for MatplotlibFormatter.
-    """
+    """Test for MatplotlibFormatter."""
+
     RANDOM_SEED = 10
 
     def setUp(self):
@@ -59,14 +60,16 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
 
     def testMatplotlibFormatter(self):
         butler = Butler(self.root, run="testrun")
-        datasetType = DatasetType("test_plot", [], "Plot",
-                                  universe=butler.registry.dimensions)
+        datasetType = DatasetType("test_plot", [], "Plot", universe=butler.registry.dimensions)
         butler.registry.registerDatasetType(datasetType)
         # Does not have to be a random image
-        pyplot.imshow([self.rng.sample(range(50), 10),
-                       self.rng.sample(range(50), 10),
-                       self.rng.sample(range(50), 10),
-                       ])
+        pyplot.imshow(
+            [
+                self.rng.sample(range(50), 10),
+                self.rng.sample(range(50), 10),
+                self.rng.sample(range(50), 10),
+            ]
+        )
         ref = butler.put(pyplot.gcf(), datasetType)
         uri = butler.getURI(ref)
 
@@ -74,13 +77,7 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
         with uri.as_local() as local:
             with tempfile.NamedTemporaryFile(suffix=".png") as file:
                 pyplot.gcf().savefig(file.name)
-                self.assertTrue(
-                    filecmp.cmp(
-                        local.ospath,
-                        file.name,
-                        shallow=True
-                    )
-                )
+                self.assertTrue(filecmp.cmp(local.ospath, file.name, shallow=True))
         self.assertTrue(butler.datasetExists(ref))
         with self.assertRaises(ValueError):
             butler.get(ref)

@@ -35,8 +35,8 @@ from ...core import (
     SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
-from ..queries import QueryBuilder
 from ..interfaces import SkyPixDimensionRecordStorage
+from ..queries import QueryBuilder
 
 
 class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
@@ -50,6 +50,7 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
     dimension : `SkyPixDimension`
         The dimension for which this instance will simulate storage.
     """
+
     def __init__(self, dimension: SkyPixDimension):
         self._dimension = dimension
 
@@ -64,7 +65,8 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
 
     def join(
         self,
-        builder: QueryBuilder, *,
+        builder: QueryBuilder,
+        *,
         regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:

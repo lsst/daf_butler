@@ -24,12 +24,7 @@ from __future__ import annotations
 __all__ = ["FileDataset"]
 
 from dataclasses import dataclass
-from typing import (
-    Any,
-    List,
-    Optional,
-    Union,
-)
+from typing import Any, List, Optional, Union
 
 from ._butlerUri import ButlerURI
 from .datasets import DatasetRef
@@ -60,8 +55,13 @@ class FileDataset:
     """A `Formatter` class or fully-qualified name.
     """
 
-    def __init__(self, path: Union[str, ButlerURI], refs: Union[DatasetRef, List[DatasetRef]], *,
-                 formatter: Optional[FormatterParameter] = None):
+    def __init__(
+        self,
+        path: Union[str, ButlerURI],
+        refs: Union[DatasetRef, List[DatasetRef]],
+        *,
+        formatter: Optional[FormatterParameter] = None,
+    ):
         self.path = path
         if isinstance(refs, DatasetRef):
             refs = [refs]

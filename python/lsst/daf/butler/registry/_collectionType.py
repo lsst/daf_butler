@@ -26,12 +26,11 @@ __all__ = [
 ]
 
 import enum
-from typing import FrozenSet, Optional, Iterable
+from typing import FrozenSet, Iterable, Optional
 
 
 class CollectionType(enum.IntEnum):
-    """Enumeration used to label different types of collections.
-    """
+    """Enumeration used to label different types of collections."""
 
     RUN = 1
     """A ``RUN`` collection (also just called a 'run') is the initial
@@ -68,8 +67,7 @@ class CollectionType(enum.IntEnum):
 
     @classmethod
     def all(cls) -> FrozenSet[CollectionType]:
-        """Return a `frozenset` containing all members.
-        """
+        """Return a `frozenset` containing all members."""
         return frozenset(cls.__members__.values())
 
     @classmethod

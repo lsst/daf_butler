@@ -23,27 +23,13 @@ from __future__ import annotations
 
 """Cache management for a datastore."""
 
-__all__ = ("AbstractDatastoreCacheManager",
-           "DatastoreDisabledCacheManager",
-           "DatastoreCacheManager",
-           "DatastoreCacheManagerConfig",
-           )
-
-from typing import (
-    TYPE_CHECKING,
-    Dict,
-    Iterable,
-    Iterator,
-    ItemsView,
-    KeysView,
-    List,
-    Optional,
-    Union,
-    ValuesView,
+__all__ = (
+    "AbstractDatastoreCacheManager",
+    "DatastoreDisabledCacheManager",
+    "DatastoreCacheManager",
+    "DatastoreCacheManagerConfig",
 )
 
-from abc import ABC, abstractmethod
-from collections import defaultdict
 import atexit
 import contextlib
 import datetime
@@ -52,26 +38,39 @@ import logging
 import os
 import shutil
 import tempfile
+from abc import ABC, abstractmethod
+from collections import defaultdict
+from typing import (
+    TYPE_CHECKING,
+    Dict,
+    ItemsView,
+    Iterable,
+    Iterator,
+    KeysView,
+    List,
+    Optional,
+    Union,
+    ValuesView,
+)
 
 from pydantic import BaseModel, PrivateAttr
 
-from .configSupport import processLookupConfigs
-from .config import ConfigSubset
 from ._butlerUri import ButlerURI
+from .config import ConfigSubset
+from .configSupport import processLookupConfigs
 from .datasets import DatasetId, DatasetRef
 
 if TYPE_CHECKING:
-    from .dimensions import DimensionUniverse
-    from .datasets import DatasetType
-    from .storageClass import StorageClass
     from .configSupport import LookupKey
+    from .datasets import DatasetType
+    from .dimensions import DimensionUniverse
+    from .storageClass import StorageClass
 
 log = logging.getLogger(__name__)
 
 
 def remove_cache_directory(directory: str) -> None:
-    """Remove the specified directory and all its contents.
-    """
+    """Remove the specified directory and all its contents."""
     log.debug("Removing temporary cache directory %s", directory)
     shutil.rmtree(directory, ignore_errors=True)
 
@@ -163,8 +162,13 @@ class CacheEntry(BaseModel):
         parts = _parse_cache_name(file_in_cache)
 
         stat = os.stat(file.ospath)
-        return cls(name=file_in_cache, size=stat.st_size, ref=parts["id"], component=parts["component"],
-                   ctime=datetime.datetime.utcfromtimestamp(stat.st_ctime))
+        return cls(
+            name=file_in_cache,
+            size=stat.st_size,
+            ref=parts["id"],
+            component=parts["component"],
+            ctime=datetime.datetime.utcfromtimestamp(stat.st_ctime),
+        )
 
 
 class CacheRegistry(BaseModel):
@@ -251,8 +255,7 @@ class AbstractDatastoreCacheManager(ABC):
         """Return number of cached files tracked by registry."""
         return 0
 
-    def __init__(self, config: Union[str, DatastoreCacheManagerConfig],
-                 universe: DimensionUniverse):
+    def __init__(self, config: Union[str, DatastoreCacheManagerConfig], universe: DimensionUniverse):
         if not isinstance(config, DatastoreCacheManagerConfig):
             config = DatastoreCacheManagerConfig(config)
         assert isinstance(config, DatastoreCacheManagerConfig)
@@ -374,20 +377,21 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
     _temp_exemption_prefix = "exempt/"
 
-    def __init__(self, config: Union[str, DatastoreCacheManagerConfig],
-                 universe: DimensionUniverse):
+    def __init__(self, config: Union[str, DatastoreCacheManagerConfig], universe: DimensionUniverse):
         super().__init__(config, universe)
 
         # Set cache directory if it pre-exists, else defer creation until
         # requested. Allow external override from environment.
         root = os.environ.get("DAF_BUTLER_CACHE_DIRECTORY") or self.config.get("root")
-        self._cache_directory = ButlerURI(root, forceAbsolute=True,
-                                          forceDirectory=True) if root is not None else None
+        self._cache_directory = (
+            ButlerURI(root, forceAbsolute=True, forceDirectory=True) if root is not None else None
+        )
 
         if self._cache_directory:
             if not self._cache_directory.isLocal:
-                raise ValueError("Cache directory must be on a local file system. "
-                                 f"Got: {self._cache_directory}")
+                raise ValueError(
+                    f"Cache directory must be on a local file system. Got: {self._cache_directory}"
+                )
             # Ensure that the cache directory is created. We assume that
             # someone specifying a permanent cache directory will be expecting
             # it to always be there. This will also trigger an error
@@ -416,13 +420,15 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         self._expiration_mode: Optional[str] = expiration_mode
         self._expiration_threshold: Optional[int] = threshold
         if self._expiration_threshold is None and self._expiration_mode is not None:
-            raise ValueError("Cache expiration threshold must be set for expiration mode "
-                             f"{self._expiration_mode}")
+            raise ValueError(
+                f"Cache expiration threshold must be set for expiration mode {self._expiration_mode}"
+            )
 
-        log.debug("Cache configuration:\n- root: %s\n- expiration mode: %s",
-                  self._cache_directory if self._cache_directory else "tmpdir",
-                  f"{self._expiration_mode}={self._expiration_threshold}"
-                  if self._expiration_mode else "disabled")
+        log.debug(
+            "Cache configuration:\n- root: %s\n- expiration mode: %s",
+            self._cache_directory if self._cache_directory else "tmpdir",
+            f"{self._expiration_mode}={self._expiration_threshold}" if self._expiration_mode else "disabled",
+        )
 
         # Files in cache, indexed by path within the cache directory.
         self._cache_entries = CacheRegistry()
@@ -431,8 +437,9 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     def cache_directory(self) -> ButlerURI:
         if self._cache_directory is None:
             # Create on demand.
-            self._cache_directory = ButlerURI(tempfile.mkdtemp(prefix="butler-"), forceDirectory=True,
-                                              isTemporary=True)
+            self._cache_directory = ButlerURI(
+                tempfile.mkdtemp(prefix="butler-"), forceDirectory=True, isTemporary=True
+            )
             log.debug("Creating temporary cache directory at %s", self._cache_directory)
             # Remove when we no longer need it.
             atexit.register(remove_cache_directory, self._cache_directory.ospath)
@@ -603,21 +610,24 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         """
         path_in_cache = cached_location.relative_to(self.cache_directory)
         if path_in_cache is None:
-            raise ValueError(f"Can not register cached file {cached_location} that is not within"
-                             f" the cache directory at {self.cache_directory}.")
+            raise ValueError(
+                f"Can not register cached file {cached_location} that is not within"
+                f" the cache directory at {self.cache_directory}."
+            )
         if path_in_cache in self._cache_entries:
             if can_exist:
                 return path_in_cache
             else:
-                raise ValueError(f"Cached file {cached_location} is already known to the registry"
-                                 " but this was expected to be a new file.")
+                raise ValueError(
+                    f"Cached file {cached_location} is already known to the registry"
+                    " but this was expected to be a new file."
+                )
         details = CacheEntry.from_file(cached_location, root=self.cache_directory)
         self._cache_entries[path_in_cache] = details
         return path_in_cache
 
     def scan_cache(self) -> None:
-        """Scan the cache directory and record information about files.
-        """
+        """Scan the cache directory and record information about files."""
         found = set()
         for file in ButlerURI.findFileResources([self.cache_directory]):
             assert isinstance(file, ButlerURI), "Unexpectedly did not get ButlerURI from iterator"
@@ -636,8 +646,9 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         missing = known_to_cache - found
 
         if missing:
-            log.debug("Entries no longer on disk but thought to be in cache and so removed: %s",
-                      ",".join(missing))
+            log.debug(
+                "Entries no longer on disk but thought to be in cache and so removed: %s", ",".join(missing)
+            )
             for path_in_cache in missing:
                 self._cache_entries.pop(path_in_cache)
 
@@ -687,8 +698,9 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
         # mypy can't be sure we have set a threshold properly
         if self._expiration_threshold is None:
-            log.warning("Requesting cache expiry of mode %s but no threshold set in config.",
-                        self._expiration_mode)
+            log.warning(
+                "Requesting cache expiry of mode %s but no threshold set in config.", self._expiration_mode
+            )
             return
 
         # Sync up cache. There is no file locking involved so for a shared
@@ -761,9 +773,11 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
     def __str__(self) -> str:
         cachedir = self._cache_directory if self._cache_directory else "<tempdir>"
-        return f"{type(self).__name__}@{cachedir} ({self._expiration_mode}={self._expiration_threshold}," \
-            f"default={self._caching_default}) " \
+        return (
+            f"{type(self).__name__}@{cachedir} ({self._expiration_mode}={self._expiration_threshold},"
+            f"default={self._caching_default}) "
             f"n_files={self.file_count}, n_bytes={self.cache_size}"
+        )
 
 
 class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
@@ -778,8 +792,7 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         in lookup keys.
     """
 
-    def __init__(self, config: Union[str, DatastoreCacheManagerConfig],
-                 universe: DimensionUniverse):
+    def __init__(self, config: Union[str, DatastoreCacheManagerConfig], universe: DimensionUniverse):
         return
 
     def should_be_cached(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:

@@ -23,9 +23,10 @@ __all__ = ()
 
 import click
 
+from ... import script
 from ..opt import (
-    collection_type_option,
     collection_argument,
+    collection_type_option,
     collections_argument,
     collections_option,
     components_option,
@@ -48,7 +49,6 @@ from ..opt import (
     verbose_option,
     where_option,
 )
-
 from ..utils import (
     ButlerCommand,
     MWOptionDecorator,
@@ -60,9 +60,6 @@ from ..utils import (
     unwrap,
     where_help,
 )
-
-from ... import script
-
 
 willCreateRepoHelp = "REPO is the URI or path to the new repository. Will be created if it does not exist."
 existingRepoHelp = "REPO is the URI or path to an existing data repository root or configuration file."
@@ -89,15 +86,23 @@ def associate(**kwargs):
 @repo_argument(required=True, help=willCreateRepoHelp)
 @directory_argument(required=True)
 @transfer_option()
-@click.option("--export-file",
-              help="Name for the file that contains database information associated with the exported "
-                   "datasets.  If this is not an absolute path, does not exist in the current working "
-                   "directory, and --dir is provided, it is assumed to be in that directory.  Defaults "
-                   "to \"export.yaml\".",
-              type=click.File("r"))
-@click.option("--skip-dimensions", "-s", type=str, multiple=True, callback=split_commas,
-              metavar=typeStrAcceptsMultiple,
-              help="Dimensions that should be skipped during import")
+@click.option(
+    "--export-file",
+    help="Name for the file that contains database information associated with the exported "
+    "datasets.  If this is not an absolute path, does not exist in the current working "
+    "directory, and --dir is provided, it is assumed to be in that directory.  Defaults "
+    'to "export.yaml".',
+    type=click.File("r"),
+)
+@click.option(
+    "--skip-dimensions",
+    "-s",
+    type=str,
+    multiple=True,
+    callback=split_commas,
+    metavar=typeStrAcceptsMultiple,
+    help="Dimensions that should be skipped during import",
+)
 @click.option("--reuse-ids", is_flag=True, help="Force re-use of imported dataset IDs for integer IDs.")
 @options_file_option()
 def butler_import(*args, **kwargs):
@@ -109,12 +114,23 @@ def butler_import(*args, **kwargs):
 @repo_argument(required=True, help=willCreateRepoHelp)
 @click.option("--seed-config", help="Path to an existing YAML config file to apply (on top of defaults).")
 @click.option("--dimension-config", help="Path to an existing YAML config file with dimension configuration.")
-@click.option("--standalone", is_flag=True, help="Include all defaults in the config file in the repo, "
-              "insulating the repo from changes in package defaults.")
-@click.option("--override", is_flag=True, help="Allow values in the supplied config to override all "
-              "repo settings.")
-@click.option("--outfile", "-f", default=None, type=str, help="Name of output file to receive repository "
-              "configuration. Default is to write butler.yaml into the specified repo.")
+@click.option(
+    "--standalone",
+    is_flag=True,
+    help="Include all defaults in the config file in the repo, "
+    "insulating the repo from changes in package defaults.",
+)
+@click.option(
+    "--override", is_flag=True, help="Allow values in the supplied config to override all repo settings."
+)
+@click.option(
+    "--outfile",
+    "-f",
+    default=None,
+    type=str,
+    help="Name of output file to receive repository "
+    "configuration. Default is to write butler.yaml into the specified repo.",
+)
 @options_file_option()
 def create(*args, **kwargs):
     """Create an empty Gen3 Butler repository."""
@@ -123,15 +139,30 @@ def create(*args, **kwargs):
 
 @click.command(short_help="Dump butler config to stdout.", cls=ButlerCommand)
 @repo_argument(required=True, help=existingRepoHelp)
-@click.option("--subset", "-s", type=str,
-              help="Subset of a configuration to report. This can be any key in the hierarchy such as "
-              "'.datastore.root' where the leading '.' specified the delimiter for the hierarchy.")
-@click.option("--searchpath", "-p", type=str, multiple=True, callback=split_commas,
-              metavar=typeStrAcceptsMultiple,
-              help="Additional search paths to use for configuration overrides")
-@click.option("--file", "outfile", type=click.File("w"), default="-",
-              help="Print the (possibly-expanded) configuration for a repository to a file, or to stdout "
-              "by default.")
+@click.option(
+    "--subset",
+    "-s",
+    type=str,
+    help="Subset of a configuration to report. This can be any key in the hierarchy such as "
+    "'.datastore.root' where the leading '.' specified the delimiter for the hierarchy.",
+)
+@click.option(
+    "--searchpath",
+    "-p",
+    type=str,
+    multiple=True,
+    callback=split_commas,
+    metavar=typeStrAcceptsMultiple,
+    help="Additional search paths to use for configuration overrides",
+)
+@click.option(
+    "--file",
+    "outfile",
+    type=click.File("w"),
+    default="-",
+    help="Print the (possibly-expanded) configuration for a repository to a file, or to stdout "
+    "by default.",
+)
 @options_file_option()
 def config_dump(*args, **kwargs):
     """Dump either a subset or full Butler configuration to standard output."""
@@ -142,9 +173,15 @@ def config_dump(*args, **kwargs):
 @repo_argument(required=True, help=existingRepoHelp)
 @click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
 @dataset_type_option(help="Specific DatasetType(s) to validate.", multiple=True)
-@click.option("--ignore", "-i", type=str, multiple=True, callback=split_commas,
-              metavar=typeStrAcceptsMultiple,
-              help="DatasetType(s) to ignore for validation.")
+@click.option(
+    "--ignore",
+    "-i",
+    type=str,
+    multiple=True,
+    callback=split_commas,
+    metavar=typeStrAcceptsMultiple,
+    help="DatasetType(s) to ignore for validation.",
+)
 @options_file_option()
 def config_validate(*args, **kwargs):
     """Validate the configuration files for a Gen3 Butler repository."""
@@ -155,22 +192,34 @@ def config_validate(*args, **kwargs):
 
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
-@collection_argument(help=unwrap("""COLLECTION is the Name of the collection to remove. If this is a tagged or
+@collection_argument(
+    help=unwrap(
+        """COLLECTION is the Name of the collection to remove. If this is a tagged or
                           chained collection, datasets within the collection are not modified unless --unstore
                           is passed. If this is a run collection, --purge and --unstore must be passed, and
-                          all datasets in it are fully removed from the data repository."""))
-@click.option("--purge",
-              help=unwrap("""Permit RUN collections to be removed, fully removing datasets within them.
+                          all datasets in it are fully removed from the data repository."""
+    )
+)
+@click.option(
+    "--purge",
+    help=unwrap(
+        """Permit RUN collections to be removed, fully removing datasets within them.
                           Requires --unstore as an added precaution against accidental deletion. Must not be
-                          passed if the collection is not a RUN."""),
-              is_flag=True)
-@click.option("--unstore",
-              help=("""Remove all datasets in the collection from all datastores in which they appear."""),
-              is_flag=True)
-@click.option("--unlink",
-              help="Before removing the given `collection` unlink it from from this parent collection.",
-              multiple=True,
-              callback=split_commas)
+                          passed if the collection is not a RUN."""
+    ),
+    is_flag=True,
+)
+@click.option(
+    "--unstore",
+    help=("""Remove all datasets in the collection from all datastores in which they appear."""),
+    is_flag=True,
+)
+@click.option(
+    "--unlink",
+    help="Before removing the given `collection` unlink it from from this parent collection.",
+    multiple=True,
+    callback=split_commas,
+)
 @confirm_option()
 @options_file_option()
 def prune_collection(**kwargs):
@@ -189,14 +238,20 @@ def prune_collection(**kwargs):
         print("Aborted.")
 
 
-pruneDatasets_wouldRemoveMsg = unwrap("""The following datasets will be removed from any datastores in which
-                                      they are present:""")
-pruneDatasets_wouldDisassociateMsg = unwrap("""The following datasets will be disassociated from {collections}
-                                            if they are currently present in it (which is not checked):""")
-pruneDatasets_wouldDisassociateAndRemoveMsg = unwrap("""The following datasets will be disassociated from
+pruneDatasets_wouldRemoveMsg = unwrap(
+    """The following datasets will be removed from any datastores in which
+                                      they are present:"""
+)
+pruneDatasets_wouldDisassociateMsg = unwrap(
+    """The following datasets will be disassociated from {collections}
+                                            if they are currently present in it (which is not checked):"""
+)
+pruneDatasets_wouldDisassociateAndRemoveMsg = unwrap(
+    """The following datasets will be disassociated from
                                                   {collections} if they are currently present in it (which is
                                                   not checked), and removed from any datastores in which they
-                                                  are present.""")
+                                                  are present."""
+)
 pruneDatasets_willRemoveMsg = "The following datasets will be removed:"
 pruneDatasets_askContinueMsg = "Continue?"
 pruneDatasets_didRemoveAforementioned = "The datasets were removed."
@@ -211,74 +266,94 @@ pruneDatasets_errQuietWithDryRun = "Can not use --quiet and --dry-run together."
 pruneDatasets_errNoCollectionRestriction = unwrap(
     """Must indicate collections from which to prune datasets by passing COLLETION arguments (select all
     collections by passing '*', or consider using 'butler prune-collections'), by using --purge to pass a run
-    collection, or by using --disassociate to select a tagged collection.""")
+    collection, or by using --disassociate to select a tagged collection."""
+)
 pruneDatasets_errPruneOnNotRun = "Can not prune a collection that is not a RUN collection: {collection}"
 pruneDatasets_errNoOp = "No operation: one of --purge, --unstore, or --disassociate must be provided."
 
 disassociate_option = MWOptionDecorator(
-    "--disassociate", "disassociate_tags",
-    help=unwrap("""Disassociate pruned datasets from the given tagged collections. May not be used with
-                --purge."""),
+    "--disassociate",
+    "disassociate_tags",
+    help=unwrap(
+        """Disassociate pruned datasets from the given tagged collections. May not be used with
+                --purge."""
+    ),
     multiple=True,
     callback=split_commas,
-    metavar="TAG"
+    metavar="TAG",
 )
 
 
 purge_option = MWOptionDecorator(
-    "--purge", "purge_run",
-    help=unwrap("""Completely remove the dataset from the given RUN in the Registry. May not be used with
+    "--purge",
+    "purge_run",
+    help=unwrap(
+        """Completely remove the dataset from the given RUN in the Registry. May not be used with
                 --disassociate. Note, this may remove provenance information from datasets other than those
-                provided, and should be used with extreme care."""),
-    metavar="RUN"
+                provided, and should be used with extreme care."""
+    ),
+    metavar="RUN",
 )
 
 
 find_all_option = MWOptionDecorator(
-    "--find-all", is_flag=True,
-    help=unwrap("""Purge the dataset results from all of the collections in which a dataset of that dataset
+    "--find-all",
+    is_flag=True,
+    help=unwrap(
+        """Purge the dataset results from all of the collections in which a dataset of that dataset
                 type + data id combination appear. (By default only the first found dataset type + data id is
-                purged, according to the order of COLLECTIONS passed in).""")
+                purged, according to the order of COLLECTIONS passed in)."""
+    ),
 )
 
 
 unstore_option = MWOptionDecorator(
     "--unstore",
     is_flag=True,
-    help=unwrap("""Remove these datasets from all datastores configured with this data repository. If
+    help=unwrap(
+        """Remove these datasets from all datastores configured with this data repository. If
                 --disassociate and --purge are not used then --unstore will be used by default. Note that
                 --unstore will make it impossible to retrieve these datasets even via other collections.
-                Datasets that are already not stored are ignored by this option.""")
+                Datasets that are already not stored are ignored by this option."""
+    ),
 )
 
 
 dry_run_option = MWOptionDecorator(
     "--dry-run",
     is_flag=True,
-    help=unwrap("""Display the datasets that would be removed but do not remove them.
+    help=unwrap(
+        """Display the datasets that would be removed but do not remove them.
 
                 Note that a dataset can be in collections other than its RUN-type collection, and removing it
                 will remove it from all of them, even though the only one this will show is its RUN
-                collection.""")
+                collection."""
+    ),
 )
 
 
 quiet_option = MWOptionDecorator(
     "--quiet",
     is_flag=True,
-    help=unwrap("""Makes output quiet. Implies --no-confirm. Requires --dry-run not be passed.""")
+    help=unwrap("""Makes output quiet. Implies --no-confirm. Requires --dry-run not be passed."""),
 )
 
 
 @click.command(cls=ButlerCommand, short_help="Remove datasets.")
 @repo_argument(required=True)
-@collections_argument(help=unwrap("""COLLECTIONS is or more expressions that identify the collections to
+@collections_argument(
+    help=unwrap(
+        """COLLECTIONS is or more expressions that identify the collections to
                                   search for datasets. Glob-style expressions may be used but only if the
-                                  --find-all flag is also passed."""))
+                                  --find-all flag is also passed."""
+    )
+)
 @option_section("Query Datasets Options:")
-@datasets_option(help="One or more glob-style expressions that identify the dataset types to be pruned.",
-                 multiple=True,
-                 callback=split_commas)
+@datasets_option(
+    help="One or more glob-style expressions that identify the dataset types to be pruned.",
+    multiple=True,
+    callback=split_commas,
+)
 @find_all_option()
 @where_option(help=where_help)
 @option_section("Prune Options:")
@@ -344,17 +419,23 @@ def prune_datasets(**kwargs):
 
 @click.command(short_help="Search for collections.", cls=ButlerCommand)
 @repo_argument(required=True)
-@glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
-                    "collections to return.")
+@glob_argument(
+    help="GLOB is one or more glob-style expressions that fully or partially identify the "
+    "collections to return."
+)
 @collection_type_option()
-@click.option("--chains",
-              default="table",
-              help=unwrap("""Affects how results are presented. TABLE lists each dataset in a row with
+@click.option(
+    "--chains",
+    default="table",
+    help=unwrap(
+        """Affects how results are presented. TABLE lists each dataset in a row with
                           chained datasets' children listed in a Definition column. TREE lists children below
                           their parent in tree form. FLATTEN lists all datasets, including child datasets in
-                          one list.Defaults to TABLE. """),
-              callback=to_upper,
-              type=click.Choice(("TABLE", "TREE", "FLATTEN"), case_sensitive=False))
+                          one list.Defaults to TABLE. """
+    ),
+    callback=to_upper,
+    type=click.Choice(("TABLE", "TREE", "FLATTEN"), case_sensitive=False),
+)
 @options_file_option()
 def query_collections(*args, **kwargs):
     """Get the collections whose names match an expression."""
@@ -370,8 +451,10 @@ def query_collections(*args, **kwargs):
 
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
-@glob_argument(help="GLOB is one or more glob-style expressions that fully or partially identify the "
-                    "dataset types to return.")
+@glob_argument(
+    help="GLOB is one or more glob-style expressions that fully or partially identify the "
+    "dataset types to return."
+)
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
 @components_option()
 @options_file_option()
@@ -386,7 +469,7 @@ def query_dataset_types(*args, **kwargs):
 
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
-@click.argument('dataset-type-name', nargs=1)
+@click.argument("dataset-type-name", nargs=1)
 def remove_dataset_type(*args, **kwargs):
     """Remove a dataset type definition from a repository."""
     script.removeDatasetType(*args, **kwargs)
@@ -405,43 +488,67 @@ def query_datasets(**kwargs):
 
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
-@click.argument('input-collection')
-@click.argument('output-collection')
-@click.argument('dataset-type-name')
-@click.option("--begin-date", type=str, default=None,
-              help=unwrap("""ISO-8601 datetime (TAI) of the beginning of the validity range for the
-                          certified calibrations."""))
-@click.option("--end-date", type=str, default=None,
-              help=unwrap("""ISO-8601 datetime (TAI) of the end of the validity range for the
-                          certified calibrations."""))
-@click.option("--search-all-inputs", is_flag=True, default=False,
-              help=unwrap("""Search all children of the inputCollection if it is a CHAINED collection,
-                          instead of just the most recent one."""))
+@click.argument("input-collection")
+@click.argument("output-collection")
+@click.argument("dataset-type-name")
+@click.option(
+    "--begin-date",
+    type=str,
+    default=None,
+    help=unwrap(
+        """ISO-8601 datetime (TAI) of the beginning of the validity range for the
+                          certified calibrations."""
+    ),
+)
+@click.option(
+    "--end-date",
+    type=str,
+    default=None,
+    help=unwrap(
+        """ISO-8601 datetime (TAI) of the end of the validity range for the
+                          certified calibrations."""
+    ),
+)
+@click.option(
+    "--search-all-inputs",
+    is_flag=True,
+    default=False,
+    help=unwrap(
+        """Search all children of the inputCollection if it is a CHAINED collection,
+                          instead of just the most recent one."""
+    ),
+)
 @options_file_option()
 def certify_calibrations(*args, **kwargs):
-    """Certify calibrations in a repository.
-    """
+    """Certify calibrations in a repository."""
     script.certifyCalibrations(*args, **kwargs)
 
 
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
-@dimensions_argument(help=unwrap("""DIMENSIONS are the keys of the data IDs to yield, such as exposure,
-                                 instrument, or tract. Will be expanded to include any dependencies."""))
+@dimensions_argument(
+    help=unwrap(
+        """DIMENSIONS are the keys of the data IDs to yield, such as exposure,
+                                 instrument, or tract. Will be expanded to include any dependencies."""
+    )
+)
 @collections_option(help=collections_option.help + " May only be used with --datasets.")
-@datasets_option(help=unwrap("""An expression that fully or partially identifies dataset types that should
+@datasets_option(
+    help=unwrap(
+        """An expression that fully or partially identifies dataset types that should
                              constrain the yielded data IDs.  For example, including "raw" here would
                              constrain the yielded "instrument", "exposure", "detector", and
                              "physical_filter" values to only those for which at least one "raw" dataset
-                             exists in "collections".  Requires --collections."""))
+                             exists in "collections".  Requires --collections."""
+    )
+)
 @where_option(help=where_help)
 @order_by_option()
 @limit_option()
 @offset_option()
 @options_file_option()
 def query_data_ids(**kwargs):
-    """List the data IDs in a repository.
-    """
+    """List the data IDs in a repository."""
     table = script.queryDataIds(**kwargs)
     if table:
         table.pprint_all()
@@ -455,17 +562,26 @@ def query_data_ids(**kwargs):
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
 @element_argument(required=True)
-@datasets_option(help=unwrap("""An expression that fully or partially identifies dataset types that should
+@datasets_option(
+    help=unwrap(
+        """An expression that fully or partially identifies dataset types that should
                              constrain the yielded records. May only be used with
-                             --collections."""))
+                             --collections."""
+    )
+)
 @collections_option(help=collections_option.help + " May only be used with --datasets.")
 @where_option(help=where_help)
 @order_by_option()
 @limit_option()
 @offset_option()
-@click.option("--no-check", is_flag=True,
-              help=unwrap("""Don't check the query before execution. By default the query is checked before it
-                          executed, this may reject some valid queries that resemble common mistakes."""))
+@click.option(
+    "--no-check",
+    is_flag=True,
+    help=unwrap(
+        """Don't check the query before execution. By default the query is checked before it
+                          executed, this may reject some valid queries that resemble common mistakes."""
+    ),
+)
 @options_file_option()
 def query_dimension_records(**kwargs):
     """Query for dimension information."""
@@ -482,10 +598,18 @@ def query_dimension_records(**kwargs):
 @destination_argument(help="Destination URI of folder to receive file artifacts.")
 @transfer_option()
 @verbose_option(help="Report destination location of all transferred artifacts.")
-@click.option("--preserve-path/--no-preserve-path", is_flag=True, default=True,
-              help="Preserve the datastore path to the artifact at the destination.")
-@click.option("--clobber/--no-clobber", is_flag=True, default=False,
-              help="If clobber, overwrite files if they exist locally.")
+@click.option(
+    "--preserve-path/--no-preserve-path",
+    is_flag=True,
+    default=True,
+    help="Preserve the datastore path to the artifact at the destination.",
+)
+@click.option(
+    "--clobber/--no-clobber",
+    is_flag=True,
+    default=False,
+    help="If clobber, overwrite files if they exist locally.",
+)
 @options_file_option()
 def retrieve_artifacts(**kwargs):
     """Retrieve file artifacts associated with datasets in a repository."""
@@ -522,21 +646,29 @@ def transfer_datasets(**kwargs):
 @repo_argument(required=True)
 @click.argument("parent", required=True, nargs=1)
 @click.argument("children", required=False, nargs=-1, callback=split_commas)
-@click.option("--doc", default="",
-              help="Documentation string associated with this collection. "
-              "Only relevant if the collection is newly created.")
-@click.option("--flatten/--no-flatten", default=False,
-              help="If `True` recursively flatten out any nested chained collections in children first.")
-@click.option("--mode",
-              type=click.Choice(["redefine", "extend", "remove", "prepend", "pop"]),
-              default="redefine",
-              help="Update mode: "
-              "'redefine': Create new chain or redefine existing chain with the supplied CHILDREN. "
-              "'remove': Modify existing chain to remove the supplied CHILDREN. "
-              "'pop': Pop a numbered element off the chain. Defaults to popping "
-              "the first element (0). ``children`` must be integers if given. "
-              "'prepend': Modify existing chain to prepend the supplied CHILDREN to the front. "
-              "'extend': Modify existing chain to extend it with the supplied CHILDREN.")
+@click.option(
+    "--doc",
+    default="",
+    help="Documentation string associated with this collection. "
+    "Only relevant if the collection is newly created.",
+)
+@click.option(
+    "--flatten/--no-flatten",
+    default=False,
+    help="If `True` recursively flatten out any nested chained collections in children first.",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["redefine", "extend", "remove", "prepend", "pop"]),
+    default="redefine",
+    help="Update mode: "
+    "'redefine': Create new chain or redefine existing chain with the supplied CHILDREN. "
+    "'remove': Modify existing chain to remove the supplied CHILDREN. "
+    "'pop': Pop a numbered element off the chain. Defaults to popping "
+    "the first element (0). ``children`` must be integers if given. "
+    "'prepend': Modify existing chain to prepend the supplied CHILDREN to the front. "
+    "'extend': Modify existing chain to extend it with the supplied CHILDREN.",
+)
 def collection_chain(**kwargs):
     """Define a collection chain.
 
@@ -570,29 +702,39 @@ def collection_chain(**kwargs):
 @click.argument("dataset_type", required=True)
 @click.argument("run", required=True)
 @click.argument("table_file", required=True)
-@click.option("--formatter", type=str,
-              help="Fully-qualified python class to use as the Formatter. If not specified the formatter"
-              " will be determined from the dataset type and datastore configuration.")
-@click.option("--id-generation-mode",
-              default="UNIQUE",
-              help="Mode to use for generating dataset IDs. The default creates a unique ID. Other options"
-              " are: 'DATAID_TYPE' for creating a reproducible ID from the dataID and dataset type;"
-              " 'DATAID_TYPE_RUN' for creating a reproducible ID from the dataID, dataset type and run."
-              " The latter is usually used for 'raw'-type data that will be ingested in multiple."
-              " repositories.",
-              callback=to_upper,
-              type=click.Choice(("UNIQUE", "DATAID_TYPE", "DATAID_TYPE_RUN"), case_sensitive=False))
-@click.option("--data-id",
-              type=str,
-              multiple=True, callback=split_commas,
-              help="Keyword=value string with an additional dataId value that is fixed for all ingested"
-              " files. This can be used to simplify the table file by removing repeated entries that are"
-              " fixed for all files to be ingested.  Multiple key/values can be given either by using"
-              " comma separation or multiple command line options.")
-@click.option("--prefix",
-              type=str,
-              help="For relative paths in the table file, specify a prefix to use. The default is to"
-              " use the current working directory.")
+@click.option(
+    "--formatter",
+    type=str,
+    help="Fully-qualified python class to use as the Formatter. If not specified the formatter"
+    " will be determined from the dataset type and datastore configuration.",
+)
+@click.option(
+    "--id-generation-mode",
+    default="UNIQUE",
+    help="Mode to use for generating dataset IDs. The default creates a unique ID. Other options"
+    " are: 'DATAID_TYPE' for creating a reproducible ID from the dataID and dataset type;"
+    " 'DATAID_TYPE_RUN' for creating a reproducible ID from the dataID, dataset type and run."
+    " The latter is usually used for 'raw'-type data that will be ingested in multiple."
+    " repositories.",
+    callback=to_upper,
+    type=click.Choice(("UNIQUE", "DATAID_TYPE", "DATAID_TYPE_RUN"), case_sensitive=False),
+)
+@click.option(
+    "--data-id",
+    type=str,
+    multiple=True,
+    callback=split_commas,
+    help="Keyword=value string with an additional dataId value that is fixed for all ingested"
+    " files. This can be used to simplify the table file by removing repeated entries that are"
+    " fixed for all files to be ingested.  Multiple key/values can be given either by using"
+    " comma separation or multiple command line options.",
+)
+@click.option(
+    "--prefix",
+    type=str,
+    help="For relative paths in the table file, specify a prefix to use. The default is to"
+    " use the current working directory.",
+)
 @transfer_option()
 def ingest_files(**kwargs):
     """Ingest files from table file.
@@ -628,8 +770,12 @@ def ingest_files(**kwargs):
 @click.argument("dataset_type", required=True)
 @click.argument("storage_class", required=True)
 @click.argument("dimensions", required=False, nargs=-1)
-@click.option("--is-calibration/--no-is-calibration", is_flag=True, default=False,
-              help="Indicate that this dataset type can be part of a calibration collection.")
+@click.option(
+    "--is-calibration/--no-is-calibration",
+    is_flag=True,
+    default=False,
+    help="Indicate that this dataset type can be part of a calibration collection.",
+)
 def register_dataset_type(**kwargs):
     """Register a new dataset type with this butler repository.
 

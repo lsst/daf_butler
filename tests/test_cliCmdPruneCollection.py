@@ -22,28 +22,26 @@
 """Unit tests for daf_butler CLI prune-collections subcommand.
 """
 
-from astropy.table import Table
-from numpy import array
 import os
 import unittest
 
+from astropy.table import Table
 from lsst.daf.butler import Butler, CollectionType
 from lsst.daf.butler.cli.butler import cli as butlerCli
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.tests.utils import (
     ButlerTestHelper,
-    makeTestTempDir,
     MetricTestRepo,
+    makeTestTempDir,
     readTable,
     removeTestTempDir,
 )
-
+from numpy import array
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class PruneCollectionsTest(unittest.TestCase):
-
     def setUp(self):
         self.runner = LogCliRunner()
 
@@ -105,20 +103,18 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
         self.runner = LogCliRunner()
 
         self.root = makeTestTempDir(TESTDIR)
-        self.testRepo = MetricTestRepo(self.root,
-                                       configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+        self.testRepo = MetricTestRepo(
+            self.root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml")
+        )
 
     def tearDown(self):
         removeTestTempDir(self.root)
 
     def testPruneRun(self):
-
         def confirm_initial_tables():
             result = self.runner.invoke(butlerCli, ["query-collections", self.root])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            expected = Table(array((("ingest/run", "RUN"),
-                                    ("ingest", "TAGGED"))),
-                             names=("Name", "Type"))
+            expected = Table(array((("ingest/run", "RUN"), ("ingest", "TAGGED"))), names=("Name", "Type"))
             self.assertAstropyTablesEqual(readTable(result.output), expected)
 
         confirm_initial_tables()
@@ -179,19 +175,13 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
             ["query-collections", self.root],
         )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        expected = Table((["ingest"], ["TAGGED"]),
-                         names=("Name", "Type"))
+        expected = Table((["ingest"], ["TAGGED"]), names=("Name", "Type"))
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
     def testPruneTagged(self):
-        result = self.runner.invoke(
-            butlerCli,
-            ["query-collections", self.root]
-        )
+        result = self.runner.invoke(butlerCli, ["query-collections", self.root])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        expected = Table(array((("ingest/run", "RUN"),
-                                ("ingest", "TAGGED"))),
-                         names=("Name", "Type"))
+        expected = Table(array((("ingest/run", "RUN"), ("ingest", "TAGGED"))), names=("Name", "Type"))
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
         # Try pruning TAGGED, should succeed.
@@ -202,13 +192,9 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
         )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-        result = self.runner.invoke(
-            butlerCli,
-            ["query-collections", self.root]
-        )
+        result = self.runner.invoke(butlerCli, ["query-collections", self.root])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        expected = Table((["ingest/run"], ["RUN"]),
-                         names=("Name", "Type"))
+        expected = Table((["ingest/run"], ["RUN"]), names=("Name", "Type"))
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
 

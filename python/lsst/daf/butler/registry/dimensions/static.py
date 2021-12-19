@@ -20,8 +20,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from collections import defaultdict
 import itertools
+from collections import defaultdict
 from typing import Dict, List, Optional, Set, Tuple
 
 import sqlalchemy
@@ -29,25 +29,24 @@ import sqlalchemy
 from ...core import (
     DatabaseDimensionElement,
     DatabaseTopologicalFamily,
-    ddl,
     DimensionElement,
     DimensionGraph,
     DimensionUniverse,
     GovernorDimension,
     NamedKeyDict,
     SkyPixDimension,
+    ddl,
 )
 from ..interfaces import (
     Database,
-    StaticTablesContext,
-    DatabaseDimensionRecordStorage,
     DatabaseDimensionOverlapStorage,
-    DimensionRecordStorageManager,
+    DatabaseDimensionRecordStorage,
     DimensionRecordStorage,
+    DimensionRecordStorageManager,
     GovernorDimensionRecordStorage,
-    VersionTuple
+    StaticTablesContext,
+    VersionTuple,
 )
-
 
 # This has to be updated on every schema change
 _VERSION = VersionTuple(6, 0, 1)
@@ -77,12 +76,15 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     universe : `DimensionUniverse`
         All known dimensions.
     """
+
     def __init__(
         self,
-        db: Database, *,
+        db: Database,
+        *,
         records: NamedKeyDict[DimensionElement, DimensionRecordStorage],
-        overlaps: Dict[Tuple[DatabaseDimensionElement, DatabaseDimensionElement],
-                       DatabaseDimensionOverlapStorage],
+        overlaps: Dict[
+            Tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
+        ],
         dimensionGraphStorage: _DimensionGraphStorage,
         universe: DimensionUniverse,
     ):
@@ -93,8 +95,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         self._dimensionGraphStorage = dimensionGraphStorage
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext, *,
-                   universe: DimensionUniverse) -> DimensionRecordStorageManager:
+    def initialize(
+        cls, db: Database, context: StaticTablesContext, *, universe: DimensionUniverse
+    ) -> DimensionRecordStorageManager:
         # Docstring inherited from DimensionRecordStorageManager.
         # Start by initializing governor dimensions; those go both in the main
         # 'records' mapping we'll pass to init, and a local dictionary that we
@@ -120,8 +123,10 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # skypix dimensions is internal to `DatabaseDimensionRecordStorage`,
         # and hence is not included here.
         from ..dimensions.overlaps import CrossFamilyDimensionOverlapStorage
-        overlaps: Dict[Tuple[DatabaseDimensionElement, DatabaseDimensionElement],
-                       DatabaseDimensionOverlapStorage] = {}
+
+        overlaps: Dict[
+            Tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
+        ] = {}
         for (family1, storages1), (family2, storages2) in itertools.combinations(spatial.items(), 2):
             for elementStoragePair in itertools.product(storages1, storages2):
                 governorStoragePair = (governors[family1.governor], governors[family2.governor])
@@ -139,8 +144,13 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
                 overlaps[overlapStorage.elements] = overlapStorage
         # Create table that stores DimensionGraph definitions.
         dimensionGraphStorage = _DimensionGraphStorage.initialize(db, context, universe=universe)
-        return cls(db=db, records=records, universe=universe, overlaps=overlaps,
-                   dimensionGraphStorage=dimensionGraphStorage)
+        return cls(
+            db=db,
+            records=records,
+            universe=universe,
+            overlaps=overlaps,
+            dimensionGraphStorage=dimensionGraphStorage,
+        )
 
     def refresh(self) -> None:
         # Docstring inherited from DimensionRecordStorageManager.
@@ -208,6 +218,7 @@ class _DimensionGraphStorage:
     universe : `DimensionUniverse`
         All known dimensions.
     """
+
     def __init__(
         self,
         db: Database,
@@ -226,7 +237,8 @@ class _DimensionGraphStorage:
     def initialize(
         cls,
         db: Database,
-        context: StaticTablesContext, *,
+        context: StaticTablesContext,
+        *,
         universe: DimensionUniverse,
     ) -> _DimensionGraphStorage:
         """Construct a new instance, including creating tables if necessary.
@@ -260,7 +272,7 @@ class _DimensionGraphStorage:
                         primaryKey=True,
                     ),
                 ],
-            )
+            ),
         )
         definitionTable = context.addTable(
             "dimension_graph_definition",
@@ -277,7 +289,7 @@ class _DimensionGraphStorage:
                         onDelete="CASCADE",
                     ),
                 ],
-            )
+            ),
         )
         return cls(db, idTable, definitionTable, universe=universe)
 
@@ -330,10 +342,7 @@ class _DimensionGraphStorage:
                 (key,) = self._db.insert(self._idTable, {}, returnIds=True)  # type: ignore
                 self._db.insert(
                     self._definitionTable,
-                    *[
-                        {"dimension_graph_id": key, "dimension_name": name}
-                        for name in graph.required.names
-                    ],
+                    *[{"dimension_graph_id": key, "dimension_name": name} for name in graph.required.names],
                 )
             self._keysByGraph[graph] = key
             self._graphsByKey[key] = graph

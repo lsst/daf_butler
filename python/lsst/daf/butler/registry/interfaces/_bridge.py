@@ -23,19 +23,10 @@ from __future__ import annotations
 __all__ = ("DatastoreRegistryBridgeManager", "DatastoreRegistryBridge", "FakeDatasetRef", "DatasetIdRef")
 
 from abc import ABC, abstractmethod
-from typing import (
-    Any,
-    ContextManager,
-    Iterable,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-    TYPE_CHECKING,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, ContextManager, Iterable, Optional, Set, Tuple, Type, Union
 
 from lsst.utils.classes import immutable
+
 from ...core import DatasetId, DatasetRef
 from ._versioning import VersionedExtension
 
@@ -43,7 +34,7 @@ if TYPE_CHECKING:
     from ...core import DatasetType, DimensionUniverse, StoredDatastoreItemInfo
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
-    from ._opaque import OpaqueTableStorageManager, OpaqueTableStorage
+    from ._opaque import OpaqueTableStorage, OpaqueTableStorageManager
 
 
 @immutable
@@ -60,6 +51,7 @@ class FakeDatasetRef:
     id : `DatasetId`
         The dataset ID.
     """
+
     __slots__ = ("id",)
 
     def __init__(self, id: DatasetId):
@@ -117,6 +109,7 @@ class DatastoreRegistryBridge(ABC):
         Name of the `Datastore` as it should appear in `Registry` tables
         referencing it.
     """
+
     def __init__(self, datastoreName: str):
         self.datastoreName = datastoreName
 
@@ -195,12 +188,14 @@ class DatastoreRegistryBridge(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def emptyTrash(self, records_table: Optional[OpaqueTableStorage] = None,
-                   record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
-                   record_column: Optional[str] = None,
-                   ) -> ContextManager[Tuple[Iterable[Tuple[DatasetIdRef,
-                                                            Optional[StoredDatastoreItemInfo]]],
-                                             Optional[Set[str]]]]:
+    def emptyTrash(
+        self,
+        records_table: Optional[OpaqueTableStorage] = None,
+        record_class: Optional[Type[StoredDatastoreItemInfo]] = None,
+        record_column: Optional[str] = None,
+    ) -> ContextManager[
+        Tuple[Iterable[Tuple[DatasetIdRef, Optional[StoredDatastoreItemInfo]]], Optional[Set[str]]]
+    ]:
         """Retrieve all the dataset ref IDs that are in the trash
         associated for this datastore, and then remove them if the context
         exists without an exception being raised.
@@ -285,19 +280,25 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
       filename templates.
 
     """
-    def __init__(self, *, opaque: OpaqueTableStorageManager, universe: DimensionUniverse,
-                 datasetIdColumnType: type):
+
+    def __init__(
+        self, *, opaque: OpaqueTableStorageManager, universe: DimensionUniverse, datasetIdColumnType: type
+    ):
         self.opaque = opaque
         self.universe = universe
         self.datasetIdColumnType = datasetIdColumnType
 
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, context: StaticTablesContext, *,
-                   opaque: OpaqueTableStorageManager,
-                   datasets: Type[DatasetRecordStorageManager],
-                   universe: DimensionUniverse,
-                   ) -> DatastoreRegistryBridgeManager:
+    def initialize(
+        cls,
+        db: Database,
+        context: StaticTablesContext,
+        *,
+        opaque: OpaqueTableStorageManager,
+        datasets: Type[DatasetRecordStorageManager],
+        universe: DimensionUniverse,
+    ) -> DatastoreRegistryBridgeManager:
         """Construct an instance of the manager.
 
         Parameters

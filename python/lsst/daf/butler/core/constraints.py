@@ -26,22 +26,17 @@ from __future__ import annotations
 
 __all__ = ("Constraints", "ConstraintsValidationError", "ConstraintsConfig")
 
-from typing import (
-    TYPE_CHECKING,
-    Optional,
-    Set,
-    Union,
-)
-
 import logging
+from typing import TYPE_CHECKING, Optional, Set, Union
+
 from .config import Config
 from .configSupport import LookupKey, processLookupConfigList
 from .exceptions import ValidationError
 
 if TYPE_CHECKING:
+    from .datasets import DatasetRef, DatasetType
     from .dimensions import DimensionUniverse
     from .storageClass import StorageClass
-    from .datasets import DatasetRef, DatasetType
 
 log = logging.getLogger(__name__)
 
@@ -90,8 +85,9 @@ class Constraints:
                 self._reject = processLookupConfigList(self.config["reject"], universe=universe)
 
         if self.matchAllKey in self._accept and self.matchAllKey in self._reject:
-            raise ConstraintsValidationError("Can not explicitly accept 'all' and reject 'all'"
-                                             " in one configuration")
+            raise ConstraintsValidationError(
+                "Can not explicitly accept 'all' and reject 'all' in one configuration"
+            )
 
     def __str__(self) -> str:
         # Standard stringification

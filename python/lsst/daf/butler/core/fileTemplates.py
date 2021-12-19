@@ -25,32 +25,22 @@ from __future__ import annotations
 
 __all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig", "FileTemplateValidationError")
 
+import logging
 import os.path
 import string
-import logging
 from types import MappingProxyType
-
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Iterable,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Optional, Set, Tuple, Union
 
 from .config import Config
-from .configSupport import processLookupConfigs, LookupKey
-from .exceptions import ValidationError
-from .dimensions import SkyPixDimension, DataCoordinate
+from .configSupport import LookupKey, processLookupConfigs
 from .datasets import DatasetRef
+from .dimensions import DataCoordinate, SkyPixDimension
+from .exceptions import ValidationError
 from .storageClass import StorageClass
 
 if TYPE_CHECKING:
-    from .dimensions import DimensionUniverse
     from .datasets import DatasetType
+    from .dimensions import DimensionUniverse
 
 log = logging.getLogger(__name__)
 
@@ -101,9 +91,13 @@ class FileTemplates:
     defaultKey = LookupKey("default")
     """Configuration key associated with the default template."""
 
-    def __init__(self, config: Union[FileTemplatesConfig, str],
-                 default: Optional[str] = None, *,
-                 universe: DimensionUniverse):
+    def __init__(
+        self,
+        config: Union[FileTemplatesConfig, str],
+        default: Optional[str] = None,
+        *,
+        universe: DimensionUniverse,
+    ):
         self.config = FileTemplatesConfig(config)
         self._templates = {}
 
@@ -113,8 +107,9 @@ class FileTemplates:
         # we get a False or None
         defaultValue = contents.get(self.defaultKey, default)
         if defaultValue and not isinstance(defaultValue, str):
-            raise RuntimeError("Default template value should be str or False, or None. "
-                               f"Got '{defaultValue}'")
+            raise RuntimeError(
+                f"Default template value should be str or False, or None. Got '{defaultValue}'"
+            )
         self.default = FileTemplate(defaultValue) if isinstance(defaultValue, str) and defaultValue else None
 
         # Convert all the values to FileTemplate, handling defaults
@@ -149,8 +144,9 @@ class FileTemplates:
     def __getitem__(self, key: LookupKey) -> FileTemplate:
         return self.templates[key]
 
-    def validateTemplates(self, entities: Iterable[Union[DatasetType, DatasetRef, StorageClass]],
-                          logFailures: bool = False) -> None:
+    def validateTemplates(
+        self, entities: Iterable[Union[DatasetType, DatasetRef, StorageClass]], logFailures: bool = False
+    ) -> None:
         """Validate the templates.
 
         Retrieves the template associated with each dataset type and
@@ -181,7 +177,7 @@ class FileTemplates:
                 matchKey, template = self.getTemplateWithMatch(entity)
             except KeyError as e:
                 # KeyError always quotes on stringification so strip here
-                errMsg = str(e).strip('"\'')
+                errMsg = str(e).strip("\"'")
                 failed.append(errMsg)
                 if logFailures:
                     log.critical("%s", errMsg)
@@ -218,9 +214,9 @@ class FileTemplates:
         """
         return set(self.templates)
 
-    def getTemplateWithMatch(self, entity: Union[DatasetRef,
-                                                 DatasetType, StorageClass]) -> Tuple[LookupKey,
-                                                                                      FileTemplate]:
+    def getTemplateWithMatch(
+        self, entity: Union[DatasetRef, DatasetType, StorageClass]
+    ) -> Tuple[LookupKey, FileTemplate]:
         """Retrieve the `FileTemplate` associated with the dataset type.
 
         Also retrieves the lookup key that was a match for this template.
@@ -354,8 +350,9 @@ class FileTemplate:
 
     def __init__(self, template: str):
         if not isinstance(template, str):
-            raise FileTemplateValidationError(f"Template ('{template}') does "
-                                              "not contain any format specifiers")
+            raise FileTemplateValidationError(
+                f"Template ('{template}') does not contain any format specifiers"
+            )
         self.template = template
 
         # Do basic validation without access to dimensions
@@ -441,8 +438,9 @@ class FileTemplate:
         # the case where only required dimensions are present (which in this
         # context should only happen in unit tests; in general we need all
         # dimensions to fill out templates).
-        fields = {k: ref.dataId.get(k) for k in ref.datasetType.dimensions.names
-                  if ref.dataId.get(k) is not None}
+        fields = {
+            k: ref.dataId.get(k) for k in ref.datasetType.dimensions.names if ref.dataId.get(k) is not None
+        }
         # Extra information that can be included using . syntax
         extras = {}
         if isinstance(ref.dataId, DataCoordinate):
@@ -492,8 +490,10 @@ class FileTemplate:
                 usedRun = True
 
             if field_name == "collection":
-                raise KeyError("'collection' is no longer supported as a "
-                               "file template placeholder; use 'run' instead.")
+                raise KeyError(
+                    "'collection' is no longer supported as a "
+                    "file template placeholder; use 'run' instead."
+                )
 
             # Check for request for additional information from the dataId
             if "." in field_name:
@@ -516,8 +516,10 @@ class FileTemplate:
                 if "/" not in literal:
                     literal = ""
             else:
-                raise KeyError(f"'{field_name}' requested in template via '{self.template}' "
-                               "but not defined and not optional")
+                raise KeyError(
+                    f"'{field_name}' requested in template via '{self.template}' "
+                    "but not defined and not optional"
+                )
 
             # Handle "/" in values since we do not want to be surprised by
             # unexpected directories turning up
@@ -546,8 +548,9 @@ class FileTemplate:
 
         # Complain if we were meant to use a component
         if component is not None and not usedComponent:
-            raise KeyError("Component '{}' specified but template {} did not use it".format(component,
-                                                                                            self.template))
+            raise KeyError(
+                "Component '{}' specified but template {} did not use it".format(component, self.template)
+            )
 
         # Complain if there's no run
         if not usedRun:
@@ -588,14 +591,16 @@ class FileTemplate:
         # Check that the template has run
         withSpecials = self.fields(specials=True, optionals=True)
         if not withSpecials & self.mandatoryFields:
-            raise FileTemplateValidationError(f"Template '{self}' is missing a mandatory field"
-                                              f" from {self.mandatoryFields}")
+            raise FileTemplateValidationError(
+                f"Template '{self}' is missing a mandatory field from {self.mandatoryFields}"
+            )
 
         # Check that there are some dimension fields in the template
         allfields = self.fields(optionals=True)
         if not allfields:
-            raise FileTemplateValidationError(f"Template '{self}' does not seem to have any fields"
-                                              " corresponding to dimensions.")
+            raise FileTemplateValidationError(
+                f"Template '{self}' does not seem to have any fields corresponding to dimensions."
+            )
 
         # If we do not have dimensions available then all we can do is shrug
         if not hasattr(entity, "dimensions"):
@@ -613,13 +618,16 @@ class FileTemplate:
             # StorageClass not supporting isComponent
             if entity.isComponent():  # type: ignore
                 if "component" not in withSpecials:
-                    raise FileTemplateValidationError(f"Template '{self}' has no component but "
-                                                      f"{entity} refers to a component.")
+                    raise FileTemplateValidationError(
+                        f"Template '{self}' has no component but {entity} refers to a component."
+                    )
             else:
                 mandatorySpecials = self.fields(specials=True)
                 if "component" in mandatorySpecials:
-                    raise FileTemplateValidationError(f"Template '{self}' has mandatory component but "
-                                                      f"{entity} does not refer to a component.")
+                    raise FileTemplateValidationError(
+                        f"Template '{self}' has mandatory component but "
+                        f"{entity} does not refer to a component."
+                    )
         except AttributeError:
             pass
 
@@ -653,12 +661,16 @@ class FileTemplate:
 
         # Calculate any field usage that does not match a dimension
         if not required.issubset(maximal):
-            raise FileTemplateValidationError(f"Template '{self}' is inconsistent with {entity}:"
-                                              f" {required} is not a subset of {maximal}.")
+            raise FileTemplateValidationError(
+                f"Template '{self}' is inconsistent with {entity}:"
+                f" {required} is not a subset of {maximal}."
+            )
 
         if not allfields.issuperset(minimal):
-            raise FileTemplateValidationError(f"Template '{self}' is inconsistent with {entity}:"
-                                              f" {allfields} is not a superset of {minimal}.")
+            raise FileTemplateValidationError(
+                f"Template '{self}' is inconsistent with {entity}:"
+                f" {allfields} is not a superset of {minimal}."
+            )
 
         return
 
@@ -691,8 +703,7 @@ class FileTemplate:
         # not be true in some test code, but that test code is a pain to
         # update to be more like the real world while still providing our
         # only tests of important behavior.
-        skypix = [dimension for dimension in entity.dimensions
-                  if isinstance(dimension, SkyPixDimension)]
+        skypix = [dimension for dimension in entity.dimensions if isinstance(dimension, SkyPixDimension)]
         if len(skypix) == 1:
             alias = skypix[0].name
         return alias

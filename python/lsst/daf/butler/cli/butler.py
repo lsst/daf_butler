@@ -20,19 +20,19 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import abc
-import click
-from collections import defaultdict
 import functools
 import logging
 import os
 import traceback
-import yaml
+from collections import defaultdict
 
-from .cliLog import CliLog
-from .opt import log_level_option, long_log_option, log_file_option, log_tty_option, log_label_option
-from .progress import ClickProgressHandler
+import click
+import yaml
 from lsst.utils import doImport
 
+from .cliLog import CliLog
+from .opt import log_file_option, log_label_option, log_level_option, log_tty_option, long_log_option
+from .progress import ClickProgressHandler
 
 log = logging.getLogger(__name__)
 
@@ -61,8 +61,11 @@ def _importPlugin(pluginName):
         return doImport(pluginName)
     except Exception as err:
         log.warning("Could not import plugin from %s, skipping.", pluginName)
-        log.debug("Plugin import exception: %s\nTraceback:\n%s", err,
-                  "".join(traceback.format_tb(err.__traceback__)))
+        log.debug(
+            "Plugin import exception: %s\nTraceback:\n%s",
+            err,
+            "".join(traceback.format_tb(err.__traceback__)),
+        )
         return None
 
 
@@ -103,8 +106,9 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         if commandsLocation is None:
             # _importPlugins logs an error, don't need to do it again here.
             return defaultdict(list)
-        return defaultdict(list, {self._funcNameToCmdName(f):
-                                  [self.localCmdPkg] for f in commandsLocation.__all__})
+        return defaultdict(
+            list, {self._funcNameToCmdName(f): [self.localCmdPkg] for f in commandsLocation.__all__}
+        )
 
     def list_commands(self, ctx):
         """Used by Click to get all the commands that can be called by the
@@ -152,10 +156,12 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
 
         Subcommands may further configure the log settings."""
         if isinstance(ctx, click.Context):
-            CliLog.initLog(longlog=ctx.params.get(long_log_option.name(), False),
-                           log_tty=ctx.params.get(log_tty_option.name(), True),
-                           log_file=ctx.params.get(log_file_option.name(), ()),
-                           log_label=ctx.params.get(log_label_option.name(), ()))
+            CliLog.initLog(
+                longlog=ctx.params.get(long_log_option.name(), False),
+                log_tty=ctx.params.get(log_tty_option.name(), True),
+                log_file=ctx.params.get(log_file_option.name(), ()),
+                log_label=ctx.params.get(log_label_option.name(), ()),
+            )
             if log_level_option.name() in ctx.params:
                 CliLog.setLogLevels(ctx.params[log_level_option.name()])
         else:
@@ -163,8 +169,10 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             # click.MultiCommand instead of the context.
             # https://github.com/click-contrib/sphinx-click/issues/70
             CliLog.initLog(longlog=False)
-            logging.debug("The passed-in context was not a click.Context, could not determine --long-log or "
-                          "--log-level values.")
+            logging.debug(
+                "The passed-in context was not a click.Context, could not determine --long-log or "
+                "--log-level values."
+            )
 
     @classmethod
     def getPluginList(cls):
@@ -180,7 +188,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             return []
         pluginModules = os.environ.get(cls.pluginEnvVar)
         if pluginModules:
-            return [p for p in pluginModules.split(":") if p != '']
+            return [p for p in pluginModules.split(":") if p != ""]
         return []
 
     @classmethod

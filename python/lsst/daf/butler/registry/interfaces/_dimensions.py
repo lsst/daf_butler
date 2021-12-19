@@ -30,16 +30,7 @@ __all__ = (
 )
 
 from abc import ABC, abstractmethod
-from typing import (
-    AbstractSet, Any,
-    Callable,
-    Dict,
-    Iterable, Mapping,
-    Optional,
-    Tuple,
-    TYPE_CHECKING,
-    Union,
-)
+from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, Iterable, Mapping, Optional, Tuple, Union
 
 import sqlalchemy
 
@@ -81,7 +72,8 @@ class DimensionRecordStorage(ABC):
     @property
     @abstractmethod
     def element(self) -> DimensionElement:
-        """The element whose records this instance holds (`DimensionElement`).
+        """The element whose records this instance managers
+        (`DimensionElement`).
         """
         raise NotImplementedError()
 
@@ -98,7 +90,8 @@ class DimensionRecordStorage(ABC):
     @abstractmethod
     def join(
         self,
-        builder: QueryBuilder, *,
+        builder: QueryBuilder,
+        *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> sqlalchemy.sql.FromClause:
@@ -241,10 +234,14 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
 
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, dimension: GovernorDimension, *,
-                   context: Optional[StaticTablesContext] = None,
-                   config: Mapping[str, Any],
-                   ) -> GovernorDimensionRecordStorage:
+    def initialize(
+        cls,
+        db: Database,
+        dimension: GovernorDimension,
+        *,
+        context: Optional[StaticTablesContext] = None,
+        config: Mapping[str, Any],
+    ) -> GovernorDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
         Parameters
@@ -333,11 +330,15 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
 
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, element: DatabaseDimensionElement, *,
-                   context: Optional[StaticTablesContext] = None,
-                   config: Mapping[str, Any],
-                   governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
-                   ) -> DatabaseDimensionRecordStorage:
+    def initialize(
+        cls,
+        db: Database,
+        element: DatabaseDimensionElement,
+        *,
+        context: Optional[StaticTablesContext] = None,
+        config: Mapping[str, Any],
+        governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+    ) -> DatabaseDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
         Parameters
@@ -463,13 +464,15 @@ class DimensionRecordStorageManager(VersionedExtension):
     records in one layer (often the base layer).  The union of the records
     across all layers forms the logical table for the full `Registry`.
     """
+
     def __init__(self, *, universe: DimensionUniverse):
         self.universe = universe
 
     @classmethod
     @abstractmethod
-    def initialize(cls, db: Database, context: StaticTablesContext, *,
-                   universe: DimensionUniverse) -> DimensionRecordStorageManager:
+    def initialize(
+        cls, db: Database, context: StaticTablesContext, *, universe: DimensionUniverse
+    ) -> DimensionRecordStorageManager:
         """Construct an instance of the manager.
 
         Parameters

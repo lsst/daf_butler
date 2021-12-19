@@ -19,25 +19,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import click
-import click.exceptions
-import click.testing
-from contextlib import contextmanager
 import copy
-from functools import partial, wraps
 import itertools
 import logging
 import os
 import sys
 import textwrap
 import traceback
-from unittest.mock import patch
 import uuid
-import yaml
+from contextlib import contextmanager
+from functools import partial, wraps
+from unittest.mock import patch
 
+import click
+import click.exceptions
+import click.testing
+import yaml
 from lsst.utils.iteration import ensure_iterable
-from .cliLog import CliLog
+
 from ..core.config import Config
+from .cliLog import CliLog
 
 log = logging.getLogger(__name__)
 
@@ -55,9 +56,11 @@ split_kv_separator = "="
 
 
 # The standard help string for the --where option when it takes a WHERE clause.
-where_help = "A string expression similar to a SQL WHERE clause. May involve any column of a " \
-             "dimension table or a dimension name as a shortcut for the primary key column of a " \
-             "dimension table."
+where_help = (
+    "A string expression similar to a SQL WHERE clause. May involve any column of a "
+    "dimension table or a dimension name as a shortcut for the primary key column of a "
+    "dimension table."
+)
 
 
 def astropyTablesToStr(tables):
@@ -237,9 +240,20 @@ def split_commas(context, param, values):
     return tuple(valueList)
 
 
-def split_kv(context, param, values, choice=None, multiple=True, normalize=False, separator="=",
-             unseparated_okay=False, return_type=dict, default_key="", reverse_kv=False,
-             add_to_default=False):
+def split_kv(
+    context,
+    param,
+    values,
+    choice=None,
+    multiple=True,
+    normalize=False,
+    separator="=",
+    unseparated_okay=False,
+    return_type=dict,
+    default_key="",
+    reverse_kv=False,
+    add_to_default=False,
+):
     """Process a tuple of values that are key-value pairs separated by a given
     separator. Multiple pairs may be comma separated. Return a dictionary of
     all the passed-in values.
@@ -326,7 +340,6 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
         return val
 
     class RetDict:
-
         def __init__(self):
             self.ret = {}
 
@@ -339,7 +352,6 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
             return self.ret
 
     class RetTuple:
-
         def __init__(self):
             self.ret = []
 
@@ -381,7 +393,8 @@ def split_kv(context, param, values, choice=None, multiple=True, normalize=False
             except ValueError:
                 raise click.ClickException(
                     f"Could not parse key-value pair '{val}' using separator '{separator}', "
-                    f"with multiple values {'allowed' if multiple else 'not allowed'}.")
+                    f"with multiple values {'allowed' if multiple else 'not allowed'}."
+                )
             ret.add(k, norm(v))
     return ret.get()
 
@@ -427,6 +440,7 @@ def unwrap(val):
         The string with newlines, indentation, and leading and trailing
         whitespace removed.
     """
+
     def splitSection(val):
         if not val.startswith("\n"):
             firstLine, _, val = val.partition("\n")
@@ -454,9 +468,9 @@ class option_section:  # noqa: N801
     def __call__(self, f):
         # Generate a parameter declaration that will be unique for this
         # section.
-        return click.option(f"--option-section-{str(uuid.uuid4())}",
-                            sectionText=self.sectionText,
-                            cls=OptionSection)(f)
+        return click.option(
+            f"--option-section-{str(uuid.uuid4())}", sectionText=self.sectionText, cls=OptionSection
+        )(f)
 
 
 class MWPath(click.Path):
@@ -479,14 +493,21 @@ class MWPath(click.Path):
     For other parameters see `click.Path`.
     """
 
-    def __init__(self, exists=None, file_okay=True, dir_okay=True,
-                 writable=False, readable=True, resolve_path=False,
-                 allow_dash=False, path_type=None):
+    def __init__(
+        self,
+        exists=None,
+        file_okay=True,
+        dir_okay=True,
+        writable=False,
+        readable=True,
+        resolve_path=False,
+        allow_dash=False,
+        path_type=None,
+    ):
         self.mustNotExist = exists is False
         if exists is None:
             exists = False
-        super().__init__(exists, file_okay, dir_okay, writable, readable,
-                         resolve_path, allow_dash, path_type)
+        super().__init__(exists, file_okay, dir_okay, writable, readable, resolve_path, allow_dash, path_type)
 
     def convert(self, value, param, ctx):
         """Called by click.ParamType to "convert values through types".
@@ -601,8 +622,7 @@ class MWOptionDecorator:
     """
 
     def __init__(self, *param_decls, **kwargs):
-        self.partialOpt = partial(click.option, *param_decls, cls=partial(MWOption),
-                                  **kwargs)
+        self.partialOpt = partial(click.option, *param_decls, cls=partial(MWOption), **kwargs)
         opt = click.Option(param_decls, **kwargs)
         self._name = opt.name
         self._opts = opt.opts
@@ -629,7 +649,7 @@ class MWOptionDecorator:
 
 class MWArgumentDecorator:
     """Wraps the click.argument decorator to enable shared arguments to be
-    declared. """
+    declared."""
 
     def __init__(self, *param_decls, **kwargs):
         self._helpText = kwargs.pop("help", None)
@@ -642,6 +662,7 @@ class MWArgumentDecorator:
             if self._helpText:
                 f.__doc__ = addArgumentHelp(f.__doc__, self._helpText)
             return self.partialArg(*args, **kwargs)(f)
+
         return decorator
 
 
@@ -696,7 +717,7 @@ class OptionGroup:
         return f
 
 
-class MWCtxObj():
+class MWCtxObj:
     """Helper object for managing the `click.Context.obj` parameter, allows
     obj data to be managed in a consistent way.
 
@@ -860,6 +881,7 @@ def catch_and_exit(func):
     """Decorator which catches all exceptions, prints an exception traceback
     and signals click to exit.
     """
+
     @wraps(func)
     def inner(*args, **kwargs):
         try:
@@ -872,8 +894,9 @@ def catch_and_exit(func):
             if exc_tb.tb_next:
                 # do not show this decorator in traceback
                 exc_tb = exc_tb.tb_next
-            log.exception("Caught an exception, details are in traceback:",
-                          exc_info=(exc_type, exc_value, exc_tb))
+            log.exception(
+                "Caught an exception, details are in traceback:", exc_info=(exc_type, exc_value, exc_tb)
+            )
             # tell click to stop, this never returns.
             click.get_current_context().exit(1)
 

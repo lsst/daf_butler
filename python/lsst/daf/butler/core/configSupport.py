@@ -23,28 +23,18 @@ from __future__ import annotations
 
 """Support for configuration snippets"""
 
-__all__ = ("LookupKey", "processLookupConfigs",
-           "processLookupConfigList")
+__all__ = ("LookupKey", "processLookupConfigs", "processLookupConfigList")
 
 import logging
 import re
 from collections.abc import Mapping
-
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Iterable,
-    Optional,
-    Set,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Set, Union
 
 from .dimensions import DimensionGraph
 
 if TYPE_CHECKING:
-    from .dimensions import DimensionUniverse, Dimension
     from .config import Config
+    from .dimensions import Dimension, DimensionUniverse
 
 log = logging.getLogger(__name__)
 
@@ -75,9 +65,14 @@ class LookupKey:
         full `DimensionGraph` is not provided.
     """
 
-    def __init__(self, name: Optional[str] = None,
-                 dimensions: Optional[Iterable[Union[str, Dimension]]] = None,
-                 dataId: Optional[Dict[str, Any]] = None, *, universe: Optional[DimensionUniverse] = None):
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        dimensions: Optional[Iterable[Union[str, Dimension]]] = None,
+        dataId: Optional[Dict[str, Any]] = None,
+        *,
+        universe: Optional[DimensionUniverse] = None,
+    ):
         if name is None and dimensions is None:
             raise ValueError("At least one of name or dimensions must be given")
 
@@ -111,9 +106,12 @@ class LookupKey:
                     # default config but the users are using an external
                     # universe.
                     unknown = [name for name in dimension_names if universe.get(name) is None]
-                    log.warning("A LookupKey '%s' uses unknown dimensions: %s. Possible typo?"
-                                " Using the name explicitly.",
-                                name, unknown)
+                    log.warning(
+                        "A LookupKey '%s' uses unknown dimensions: %s. Possible typo?"
+                        " Using the name explicitly.",
+                        name,
+                        unknown,
+                    )
                     self._name = name
             else:
                 self._name = name
@@ -121,8 +119,9 @@ class LookupKey:
         elif dimensions is not None:
             if not isinstance(dimensions, DimensionGraph):
                 if universe is None:
-                    raise ValueError(f"Cannot construct LookupKey for dimensions={dimensions} "
-                                     "without universe.")
+                    raise ValueError(
+                        f"Cannot construct LookupKey for dimensions={dimensions} without universe."
+                    )
                 else:
                     self._dimensions = universe.extract(dimensions)
             else:
@@ -163,8 +162,11 @@ class LookupKey:
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, type(self)):
             return False
-        if self._name == other._name and self._dimensions == other._dimensions and \
-                self._dataId == other._dataId:
+        if (
+            self._name == other._name
+            and self._dimensions == other._dimensions
+            and self._dataId == other._dataId
+        ):
             return True
         return False
 
@@ -193,8 +195,12 @@ class LookupKey:
         """Hash the lookup to allow use as a key in a dict."""
         return hash((self._name, self._dimensions, self._dataId))
 
-    def clone(self, name: Optional[str] = None, dimensions: Optional[DimensionGraph] = None,
-              dataId: Optional[Dict[str, Any]] = None) -> LookupKey:
+    def clone(
+        self,
+        name: Optional[str] = None,
+        dimensions: Optional[DimensionGraph] = None,
+        dataId: Optional[Dict[str, Any]] = None,
+    ) -> LookupKey:
         """Clone the object, overriding some options.
 
         Used to create a new instance of the object whilst updating
@@ -232,10 +238,9 @@ class LookupKey:
         return self.__class__(name=name, dimensions=dimensions, dataId=dataId)
 
 
-def processLookupConfigs(config: Config, *,
-                         allow_hierarchy: bool = False,
-                         universe: Optional[DimensionUniverse] = None) -> Dict[LookupKey,
-                                                                               Union[str, Dict[str, Any]]]:
+def processLookupConfigs(
+    config: Config, *, allow_hierarchy: bool = False, universe: Optional[DimensionUniverse] = None
+) -> Dict[LookupKey, Union[str, Dict[str, Any]]]:
     """Process sections of configuration relating to lookups.
 
     Can be by dataset type name, storage class name, dimensions, or values
@@ -317,8 +322,9 @@ def processLookupConfigs(config: Config, *,
     return contents
 
 
-def processLookupConfigList(config: Iterable[Union[str, Mapping]],
-                            *, universe: Optional[DimensionUniverse] = None) -> Set[LookupKey]:
+def processLookupConfigList(
+    config: Iterable[Union[str, Mapping]], *, universe: Optional[DimensionUniverse] = None
+) -> Set[LookupKey]:
     """Process sections of configuration relating to lookups.
 
     Can be by dataset type name, storage class name, dimensions, or values

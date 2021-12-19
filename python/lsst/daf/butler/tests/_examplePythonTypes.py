@@ -25,15 +25,20 @@ large external dependencies on python classes such as afw or serialization
 formats such as FITS or HDF5.
 """
 
-__all__ = ("ListDelegate", "MetricsDelegate", "MetricsExample", "registerMetricsExample",
-           "MetricsExampleModel")
+__all__ = (
+    "ListDelegate",
+    "MetricsDelegate",
+    "MetricsExample",
+    "registerMetricsExample",
+    "MetricsExampleModel",
+)
 
 
 import copy
-from typing import Optional, Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+from lsst.daf.butler import StorageClass, StorageClassDelegate
 from pydantic import BaseModel
-from lsst.daf.butler import StorageClassDelegate, StorageClass
 
 
 def registerMetricsExample(butler):
@@ -71,7 +76,7 @@ def registerMetricsExample(butler):
         "lsst.daf.butler.formatters.yaml.YamlFormatter",
         pytype=list,
         parameters={"slice"},
-        delegate="lsst.daf.butler.tests.ListDelegate"
+        delegate="lsst.daf.butler.tests.ListDelegate",
     )
 
     _addFullStorageClass(
@@ -80,7 +85,7 @@ def registerMetricsExample(butler):
         "lsst.daf.butler.formatters.pickle.PickleFormatter",
         pytype=MetricsExample,
         parameters={"slice"},
-        delegate="lsst.daf.butler.tests.MetricsDelegate"
+        delegate="lsst.daf.butler.tests.MetricsDelegate",
     )
 
     _addFullStorageClass(
@@ -88,11 +93,12 @@ def registerMetricsExample(butler):
         "StructuredData",
         "lsst.daf.butler.formatters.yaml.YamlFormatter",
         pytype=MetricsExample,
-        components={"summary": yamlDict,
-                    "output": yamlDict,
-                    "data": yamlList,
-                    },
-        delegate="lsst.daf.butler.tests.MetricsDelegate"
+        components={
+            "summary": yamlDict,
+            "output": yamlDict,
+            "data": yamlList,
+        },
+        delegate="lsst.daf.butler.tests.MetricsDelegate",
     )
 
 
@@ -196,8 +202,7 @@ class MetricsExample:
 
     def exportAsDict(self):
         """Convert object contents to a single python dict."""
-        exportDict = {"summary": self.summary,
-                      "output": self.output}
+        exportDict = {"summary": self.summary, "output": self.output}
         if self.data is not None:
             exportDict["data"] = list(self.data)
         else:

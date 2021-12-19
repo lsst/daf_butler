@@ -28,26 +28,21 @@ __all__ = (
 )
 
 from abc import abstractmethod
-
-from typing import (
-    Any,
-    Optional,
-    Type,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, Any, Optional, Type
 
 from lsst.utils.classes import cached_getter
-from ..named import NamedValueAbstractSet, NamedValueSet
+
 from .. import ddl
 from .._topology import TopologicalRelationshipEndpoint
 from ..json import from_json_generic, to_json_generic
+from ..named import NamedValueAbstractSet, NamedValueSet
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from ._universe import DimensionUniverse
+    from ...registry import Registry
     from ._governor import GovernorDimension
     from ._graph import DimensionGraph
     from ._records import DimensionRecord
-    from ...registry import Registry
+    from ._universe import DimensionUniverse
 
 
 class DimensionElement(TopologicalRelationshipEndpoint):
@@ -154,9 +149,9 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         return self.name
 
     @classmethod
-    def from_simple(cls, simple: str,
-                    universe: Optional[DimensionUniverse] = None,
-                    registry: Optional[Registry] = None) -> DimensionElement:
+    def from_simple(
+        cls, simple: str, universe: Optional[DimensionUniverse] = None, registry: Optional[Registry] = None
+    ) -> DimensionElement:
         """Construct a new object from the simplified form.
 
         Usually the data is returned from the `to_simple` method.
@@ -305,6 +300,7 @@ class DimensionElement(TopologicalRelationshipEndpoint):
         this attribute.
         """
         from ._records import _subclassDimensionRecord
+
         return _subclassDimensionRecord(self)
 
     @property

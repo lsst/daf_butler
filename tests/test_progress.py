@@ -20,15 +20,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from contextlib import contextmanager
 import logging
 import unittest
+from contextlib import contextmanager
 
 import click
-
-from lsst.daf.butler.core.progress import Progress, ProgressHandler
-from lsst.daf.butler.cli.utils import clickResultMsg
 from lsst.daf.butler.cli.progress import ClickProgressHandler
+from lsst.daf.butler.cli.utils import clickResultMsg
+from lsst.daf.butler.core.progress import Progress, ProgressHandler
 
 
 class MockProgressBar:
@@ -42,6 +41,7 @@ class MockProgressBar:
     iterable : `Iterable`, optional
         Iterable to wrap, or `None`.
     """
+
     def __init__(self, iterable):
         self._iterable = iterable
         self._current = 0
@@ -68,6 +68,7 @@ class MockProgressHandler(ProgressHandler):
     """A `ProgressHandler` implementation that returns `MockProgressBar`
     instances.
     """
+
     @contextmanager
     def get_progress_bar(self, iterable, desc, total, level):
         yield MockProgressBar(iterable)
@@ -114,8 +115,7 @@ class ClickProgressHandlerTestCase(unittest.TestCase):
         return cmd
 
     def test_click_disabled_by_default(self):
-        """Test that progress is disabled by default in click commands.
-        """
+        """Test that progress is disabled by default in click commands."""
         result = self.runner.invoke(
             self.get_cmd(logging.INFO, enabled=False),
             [],
@@ -123,8 +123,7 @@ class ClickProgressHandlerTestCase(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
     def test_click_enabled(self):
-        """Test turning on progress in click commands.
-        """
+        """Test turning on progress in click commands."""
         result = self.runner.invoke(
             self.get_cmd(logging.INFO, enabled=True),
             ["--progress"],
@@ -132,8 +131,7 @@ class ClickProgressHandlerTestCase(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
     def test_click_disabled_globally(self):
-        """Test turning on progress in click commands.
-        """
+        """Test turning on progress in click commands."""
         result = self.runner.invoke(
             self.get_cmd(logging.INFO, enabled=False),
             ["--no-progress"],
@@ -168,8 +166,7 @@ class MockedProgressHandlerTestCase(unittest.TestCase):
         self.logger.setLevel(logging.NOTSET)
 
     def test_bar_iterable(self):
-        """Test using `Progress.bar` to wrap an iterable.
-        """
+        """Test using `Progress.bar` to wrap an iterable."""
         iterable = list(range(5))
         with self.progress.bar(iterable) as bar:
             r = list(bar)
@@ -177,16 +174,14 @@ class MockedProgressHandlerTestCase(unittest.TestCase):
         self.assertEqual(iterable + [len(iterable)], bar.reported)
 
     def test_bar_update(self):
-        """Test using `Progress.bar` with manual updates.
-        """
+        """Test using `Progress.bar` with manual updates."""
         with self.progress.bar(total=10) as bar:
             for i in range(5):
                 bar.update(2)
         self.assertEqual(list(range(0, 12, 2)), bar.reported)
 
     def test_iter_chunks(self):
-        """Test using `Progress.iter_chunks`.
-        """
+        """Test using `Progress.iter_chunks`."""
         iterable = [list(range(2)), list(range(3))]
         seen = []
         for chunk in self.progress.iter_chunks(iterable):
@@ -195,8 +190,7 @@ class MockedProgressHandlerTestCase(unittest.TestCase):
         self.assertEqual(MockProgressBar.last.reported, [0, 2, 5])
 
     def test_iter_item_chunks(self):
-        """Test using `Progress.iter_item_chunks`.
-        """
+        """Test using `Progress.iter_item_chunks`."""
         mapping = {"x": list(range(2)), "y": list(range(3))}
         seen = {}
         for key, chunk in self.progress.iter_item_chunks(mapping.items()):

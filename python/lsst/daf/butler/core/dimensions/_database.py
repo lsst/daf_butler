@@ -29,34 +29,25 @@ __all__ = (
 )
 
 from types import MappingProxyType
-from typing import (
-    AbstractSet,
-    Dict,
-    Iterable,
-    Mapping,
-    Optional,
-    Set,
-    TYPE_CHECKING,
-)
+from typing import TYPE_CHECKING, AbstractSet, Dict, Iterable, Mapping, Optional, Set
 
 from lsst.utils import doImportType
 from lsst.utils.classes import cached_getter
 
 from .. import ddl
-from ..named import NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
 from .._topology import TopologicalFamily, TopologicalRelationshipEndpoint, TopologicalSpace
-
+from ..named import NamedKeyMapping, NamedValueAbstractSet, NamedValueSet
 from ._elements import Dimension, DimensionCombination, DimensionElement
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:
-    from ._governor import GovernorDimension
     from ...registry.interfaces import (
         Database,
         DatabaseDimensionRecordStorage,
         GovernorDimensionRecordStorage,
         StaticTablesContext,
     )
+    from ._governor import GovernorDimension
 
 
 class DatabaseTopologicalFamily(TopologicalFamily):
@@ -80,7 +71,8 @@ class DatabaseTopologicalFamily(TopologicalFamily):
     def __init__(
         self,
         name: str,
-        space: TopologicalSpace, *,
+        space: TopologicalSpace,
+        *,
         members: NamedValueAbstractSet[DimensionElement],
     ):
         super().__init__(name, space)
@@ -147,18 +139,16 @@ class DatabaseTopologicalFamilyConstructionVisitor(DimensionConstructionVisitor)
     def visit(self, builder: DimensionConstructionBuilder) -> None:
         # Docstring inherited from DimensionConstructionVisitor.
         members = NamedValueSet(builder.elements[name] for name in self._members)
-        family = DatabaseTopologicalFamily(
-            self.name,
-            self._space,
-            members=members.freeze()
-        )
+        family = DatabaseTopologicalFamily(self.name, self._space, members=members.freeze())
         builder.topology[self._space].add(family)
         for member in members:
             assert isinstance(member, (DatabaseDimension, DatabaseDimensionCombination))
             other = member._topology.setdefault(self._space, family)
             if other is not family:
-                raise RuntimeError(f"{member.name} is declared to be a member of (at least) two "
-                                   f"{self._space.name} families: {other.name} and {family.name}.")
+                raise RuntimeError(
+                    f"{member.name} is declared to be a member of (at least) two "
+                    f"{self._space.name} families: {other.name} and {family.name}."
+                )
 
 
 class DatabaseDimensionElement(DimensionElement):
@@ -185,7 +175,8 @@ class DatabaseDimensionElement(DimensionElement):
     def __init__(
         self,
         name: str,
-        storage: dict, *,
+        storage: dict,
+        *,
         implied: NamedValueAbstractSet[Dimension],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
     ):
@@ -240,7 +231,8 @@ class DatabaseDimensionElement(DimensionElement):
 
     def makeStorage(
         self,
-        db: Database, *,
+        db: Database,
+        *,
         context: Optional[StaticTablesContext] = None,
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
@@ -266,6 +258,7 @@ class DatabaseDimensionElement(DimensionElement):
             Storage object that should back this element in a registry.
         """
         from ...registry.interfaces import DatabaseDimensionRecordStorage
+
         cls = doImportType(self._storage["cls"])
         assert issubclass(cls, DatabaseDimensionRecordStorage)
         return cls.initialize(db, self, context=context, config=self._storage, governors=governors)
@@ -310,7 +303,8 @@ class DatabaseDimension(Dimension, DatabaseDimensionElement):
     def __init__(
         self,
         name: str,
-        storage: dict, *,
+        storage: dict,
+        *,
         required: NamedValueSet[Dimension],
         implied: NamedValueAbstractSet[Dimension],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
@@ -376,7 +370,8 @@ class DatabaseDimensionCombination(DimensionCombination, DatabaseDimensionElemen
     def __init__(
         self,
         name: str,
-        storage: dict, *,
+        storage: dict,
+        *,
         required: NamedValueAbstractSet[Dimension],
         implied: NamedValueAbstractSet[Dimension],
         metadata: NamedValueAbstractSet[ddl.FieldSpec],
@@ -454,10 +449,7 @@ class DatabaseDimensionElementConstructionVisitor(DimensionConstructionVisitor):
 
     def hasDependenciesIn(self, others: AbstractSet[str]) -> bool:
         # Docstring inherited from DimensionConstructionVisitor.
-        return not (
-            self._required.isdisjoint(others)
-            and self._implied.isdisjoint(others)
-        )
+        return not (self._required.isdisjoint(others) and self._implied.isdisjoint(others))
 
     def visit(self, builder: DimensionConstructionBuilder) -> None:
         # Docstring inherited from DimensionConstructionVisitor.

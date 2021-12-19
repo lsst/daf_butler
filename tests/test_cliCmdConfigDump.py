@@ -1,4 +1,3 @@
-
 # This file is part of daf_butler.
 #
 # Developed for the LSST Data Management System.
@@ -23,18 +22,17 @@
 """Unit tests for daf_butler CLI config-dump command.
 """
 
-import click
-import os.path
 import os
+import os.path
 import unittest
-import yaml
 
+import click
+import yaml
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.cmd import config_dump
 from lsst.daf.butler.cli.opt import options_file_option
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.tests import CliCmdTestBase
-
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -116,8 +114,7 @@ class ConfigDumpUseTest(unittest.TestCase):
             self.assertEqual(result.exception.args, (1,))
 
     def test_presets(self):
-        """Test that file overrides can set command line options in bulk.
-        """
+        """Test that file overrides can set command line options in bulk."""
         with self.runner.isolated_filesystem():
             result = self.runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
@@ -132,8 +129,9 @@ class ConfigDumpUseTest(unittest.TestCase):
             self.assertIn("root", cfg)
 
             # Now run with an explicit subset and presets
-            result = self.runner.invoke(butler.cli, ["config-dump", "here", f"-@{overrides_path}",
-                                                     "--subset", ".registry"])
+            result = self.runner.invoke(
+                butler.cli, ["config-dump", "here", f"-@{overrides_path}", "--subset", ".registry"]
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             cfg = yaml.safe_load(result.stdout)
             # Look for datastore information
@@ -142,8 +140,9 @@ class ConfigDumpUseTest(unittest.TestCase):
 
             # Now with subset before presets -- explicit always trumps
             # presets.
-            result = self.runner.invoke(butler.cli, ["config-dump", "here", "--subset", ".registry",
-                                                     "--options-file", overrides_path])
+            result = self.runner.invoke(
+                butler.cli, ["config-dump", "here", "--subset", ".registry", "--options-file", overrides_path]
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             cfg = yaml.safe_load(result.stdout)
             # Look for datastore information
@@ -170,8 +169,7 @@ class ConfigDumpUseTest(unittest.TestCase):
             self.assertTrue(os.path.exists(outfile))
 
     def test_presetsDashedName(self):
-        """Test file overrides when the option has a dash in its name.
-        """
+        """Test file overrides when the option has a dash in its name."""
 
         # Instead of using `butler config-dump` as we do in other tests,
         # create a small command for testing, because config-dump does

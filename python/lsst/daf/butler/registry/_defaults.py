@@ -23,9 +23,10 @@ from __future__ import annotations
 
 __all__ = ("RegistryDefaults",)
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 from lsst.utils.classes import immutable
+
 from ..core import DataCoordinate
 from ._exceptions import MissingCollectionError
 from .summaries import CollectionSummary
@@ -72,6 +73,7 @@ class RegistryDefaults:
         dimensions like ``instrument`` and ``skymap``, though this is only
         checked when the defaults struct is actually attached to a `Registry`.
     """
+
     def __init__(self, collections: Any = None, run: Optional[str] = None, infer: bool = True, **kwargs: str):
         if collections is None:
             if run is not None:
@@ -117,7 +119,7 @@ class RegistryDefaults:
                     pass
             if summaries:
                 summary = CollectionSummary.union(*summaries)
-                for dimensionName in (allGovernorDimensions.names - self._kwargs.keys()):
+                for dimensionName in allGovernorDimensions.names - self._kwargs.keys():
                     values = summary.dimensions[dimensionName]
                     if len(values) == 1:
                         (value,) = values

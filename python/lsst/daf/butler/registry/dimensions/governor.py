@@ -34,11 +34,7 @@ from ...core import (
     NamedKeyDict,
     TimespanDatabaseRepresentation,
 )
-from ..interfaces import (
-    Database,
-    GovernorDimensionRecordStorage,
-    StaticTablesContext,
-)
+from ..interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
 
 
@@ -56,6 +52,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
     table : `sqlalchemy.schema.Table`
         The logical table for the dimension.
     """
+
     def __init__(self, db: Database, dimension: GovernorDimension, table: sqlalchemy.schema.Table):
         self._db = db
         self._dimension = dimension
@@ -64,9 +61,14 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         self._callbacks: List[Callable[[DimensionRecord], None]] = []
 
     @classmethod
-    def initialize(cls, db: Database, element: GovernorDimension, *,
-                   context: Optional[StaticTablesContext] = None,
-                   config: Mapping[str, Any]) -> GovernorDimensionRecordStorage:
+    def initialize(
+        cls,
+        db: Database,
+        element: GovernorDimension,
+        *,
+        context: Optional[StaticTablesContext] = None,
+        config: Mapping[str, Any],
+    ) -> GovernorDimensionRecordStorage:
         # Docstring inherited from GovernorDimensionRecordStorage.
         spec = element.RecordClass.fields.makeTableSpec(
             RegionReprClass=db.getSpatialRegionRepresentation(),
@@ -114,13 +116,15 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
 
     def join(
         self,
-        builder: QueryBuilder, *,
+        builder: QueryBuilder,
+        *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
-        joinOn = builder.startJoin(self._table, self.element.dimensions,
-                                   self.element.RecordClass.fields.dimensions.names)
+        joinOn = builder.startJoin(
+            self._table, self.element.dimensions, self.element.RecordClass.fields.dimensions.names
+        )
         builder.finishJoin(self._table, joinOn)
         return self._table
 

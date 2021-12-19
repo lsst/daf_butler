@@ -23,9 +23,9 @@ from __future__ import annotations
 
 __all__ = ("Progress", "ProgressBar", "ProgressHandler")
 
+import logging
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-import logging
 from typing import (
     ClassVar,
     Collection,
@@ -332,12 +332,12 @@ class Progress:
 
 
 class ProgressHandler(ABC):
-    """An interface for objects that can create progress bars.
-    """
+    """An interface for objects that can create progress bars."""
 
     @abstractmethod
-    def get_progress_bar(self, iterable: Optional[Iterable[_T]], desc: str,
-                         total: Optional[int], level: int) -> ContextManager[ProgressBar[_T]]:
+    def get_progress_bar(
+        self, iterable: Optional[Iterable[_T]], desc: str, total: Optional[int], level: int
+    ) -> ContextManager[ProgressBar[_T]]:
         """Create a new progress bar.
 
         Parameters

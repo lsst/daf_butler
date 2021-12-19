@@ -22,41 +22,26 @@ from __future__ import annotations
 
 __all__ = ()
 
+import itertools
 from abc import abstractmethod
 from collections import namedtuple
-import itertools
-from typing import (
-    Any,
-    Dict,
-    Generic,
-    Iterable,
-    Iterator,
-    Optional,
-    Tuple,
-    Type,
-    TYPE_CHECKING,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Any, Dict, Generic, Iterable, Iterator, Optional, Tuple, Type, TypeVar
 
 import sqlalchemy
 
-from ...core import DimensionUniverse, TimespanDatabaseRepresentation, ddl, Timespan
+from ...core import DimensionUniverse, Timespan, TimespanDatabaseRepresentation, ddl
 from .._collectionType import CollectionType
 from .._exceptions import MissingCollectionError
-from ..interfaces import (
-    ChainedCollectionRecord,
-    CollectionManager,
-    CollectionRecord,
-    RunRecord,
-)
+from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionRecord, RunRecord
 from ..wildcards import CollectionSearch
 
 if TYPE_CHECKING:
     from ..interfaces import Database, DimensionRecordStorageManager
 
 
-def _makeCollectionForeignKey(sourceColumnName: str, collectionIdName: str,
-                              **kwargs: Any) -> ddl.ForeignKeySpec:
+def _makeCollectionForeignKey(
+    sourceColumnName: str, collectionIdName: str, **kwargs: Any
+) -> ddl.ForeignKeySpec:
     """Define foreign key specification that refers to collections table.
 
     Parameters
@@ -79,15 +64,15 @@ def _makeCollectionForeignKey(sourceColumnName: str, collectionIdName: str,
     There is also a general assumption that collection primary key consists
     of a single column.
     """
-    return ddl.ForeignKeySpec("collection", source=(sourceColumnName,), target=(collectionIdName,),
-                              **kwargs)
+    return ddl.ForeignKeySpec("collection", source=(sourceColumnName,), target=(collectionIdName,), **kwargs)
 
 
 CollectionTablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run", "collection_chain"])
 
 
-def makeRunTableSpec(collectionIdName: str, collectionIdType: type,
-                     TimespanReprClass: Type[TimespanDatabaseRepresentation]) -> ddl.TableSpec:
+def makeRunTableSpec(
+    collectionIdName: str, collectionIdType: type, TimespanReprClass: Type[TimespanDatabaseRepresentation]
+) -> ddl.TableSpec:
     """Define specification for "run" table.
 
     Parameters
@@ -188,9 +173,18 @@ class DefaultRunRecord(RunRecord):
     timespan : `Timespan`, optional
         Timespan for this run.
     """
-    def __init__(self, db: Database, key: Any, name: str, *, table: sqlalchemy.schema.Table,
-                 idColumnName: str, host: Optional[str] = None,
-                 timespan: Optional[Timespan] = None):
+
+    def __init__(
+        self,
+        db: Database,
+        key: Any,
+        name: str,
+        *,
+        table: sqlalchemy.schema.Table,
+        idColumnName: str,
+        host: Optional[str] = None,
+        timespan: Optional[Timespan] = None,
+    ):
         super().__init__(key=key, name=name, type=CollectionType.RUN)
         self._db = db
         self._table = table
@@ -200,8 +194,7 @@ class DefaultRunRecord(RunRecord):
         self._timespan = timespan
         self._idName = idColumnName
 
-    def update(self, host: Optional[str] = None,
-               timespan: Optional[Timespan] = None) -> None:
+    def update(self, host: Optional[str] = None, timespan: Optional[Timespan] = None) -> None:
         # Docstring inherited from RunRecord.
         if timespan is None:
             timespan = Timespan(begin=None, end=None)
@@ -249,8 +242,16 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
     universe : `DimensionUniverse`
         Object managing all known dimensions.
     """
-    def __init__(self, db: Database, key: Any, name: str, *, table: sqlalchemy.schema.Table,
-                 universe: DimensionUniverse):
+
+    def __init__(
+        self,
+        db: Database,
+        key: Any,
+        name: str,
+        *,
+        table: sqlalchemy.schema.Table,
+        universe: DimensionUniverse,
+    ):
         super().__init__(key=key, name=name, universe=universe)
         self._db = db
         self._table = table
@@ -261,25 +262,26 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
         rows = []
         position = itertools.count()
         for child in children.iter(manager, flattenChains=False):
-            rows.append({
-                "parent": self.key,
-                "child": child.key,
-                "position": next(position),
-            })
+            rows.append(
+                {
+                    "parent": self.key,
+                    "child": child.key,
+                    "position": next(position),
+                }
+            )
         with self._db.transaction():
             self._db.delete(self._table, ["parent"], {"parent": self.key})
             self._db.insert(self._table, *rows)
 
     def _load(self, manager: CollectionManager) -> CollectionSearch:
         # Docstring inherited from ChainedCollectionRecord.
-        sql = sqlalchemy.sql.select(
-            self._table.columns.child,
-        ).select_from(
-            self._table
-        ).where(
-            self._table.columns.parent == self.key
-        ).order_by(
-            self._table.columns.position
+        sql = (
+            sqlalchemy.sql.select(
+                self._table.columns.child,
+            )
+            .select_from(self._table)
+            .where(self._table.columns.parent == self.key)
+            .order_by(self._table.columns.position)
         )
         return CollectionSearch.fromExpression(
             [manager[row._mapping[self._table.columns.child]].name for row in self._db.query(sql)]
@@ -312,8 +314,15 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
     in memory. Memory cache is synchronized from database when `refresh`
     method is called.
     """
-    def __init__(self, db: Database, tables: CollectionTablesTuple, collectionIdName: str, *,
-                 dimensions: DimensionRecordStorageManager):
+
+    def __init__(
+        self,
+        db: Database,
+        tables: CollectionTablesTuple,
+        collectionIdName: str,
+        *,
+        dimensions: DimensionRecordStorageManager,
+    ):
         self._db = db
         self._tables = tables
         self._collectionIdName = collectionIdName
@@ -324,9 +333,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         # Docstring inherited from CollectionManager.
         sql = sqlalchemy.sql.select(
             *(list(self._tables.collection.columns) + list(self._tables.run.columns))
-        ).select_from(
-            self._tables.collection.join(self._tables.run, isouter=True)
-        )
+        ).select_from(self._tables.collection.join(self._tables.run, isouter=True))
         # Put found records into a temporary instead of updating self._records
         # in place, for exception safety.
         records = []
@@ -348,11 +355,13 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                     timespan=TimespanReprClass.extract(row),
                 )
             elif type is CollectionType.CHAINED:
-                record = DefaultChainedCollectionRecord(db=self._db,
-                                                        key=collection_id,
-                                                        table=self._tables.collection_chain,
-                                                        name=name,
-                                                        universe=self._dimensions.universe)
+                record = DefaultChainedCollectionRecord(
+                    db=self._db,
+                    key=collection_id,
+                    table=self._tables.collection_chain,
+                    name=name,
+                    universe=self._dimensions.universe,
+                )
                 chains.append(record)
             else:
                 record = CollectionRecord(key=collection_id, name=name, type=type)
@@ -372,8 +381,9 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                 # the floor (a manual refresh can be used to get it back).
                 self._removeCachedRecord(chain)
 
-    def register(self, name: str, type: CollectionType,
-                 doc: Optional[str] = None) -> Tuple[CollectionRecord, bool]:
+    def register(
+        self, name: str, type: CollectionType, doc: Optional[str] = None
+    ) -> Tuple[CollectionRecord, bool]:
         # Docstring inherited from CollectionManager.
         registered = False
         record = self._getByName(name)
@@ -407,9 +417,13 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                     timespan=TimespanReprClass.extract(row),
                 )
             elif type is CollectionType.CHAINED:
-                record = DefaultChainedCollectionRecord(db=self._db, key=collection_id, name=name,
-                                                        table=self._tables.collection_chain,
-                                                        universe=self._dimensions.universe)
+                record = DefaultChainedCollectionRecord(
+                    db=self._db,
+                    key=collection_id,
+                    name=name,
+                    table=self._tables.collection_chain,
+                    universe=self._dimensions.universe,
+                )
             else:
                 record = CollectionRecord(key=collection_id, name=name, type=type)
             self._addCachedRecord(record)
@@ -421,8 +435,9 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         if record is None:
             raise MissingCollectionError(f"No collection with name '{name}' found.")
         # This may raise
-        self._db.delete(self._tables.collection, [self._collectionIdName],
-                        {self._collectionIdName: record.key})
+        self._db.delete(
+            self._tables.collection, [self._collectionIdName], {self._collectionIdName: record.key}
+        )
         self._removeCachedRecord(record)
 
     def find(self, name: str) -> CollectionRecord:
@@ -444,12 +459,10 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
 
     def getDocumentation(self, key: Any) -> Optional[str]:
         # Docstring inherited from CollectionManager.
-        sql = sqlalchemy.sql.select(
-            self._tables.collection.columns.doc
-        ).select_from(
-            self._tables.collection
-        ).where(
-            self._tables.collection.columns[self._collectionIdName] == key
+        sql = (
+            sqlalchemy.sql.select(self._tables.collection.columns.doc)
+            .select_from(self._tables.collection)
+            .where(self._tables.collection.columns[self._collectionIdName] == key)
         )
         return self._db.query(sql).scalar()
 
@@ -466,17 +479,14 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
             self._records[record.key] = record
 
     def _addCachedRecord(self, record: CollectionRecord) -> None:
-        """Add single record to cache.
-        """
+        """Add single record to cache."""
         self._records[record.key] = record
 
     def _removeCachedRecord(self, record: CollectionRecord) -> None:
-        """Remove single record from cache.
-        """
+        """Remove single record from cache."""
         del self._records[record.key]
 
     @abstractmethod
     def _getByName(self, name: str) -> Optional[CollectionRecord]:
-        """Find collection record given collection name.
-        """
+        """Find collection record given collection name."""
         raise NotImplementedError()

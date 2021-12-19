@@ -22,17 +22,9 @@
 
 import click
 
-from ..utils import (
-    ButlerCommand,
-)
-from ..opt import (
-    collection_argument,
-    confirm_option,
-    options_file_option,
-    repo_argument,
-)
 from ... import script
-
+from ..opt import collection_argument, confirm_option, options_file_option, repo_argument
+from ..utils import ButlerCommand
 
 # messages emitted by remove-collections, defined separately for use in unit
 # tests.
@@ -54,10 +46,10 @@ abortedMsg = "Aborted."
 def remove_collections(**kwargs):
     """Remove one or more non-RUN collections.
 
-This command can be used to remove only non-RUN collections. If RUN collections
-are found when searching for collections (and the --no-confirm flag is not
-used), then they will be shown in a separate table during confirmation, but
-they will not be removed.
+    This command can be used to remove only non-RUN collections. If RUN
+    collections are found when searching for collections (and the --no-confirm
+    flag is not used), then they will be shown in a separate table during
+    confirmation, but they will not be removed.
     """
     confirm = kwargs.pop("confirm")
     result = script.removeCollections(**kwargs)

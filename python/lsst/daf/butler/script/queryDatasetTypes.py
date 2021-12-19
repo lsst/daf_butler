@@ -25,7 +25,7 @@ from typing import Any, List
 from astropy.table import Table
 from numpy import array
 
-from .. import Butler
+from .._butler import Butler
 
 
 def queryDatasetTypes(repo, verbose, glob, components):
@@ -61,9 +61,12 @@ def queryDatasetTypes(repo, verbose, glob, components):
     datasetTypes = butler.registry.queryDatasetTypes(components=components, expression=glob)
     info: List[Any]
     if verbose:
-        table = Table(array([(d.name, str(list(d.dimensions.names)) or "None", d.storageClass.name)
-                             for d in datasetTypes]),
-                      names=("name", "dimensions", "storage class"))
+        table = Table(
+            array(
+                [(d.name, str(list(d.dimensions.names)) or "None", d.storageClass.name) for d in datasetTypes]
+            ),
+            names=("name", "dimensions", "storage class"),
+        )
     else:
         rows = ([d.name for d in datasetTypes],)
         table = Table(rows, names=("name",))

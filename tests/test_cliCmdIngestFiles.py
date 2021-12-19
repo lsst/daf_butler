@@ -22,17 +22,16 @@
 """Unit tests for daf_butler CLI ingest-files command.
 """
 
-import os
 import json
+import os
 import unittest
+
 from astropy.table import Table
-
-from lsst.daf.butler.cli.butler import cli
-from lsst.daf.butler.cli.utils import clickResultMsg, LogCliRunner
 from lsst.daf.butler import Butler
+from lsst.daf.butler.cli.butler import cli
+from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.tests import MetricsExample
-from lsst.daf.butler.tests.utils import ButlerTestHelper, makeTestTempDir, MetricTestRepo, removeTestTempDir
-
+from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -45,8 +44,7 @@ class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
         self.root = makeTestTempDir(TESTDIR)
         self.addCleanup(removeTestTempDir, self.root)
 
-        self.testRepo = MetricTestRepo(self.root,
-                                       configFile=self.configFile)
+        self.testRepo = MetricTestRepo(self.root, configFile=self.configFile)
 
         self.root2 = makeTestTempDir(TESTDIR)
         self.addCleanup(removeTestTempDir, self.root2)
@@ -69,22 +67,21 @@ class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
 
     def testIngestRelativePath(self):
         """Ingest using relative path with prefix."""
-        table = Table([self.files, self.visits, self.instruments],
-                      names=["Files", "visit", "instrument"])
+        table = Table([self.files, self.visits, self.instruments], names=["Files", "visit", "instrument"])
         options = ("--prefix", self.root2)
         self.assertIngest(table, options)
 
     def testIngestAbsoluteWithDataId(self):
         """Ingest with absolute path and factored out dataId override."""
-        table = Table([[os.path.join(self.root2, f) for f in self.files], self.visits],
-                      names=["Files", "visit"])
+        table = Table(
+            [[os.path.join(self.root2, f) for f in self.files], self.visits], names=["Files", "visit"]
+        )
         options = ("--data-id", f"instrument={self.instruments[0]}")
         self.assertIngest(table, options)
 
     def testIngestRelativeWithDataId(self):
         """Ingest with relative path and factored out dataId override."""
-        table = Table([self.files, self.visits],
-                      names=["Files", "visit"])
+        table = Table([self.files, self.visits], names=["Files", "visit"])
         options = ("--data-id", f"instrument={self.instruments[0]}", "--prefix", self.root2)
         self.assertIngest(table, options)
 
@@ -96,8 +93,9 @@ class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
             table.write(table_file)
 
             run = f"u/user/{self.id()}"
-            result = runner.invoke(cli, ["ingest-files", *options,
-                                         self.root, "test_metric_comp", run, table_file])
+            result = runner.invoke(
+                cli, ["ingest-files", *options, self.root, "test_metric_comp", run, table_file]
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
             butler = Butler(self.root)
@@ -105,9 +103,9 @@ class CliIngestFilesTest(unittest.TestCase, ButlerTestHelper):
             self.assertEqual(len(refs), 2)
 
             for i, data in enumerate(self.datasets):
-                butler_data = butler.get("test_metric_comp", visit=self.visits[i],
-                                         instrument=self.instruments[i],
-                                         collections=run)
+                butler_data = butler.get(
+                    "test_metric_comp", visit=self.visits[i], instrument=self.instruments[i], collections=run
+                )
                 self.assertEqual(butler_data, data)
 
 

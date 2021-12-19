@@ -26,10 +26,12 @@ __all__ = (
     "ExpressionTypeError",
 )
 
+import operator
+import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
-import operator
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -39,30 +41,28 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    TYPE_CHECKING,
     TypeVar,
     Union,
 )
-import warnings
 
-from astropy.time import Time
 import astropy.utils.exceptions
 import sqlalchemy
+from astropy.time import Time
+from lsst.utils.iteration import ensure_iterable
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import func
 
-from lsst.utils.iteration import ensure_iterable
 from ....core import (
-    ddl,
     Dimension,
     DimensionElement,
     DimensionUniverse,
     NamedKeyMapping,
     Timespan,
     TimespanDatabaseRepresentation,
+    ddl,
 )
+from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .parser import Node, TreeVisitor
-from .categorize import categorizeElementId, categorizeConstant, ExpressionConstant
 
 # As of astropy 4.2, the erfa interface is shipped independently and
 # ErfaWarning is no longer an AstropyWarning
@@ -138,8 +138,10 @@ class _TimestampColumnElement(sqlalchemy.sql.ColumnElement):
     TIMESTAMP columns returned from queries are still handled by standard
     mechanism and they are converted to `datetime` instances.
     """
-    def __init__(self, column: Optional[sqlalchemy.sql.ColumnElement] = None,
-                 literal: Optional[datetime] = None):
+
+    def __init__(
+        self, column: Optional[sqlalchemy.sql.ColumnElement] = None, literal: Optional[datetime] = None
+    ):
         super().__init__()
         self._column = column
         self._literal = literal
@@ -281,6 +283,7 @@ class ScalarWhereClauseConverter(WhereClauseConverter):
     dtype : `type`
         Python type this expression maps to.
     """
+
     def __init__(self, column: sqlalchemy.sql.ColumnElement, value: Any, dtype: type):
         self.column = column
         self.value = value
@@ -347,7 +350,7 @@ class ScalarWhereClauseConverter(WhereClauseConverter):
         if dtype is not self.dtype:
             raise ExpressionTypeError(
                 f'Error in IN expression "{node}": left hand side has type '
-                f'{dtype.__name__}, but item has type {self.dtype.__name__}.'
+                f"{dtype.__name__}, but item has type {self.dtype.__name__}."
             )
         literals.append(self.column)
 
@@ -361,6 +364,7 @@ class TimespanWhereClauseConverter(WhereClauseConverter):
         Object that represents a logical timespan column or column expression
         (which may or may not be backed by multiple real columns).
     """
+
     def __init__(self, timespan: TimespanDatabaseRepresentation):
         self.timespan = timespan
 
@@ -455,7 +459,7 @@ class TimespanWhereClauseConverter(WhereClauseConverter):
         # Docstring inherited.
         raise ExpressionTypeError(
             f'Invalid element on right side of IN expression "{node}": '
-            'Timespans are not allowed in this context.'
+            "Timespans are not allowed in this context."
         )
 
 
@@ -474,6 +478,7 @@ class RangeWhereClauseConverter(WhereClauseConverter):
     step : `int`
         Step size for the range.
     """
+
     def __init__(self, start: int, stop: int, step: int):
         self.start = start
         self.stop = stop
@@ -495,7 +500,7 @@ class RangeWhereClauseConverter(WhereClauseConverter):
         if dtype is not int:
             raise ExpressionTypeError(
                 f'Error in IN expression "{node}": range expressions '
-                f'are only supported for int operands, not {dtype.__name__}.'
+                f"are only supported for int operands, not {dtype.__name__}."
             )
         ranges.append((self.start, self.stop, self.step))
 
@@ -513,8 +518,9 @@ UnaryColumnFunc = Callable[[sqlalchemy.sql.ColumnElement], sqlalchemy.sql.Column
 column expressions.
 """
 
-BinaryColumnFunc = Callable[[sqlalchemy.sql.ColumnElement, sqlalchemy.sql.ColumnElement],
-                            sqlalchemy.sql.ColumnElement]
+BinaryColumnFunc = Callable[
+    [sqlalchemy.sql.ColumnElement, sqlalchemy.sql.ColumnElement], sqlalchemy.sql.ColumnElement
+]
 """Signature for binary-operation callables that can work directly on
 SQLAlchemy column expressions.
 """
@@ -534,9 +540,11 @@ def adaptUnaryColumnFunc(func: UnaryColumnFunc, result: type) -> UnaryFunc:
     `UnaryColumnFunc` into a `UnaryFunc`, requiring the operand to be a
     `ScalarWhereClauseConverter`.
     """
+
     def adapted(operand: WhereClauseConverter) -> WhereClauseConverter:
         assert isinstance(operand, ScalarWhereClauseConverter)
         return ScalarWhereClauseConverter.fromExpression(func(operand.column), dtype=result)
+
     return adapted
 
 
@@ -545,15 +553,16 @@ def adaptBinaryColumnFunc(func: BinaryColumnFunc, result: type) -> BinaryFunc:
     `BinaryColumnFunc` into a `BinaryFunc`, requiring the operands to be
     `ScalarWhereClauseConverter` instances.
     """
+
     def adapted(lhs: WhereClauseConverter, rhs: WhereClauseConverter) -> WhereClauseConverter:
         assert isinstance(lhs, ScalarWhereClauseConverter)
         assert isinstance(rhs, ScalarWhereClauseConverter)
         return ScalarWhereClauseConverter.fromExpression(func(lhs.column, rhs.column), dtype=result)
+
     return adapted
 
 
 class TimeBinaryOperator:
-
     def __init__(self, operator: Callable, dtype: type):
         self.operator = operator
         self.dtype = dtype
@@ -588,8 +597,7 @@ class TimeBinaryOperator:
         """
 
         def _coerce(arg: ScalarWhereClauseConverter) -> ScalarWhereClauseConverter:
-            """Coerce single ScalarWhereClauseConverter to datetime literal.
-            """
+            """Coerce single ScalarWhereClauseConverter to datetime literal."""
             if arg.dtype is not datetime:
                 assert arg.value is not None, "Cannot coerce non-literals"
                 assert arg.dtype is Time, "Cannot coerce non-Time literals"
@@ -622,6 +630,7 @@ class DispatchTable:
     noting that I first tried the traditional visitor-pattern approach here,
     and it was *definitely* much harder to see the actual behavior.
     """
+
     def __init__(self) -> None:
         self._unary: Dict[Tuple[str, type], UnaryFunc] = {}
         self._binary: Dict[Tuple[str, type, type], BinaryFunc] = {}
@@ -667,10 +676,7 @@ class DispatchTable:
         elif adapt is False:
             adapt = adaptIdentity
         for item in ensure_iterable(operand):
-            self._unary[operator, item] = adapt(
-                func,
-                result if result is not None else item
-            )
+            self._unary[operator, item] = adapt(func, result if result is not None else item)
 
     def registerBinary(
         self,
@@ -811,18 +817,48 @@ class DispatchTable:
         table.registerBinary("*", (int, float), operator.__mul__)
         table.registerBinary("/", (int, float), operator.__truediv__)
         table.registerBinary("%", (int, float), operator.__mod__)
-        table.registerBinary("=", (Time, datetime), TimeBinaryOperator(operator.__eq__, bool),
-                             rhs=(Time, datetime), adapt=False)
-        table.registerBinary("!=", (Time, datetime), TimeBinaryOperator(operator.__ne__, bool),
-                             rhs=(Time, datetime), adapt=False)
-        table.registerBinary("<", (Time, datetime), TimeBinaryOperator(operator.__lt__, bool),
-                             rhs=(Time, datetime), adapt=False)
-        table.registerBinary(">", (Time, datetime), TimeBinaryOperator(operator.__gt__, bool),
-                             rhs=(Time, datetime), adapt=False)
-        table.registerBinary("<=", (Time, datetime), TimeBinaryOperator(operator.__le__, bool),
-                             rhs=(Time, datetime), adapt=False)
-        table.registerBinary(">=", (Time, datetime), TimeBinaryOperator(operator.__ge__, bool),
-                             rhs=(Time, datetime), adapt=False)
+        table.registerBinary(
+            "=",
+            (Time, datetime),
+            TimeBinaryOperator(operator.__eq__, bool),
+            rhs=(Time, datetime),
+            adapt=False,
+        )
+        table.registerBinary(
+            "!=",
+            (Time, datetime),
+            TimeBinaryOperator(operator.__ne__, bool),
+            rhs=(Time, datetime),
+            adapt=False,
+        )
+        table.registerBinary(
+            "<",
+            (Time, datetime),
+            TimeBinaryOperator(operator.__lt__, bool),
+            rhs=(Time, datetime),
+            adapt=False,
+        )
+        table.registerBinary(
+            ">",
+            (Time, datetime),
+            TimeBinaryOperator(operator.__gt__, bool),
+            rhs=(Time, datetime),
+            adapt=False,
+        )
+        table.registerBinary(
+            "<=",
+            (Time, datetime),
+            TimeBinaryOperator(operator.__le__, bool),
+            rhs=(Time, datetime),
+            adapt=False,
+        )
+        table.registerBinary(
+            ">=",
+            (Time, datetime),
+            TimeBinaryOperator(operator.__ge__, bool),
+            rhs=(Time, datetime),
+            adapt=False,
+        )
         table.registerBinary(
             "=",
             lhs=(int, float, str, Time, type(None)),
@@ -952,6 +988,7 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
         Class that encapsulates the representation of `Timespan` objects in
         the database.
     """
+
     def __init__(
         self,
         universe: DimensionUniverse,
@@ -1021,8 +1058,7 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
         else:
             assert isinstance(element, Dimension)
             return ScalarWhereClauseConverter.fromExpression(
-                self.columns.getKeyColumn(element),
-                element.primaryKey.getPythonType()
+                self.columns.getKeyColumn(element), element.primaryKey.getPythonType()
             )
 
     def visitUnaryOp(self, operator: str, operand: WhereClauseConverter, node: Node) -> WhereClauseConverter:
@@ -1042,7 +1078,7 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
             return self._dispatch.applyBinary(operator, lhs, rhs)
         except KeyError:
             raise ExpressionTypeError(
-                f'Invalid operand types ({lhs.dtype}, {rhs.dtype}) for binary '
+                f"Invalid operand types ({lhs.dtype}, {rhs.dtype}) for binary "
                 f'operator {operator} in "{node}".'
             ) from None
 
@@ -1054,9 +1090,7 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
         node: Node,
     ) -> WhereClauseConverter:
         if not isinstance(lhs, ScalarWhereClauseConverter):
-            raise ExpressionTypeError(
-                f'Invalid LHS operand of type {lhs.dtype} for IN operator in "{node}".'
-            )
+            raise ExpressionTypeError(f'Invalid LHS operand of type {lhs.dtype} for IN operator in "{node}".')
         # Docstring inherited from TreeVisitor.visitIsIn
         #
         # `values` is a list of literals and ranges, range is represented

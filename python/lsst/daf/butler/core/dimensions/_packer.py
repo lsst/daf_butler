@@ -21,26 +21,16 @@
 
 from __future__ import annotations
 
-
 __all__ = ("DimensionPacker",)
 
 from abc import ABCMeta, abstractmethod
-from typing import (
-    AbstractSet,
-    Any,
-    Iterable,
-    Optional,
-    Tuple,
-    Type,
-    TYPE_CHECKING,
-    Union,
-)
+from typing import TYPE_CHECKING, AbstractSet, Any, Iterable, Optional, Tuple, Type, Union
 
 from lsst.utils import doImportType
 
-from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 from ._coordinate import DataCoordinate, DataId
 from ._graph import DimensionGraph
+from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from ._universe import DimensionUniverse
@@ -104,8 +94,9 @@ class DimensionPacker(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    def pack(self, dataId: DataId, *, returnMaxBits: bool = False,
-             **kwargs: Any) -> Union[Tuple[int, int], int]:
+    def pack(
+        self, dataId: DataId, *, returnMaxBits: bool = False, **kwargs: Any
+    ) -> Union[Tuple[int, int], int]:
         """Pack the given data ID into a single integer.
 
         Parameters
@@ -230,8 +221,9 @@ class DimensionPackerFactory:
         assert fixed.graph.issuperset(self._fixed)
         if self._cls is None:
             packer_class = doImportType(self._clsName)
-            assert not isinstance(packer_class, DimensionPacker), \
-                f"Packer class {self._clsName} must be a DimensionPacker."
+            assert not isinstance(
+                packer_class, DimensionPacker
+            ), f"Packer class {self._clsName} must be a DimensionPacker."
             self._cls = packer_class
         return self._cls(fixed, self._dimensions)
 
