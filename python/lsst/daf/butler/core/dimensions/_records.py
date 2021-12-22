@@ -287,6 +287,13 @@ class DimensionRecord:
         mapping = {name: getattr(self, name) for name in self.__slots__}
         return (_reconstructDimensionRecord, (self.definition, mapping))
 
+    def _repr_html_(self) -> str:
+        """Override the default representation in IPython/Jupyter notebooks.
+
+        This gives a more readable output that understands embedded newlines.
+        """
+        return f"<pre>{self}<pre>"
+
     def to_simple(self, minimal: bool = False) -> SerializedDimensionRecord:
         """Convert this class to a simple python type.
 
