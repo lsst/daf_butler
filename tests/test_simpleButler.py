@@ -596,7 +596,7 @@ class SimpleButlerTestCase(unittest.TestCase):
                     from_json = type(test_item).from_json(json_str, universe=butler.registry.dimensions)
                     self.assertEqual(from_json, test_item, msg=f"From JSON '{json_str}' using universe")
 
-    def testJsonDimensionRecords(self):
+    def testJsonDimensionRecordsAndHtmlRepresentation(self):
         # Dimension Records
         butler = self.makeButler(writeable=True)
         butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "hsc-rc2-subset.yaml"))
@@ -614,6 +614,11 @@ class SimpleButlerTestCase(unittest.TestCase):
                     self.assertEqual(simple, fromDirect)
                     # Also check equality of each of the components as dicts
                     self.assertEqual(r_json.toDict(), r.toDict())
+
+                    # check the html representation of records
+                    r_html = r._repr_html_()
+                    self.assertTrue(isinstance(r_html, str))
+                    self.assertIn(dimension, r_html)
 
     def testWildcardQueries(self):
         """Test that different collection type queries work."""
