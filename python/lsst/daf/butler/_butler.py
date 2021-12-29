@@ -764,9 +764,14 @@ class Butler:
         # where additional dimensions can be used to constrain the temporal
         # axis.
         if not_dimensions:
-            # Calculate missing dimensions
-            provided = set(newDataId) | set(kwargs) | set(byRecord)
-            missingDimensions = datasetType.dimensions.names - provided
+            # Search for all dimensions even if we have been given a value
+            # explicitly. In some cases records are given as well as the
+            # actually dimension and this should not be an error if they
+            # match.
+            mandatoryDimensions = datasetType.dimensions.names  # - provided
+
+            candidateDimensions: Set[str] = set()
+            candidateDimensions.update(mandatoryDimensions)
 
             # For calibrations we may well be needing temporal dimensions
             # so rather than always including all dimensions in the scan
@@ -775,8 +780,6 @@ class Butler:
             # If we are not searching calibration collections things may
             # fail but they are going to fail anyway because of the
             # ambiguousness of the dataId...
-            candidateDimensions: Set[str] = set()
-            candidateDimensions.update(missingDimensions)
             if datasetType.isCalibration():
                 for dim in self.registry.dimensions.getStaticDimensions():
                     if dim.temporal:
@@ -819,7 +822,7 @@ class Butler:
             for fieldName, assignedDimensions in assigned.items():
                 if len(assignedDimensions) > 1:
                     # Pick the most popular (preferring mandatory dimensions)
-                    requiredButMissing = assignedDimensions.intersection(missingDimensions)
+                    requiredButMissing = assignedDimensions.intersection(mandatoryDimensions)
                     if requiredButMissing:
                         candidateDimensions = requiredButMissing
                     else:
