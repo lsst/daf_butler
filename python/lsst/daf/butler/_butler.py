@@ -901,12 +901,12 @@ class Butler:
                         log.debug("Received %d records from constraints of %s", len(records), str(values))
                         for r in records:
                             log.debug("- %s", str(r))
-                        raise RuntimeError(
+                        raise ValueError(
                             f"DataId specification for dimension {dimensionName} is not"
                             f" uniquely constrained to a single dataset by {values}."
                             f" Got {len(records)} results."
                         )
-                    raise RuntimeError(
+                    raise ValueError(
                         f"DataId specification for dimension {dimensionName} matched no"
                         f" records when constrained by {values}"
                     )
