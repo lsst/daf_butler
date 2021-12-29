@@ -670,7 +670,7 @@ class Butler:
             no keyword arguments, the original dataId will be returned
             unchanged.
         **kwargs : `dict`
-            Any unused keyword arguments.
+            Any unused keyword arguments (would normally be empty dict).
         """
         # Do nothing if we have a standalone DataCoordinate.
         if isinstance(dataId, DataCoordinate) and not kwargs:
@@ -743,6 +743,18 @@ class Butler:
                             dimensionName,
                             dimension.primaryKey.getPythonType(),
                         )
+
+        # By this point kwargs and newDataId should only include valid
+        # dimensions. Merge kwargs in to the new dataId and log if there
+        # are dimensions in both (rather than calling update).
+        for k, v in kwargs.items():
+            if k in newDataId and newDataId[k] != v:
+                log.debug(
+                    "Keyword arg %s overriding explicit value in dataId of %s with %s", k, newDataId[k], v
+                )
+            newDataId[k] = v
+        # No need to retain any values in kwargs now.
+        kwargs = {}
 
         # If we have some unrecognized dimensions we have to try to connect
         # them to records in other dimensions.  This is made more complicated
@@ -890,10 +902,7 @@ class Butler:
                     )
                 newDataId[dimensionName] = getattr(records.pop(), dimension.primaryKey.name)
 
-            # We have modified the dataId so need to switch to it
-            dataId = newDataId
-
-        return dataId, kwargs
+        return newDataId, kwargs
 
     def _findDatasetRef(
         self,
