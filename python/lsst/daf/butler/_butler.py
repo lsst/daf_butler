@@ -866,6 +866,23 @@ class Butler:
                         newDataId[dimensionName],
                         str(values),
                     )
+                    # Get the actual record and compare with these values.
+                    recs = list(self.registry.queryDimensionRecords(dimensionName, dataId=newDataId))
+                    if len(recs) == 1:
+                        errmsg: List[str] = []
+                        for k, v in values.items():
+                            if (recval := getattr(recs[0], k)) != v:
+                                errmsg.append(f"{k}({recval} != {v})")
+                        if errmsg:
+                            raise ValueError(
+                                f"Dimension {dimensionName} in dataId has explicit value"
+                                " inconsistent with records: " + ", ".join(errmsg)
+                            )
+                    else:
+                        # Multiple matches for an explicit dimension
+                        # should never happen, and if there are no matches
+                        # let downstream complain.
+                        pass
                     continue
 
                 # Build up a WHERE expression
