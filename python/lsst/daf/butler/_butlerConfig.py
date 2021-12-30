@@ -30,7 +30,9 @@ import copy
 import os
 from typing import Optional, Sequence, Union
 
-from .core import ButlerURI, Config, DatastoreConfig, StorageClassConfig
+from lsst.resources import ResourcePath
+
+from .core import Config, DatastoreConfig, StorageClassConfig
 from .registry import RegistryConfig
 from .transfers import RepoTransferFormatConfig
 
@@ -63,11 +65,11 @@ class ButlerConfig(Config):
 
     def __init__(
         self,
-        other: Optional[Union[str, ButlerURI, Config]] = None,
-        searchPaths: Sequence[Union[str, ButlerURI]] = None,
+        other: Optional[Union[str, ResourcePath, Config]] = None,
+        searchPaths: Sequence[Union[str, ResourcePath]] = None,
     ):
 
-        self.configDir: Optional[ButlerURI] = None
+        self.configDir: Optional[ResourcePath] = None
 
         # If this is already a ButlerConfig we assume that defaults
         # have already been loaded.
@@ -79,7 +81,7 @@ class ButlerConfig(Config):
 
         if isinstance(other, (str, os.PathLike)):
             # This will only allow supported schemes
-            uri = ButlerURI(other)
+            uri = ResourcePath(other)
 
             # We allow the butler configuration file to be left off the
             # URI supplied by the user. If a directory-like URI is given
@@ -89,7 +91,7 @@ class ButlerConfig(Config):
             # we have been given a directory-like URI if there is no
             # file extension. Local URIs do not need any guess work.
             if not uri.isLocal and not uri.getExtension():
-                uri = ButlerURI(other, forceDirectory=True)
+                uri = ResourcePath(other, forceDirectory=True)
 
             if uri.isdir():
                 # Could also be butler.json (for example in the butler
@@ -107,7 +109,7 @@ class ButlerConfig(Config):
 
         configFile = butlerConfig.configFile
         if configFile is not None:
-            uri = ButlerURI(configFile)
+            uri = ResourcePath(configFile)
             self.configFile = uri
             self.configDir = uri.dirname()
 

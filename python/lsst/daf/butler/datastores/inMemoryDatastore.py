@@ -31,8 +31,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
 from urllib.parse import urlencode
 
-from lsst.daf.butler import ButlerURI, DatasetId, DatasetRef, StorageClass, StoredDatastoreItemInfo
+from lsst.daf.butler import DatasetId, DatasetRef, StorageClass, StoredDatastoreItemInfo
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
+from lsst.resources import ResourcePath
 
 from .genericDatastore import GenericBaseDatastore
 
@@ -392,7 +393,7 @@ class InMemoryDatastore(GenericBaseDatastore):
 
     def getURIs(
         self, ref: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
         """Return URIs associated with dataset.
 
         Parameters
@@ -405,7 +406,7 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        primary : `ButlerURI`
+        primary : `lsst.resources.ResourcePath`
             The URI to the primary artifact associated with this dataset.
             If the dataset was disassembled within the datastore this
             may be `None`.
@@ -433,9 +434,9 @@ class InMemoryDatastore(GenericBaseDatastore):
             name = f"{id(self.datasets[realID])}?{query}"
             fragment = ""
 
-        return ButlerURI(f"mem://{name}?{query}{fragment}"), {}
+        return ResourcePath(f"mem://{name}?{query}{fragment}"), {}
 
-    def getURI(self, ref: DatasetRef, predict: bool = False) -> ButlerURI:
+    def getURI(self, ref: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.
 
         Always uses "mem://" URI prefix.
@@ -477,11 +478,11 @@ class InMemoryDatastore(GenericBaseDatastore):
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
-        destination: ButlerURI,
+        destination: ResourcePath,
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: Optional[bool] = False,
-    ) -> List[ButlerURI]:
+    ) -> List[ResourcePath]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Notes

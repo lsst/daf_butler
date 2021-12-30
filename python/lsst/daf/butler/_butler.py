@@ -56,6 +56,7 @@ from typing import (
     Union,
 )
 
+from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
@@ -65,7 +66,6 @@ from ._butlerRepoIndex import ButlerRepoIndex
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from .core import (
     AmbiguousDatasetError,
-    ButlerURI,
     Config,
     ConfigSubset,
     DataCoordinate,
@@ -290,7 +290,7 @@ class Butler:
     """
 
     @classmethod
-    def get_repo_uri(cls, label: str) -> ButlerURI:
+    def get_repo_uri(cls, label: str) -> ResourcePath:
         """Look up the label in a butler repository index.
 
         Parameters
@@ -300,7 +300,7 @@ class Butler:
 
         Returns
         -------
-        uri : `ButlerURI`
+        uri : `lsst.resources.ResourcePath`
             URI to the Butler repository associated with the given label.
 
         Raises
@@ -348,7 +348,7 @@ class Butler:
 
         Parameters
         ----------
-        root : `str` or `ButlerURI`
+        root : `str` or `lsst.resources.ResourcePath`
             Path or URI to the root location of the new repository. Will be
             created if it does not exist.
         config : `Config` or `str`, optional
@@ -417,7 +417,7 @@ class Butler:
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
 
         # Ensure that the root of the repository exists or can be made
-        uri = ButlerURI(root, forceDirectory=True)
+        uri = ResourcePath(root, forceDirectory=True)
         uri.mkdir()
 
         config = Config(config)
@@ -457,7 +457,7 @@ class Butler:
             # branch, _everything_ in the config is expanded, so there's no
             # need to special case this.
             Config.updateParameters(RegistryConfig, config, full, toMerge=("managers",), overwrite=False)
-        configURI: Union[str, ButlerURI]
+        configURI: Union[str, ResourcePath]
         if outfile is not None:
             # When writing to a separate location we must include
             # the root of the butler repo in the config else it won't know
@@ -1286,7 +1286,7 @@ class Butler:
         collections: Any = None,
         run: Optional[str] = None,
         **kwargs: Any,
-    ) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
         """Returns the URIs associated with the dataset.
 
         Parameters
@@ -1314,7 +1314,7 @@ class Butler:
 
         Returns
         -------
-        primary : `ButlerURI`
+        primary : `lsst.resources.ResourcePath`
             The URI to the primary artifact associated with this dataset.
             If the dataset was disassembled within the datastore this
             may be `None`.
@@ -1344,7 +1344,7 @@ class Butler:
         collections: Any = None,
         run: Optional[str] = None,
         **kwargs: Any,
-    ) -> ButlerURI:
+    ) -> ResourcePath:
         """Return the URI to the Dataset.
 
         Parameters
@@ -1372,7 +1372,7 @@ class Butler:
 
         Returns
         -------
-        uri : `ButlerURI`
+        uri : `lsst.resources.ResourcePath`
             URI pointing to the Dataset within the datastore. If the
             Dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
@@ -1409,11 +1409,11 @@ class Butler:
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
-        destination: Union[str, ButlerURI],
+        destination: Union[str, ResourcePath],
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> List[ButlerURI]:
+    ) -> List[ResourcePath]:
         """Retrieve the artifacts associated with the supplied refs.
 
         Parameters
@@ -1422,11 +1422,12 @@ class Butler:
             The datasets for which artifacts are to be retrieved.
             A single ref can result in multiple artifacts. The refs must
             be resolved.
-        destination : `ButlerURI` or `str`
+        destination : `lsst.resources.ResourcePath` or `str`
             Location to write the artifacts.
         transfer : `str`, optional
             Method to use to transfer the artifacts. Must be one of the options
-            supported by `ButlerURI.transfer_from()`. "move" is not allowed.
+            supported by `~lsst.resources.ResourcePath.transfer_from()`.
+            "move" is not allowed.
         preserve_path : `bool`, optional
             If `True` the full path of the artifact within the datastore
             is preserved. If `False` the final file component of the path
@@ -1437,7 +1438,7 @@ class Butler:
 
         Returns
         -------
-        targets : `list` of `ButlerURI`
+        targets : `list` of `lsst.resources.ResourcePath`
             URIs of file artifacts in destination location. Order is not
             preserved.
 
@@ -1449,7 +1450,11 @@ class Butler:
         as a JSON file.
         """
         return self.datastore.retrieveArtifacts(
-            refs, ButlerURI(destination), transfer=transfer, preserve_path=preserve_path, overwrite=overwrite
+            refs,
+            ResourcePath(destination),
+            transfer=transfer,
+            preserve_path=preserve_path,
+            overwrite=overwrite,
         )
 
     def datasetExists(
@@ -2091,7 +2096,7 @@ class Butler:
         # purged, we have to ask for the (predicted) URI and check
         # existence explicitly. Execution butler is set up exactly like
         # this with no datastore records.
-        artifact_existence: Dict[ButlerURI, bool] = {}
+        artifact_existence: Dict[ResourcePath, bool] = {}
         if skip_missing:
             dataset_existence = source_butler.datastore.mexists(
                 source_refs, artifact_existence=artifact_existence

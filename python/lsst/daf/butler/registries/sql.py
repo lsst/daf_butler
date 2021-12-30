@@ -29,10 +29,10 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Set, Tuple, Union
 
 import sqlalchemy
+from lsst.resources import ResourcePath
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
-    ButlerURI,
     Config,
     DataCoordinate,
     DataCoordinateIterable,
@@ -149,7 +149,7 @@ class SqlRegistry(Registry):
     def fromConfig(
         cls,
         config: Union[ButlerConfig, RegistryConfig, Config, str],
-        butlerRoot: Optional[Union[str, ButlerURI]] = None,
+        butlerRoot: Optional[Union[str, ResourcePath]] = None,
         writeable: bool = True,
         defaults: Optional[RegistryDefaults] = None,
     ) -> Registry:
@@ -161,7 +161,7 @@ class SqlRegistry(Registry):
         ----------
         config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
             Registry configuration
-        butlerRoot : `str` or `ButlerURI`, optional
+        butlerRoot : `str` or `lsst.resources.ResourcePath`, optional
             Path to the repository root this `Registry` will manage.
         writeable : `bool`, optional
             If `True` (default) create a read-write connection to the database.

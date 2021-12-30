@@ -51,7 +51,7 @@ class _Table:
         ----------
         datasetRef : ``DatasetRef``
             A dataset ref that will be added as a row in the table.
-        uri : ``ButlerURI``, optional
+        uri : ``lsst.resources.ResourcePath``, optional
             The URI to show as a file location in the table, by default None
         """
         if uri:

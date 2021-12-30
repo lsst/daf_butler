@@ -37,10 +37,9 @@ from pathlib import Path
 from typing import IO, Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
 
 import yaml
+from lsst.resources import ResourcePath
 from lsst.utils import doImport
 from yaml.representer import Representer
-
-from ._butlerUri import ButlerURI
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
@@ -123,10 +122,10 @@ class Loader(yamlLoader):
         super().__init__(stream)
         # if this is a string and not a stream we may well lack a name
         try:
-            self._root = ButlerURI(stream.name)
+            self._root = ResourcePath(stream.name)
         except AttributeError:
             # No choice but to assume a local filesystem
-            self._root = ButlerURI("no-file.yaml")
+            self._root = ResourcePath("no-file.yaml")
         Loader.add_constructor("!include", Loader.include)
 
     def include(self, node):
@@ -155,7 +154,7 @@ class Loader(yamlLoader):
         # instead of a relative URI, therefore we first see if it is
         # scheme-less or not. If it has a scheme we use it directly
         # if it is scheme-less we use it relative to the file root.
-        requesteduri = ButlerURI(filename, forceAbsolute=False)
+        requesteduri = ResourcePath(filename, forceAbsolute=False)
 
         if requesteduri.scheme:
             fileuri = requesteduri
@@ -216,11 +215,12 @@ class Config(collections.abc.MutableMapping):
 
     Parameters
     ----------
-    other : `str` or `Config` or `dict` or `ButlerURI` or `pathlib.Path`
+    other : `str` or `Config` or `dict` or `lsst.resources.ResourcePath`
+            or `pathlib.Path`
         Other source of configuration, can be:
 
-        - (`str` or `ButlerURI`) Treated as a URI to a config file. Must end
-          with ".yaml".
+        - (`str` or `lsst.resources.ResourcePath`) Treated as a URI to a
+          config file. Must end with ".yaml".
         - (`Config`) Copies the other Config's values into this one.
         - (`dict`) Copies the values from the dict into this Config.
 
@@ -253,7 +253,7 @@ class Config(collections.abc.MutableMapping):
             # In most cases we have a dict, and it's more efficient
             # to check for a dict instance before checking the generic mapping.
             self.update(other)
-        elif isinstance(other, (str, ButlerURI, Path)):
+        elif isinstance(other, (str, ResourcePath, Path)):
             # if other is a string, assume it is a file path/URI
             self.__initFromUri(other)
             self._processExplicitIncludes()
@@ -332,7 +332,7 @@ class Config(collections.abc.MutableMapping):
         """
         return cls.fromString(string, format="yaml")
 
-    def __initFromUri(self, path: Union[str, ButlerURI, Path]) -> None:
+    def __initFromUri(self, path: Union[str, ResourcePath, Path]) -> None:
         """Load a file from a path or an URI.
 
         Parameters
@@ -340,7 +340,7 @@ class Config(collections.abc.MutableMapping):
         path : `str`
             Path or a URI to a persisted config file.
         """
-        uri = ButlerURI(path)
+        uri = ResourcePath(path)
         ext = uri.getExtension()
         if ext == ".yaml":
             log.debug("Opening YAML config file: %s", uri.geturl())
@@ -415,9 +415,9 @@ class Config(collections.abc.MutableMapping):
         Looks for ``includeConfigs`` directive and processes the includes.
         """
         # Search paths for config files
-        searchPaths = [ButlerURI(os.path.curdir, forceDirectory=True)]
+        searchPaths = [ResourcePath(os.path.curdir, forceDirectory=True)]
         if self.configFile is not None:
-            if isinstance(self.configFile, ButlerURI):
+            if isinstance(self.configFile, ResourcePath):
                 configDir = self.configFile.dirname()
             else:
                 raise RuntimeError(f"Unexpected type for config file: {self.configFile}")
@@ -445,13 +445,13 @@ class Config(collections.abc.MutableMapping):
                 subConfigs = []
                 for fileName in includes:
                     # Expand any shell variables -- this could be URI
-                    fileName = ButlerURI(os.path.expandvars(fileName), forceAbsolute=False)
+                    fileName = ResourcePath(os.path.expandvars(fileName), forceAbsolute=False)
                     found = None
                     if fileName.isabs():
                         found = fileName
                     else:
                         for dir in searchPaths:
-                            if isinstance(dir, ButlerURI):
+                            if isinstance(dir, ResourcePath):
                                 specific = dir.join(fileName.path)
                                 # Remote resource check might be expensive
                                 if specific.exists():
@@ -901,7 +901,7 @@ class Config(collections.abc.MutableMapping):
 
     def dumpToUri(
         self,
-        uri: Union[ButlerURI, str],
+        uri: Union[ResourcePath, str],
         updateFile: bool = True,
         defaultFileName: str = "butler.yaml",
         overwrite: bool = True,
@@ -912,7 +912,7 @@ class Config(collections.abc.MutableMapping):
 
         Parameters
         ----------
-        uri: `str` or `ButlerURI`
+        uri: `str` or `lsst.resources.ResourcePath`
             URI of location where the Config will be written.
         updateFile : bool, optional
             If True and uri does not end on a filename with extension, will
@@ -925,7 +925,7 @@ class Config(collections.abc.MutableMapping):
             exists at that location.
         """
         # Make local copy of URI or create new one
-        uri = ButlerURI(uri)
+        uri = ResourcePath(uri)
 
         if updateFile and not uri.getExtension():
             uri = uri.updatedFile(defaultFileName)
@@ -1104,7 +1104,7 @@ class ConfigSubset(Config):
         be supplied in priority order. These paths have higher priority
         than those read from the environment in
         `ConfigSubset.defaultSearchPaths()`.  Paths can be `str` referring to
-        the local file system or URIs, `ButlerURI`.
+        the local file system or URIs, `lsst.resources.ResourcePath`.
     """
 
     component: ClassVar[Optional[str]] = None
@@ -1230,14 +1230,14 @@ class ConfigSubset(Config):
         # We can pick up defaults from multiple search paths
         # We fill defaults by using the butler config path and then
         # the config path environment variable in reverse order.
-        defaultsPaths: List[Union[str, ButlerURI]] = []
+        defaultsPaths: List[Union[str, ResourcePath]] = []
 
         if CONFIG_PATH in os.environ:
             externalPaths = os.environ[CONFIG_PATH].split(os.pathsep)
             defaultsPaths.extend(externalPaths)
 
         # Add the package defaults as a resource
-        defaultsPaths.append(ButlerURI(f"resource://{cls.resourcesPackage}/configs", forceDirectory=True))
+        defaultsPaths.append(ResourcePath(f"resource://{cls.resourcesPackage}/configs", forceDirectory=True))
         return defaultsPaths
 
     def _updateWithConfigsFromPath(self, searchPaths, configFile):
@@ -1249,19 +1249,19 @@ class ConfigSubset(Config):
 
         Parameters
         ----------
-        searchPaths : `list` of `ButlerURI`, `str`
+        searchPaths : `list` of `lsst.resources.ResourcePath`, `str`
             Paths to search for the supplied configFile. This path
             is the priority order, such that files read from the
             first path entry will be selected over those read from
             a later path. Can contain `str` referring to the local file
             system or a URI string.
-        configFile : `ButlerURI`
+        configFile : `lsst.resources.ResourcePath`
             File to locate in path. If absolute path it will be read
             directly and the search path will not be used. Can be a URI
             to an explicit resource (which will ignore the search path)
             which is assumed to exist.
         """
-        uri = ButlerURI(configFile)
+        uri = ResourcePath(configFile)
         if uri.isabs() and uri.exists():
             # Assume this resource exists
             self._updateWithOtherConfigFile(configFile)
@@ -1270,8 +1270,8 @@ class ConfigSubset(Config):
             # Reverse order so that high priority entries
             # update the object last.
             for pathDir in reversed(searchPaths):
-                if isinstance(pathDir, (str, ButlerURI)):
-                    pathDir = ButlerURI(pathDir, forceDirectory=True)
+                if isinstance(pathDir, (str, ResourcePath)):
+                    pathDir = ResourcePath(pathDir, forceDirectory=True)
                     file = pathDir.join(configFile)
                     if file.exists():
                         self.filesRead.append(file)
@@ -1288,7 +1288,7 @@ class ConfigSubset(Config):
 
         Parameters
         ----------
-        file : `Config`, `str`, `ButlerURI`, or `dict`
+        file : `Config`, `str`, `lsst.resources.ResourcePath`, or `dict`
             Entity that can be converted to a `ConfigSubset`.
         """
         # Use this class to read the defaults so that subsetting can happen

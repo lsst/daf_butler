@@ -44,7 +44,6 @@ from typing import (
 )
 
 from lsst.daf.butler import (
-    ButlerURI,
     CompositesMap,
     Config,
     DatasetId,
@@ -72,6 +71,7 @@ from lsst.daf.butler import (
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 from lsst.daf.butler.core.utils import transactional
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge, ReadOnlyDatabaseError
+from lsst.resources import ResourcePath
 from lsst.utils.introspection import get_class_of, get_instance_of
 from lsst.utils.iteration import chunk_iterable
 
@@ -157,7 +157,7 @@ class FileDatastore(GenericBaseDatastore):
     or relative to a search path. Can be None if no defaults specified.
     """
 
-    root: ButlerURI
+    root: ResourcePath
     """Root directory URI of this `Datastore`."""
 
     locationFactory: LocationFactory
@@ -256,7 +256,7 @@ class FileDatastore(GenericBaseDatastore):
 
         # Support repository relocation in config
         # Existence of self.root is checked in subclass
-        self.root = ButlerURI(
+        self.root = ResourcePath(
             replaceRoot(self.config["root"], butlerRoot), forceDirectory=True, forceAbsolute=True
         )
 
@@ -398,13 +398,13 @@ class FileDatastore(GenericBaseDatastore):
         return records_by_ref
 
     def _refs_associated_with_artifacts(
-        self, paths: List[Union[str, ButlerURI]]
+        self, paths: List[Union[str, ResourcePath]]
     ) -> Dict[str, Set[DatasetId]]:
         """Return paths and associated dataset refs.
 
         Parameters
         ----------
-        paths : `list` of `str` or `ButlerURI`
+        paths : `list` of `str` or `lsst.resources.ResourcePath`
             All the paths to include in search.
 
         Returns
@@ -418,12 +418,12 @@ class FileDatastore(GenericBaseDatastore):
             result[row["path"]].add(row["dataset_id"])
         return result
 
-    def _registered_refs_per_artifact(self, pathInStore: ButlerURI) -> Set[DatasetId]:
+    def _registered_refs_per_artifact(self, pathInStore: ResourcePath) -> Set[DatasetId]:
         """Return all dataset refs associated with the supplied path.
 
         Parameters
         ----------
-        pathInStore : `ButlerURI`
+        pathInStore : `lsst.resources.ResourcePath`
             Path of interest in the data store.
 
         Returns
@@ -747,12 +747,12 @@ class FileDatastore(GenericBaseDatastore):
         if all(inside):
             transfer = None
         elif not any(inside):
-            # Allow ButlerURI to use its own knowledge
+            # Allow ResourcePath to use its own knowledge
             transfer = "auto"
         else:
             # This can happen when importing from a datastore that
             # has had some datasets ingested using "direct" mode.
-            # Also allow ButlerURI to sort it out but warn about it.
+            # Also allow ResourcePath to sort it out but warn about it.
             # This can happen if you are importing from a datastore
             # that had some direct transfer datasets.
             log.warning(
@@ -765,12 +765,12 @@ class FileDatastore(GenericBaseDatastore):
 
         return transfer
 
-    def _pathInStore(self, path: Union[str, ButlerURI]) -> Optional[str]:
+    def _pathInStore(self, path: Union[str, ResourcePath]) -> Optional[str]:
         """Return path relative to datastore root
 
         Parameters
         ----------
-        path : `str` or `ButlerURI`
+        path : `str` or `lsst.resources.ResourcePath`
             Path to dataset. Can be absolute URI. If relative assumed to
             be relative to the datastore. Returns path in datastore
             or raises an exception if the path it outside.
@@ -782,17 +782,17 @@ class FileDatastore(GenericBaseDatastore):
             outside the root.
         """
         # Relative path will always be relative to datastore
-        pathUri = ButlerURI(path, forceAbsolute=False)
+        pathUri = ResourcePath(path, forceAbsolute=False)
         return pathUri.relative_to(self.root)
 
     def _standardizeIngestPath(
-        self, path: Union[str, ButlerURI], *, transfer: Optional[str] = None
-    ) -> Union[str, ButlerURI]:
+        self, path: Union[str, ResourcePath], *, transfer: Optional[str] = None
+    ) -> Union[str, ResourcePath]:
         """Standardize the path of a to-be-ingested file.
 
         Parameters
         ----------
-        path : `str` or `ButlerURI`
+        path : `str` or `lsst.resources.ResourcePath`
             Path of a file to be ingested.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
@@ -803,7 +803,7 @@ class FileDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        path : `str` or `ButlerURI`
+        path : `str` or `lsst.resources.ResourcePath`
             New path in what the datastore considers standard form. If an
             absolute URI was given that will be returned unchanged.
 
@@ -825,7 +825,7 @@ class FileDatastore(GenericBaseDatastore):
             raise NotImplementedError(f"Transfer mode {transfer} not supported.")
 
         # A relative URI indicates relative to datastore root
-        srcUri = ButlerURI(path, forceAbsolute=False)
+        srcUri = ResourcePath(path, forceAbsolute=False)
         if not srcUri.isabs():
             srcUri = self.root.join(path)
 
@@ -850,7 +850,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def _extractIngestInfo(
         self,
-        path: Union[str, ButlerURI],
+        path: Union[str, ResourcePath],
         ref: DatasetRef,
         *,
         formatter: Union[Formatter, Type[Formatter]],
@@ -861,7 +861,7 @@ class FileDatastore(GenericBaseDatastore):
 
         Parameters
         ----------
-        path : `str` or `ButlerURI`
+        path : `str` or `lsst.resources.ResourcePath`
             URI or path of a file to be ingested.
         ref : `DatasetRef`
             Reference for the dataset being ingested.  Guaranteed to have
@@ -892,7 +892,7 @@ class FileDatastore(GenericBaseDatastore):
 
         # Create URI of the source path, do not need to force a relative
         # path to absolute.
-        srcUri = ButlerURI(path, forceAbsolute=False)
+        srcUri = ResourcePath(path, forceAbsolute=False)
 
         # Track whether we have read the size of the source yet
         have_sized = False
@@ -1007,14 +1007,14 @@ class FileDatastore(GenericBaseDatastore):
         self._register_datasets(refsAndInfos)
 
     def _calculate_ingested_datastore_name(
-        self, srcUri: ButlerURI, ref: DatasetRef, formatter: Union[Formatter, Type[Formatter]]
+        self, srcUri: ResourcePath, ref: DatasetRef, formatter: Union[Formatter, Type[Formatter]]
     ) -> Location:
         """Given a source URI and a DatasetRef, determine the name the
         dataset will have inside datastore.
 
         Parameters
         ----------
-        srcUri : `ButlerURI`
+        srcUri : `lsst.resources.ResourcePath`
             URI to the source dataset file.
         ref : `DatasetRef`
             Ref associated with the newly-ingested dataset artifact.  This
@@ -1068,7 +1068,7 @@ class FileDatastore(GenericBaseDatastore):
         if self._transaction is None:
             raise RuntimeError("Attempting to write artifact without transaction enabled")
 
-        def _removeFileExists(uri: ButlerURI) -> None:
+        def _removeFileExists(uri: ResourcePath) -> None:
             """Remove a file and do not complain if it is not there.
 
             This is important since a formatter might fail before the file
@@ -1119,7 +1119,7 @@ class FileDatastore(GenericBaseDatastore):
             if not data_written:
                 # Did not write the bytes directly to object store so instead
                 # write to temporary file.
-                with ButlerURI.temporary_uri(suffix=uri.getExtension()) as temporary_uri:
+                with ResourcePath.temporary_uri(suffix=uri.getExtension()) as temporary_uri:
                     # Need to configure the formatter to write to a different
                     # location and that needs us to overwrite internals
                     log.debug("Writing dataset to temporary location at %s", temporary_uri)
@@ -1337,7 +1337,7 @@ class FileDatastore(GenericBaseDatastore):
         id_to_ref: Dict[DatasetId, DatasetRef],
         records: Dict[DatasetId, List[StoredFileInfo]],
         all_required: bool,
-        artifact_existence: Optional[Dict[ButlerURI, bool]] = None,
+        artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
     ) -> Dict[DatasetRef, bool]:
         """Helper function for mexists that checks the given records.
 
@@ -1351,7 +1351,8 @@ class FileDatastore(GenericBaseDatastore):
         all_required : `bool`
             Flag to indicate whether existence requires all artifacts
             associated with a dataset ID to exist or not for existence.
-        artifact_existence : `dict` of [`ButlerURI`, `bool`], optional
+        artifact_existence : `dict` of [`lsst.resources.ResourcePath`, `bool`],
+                             optional
             Mapping of datastore artifact to existence. Updated by this
             method with details of all artifacts tested. Can be `None`
             if the caller is not interested.
@@ -1363,8 +1364,8 @@ class FileDatastore(GenericBaseDatastore):
         """
         # The URIs to be checked and a mapping of those URIs to
         # the dataset ID.
-        uris_to_check: List[ButlerURI] = []
-        location_map: Dict[ButlerURI, DatasetId] = {}
+        uris_to_check: List[ResourcePath] = []
+        location_map: Dict[ResourcePath, DatasetId] = {}
 
         location_factory = self.locationFactory
 
@@ -1374,7 +1375,7 @@ class FileDatastore(GenericBaseDatastore):
             uris_to_check.extend(uris)
             location_map.update({uri: ref_id for uri in uris})
 
-        uri_existence: Dict[ButlerURI, bool] = {}
+        uri_existence: Dict[ResourcePath, bool] = {}
         if artifact_existence is not None:
             # If a URI has already been checked remove it from the list
             # and immediately add the status to the output dict.
@@ -1389,7 +1390,7 @@ class FileDatastore(GenericBaseDatastore):
         # Results.
         dataset_existence: Dict[DatasetRef, bool] = {}
 
-        uri_existence.update(ButlerURI.mexists(uris_to_check))
+        uri_existence.update(ResourcePath.mexists(uris_to_check))
         for uri, exists in uri_existence.items():
             dataset_id = location_map[uri]
             ref = id_to_ref[dataset_id]
@@ -1409,7 +1410,7 @@ class FileDatastore(GenericBaseDatastore):
         return dataset_existence
 
     def mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ButlerURI, bool]] = None
+        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
     ) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
@@ -1417,7 +1418,8 @@ class FileDatastore(GenericBaseDatastore):
         ----------
         refs : iterable of `DatasetRef`
             The datasets to be checked.
-        artifact_existence : `dict` of [`ButlerURI`, `bool`], optional
+        artifact_existence : `dict` of [`lsst.resources.ResourcePath`, `bool`],
+                             optional
             Mapping of datastore artifact to existence. Updated by this
             method with details of all artifacts tested. Can be `None`
             if the caller is not interested.
@@ -1455,7 +1457,7 @@ class FileDatastore(GenericBaseDatastore):
         return dataset_existence
 
     def _mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ButlerURI, bool]] = None
+        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
     ) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
@@ -1554,7 +1556,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def getURIs(
         self, ref: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
         """Return URIs associated with dataset.
 
         Parameters
@@ -1567,7 +1569,7 @@ class FileDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        primary : `ButlerURI`
+        primary : `lsst.resources.ResourcePath`
             The URI to the primary artifact associated with this dataset.
             If the dataset was disassembled within the datastore this
             may be `None`.
@@ -1576,8 +1578,8 @@ class FileDatastore(GenericBaseDatastore):
             Can be empty if there are no components.
         """
 
-        primary: Optional[ButlerURI] = None
-        components: Dict[str, ButlerURI] = {}
+        primary: Optional[ResourcePath] = None
+        components: Dict[str, ResourcePath] = {}
 
         # if this has never been written then we have to guess
         if not self.exists(ref):
@@ -1593,14 +1595,14 @@ class FileDatastore(GenericBaseDatastore):
                     compLocation, _ = self._determine_put_formatter_location(compRef)
 
                     # Add a URI fragment to indicate this is a guess
-                    components[component] = ButlerURI(compLocation.uri.geturl() + "#predicted")
+                    components[component] = ResourcePath(compLocation.uri.geturl() + "#predicted")
 
             else:
 
                 location, _ = self._determine_put_formatter_location(ref)
 
                 # Add a URI fragment to indicate this is a guess
-                primary = ButlerURI(location.uri.geturl() + "#predicted")
+                primary = ResourcePath(location.uri.geturl() + "#predicted")
 
             return primary, components
 
@@ -1638,7 +1640,7 @@ class FileDatastore(GenericBaseDatastore):
 
         return primary, components
 
-    def getURI(self, ref: DatasetRef, predict: bool = False) -> ButlerURI:
+    def getURI(self, ref: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.
 
         Parameters
@@ -1684,11 +1686,11 @@ class FileDatastore(GenericBaseDatastore):
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
-        destination: ButlerURI,
+        destination: ResourcePath,
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> List[ButlerURI]:
+    ) -> List[ResourcePath]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -1697,11 +1699,12 @@ class FileDatastore(GenericBaseDatastore):
             The datasets for which file artifacts are to be retrieved.
             A single ref can result in multiple files. The refs must
             be resolved.
-        destination : `ButlerURI`
+        destination : `lsst.resources.ResourcePath`
             Location to write the file artifacts.
         transfer : `str`, optional
             Method to use to transfer the artifacts. Must be one of the options
-            supported by `ButlerURI.transfer_from()`. "move" is not allowed.
+            supported by `lsst.resources.ResourcePath.transfer_from()`.
+            "move" is not allowed.
         preserve_path : `bool`, optional
             If `True` the full path of the file artifact within the datastore
             is preserved. If `False` the final file component of the path
@@ -1712,7 +1715,7 @@ class FileDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        targets : `list` of `ButlerURI`
+        targets : `list` of `lsst.resources.ResourcePath`
             URIs of file artifacts in destination location. Order is not
             preserved.
         """
@@ -1725,13 +1728,13 @@ class FileDatastore(GenericBaseDatastore):
         # Source -> Destination
         # This also helps filter out duplicate DatasetRef in the request
         # that will map to the same underlying file transfer.
-        to_transfer: Dict[ButlerURI, ButlerURI] = {}
+        to_transfer: Dict[ResourcePath, ResourcePath] = {}
 
         for ref in refs:
             locations = self._get_dataset_locations_info(ref)
             for location, _ in locations:
                 source_uri = location.uri
-                target_path: Union[str, ButlerURI]
+                target_path: Union[str, ResourcePath]
                 if preserve_path:
                     target_path = location.pathInStore
                     if target_path.isabs():
@@ -2038,7 +2041,7 @@ class FileDatastore(GenericBaseDatastore):
                 # Do an explicit existence check on these refs.
                 # We only care about the artifacts at this point and not
                 # the dataset existence.
-                artifact_existence: Dict[ButlerURI, bool] = {}
+                artifact_existence: Dict[ResourcePath, bool] = {}
                 _ = self.mexists(missing, artifact_existence)
                 uris = [uri for uri, exists in artifact_existence.items() if exists]
 
@@ -2234,7 +2237,7 @@ class FileDatastore(GenericBaseDatastore):
         refs: Iterable[DatasetRef],
         local_refs: Optional[Iterable[DatasetRef]] = None,
         transfer: str = "auto",
-        artifact_existence: Optional[Dict[ButlerURI, bool]] = None,
+        artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
     ) -> None:
         # Docstring inherited
         if type(self) is not type(source_datastore):
@@ -2499,7 +2502,7 @@ class FileDatastore(GenericBaseDatastore):
         self,
         refs: Iterable[DatasetRef],
         *,
-        directory: Optional[Union[ButlerURI, str]] = None,
+        directory: Optional[Union[ResourcePath, str]] = None,
         transfer: Optional[str] = "auto",
     ) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
@@ -2507,9 +2510,9 @@ class FileDatastore(GenericBaseDatastore):
             raise RuntimeError(f"Cannot export using transfer mode {transfer} with no export directory given")
 
         # Force the directory to be a URI object
-        directoryUri: Optional[ButlerURI] = None
+        directoryUri: Optional[ResourcePath] = None
         if directory is not None:
-            directoryUri = ButlerURI(directory, forceDirectory=True)
+            directoryUri = ResourcePath(directory, forceDirectory=True)
 
         if transfer is not None and directoryUri is not None:
             # mypy needs the second test
@@ -2539,7 +2542,7 @@ class FileDatastore(GenericBaseDatastore):
             else:
                 # mypy needs help
                 assert directoryUri is not None, "directoryUri must be defined to get here"
-                storeUri = ButlerURI(location.uri)
+                storeUri = ResourcePath(location.uri)
 
                 # if the datastore has an absolute URI to a resource, we
                 # have two options:
@@ -2549,7 +2552,7 @@ class FileDatastore(GenericBaseDatastore):
                 # For now go with option 2
                 if location.pathInStore.isabs():
                     template = self.templates.getTemplate(ref)
-                    newURI = ButlerURI(template.format(ref), forceAbsolute=False)
+                    newURI = ResourcePath(template.format(ref), forceAbsolute=False)
                     pathInStore = str(newURI.updatedExtension(location.pathInStore.getExtension()))
 
                 exportUri = directoryUri.join(pathInStore)
@@ -2558,12 +2561,14 @@ class FileDatastore(GenericBaseDatastore):
             yield FileDataset(refs=[ref], path=pathInStore, formatter=storedFileInfo.formatter)
 
     @staticmethod
-    def computeChecksum(uri: ButlerURI, algorithm: str = "blake2b", block_size: int = 8192) -> Optional[str]:
+    def computeChecksum(
+        uri: ResourcePath, algorithm: str = "blake2b", block_size: int = 8192
+    ) -> Optional[str]:
         """Compute the checksum of the supplied file.
 
         Parameters
         ----------
-        uri : `ButlerURI`
+        uri : `lsst.resources.ResourcePath`
             Name of resource to calculate checksum from.
         algorithm : `str`, optional
             Name of algorithm to use. Must be one of the algorithms supported

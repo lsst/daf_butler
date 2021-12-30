@@ -59,7 +59,7 @@ def retrieveArtifacts(
 
     Returns
     -------
-    transferred : `list` of `ButlerURI`
+    transferred : `list` of `lsst.resources.ResourcePath`
         The destination URIs of every transferred artifact.
     """
     if not dataset_type:

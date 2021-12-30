@@ -26,10 +26,11 @@ import os
 import unittest
 from typing import List
 
-from lsst.daf.butler import ButlerURI, StorageClassFactory
+from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
+from lsst.resources import ResourcePath
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -47,8 +48,8 @@ class CliRetrieveArtifactsTest(unittest.TestCase, ButlerTestHelper):
         removeTestTempDir(self.root)
 
     @staticmethod
-    def find_files(root: str) -> List[ButlerURI]:
-        return list(ButlerURI.findFileResources([root]))
+    def find_files(root: str) -> List[ResourcePath]:
+        return list(ResourcePath.findFileResources([root]))
 
     def testRetrieveAll(self):
         runner = LogCliRunner()

@@ -25,8 +25,9 @@ __all__ = ("DimensionConfig",)
 
 from typing import Iterable, Iterator, Optional, Union
 
+from lsst.resources import ResourcePath
+
 from .. import ddl
-from .._butlerUri import ButlerURI
 from .._topology import TopologicalSpace
 from ..config import Config, ConfigSubset
 from ._database import (
@@ -79,7 +80,7 @@ class DimensionConfig(ConfigSubset):
         be supplied in priority order. These paths have higher priority
         than those read from the environment in
         `ConfigSubset.defaultSearchPaths()`.  Paths can be `str` referring to
-        the local file system or URIs, `ButlerURI`.
+        the local file system or URIs, `lsst.resources.ResourcePath`.
     """
 
     requiredKeys = ("version", "elements", "skypix")
@@ -87,16 +88,16 @@ class DimensionConfig(ConfigSubset):
 
     def __init__(
         self,
-        other: Union[Config, ButlerURI, str, None] = None,
+        other: Union[Config, ResourcePath, str, None] = None,
         validate: bool = True,
-        searchPaths: Optional[Iterable[Union[str, ButlerURI]]] = None,
+        searchPaths: Optional[Iterable[Union[str, ResourcePath]]] = None,
     ):
         # if argument is not None then do not load/merge defaults
         mergeDefaults = other is None
         super().__init__(other=other, validate=validate, mergeDefaults=mergeDefaults, searchPaths=searchPaths)
 
     def _updateWithConfigsFromPath(
-        self, searchPaths: Iterable[Union[str, ButlerURI]], configFile: str
+        self, searchPaths: Iterable[Union[str, ResourcePath]], configFile: str
     ) -> None:
         """Search the supplied paths reading config from first found.
 
@@ -111,15 +112,15 @@ class DimensionConfig(ConfigSubset):
         Instead of merging all found files into a single configuration it
         finds first matching file and reads it.
         """
-        uri = ButlerURI(configFile)
+        uri = ResourcePath(configFile)
         if uri.isabs() and uri.exists():
             # Assume this resource exists
             self._updateWithOtherConfigFile(configFile)
             self.filesRead.append(configFile)
         else:
             for pathDir in searchPaths:
-                if isinstance(pathDir, (str, ButlerURI)):
-                    pathDir = ButlerURI(pathDir, forceDirectory=True)
+                if isinstance(pathDir, (str, ResourcePath)):
+                    pathDir = ResourcePath(pathDir, forceDirectory=True)
                     file = pathDir.join(configFile)
                     if file.exists():
                         self.filesRead.append(file)
@@ -130,12 +131,12 @@ class DimensionConfig(ConfigSubset):
             else:
                 raise FileNotFoundError(f"Could not find {configFile} in search path {searchPaths}")
 
-    def _updateWithOtherConfigFile(self, file: Union[ButlerURI, str]) -> None:
+    def _updateWithOtherConfigFile(self, file: Union[ResourcePath, str]) -> None:
         """Override for base class method.
 
         Parameters
         ----------
-        file : `Config`, `str`, `ButlerURI`, or `dict`
+        file : `Config`, `str`, `lsst.resources.ResourcePath`, or `dict`
             Entity that can be converted to a `ConfigSubset`.
         """
         # Use this class to read the defaults so that subsetting can happen

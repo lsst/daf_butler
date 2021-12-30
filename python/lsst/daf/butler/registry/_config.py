@@ -34,8 +34,7 @@ from .interfaces import Database
 
 if TYPE_CHECKING:
     import sqlalchemy
-
-    from ..core import ButlerURI
+    from lsst.resources import ResourcePath
 
 
 class RegistryConfig(ConfigSubset):
@@ -87,13 +86,13 @@ class RegistryConfig(ConfigSubset):
         DatabaseClass = self.getDatabaseClass()
         return DatabaseClass.makeDefaultUri(root)
 
-    def replaceRoot(self, root: Optional[Union[str, ButlerURI]]) -> None:
+    def replaceRoot(self, root: Optional[Union[str, ResourcePath]]) -> None:
         """Replace any occurrences of `BUTLER_ROOT_TAG` in the connection
         with the given root directory.
 
         Parameters
         ----------
-        root : `str`, `ButlerURI`, or `None`
+        root : `str`, `lsst.resources.ResourcePath`, or `None`
             String to substitute for `BUTLER_ROOT_TAG`.  Passing `None` here is
             allowed only as a convenient way to raise an exception
             (`ValueError`).

@@ -29,11 +29,11 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, 
 
 import httpx
 from lsst.daf.butler import __version__
+from lsst.resources import ResourcePath
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
-    ButlerURI,
     Config,
     DataCoordinate,
     DataCoordinateSequence,
@@ -77,7 +77,7 @@ class RemoteRegistry(Registry):
 
     Parameters
     ----------
-    server_uri : `ButlerURI`
+    server_uri : `lsst.resources.ResourcePath`
         URL of the remote Butler server.
     defaults : `RegistryDefaults`
         Default collection search path and/or output `~CollectionType.RUN`
@@ -102,7 +102,7 @@ class RemoteRegistry(Registry):
     def fromConfig(
         cls,
         config: Union[ButlerConfig, RegistryConfig, Config, str],
-        butlerRoot: Optional[Union[str, ButlerURI]] = None,
+        butlerRoot: Optional[Union[str, ResourcePath]] = None,
         writeable: bool = True,
         defaults: Optional[RegistryDefaults] = None,
     ) -> Registry:
@@ -113,10 +113,10 @@ class RemoteRegistry(Registry):
         if defaults is None:
             defaults = RegistryDefaults()
 
-        server_uri = ButlerURI(config["db"])
+        server_uri = ResourcePath(config["db"])
         return cls(server_uri, defaults, writeable)
 
-    def __init__(self, server_uri: ButlerURI, defaults: RegistryDefaults, writeable: bool):
+    def __init__(self, server_uri: ResourcePath, defaults: RegistryDefaults, writeable: bool):
         self._db = server_uri
         self._defaults = defaults
 

@@ -31,6 +31,7 @@ from typing import IO, Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple,
 
 import astropy.time
 import yaml
+from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 from lsst.utils.iteration import ensure_iterable
 
@@ -45,7 +46,6 @@ from ..core import (
     FileDataset,
     Timespan,
 )
-from ..core._butlerUri import ButlerURI
 from ..core.named import NamedValueSet
 from ..registry import CollectionType, Registry
 from ..registry.interfaces import (
@@ -405,7 +405,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             for sliceForFileDataset, fileDataset in zip(slices, records):
                 fileDataset.refs = resolvedRefs[sliceForFileDataset]
                 if directory is not None:
-                    fileDataset.path = ButlerURI(directory, forceDirectory=True).join(fileDataset.path)
+                    fileDataset.path = ResourcePath(directory, forceDirectory=True).join(fileDataset.path)
                 fileDatasets.append(fileDataset)
         # Ingest everything into the datastore at once.
         if datastore is not None and fileDatasets:
