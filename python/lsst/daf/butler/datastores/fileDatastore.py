@@ -1351,10 +1351,9 @@ class FileDatastore(GenericBaseDatastore):
         all_required : `bool`
             Flag to indicate whether existence requires all artifacts
             associated with a dataset ID to exist or not for existence.
-        artifact_existence : `dict` of [`lsst.resources.ResourcePath`, `bool`],
-                             optional
-            Mapping of datastore artifact to existence. Updated by this
-            method with details of all artifacts tested. Can be `None`
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested. Can be `None`
             if the caller is not interested.
 
         Returns
@@ -1418,10 +1417,9 @@ class FileDatastore(GenericBaseDatastore):
         ----------
         refs : iterable of `DatasetRef`
             The datasets to be checked.
-        artifact_existence : `dict` of [`lsst.resources.ResourcePath`, `bool`],
-                             optional
-            Mapping of datastore artifact to existence. Updated by this
-            method with details of all artifacts tested. Can be `None`
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested. Can be `None`
             if the caller is not interested.
 
         Returns

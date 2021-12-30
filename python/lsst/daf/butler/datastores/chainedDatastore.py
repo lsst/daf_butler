@@ -269,10 +269,9 @@ class ChainedDatastore(Datastore):
         ----------
         refs : iterable of `DatasetRef`
             The datasets to be checked.
-        artifact_existence : `dict` of [`lsst.resources.ResourcePath`, `bool`],
-                             optional
-            Mapping of datastore artifact to existence. Updated by this
-            method with details of all artifacts tested. Can be `None`
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested. Can be `None`
             if the caller is not interested.
 
         Returns

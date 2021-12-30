@@ -215,12 +215,11 @@ class Config(collections.abc.MutableMapping):
 
     Parameters
     ----------
-    other : `str` or `Config` or `dict` or `lsst.resources.ResourcePath`
-            or `pathlib.Path`
+    other : various
         Other source of configuration, can be:
 
-        - (`str` or `lsst.resources.ResourcePath`) Treated as a URI to a
-          config file. Must end with ".yaml".
+        - (`str`, `lsst.resources.ResourcePath` or `pathlib.Path`)
+          Treated as a URI to a config file. Must end with ".yaml".
         - (`Config`) Copies the other Config's values into this one.
         - (`dict`) Copies the values from the dict into this Config.
 
