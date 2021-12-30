@@ -56,11 +56,6 @@ from typing import (
     Union,
 )
 
-try:
-    import boto3
-except ImportError:
-    boto3 = None
-
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
