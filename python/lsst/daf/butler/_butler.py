@@ -870,7 +870,14 @@ class Butler:
                         str(values),
                     )
                     # Get the actual record and compare with these values.
-                    recs = list(self.registry.queryDimensionRecords(dimensionName, dataId=newDataId))
+                    try:
+                        recs = list(self.registry.queryDimensionRecords(dimensionName, dataId=newDataId))
+                    except LookupError:
+                        raise ValueError(
+                            f"Could not find dimension '{dimensionName}'"
+                            f" with dataId {newDataId} as part of comparing with"
+                            f" record values {byRecord[dimensionName]}"
+                        ) from None
                     if len(recs) == 1:
                         errmsg: List[str] = []
                         for k, v in values.items():
@@ -883,8 +890,7 @@ class Butler:
                             )
                     else:
                         # Multiple matches for an explicit dimension
-                        # should never happen, and if there are no matches
-                        # let downstream complain.
+                        # should never happen but let downstream complain.
                         pass
                     continue
 

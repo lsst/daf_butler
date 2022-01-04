@@ -387,6 +387,7 @@ class SimpleButlerTestCase(unittest.TestCase):
             # Inconsistent detector information.
             (None, {"instrument": "Cam1", "detector": 2, "raft": "B", "physical_filter": "Cam1-G"}),
             ({"detector": 2}, {"instrument": "Cam1", "raft": "B", "physical_filter": "Cam1-G"}),
+            ({"detector": 12}, {"instrument": "Cam1", "raft": "B", "physical_filter": "Cam1-G"}),
             ({"raft": "B"}, {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}),
             ({"raft": "B"}, {"instrument": "Cam1", "detector": "Ab", "physical_filter": "Cam1-G"}),
             # Under-specified.
