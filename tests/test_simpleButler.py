@@ -368,6 +368,11 @@ class SimpleButlerTestCase(unittest.TestCase):
                 },
                 {},
             ),
+            # Duplicate (but valid) information.
+            (None, {"instrument": "Cam1", "detector": 2, "raft": "A", "physical_filter": "Cam1-G"}),
+            ({"detector": 2}, {"instrument": "Cam1", "raft": "A", "physical_filter": "Cam1-G"}),
+            ({"raft": "A"}, {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}),
+            ({"raft": "A"}, {"instrument": "Cam1", "detector": "Ab", "physical_filter": "Cam1-G"}),
         )
 
         for dataId, kwds in variants:
@@ -376,6 +381,24 @@ class SimpleButlerTestCase(unittest.TestCase):
             except Exception as e:
                 raise type(e)(f"{str(e)}: dataId={dataId}, kwds={kwds}") from e
             self.assertEqual(flat_id, flat2g.id, msg=f"DataId: {dataId}, kwds: {kwds}")
+
+        # Check that bad combinations raise.
+        variants = (
+            # Inconsistent detector information.
+            (None, {"instrument": "Cam1", "detector": 2, "raft": "B", "physical_filter": "Cam1-G"}),
+            ({"detector": 2}, {"instrument": "Cam1", "raft": "B", "physical_filter": "Cam1-G"}),
+            ({"detector": 12}, {"instrument": "Cam1", "raft": "B", "physical_filter": "Cam1-G"}),
+            ({"raft": "B"}, {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}),
+            ({"raft": "B"}, {"instrument": "Cam1", "detector": "Ab", "physical_filter": "Cam1-G"}),
+            # Under-specified.
+            ({"raft": "B"}, {"instrument": "Cam1", "physical_filter": "Cam1-G"}),
+            # Spurious kwargs.
+            (None, {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G", "x": "y"}),
+            ({"x": "y"}, {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}),
+        )
+        for dataId, kwds in variants:
+            with self.assertRaises(ValueError):
+                butler.get("flat", dataId=dataId, collections=coll, **kwds)
 
     def testGetCalibration(self):
         """Test that `Butler.get` can be used to fetch from
@@ -475,6 +498,33 @@ class SimpleButlerTestCase(unittest.TestCase):
             instrument="Cam1",
         )
         self.assertEqual(bias3b_id, bias3b.id)
+
+        # Allow a fully-specified dataId and unnecessary extra information
+        # that comes from the record.
+        bias3b_id, _ = butler.get(
+            "bias",
+            dataId=dict(
+                exposure=4,
+                day_obs=20211114,
+                seq_num=42,
+                detector=3,
+                instrument="Cam1",
+            ),
+            collections="calibs",
+        )
+        self.assertEqual(bias3b_id, bias3b.id)
+
+        # Extra but inconsistent record values are a problem.
+        with self.assertRaises(ValueError):
+            bias3b_id, _ = butler.get(
+                "bias",
+                exposure=3,
+                day_obs=20211114,
+                seq_num=42,
+                detector=3,
+                collections="calibs",
+                instrument="Cam1",
+            )
 
         # Ensure that spurious kwargs cause an exception.
         with self.assertRaises(ValueError):

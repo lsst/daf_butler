@@ -670,7 +670,7 @@ class Butler:
             no keyword arguments, the original dataId will be returned
             unchanged.
         **kwargs : `dict`
-            Any unused keyword arguments.
+            Any unused keyword arguments (would normally be empty dict).
         """
         # Do nothing if we have a standalone DataCoordinate.
         if isinstance(dataId, DataCoordinate) and not kwargs:
@@ -744,6 +744,18 @@ class Butler:
                             dimension.primaryKey.getPythonType(),
                         )
 
+        # By this point kwargs and newDataId should only include valid
+        # dimensions. Merge kwargs in to the new dataId and log if there
+        # are dimensions in both (rather than calling update).
+        for k, v in kwargs.items():
+            if k in newDataId and newDataId[k] != v:
+                log.debug(
+                    "Keyword arg %s overriding explicit value in dataId of %s with %s", k, newDataId[k], v
+                )
+            newDataId[k] = v
+        # No need to retain any values in kwargs now.
+        kwargs = {}
+
         # If we have some unrecognized dimensions we have to try to connect
         # them to records in other dimensions.  This is made more complicated
         # by some dimensions having records with clashing names.  A mitigation
@@ -752,9 +764,14 @@ class Butler:
         # where additional dimensions can be used to constrain the temporal
         # axis.
         if not_dimensions:
-            # Calculate missing dimensions
-            provided = set(newDataId) | set(kwargs) | set(byRecord)
-            missingDimensions = datasetType.dimensions.names - provided
+            # Search for all dimensions even if we have been given a value
+            # explicitly. In some cases records are given as well as the
+            # actually dimension and this should not be an error if they
+            # match.
+            mandatoryDimensions = datasetType.dimensions.names  # - provided
+
+            candidateDimensions: Set[str] = set()
+            candidateDimensions.update(mandatoryDimensions)
 
             # For calibrations we may well be needing temporal dimensions
             # so rather than always including all dimensions in the scan
@@ -763,8 +780,6 @@ class Butler:
             # If we are not searching calibration collections things may
             # fail but they are going to fail anyway because of the
             # ambiguousness of the dataId...
-            candidateDimensions: Set[str] = set()
-            candidateDimensions.update(missingDimensions)
             if datasetType.isCalibration():
                 for dim in self.registry.dimensions.getStaticDimensions():
                     if dim.temporal:
@@ -807,7 +822,7 @@ class Butler:
             for fieldName, assignedDimensions in assigned.items():
                 if len(assignedDimensions) > 1:
                     # Pick the most popular (preferring mandatory dimensions)
-                    requiredButMissing = assignedDimensions.intersection(missingDimensions)
+                    requiredButMissing = assignedDimensions.intersection(mandatoryDimensions)
                     if requiredButMissing:
                         candidateDimensions = requiredButMissing
                     else:
@@ -854,6 +869,29 @@ class Butler:
                         newDataId[dimensionName],
                         str(values),
                     )
+                    # Get the actual record and compare with these values.
+                    try:
+                        recs = list(self.registry.queryDimensionRecords(dimensionName, dataId=newDataId))
+                    except LookupError:
+                        raise ValueError(
+                            f"Could not find dimension '{dimensionName}'"
+                            f" with dataId {newDataId} as part of comparing with"
+                            f" record values {byRecord[dimensionName]}"
+                        ) from None
+                    if len(recs) == 1:
+                        errmsg: List[str] = []
+                        for k, v in values.items():
+                            if (recval := getattr(recs[0], k)) != v:
+                                errmsg.append(f"{k}({recval} != {v})")
+                        if errmsg:
+                            raise ValueError(
+                                f"Dimension {dimensionName} in dataId has explicit value"
+                                " inconsistent with records: " + ", ".join(errmsg)
+                            )
+                    else:
+                        # Multiple matches for an explicit dimension
+                        # should never happen but let downstream complain.
+                        pass
                     continue
 
                 # Build up a WHERE expression
@@ -872,12 +910,12 @@ class Butler:
                         log.debug("Received %d records from constraints of %s", len(records), str(values))
                         for r in records:
                             log.debug("- %s", str(r))
-                        raise RuntimeError(
+                        raise ValueError(
                             f"DataId specification for dimension {dimensionName} is not"
                             f" uniquely constrained to a single dataset by {values}."
                             f" Got {len(records)} results."
                         )
-                    raise RuntimeError(
+                    raise ValueError(
                         f"DataId specification for dimension {dimensionName} matched no"
                         f" records when constrained by {values}"
                     )
@@ -890,10 +928,7 @@ class Butler:
                     )
                 newDataId[dimensionName] = getattr(records.pop(), dimension.primaryKey.name)
 
-            # We have modified the dataId so need to switch to it
-            dataId = newDataId
-
-        return dataId, kwargs
+        return newDataId, kwargs
 
     def _findDatasetRef(
         self,
