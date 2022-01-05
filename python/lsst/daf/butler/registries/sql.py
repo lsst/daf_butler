@@ -149,7 +149,7 @@ class SqlRegistry(Registry):
     def fromConfig(
         cls,
         config: Union[ButlerConfig, RegistryConfig, Config, str],
-        butlerRoot: Optional[Union[str, ResourcePath]] = None,
+        butlerRoot: Optional[ResourcePathExpression] = None,
         writeable: bool = True,
         defaults: Optional[RegistryDefaults] = None,
     ) -> Registry:

@@ -42,7 +42,7 @@ class FileDataset:
     """Registry information about the dataset. (`list` of `DatasetRef`).
     """
 
-    path: Union[str, ResourcePath]
+    path: ResourcePathExpression
     """Path to the dataset (`str` or `lsst.resources.ResourcePath`).
 
     If the dataset was exported with ``transfer=None`` (i.e. in-place),
@@ -58,7 +58,7 @@ class FileDataset:
 
     def __init__(
         self,
-        path: Union[str, ResourcePath],
+        path: ResourcePathExpression,
         refs: Union[DatasetRef, List[DatasetRef]],
         *,
         formatter: Optional[FormatterParameter] = None,

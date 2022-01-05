@@ -398,7 +398,7 @@ class FileDatastore(GenericBaseDatastore):
         return records_by_ref
 
     def _refs_associated_with_artifacts(
-        self, paths: List[Union[str, ResourcePath]]
+        self, paths: List[ResourcePathExpression]
     ) -> Dict[str, Set[DatasetId]]:
         """Return paths and associated dataset refs.
 
@@ -765,7 +765,7 @@ class FileDatastore(GenericBaseDatastore):
 
         return transfer
 
-    def _pathInStore(self, path: Union[str, ResourcePath]) -> Optional[str]:
+    def _pathInStore(self, path: ResourcePathExpression) -> Optional[str]:
         """Return path relative to datastore root
 
         Parameters
@@ -786,8 +786,8 @@ class FileDatastore(GenericBaseDatastore):
         return pathUri.relative_to(self.root)
 
     def _standardizeIngestPath(
-        self, path: Union[str, ResourcePath], *, transfer: Optional[str] = None
-    ) -> Union[str, ResourcePath]:
+        self, path: ResourcePathExpression, *, transfer: Optional[str] = None
+    ) -> ResourcePathExpression:
         """Standardize the path of a to-be-ingested file.
 
         Parameters
@@ -850,7 +850,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def _extractIngestInfo(
         self,
-        path: Union[str, ResourcePath],
+        path: ResourcePathExpression,
         ref: DatasetRef,
         *,
         formatter: Union[Formatter, Type[Formatter]],
@@ -1732,7 +1732,7 @@ class FileDatastore(GenericBaseDatastore):
             locations = self._get_dataset_locations_info(ref)
             for location, _ in locations:
                 source_uri = location.uri
-                target_path: Union[str, ResourcePath]
+                target_path: ResourcePathExpression
                 if preserve_path:
                     target_path = location.pathInStore
                     if target_path.isabs():
@@ -2500,7 +2500,7 @@ class FileDatastore(GenericBaseDatastore):
         self,
         refs: Iterable[DatasetRef],
         *,
-        directory: Optional[Union[ResourcePath, str]] = None,
+        directory: Optional[ResourcePathExpression] = None,
         transfer: Optional[str] = "auto",
     ) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.

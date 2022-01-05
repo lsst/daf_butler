@@ -35,7 +35,7 @@ BUTLER_ROOT_TAG = "<butlerRoot>"
 the butler root location should be used."""
 
 
-def replaceRoot(configRoot: str, butlerRoot: Optional[Union[ResourcePath, str]]) -> str:
+def replaceRoot(configRoot: str, butlerRoot: Optional[ResourcePathExpression]) -> str:
     """Update a configuration root with the butler root location.
 
     No changes are made if the special root string is not found in the

@@ -86,7 +86,7 @@ class RegistryConfig(ConfigSubset):
         DatabaseClass = self.getDatabaseClass()
         return DatabaseClass.makeDefaultUri(root)
 
-    def replaceRoot(self, root: Optional[Union[str, ResourcePath]]) -> None:
+    def replaceRoot(self, root: Optional[ResourcePathExpression]) -> None:
         """Replace any occurrences of `BUTLER_ROOT_TAG` in the connection
         with the given root directory.
 

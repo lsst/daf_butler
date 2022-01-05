@@ -1409,7 +1409,7 @@ class Butler:
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
-        destination: Union[str, ResourcePath],
+        destination: ResourcePathExpression,
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,

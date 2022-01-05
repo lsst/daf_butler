@@ -88,16 +88,16 @@ class DimensionConfig(ConfigSubset):
 
     def __init__(
         self,
-        other: Union[Config, ResourcePath, str, None] = None,
+        other: Union[Config, ResourcePathExpression, None] = None,
         validate: bool = True,
-        searchPaths: Optional[Iterable[Union[str, ResourcePath]]] = None,
+        searchPaths: Optional[Iterable[ResourcePathExpression]] = None,
     ):
         # if argument is not None then do not load/merge defaults
         mergeDefaults = other is None
         super().__init__(other=other, validate=validate, mergeDefaults=mergeDefaults, searchPaths=searchPaths)
 
     def _updateWithConfigsFromPath(
-        self, searchPaths: Iterable[Union[str, ResourcePath]], configFile: str
+        self, searchPaths: Iterable[ResourcePathExpression], configFile: str
     ) -> None:
         """Search the supplied paths reading config from first found.
 

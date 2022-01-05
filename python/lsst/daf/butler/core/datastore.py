@@ -283,7 +283,7 @@ class Datastore(metaclass=ABCMeta):
     def fromConfig(
         config: Config,
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: Optional[Union[str, ResourcePath]] = None,
+        butlerRoot: Optional[ResourcePathExpression] = None,
     ) -> "Datastore":
         """Create datastore from type specified in config file.
 
@@ -306,7 +306,7 @@ class Datastore(metaclass=ABCMeta):
         self,
         config: Union[Config, str],
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: Optional[Union[str, ResourcePath]] = None,
+        butlerRoot: Optional[ResourcePathExpression] = None,
     ):
         self.config = DatastoreConfig(config)
         self.name = "ABCDataStore"

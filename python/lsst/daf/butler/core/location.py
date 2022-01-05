@@ -195,7 +195,7 @@ class LocationFactory:
         be treated as a posixpath but then converted to an absolute path.
     """
 
-    def __init__(self, datastoreRoot: Union[ResourcePath, str]):
+    def __init__(self, datastoreRoot: ResourcePathExpression):
         self._datastoreRootUri = ResourcePath(datastoreRoot, forceAbsolute=True, forceDirectory=True)
 
     def __str__(self) -> str:
@@ -206,7 +206,7 @@ class LocationFactory:
         """Return the network location of root location of the `Datastore`."""
         return self._datastoreRootUri.netloc
 
-    def fromPath(self, path: Union[str, ResourcePath]) -> Location:
+    def fromPath(self, path: ResourcePathExpression) -> Location:
         """Create a `Location` from a POSIX path.
 
         Parameters

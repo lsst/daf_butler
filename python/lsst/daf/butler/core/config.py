@@ -331,7 +331,7 @@ class Config(collections.abc.MutableMapping):
         """
         return cls.fromString(string, format="yaml")
 
-    def __initFromUri(self, path: Union[str, ResourcePath, Path]) -> None:
+    def __initFromUri(self, path: ResourcePathExpression) -> None:
         """Load a file from a path or an URI.
 
         Parameters
@@ -900,7 +900,7 @@ class Config(collections.abc.MutableMapping):
 
     def dumpToUri(
         self,
-        uri: Union[ResourcePath, str],
+        uri: ResourcePathExpression,
         updateFile: bool = True,
         defaultFileName: str = "butler.yaml",
         overwrite: bool = True,
