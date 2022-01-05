@@ -340,7 +340,7 @@ class Butler:
         standalone: bool = False,
         searchPaths: Optional[List[str]] = None,
         forceConfigRoot: bool = True,
-        outfile: Optional[str] = None,
+        outfile: Optional[ResourcePathExpression] = None,
         overwrite: bool = False,
     ) -> Config:
         """Create an empty data repository by adding a butler.yaml config
@@ -379,7 +379,7 @@ class Butler:
             of the root directory for a datastore or registry to be given.
             If this parameter is `True` the values for ``root`` will be
             forced into the resulting config if appropriate.
-        outfile : `str`, optional
+        outfile : `lss.resources.ResourcePathExpression`, optional
             If not-`None`, the output configuration will be written to this
             location rather than into the repository itself. Can be a URI
             string.  Can refer to a directory that will be used to write
@@ -457,7 +457,7 @@ class Butler:
             # branch, _everything_ in the config is expanded, so there's no
             # need to special case this.
             Config.updateParameters(RegistryConfig, config, full, toMerge=("managers",), overwrite=False)
-        configURI: Union[str, ResourcePath]
+        configURI: Union[str, ResourcePathExpression]
         if outfile is not None:
             # When writing to a separate location we must include
             # the root of the butler repo in the config else it won't know
