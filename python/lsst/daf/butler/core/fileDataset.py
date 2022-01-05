@@ -26,7 +26,7 @@ __all__ = ["FileDataset"]
 from dataclasses import dataclass
 from typing import Any, List, Optional, Union
 
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePathExpression
 
 from .datasets import DatasetRef
 from .formatter import FormatterParameter
@@ -43,7 +43,7 @@ class FileDataset:
     """
 
     path: ResourcePathExpression
-    """Path to the dataset (`str` or `lsst.resources.ResourcePath`).
+    """Path to the dataset (`lsst.resources.ResourcePathExpression`).
 
     If the dataset was exported with ``transfer=None`` (i.e. in-place),
     this is relative to the datastore root (only datastores that have a

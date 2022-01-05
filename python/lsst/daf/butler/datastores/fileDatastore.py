@@ -71,7 +71,7 @@ from lsst.daf.butler import (
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 from lsst.daf.butler.core.utils import transactional
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge, ReadOnlyDatabaseError
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_class_of, get_instance_of
 from lsst.utils.iteration import chunk_iterable
 
@@ -398,7 +398,7 @@ class FileDatastore(GenericBaseDatastore):
         return records_by_ref
 
     def _refs_associated_with_artifacts(
-        self, paths: List[ResourcePathExpression]
+        self, paths: List[Union[str, ResourcePath]]
     ) -> Dict[str, Set[DatasetId]]:
         """Return paths and associated dataset refs.
 
@@ -770,7 +770,7 @@ class FileDatastore(GenericBaseDatastore):
 
         Parameters
         ----------
-        path : `str` or `lsst.resources.ResourcePath`
+        path : `lsst.resources.ResourcePathExpression`
             Path to dataset. Can be absolute URI. If relative assumed to
             be relative to the datastore. Returns path in datastore
             or raises an exception if the path it outside.
@@ -787,12 +787,12 @@ class FileDatastore(GenericBaseDatastore):
 
     def _standardizeIngestPath(
         self, path: ResourcePathExpression, *, transfer: Optional[str] = None
-    ) -> ResourcePathExpression:
+    ) -> Union[str, ResourcePath]:
         """Standardize the path of a to-be-ingested file.
 
         Parameters
         ----------
-        path : `str` or `lsst.resources.ResourcePath`
+        path : `lsst.resources.ResourcePathExpression`
             Path of a file to be ingested.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
@@ -861,7 +861,7 @@ class FileDatastore(GenericBaseDatastore):
 
         Parameters
         ----------
-        path : `str` or `lsst.resources.ResourcePath`
+        path : `lsst.resources.ResourcePathExpression`
             URI or path of a file to be ingested.
         ref : `DatasetRef`
             Reference for the dataset being ingested.  Guaranteed to have

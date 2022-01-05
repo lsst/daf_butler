@@ -25,7 +25,7 @@ __all__ = ("DimensionConfig",)
 
 from typing import Iterable, Iterator, Optional, Union
 
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .. import ddl
 from .._topology import TopologicalSpace

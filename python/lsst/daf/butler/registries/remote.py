@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, 
 
 import httpx
 from lsst.daf.butler import __version__
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import ensure_iterable
 

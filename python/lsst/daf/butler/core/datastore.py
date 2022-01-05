@@ -56,7 +56,7 @@ from .fileDataset import FileDataset
 from .storageClass import StorageClassFactory
 
 if TYPE_CHECKING:
-    from lsst.resources import ResourcePath
+    from lsst.resources import ResourcePath, ResourcePathExpression
 
     from ..registry.interfaces import DatastoreRegistryBridgeManager
     from .configSupport import LookupKey

@@ -28,7 +28,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, Union
 
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePathExpression
 from lsst.utils import doImportType
 
 from ..core import (
@@ -179,7 +179,7 @@ class Registry(ABC):
     def fromConfig(
         cls,
         config: Union[ButlerConfig, RegistryConfig, Config, str],
-        butlerRoot: Optional[Union[str, ResourcePath]] = None,
+        butlerRoot: Optional[ResourcePathExpression] = None,
         writeable: bool = True,
         defaults: Optional[RegistryDefaults] = None,
     ) -> Registry:
@@ -191,7 +191,7 @@ class Registry(ABC):
         ----------
         config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
             Registry configuration
-        butlerRoot : `str` or `lsst.resources.ResourcePath`, optional
+        butlerRoot : `lsst.resources.ResourcePathExpression`, optional
             Path to the repository root this `Registry` will manage.
         writeable : `bool`, optional
             If `True` (default) create a read-write connection to the database.

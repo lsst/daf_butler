@@ -26,7 +26,7 @@ __all__ = ("ButlerRepoIndex",)
 import os
 from typing import ClassVar, Dict, Set
 
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .core import Config
 
@@ -56,12 +56,12 @@ class ButlerRepoIndex:
     and the environment will not change. In tests this may not be true."""
 
     @classmethod
-    def _read_repository_index(cls, index_uri: ResourcePath) -> Config:
+    def _read_repository_index(cls, index_uri: ResourcePathExpression) -> Config:
         """Read the repository index from the supplied URI.
 
         Parameters
         ----------
-        index_uri : `str` or `lsst.resources.ResourcePath`
+        index_uri : `lsst.resources.ResourcePathExpression`
             URI of the repository index.
 
         Returns

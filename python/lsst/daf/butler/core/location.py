@@ -25,7 +25,7 @@ __all__ = ("Location", "LocationFactory")
 
 from typing import Optional, Union
 
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePath, ResourcePathExpression
 
 
 class Location:
@@ -33,10 +33,10 @@ class Location:
 
     Parameters
     ----------
-    datastoreRootUri : `lsst.resources.ResourcePath` or `str` or `None`
+    datastoreRootUri : `lsst.resources.ResourcePathExpression` or `None`
         Base URI for this datastore, must include an absolute path.
         If `None` the `path` must correspond to an absolute URI.
-    path : `lsst.resources.ResourcePath` or `str`
+    path : `lsst.resources.ResourcePathExpression`
         Relative path within datastore.  Assumed to be using the local
         path separator if a ``file`` scheme is being used for the URI,
         else a POSIX separator. Can be a full URI if the root URI is `None`.
@@ -45,7 +45,7 @@ class Location:
 
     __slots__ = ("_datastoreRootUri", "_path", "_uri")
 
-    def __init__(self, datastoreRootUri: Union[None, ResourcePath, str], path: Union[ResourcePath, str]):
+    def __init__(self, datastoreRootUri: Union[None, ResourcePathExpression], path: ResourcePathExpression):
         # Be careful not to force a relative local path to absolute path
         path_uri = ResourcePath(path, forceAbsolute=False)
 

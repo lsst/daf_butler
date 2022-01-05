@@ -30,7 +30,7 @@ import copy
 import os
 from typing import Optional, Sequence, Union
 
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .core import Config, DatastoreConfig, StorageClassConfig
 from .registry import RegistryConfig

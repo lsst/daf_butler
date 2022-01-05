@@ -26,9 +26,9 @@ from __future__ import annotations
 __all__ = ("BUTLER_ROOT_TAG", "replaceRoot")
 
 import os.path
-from typing import Optional, Union
+from typing import Optional
 
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePath, ResourcePathExpression
 
 BUTLER_ROOT_TAG = "<butlerRoot>"
 """The special string to be used in configuration files to indicate that
@@ -46,7 +46,7 @@ def replaceRoot(configRoot: str, butlerRoot: Optional[ResourcePathExpression]) -
     ----------
     configRoot : `str`
         Directory root location as specified in a configuration file.
-    butlerRoot : `str`, `lsst.resources.ResourcePath` or `None`
+    butlerRoot : `lsst.resources.ResourcePathExpression` or `None`
         Butler root directory.  Absolute path is inserted into the
         ``configRoot`` where the
         `~lsst.daf.butler.core.repoRelocation.BUTLER_ROOT_TAG` string is

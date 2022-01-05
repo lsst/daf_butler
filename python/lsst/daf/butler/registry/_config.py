@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("RegistryConfig",)
 
-from typing import TYPE_CHECKING, Optional, Type, Union
+from typing import TYPE_CHECKING, Optional, Type
 
 from lsst.utils import doImportType
 
@@ -34,7 +34,7 @@ from .interfaces import Database
 
 if TYPE_CHECKING:
     import sqlalchemy
-    from lsst.resources import ResourcePath
+    from lsst.resources import ResourcePathExpression
 
 
 class RegistryConfig(ConfigSubset):
@@ -92,7 +92,7 @@ class RegistryConfig(ConfigSubset):
 
         Parameters
         ----------
-        root : `str`, `lsst.resources.ResourcePath`, or `None`
+        root : `lsst.resources.ResourcePathExpression`, or `None`
             String to substitute for `BUTLER_ROOT_TAG`.  Passing `None` here is
             allowed only as a convenient way to raise an exception
             (`ValueError`).

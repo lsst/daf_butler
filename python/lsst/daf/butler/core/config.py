@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import IO, Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
 
 import yaml
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImport
 from yaml.representer import Representer
 
@@ -215,10 +215,10 @@ class Config(collections.abc.MutableMapping):
 
     Parameters
     ----------
-    other : various
+    other : `lsst.resources.ResourcePath` or `Config` or `dict`
         Other source of configuration, can be:
 
-        - (`str`, `lsst.resources.ResourcePath` or `pathlib.Path`)
+        - (`lsst.resources.ResourcePathExpression`)
           Treated as a URI to a config file. Must end with ".yaml".
         - (`Config`) Copies the other Config's values into this one.
         - (`dict`) Copies the values from the dict into this Config.
@@ -336,7 +336,7 @@ class Config(collections.abc.MutableMapping):
 
         Parameters
         ----------
-        path : `str`
+        path : `lsst.resources.ResourcePathExpression`
             Path or a URI to a persisted config file.
         """
         uri = ResourcePath(path)
@@ -911,7 +911,7 @@ class Config(collections.abc.MutableMapping):
 
         Parameters
         ----------
-        uri: `str` or `lsst.resources.ResourcePath`
+        uri: `lsst.resources.ResourcePathExpression`
             URI of location where the Config will be written.
         updateFile : bool, optional
             If True and uri does not end on a filename with extension, will

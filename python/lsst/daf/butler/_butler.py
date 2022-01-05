@@ -56,7 +56,7 @@ from typing import (
     Union,
 )
 
-from lsst.resources import ResourcePath
+from lsst.resources import ResourcePath, ResourcePathExpression
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_class_of
 from lsst.utils.logging import VERBOSE, getLogger
@@ -334,7 +334,7 @@ class Butler:
 
     @staticmethod
     def makeRepo(
-        root: str,
+        root: ResourcePathExpression,
         config: Union[Config, str, None] = None,
         dimensionConfig: Union[Config, str, None] = None,
         standalone: bool = False,
@@ -348,7 +348,7 @@ class Butler:
 
         Parameters
         ----------
-        root : `str` or `lsst.resources.ResourcePath`
+        root : `lsst.resources.ResourcePathExpression`
             Path or URI to the root location of the new repository. Will be
             created if it does not exist.
         config : `Config` or `str`, optional
