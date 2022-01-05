@@ -24,6 +24,7 @@ import posixpath
 import unittest
 
 from lsst.daf.butler import Location, LocationFactory
+from lsst.resources import ResourcePath
 
 
 class LocationTestCase(unittest.TestCase):
@@ -71,6 +72,16 @@ class LocationTestCase(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             Location(None, "relative.txt")
+
+    def testBadLocations(self):
+        with self.assertRaises(ValueError):
+            Location([1, 2, 3], "something.txt")
+
+        with self.assertRaises(ValueError):
+            Location(ResourcePath("a/b/c", forceAbsolute=False), "d.txt")
+
+        with self.assertRaises(ValueError):
+            Location("/a/c", "/a/c")
 
     def testRelativeRoot(self):
         root = os.path.abspath(os.path.curdir)

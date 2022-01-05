@@ -502,6 +502,12 @@ class ButlerTests(ButlerPutGetTests):
         butler = Butler(self.tmpConfigFile, run="ingest")
         self.assertIsInstance(butler, Butler)
 
+        # Check that butler.yaml is added automatically.
+        if self.tmpConfigFile.endswith(end := "/butler.yaml"):
+            config_dir = self.tmpConfigFile[: -len(end)]
+            butler = Butler(config_dir, run="ingest")
+            self.assertIsInstance(butler, Butler)
+
         collections = set(butler.registry.queryCollections())
         self.assertEqual(collections, {"ingest"})
 
