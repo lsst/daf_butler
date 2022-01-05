@@ -155,6 +155,8 @@ class Base64Region(Base64Bytes):
     Maps Python `sphgeom.Region` to a base64-encoded `sqlalchemy.String`.
     """
 
+    cache_ok = True  # have to be set explicitly in each class
+
     def process_bind_param(
         self, value: Optional[Region], dialect: sqlalchemy.engine.Dialect
     ) -> Optional[str]:

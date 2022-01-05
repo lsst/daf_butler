@@ -51,6 +51,7 @@ from astropy.time import Time
 from lsst.utils.iteration import ensure_iterable
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import func
+from sqlalchemy.sql.visitors import InternalTraversal
 
 from ....core import (
     Dimension,
@@ -125,54 +126,77 @@ class ExpressionTypeError(TypeError):
     """
 
 
-class _TimestampColumnElement(sqlalchemy.sql.ColumnElement):
-    """Special ColumnElement type used for TIMESTAMP columns or literals in
-    expressions.
+class _TimestampLiteral(sqlalchemy.sql.ColumnElement):
+    """Special ColumnElement type used for TIMESTAMP literals in expressions.
 
     SQLite stores timestamps as strings which sometimes can cause issues when
     comparing strings. For more reliable comparison SQLite needs DATETIME()
     wrapper for those strings. For PostgreSQL it works better if we add
     TIMESTAMP to string literals.
+    """
+
+    inherit_cache = True
+    _traverse_internals = [("_literal", InternalTraversal.dp_plain_obj)]
+
+    def __init__(self, literal: datetime):
+        super().__init__()
+        self._literal = literal
+
+
+@compiles(_TimestampLiteral, "sqlite")
+def compile_timestamp_literal_sqlite(element: Any, compiler: Any, **kw: Mapping[str, Any]) -> str:
+    """Compilation of TIMESTAMP literal for SQLite.
+
+    SQLite defines ``datetiem`` function that can be used to convert timestamp
+    value to Unix seconds.
+    """
+    return compiler.process(func.datetime(sqlalchemy.sql.literal(element._literal)), **kw)
+
+
+@compiles(_TimestampLiteral, "postgresql")
+def compile_timestamp_literal_pg(element: Any, compiler: Any, **kw: Mapping[str, Any]) -> str:
+    """Compilation of TIMESTAMP literal for PostgreSQL.
+
+    For PostgreSQL it works better if we add TIMESTAMP to string literals.
+    """
+    literal = element._literal.isoformat(sep=" ", timespec="microseconds")
+    return "TIMESTAMP " + compiler.process(sqlalchemy.sql.literal(literal), **kw)
+
+
+class _TimestampColumnElement(sqlalchemy.sql.ColumnElement):
+    """Special ColumnElement type used for TIMESTAMP columns or in expressions.
+
+    SQLite stores timestamps as strings which sometimes can cause issues when
+    comparing strings. For more reliable comparison SQLite needs DATETIME()
+    wrapper for columns.
 
     This mechanism is only used for expressions in WHERE clause, values of the
     TIMESTAMP columns returned from queries are still handled by standard
     mechanism and they are converted to `datetime` instances.
     """
 
-    def __init__(
-        self, column: Optional[sqlalchemy.sql.ColumnElement] = None, literal: Optional[datetime] = None
-    ):
+    inherit_cache = True
+    _traverse_internals = [("_column", InternalTraversal.dp_clauseelement)]
+
+    def __init__(self, column: sqlalchemy.sql.ColumnElement):
         super().__init__()
         self._column = column
-        self._literal = literal
 
 
 @compiles(_TimestampColumnElement, "sqlite")
 def compile_timestamp_sqlite(element: Any, compiler: Any, **kw: Mapping[str, Any]) -> str:
     """Compilation of TIMESTAMP column for SQLite.
 
-    SQLite defines ``strftime`` function that can be used to convert timestamp
+    SQLite defines ``datetime`` function that can be used to convert timestamp
     value to Unix seconds.
     """
-    assert element._column is not None or element._literal is not None, "Must have column or literal"
-    if element._column is not None:
-        return compiler.process(func.datetime(element._column), **kw)
-    else:
-        return compiler.process(func.datetime(sqlalchemy.sql.literal(element._literal)), **kw)
+    return compiler.process(func.datetime(element._column), **kw)
 
 
 @compiles(_TimestampColumnElement, "postgresql")
 def compile_timestamp_pg(element: Any, compiler: Any, **kw: Mapping[str, Any]) -> str:
-    """Compilation of TIMESTAMP column for PostgreSQL.
-
-    PostgreSQL can use `EXTRACT(epoch FROM timestamp)` function.
-    """
-    assert element._column is not None or element._literal is not None, "Must have column or literal"
-    if element._column is not None:
-        return compiler.process(element._column, **kw)
-    else:
-        literal = element._literal.isoformat(sep=" ", timespec="microseconds")
-        return "TIMESTAMP " + compiler.process(sqlalchemy.sql.literal(literal), **kw)
+    """Compilation of TIMESTAMP column for PostgreSQL."""
+    return compiler.process(element._column, **kw)
 
 
 class WhereClauseConverter(ABC):
@@ -323,7 +347,7 @@ class ScalarWhereClauseConverter(WhereClauseConverter):
         """
         dtype = type(value)
         if dtype is datetime:
-            column = _TimestampColumnElement(literal=value)
+            column = _TimestampLiteral(value)
         else:
             column = sqlalchemy.sql.literal(value, type_=ddl.AstropyTimeNsecTai if dtype is Time else None)
         return cls(column, value, dtype)
@@ -1034,7 +1058,7 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
             assert self.columns.datasets is not None
             assert self.columns.datasets.ingestDate is not None, "dataset.ingest_date is not in the query"
             return ScalarWhereClauseConverter.fromExpression(
-                _TimestampColumnElement(column=self.columns.datasets.ingestDate),
+                _TimestampColumnElement(self.columns.datasets.ingestDate),
                 datetime,
             )
         elif constant is ExpressionConstant.NULL:
