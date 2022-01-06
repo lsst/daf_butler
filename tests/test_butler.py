@@ -60,7 +60,6 @@ import astropy.time
 from lsst.daf.butler import (
     Butler,
     ButlerConfig,
-    ButlerURI,
     CollectionSearch,
     CollectionType,
     Config,
@@ -77,6 +76,7 @@ from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.registry import ConflictingDefinitionError, MissingCollectionError
 from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
+from lsst.resources import ResourcePath
 from lsst.resources.http import isWebdavEndpoint
 from lsst.resources.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
 from lsst.utils import doImport
@@ -262,7 +262,7 @@ class ButlerPutGetTests:
 
                 # Can the artifacts themselves be retrieved?
                 if not butler.datastore.isEphemeral:
-                    root_uri = ButlerURI(self.root)
+                    root_uri = ResourcePath(self.root)
 
                     for preserve_path in (True, False):
                         destination = root_uri.join(f"artifacts/{preserve_path}_{counter}/")
@@ -274,7 +274,7 @@ class ButlerPutGetTests:
                             [ref], destination, preserve_path=preserve_path, transfer="copy"
                         )
                         self.assertGreater(len(transferred), 0)
-                        artifacts = list(ButlerURI.findFileResources([destination]))
+                        artifacts = list(ResourcePath.findFileResources([destination]))
                         self.assertEqual(set(transferred), set(artifacts))
 
                         for artifact in transferred:
@@ -502,6 +502,12 @@ class ButlerTests(ButlerPutGetTests):
         butler = Butler(self.tmpConfigFile, run="ingest")
         self.assertIsInstance(butler, Butler)
 
+        # Check that butler.yaml is added automatically.
+        if self.tmpConfigFile.endswith(end := "/butler.yaml"):
+            config_dir = self.tmpConfigFile[: -len(end)]
+            butler = Butler(config_dir, run="ingest")
+            self.assertIsInstance(butler, Butler)
+
         collections = set(butler.registry.queryCollections())
         self.assertEqual(collections, {"ingest"})
 
@@ -519,12 +525,12 @@ class ButlerTests(ButlerPutGetTests):
             # we aren't reusing the cache.
             bad_label = f"s3://bucket/not_real{suffix}"
             butler_index["bad_label"] = bad_label
-            with ButlerURI.temporary_uri(suffix=suffix) as temp_file:
+            with ResourcePath.temporary_uri(suffix=suffix) as temp_file:
                 butler_index.dumpToUri(temp_file)
                 with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": str(temp_file)}):
                     self.assertEqual(Butler.get_known_repos(), set(("label", "bad_label")))
                     uri = Butler.get_repo_uri("bad_label")
-                    self.assertEqual(uri, ButlerURI(bad_label))
+                    self.assertEqual(uri, ResourcePath(bad_label))
                     uri = Butler.get_repo_uri("label")
                     butler = Butler(uri, writeable=False)
                     self.assertIsInstance(butler, Butler)
@@ -554,7 +560,7 @@ class ButlerTests(ButlerPutGetTests):
         datasets = list(butler.registry.queryDatasets(..., collections="ingest"))
         self.assertEqual(len(datasets), 1)
         uri, components = butler.getURIs(datasets[0])
-        self.assertIsInstance(uri, ButlerURI)
+        self.assertIsInstance(uri, ResourcePath)
         self.assertFalse(components)
         self.assertEqual(uri.fragment, "", f"Checking absence of fragment in {uri}")
         self.assertIn("423", str(uri), f"Checking visit is in URI {uri}")
@@ -563,7 +569,7 @@ class ButlerTests(ButlerPutGetTests):
         dataId = {"instrument": "DummyCamComp", "visit": 424}
         uri, components = butler.getURIs(datasets[0].datasetType, dataId=dataId, predict=True)
         self.assertFalse(components)
-        self.assertIsInstance(uri, ButlerURI)
+        self.assertIsInstance(uri, ResourcePath)
         self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
         self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
 
@@ -578,7 +584,7 @@ class ButlerTests(ButlerPutGetTests):
 
         if butler.datastore.isEphemeral:
             # Never disassemble in-memory datastore
-            self.assertIsInstance(uri, ButlerURI)
+            self.assertIsInstance(uri, ResourcePath)
             self.assertFalse(components)
             self.assertEqual(uri.fragment, "", f"Checking absence of fragment in {uri}")
             self.assertIn("423", str(uri), f"Checking visit is in URI {uri}")
@@ -586,7 +592,7 @@ class ButlerTests(ButlerPutGetTests):
             self.assertIsNone(uri)
             self.assertEqual(set(components), set(storageClass.components))
             for compuri in components.values():
-                self.assertIsInstance(compuri, ButlerURI)
+                self.assertIsInstance(compuri, ResourcePath)
                 self.assertIn("423", str(compuri), f"Checking visit is in URI {compuri}")
                 self.assertEqual(compuri.fragment, "", f"Checking absence of fragment in {compuri}")
 
@@ -596,7 +602,7 @@ class ButlerTests(ButlerPutGetTests):
 
         if butler.datastore.isEphemeral:
             # Never disassembled
-            self.assertIsInstance(uri, ButlerURI)
+            self.assertIsInstance(uri, ResourcePath)
             self.assertFalse(components)
             self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
             self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
@@ -604,7 +610,7 @@ class ButlerTests(ButlerPutGetTests):
             self.assertIsNone(uri)
             self.assertEqual(set(components), set(storageClass.components))
             for compuri in components.values():
-                self.assertIsInstance(compuri, ButlerURI)
+                self.assertIsInstance(compuri, ResourcePath)
                 self.assertIn("424", str(compuri), f"Checking visit is in URI {compuri}")
                 self.assertEqual(compuri.fragment, "predicted", f"Checking for fragment in {compuri}")
 
@@ -1062,7 +1068,7 @@ class FileDatastoreButlerTests(ButlerTests):
         Test testPutTemplates verifies actual physical existance of the files
         in the requested location.
         """
-        uri = ButlerURI(root, forceDirectory=True)
+        uri = ResourcePath(root, forceDirectory=True)
         return uri.join(relpath).exists()
 
     def testPutTemplates(self):
@@ -1481,8 +1487,8 @@ class ButlerMakeRepoOutfileTestCase(ButlerPutGetTests, unittest.TestCase):
 
     def testConfigExistence(self):
         c = Config(self.tmpConfigFile)
-        uri_config = ButlerURI(c["root"])
-        uri_expected = ButlerURI(self.root, forceDirectory=True)
+        uri_config = ResourcePath(c["root"])
+        uri_expected = ResourcePath(self.root, forceDirectory=True)
         self.assertEqual(uri_config.geturl(), uri_expected.geturl())
         self.assertNotIn(":", uri_config.path, "Check for URI concatenated with normal path")
 
@@ -1519,7 +1525,7 @@ class ButlerMakeRepoOutfileUriTestCase(ButlerMakeRepoOutfileTestCase):
         self.root = makeTestTempDir(TESTDIR)
         self.root2 = makeTestTempDir(TESTDIR)
 
-        self.tmpConfigFile = ButlerURI(os.path.join(self.root2, "something.yaml")).geturl()
+        self.tmpConfigFile = ResourcePath(os.path.join(self.root2, "something.yaml")).geturl()
         Butler.makeRepo(self.root, config=Config(self.configFile), outfile=self.tmpConfigFile)
 
 
@@ -1568,7 +1574,7 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
     def setUp(self):
         config = Config(self.configFile)
-        uri = ButlerURI(config[".datastore.datastore.root"])
+        uri = ResourcePath(config[".datastore.datastore.root"])
         self.bucketName = uri.netloc
 
         # set up some fake credentials if they do not exist
@@ -1745,8 +1751,8 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
     )
     def tearDown(self):
         # Clear temporary directory
-        ButlerURI(self.rooturi).remove()
-        ButlerURI(self.rooturi).session.close()
+        ResourcePath(self.rooturi).remove()
+        ResourcePath(self.rooturi).session.close()
 
         if self.reg_dir is not None and os.path.exists(self.reg_dir):
             shutil.rmtree(self.reg_dir, ignore_errors=True)

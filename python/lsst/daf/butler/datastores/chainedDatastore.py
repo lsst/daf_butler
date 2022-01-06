@@ -32,7 +32,6 @@ import warnings
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from lsst.daf.butler import (
-    ButlerURI,
     Constraints,
     DatasetRef,
     DatasetTypeNotSupportedError,
@@ -41,6 +40,7 @@ from lsst.daf.butler import (
     DatastoreValidationError,
     FileDataset,
 )
+from lsst.resources import ResourcePath
 from lsst.utils import doImportType
 
 if TYPE_CHECKING:
@@ -261,7 +261,7 @@ class ChainedDatastore(Datastore):
         return False
 
     def mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ButlerURI, bool]] = None
+        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
     ) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
@@ -269,9 +269,9 @@ class ChainedDatastore(Datastore):
         ----------
         refs : iterable of `DatasetRef`
             The datasets to be checked.
-        artifact_existence : `dict` of [`ButlerURI`, `bool`], optional
-            Mapping of datastore artifact to existence. Updated by this
-            method with details of all artifacts tested. Can be `None`
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested. Can be `None`
             if the caller is not interested.
 
         Returns
@@ -494,7 +494,7 @@ class ChainedDatastore(Datastore):
 
     def getURIs(
         self, ref: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
         """Return URIs associated with dataset.
 
         Parameters
@@ -507,7 +507,7 @@ class ChainedDatastore(Datastore):
 
         Returns
         -------
-        primary : `ButlerURI`
+        primary : `lsst.resources.ResourcePath`
             The URI to the primary artifact associated with this dataset.
             If the dataset was disassembled within the datastore this
             may be `None`.
@@ -523,7 +523,7 @@ class ChainedDatastore(Datastore):
         is allowed, the predicted URI for the first datastore in the list will
         be returned.
         """
-        DatastoreURIs = Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]
+        DatastoreURIs = Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]
         log.debug("Requesting URIs for %s", ref)
         predictedUri: Optional[DatastoreURIs] = None
         predictedEphemeralUri: Optional[DatastoreURIs] = None
@@ -556,7 +556,7 @@ class ChainedDatastore(Datastore):
 
         raise FileNotFoundError("Dataset {} not in any datastore".format(ref))
 
-    def getURI(self, ref: DatasetRef, predict: bool = False) -> ButlerURI:
+    def getURI(self, ref: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.
 
         The returned URI is from the first datastore in the list that has
@@ -575,7 +575,7 @@ class ChainedDatastore(Datastore):
 
         Returns
         -------
-        uri : `ButlerURI`
+        uri : `lsst.resources.ResourcePath`
             URI pointing to the dataset within the datastore. If the
             dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
@@ -607,11 +607,11 @@ class ChainedDatastore(Datastore):
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
-        destination: ButlerURI,
+        destination: ResourcePath,
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> List[ButlerURI]:
+    ) -> List[ResourcePath]:
         """Retrieve the file artifacts associated with the supplied refs.
 
         Parameters
@@ -620,11 +620,12 @@ class ChainedDatastore(Datastore):
             The datasets for which file artifacts are to be retrieved.
             A single ref can result in multiple files. The refs must
             be resolved.
-        destination : `ButlerURI`
+        destination : `lsst.resources.ResourcePath`
             Location to write the file artifacts.
         transfer : `str`, optional
             Method to use to transfer the artifacts. Must be one of the options
-            supported by `ButlerURI.transfer_from()`. "move" is not allowed.
+            supported by `lsst.resources.ResourcePath.transfer_from()`.
+            "move" is not allowed.
         preserve_path : `bool`, optional
             If `True` the full path of the file artifact within the datastore
             is preserved. If `False` the final file component of the path
@@ -635,7 +636,7 @@ class ChainedDatastore(Datastore):
 
         Returns
         -------
-        targets : `list` of `ButlerURI`
+        targets : `list` of `lsst.resources.ResourcePath`
             URIs of file artifacts in destination location. Order is not
             preserved.
         """
@@ -673,7 +674,7 @@ class ChainedDatastore(Datastore):
             raise RuntimeError(f"Some datasets were not found in any datastores: {pending}")
 
         # Now do the transfer.
-        targets: List[ButlerURI] = []
+        targets: List[ResourcePath] = []
         for number, datastore_refs in grouped_by_datastore.items():
             targets.extend(
                 self.datastores[number].retrieveArtifacts(

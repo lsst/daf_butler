@@ -26,7 +26,9 @@ __all__ = ("ButlerRepoIndex",)
 import os
 from typing import ClassVar, Dict, Set
 
-from .core import ButlerURI, Config
+from lsst.resources import ResourcePath, ResourcePathExpression
+
+from .core import Config
 
 
 class ButlerRepoIndex:
@@ -49,17 +51,17 @@ class ButlerRepoIndex:
     index_env_var: ClassVar[str] = "DAF_BUTLER_REPOSITORY_INDEX"
     """The name of the environment variable to read to locate the index."""
 
-    _cache: ClassVar[Dict[ButlerURI, Config]] = {}
+    _cache: ClassVar[Dict[ResourcePath, Config]] = {}
     """Cache of indexes. In most scenarios only one index will be found
     and the environment will not change. In tests this may not be true."""
 
     @classmethod
-    def _read_repository_index(cls, index_uri: ButlerURI) -> Config:
+    def _read_repository_index(cls, index_uri: ResourcePathExpression) -> Config:
         """Read the repository index from the supplied URI.
 
         Parameters
         ----------
-        index_uri : `str` or `ButlerURI`
+        index_uri : `lsst.resources.ResourcePathExpression`
             URI of the repository index.
 
         Returns
@@ -85,12 +87,12 @@ class ButlerRepoIndex:
         return repo_index
 
     @classmethod
-    def _get_index_uri(cls) -> ButlerURI:
+    def _get_index_uri(cls) -> ResourcePath:
         """Find the URI to the repository index.
 
         Returns
         -------
-        index_uri : `ButlerURI`
+        index_uri : `lsst.resources.ResourcePath`
             URI to the repository index.
 
         Raises
@@ -101,7 +103,7 @@ class ButlerRepoIndex:
         index_uri = os.environ.get(cls.index_env_var)
         if index_uri is None:
             raise KeyError(f"No repository index defined in enviroment variable {cls.index_env_var}")
-        return ButlerURI(index_uri)
+        return ResourcePath(index_uri)
 
     @classmethod
     def _read_repository_index_from_environment(cls) -> Config:
@@ -131,7 +133,7 @@ class ButlerRepoIndex:
         return set(repo_index)
 
     @classmethod
-    def get_repo_uri(cls, label: str) -> ButlerURI:
+    def get_repo_uri(cls, label: str) -> ResourcePath:
         """Look up the label in a butler repository index.
 
         Parameters
@@ -141,7 +143,7 @@ class ButlerRepoIndex:
 
         Returns
         -------
-        uri : `ButlerURI`
+        uri : `lsst.resources.ResourcePath`
             URI to the Butler repository associated with the given label.
 
         Raises
@@ -162,4 +164,4 @@ class ButlerRepoIndex:
             except KeyError:
                 index_uri = "<environment variable not defined>"
             raise KeyError(f"Label '{label}' not known to repository index at {index_uri}")
-        return ButlerURI(repo_uri)
+        return ResourcePath(repo_uri)

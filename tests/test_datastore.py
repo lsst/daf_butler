@@ -29,7 +29,6 @@ from dataclasses import dataclass
 import lsst.utils.tests
 import yaml
 from lsst.daf.butler import (
-    ButlerURI,
     Config,
     DatasetTypeNotSupportedError,
     DatastoreCacheManager,
@@ -52,6 +51,7 @@ from lsst.daf.butler.tests import (
     DummyRegistry,
     MetricsExample,
 )
+from lsst.resources import ResourcePath
 from lsst.utils import doImport
 
 TESTDIR = os.path.dirname(__file__)
@@ -1157,7 +1157,7 @@ class DatastoreCacheTestCase(DatasetTestHelper, unittest.TestCase):
             for n in range(n_datasets)
         ]
 
-        root_uri = ButlerURI(self.root, forceDirectory=True)
+        root_uri = ResourcePath(self.root, forceDirectory=True)
         self.files = [root_uri.join(f"file{n}.txt") for n in range(n_datasets)]
 
         # Create test files.
@@ -1232,7 +1232,7 @@ cached:
         cache_manager = self._make_cache_manager(config_str)
 
         # Look inside to check we do have a cache directory.
-        self.assertEqual(cache_manager.cache_directory, ButlerURI(self.root, forceDirectory=True))
+        self.assertEqual(cache_manager.cache_directory, ResourcePath(self.root, forceDirectory=True))
 
         self.assertCache(cache_manager)
 
@@ -1244,7 +1244,7 @@ cached:
         self.assertFalse(cache_manager.should_be_cached(self.refs[1]))
 
         uri = cache_manager.move_to_cache(self.files[0], self.refs[0])
-        self.assertIsInstance(uri, ButlerURI)
+        self.assertIsInstance(uri, ResourcePath)
         self.assertIsNone(cache_manager.move_to_cache(self.files[1], self.refs[1]))
 
         # Cached file should no longer exist but uncached file should be
@@ -1389,7 +1389,7 @@ cached:
         for i in range(n_datasets):
             with cache_manager.find_in_cache(self.refs[i], ".txt") as found:
                 if i >= n_datasets - n_retained:
-                    self.assertIsInstance(found, ButlerURI)
+                    self.assertIsInstance(found, ResourcePath)
                 else:
                     self.assertIsNone(found)
 
@@ -1416,7 +1416,7 @@ cached:
         with cache_manager.find_in_cache(self.refs[1], ".txt") as found:
             self.assertIsNone(found)
         with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
-            self.assertIsInstance(found, ButlerURI)
+            self.assertIsInstance(found, ResourcePath)
 
 
 if __name__ == "__main__":

@@ -53,9 +53,9 @@ from typing import (
     ValuesView,
 )
 
+from lsst.resources import ResourcePath
 from pydantic import BaseModel, PrivateAttr
 
-from ._butlerUri import ButlerURI
 from .config import ConfigSubset
 from .configSupport import processLookupConfigs
 from .datasets import DatasetId, DatasetRef
@@ -75,7 +75,7 @@ def remove_cache_directory(directory: str) -> None:
     shutil.rmtree(directory, ignore_errors=True)
 
 
-def _construct_cache_path(root: ButlerURI, ref: DatasetRef, extension: str) -> ButlerURI:
+def _construct_cache_path(root: ResourcePath, ref: DatasetRef, extension: str) -> ResourcePath:
     """Construct the full path to use for this dataset in the cache.
 
     Parameters
@@ -88,7 +88,7 @@ def _construct_cache_path(root: ButlerURI, ref: DatasetRef, extension: str) -> B
 
     Returns
     -------
-    uri : `ButlerURI`
+    uri : `lsst.resources.ResourcePath`
         URI to use for this dataset in the cache.
     """
     # Dataset type component is needed in the name if composite
@@ -146,14 +146,14 @@ class CacheEntry(BaseModel):
     """Component for this disassembled composite (optional)."""
 
     @classmethod
-    def from_file(cls, file: ButlerURI, root: ButlerURI) -> CacheEntry:
+    def from_file(cls, file: ResourcePath, root: ResourcePath) -> CacheEntry:
         """Construct an object from a file name.
 
         Parameters
         ----------
-        file : `ButlerURI`
+        file : `lsst.resources.ResourcePath`
             Path to the file.
-        root : `ButlerURI`
+        root : `lsst.resources.ResourcePath`
             Cache root directory.
         """
         file_in_cache = file.relative_to(root)
@@ -283,7 +283,7 @@ class AbstractDatastoreCacheManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def move_to_cache(self, uri: ButlerURI, ref: DatasetRef) -> Optional[ButlerURI]:
+    def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> Optional[ResourcePath]:
         """Move a file to the cache.
 
         Move the given file into the cache, using the supplied DatasetRef
@@ -294,7 +294,7 @@ class AbstractDatastoreCacheManager(ABC):
 
         Parameters
         ----------
-        uri : `ButlerURI`
+        uri : `lsst.resources.ResourcePath`
             Location of the file to be relocated to the cache. Will be moved.
         ref : `DatasetRef`
             Ref associated with this file. Will be used to determine the name
@@ -302,7 +302,7 @@ class AbstractDatastoreCacheManager(ABC):
 
         Returns
         -------
-        new : `ButlerURI` or `None`
+        new : `lsst.resources.ResourcePath` or `None`
             URI to the file within the cache, or `None` if the dataset
             was not accepted by the cache.
         """
@@ -310,7 +310,7 @@ class AbstractDatastoreCacheManager(ABC):
 
     @abstractmethod
     @contextlib.contextmanager
-    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ButlerURI]]:
+    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ResourcePath]]:
         """Look for a dataset in the cache and return its location.
 
         Parameters
@@ -322,7 +322,7 @@ class AbstractDatastoreCacheManager(ABC):
 
         Yields
         ------
-        uri : `ButlerURI` or `None`
+        uri : `lsst.resources.ResourcePath` or `None`
             The URI to the cached file, or `None` if the file has not been
             cached.
 
@@ -384,7 +384,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         # requested. Allow external override from environment.
         root = os.environ.get("DAF_BUTLER_CACHE_DIRECTORY") or self.config.get("root")
         self._cache_directory = (
-            ButlerURI(root, forceAbsolute=True, forceDirectory=True) if root is not None else None
+            ResourcePath(root, forceAbsolute=True, forceDirectory=True) if root is not None else None
         )
 
         if self._cache_directory:
@@ -434,10 +434,10 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         self._cache_entries = CacheRegistry()
 
     @property
-    def cache_directory(self) -> ButlerURI:
+    def cache_directory(self) -> ResourcePath:
         if self._cache_directory is None:
             # Create on demand.
-            self._cache_directory = ButlerURI(
+            self._cache_directory = ResourcePath(
                 tempfile.mkdtemp(prefix="butler-"), forceDirectory=True, isTemporary=True
             )
             log.debug("Creating temporary cache directory at %s", self._cache_directory)
@@ -446,7 +446,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         return self._cache_directory
 
     @property
-    def _temp_exempt_directory(self) -> ButlerURI:
+    def _temp_exempt_directory(self) -> ResourcePath:
         """Return the directory in which to store temporary cache files that
         should not be expired.
         """
@@ -479,7 +479,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         log.debug("%s (match: %s) should%s be cached", entity, matchName, "" if should_cache else " not")
         return should_cache
 
-    def _construct_cache_name(self, ref: DatasetRef, extension: str) -> ButlerURI:
+    def _construct_cache_name(self, ref: DatasetRef, extension: str) -> ResourcePath:
         """Construct the name to use for this dataset in the cache.
 
         Parameters
@@ -492,12 +492,12 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
 
         Returns
         -------
-        uri : `ButlerURI`
+        uri : `lsst.resources.ResourcePath`
             URI to use for this dataset in the cache.
         """
         return _construct_cache_path(self.cache_directory, ref, extension)
 
-    def move_to_cache(self, uri: ButlerURI, ref: DatasetRef) -> Optional[ButlerURI]:
+    def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> Optional[ResourcePath]:
         # Docstring inherited
         if ref.id is None:
             raise ValueError(f"Can not cache a file associated with an unresolved reference ({ref})")
@@ -526,7 +526,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         return cached_location
 
     @contextlib.contextmanager
-    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ButlerURI]]:
+    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ResourcePath]]:
         # Docstring inherited
         # Short circuit this if the cache directory has not been created yet.
         if self._cache_directory is None:
@@ -546,7 +546,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             # is created.
             path_in_cache = cached_location.relative_to(self.cache_directory)
             assert path_in_cache is not None, f"Somehow {cached_location} not in cache directory"
-            temp_location: Optional[ButlerURI] = self._temp_exempt_directory.join(path_in_cache)
+            temp_location: Optional[ResourcePath] = self._temp_exempt_directory.join(path_in_cache)
             try:
                 if temp_location is not None:
                     temp_location.transfer_from(cached_location, transfer="hardlink")
@@ -590,12 +590,12 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
                 keys_to_remove.append(key)
         self._remove_from_cache(keys_to_remove)
 
-    def _register_cache_entry(self, cached_location: ButlerURI, can_exist: bool = False) -> str:
+    def _register_cache_entry(self, cached_location: ResourcePath, can_exist: bool = False) -> str:
         """Record the file in the cache registry.
 
         Parameters
         ----------
-        cached_location : `ButlerURI`
+        cached_location : `lsst.resources.ResourcePath`
             Location of the file to be registered.
         can_exist : `bool`, optional
             If `True` the item being registered can already be listed.
@@ -629,8 +629,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
     def scan_cache(self) -> None:
         """Scan the cache directory and record information about files."""
         found = set()
-        for file in ButlerURI.findFileResources([self.cache_directory]):
-            assert isinstance(file, ButlerURI), "Unexpectedly did not get ButlerURI from iterator"
+        for file in ResourcePath.findFileResources([self.cache_directory]):
+            assert isinstance(file, ResourcePath), "Unexpectedly did not get ResourcePath from iterator"
 
             # Skip any that are found in an exempt part of the hierarchy
             # since they should not be part of the registry.
@@ -802,12 +802,12 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         """
         return False
 
-    def move_to_cache(self, uri: ButlerURI, ref: DatasetRef) -> Optional[ButlerURI]:
+    def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> Optional[ResourcePath]:
         """Move dataset to cache but always refuse and returns `None`."""
         return None
 
     @contextlib.contextmanager
-    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ButlerURI]]:
+    def find_in_cache(self, ref: DatasetRef, extension: str) -> Iterator[Optional[ResourcePath]]:
         """Look for a dataset in the cache and return its location.
 
         Never finds a file.

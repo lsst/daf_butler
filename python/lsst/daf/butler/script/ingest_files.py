@@ -27,10 +27,11 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from astropy.table import Table
+from lsst.resources import ResourcePath
 from lsst.utils import doImport
 
 from .._butler import Butler
-from ..core import ButlerURI, DatasetRef, FileDataset
+from ..core import DatasetRef, FileDataset
 from ..registry import DatasetIdGenEnum
 
 if TYPE_CHECKING:
@@ -173,7 +174,7 @@ def extract_datasets_from_table(
         # Convert path to absolute (because otherwise system will
         # assume relative to datastore root and that is almost certainly
         # never the right default here).
-        path_uri = ButlerURI(path, root=prefix, forceAbsolute=True)
+        path_uri = ResourcePath(path, root=prefix, forceAbsolute=True)
 
         refs_by_file[path_uri].append(ref)
         n_dataset_refs += 1

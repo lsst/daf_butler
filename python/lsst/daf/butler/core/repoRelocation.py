@@ -26,16 +26,16 @@ from __future__ import annotations
 __all__ = ("BUTLER_ROOT_TAG", "replaceRoot")
 
 import os.path
-from typing import Optional, Union
+from typing import Optional
 
-from ._butlerUri import ButlerURI
+from lsst.resources import ResourcePath, ResourcePathExpression
 
 BUTLER_ROOT_TAG = "<butlerRoot>"
 """The special string to be used in configuration files to indicate that
 the butler root location should be used."""
 
 
-def replaceRoot(configRoot: str, butlerRoot: Optional[Union[ButlerURI, str]]) -> str:
+def replaceRoot(configRoot: str, butlerRoot: Optional[ResourcePathExpression]) -> str:
     """Update a configuration root with the butler root location.
 
     No changes are made if the special root string is not found in the
@@ -46,7 +46,7 @@ def replaceRoot(configRoot: str, butlerRoot: Optional[Union[ButlerURI, str]]) ->
     ----------
     configRoot : `str`
         Directory root location as specified in a configuration file.
-    butlerRoot : `str`, `ButlerURI` or `None`
+    butlerRoot : `lsst.resources.ResourcePathExpression` or `None`
         Butler root directory.  Absolute path is inserted into the
         ``configRoot`` where the
         `~lsst.daf.butler.core.repoRelocation.BUTLER_ROOT_TAG` string is
@@ -77,7 +77,7 @@ def replaceRoot(configRoot: str, butlerRoot: Optional[Union[ButlerURI, str]]) ->
 
     # Use absolute file path if this refers to a local file, else use
     # unchanged since all other URI schemes are absolute
-    uri = ButlerURI(butlerRoot)
+    uri = ResourcePath(butlerRoot)
     if uri.isLocal:
         # This will be a local file with URI quoting removed
         butlerRoot = os.path.abspath(uri.ospath)

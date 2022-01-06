@@ -27,7 +27,8 @@ import inspect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type
 
-from ._butlerUri import ButlerURI
+from lsst.resources import ResourcePath
+
 from .formatter import Formatter, FormatterParameter
 from .location import Location, LocationFactory
 from .storageClass import StorageClass, StorageClassFactory
@@ -169,7 +170,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         location : `Location`
             The location of the item within this datastore.
         """
-        uriInStore = ButlerURI(self.path, forceAbsolute=False)
+        uriInStore = ResourcePath(self.path, forceAbsolute=False)
         if uriInStore.isabs():
             location = Location(None, uriInStore)
         else:

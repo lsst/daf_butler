@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("RegistryConfig",)
 
-from typing import TYPE_CHECKING, Optional, Type, Union
+from typing import TYPE_CHECKING, Optional, Type
 
 from lsst.utils import doImportType
 
@@ -34,8 +34,7 @@ from .interfaces import Database
 
 if TYPE_CHECKING:
     import sqlalchemy
-
-    from ..core import ButlerURI
+    from lsst.resources import ResourcePathExpression
 
 
 class RegistryConfig(ConfigSubset):
@@ -87,13 +86,13 @@ class RegistryConfig(ConfigSubset):
         DatabaseClass = self.getDatabaseClass()
         return DatabaseClass.makeDefaultUri(root)
 
-    def replaceRoot(self, root: Optional[Union[str, ButlerURI]]) -> None:
+    def replaceRoot(self, root: Optional[ResourcePathExpression]) -> None:
         """Replace any occurrences of `BUTLER_ROOT_TAG` in the connection
         with the given root directory.
 
         Parameters
         ----------
-        root : `str`, `ButlerURI`, or `None`
+        root : `lsst.resources.ResourcePathExpression`, or `None`
             String to substitute for `BUTLER_ROOT_TAG`.  Passing `None` here is
             allowed only as a convenient way to raise an exception
             (`ValueError`).

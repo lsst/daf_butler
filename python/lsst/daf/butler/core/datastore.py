@@ -56,8 +56,9 @@ from .fileDataset import FileDataset
 from .storageClass import StorageClassFactory
 
 if TYPE_CHECKING:
+    from lsst.resources import ResourcePath, ResourcePathExpression
+
     from ..registry.interfaces import DatastoreRegistryBridgeManager
-    from ._butlerUri import ButlerURI
     from .configSupport import LookupKey
     from .datasets import DatasetRef, DatasetType
     from .storageClass import StorageClass
@@ -282,7 +283,7 @@ class Datastore(metaclass=ABCMeta):
     def fromConfig(
         config: Config,
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: Optional[Union[str, ButlerURI]] = None,
+        butlerRoot: Optional[ResourcePathExpression] = None,
     ) -> "Datastore":
         """Create datastore from type specified in config file.
 
@@ -305,7 +306,7 @@ class Datastore(metaclass=ABCMeta):
         self,
         config: Union[Config, str],
         bridgeManager: DatastoreRegistryBridgeManager,
-        butlerRoot: Optional[Union[str, ButlerURI]] = None,
+        butlerRoot: Optional[ResourcePathExpression] = None,
     ):
         self.config = DatastoreConfig(config)
         self.name = "ABCDataStore"
@@ -369,7 +370,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError()
 
     def mexists(
-        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ButlerURI, bool]] = None
+        self, refs: Iterable[DatasetRef], artifact_existence: Optional[Dict[ResourcePath, bool]] = None
     ) -> Dict[DatasetRef, bool]:
         """Check the existence of multiple datasets at once.
 
@@ -377,9 +378,9 @@ class Datastore(metaclass=ABCMeta):
         ----------
         refs : iterable of `DatasetRef`
             The datasets to be checked.
-        artifact_existence : `dict` of [`ButlerURI`, `bool`], optional
-            Mapping of datastore artifact to existence. Updated by this
-            method with details of all artifacts tested. Can be `None`
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested. Can be `None`
             if the caller is not interested.
 
         Returns
@@ -642,7 +643,7 @@ class Datastore(metaclass=ABCMeta):
         refs: Iterable[DatasetRef],
         local_refs: Optional[Iterable[DatasetRef]] = None,
         transfer: str = "auto",
-        artifact_existence: Optional[Dict[ButlerURI, bool]] = None,
+        artifact_existence: Optional[Dict[ResourcePath, bool]] = None,
     ) -> None:
         """Transfer dataset artifacts from another datastore to this one.
 
@@ -669,9 +670,9 @@ class Datastore(metaclass=ABCMeta):
             data store choose the most natural option for itself.
             If the source location and transfer location are identical the
             transfer mode will be ignored.
-        artifact_existence : `dict` of [`ButlerURI`, `bool`], optional
-            Mapping of datastore artifact to existence. Updated by this
-            method with details of all artifacts tested. Can be `None`
+        artifact_existence : `dict` [`lsst.resources.ResourcePath`, `bool`]
+            Optional mapping of datastore artifact to existence. Updated by
+            this method with details of all artifacts tested. Can be `None`
             if the caller is not interested.
 
         Raises
@@ -690,7 +691,7 @@ class Datastore(metaclass=ABCMeta):
     @abstractmethod
     def getURIs(
         self, datasetRef: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
         """Return URIs associated with dataset.
 
         Parameters
@@ -703,7 +704,7 @@ class Datastore(metaclass=ABCMeta):
 
         Returns
         -------
-        primary : `ButlerURI`
+        primary : `lsst.resources.ResourcePath`
             The URI to the primary artifact associated with this dataset.
             If the dataset was disassembled within the datastore this
             may be `None`.
@@ -714,7 +715,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def getURI(self, datasetRef: DatasetRef, predict: bool = False) -> ButlerURI:
+    def getURI(self, datasetRef: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.
 
         Parameters
@@ -746,11 +747,11 @@ class Datastore(metaclass=ABCMeta):
     def retrieveArtifacts(
         self,
         refs: Iterable[DatasetRef],
-        destination: ButlerURI,
+        destination: ResourcePath,
         transfer: str = "auto",
         preserve_path: bool = True,
         overwrite: bool = False,
-    ) -> List[ButlerURI]:
+    ) -> List[ResourcePath]:
         """Retrieve the artifacts associated with the supplied refs.
 
         Parameters
@@ -759,11 +760,12 @@ class Datastore(metaclass=ABCMeta):
             The datasets for which artifacts are to be retrieved.
             A single ref can result in multiple artifacts. The refs must
             be resolved.
-        destination : `ButlerURI`
+        destination : `lsst.resources.ResourcePath`
             Location to write the artifacts.
         transfer : `str`, optional
             Method to use to transfer the artifacts. Must be one of the options
-            supported by `ButlerURI.transfer_from()`. "move" is not allowed.
+            supported by `lsst.resources.ResourcePath.transfer_from()`.
+            "move" is not allowed.
         preserve_path : `bool`, optional
             If `True` the full path of the artifact within the datastore
             is preserved. If `False` the final file component of the path
@@ -774,7 +776,7 @@ class Datastore(metaclass=ABCMeta):
 
         Returns
         -------
-        targets : `list` of `ButlerURI`
+        targets : `list` of `lsst.resources.ResourcePath`
             URIs of file artifacts in destination location. Order is not
             preserved.
 

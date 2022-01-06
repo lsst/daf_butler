@@ -553,8 +553,8 @@ class DimensionRecordsAccumulator:
         This function returns the key associated with the record (either the
         newly allocated key, or the existing one)
 
-        Paramters
-        ---------
+        Parameters
+        ----------
         record : `DimensionRecord`
             The record to add to the accumulator
 
