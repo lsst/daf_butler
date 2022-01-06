@@ -64,7 +64,7 @@ class _Replace(sqlalchemy.sql.Insert):
     on the primary key constraint for the table.
     """
 
-    pass
+    inherit_cache = True  # make it cacheable
 
 
 # SQLite and PostgreSQL use similar syntax for their ON CONFLICT extension,
@@ -95,7 +95,7 @@ class _Ensure(sqlalchemy.sql.Insert):
     ``INSERT ... ON CONFLICT DO NOTHING``.
     """
 
-    pass
+    inherit_cache = True  # make it cacheable
 
 
 @sqlalchemy.ext.compiler.compiles(_Ensure, "sqlite")
