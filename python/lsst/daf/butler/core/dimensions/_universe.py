@@ -318,8 +318,11 @@ class DimensionUniverse:
         while True:
             # iterate over a temporary copy so we can modify the original
             for name in tuple(names):
-                names.update(self._dimensions[name].required.names)
-                names.update(self._dimensions[name].implied.names)
+                try:
+                    names.update(self._dimensions[name].required.names)
+                    names.update(self._dimensions[name].implied.names)
+                except KeyError:
+                    continue
             if oldSize == len(names):
                 break
             else:
