@@ -857,7 +857,7 @@ class Butler:
             # them to the Id form
             for dimensionName, values in byRecord.items():
                 if dimensionName in newDataId:
-                    log.warning(
+                    log.debug(
                         "DataId specified explicit %s dimension value of %s in addition to"
                         " general record specifiers for it of %s.  Ignoring record information.",
                         dimensionName,
