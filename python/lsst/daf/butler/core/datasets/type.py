@@ -147,7 +147,7 @@ class DatasetType:
 
     _serializedType = SerializedDatasetType
 
-    VALID_NAME_REGEX = re.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$")
+    VALID_NAME_REGEX = re.compile("^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
 
     @staticmethod
     def nameWithComponent(datasetTypeName: str, componentName: str) -> str:

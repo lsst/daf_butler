@@ -77,8 +77,8 @@ class DatasetTypeTestCase(unittest.TestCase):
         in certain positions.
         """
         dimensions = self.universe.extract(("instrument", "visit"))
-        goodNames = ("a", "A", "z1", "Z1", "a_1B", "A_1b")
-        badNames = ("1", "_", "a%b", "B+Z", "T[0]")
+        goodNames = ("a", "A", "z1", "Z1", "a_1B", "A_1b", "_a")
+        badNames = ("1", "a%b", "B+Z", "T[0]")
 
         # Construct storage class with all the good names included as
         # components so that we can test internal consistency
