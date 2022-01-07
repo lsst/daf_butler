@@ -487,10 +487,18 @@ class ChainedDatastore(Datastore):
             raise NotImplementedError(f"No child datastore supports transfer mode {transfer}.")
         return _IngestPrepData(children=children)
 
-    def _finishIngest(self, prepData: _IngestPrepData, *, transfer: Optional[str] = None) -> None:
+    def _finishIngest(
+        self,
+        prepData: _IngestPrepData,
+        *,
+        transfer: Optional[str] = None,
+        record_validation_info: bool = True,
+    ) -> None:
         # Docstring inherited from Datastore._finishIngest.
         for datastore, prepDataForChild in prepData.children:
-            datastore._finishIngest(prepDataForChild, transfer=transfer)
+            datastore._finishIngest(
+                prepDataForChild, transfer=transfer, record_validation_info=record_validation_info
+            )
 
     def getURIs(
         self, ref: DatasetRef, predict: bool = False

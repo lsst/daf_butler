@@ -527,7 +527,9 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError(f"Datastore {self} does not support direct file-based ingest.")
 
-    def _finishIngest(self, prepData: IngestPrepData, *, transfer: Optional[str] = None) -> None:
+    def _finishIngest(
+        self, prepData: IngestPrepData, *, transfer: Optional[str] = None, record_validation_info: bool = True
+    ) -> None:
         """Complete an ingest operation.
 
         Parameters
@@ -538,6 +540,13 @@ class Datastore(metaclass=ABCMeta):
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
             See `ingest` for details of transfer modes.
+        record_validation_info : `bool`, optional
+            If `True`, the default, the datastore can record validation
+            information associated with the file. If `False` the datastore
+            will not attempt to track any information such as checksums
+            or file sizes. This can be useful if such information is tracked
+            in an external system or if the file is to be compressed in place.
+            It is up to the datastore whether this parameter is relevant.
 
         Raises
         ------
@@ -555,7 +564,9 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError(f"Datastore {self} does not support direct file-based ingest.")
 
-    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> None:
+    def ingest(
+        self, *datasets: FileDataset, transfer: Optional[str] = None, record_validation_info: bool = True
+    ) -> None:
         """Ingest one or more files into the datastore.
 
         Parameters
@@ -580,6 +591,13 @@ class Datastore(metaclass=ABCMeta):
             Most datastores do not support all transfer modes.
             "auto" is a special option that will let the
             data store choose the most natural option for itself.
+        record_validation_info : `bool`, optional
+            If `True`, the default, the datastore can record validation
+            information associated with the file. If `False` the datastore
+            will not attempt to track any information such as checksums
+            or file sizes. This can be useful if such information is tracked
+            in an external system or if the file is to be compressed in place.
+            It is up to the datastore whether this parameter is relevant.
 
         Raises
         ------
@@ -635,7 +653,7 @@ class Datastore(metaclass=ABCMeta):
                 "DatasetType(s) not supported in ingest: "
                 + ", ".join(f"{k.name} ({len(v)} dataset(s))" for k, v in byDatasetType.items())
             )
-        self._finishIngest(prepData, transfer=transfer)
+        self._finishIngest(prepData, transfer=transfer, record_validation_info=record_validation_info)
 
     def transfer_from(
         self,
