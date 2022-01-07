@@ -110,6 +110,8 @@ storageClasses:
     pytype: lsst.skymap.BaseSkyMap
   PropertySet:
     pytype: lsst.daf.base.PropertySet
+    converters:
+      lsst.pipe.base.TaskMetadata: lsst.daf.base.PropertySet.from_mapping
   PropertyList:
     pytype: lsst.daf.base.PropertyList
   IsrCalib:

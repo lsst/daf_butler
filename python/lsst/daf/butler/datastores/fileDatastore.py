@@ -1081,6 +1081,10 @@ class FileDatastore(GenericBaseDatastore):
         info : `StoredFileInfo`
             Information describing the artifact written to the datastore.
         """
+        # May need to coerce the in memory dataset to the correct
+        # python type.
+        inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
+
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
         uri = location.uri
 

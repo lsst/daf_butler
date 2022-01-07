@@ -21,6 +21,8 @@ storageClasses:
     delegate: lsst.daf.butler.tests.MetricsDelegate
     parameters:
       - slice
+    converters:
+      dict: lsst.daf.butler.tests.MetricsExample.makeFromDict
   StructuredData:
     # Data from a simple Python class
     pytype: lsst.daf.butler.tests.MetricsExample
