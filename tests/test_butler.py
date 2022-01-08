@@ -511,6 +511,12 @@ class ButlerTests(ButlerPutGetTests):
         collections = set(butler.registry.queryCollections())
         self.assertEqual(collections, {"ingest"})
 
+        # Check that some special characters can be included in run name.
+        special_run = "u@b.c-A"
+        butler_special = Butler(butler=butler, run=special_run)
+        collections = set(butler_special.registry.queryCollections("*@*"))
+        self.assertEqual(collections, {special_run})
+
         butler2 = Butler(butler=butler, collections=["other"])
         self.assertEqual(butler2.collections, CollectionSearch.fromExpression(["other"]))
         self.assertIsNone(butler2.run)
