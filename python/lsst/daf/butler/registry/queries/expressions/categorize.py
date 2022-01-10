@@ -215,3 +215,81 @@ def categorizeOrderByName(graph: DimensionGraph, name: str) -> Tuple[DimensionEl
                 raise ValueError(f"Field '{field_name}' does not exist in '{element}'.")
 
     return element, field_name
+
+
+def categorizeElementOrderByName(element: DimensionElement, name: str) -> Optional[str]:
+    """Categorize an identifier in an ORDER BY clause for a single element.
+
+    Parameters
+    ----------
+    element : `DimensionElement`
+        Dimension element.
+    name : `str`
+        Identifier to categorize.
+
+    Returns
+    -------
+    column : `str` or `None`
+        The name of a column in the table for ``element``, or `None` if
+        ``element`` is a `Dimension` and the requested column is its primary
+        key.
+
+    Raises
+    ------
+    ValueError
+        Raised if name is not recognized.
+
+    Notes
+    -----
+    For ORDER BY identifiers we use slightly different set of rules compared to
+    the rules in `categorizeElementId`:
+
+    - Name can be a dimension element name. e.g. ``visit``.
+    - Name can be an element name and a metadata name (or key name) separated
+      by dot, e.g. ``detector.full_name``, element name must correspond to
+      ``element`` argument
+    - Name can be a metadata name without element name prefix, e.g.
+      ``day_obs``.
+    - Two special identifiers ``timespan.begin`` and ``timespan.end`` can be
+      used with temporal elements.
+    """
+    field_name: Optional[str] = None
+    if name in ("timespan.begin", "timespan.end"):
+        if element.temporal:
+            field_name = name
+        else:
+            raise ValueError(f"Cannot use '{field_name}' with non-temporal element '{element}'.")
+    elif "." not in name:
+        # No dot, can be either a dimension name or a field name (in any of
+        # the known elements)
+        if name == element.name:
+            # Must be a dimension element
+            if not isinstance(element, Dimension):
+                raise ValueError(f"Element '{element}' is not a dimension.")
+        else:
+            # Can be a metadata name or any of the keys
+            if name in element.metadata.names or (
+                isinstance(element, Dimension) and name in element.uniqueKeys.names
+            ):
+                field_name = name
+            else:
+                raise ValueError(f"Field '{name}' does not exist in '{element}'.")
+    else:
+        # qualified name, must be a dimension element and a field
+        elem_name, _, field_name = name.partition(".")
+        if elem_name != element.name:
+            raise ValueError(f"Element name mismatch: '{elem_name}' instead of '{element}'")
+        if field_name in ("timespan.begin", "timespan.end"):
+            if not element.temporal:
+                raise ValueError(f"Cannot use '{field_name}' with non-temporal element '{element}'.")
+        elif isinstance(element, Dimension) and field_name == element.primaryKey.name:
+            # Primary key is optional
+            field_name = None
+        else:
+            if not (
+                field_name in element.metadata.names
+                or (isinstance(element, Dimension) and field_name in element.alternateKeys.names)
+            ):
+                raise ValueError(f"Field '{field_name}' does not exist in '{element}'.")
+
+    return field_name

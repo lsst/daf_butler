@@ -22,12 +22,11 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-import dataclasses
 from typing import AbstractSet, Any, Iterable, List, Optional
 
 import sqlalchemy.sql
 
-from ...core import DatasetType, Dimension, DimensionElement, SimpleQuery, SkyPixDimension, ddl
+from ...core import DatasetType, Dimension, DimensionElement, SimpleQuery, SkyPixDimension
 from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._collectionType import CollectionType
 from ..wildcards import CollectionQuery, CollectionSearch
@@ -570,16 +569,11 @@ class QueryBuilder:
         for order_by_column in self.summary.order_by.order_by_columns:
 
             column: sqlalchemy.sql.ColumnElement
-            field_spec: Optional[ddl.FieldSpec]
-            dimension: Optional[Dimension] = None
             if order_by_column.column is None:
                 # dimension name, it has to be in SELECT list already, only
                 # add it to ORDER BY
                 assert isinstance(order_by_column.element, Dimension), "expecting full Dimension"
                 column = self._columns.getKeyColumn(order_by_column.element)
-                add_to_select = False
-                field_spec = None
-                dimension = order_by_column.element
             else:
                 table = self._elements[order_by_column.element]
 
@@ -592,25 +586,13 @@ class QueryBuilder:
                     else:
                         column = timespan_repr.upper()
                         label = f"{order_by_column.element.name}_timespan_end"
-                    field_spec = ddl.FieldSpec(label, dtype=sqlalchemy.BigInteger, nullable=True)
                 else:
                     column = table.columns[order_by_column.column]
                     # make a unique label for it
                     label = f"{order_by_column.element.name}_{order_by_column.column}"
-                    field_spec = order_by_column.element.RecordClass.fields.facts[order_by_column.column]
-                    field_spec = dataclasses.replace(field_spec, name=label)
 
                 column = column.label(label)
-                add_to_select = True
 
-            order_by_columns.append(
-                OrderByColumn(
-                    column=column,
-                    ordering=order_by_column.ordering,
-                    add_to_select=add_to_select,
-                    field_spec=field_spec,
-                    dimension=dimension,
-                )
-            )
+            order_by_columns.append(OrderByColumn(column=column, ordering=order_by_column.ordering))
 
         return order_by_columns

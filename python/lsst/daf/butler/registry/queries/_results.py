@@ -30,6 +30,7 @@ __all__ = (
 )
 
 import itertools
+import operator
 from abc import abstractmethod
 from contextlib import ExitStack, contextmanager
 from typing import (
@@ -38,6 +39,7 @@ from typing import (
     ContextManager,
     Iterable,
     Iterator,
+    List,
     Mapping,
     Optional,
     Sequence,
@@ -52,13 +54,14 @@ from ...core import (
     DataCoordinateIterable,
     DatasetRef,
     DatasetType,
+    Dimension,
     DimensionGraph,
     DimensionRecord,
     SimpleQuery,
 )
 from ..interfaces import Database, DimensionRecordStorage
 from ._query import Query
-from ._structs import QuerySummary
+from ._structs import ElementOrderByClause, QuerySummary
 
 QueryFactoryMethod = Callable[[Optional[Iterable[str]], Optional[Tuple[int, Optional[int]]]], Query]
 """Type of a query factory method type used by DataCoordinateQueryResults.
@@ -986,6 +989,68 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
         raise NotImplementedError()
 
 
+class _DimensionRecordKey:
+    """Class for objects used as keys in ordering `DimensionRecord` instances.
+
+    Parameters
+    ----------
+    attributes : `Sequence` [ `str` ]
+        Sequence of attribute names to use for comparison.
+    ordering : `Sequence` [ `bool` ]
+        Matching sequence of ordering flags, `False` for descending ordering,
+        `True` for ascending ordering.
+    record : `DimensionRecord`
+        `DimensionRecord` to compare to other records.
+    """
+
+    def __init__(self, attributes: Sequence[str], ordering: Sequence[bool], record: DimensionRecord):
+        self.attributes = attributes
+        self.ordering = ordering
+        self.rec = record
+
+    def _cmp(self, other: _DimensionRecordKey) -> int:
+        """Compare two records using provided comparison operator.
+
+        Parameters
+        ----------
+        other : `_DimensionRecordKey`
+            Key for other record.
+
+        Returns
+        -------
+        result : `int`
+            0 if keys are identical, negative if ``self`` is ordered before
+            ``other``, positive otherwise.
+        """
+        for attribute, ordering in zip(self.attributes, self.ordering):
+            # timespan.begin/end cannot use getattr
+            attrgetter = operator.attrgetter(attribute)
+            lhs = attrgetter(self.rec)
+            rhs = attrgetter(other.rec)
+            if not ordering:
+                lhs, rhs = rhs, lhs
+            if lhs != rhs:
+                return 1 if lhs > rhs else -1
+        return 0
+
+    def __lt__(self, other: _DimensionRecordKey) -> bool:
+        return self._cmp(other) < 0
+
+    def __gt__(self, other: _DimensionRecordKey) -> bool:
+        return self._cmp(other) > 0
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, _DimensionRecordKey):
+            return NotImplemented
+        return self._cmp(other) == 0
+
+    def __le__(self, other: _DimensionRecordKey) -> bool:
+        return self._cmp(other) <= 0
+
+    def __ge__(self, other: _DimensionRecordKey) -> bool:
+        return self._cmp(other) >= 0
+
+
 class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
     """Implementation of DimensionRecordQueryResults using database query.
 
@@ -1005,19 +1070,32 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
     def __iter__(self) -> Iterator[DimensionRecord]:
         # LIMIT is already applied at DataCoordinateQueryResults level
         # (assumption here is that if DataId exists then dimension record
-        # exists too and their counts must be equal). We still need to make
-        # sure that ordering is applied to dimension records as well.
+        # exists too and their counts must be equal). fetch() does not
+        # guarantee ordering, so we need to sort records in memory below.
+        recordIter = self._recordStorage.fetch(self._dataIds)
         if not self._order_by:
-            return iter(self._recordStorage.fetch(self._dataIds))
-        else:
-            # fetch() method does not support ordering, for now do it hard way
-            # by fetching everything into memory and ordering by DataId
-            dataIds = self._dataIds.toSequence()
-            rec_map = {}
-            for rec in self._recordStorage.fetch(dataIds):
-                rec_map[rec.dataId] = rec
-            # TODO: Do we want to clean up dataIds that may be missing
-            return iter(rec_map[dataId] for dataId in dataIds)
+            return iter(recordIter)
+
+        # Parse list of column names and build a list of attribute name for
+        # ordering. Note that here we only support ordering by direct
+        # attributes of the element, and not other elements from the dimension
+        # graph.
+        orderBy = ElementOrderByClause(self._order_by, self._recordStorage.element)
+        attributes: List[str] = []
+        ordering: List[bool] = []
+        for column in orderBy.order_by_columns:
+            if column.column is None:
+                assert isinstance(column.element, Dimension), "Element must be a Dimension"
+                attributes.append(column.element.primaryKey.name)
+            else:
+                attributes.append(column.column)
+            ordering.append(column.ordering)
+
+        def _key(record: DimensionRecord) -> _DimensionRecordKey:
+            return _DimensionRecordKey(attributes, ordering, record)
+
+        records = sorted(recordIter, key=_key)
+        return iter(records)
 
     def count(self, *, exact: bool = True) -> int:
         # Docstring inherited from base class.
