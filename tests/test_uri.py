@@ -49,6 +49,7 @@ class FileURITestCase(unittest.TestCase):
     def testFile(self):
         file = os.path.join(self.tmpdir, "test.txt")
         uri = ButlerURI(file)
+        self.assertIsInstance(uri, ButlerURI)
         self.assertFalse(uri.exists(), f"{uri} should not exist")
         self.assertEqual(uri.ospath, file)
 
