@@ -1,0 +1,1 @@
+Storage class converters can now also be used on `~lsst.daf.butler.Butler.put`.

@@ -154,10 +154,7 @@ class ButlerPutGetTests:
     def tearDown(self):
         removeTestTempDir(self.root)
 
-    def runPutGetTest(self, storageClass, datasetTypeName):
-        # New datasets will be added to run and tag, but we will only look in
-        # tag when looking up datasets.
-        run = "ingest"
+    def create_butler(self, run, storageClass, datasetTypeName):
         butler = Butler(self.tmpConfigFile, run=run)
 
         collections = set(butler.registry.queryCollections())
@@ -202,6 +199,13 @@ class ButlerPutGetTests:
                 "visit_system": 1,
             },
         )
+        return butler, datasetType
+
+    def runPutGetTest(self, storageClass, datasetTypeName):
+        # New datasets will be added to run and tag, but we will only look in
+        # tag when looking up datasets.
+        run = "ingest"
+        butler, datasetType = self.create_butler(run, storageClass, datasetTypeName)
 
         # Create and store a dataset
         metric = makeExampleMetrics()
@@ -378,7 +382,7 @@ class ButlerPutGetTests:
 
         # Create a Dataset type that has the same name but is inconsistent.
         inconsistentDatasetType = DatasetType(
-            datasetTypeName, dimensions, self.storageClassFactory.getStorageClass("Config")
+            datasetTypeName, datasetType.dimensions, self.storageClassFactory.getStorageClass("Config")
         )
 
         # Getting with a dataset type that does not match registry fails
@@ -1365,8 +1369,26 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # Clear out the datasets from registry.
         butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
 
+    def testPytypePutCoercion(self):
+        """Test python type coercion on Butler.get and put."""
+
+        # Store some data with the normal example storage class.
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        datasetTypeName = "test_metric"
+        butler, _ = self.create_butler("ingest", storageClass, datasetTypeName)
+
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+
+        # Put a dict and this should coerce to a MetricsExample
+        test_dict = {"summary": {"a": 1}, "output": {"b": 2}}
+        metric_ref = butler.put(test_dict, datasetTypeName, dataId=dataId, visit=424)
+        test_metric = butler.getDirect(metric_ref)
+        self.assertEqual(get_full_type_name(test_metric), "lsst.daf.butler.tests.MetricsExample")
+        self.assertEqual(test_metric.summary, test_dict["summary"])
+        self.assertEqual(test_metric.output, test_dict["output"])
+
     def testPytypeCoercion(self):
-        """Test python type coercion on Butler.get"""
+        """Test python type coercion on Butler.get and put."""
 
         # Store some data with the normal example storage class.
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
