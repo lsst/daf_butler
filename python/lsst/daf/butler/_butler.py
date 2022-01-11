@@ -1716,6 +1716,7 @@ class Butler:
         transfer: Optional[str] = "auto",
         run: Optional[str] = None,
         idGenerationMode: DatasetIdGenEnum = DatasetIdGenEnum.UNIQUE,
+        record_validation_info: bool = True,
     ) -> None:
         """Store and register one or more datasets that already exist on disk.
 
@@ -1743,6 +1744,13 @@ class Butler:
         idGenerationMode : `DatasetIdGenEnum`, optional
             Specifies option for generating dataset IDs. By default unique IDs
             are generated for each inserted dataset.
+        record_validation_info : `bool`, optional
+            If `True`, the default, the datastore can record validation
+            information associated with the file. If `False` the datastore
+            will not attempt to track any information such as checksums
+            or file sizes. This can be useful if such information is tracked
+            in an external system or if the file is to be compressed in place.
+            It is up to the datastore whether this parameter is relevant.
 
         Raises
         ------
@@ -1860,7 +1868,7 @@ class Butler:
                 dataset.refs = resolvedRefs
 
         # Bulk-insert everything into Datastore.
-        self.datastore.ingest(*datasets, transfer=transfer)
+        self.datastore.ingest(*datasets, transfer=transfer, record_validation_info=record_validation_info)
 
     @contextlib.contextmanager
     def export(

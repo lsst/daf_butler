@@ -685,7 +685,15 @@ class ButlerTests(ButlerPutGetTests):
         datasets = []
         datasets.append(FileDataset(path=metricFile, refs=refs, formatter=MultiDetectorFormatter))
 
-        butler.ingest(*datasets, transfer="copy")
+        butler.ingest(*datasets, transfer="copy", record_validation_info=False)
+
+        # Check that the datastore recorded no file size.
+        # Not all datastores can support this.
+        try:
+            infos = butler.datastore.getStoredItemsInfo(datasets[0].refs[0])
+            self.assertEqual(infos[0].file_size, -1)
+        except AttributeError:
+            pass
 
         dataId1 = {"instrument": "DummyCamComp", "detector": 1, "visit": 424}
         dataId2 = {"instrument": "DummyCamComp", "detector": 2, "visit": 424}

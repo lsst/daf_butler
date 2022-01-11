@@ -855,6 +855,7 @@ class FileDatastore(GenericBaseDatastore):
         *,
         formatter: Union[Formatter, Type[Formatter]],
         transfer: Optional[str] = None,
+        record_validation_info: bool = True,
     ) -> StoredFileInfo:
         """Relocate (if necessary) and extract `StoredFileInfo` from a
         to-be-ingested file.
@@ -871,6 +872,13 @@ class FileDatastore(GenericBaseDatastore):
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
             See `ingest` for details of transfer modes.
+        record_validation_info : `bool`, optional
+            If `True`, the default, the datastore can record validation
+            information associated with the file. If `False` the datastore
+            will not attempt to track any information such as checksums
+            or file sizes. This can be useful if such information is tracked
+            in an external system or if the file is to be compressed in place.
+            It is up to the datastore whether this parameter is relevant.
 
         Returns
         -------
@@ -936,7 +944,7 @@ class FileDatastore(GenericBaseDatastore):
             # if we are transferring from a local file to a remote location
             # it may be more efficient to get the size and checksum of the
             # local file rather than the transferred one
-            if not srcUri.scheme or srcUri.scheme == "file":
+            if record_validation_info and srcUri.isLocal:
                 size = srcUri.size()
                 checksum = self.computeChecksum(srcUri) if self.useChecksum else None
                 have_sized = True
@@ -959,9 +967,14 @@ class FileDatastore(GenericBaseDatastore):
             targetPath = tgtLocation.pathInStore.path
 
         # the file should exist in the datastore now
-        if not have_sized:
-            size = targetUri.size()
-            checksum = self.computeChecksum(targetUri) if self.useChecksum else None
+        if record_validation_info:
+            if not have_sized:
+                size = targetUri.size()
+                checksum = self.computeChecksum(targetUri) if self.useChecksum else None
+        else:
+            # Not recording any file information.
+            size = -1
+            checksum = None
 
         return StoredFileInfo(
             formatter=formatter,
@@ -994,14 +1007,24 @@ class FileDatastore(GenericBaseDatastore):
         return _IngestPrepData(filtered)
 
     @transactional
-    def _finishIngest(self, prepData: Datastore.IngestPrepData, *, transfer: Optional[str] = None) -> None:
+    def _finishIngest(
+        self,
+        prepData: Datastore.IngestPrepData,
+        *,
+        transfer: Optional[str] = None,
+        record_validation_info: bool = True,
+    ) -> None:
         # Docstring inherited from Datastore._finishIngest.
         refsAndInfos = []
         progress = Progress("lsst.daf.butler.datastores.FileDatastore.ingest", level=logging.DEBUG)
         for dataset in progress.wrap(prepData.datasets, desc="Ingesting dataset files"):
             # Do ingest as if the first dataset ref is associated with the file
             info = self._extractIngestInfo(
-                dataset.path, dataset.refs[0], formatter=dataset.formatter, transfer=transfer
+                dataset.path,
+                dataset.refs[0],
+                formatter=dataset.formatter,
+                transfer=transfer,
+                record_validation_info=record_validation_info,
             )
             refsAndInfos.extend([(ref, info) for ref in dataset.refs])
         self._register_datasets(refsAndInfos)

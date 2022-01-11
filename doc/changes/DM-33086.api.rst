@@ -1,0 +1,2 @@
+A new optional parameter, ``record_validation_info`` has been added to `~lsst.daf.butler.Butler.ingest` (and related datastore APIs) to allow the caller to declare that file attributes such as the file size or checksum should not be recorded.
+This can be useful if the file is being monitored by an external system or it is known that the file might be compressed in-place after ingestion.
