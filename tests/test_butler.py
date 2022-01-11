@@ -1365,6 +1365,24 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # Clear out the datasets from registry.
         butler.pruneDatasets([ref1, ref2, ref3], purge=True, unstore=True)
 
+    def testPytypePutCoercion(self):
+        """Test python type coercion on Butler.get and put."""
+
+        # Store some data with the normal example storage class.
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        datasetTypeName = "test_metric"
+        butler = self.runPutGetTest(storageClass, datasetTypeName)
+
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+
+        # Put a dict and this should coerce to a MetricsExample
+        test_dict = {"summary": {"a": 1}, "output": {"b": 2}}
+        metric_ref = butler.put(test_dict, datasetTypeName, dataId=dataId, visit=424)
+        test_metric = butler.getDirect(metric_ref)
+        self.assertEqual(get_full_type_name(test_metric), "lsst.daf.butler.tests.MetricsExample")
+        self.assertEqual(test_metric.summary, test_dict["summary"])
+        self.assertEqual(test_metric.output, test_dict["output"])
+
     def testPytypeCoercion(self):
         """Test python type coercion on Butler.get and put."""
 
@@ -1379,15 +1397,6 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         datasetType_ori = butler.registry.getDatasetType(datasetTypeName)
         self.assertEqual(datasetType_ori.storageClass.name, "StructuredDataNoComponents")
-
-        # Put a dict and this should coerce to a MetricsExample
-        test_dict = {"summary": {"a": 1}, "output": {"b": 2}}
-        metric_ref = butler.put(test_dict, datasetTypeName, dataId=dataId, visit=424)
-        test_metric = butler.getDirect(metric_ref)
-        self.assertEqual(test_metric.summary, test_dict["summary"])
-        self.assertEqual(test_metric.output, test_dict["output"])
-        # Remove the dataset because another will be stored later in the test.
-        butler.pruneDatasets([metric_ref], unstore=True, purge=True)
 
         # Now need to hack the registry dataset type definition.
         # There is no API for this.
