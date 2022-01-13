@@ -63,45 +63,12 @@ class OrderByColumn:
     ordering: bool
     """True for ascending order, False for descending (`bool`)."""
 
-    add_to_select: bool
-    """True if columns is a non-key column and needs to be added to select
-    columns explicitly (`bool`)."""
-
-    field_spec: Optional[ddl.FieldSpec]
-    """Field specification for a column in materialized table (`ddl.FieldSpec`)
-    """
-
-    dimension: Optional[Dimension]
-    """Not-None if column corresponds to a dimension (`Dimension` or `None`)"""
-
     @property
     def column_order(self) -> sqlalchemy.sql.ColumnElement:
         """Column element for use in ORDER BY clause
         (`sqlalchemy.sql.ColumnElement`)
         """
         return self.column.asc() if self.ordering else self.column.desc()
-
-    def materialized(self, table: sqlalchemy.schema.Table) -> OrderByColumn:
-        """Re-purpose ordering column definition for a materialized table.
-
-        Parameters
-        ----------
-        table : `sqlalchemy.schema.Table`
-            Materialized table, it should have all columns in SELECT clause
-            already.
-
-        Returns
-        -------
-        column : `OrderByColumn`
-            Column definition to use with ORDER BY in materialized table.
-        """
-        return OrderByColumn(
-            column=table.columns[self.dimension.name if self.dimension else self.column.name],
-            ordering=self.ordering,
-            add_to_select=False,
-            field_spec=None,
-            dimension=self.dimension,
-        )
 
 
 class Query(ABC):
@@ -857,20 +824,18 @@ class DirectQuery(Query):
         if datasetColumns is not None:
             simpleQuery.columns.extend(datasetColumns)
 
+        assert not simpleQuery.order_by, "Input query cannot have ORDER BY"
         if self._order_by_columns:
-            # add ORDER BY columns
-            select_columns = [column.column for column in self._order_by_columns if column.add_to_select]
-            simpleQuery.columns.extend(select_columns)
-            sql = simpleQuery.combine()
+            # add ORDER BY column
             order_by_columns = [column.column_order for column in self._order_by_columns]
-            sql = sql.order_by(*order_by_columns)
-        else:
-            sql = simpleQuery.combine()
+            order_by_column = sqlalchemy.func.row_number().over(order_by=order_by_columns).label("_orderby")
+            simpleQuery.columns.append(order_by_column)
+            simpleQuery.order_by = [order_by_column]
 
-        if self._limit:
-            sql = sql.limit(self._limit[0])
-            if self._limit[1] is not None:
-                sql = sql.offset(self._limit[1])
+        assert simpleQuery.limit is None, "Input query cannot have LIMIT"
+        simpleQuery.limit = self._limit
+
+        sql = simpleQuery.combine()
 
         if self._uniqueness is DirectQueryUniqueness.NEEDS_DISTINCT:
             return sql.distinct()
@@ -911,10 +876,16 @@ class DirectQuery(Query):
             self.managers.datasets.addDatasetForeignKey(spec, primaryKey=unique, constraint=constraints)
             self.managers.collections.addRunForeignKey(spec, nullable=False, constraint=constraints)
 
-        # may need few extra columns from ORDER BY
-        spec.fields.update(
-            column.field_spec for column in self._order_by_columns if column.field_spec is not None
-        )
+        # Need a column for ORDER BY if ordering is requested
+        if self._order_by_columns:
+            spec.fields.add(
+                ddl.FieldSpec(
+                    name="_orderby",
+                    dtype=sqlalchemy.BigInteger,
+                    nullable=False,
+                    doc="Column to use with ORDER BY",
+                )
+            )
 
         return spec
 
@@ -926,7 +897,6 @@ class DirectQuery(Query):
             table = session.makeTemporaryTable(spec)
             if not self._doomed_by:
                 db.insert(table, select=self.sql, names=spec.fields.names)
-            order_by_columns = [column.materialized(table) for column in self._order_by_columns]
             yield MaterializedQuery(
                 table=table,
                 spatial=self.spatial,
@@ -936,7 +906,6 @@ class DirectQuery(Query):
                 whereRegion=self.whereRegion,
                 managers=self.managers,
                 doomed_by=self._doomed_by,
-                order_by_columns=order_by_columns,
             )
             session.dropTemporaryTable(table)
 
@@ -1010,9 +979,6 @@ class MaterializedQuery(Query):
         A list of messages (appropriate for e.g. logging or exceptions) that
         explain why the query is known to return no results even before it is
         executed.  Queries with a non-empty list will never be executed.
-    order_by : `Tuple` [ `str` ], optional
-        Optional list of column names to use in ORDER BY clause, names can be
-        prefixed with minus sign for descending ordering.
     """
 
     def __init__(
@@ -1026,14 +992,12 @@ class MaterializedQuery(Query):
         whereRegion: Optional[Region],
         managers: RegistryManagers,
         doomed_by: Iterable[str] = (),
-        order_by_columns: Iterable[OrderByColumn] = (),
     ):
         super().__init__(graph=graph, whereRegion=whereRegion, managers=managers, doomed_by=doomed_by)
         self._table = table
         self._spatial = tuple(spatial)
         self._datasetType = datasetType
         self._isUnique = isUnique
-        self._order_by_columns = order_by_columns
 
     def isUnique(self) -> bool:
         # Docstring inherited from Query.
@@ -1047,17 +1011,6 @@ class MaterializedQuery(Query):
     def spatial(self) -> Iterator[DimensionElement]:
         # Docstring inherited from Query.
         return iter(self._spatial)
-
-    def order_by(self, *args: str) -> Query:
-        # Docstring inherited from Query.
-        raise NotImplementedError("MaterializedQuery.order_by should not be called directly")
-
-    def limit(self, limit: int, offset: Optional[int] = None) -> Query:
-        # Docstring inherited from Query.
-
-        # Calling limit on materialized data is likely an error, limit should
-        # be set before materializing.
-        raise NotImplementedError("MaterializedQuery.limit should not be called directly")
 
     def getRegionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from Query.
@@ -1079,9 +1032,8 @@ class MaterializedQuery(Query):
     def sql(self) -> sqlalchemy.sql.FromClause:
         # Docstring inherited from Query.
         select = self._table.select()
-        if self._order_by_columns:
-            order_by_columns = [column.column_order for column in self._order_by_columns]
-            select = select.order_by(*order_by_columns)
+        if "_orderby" in self._table.columns:
+            select = select.order_by(self._table.columns["_orderby"])
         return select
 
     @contextmanager
@@ -1164,14 +1116,6 @@ class EmptyQuery(Query):
     def spatial(self) -> Iterator[DimensionElement]:
         # Docstring inherited from Query.
         return iter(())
-
-    def order_by(self, *args: str) -> Query:
-        # Docstring inherited from Query.
-        return self
-
-    def limit(self, limit: int, offset: Optional[int] = None) -> Query:
-        # Docstring inherited from Query.
-        return self
 
     def getRegionColumn(self, name: str) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from Query.

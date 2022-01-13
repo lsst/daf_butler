@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("SimpleQuery",)
 
-from typing import Any, ClassVar, List, Optional, Type, TypeVar, Union
+from typing import Any, ClassVar, List, Optional, Tuple, Type, TypeVar, Union
 
 import sqlalchemy
 
@@ -39,6 +39,8 @@ class SimpleQuery:
     def __init__(self) -> None:
         self.columns = []
         self.where = []
+        self.order_by = []
+        self.limit = None
         self._from: Optional[sqlalchemy.sql.FromClause] = None
 
     class Select:
@@ -126,6 +128,12 @@ class SimpleQuery:
             result = result.select_from(self._from)
         if self.where:
             result = result.where(sqlalchemy.sql.and_(*self.where))
+        if self.order_by:
+            result = result.order_by(*self.order_by)
+        if self.limit:
+            result = result.limit(self.limit[0])
+            if self.limit[1] is not None:
+                result = result.offset(self.limit[1])
         return result
 
     @property
@@ -152,6 +160,8 @@ class SimpleQuery:
         result = SimpleQuery()
         result.columns = list(self.columns)
         result.where = list(self.where)
+        result.order_by = list(self.order_by)
+        result.limit = self.limit
         result._from = self._from
         return result
 
@@ -164,3 +174,11 @@ class SimpleQuery:
     """Boolean expressions that will be combined with AND to form the WHERE
     clause (`list` [ `sqlalchemy.sql.ColumnElement` ]).
     """
+
+    order_by: List[sqlalchemy.sql.ColumnElement]
+    """Columns to appear in ORDER BY clause (`list`
+    [`sqlalchemy.sql.ColumnElement` ])
+    """
+
+    limit: Optional[Tuple[int, Optional[int]]]
+    """Limit on the number of returned rows and optional offset (`tuple`)"""

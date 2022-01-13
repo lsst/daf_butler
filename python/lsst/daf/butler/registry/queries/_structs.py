@@ -50,7 +50,7 @@ from ..summaries import GovernorDimensionRestriction
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
 from .expressions import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
-from .expressions.categorize import categorizeOrderByName
+from .expressions.categorize import categorizeElementOrderByName, categorizeOrderByName
 
 
 @immutable
@@ -292,6 +292,39 @@ class OrderByClause:
     elements: NamedValueSet[DimensionElement]
     """Dimension elements whose non-key columns were referenced by order_by
     (`NamedValueSet` [ `DimensionElement` ]).
+    """
+
+
+@immutable
+class ElementOrderByClause:
+    """Class for information about columns in ORDER BY clause for one element.
+
+    Parameters
+    ----------
+    order_by : `Iterable` [ `str` ]
+        Sequence of names to use for ordering with optional "-" prefix.
+    element : `DimensionElement`
+        Dimensions used by a query.
+    """
+
+    def __init__(self, order_by: Iterable[str], element: DimensionElement):
+
+        self.order_by_columns = []
+        for name in order_by:
+            if not name or name == "-":
+                raise ValueError("Empty dimension name in ORDER BY")
+            ascending = True
+            if name[0] == "-":
+                ascending = False
+                name = name[1:]
+            column = categorizeElementOrderByName(element, name)
+            self.order_by_columns.append(
+                OrderByClauseColumn(element=element, column=column, ordering=ascending)
+            )
+
+    order_by_columns: Iterable[OrderByClauseColumn]
+    """Columns that appear in the ORDER BY
+    (`Iterable` [ `OrderByClauseColumn` ]).
     """
 
 
