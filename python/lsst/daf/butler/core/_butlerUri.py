@@ -1,4 +1,6 @@
 # Temporarily alias ResourcePath as ButlerURI.
+__all__ = ["ButlerURI"]
+
 from typing import Any, Type
 
 from deprecated.sphinx import deprecated
