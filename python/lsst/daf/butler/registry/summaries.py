@@ -126,7 +126,7 @@ class GovernorDimensionRestriction(NamedKeyMapping[GovernorDimension, AbstractSe
         # Docstring inherited.
         return self._mapping.names
 
-    def keys(self) -> NamedValueAbstractSet[GovernorDimension]:
+    def keys(self) -> NamedValueAbstractSet[GovernorDimension]:  # type: ignore
         return self._mapping.keys()
 
     def values(self) -> ValuesView[AbstractSet[str]]:
