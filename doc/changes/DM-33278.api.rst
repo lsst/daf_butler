@@ -1,0 +1,2 @@
+Added a new `DatasetType.is_compatible_with` method.
+This method determines if two dataset types are compatible with each other, taking into account whether the storage classes allow type conversion.
