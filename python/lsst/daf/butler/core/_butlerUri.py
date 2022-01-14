@@ -39,7 +39,7 @@ class ButlerURI(ResourcePath):
     All users should instead use `lsst.resources.ResourcePath`.
     """
 
-    def __new__(cls, uri: ResourcePathExpression, **kwargs: Any) -> ResourcePath:  # type:ignore
+    def __new__(cls, uri: ResourcePathExpression, **kwargs: Any) -> ResourcePath:
         if cls is not ButlerURI:
             # This is a subclass trying to create an updated version of
             # itself without wanting to change the class. The ButlerURI
