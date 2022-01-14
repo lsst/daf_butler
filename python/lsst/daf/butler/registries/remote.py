@@ -89,7 +89,7 @@ class RemoteRegistry(Registry):
         cls,
         config: Optional[Union[RegistryConfig, str]] = None,
         dimensionConfig: Optional[Union[DimensionConfig, str]] = None,
-        butlerRoot: Optional[str] = None,
+        butlerRoot: Optional[ResourcePathExpression] = None,
     ) -> Registry:
         """Create registry database and return `Registry` instance.
 

@@ -417,8 +417,8 @@ class Butler:
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
 
         # Ensure that the root of the repository exists or can be made
-        uri = ResourcePath(root, forceDirectory=True)
-        uri.mkdir()
+        root_uri = ResourcePath(root, forceDirectory=True)
+        root_uri.mkdir()
 
         config = Config(config)
 
@@ -457,21 +457,21 @@ class Butler:
             # branch, _everything_ in the config is expanded, so there's no
             # need to special case this.
             Config.updateParameters(RegistryConfig, config, full, toMerge=("managers",), overwrite=False)
-        configURI: Union[str, ResourcePathExpression]
+        configURI: ResourcePathExpression
         if outfile is not None:
             # When writing to a separate location we must include
             # the root of the butler repo in the config else it won't know
             # where to look.
-            config["root"] = uri.geturl()
+            config["root"] = root_uri.geturl()
             configURI = outfile
         else:
-            configURI = uri
+            configURI = root_uri
         config.dumpToUri(configURI, overwrite=overwrite)
 
         # Create Registry and populate tables
         registryConfig = RegistryConfig(config.get("registry"))
         dimensionConfig = DimensionConfig(dimensionConfig)
-        Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root)
+        Registry.createFromConfig(registryConfig, dimensionConfig=dimensionConfig, butlerRoot=root_uri)
 
         log.verbose("Wrote new Butler configuration file to %s", configURI)
 

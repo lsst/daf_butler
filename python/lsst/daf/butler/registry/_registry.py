@@ -143,7 +143,7 @@ class Registry(ABC):
         cls,
         config: Optional[Union[RegistryConfig, str]] = None,
         dimensionConfig: Optional[Union[DimensionConfig, str]] = None,
-        butlerRoot: Optional[str] = None,
+        butlerRoot: Optional[ResourcePathExpression] = None,
     ) -> Registry:
         """Create registry database and return `Registry` instance.
 
@@ -158,7 +158,7 @@ class Registry(ABC):
         dimensionConfig : `DimensionConfig` or `str`, optional
             Dimensions configuration, if missing then default configuration
             will be loaded from dimensions.yaml.
-        butlerRoot : `str`, optional
+        butlerRoot : convertible to `lsst.resources.ResourcePath`, optional
             Path to the repository root this `Registry` will manage.
 
         Returns
