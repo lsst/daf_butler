@@ -240,25 +240,78 @@ class DatasetType:
             extra += ", isCalibration=True"
         return f"DatasetType({self.name!r}, {self.dimensions}, {self._storageClassName}{extra})"
 
-    def __eq__(self, other: Any) -> bool:
+    def _equal_ignoring_storage_class(self, other: Any) -> bool:
+        """Check everything is equal except the storage class.
+
+        Parameters
+        ----------
+        other : Any
+            Object to check against this one.
+
+        Returns
+        -------
+        mostly : `bool`
+            Returns `True` if everything except the storage class is equal.
+        """
         if not isinstance(other, type(self)):
             return False
         if self._name != other._name:
             return False
         if self._dimensions != other._dimensions:
             return False
-        if self._storageClass is not None and other._storageClass is not None:
-            if self._storageClass != other._storageClass:
-                return False
-        else:
-            if self._storageClassName != other._storageClassName:
-                return False
         if self._isCalibration != other._isCalibration:
             return False
         if self._parentStorageClass is not None and other._parentStorageClass is not None:
             return self._parentStorageClass == other._parentStorageClass
         else:
             return self._parentStorageClassName == other._parentStorageClassName
+
+    def __eq__(self, other: Any) -> bool:
+        mostly_equal = self._equal_ignoring_storage_class(other)
+        if not mostly_equal:
+            return False
+
+        # Be careful not to force a storage class to import the corresponding
+        # python code.
+        if self._storageClass is not None and other._storageClass is not None:
+            if self._storageClass != other._storageClass:
+                return False
+        else:
+            if self._storageClassName != other._storageClassName:
+                return False
+        return True
+
+    def is_compatible_with(self, other: "DatasetType") -> bool:
+        """Determine if the given `DatasetType` is compatible with this one.
+
+        Compatibility requires a matching name and dimensions and a storage
+        class that can be converted to this storage class.
+
+        Parameters
+        ----------
+        other : `DatasetType`
+            Dataset type to check.
+
+        Returns
+        -------
+        is_compatible : `bool`
+            Returns `True` if the other dataset type is either the same as this
+            or the storage class associated with the other can be converted to
+            this.
+        """
+        mostly_equal = self._equal_ignoring_storage_class(other)
+        if not mostly_equal:
+            return False
+
+        # If the storage class names match then they are compatible.
+        if self._storageClassName == other._storageClassName:
+            return True
+
+        # Now required to check the full storage class.
+        self_sc = self.storageClass
+        other_sc = other.storageClass
+
+        return self_sc.can_convert(other_sc)
 
     def __hash__(self) -> int:
         """Hash DatasetType instance.
