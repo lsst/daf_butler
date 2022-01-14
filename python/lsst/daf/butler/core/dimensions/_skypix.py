@@ -230,12 +230,15 @@ class SkyPixConstructionVisitor(DimensionConstructionVisitor):
         if self._maxLevel is not None:
             maxLevel = self._maxLevel
         else:
-            maxLevel = getattr(PixelizationClass, "MAX_LEVEL", None)
-            if maxLevel is None:
+            # MyPy does not know the return type of getattr.
+            max_level = getattr(PixelizationClass, "MAX_LEVEL", None)
+            if max_level is None:
                 raise TypeError(
                     f"Skypix pixelization class {self._pixelizationClassName} does"
                     " not have MAX_LEVEL but no max level has been set explicitly."
                 )
+            assert isinstance(max_level, int)
+            maxLevel = max_level
         system = SkyPixSystem(
             self.name,
             maxLevel=maxLevel,
