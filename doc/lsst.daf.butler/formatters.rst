@@ -88,6 +88,13 @@ It does not make sense for subsetting to be applied to the integer pixel count.
 
 For this reason read parameters for derived components are processed prior to calculating the derived component.
 
+Type Converters
+^^^^^^^^^^^^^^^
+
+It is sometimes convenient to be able to call `Butler.put` with a Python type that is not a match to the storage class defined for that dataset type in the registry.
+Storage classes can be defined with converters that declare which Python types can be coerced into the required type, and what functions or method should be used to perform that conversion.
+Butler can support this on `Butler.put` and `Butler.get`, the latter being required if the dataset type definition has been changed in registry after a dataset was stored.
+
 Defining a Storage Class
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -138,6 +145,22 @@ You can do this using YAML anchors and references but the preferred approach is 
        image: ImageI
 
 If this approach is used the `StorageClass` Python class created by `StorageClassFactory` will inherit from the specific parent class and not the generic `StorageClass`.
+
+Type converters are specified with a ``converters`` section.
+
+.. code-block:: yaml
+
+    StructuredDataDict:
+      pytype: dict
+      converters:
+        lsst.daf.base.PropertySet: toDict()
+    TaskMetadata:
+      pytype: lsst.pipe.base.TaskMetadata
+      converters:
+        lsst.daf.base.PropertySet: lsst.pipe.base.TaskMetadata.from_metadata
+
+In the first definition, the configuration says that if a ``PropertySet`` object is given then the ``toDict()`` method can be called on it and the returned value will be a `dict`.
+In the second definition a ``PropertySet`` is again specified but this time the ``from_metadata`` class method will be called with the ``PropertySet`` as the first parameter and a ``TaskMetadata`` will be returned.
 
 Storage Class Delegates
 =======================
