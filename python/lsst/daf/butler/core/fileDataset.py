@@ -65,7 +65,7 @@ class FileDataset:
     ):
         # Do not want to store all possible options supported by ResourcePath
         # so force a conversion for the non-str parameters.
-        self.path = path if isinstance(path, str) else ResourcePath(path)
+        self.path = path if isinstance(path, str) else ResourcePath(path, forceAbsolute=False)
         if isinstance(refs, DatasetRef):
             refs = [refs]
         self.refs = refs
