@@ -373,6 +373,10 @@ class InMemoryDatastore(GenericBaseDatastore):
         if ref.id is None:
             raise RuntimeError(f"Can not store unresolved DatasetRef {ref}")
 
+        # May need to coerce the in memory dataset to the correct
+        # python type, otherwise parameters may not work.
+        inMemoryDataset = ref.datasetType.storageClass.coerce_type(inMemoryDataset)
+
         self._validate_put_parameters(inMemoryDataset, ref)
 
         self.datasets[ref.id] = inMemoryDataset
