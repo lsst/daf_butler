@@ -107,7 +107,7 @@ class NamedKeyMapping(Mapping[K_co, V_co]):
         return dict(zip(self.names, self.values()))
 
     @abstractmethod
-    def keys(self) -> NamedValueAbstractSet[K_co]:
+    def keys(self) -> NamedValueAbstractSet[K_co]:  # type: ignore
         # TODO: docs
         raise NotImplementedError()
 
@@ -232,7 +232,7 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
             del self._dict[key]
             del self._names[key.name]
 
-    def keys(self) -> NamedValueAbstractSet[K]:
+    def keys(self) -> NamedValueAbstractSet[K]:  # type: ignore
         return NameMappingSetView(self._names)
 
     def values(self) -> ValuesView[V]:
@@ -519,7 +519,8 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
 
     def remove(self, element: Union[str, K]) -> Any:
         # Docstring inherited.
-        del self._mapping[getattr(element, "name", element)]
+        k = getattr(element, "name") if not isinstance(element, str) else element
+        del self._mapping[k]
 
     def discard(self, element: Union[str, K]) -> Any:
         # Docstring inherited.

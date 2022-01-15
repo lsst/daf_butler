@@ -104,7 +104,7 @@ class SqlRegistry(Registry):
         cls,
         config: Optional[Union[RegistryConfig, str]] = None,
         dimensionConfig: Optional[Union[DimensionConfig, str]] = None,
-        butlerRoot: Optional[str] = None,
+        butlerRoot: Optional[ResourcePathExpression] = None,
     ) -> Registry:
         """Create registry database and return `SqlRegistry` instance.
 
@@ -119,7 +119,7 @@ class SqlRegistry(Registry):
         dimensionConfig : `DimensionConfig` or `str`, optional
             Dimensions configuration, if missing then default configuration
             will be loaded from dimensions.yaml.
-        butlerRoot : `str`, optional
+        butlerRoot : convertible to `lsst.resources.ResourcePath`, optional
             Path to the repository root this `SqlRegistry` will manage.
 
         Returns

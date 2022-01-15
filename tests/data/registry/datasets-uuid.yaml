@@ -12,9 +12,9 @@
 #   flat for detectors 1-2, physical_filter=Cam1-R1
 #   flat for detectors 3-4, physical_filter=Cam1-R2
 #
-# At present, the path and formatter entries here are missing.  If we ever
-# want to use this data for a tests that involves a datastore, that would need
-# to change.
+# At present the formatter entry is missing and the path is a placeholder.
+# If we ever want to use this data for a tests that involves a datastore,
+# that would need to change.
 description: Butler Data Repository Export
 version: 0
 data:
@@ -31,16 +31,19 @@ data:
         data_id:
           instrument: Cam1
           detector: 1
+        path: placeholder
       -
         dataset_id: !uuid 51352db4-a47a-447c-b12d-a50b206b17cd
         data_id:
           instrument: Cam1
           detector: 2
+        path: placeholder
       -
         dataset_id: !uuid e06b6f3c-5b3e-46d0-bdde-4ef972301116
         data_id:
           instrument: Cam1
           detector: 3
+        path: placeholder
   -
     type: dataset
     dataset_type: flat
@@ -53,6 +56,7 @@ data:
           detector: 2
           physical_filter: Cam1-G
           band: g
+        path: placeholder
       -
         dataset_id: !uuid 84239e7f-c41f-46d5-97b9-a27976b98ceb
         data_id:
@@ -60,6 +64,7 @@ data:
           detector: 3
           physical_filter: Cam1-G
           band: g
+        path: placeholder
       -
         dataset_id: !uuid fd51bce1-2848-49d6-a378-f8a122f5139a
         data_id:
@@ -67,6 +72,7 @@ data:
           detector: 4
           physical_filter: Cam1-G
           band: g
+        path: placeholder
   -
     type: run
     name: imported_r
@@ -80,16 +86,19 @@ data:
         data_id:
           instrument: Cam1
           detector: 2
+        path: placeholder
       -
         dataset_id: !uuid dc0ef017-dc94-4118-b431-d65b1ef89a5f
         data_id:
           instrument: Cam1
           detector: 3
+        path: placeholder
       -
         dataset_id: !uuid e255067d-dcc5-4f39-9824-0baa5817d3e5
         data_id:
           instrument: Cam1
           detector: 4
+        path: placeholder
   -
     type: dataset
     dataset_type: flat
@@ -102,6 +111,7 @@ data:
           detector: 1
           physical_filter: Cam1-R1
           band: r
+        path: placeholder
       -
         dataset_id: !uuid c1296796-56c5-4acf-9b49-40d920c6f840
         data_id:
@@ -109,6 +119,7 @@ data:
           detector: 2
           physical_filter: Cam1-R1
           band: r
+        path: placeholder
       -
         dataset_id: !uuid 393972aa-57ab-41c2-b3bc-03541ca6bc6e
         data_id:
@@ -116,6 +127,7 @@ data:
           detector: 3
           physical_filter: Cam1-R2
           band: r
+        path: placeholder
       -
         dataset_id: !uuid 37185f04-1cea-4ddd-a065-a5e0be9e19de
         data_id:
@@ -123,3 +135,4 @@ data:
           detector: 4
           physical_filter: Cam1-R2
           band: r
+        path: placeholder

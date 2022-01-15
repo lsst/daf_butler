@@ -12,9 +12,9 @@
 #   flat for detectors 1-2, physical_filter=Cam1-R1
 #   flat for detectors 3-4, physical_filter=Cam1-R2
 #
-# At present, the path and formatter entries here are missing.  If we ever
-# want to use this data for a tests that involves a datastore, that would need
-# to change.
+# At present the formatter entry is missing and the path is a placeholder.
+# If we ever want to use this data for a tests that involves a datastore,
+# that would need to change.
 description: Butler Data Repository Export
 version: 0
 data:
@@ -31,16 +31,19 @@ data:
         data_id:
           instrument: Cam1
           detector: 1
+        path: placeholder
       -
         dataset_id: 1002
         data_id:
           instrument: Cam1
           detector: 2
+        path: placeholder
       -
         dataset_id: 1003
         data_id:
           instrument: Cam1
           detector: 3
+        path: placeholder
   -
     type: dataset
     dataset_type: flat
@@ -53,6 +56,7 @@ data:
           detector: 2
           physical_filter: Cam1-G
           band: g
+        path: placeholder
       -
         dataset_id: 1020
         data_id:
@@ -60,6 +64,7 @@ data:
           detector: 3
           physical_filter: Cam1-G
           band: g
+        path: placeholder
       -
         dataset_id: 1030
         data_id:
@@ -67,6 +72,7 @@ data:
           detector: 4
           physical_filter: Cam1-G
           band: g
+        path: placeholder
   -
     type: run
     name: imported_r
@@ -80,16 +86,19 @@ data:
         data_id:
           instrument: Cam1
           detector: 2
+        path: placeholder
       -
         dataset_id: 2002
         data_id:
           instrument: Cam1
           detector: 3
+        path: placeholder
       -
         dataset_id: 2003
         data_id:
           instrument: Cam1
           detector: 4
+        path: placeholder
   -
     type: dataset
     dataset_type: flat
@@ -102,6 +111,7 @@ data:
           detector: 1
           physical_filter: Cam1-R1
           band: r
+        path: placeholder
       -
         dataset_id: 2020
         data_id:
@@ -109,6 +119,7 @@ data:
           detector: 2
           physical_filter: Cam1-R1
           band: r
+        path: placeholder
       -
         dataset_id: 2030
         data_id:
@@ -116,6 +127,7 @@ data:
           detector: 3
           physical_filter: Cam1-R2
           band: r
+        path: placeholder
       -
         dataset_id: 2040
         data_id:
@@ -123,3 +135,4 @@ data:
           detector: 4
           physical_filter: Cam1-R2
           band: r
+        path: placeholder

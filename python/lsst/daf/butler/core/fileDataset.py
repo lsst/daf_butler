@@ -26,7 +26,7 @@ __all__ = ["FileDataset"]
 from dataclasses import dataclass
 from typing import Any, List, Optional, Union
 
-from lsst.resources import ResourcePathExpression
+from lsst.resources import ResourcePath, ResourcePathExpression
 
 from .datasets import DatasetRef
 from .formatter import FormatterParameter
@@ -42,8 +42,8 @@ class FileDataset:
     """Registry information about the dataset. (`list` of `DatasetRef`).
     """
 
-    path: ResourcePathExpression
-    """Path to the dataset (`lsst.resources.ResourcePathExpression`).
+    path: Union[str, ResourcePath]
+    """Path to the dataset (`lsst.resources.ResourcePath` or `str`).
 
     If the dataset was exported with ``transfer=None`` (i.e. in-place),
     this is relative to the datastore root (only datastores that have a
@@ -63,7 +63,9 @@ class FileDataset:
         *,
         formatter: Optional[FormatterParameter] = None,
     ):
-        self.path = path
+        # Do not want to store all possible options supported by ResourcePath
+        # so force a conversion for the non-str parameters.
+        self.path = path if isinstance(path, str) else ResourcePath(path, forceAbsolute=False)
         if isinstance(refs, DatasetRef):
             refs = [refs]
         self.refs = refs

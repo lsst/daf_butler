@@ -370,7 +370,7 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
     def __len__(self) -> int:
         return len(self.keys())
 
-    def keys(self) -> NamedValueAbstractSet[Dimension]:
+    def keys(self) -> NamedValueAbstractSet[Dimension]:  # type: ignore
         return self.graph.required
 
     @property
@@ -765,7 +765,7 @@ class _DataCoordinateFullView(NamedKeyMapping[Dimension, DataIdValue]):
     def __len__(self) -> int:
         return len(self.keys())
 
-    def keys(self) -> NamedValueAbstractSet[Dimension]:
+    def keys(self) -> NamedValueAbstractSet[Dimension]:  # type: ignore
         return self._target.graph.dimensions
 
     @property
@@ -809,7 +809,7 @@ class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, Optional[Dime
     def __len__(self) -> int:
         return len(self.keys())
 
-    def keys(self) -> NamedValueAbstractSet[DimensionElement]:
+    def keys(self) -> NamedValueAbstractSet[DimensionElement]:  # type: ignore
         return self._target.graph.elements
 
     @property

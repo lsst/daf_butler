@@ -78,11 +78,15 @@ class ButlerRepoIndex:
         -----
         Does check the cache before reading the file.
         """
-        if index_uri in cls._cache:
-            return cls._cache[index_uri]
+        # Force the given value to a ResourcePath so that it can be used
+        # as an index into the cache consistently.
+        uri = ResourcePath(index_uri)
 
-        repo_index = Config(index_uri)
-        cls._cache[index_uri] = repo_index
+        if index_uri in cls._cache:
+            return cls._cache[uri]
+
+        repo_index = Config(uri)
+        cls._cache[uri] = repo_index
 
         return repo_index
 

@@ -1,4 +1,6 @@
 # Temporarily alias ResourcePath as ButlerURI.
+__all__ = ["ButlerURI"]
+
 from typing import Any, Type
 
 from deprecated.sphinx import deprecated
@@ -54,7 +56,7 @@ class ButlerURI(ResourcePath):
             _add_base(cls)
             return new
 
-        new = ResourcePath(uri, **kwargs)
-        _add_base(type(new))
+        new_uri = ResourcePath(uri, **kwargs)
+        _add_base(type(new_uri))
 
-        return new
+        return new_uri

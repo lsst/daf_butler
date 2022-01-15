@@ -786,14 +786,16 @@ class FileDatastore(GenericBaseDatastore):
         return pathUri.relative_to(self.root)
 
     def _standardizeIngestPath(
-        self, path: ResourcePathExpression, *, transfer: Optional[str] = None
+        self, path: Union[str, ResourcePath], *, transfer: Optional[str] = None
     ) -> Union[str, ResourcePath]:
         """Standardize the path of a to-be-ingested file.
 
         Parameters
         ----------
-        path : `lsst.resources.ResourcePathExpression`
-            Path of a file to be ingested.
+        path : `str` or `lsst.resources.ResourcePath`
+            Path of a file to be ingested. This parameter is not expected
+            to be all the types that can be used to construct a
+            `~lsst.resources.ResourcePath`.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
             See `ingest` for details of transfer modes.

@@ -257,7 +257,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                     # Inserted a new row, so we just need to insert new overlap
                     # rows.
                     self._skyPixOverlap.insert([record])
-                elif "region" in inserted_or_updated:  # type: ignore
+                elif "region" in inserted_or_updated:
                     # Updated the region, so we need to delete old overlap rows
                     # and insert new ones.
                     # (mypy should be able to tell that inserted_or_updated
