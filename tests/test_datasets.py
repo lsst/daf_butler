@@ -167,6 +167,10 @@ class DatasetTypeTestCase(unittest.TestCase):
             DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent"),
         )
         self.assertNotEqual(
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent", isCalibration=True),
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent", isCalibration=False),
+        )
+        self.assertNotEqual(
             DatasetType(
                 "a",
                 dimensionsA,
