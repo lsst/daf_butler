@@ -91,6 +91,11 @@ For this reason read parameters for derived components are processed prior to ca
 Type Converters
 ^^^^^^^^^^^^^^^
 
+.. warning::
+   The storage class conversion API is currently deemed to be experimental.
+   It was developed to support dataset type migration.
+   Do not add further converters without consultation.
+
 It is sometimes convenient to be able to call `Butler.put` with a Python type that is not a match to the storage class defined for that dataset type in the registry.
 Storage classes can be defined with converters that declare which Python types can be coerced into the required type, and what functions or method should be used to perform that conversion.
 Butler can support this on `Butler.put` and `Butler.get`, the latter being required if the dataset type definition has been changed in registry after a dataset was stored.
