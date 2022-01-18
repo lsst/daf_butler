@@ -281,11 +281,12 @@ class DatasetType:
                 return False
         return True
 
-    def is_compatible_with(self, other: "DatasetType") -> bool:
+    def is_compatible_with(self, other: DatasetType) -> bool:
         """Determine if the given `DatasetType` is compatible with this one.
 
         Compatibility requires a matching name and dimensions and a storage
-        class that can be converted to this storage class.
+        class for this dataset type that can convert the python type associated
+        with the other storage class to this python type.
 
         Parameters
         ----------

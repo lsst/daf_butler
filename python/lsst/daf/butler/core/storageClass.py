@@ -434,7 +434,10 @@ class StorageClass:
         Returns
         -------
         can : `bool`
-            `True` if the two storage classes are compatible.
+            `True` if this storage class has a registered converter for
+            the python type associated with the other storage class. That
+            converter will convert the other python type to the one associated
+            with this storage class.
         """
         if other.name == self.name:
             # Identical storage classes are compatible.
