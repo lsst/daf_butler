@@ -114,7 +114,7 @@ class StorageClass:
 
         # Version of converters where the python types have been
         # Do not try to import anything until needed.
-        self._converters_by_type: Optional[Dict[Type, Union[Type, str]]] = None
+        self._converters_by_type: Optional[Dict[Type, Type]] = None
 
         self.name = name
 
@@ -176,14 +176,8 @@ class StorageClass:
         return self._converters
 
     @property
-    def converters_by_type(self) -> Dict[Type, Union[Type, str]]:
-        """Return the type converters as python types or strings.
-
-        Strings are used to indicate that the conversion is obtained
-        by calling that method (without parameters) on the object to be
-        converted. This is indicated in the candidates by using () at the
-        end of the string.
-        """
+    def converters_by_type(self) -> Dict[Type, Type]:
+        """Return the type converters as python types."""
         if self._converters_by_type is None:
             self._converters_by_type = {}
 
@@ -203,11 +197,6 @@ class StorageClass:
                         )
                         del self.converters[candidate_type_str]
                         continue
-
-                if converter_str.endswith("()"):
-                    # This is indicative of a method call so store it directly.
-                    self._converters_by_type[candidate_type] = converter_str[:-2]
-                    continue
 
                 try:
                     converter = doImportType(converter_str)
@@ -488,11 +477,7 @@ class StorageClass:
         for candidate_type, converter in self.converters_by_type.items():
             if isinstance(incorrect, candidate_type):
                 try:
-                    if isinstance(converter, str):
-                        method = getattr(incorrect, converter)
-                        return method()
-                    else:
-                        return converter(incorrect)
+                    return converter(incorrect)
                 except Exception:
                     log.error(
                         "Converter %s failed to convert type %s",
