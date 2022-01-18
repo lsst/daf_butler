@@ -158,13 +158,13 @@ Type converters are specified with a ``converters`` section.
     StructuredDataDict:
       pytype: dict
       converters:
-        lsst.daf.base.PropertySet: toDict()
+        lsst.daf.base.PropertySet: lsst.daf.base.PropertySet.toDict
     TaskMetadata:
       pytype: lsst.pipe.base.TaskMetadata
       converters:
         lsst.daf.base.PropertySet: lsst.pipe.base.TaskMetadata.from_metadata
 
-In the first definition, the configuration says that if a ``PropertySet`` object is given then the ``toDict()`` method can be called on it and the returned value will be a `dict`.
+In the first definition, the configuration says that if a ``PropertySet`` object is given then the unbound method ``lsst.daf.base.PropertSety.toDict`` can be called with the ``PropertySet`` as the only parameter and the returned value will be a `dict`.
 In the second definition a ``PropertySet`` is again specified but this time the ``from_metadata`` class method will be called with the ``PropertySet`` as the first parameter and a ``TaskMetadata`` will be returned.
 
 Storage Class Delegates
