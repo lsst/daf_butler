@@ -167,6 +167,10 @@ class DatasetTypeTestCase(unittest.TestCase):
             DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent"),
         )
         self.assertNotEqual(
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent", isCalibration=True),
+            DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="parent", isCalibration=False),
+        )
+        self.assertNotEqual(
             DatasetType(
                 "a",
                 dimensionsA,
@@ -246,6 +250,23 @@ class DatasetTypeTestCase(unittest.TestCase):
             DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageA"),
             DatasetType("a.b", dimensionsA, "test_b", parentStorageClass="storageB"),
         )
+
+    def testCompatibility(self):
+        storageA = StorageClass("test_a", pytype=set, converters={"list": "builtins.set"})
+        storageB = StorageClass("test_b", pytype=list)
+        storageC = StorageClass("test_c", pytype=dict)
+        self.assertTrue(storageA.can_convert(storageB))
+        dimensionsA = self.universe.extract(["instrument"])
+
+        dA = DatasetType("a", dimensionsA, storageA)
+        dA2 = DatasetType("a", dimensionsA, storageB)
+        self.assertNotEqual(dA, dA2)
+        self.assertTrue(dA.is_compatible_with(dA))
+        self.assertTrue(dA.is_compatible_with(dA2))
+        self.assertFalse(dA2.is_compatible_with(dA))
+
+        dA3 = DatasetType("a", dimensionsA, storageC)
+        self.assertFalse(dA.is_compatible_with(dA3))
 
     def testJson(self):
         storageA = StorageClass("test_a")

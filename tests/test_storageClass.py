@@ -25,6 +25,7 @@ import pickle
 import unittest
 
 from lsst.daf.butler import StorageClass, StorageClassConfig, StorageClassDelegate, StorageClassFactory
+from lsst.daf.butler.tests import MetricsExample
 from lsst.utils.introspection import get_full_type_name
 
 """Tests related to the StorageClass infrastructure.
@@ -240,7 +241,7 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
         className = "TestConverters"
         converters = {
-            "lsst.daf.butler.tests.MetricsExample": "lsst.daf.butler.tests.MetricsExampleModel.from_metrics",
+            "lsst.daf.butler.tests.MetricsExample": "lsst.daf.butler.tests.MetricsExample.exportAsDict",
             # Add some entries that will fail to import.
             "lsst.daf.butler.bad.type": "lsst.daf.butler.tests.MetricsExampleModel.from_metrics",
             "lsst.daf.butler.tests.MetricsExampleModel": "lsst.daf.butler.bad.function",
@@ -270,6 +271,17 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
         converted = sc.coerce_type([1, 2, 3])
         self.assertEqual(converted, {"key": [1, 2, 3]})
+
+        # Convert Metrics using a named method converter.
+        metric = MetricsExample(summary={"a": 1}, data=[1, 2], output={"c": "e"})
+        converted = sc.coerce_type(metric)
+        self.assertEqual(converted["data"], [1, 2], converted)
+
+        # Check that python types matching is allowed.
+        sc4 = StorageClass("Test2", pytype=set)
+        self.assertTrue(sc2.can_convert(sc4))
+        converted = sc2.coerce_type({1, 2})
+        self.assertEqual(converted, {1, 2})
 
         # Try to coerce a type that is not supported.
         with self.assertRaises(TypeError):
