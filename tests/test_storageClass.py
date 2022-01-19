@@ -277,6 +277,12 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         converted = sc.coerce_type(metric)
         self.assertEqual(converted["data"], [1, 2], converted)
 
+        # Check that python types matching is allowed.
+        sc4 = StorageClass("Test2", pytype=set)
+        self.assertTrue(sc2.can_convert(sc4))
+        converted = sc2.coerce_type({1, 2})
+        self.assertEqual(converted, {1, 2})
+
         # Try to coerce a type that is not supported.
         with self.assertRaises(TypeError):
             sc.coerce_type(set([1, 2, 3]))

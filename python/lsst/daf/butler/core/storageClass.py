@@ -443,6 +443,10 @@ class StorageClass:
             # Identical storage classes are compatible.
             return True
 
+        if issubclass(other.pytype, self.pytype):
+            # Storage classes have different names but the same python type.
+            return True
+
         for candidate_type in self.converters_by_type:
             if issubclass(other.pytype, candidate_type):
                 return True
