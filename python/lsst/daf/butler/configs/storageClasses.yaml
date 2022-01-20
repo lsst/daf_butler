@@ -3,6 +3,8 @@ storageClasses:
     pytype: int
   StructuredDataDict:
     pytype: dict
+    converters:
+      lsst.pipe.base.TaskMetadata: lsst.pipe.base.TaskMetadata.to_dict
   StructuredDataList:
     pytype: list
   TablePersistable:
