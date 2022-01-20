@@ -112,9 +112,10 @@ class FileFormatter(Formatter):
                 # for this pytype.
                 if not readStorageClass.can_convert(fileDescriptor.storageClass):
                     raise ValueError(
-                        f"Storage class inconsistency ({readStorageClass.name,} vs"
+                        f"Storage class inconsistency ({readStorageClass.name} vs"
                         f" {fileDescriptor.storageClass.name}) but no"
-                        " component requested or converter registered"
+                        " component requested or converter registered for"
+                        f" python type {type(data)}"
                     )
             else:
                 # Concrete composite written as a single file (we hope)
