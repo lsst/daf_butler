@@ -443,12 +443,26 @@ class StorageClass:
             # Identical storage classes are compatible.
             return True
 
-        if issubclass(other.pytype, self.pytype):
+        # It may be that the storage class being compared is not
+        # available because the python type can't be imported. In that
+        # case conversion must be impossible.
+        try:
+            other_pytype = other.pytype
+        except Exception:
+            return False
+
+        # Or even this storage class itself can not have the type imported.
+        try:
+            self_pytype = self.pytype
+        except Exception:
+            return False
+
+        if issubclass(other_pytype, self_pytype):
             # Storage classes have different names but the same python type.
             return True
 
         for candidate_type in self.converters_by_type:
-            if issubclass(other.pytype, candidate_type):
+            if issubclass(other_pytype, candidate_type):
                 return True
         return False
 
