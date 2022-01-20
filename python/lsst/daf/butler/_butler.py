@@ -558,6 +558,7 @@ class Butler:
         self,
         datasetRefOrType: Union[DatasetRef, DatasetType, str],
         dataId: Optional[DataId] = None,
+        for_put: bool = True,
         **kwargs: Any,
     ) -> Tuple[DatasetType, Optional[DataId]]:
         """Standardize the arguments passed to several Butler APIs.
@@ -571,6 +572,11 @@ class Butler:
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the second argument.
+        for_put : `bool`, optional
+            If `True` this call is invoked as part of a `Butler.put()`.
+            Otherwise it is assumed to be part of a `Butler.get()`. This
+            parameter is only relevant if there is dataset type
+            inconsistency.
         **kwargs
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
@@ -615,10 +621,25 @@ class Butler:
         if externalDatasetType is not None:
             internalDatasetType = self.registry.getDatasetType(externalDatasetType.name)
             if externalDatasetType != internalDatasetType:
-                raise ValueError(
-                    f"Supplied dataset type ({externalDatasetType}) inconsistent with "
-                    f"registry definition ({internalDatasetType})"
-                )
+                # We can allow differences if they are compatible, depending
+                # on whether this is a get or a put. A get requires that
+                # the python type associated with the datastore can be
+                # converted to the user type. A put requires that the user
+                # supplied python type can be converted to the internal
+                # type expected by registry.
+                relevantDatasetType = internalDatasetType
+                if for_put:
+                    is_compatible = internalDatasetType.is_compatible_with(externalDatasetType)
+                else:
+                    is_compatible = externalDatasetType.is_compatible_with(internalDatasetType)
+                    relevantDatasetType = externalDatasetType
+                if not is_compatible:
+                    raise ValueError(
+                        f"Supplied dataset type ({externalDatasetType}) inconsistent with "
+                        f"registry definition ({internalDatasetType})"
+                    )
+                # Override the internal definition.
+                internalDatasetType = relevantDatasetType
 
         assert internalDatasetType is not None
         return internalDatasetType, dataId
@@ -973,7 +994,7 @@ class Butler:
         TypeError
             Raised if no collections were provided.
         """
-        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwargs)
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, for_put=False, **kwargs)
         if isinstance(datasetRefOrType, DatasetRef):
             idNumber = datasetRefOrType.id
         else:
@@ -1021,6 +1042,14 @@ class Butler:
                 f"DatasetRef.id provided ({idNumber}) does not match "
                 f"id ({ref.id}) in registry in collections {collections}."
             )
+        if datasetType != ref.datasetType:
+            # If they differ it is because the user explicitly specified
+            # a compatible dataset type to this call rather than using the
+            # registry definition. The DatasetRef must therefore be recreated
+            # using the user definition such that the expected type is
+            # returned.
+            ref = DatasetRef(datasetType, ref.dataId, run=ref.run, id=ref.id)
+
         return ref
 
     @transactional
