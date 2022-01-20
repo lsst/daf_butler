@@ -1,0 +1,2 @@
+The "butler prune-collections" command line command is now deprecated.
+Please consider using remove-collections or remove-runs instead. Will be removed after v24.

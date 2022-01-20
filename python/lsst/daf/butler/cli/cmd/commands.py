@@ -22,6 +22,7 @@
 __all__ = ()
 
 import click
+from deprecated.sphinx import deprecated
 
 from ... import script
 from ..opt import (
@@ -222,6 +223,11 @@ def config_validate(*args, **kwargs):
 )
 @confirm_option()
 @options_file_option()
+@deprecated(
+    reason="Please consider using remove-collections or remove-runs instead. Will be removed after v24.",
+    version="v24.0",
+    category=FutureWarning,
+)
 def prune_collection(**kwargs):
     """Remove a collection and possibly prune datasets within it."""
     result = script.pruneCollection(**kwargs)
