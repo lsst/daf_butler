@@ -1590,7 +1590,6 @@ class ButlerMakeRepoOutfileUriTestCase(ButlerMakeRepoOutfileTestCase):
 
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
-@mock_s3
 class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """S3Datastore specialization of a butler; an S3 storage Datastore +
     a local in-memory SqlRegistry.
@@ -1622,6 +1621,9 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     registryStr = "/gen3.sqlite3"
     """Expected format of the Registry string."""
 
+    mock_s3 = mock_s3()
+    """The mocked s3 interface from moto."""
+
     def genRoot(self):
         """Returns a random string of len 20 to serve as a root
         name for the temporary bucket repo.
@@ -1636,6 +1638,9 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         config = Config(self.configFile)
         uri = ResourcePath(config[".datastore.datastore.root"])
         self.bucketName = uri.netloc
+
+        # Enable S3 mocking of tests.
+        self.mock_s3.start()
 
         # set up some fake credentials if they do not exist
         self.usingDummyCredentials = setAwsEnvCredentials()
@@ -1673,6 +1678,9 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
         bucket = s3.Bucket(self.bucketName)
         bucket.delete()
+
+        # Stop the S3 mock.
+        self.mock_s3.stop()
 
         # unset any potentially set dummy credentials
         if self.usingDummyCredentials:
