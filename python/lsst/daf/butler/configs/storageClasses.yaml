@@ -280,3 +280,7 @@ storageClasses:
     converters:
       # Compatible python types.
       lsst.daf.base.PropertySet: lsst.pipe.base.TaskMetadata.from_metadata
+  SpectractorSpectrum:
+    pytype: spectractor.extractor.spectrum.Spectrum
+  SpectractorImage:
+    pytype: spectractor.extractor.images.Image
