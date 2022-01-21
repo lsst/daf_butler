@@ -9,6 +9,8 @@ storageClasses:
       - slice
   StructuredDataDictJson:
     pytype: dict
+    converters:
+      lsst.daf.butler.tests.MetricsExample: lsst.daf.butler.tests.MetricsExample.exportAsDict
   StructuredDataListJson:
     pytype: list
   StructuredDataDictPickle:

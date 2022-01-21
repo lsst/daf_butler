@@ -1,0 +1,1 @@
+If a `DatasetType` has been constructed that differs from the registry definition, but in a way that is compatible through `StorageClass` conversion, then using that in a `Butler.get()` call will return a python type that matches the user-specified `StorageClass` instead of the internal python type.
