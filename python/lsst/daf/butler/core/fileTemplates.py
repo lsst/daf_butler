@@ -338,7 +338,7 @@ class FileTemplate:
     template.
     """
 
-    mandatoryFields = {"run"}
+    mandatoryFields = {"run", "id"}
     """A set of fields, one of which must be present in a template."""
 
     datasetFields = {"datasetType", "component"}
@@ -462,6 +462,9 @@ class FileTemplate:
         usedRun = False
         fields["run"] = ref.run
 
+        usedId = False
+        fields["id"] = ref.id
+
         fmt = string.Formatter()
         parts = fmt.parse(self.template)
         output = ""
@@ -486,8 +489,11 @@ class FileTemplate:
             else:
                 optional = False
 
+            # We must use at least a run or id.
             if field_name == "run":
                 usedRun = True
+            if field_name == "id":
+                usedId = True
 
             if field_name == "collection":
                 raise KeyError(
@@ -552,9 +558,11 @@ class FileTemplate:
                 "Component '{}' specified but template {} did not use it".format(component, self.template)
             )
 
-        # Complain if there's no run
-        if not usedRun:
-            raise KeyError("Template does not include 'run'.")
+        # Complain if there's no run or id
+        if not usedRun and not usedId:
+            missing = ("run" if not usedRun else None, "id" if not usedId else None)
+            text = " or ".join(f"'{m}'" for m in missing if m is not None)
+            raise KeyError(f"Template does not include {text}.")
 
         # Since this is known to be a path, normalize it in case some double
         # slashes have crept in
@@ -596,11 +604,23 @@ class FileTemplate:
             )
 
         # Check that there are some dimension fields in the template
+        # The id is allowed instead if present since that also uniquely
+        # identifies the file in the datastore.
         allfields = self.fields(optionals=True)
-        if not allfields:
+        if not allfields and "id" not in withSpecials:
             raise FileTemplateValidationError(
                 f"Template '{self}' does not seem to have any fields corresponding to dimensions."
             )
+
+        # Require that if "id" is in the template then it must exist in the
+        # file part -- this avoids templates like "{id}/fixed" where the file
+        # name is fixed but the directory has the ID.
+        if "id" in withSpecials:
+            file_part = os.path.split(self.template)[-1]
+            if "{id}" not in file_part:
+                raise FileTemplateValidationError(
+                    f"Template '{self}' includes the 'id' but that ID is not part of the file name."
+                )
 
         # If we do not have dimensions available then all we can do is shrug
         if not hasattr(entity, "dimensions"):
