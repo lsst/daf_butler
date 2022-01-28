@@ -42,6 +42,7 @@ from lsst.daf.butler import ButlerURI
 from lsst.daf.butler.core._butlerUri.s3utils import (setAwsEnvCredentials,
                                                      unsetAwsEnvCredentials)
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+import lsst.daf.butler.core._butlerUri.http
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -812,6 +813,24 @@ class WebdavURITestCase(unittest.TestCase):
         self.assertNotEqual(self.existingFileButlerURI.read().decode(), "Nope.")
         with self.assertRaises(FileNotFoundError):
             self.notExistingFileButlerURI.read()
+
+        # Run this twice to ensure use of cache in code coverage
+        for _ in (1, 2):
+            with self.existingFileButlerURI.as_local() as local_uri:
+                self.assertTrue(local_uri.isLocal)
+                content = local_uri.read().decode()
+                self.assertEqual(content, "It works!")
+
+        # Ensure the LSST_RESOURCES_TMPDIR environment variable is used if set
+        # (requires to reset the cache in _TMPDIR)
+        lsst.daf.butler.core._butlerUri.http._TMPDIR = None
+        tmpdir = makeTestTempDir(TESTDIR)
+        with unittest.mock.patch.dict(os.environ, {"LSST_RESOURCES_TMPDIR": tmpdir}):
+            with self.existingFileButlerURI.as_local() as local_uri:
+                self.assertTrue(local_uri.isLocal)
+                content = local_uri.read().decode()
+                self.assertEqual(content, "It works!")
+                self.assertIsNotNone(local_uri.relative_to(ButlerURI(tmpdir)))
 
     @responses.activate
     def testWrite(self):
