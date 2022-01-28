@@ -19,7 +19,8 @@ jobs:
           python-version: 3.8
 
       - name: Install
-        run: pip install mypy pydantic
+        # pin mypy to fix a compatibility issue between mypy 0.92 and pedantic
+        run: pip install "mypy==0.910" pydantic
 
       - name: Install third party stubs
         run: pip install types-requests types-PyYAML types-click types-pkg_resources
