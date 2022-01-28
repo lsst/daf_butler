@@ -31,7 +31,7 @@ import functools
 __all__ = ('ButlerHttpURI', )
 
 from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
+from urllib3.util.retry import Retry
 
 from typing import (
     TYPE_CHECKING,
@@ -232,6 +232,36 @@ def finalurl(r: requests.Response) -> str:
     return destination_url
 
 
+# Tuple (path, block_size) pointing to the location of a local directory
+# to save temporary files and the block size of the underlying file system
+_TMPDIR: Optional[Tuple[str, int]] = None
+
+
+def _get_temp_dir() -> Tuple[str, int]:
+    """Return the temporary directory path and block size.
+    This function caches its results in _TMPDIR.
+    """
+    global _TMPDIR
+    if _TMPDIR:
+        return _TMPDIR
+
+    # Use the value of environment variables 'LSST_RESOURCES_TMPDIR' or
+    # 'TMPDIR', if defined. Otherwise use current working directory
+    tmpdir = os.getcwd()
+    for dir in (os.getenv(v) for v in ("LSST_RESOURCES_TMPDIR", "TMPDIR")):
+        if dir and os.path.isdir(dir):
+            tmpdir = dir
+            break
+
+    # Compute the block size as 256 blocks of typical size
+    # (i.e. 4096 bytes) or 10 times the file system block size,
+    # whichever is higher. This is a reasonable compromise between
+    # using memory for buffering and the number of system calls
+    # issued to read from or write to temporary files
+    fsstats = os.statvfs(tmpdir)
+    return (_TMPDIR := (tmpdir, max(10 * fsstats.f_bsize, 256 * 4096)))
+
+
 class ButlerHttpURI(ButlerURI):
     """General HTTP(S) resource."""
 
@@ -323,13 +353,19 @@ class ButlerHttpURI(ButlerURI):
         temporary : `bool`
             Always returns `True`. This is always a temporary file.
         """
-        log.debug("Downloading remote resource as local file: %s", self.geturl())
         r = self.session.get(self.geturl(), stream=True, timeout=TIMEOUT)
         if r.status_code != 200:
             raise FileNotFoundError(f"Unable to download resource {self}; status code: {r.status_code}")
-        with tempfile.NamedTemporaryFile(suffix=self.getExtension(), delete=False) as tmpFile:
-            with time_this(log, msg="Downloading %s to local file", args=(self,)):
-                for chunk in r.iter_content():
+        tmpdir, buffering = _get_temp_dir()
+        with tempfile.NamedTemporaryFile(
+            suffix=self.getExtension(), buffering=buffering, dir=tmpdir, delete=False
+        ) as tmpFile:
+            with time_this(
+                log,
+                msg="Downloading %s [length=%s] to local file %s [chunk_size=%d]",
+                args=(self, r.headers.get("Content-Length"), tmpFile.name, buffering),
+            ):
+                for chunk in r.iter_content(chunk_size=buffering):
                     tmpFile.write(chunk)
         return tmpFile.name, True
 
