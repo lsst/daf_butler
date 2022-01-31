@@ -459,10 +459,7 @@ class FileTemplate:
         if component is not None:
             fields["component"] = component
 
-        usedRun = False
         fields["run"] = ref.run
-
-        usedId = False
         fields["id"] = ref.id
 
         fmt = string.Formatter()
@@ -488,18 +485,6 @@ class FileTemplate:
                 format_spec = format_spec.replace("?", "")
             else:
                 optional = False
-
-            # We must use at least a run or id.
-            if field_name == "run":
-                usedRun = True
-            if field_name == "id":
-                usedId = True
-
-            if field_name == "collection":
-                raise KeyError(
-                    "'collection' is no longer supported as a "
-                    "file template placeholder; use 'run' instead."
-                )
 
             # Check for request for additional information from the dataId
             if "." in field_name:
@@ -558,12 +543,6 @@ class FileTemplate:
                 "Component '{}' specified but template {} did not use it".format(component, self.template)
             )
 
-        # Complain if there's no run or id
-        if not usedRun and not usedId:
-            missing = ("run" if not usedRun else None, "id" if not usedId else None)
-            text = " or ".join(f"'{m}'" for m in missing if m is not None)
-            raise KeyError(f"Template does not include {text}.")
-
         # Since this is known to be a path, normalize it in case some double
         # slashes have crept in
         path = os.path.normpath(output)
@@ -598,6 +577,12 @@ class FileTemplate:
         """
         # Check that the template has run
         withSpecials = self.fields(specials=True, optionals=True)
+
+        if "collection" in withSpecials:
+            raise FileTemplateValidationError(
+                "'collection' is no longer supported as a file template placeholder; use 'run' instead."
+            )
+
         if not withSpecials & self.mandatoryFields:
             raise FileTemplateValidationError(
                 f"Template '{self}' is missing a mandatory field from {self.mandatoryFields}"
