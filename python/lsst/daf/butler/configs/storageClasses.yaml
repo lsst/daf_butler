@@ -235,9 +235,9 @@ storageClasses:
   Config:
     pytype: lsst.pex.config.Config
   Packages:
-    pytype: lsst.base.Packages
+    pytype: lsst.utils.packages.Packages
     converters:
-      dict: lsst.base.Packages
+      dict: lsst.utils.packages.Packages
   NumpyArray:
     pytype: numpy.ndarray
   Thumbnail:
