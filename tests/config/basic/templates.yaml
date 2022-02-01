@@ -7,6 +7,7 @@ test_metric_comp: "{run:/}/{datasetType}.{component:?}/{datasetType}_v{visit:08d
 metric2: "{run:/}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit.name:?}"
 metric3: "{run:/}/{datasetType}/{instrument}"
 metric4: "{run:/}/{component:?}_{instrument}_{physical_filter}_{visit:08d}"
+Integer: "{id}"
 physical_filter+: "{run:/}/{instrument}_{physical_filter}"
 instrument<DummyCamComp>:
   metric33: "{run:/}/{instrument}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"

@@ -1,0 +1,1 @@
+The dataset ID can now be used in a file template for datastore (using ``{id}``).

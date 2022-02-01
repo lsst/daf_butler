@@ -338,7 +338,7 @@ class FileTemplate:
     template.
     """
 
-    mandatoryFields = {"run"}
+    mandatoryFields = {"run", "id"}
     """A set of fields, one of which must be present in a template."""
 
     datasetFields = {"datasetType", "component"}
@@ -459,8 +459,8 @@ class FileTemplate:
         if component is not None:
             fields["component"] = component
 
-        usedRun = False
         fields["run"] = ref.run
+        fields["id"] = ref.id
 
         fmt = string.Formatter()
         parts = fmt.parse(self.template)
@@ -485,15 +485,6 @@ class FileTemplate:
                 format_spec = format_spec.replace("?", "")
             else:
                 optional = False
-
-            if field_name == "run":
-                usedRun = True
-
-            if field_name == "collection":
-                raise KeyError(
-                    "'collection' is no longer supported as a "
-                    "file template placeholder; use 'run' instead."
-                )
 
             # Check for request for additional information from the dataId
             if "." in field_name:
@@ -552,10 +543,6 @@ class FileTemplate:
                 "Component '{}' specified but template {} did not use it".format(component, self.template)
             )
 
-        # Complain if there's no run
-        if not usedRun:
-            raise KeyError("Template does not include 'run'.")
-
         # Since this is known to be a path, normalize it in case some double
         # slashes have crept in
         path = os.path.normpath(output)
@@ -590,17 +577,35 @@ class FileTemplate:
         """
         # Check that the template has run
         withSpecials = self.fields(specials=True, optionals=True)
+
+        if "collection" in withSpecials:
+            raise FileTemplateValidationError(
+                "'collection' is no longer supported as a file template placeholder; use 'run' instead."
+            )
+
         if not withSpecials & self.mandatoryFields:
             raise FileTemplateValidationError(
                 f"Template '{self}' is missing a mandatory field from {self.mandatoryFields}"
             )
 
         # Check that there are some dimension fields in the template
+        # The id is allowed instead if present since that also uniquely
+        # identifies the file in the datastore.
         allfields = self.fields(optionals=True)
-        if not allfields:
+        if not allfields and "id" not in withSpecials:
             raise FileTemplateValidationError(
                 f"Template '{self}' does not seem to have any fields corresponding to dimensions."
             )
+
+        # Require that if "id" is in the template then it must exist in the
+        # file part -- this avoids templates like "{id}/fixed" where the file
+        # name is fixed but the directory has the ID.
+        if "id" in withSpecials:
+            file_part = os.path.split(self.template)[-1]
+            if "{id}" not in file_part:
+                raise FileTemplateValidationError(
+                    f"Template '{self}' includes the 'id' but that ID is not part of the file name."
+                )
 
         # If we do not have dimensions available then all we can do is shrug
         if not hasattr(entity, "dimensions"):

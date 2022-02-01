@@ -98,6 +98,23 @@ class TestFileTemplates(unittest.TestCase):
             self.makeDatasetRef("calexp", run="run/2", conform=False),
         )
 
+        # Check that the id is sufficient without any other information.
+        self.assertTemplate("{id}", "1", self.makeDatasetRef("calexp", run="run2", conform=False))
+
+        self.assertTemplate("{run}/{id}", "run2/1", self.makeDatasetRef("calexp", run="run2", conform=False))
+
+        self.assertTemplate(
+            "fixed/{id}",
+            "fixed/1",
+            self.makeDatasetRef("calexp", run="run2", conform=False),
+        )
+
+        self.assertTemplate(
+            "fixed/{id}_{physical_filter}",
+            "fixed/1_Most_Amazing_U_Filter_Ever",
+            self.makeDatasetRef("calexp", run="run2", conform=False),
+        )
+
         # Retain any "/" in run
         tmplstr = "{run:/}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
         self.assertTemplate(
@@ -122,6 +139,9 @@ class TestFileTemplates(unittest.TestCase):
 
         with self.assertRaises(FileTemplateValidationError):
             FileTemplate("{run}_{datasetType}")
+
+        with self.assertRaises(FileTemplateValidationError):
+            FileTemplate("{id}/fixed")
 
     def testRunOrCollectionNeeded(self):
         tmplstr = "{datasetType}/{visit:05d}/{physical_filter}"
@@ -343,6 +363,12 @@ class TestFileTemplates(unittest.TestCase):
         entities["hsc+instrument+physical_filter"] = self.makeDatasetRef(
             "filter_inst",
             storageClassName="StorageClassX",
+            dataId={"physical_filter": "i", "instrument": "HSC"},
+        )
+
+        entities["metric6"] = self.makeDatasetRef(
+            "filter_inst",
+            storageClassName="Integer",
             dataId={"physical_filter": "i", "instrument": "HSC"},
         )
 
