@@ -30,7 +30,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from ._butler import Butler
+    from ._limited_butler import LimitedButler
     from .core import DataCoordinate, DatasetRef
 
 
@@ -87,8 +87,8 @@ class DeferredDatasetHandle:
         """
         return self.ref.dataId
 
-    butler: Butler
-    """The butler that will be used to fetch the dataset (`Butler`).
+    butler: LimitedButler
+    """The butler that will be used to fetch the dataset (`LimitedButler`).
     """
 
     ref: DatasetRef

@@ -64,6 +64,7 @@ from lsst.utils.logging import VERBOSE, getLogger
 from ._butlerConfig import ButlerConfig
 from ._butlerRepoIndex import ButlerRepoIndex
 from ._deferredDatasetHandle import DeferredDatasetHandle
+from ._limited_butler import LimitedButler
 from .core import (
     AmbiguousDatasetError,
     Config,
@@ -76,6 +77,7 @@ from .core import (
     Datastore,
     Dimension,
     DimensionConfig,
+    DimensionUniverse,
     FileDataset,
     Progress,
     StorageClassFactory,
@@ -140,7 +142,7 @@ class PurgeUnsupportedPruneCollectionsError(PruneCollectionsArgsError):
         )
 
 
-class Butler:
+class Butler(LimitedButler):
     """Main entry point for the data access system.
 
     Parameters
@@ -1050,6 +1052,18 @@ class Butler:
             # returned.
             ref = DatasetRef(datasetType, ref.dataId, run=ref.run, id=ref.id)
 
+        return ref
+
+    @transactional
+    def putDirect(self, obj: Any, ref: DatasetRef) -> DatasetRef:
+        # Docstring inherited.
+        (imported_ref,) = self.registry._importDatasets(
+            [ref],
+            expand=True,
+        )
+        if imported_ref.id != ref.getCheckedId():
+            raise RuntimeError("This registry configuration does not support putDirect.")
+        self.datastore.put(obj, ref)
         return ref
 
     @transactional
@@ -2415,6 +2429,11 @@ class Butler:
         ``self.registry.defaults``.
         """
         return self.registry.defaults.run
+
+    @property
+    def dimensions(self) -> DimensionUniverse:
+        # Docstring inherited.
+        return self.registry.dimensions
 
     registry: Registry
     """The object that manages dataset metadata and relationships (`Registry`).

@@ -29,6 +29,7 @@ from lsst.utils import doImportType
 from pydantic import BaseModel
 
 from .datasets import DatasetRef, DatasetType, SerializedDatasetRef, SerializedDatasetType
+from .datastore import DatastoreRecordData
 from .dimensions import (
     DataCoordinate,
     DimensionRecord,
@@ -183,9 +184,21 @@ class Quantum:
     outputs : `~collections.abc.Mapping`, optional
         Outputs from executing this quantum of work, organized as a mapping
         from `DatasetType` to a list of `DatasetRef`.
+    datastore_records : `DatastoreRecordData`, optional
+        Datastore record data for input or initInput datasets that already
+        exist.
     """
 
-    __slots__ = ("_taskName", "_taskClass", "_dataId", "_initInputs", "_inputs", "_outputs", "_hash")
+    __slots__ = (
+        "_taskName",
+        "_taskClass",
+        "_dataId",
+        "_initInputs",
+        "_inputs",
+        "_outputs",
+        "_hash",
+        "_datastore_records",
+    )
 
     def __init__(
         self,
@@ -196,6 +209,7 @@ class Quantum:
         initInputs: Optional[Union[Mapping[DatasetType, DatasetRef], Iterable[DatasetRef]]] = None,
         inputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
         outputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
+        datastore_records: Optional[DatastoreRecordData] = None,
     ):
         if taskClass is not None:
             taskName = f"{taskClass.__module__}.{taskClass.__name__}"
@@ -213,6 +227,9 @@ class Quantum:
         self._initInputs = NamedKeyDict[DatasetType, DatasetRef](initInputs).freeze()
         self._inputs = NamedKeyDict[DatasetType, List[DatasetRef]](inputs).freeze()
         self._outputs = NamedKeyDict[DatasetType, List[DatasetRef]](outputs).freeze()
+        if datastore_records is None:
+            datastore_records = DatastoreRecordData()
+        self._datastore_records = datastore_records
 
     def to_simple(self, accumulator: Optional[DimensionRecordsAccumulator] = None) -> SerializedQuantum:
         """Convert this class to a simple python type.
@@ -487,6 +504,14 @@ class Quantum:
         """
         return self._outputs
 
+    @property
+    def datastore_records(self) -> DatastoreRecordData:
+        """Tabular data stored with this quantum (`dict`).
+
+        This attribute may be modified in place, but not assigned to.
+        """
+        return self._datastore_records
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Quantum):
             return False
@@ -522,6 +547,7 @@ class Quantum:
         initInputs: Optional[Union[Mapping[DatasetType, DatasetRef], Iterable[DatasetRef]]],
         inputs: Optional[Mapping[DatasetType, List[DatasetRef]]],
         outputs: Optional[Mapping[DatasetType, List[DatasetRef]]],
+        datastore_records: Optional[DatastoreRecordData] = None,
     ) -> Quantum:
         return Quantum(
             taskName=taskName,
@@ -530,6 +556,7 @@ class Quantum:
             initInputs=initInputs,
             inputs=inputs,
             outputs=outputs,
+            datastore_records=datastore_records,
         )
 
 
