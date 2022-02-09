@@ -550,7 +550,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             try:
                 if temp_location is not None:
                     temp_location.transfer_from(cached_location, transfer="hardlink")
-            except Exception:
+            except Exception as e:
+                log.debug("Detected error creating hardlink for dataset %s: %s", ref, e)
                 # Any failure will be treated as if the file was not
                 # in the cache. Yielding the original cache location
                 # is too dangerous.
