@@ -145,7 +145,7 @@ class QueryWhereExpression:
                 from .expressions import CheckVisitor
 
                 # Check the expression for consistency and completeness.
-                visitor = CheckVisitor(dataId, graph, self._bind.keys(), defaults)
+                visitor = CheckVisitor(dataId, graph, self._bind, defaults)
                 try:
                     summary = expr.visit(visitor)
                 except RuntimeError as err:
@@ -164,7 +164,7 @@ class QueryWhereExpression:
             else:
                 from .expressions import InspectionVisitor
 
-                summary = self._tree.visit(InspectionVisitor(graph.universe, self._bind.keys()))
+                summary = self._tree.visit(InspectionVisitor(graph.universe, self._bind))
         else:
             from .expressions import InspectionSummary
 

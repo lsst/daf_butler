@@ -27,7 +27,7 @@ __all__ = (
 )
 
 import dataclasses
-from typing import TYPE_CHECKING, AbstractSet, List, Optional, Sequence, Set, Tuple
+from typing import TYPE_CHECKING, Any, List, Mapping, Optional, Sequence, Set, Tuple
 
 from ....core import (
     DataCoordinate,
@@ -160,14 +160,14 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
     ----------
     universe : `DimensionUniverse`
         All known dimensions.
-    bindKeys : `collections.abc.Set` [ `str` ]
-        Identifiers that represent bound parameter values, and hence need not
-        represent in-database entities.
+    bind : `Mapping` [ `str`, `object` ]
+        Mapping containing literal values that should be injected into the
+        query expression, keyed by the identifiers they replace.
     """
 
-    def __init__(self, universe: DimensionUniverse, bindKeys: AbstractSet[str]):
+    def __init__(self, universe: DimensionUniverse, bind: Mapping[str, Any]):
         self.universe = universe
-        self.bindKeys = bindKeys
+        self.bind = bind
 
     def visitNumericLiteral(self, value: str, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
@@ -183,8 +183,8 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
 
     def visitIdentifier(self, name: str, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitIdentifier
-        if name in self.bindKeys:
-            return TreeSummary()
+        if name in self.bind:
+            return TreeSummary(dataIdValue=self.bind[name])
         constant = categorizeConstant(name)
         if constant is ExpressionConstant.INGEST_DATE:
             return TreeSummary(hasIngestDate=True)
@@ -295,9 +295,9 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
     graph : `DimensionGraph`
         The dimensions the query would include in the absence of this
         expression.
-    bindKeys : `collections.abc.Set` [ `str` ]
-        Identifiers that represent bound parameter values, and hence need not
-        represent in-database entities.
+    bind : `Mapping` [ `str`, `object` ]
+        Mapping containing literal values that should be injected into the
+        query expression, keyed by the identifiers they replace.
     defaults : `DataCoordinate`
         A data ID containing default for governor dimensions.
     """
@@ -306,14 +306,13 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         self,
         dataId: DataCoordinate,
         graph: DimensionGraph,
-        bindKeys: AbstractSet[str],
+        bind: Mapping[str, Any],
         defaults: DataCoordinate,
     ):
         self.dataId = dataId
         self.graph = graph
-        self.bindKeys = bindKeys
         self.defaults = defaults
-        self._branchVisitor = InspectionVisitor(dataId.universe, bindKeys)
+        self._branchVisitor = InspectionVisitor(dataId.universe, bind)
 
     def visitBranch(self, node: Node) -> TreeSummary:
         # Docstring inherited from NormalFormVisitor.

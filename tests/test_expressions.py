@@ -21,10 +21,16 @@
 
 import unittest
 
-from lsst.daf.butler import DimensionUniverse
+from lsst.daf.butler import DataCoordinate, DimensionUniverse
 from lsst.daf.butler.core import NamedKeyDict, TimespanDatabaseRepresentation
 from lsst.daf.butler.registry.queries._structs import QueryColumns
-from lsst.daf.butler.registry.queries.expressions import ParserYacc, convertExpressionToSql
+from lsst.daf.butler.registry.queries.expressions import (
+    CheckVisitor,
+    NormalForm,
+    NormalFormExpression,
+    ParserYacc,
+    convertExpressionToSql,
+)
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.schema import Column
 
@@ -99,6 +105,40 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
             str(column_element.compile(dialect=dialect, compile_kwargs={"literal_binds": True})),
             "datetime(ingest_date) < datetime('2020-01-01 00:00:00.000000')",
         )
+
+
+class CheckVisitorTestCase(unittest.TestCase):
+    """Tests for CheckVisitor class."""
+
+    def test_governor(self):
+        """Test with governor dimension in expression"""
+
+        parser = ParserYacc()
+
+        universe = DimensionUniverse()
+        graph = universe.extract(("instrument", "visit"))
+        dataId = DataCoordinate.makeEmpty(universe)
+        defaults = DataCoordinate.makeEmpty(universe)
+
+        # governor-only constraint
+        tree = parser.parse("instrument = 'LSST'")
+        expr = NormalFormExpression.fromTree(tree, NormalForm.DISJUNCTIVE)
+        binds = {}
+        visitor = CheckVisitor(dataId, graph, binds, defaults)
+        expr.visit(visitor)
+
+        tree = parser.parse("'LSST' = instrument")
+        expr = NormalFormExpression.fromTree(tree, NormalForm.DISJUNCTIVE)
+        binds = {}
+        visitor = CheckVisitor(dataId, graph, binds, defaults)
+        expr.visit(visitor)
+
+        # use bind for governor
+        tree = parser.parse("instrument = instr")
+        expr = NormalFormExpression.fromTree(tree, NormalForm.DISJUNCTIVE)
+        binds = {"instr": "LSST"}
+        visitor = CheckVisitor(dataId, graph, binds, defaults)
+        expr.visit(visitor)
 
 
 if __name__ == "__main__":
