@@ -90,7 +90,7 @@ def _getCollectionInfo(
         for r in all_results.byParentDatasetType():
             if r.any(exact=False, execute=False):
                 datasets[r.parentDatasetType.name] += r.count(exact=False)
-    return runs, datasets
+    return runs, {k: datasets[k] for k in sorted(datasets.keys())}
 
 
 def removeRuns(
