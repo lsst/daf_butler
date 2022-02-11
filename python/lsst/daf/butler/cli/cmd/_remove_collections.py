@@ -50,6 +50,8 @@ def remove_collections(**kwargs):
     collections are found when searching for collections (and the --no-confirm
     flag is not used), then they will be shown in a separate table during
     confirmation, but they will not be removed.
+
+    Use the remove-runs subcommand to remove RUN collections.
     """
     confirm = kwargs.pop("confirm")
     result = script.removeCollections(**kwargs)
