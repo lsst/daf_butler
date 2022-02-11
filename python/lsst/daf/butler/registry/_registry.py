@@ -26,7 +26,20 @@ __all__ = ("Registry",)
 import contextlib
 import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 from lsst.resources import ResourcePathExpression
 from lsst.utils import doImportType
@@ -479,6 +492,22 @@ class Registry(ABC):
             `~CollectionType.CHAINED` collection.
         ValueError
             Raised if the given collections contains a cycle.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def getCollectionParentChains(self, collection: str) -> Set[str]:
+        """Return the CHAINED collections that directly contain the given one.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the collection.
+
+        Returns
+        -------
+        chains : `set` of `str`
+            Set of `~CollectionType.CHAINED` collection names.
         """
         raise NotImplementedError()
 

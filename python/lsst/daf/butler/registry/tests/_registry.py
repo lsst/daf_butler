@@ -733,6 +733,8 @@ class RegistryTests(ABC):
         # Add the child collections.
         registry.setCollectionChain(chain1, [tag1, run2])
         self.assertEqual(list(registry.getCollectionChain(chain1)), [tag1, run2])
+        self.assertEqual(registry.getCollectionParentChains(tag1), {chain1})
+        self.assertEqual(registry.getCollectionParentChains(run2), {chain1})
         # Searching for dataId1 or dataId2 in the chain should return ref1 and
         # ref2, because both are in tag1.
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain1), ref1)
@@ -749,6 +751,8 @@ class RegistryTests(ABC):
         chain2 = "chain2"
         registry.registerCollection(chain2, type=CollectionType.CHAINED)
         registry.setCollectionChain(chain2, [run2, chain1])
+        self.assertEqual(registry.getCollectionParentChains(chain1), {chain2})
+        self.assertEqual(registry.getCollectionParentChains(run2), {chain1, chain2})
         # Query for collections matching a regex.
         self.assertCountEqual(
             list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),

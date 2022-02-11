@@ -28,7 +28,8 @@ __all__ = [
 ]
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Any, Iterator, Optional, Tuple
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any, DefaultDict, Iterator, Optional, Set, Tuple
 
 from ...core import DimensionUniverse, Timespan, ddl
 from .._collectionType import CollectionType
@@ -178,7 +179,15 @@ class ChainedCollectionRecord(CollectionRecord):
             children = CollectionSearch.fromExpression(
                 tuple(record.name for record in children.iter(manager, flattenChains=True))
             )
+        # Delegate to derived classes to do the database updates.
         self._update(manager, children)
+        # Update the reverse mapping (from child to parents) in the manager,
+        # by removing the old relationships and adding back in the new ones.
+        for old_child in self._children:
+            manager._parents_by_child[manager.find(old_child).key].discard(self.key)
+        for new_child in children:
+            manager._parents_by_child[manager.find(new_child).key].add(self.key)
+        # Actually set this instances sequence of children.
         self._children = children
 
     def refresh(self, manager: CollectionManager) -> None:
@@ -201,12 +210,11 @@ class ChainedCollectionRecord(CollectionRecord):
 
     @abstractmethod
     def _update(self, manager: CollectionManager, children: CollectionSearch) -> None:
-        """Protected implementation hook for setting the `children` property.
+        """Protected implementation hook for `update`.
 
         This method should be implemented by subclasses to update the database
         to reflect the children given.  It should never be called by anything
-        other than the `children` setter, which should be used by all external
-        code.
+        other than `update`, which should be used by all external code.
 
         Parameters
         ----------
@@ -255,6 +263,9 @@ class CollectionManager(VersionedExtension):
     obtained through the `CollectionManager` APIs are strictly for internal
     (to `Registry`) use.
     """
+
+    def __init__(self) -> None:
+        self._parents_by_child: DefaultDict[Any, Set[Any]] = defaultdict(set)
 
     @classmethod
     @abstractmethod
@@ -576,3 +587,17 @@ class CollectionManager(VersionedExtension):
             Docstring for the collection with the given key.
         """
         raise NotImplementedError()
+
+    def getParentChains(self, key: Any) -> Iterator[ChainedCollectionRecord]:
+        """Find all CHAINED collections that directly contain the given
+        collection.
+
+        Parameters
+        ----------
+        key
+            Internal primary key value for the collection.
+        """
+        for parent_key in self._parents_by_child[key]:
+            result = self[parent_key]
+            assert isinstance(result, ChainedCollectionRecord)
+            yield result

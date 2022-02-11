@@ -25,7 +25,7 @@ __all__ = ("RemoteRegistry",)
 
 import contextlib
 import functools
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Set, Union
 
 import httpx
 from lsst.daf.butler import __version__
@@ -225,6 +225,10 @@ class RemoteRegistry(Registry):
         return CollectionSearch.parse_obj(chain)
 
     def setCollectionChain(self, parent: str, children: Any, *, flatten: bool = False) -> None:
+        # Docstring inherited from lsst.daf.butler.registry.Registry
+        raise NotImplementedError()
+
+    def getCollectionParentChains(self, collection: str) -> Set[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()
 
