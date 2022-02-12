@@ -323,6 +323,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         *,
         dimensions: DimensionRecordStorageManager,
     ):
+        super().__init__()
         self._db = db
         self._tables = tables
         self._collectionIdName = collectionIdName

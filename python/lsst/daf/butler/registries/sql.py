@@ -363,6 +363,15 @@ class SqlRegistry(Registry):
         if children != record.children or flatten:
             record.update(self._managers.collections, children, flatten=flatten)
 
+    def getCollectionParentChains(self, collection: str) -> Set[str]:
+        # Docstring inherited from lsst.daf.butler.registry.Registry
+        return {
+            record.name
+            for record in self._managers.collections.getParentChains(
+                self._managers.collections.find(collection).key
+            )
+        }
+
     def getCollectionDocumentation(self, collection: str) -> Optional[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.collections.getDocumentation(self._managers.collections.find(collection).key)
