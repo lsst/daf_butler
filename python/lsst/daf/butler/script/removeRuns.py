@@ -88,8 +88,9 @@ def _getCollectionInfo(
         all_results = butler.registry.queryDatasets(..., collections=collectionName)
         assert isinstance(all_results, DatasetQueryResults)
         for r in all_results.byParentDatasetType():
-            datasets[r.parentDatasetType.name] += r.count(exact=False)
-    return runs, datasets
+            if r.any(exact=False, execute=False):
+                datasets[r.parentDatasetType.name] += r.count(exact=False)
+    return runs, {k: datasets[k] for k in sorted(datasets.keys())}
 
 
 def removeRuns(

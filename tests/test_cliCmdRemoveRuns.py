@@ -26,6 +26,7 @@
 import os
 import unittest
 
+from lsst.daf.butler import DatasetType
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.cmd._remove_runs import (
     abortedMsg,
@@ -51,7 +52,12 @@ class RemoveCollectionTest(unittest.TestCase):
     def test_removeRuns(self):
         with self.runner.isolated_filesystem():
             root = "repo"
-            MetricTestRepo(root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+            repo = MetricTestRepo(root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
+            # Add a dataset type that will have no datasets to make sure it
+            # isn't printed.
+            repo.butler.registry.registerDatasetType(
+                DatasetType("no_datasets", repo.butler.registry.dimensions.empty, "StructuredDataDict")
+            )
 
             # Execute cmd but say no, check for expected outputs.
             result = self.runner.invoke(butler.cli, ["remove-runs", root, "ingest*"], input="no")
@@ -59,6 +65,7 @@ class RemoveCollectionTest(unittest.TestCase):
             self.assertIn(willRemoveRunsMsg, result.output)
             self.assertIn(willRemoveDatasetsMsg, result.output)
             self.assertIn(abortedMsg, result.output)
+            self.assertNotIn("no_datasets", result.output)
 
             # ...say yes
             result = self.runner.invoke(butler.cli, ["remove-runs", root, "ingest*"], input="yes")
