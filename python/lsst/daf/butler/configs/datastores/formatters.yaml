@@ -80,3 +80,4 @@ ButlerLogRecords: lsst.daf.butler.formatters.logs.ButlerLogRecordsFormatter
 TaskMetadata: lsst.daf.butler.formatters.json.JsonFormatter
 SpectractorSpectrum: lsst.atmospec.formatters.SpectractorSpectrumFormatter
 SpectractorImage: lsst.atmospec.formatters.SpectractorImageFormatter
+Spectraction: lsst.atmospec.formatters.SpectractionFormatter
