@@ -28,7 +28,8 @@ import warnings
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
-from typing import ContextManager, Iterable, Set, Tuple
+from contextlib import contextmanager
+from typing import ContextManager, Iterable, Optional, Set, Tuple
 
 import astropy.time
 import sqlalchemy
@@ -84,6 +85,24 @@ TEMPORARY_TABLE_SPEC = ddl.TableSpec(
         ddl.FieldSpec("b_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
     ],
 )
+
+
+@contextmanager
+def _patch_getExistingTable(db: Database) -> Database:
+    """Patch getExistingTable method in a database instance to test concurrent
+    creation of tables. This patch obviously depends on knowning internals of
+    ``ensureTableExists()`` implementation.
+    """
+    original_method = db.getExistingTable
+
+    def _getExistingTable(name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
+        # Return None on first call, but forward to original method after that
+        db.getExistingTable = original_method
+        return None
+
+    db.getExistingTable = _getExistingTable
+    yield db
+    db.getExistingTable = original_method
 
 
 class DatabaseTests(ABC):
@@ -216,6 +235,31 @@ class DatabaseTests(ABC):
         with newDatabase.transaction():
             with self.assertRaises(AssertionError):
                 newDatabase.ensureTableExists("d", DYNAMIC_TABLE_SPEC)
+
+    def testDynamicTablesConcurrency(self):
+        """Tests for `Database.ensureTableExists` concurrent use."""
+        # We cannot really run things concurrently in a deterministic way, here
+        # we just simulate a situation when the table is created by other
+        # process between the call to getExistingTable() and actual table
+        # creation.
+        db1 = self.makeEmptyDatabase()
+        with db1.declareStaticTables(create=True) as context:
+            context.addTableTuple(STATIC_TABLE_SPECS)
+        self.assertIsNone(db1.getExistingTable("d", DYNAMIC_TABLE_SPEC))
+
+        # Make a dynamic table using separate connection
+        db2 = self.getNewConnection(db1, writeable=True)
+        with db2.declareStaticTables(create=False) as context:
+            context.addTableTuple(STATIC_TABLE_SPECS)
+        table = db2.ensureTableExists("d", DYNAMIC_TABLE_SPEC)
+        self.checkTable(DYNAMIC_TABLE_SPEC, table)
+
+        # Call it again but trick it into thinking that table is not there.
+        # This test depends on knowing implementation of ensureTableExists()
+        # which initially calls getExistingTable() to check that table may
+        # exist, the patch intercepts that call and returns None.
+        with _patch_getExistingTable(db1):
+            table = db1.ensureTableExists("d", DYNAMIC_TABLE_SPEC)
 
     def testTemporaryTables(self):
         """Tests for `Database.makeTemporaryTable`,
