@@ -1016,8 +1016,19 @@ class Database(ABC):
         table = self._convertTableSpec(name, spec, self._metadata)
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
-        with self._connection() as connection:
-            table.create(connection)
+        try:
+            with self._connection() as connection:
+                table.create(connection)
+        except sqlalchemy.exc.DatabaseError:
+            # Some other process could have created the table meanwhile, which
+            # usually causes OperationalError or ProgrammingError. We cannot
+            # use IF NOT EXISTS clause in this case due to PostgreSQL race
+            # condition on server side which causes IntegrityError. Instead we
+            # catch these exceptions (they all inherit DatabaseError) and
+            # re-check whether table is now there.
+            table = self.getExistingTable(name, spec)
+            if table is None:
+                raise
         return table
 
     def getExistingTable(self, name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
