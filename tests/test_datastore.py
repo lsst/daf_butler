@@ -1247,6 +1247,12 @@ cached:
         self.assertIsInstance(uri, ResourcePath)
         self.assertIsNone(cache_manager.move_to_cache(self.files[1], self.refs[1]))
 
+        # Check presence in cache using ref and then using file extension.
+        self.assertFalse(cache_manager.known_to_cache(self.refs[1]))
+        self.assertTrue(cache_manager.known_to_cache(self.refs[0]))
+        self.assertFalse(cache_manager.known_to_cache(self.refs[1], self.files[1].getExtension()))
+        self.assertTrue(cache_manager.known_to_cache(self.refs[0], self.files[0].getExtension()))
+
         # Cached file should no longer exist but uncached file should be
         # unaffected.
         self.assertFalse(self.files[0].exists())
@@ -1268,6 +1274,7 @@ cached:
         for uri, ref in zip(self.files, self.refs):
             self.assertFalse(cache_manager.should_be_cached(ref))
             self.assertIsNone(cache_manager.move_to_cache(uri, ref))
+            self.assertFalse(cache_manager.known_to_cache(ref))
             with cache_manager.find_in_cache(ref, ".txt") as found:
                 self.assertIsNone(found, msg=f"{cache_manager}")
 
@@ -1288,6 +1295,10 @@ cached:
         config_str = self._expiration_config(mode, threshold)
 
         cache_manager = self._make_cache_manager(config_str)
+
+        # Check that an empty cache returns unknown for arbitrary ref
+        self.assertFalse(cache_manager.known_to_cache(self.refs[0]))
+
         # Should end with datasets: 2, 3, 4
         self.assertExpiration(cache_manager, 5, threshold + 1)
         self.assertIn(f"{mode}={threshold}", str(cache_manager))
@@ -1363,6 +1374,10 @@ cached:
             for component_file, component_ref in zip(self.comp_files[i], self.comp_refs[i]):
                 cached = cache_manager.move_to_cache(component_file, component_ref)
                 self.assertIsNotNone(cached)
+                self.assertTrue(cache_manager.known_to_cache(component_ref))
+                self.assertTrue(cache_manager.known_to_cache(component_ref.makeCompositeRef()))
+                self.assertTrue(cache_manager.known_to_cache(component_ref, component_file.getExtension()))
+
         self.assertEqual(cache_manager.file_count, 6)  # 2 datasets each of 3 files
 
         # Write two new non-composite and the number of files should drop.

@@ -283,6 +283,35 @@ class AbstractDatastoreCacheManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def known_to_cache(self, ref: DatasetRef, extension: Optional[str] = None) -> bool:
+        """Report if the dataset is known to the cache.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Dataset to check for in the cache.
+        extension : `str`, optional
+            File extension expected. Should include the leading "``.``".
+            If `None` the extension is ignored and the dataset ID alone is
+            used to check in the cache. The extension must be defined if
+            a specific component is being checked.
+
+        Returns
+        -------
+        known : `bool`
+            Returns `True` if the dataset is currently known to the cache
+            and `False` otherwise.
+
+        Notes
+        -----
+        This method can only report if the dataset is known to the cache
+        in this specific instant and does not indicate whether the file
+        can be read from the cache later. `find_in_cache()` should be called
+        if the cached file is to be used.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def move_to_cache(self, uri: ResourcePath, ref: DatasetRef) -> Optional[ResourcePath]:
         """Move a file to the cache.
 
@@ -653,6 +682,55 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
             for path_in_cache in missing:
                 self._cache_entries.pop(path_in_cache)
 
+    def known_to_cache(self, ref: DatasetRef, extension: Optional[str] = None) -> bool:
+        """Report if the dataset is known to the cache.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Dataset to check for in the cache.
+        extension : `str`, optional
+            File extension expected. Should include the leading "``.``".
+            If `None` the extension is ignored and the dataset ID alone is
+            used to check in the cache. The extension must be defined if
+            a specific component is being checked.
+
+        Returns
+        -------
+        known : `bool`
+            Returns `True` if the dataset is currently known to the cache
+            and `False` otherwise. If the dataset refers to a component and
+            an extension is given then only that component is checked.
+
+        Notes
+        -----
+        This method can only report if the dataset is known to the cache
+        in this specific instant and does not indicate whether the file
+        can be read from the cache later. `find_in_cache()` should be called
+        if the cached file is to be used.
+
+        This method does not force the cache to be re-scanned and so can miss
+        cached datasets that have recently been written by other processes.
+        """
+        if self._cache_directory is None:
+            return False
+
+        if extension is None:
+            # Look solely for matching dataset ref ID and not specific
+            # components.
+            for entry in self._cache_entries.values():
+                if ref.id == entry.ref:
+                    return True
+            return False
+
+        else:
+            # Extension is known so we can do an explicit look up for the
+            # cache entry.
+            cached_location = self._construct_cache_name(ref, extension)
+            path_in_cache = cached_location.relative_to(self.cache_directory)
+            assert path_in_cache is not None  # For mypy
+            return path_in_cache in self._cache_entries
+
     def _remove_from_cache(self, cache_entries: Iterable[str]) -> None:
         """Remove the specified cache entries from cache.
 
@@ -821,6 +899,13 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         Always does nothing.
         """
         return
+
+    def known_to_cache(self, ref: DatasetRef, extension: Optional[str] = None) -> bool:
+        """Report if a dataset is known to the cache.
+
+        Always returns `False`.
+        """
+        return False
 
     def __str__(self) -> str:
         return f"{type(self).__name__}()"
