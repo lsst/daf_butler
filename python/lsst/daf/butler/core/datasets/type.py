@@ -457,7 +457,7 @@ class DatasetType:
         """
         if component in self.storageClass.allComponents():
             return self.nameWithComponent(self.name, component)
-        raise KeyError("Requested component ({}) not understood by this DatasetType".format(component))
+        raise KeyError(f"Requested component ({component}) not understood by this DatasetType ({self})")
 
     def makeCompositeDatasetType(self) -> DatasetType:
         """Return a composite dataset type from the component.
