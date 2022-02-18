@@ -1556,6 +1556,13 @@ class FileDatastore(GenericBaseDatastore):
         -------
         exists : `bool`
             `True` if the entity exists in the `Datastore`.
+
+        Notes
+        -----
+        The local cache is checked as a proxy for existence in the remote
+        object store. It is possible that another process on a different
+        compute node could remove the file from the object store even
+        though it is present in the local cache.
         """
         fileLocations = self._get_dataset_locations_info(ref)
 
@@ -1564,6 +1571,12 @@ class FileDatastore(GenericBaseDatastore):
         if not fileLocations:
             if not self.trustGetRequest:
                 return False
+
+            # First check the cache. If it is not found we must check
+            # the datastore itself. Assume that any component in the cache
+            # means that the dataset does exist somewhere.
+            if self.cacheManager.known_to_cache(ref):
+                return True
 
             # When we are guessing a dataset location we can not check
             # for the existence of every component since we can not
@@ -1575,7 +1588,14 @@ class FileDatastore(GenericBaseDatastore):
             return False
 
         # All listed artifacts must exist.
-        for location, _ in fileLocations:
+        for location, storedFileInfo in fileLocations:
+            # Checking in cache needs the component ref.
+            check_ref = ref
+            if not ref.datasetType.isComponent() and (component := storedFileInfo.component):
+                check_ref = ref.makeComponentRef(component)
+            if self.cacheManager.known_to_cache(check_ref, location.getExtension()):
+                continue
+
             if not self._artifact_exists(location):
                 return False
 
