@@ -24,7 +24,7 @@ jobs:
       - name: Install third party stubs
         run: pip install types-requests types-PyYAML types-click types-pkg_resources types-Deprecated
 
-      - name: Install lsst.utils
+      - name: Install lsst dependencies
         run: |
           pip install -r requirements.txt
 
