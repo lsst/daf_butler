@@ -714,7 +714,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         """
         if self._cache_directory is None:
             return False
-        if self.cache_size == 0:
+        if self.file_count == 0:
             return False
 
         if extension is None:

@@ -1405,7 +1405,7 @@ class FileDatastore(GenericBaseDatastore):
 
             # Check the local cache directly for a dataset corresponding
             # to the remote URI.
-            if self.cacheManager.cache_size > 0:
+            if self.cacheManager.file_count > 0:
                 ref = id_to_ref[ref_id]
                 for uri, storedFileInfo in zip(uris, infos):
                     check_ref = ref
