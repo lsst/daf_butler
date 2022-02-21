@@ -29,6 +29,7 @@ import sqlalchemy.sql
 from ...core import DatasetType, Dimension, DimensionElement, SimpleQuery, SkyPixDimension
 from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._collectionType import CollectionType
+from ..interfaces import GovernorDimensionRecordStorage
 from ..wildcards import CollectionQuery, CollectionSearch
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryManagers
@@ -59,6 +60,29 @@ class QueryBuilder:
         self._columns = QueryColumns()
         self._managers = managers
         self._doomed_by = list(doomed_by)
+
+        self._validateGovernors()
+
+    def _validateGovernors(self) -> None:
+        """Check that governor dimensions specified by query actually exist.
+
+        This helps to avoid mistakes in governor values. It also implements
+        consistent failure behavior for cases when governor dimensions are
+        specified in either DataId ow WHERE clause.
+
+        Raises
+        ------
+        LookupError
+            Raised when governor dimension values are not found.
+        """
+        for governor, values in self.summary.where.restriction.items():
+            storage = self._managers.dimensions[governor]
+            assert isinstance(
+                storage, GovernorDimensionRecordStorage
+            ), f"Unexpected type of the governor dimension record storage {type(storage)}"
+            if not values <= storage.values:
+                unknown = values - storage.values
+                raise LookupError(f"Unknown values specified for governor dimension {governor}: {unknown}")
 
     def hasDimensionKey(self, dimension: Dimension) -> bool:
         """Return `True` if the given dimension's primary key column has

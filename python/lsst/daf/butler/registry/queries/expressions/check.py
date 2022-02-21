@@ -407,10 +407,13 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         # columns referenced.  This aggregation is for the full query, so we
         # don't care whether things are joined by AND or OR (or + or -, etc).
         summary = OuterSummary()
-        for branch in branches:
-            summary.update(branch)
-            summary.governors.update(branch.governors)
-            summary.defaultsNeeded.update(branch.defaultsNeeded)
+        if branches:
+            # To make an OR of branch constraints start with empty selection.
+            summary.governors = GovernorDimensionRestriction.makeEmpty(self.graph.universe)
+            for branch in branches:
+                summary.update(branch)
+                summary.governors = summary.governors.union(branch.governors)
+                summary.defaultsNeeded.update(branch.defaultsNeeded)
         # See if we've referenced any dimensions that weren't in the original
         # query graph; if so, we update that to include them.  This is what
         # lets a user say "tract=X" on the command line (well, "skymap=Y AND
@@ -421,7 +424,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
                 self.graph.universe,
                 dimensions=(summary.dimensions | self.graph.dimensions),
             )
-        for governor, values in branch.governors.items():
+        for governor, values in summary.governors.items():
             if governor in summary.defaultsNeeded:
                 # One branch contained an explicit value for this dimension
                 # while another needed to refer to the default data ID.
