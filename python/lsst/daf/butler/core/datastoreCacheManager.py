@@ -171,6 +171,10 @@ class CacheEntry(BaseModel):
         )
 
 
+class _MarkerEntry(CacheEntry):
+    pass
+
+
 class CacheRegistry(BaseModel):
     """Collection of cache entries."""
 
@@ -220,8 +224,21 @@ class CacheRegistry(BaseModel):
     def items(self) -> ItemsView[str, CacheEntry]:
         return self._entries.items()
 
-    def pop(self, key: str, default: Optional[CacheEntry] = None) -> Optional[CacheEntry]:
-        entry = self._entries.pop(key, default)
+    # An private marker to indicate that pop() should raise if no default
+    # is given.
+    __marker = _MarkerEntry(name="marker", size=0, ref=0, ctime=datetime.datetime.utcfromtimestamp(0))
+
+    def pop(self, key: str, default: Optional[CacheEntry] = __marker) -> Optional[CacheEntry]:
+        # The marker for dict.pop is not the same as our marker.
+        if default is self.__marker:
+            entry = self._entries.pop(key)
+        else:
+            entry = self._entries.pop(key, self.__marker)
+            # Should not attempt to correct for this entry being removed
+            # if we got the default value.
+            if entry is self.__marker:
+                return default
+
         self._decrement(entry)
         return entry
 
@@ -680,7 +697,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
                 "Entries no longer on disk but thought to be in cache and so removed: %s", ",".join(missing)
             )
             for path_in_cache in missing:
-                self._cache_entries.pop(path_in_cache)
+                self._cache_entries.pop(path_in_cache, None)
 
     def known_to_cache(self, ref: DatasetRef, extension: Optional[str] = None) -> bool:
         """Report if the dataset is known to the cache.
@@ -745,7 +762,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         for entry in cache_entries:
             path = self.cache_directory.join(entry)
 
-            self._cache_entries.pop(entry)
+            self._cache_entries.pop(entry, None)
             log.debug("Removing file from cache: %s", path)
             try:
                 path.remove()
