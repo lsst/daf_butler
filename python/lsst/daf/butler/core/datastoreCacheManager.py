@@ -184,6 +184,9 @@ class CacheRegistry(BaseModel):
     _entries: Dict[str, CacheEntry] = PrivateAttr({})
     """Internal collection of cache entries."""
 
+    _ref_map: Dict[DatasetId, List[str]] = PrivateAttr({})
+    """Mapping of DatasetID to corresponding keys in cache registry."""
+
     @property
     def cache_size(self) -> int:
         return self._size
@@ -195,9 +198,15 @@ class CacheRegistry(BaseModel):
         self._size += entry.size
         self._entries[key] = entry
 
+        # Update the mapping from ref to path.
+        if entry.ref not in self._ref_map:
+            self._ref_map[entry.ref] = []
+        self._ref_map[entry.ref].append(key)
+
     def __delitem__(self, key: str) -> None:
         entry = self._entries.pop(key)
         self._decrement(entry)
+        self._ref_map[entry.ref].remove(key)
 
     def _decrement(self, entry: Optional[CacheEntry]) -> None:
         if entry:
@@ -240,7 +249,34 @@ class CacheRegistry(BaseModel):
                 return default
 
         self._decrement(entry)
+        # The default entry given to this method may not even be in the cache.
+        if entry and entry.ref in self._ref_map:
+            keys = self._ref_map[entry.ref]
+            if key in keys:
+                keys.remove(key)
         return entry
+
+    def get_dataset_keys(self, dataset_id: Optional[DatasetId]) -> Optional[List[str]]:
+        """Retrieve all keys associated with the given dataset ID.
+
+        Parameters
+        ----------
+        dataset_id : `DatasetId` or `None`
+            The dataset ID to look up. Returns `None` if the ID is `None`.
+
+        Returns
+        -------
+        keys : `list` [`str`]
+            Keys associated with this dataset. These keys can be used to lookup
+            the cache entry information in the `CacheRegistry`. Returns
+            `None` if the dataset is not known to the cache.
+        """
+        if dataset_id not in self._ref_map:
+            return None
+        keys = self._ref_map[dataset_id]
+        if not keys:
+            return None
+        return keys
 
 
 class DatastoreCacheManagerConfig(ConfigSubset):
@@ -737,10 +773,8 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         if extension is None:
             # Look solely for matching dataset ref ID and not specific
             # components.
-            for entry in self._cache_entries.values():
-                if ref.id == entry.ref:
-                    return True
-            return False
+            cached_paths = self._cache_entries.get_dataset_keys(ref.id)
+            return True if cached_paths else False
 
         else:
             # Extension is known so we can do an explicit look up for the
