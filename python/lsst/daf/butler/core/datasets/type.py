@@ -113,7 +113,7 @@ class DatasetType:
         and underscores.  Component dataset types should contain a single
         period separating the base dataset type name from the component name
         (and may be recursive).
-    dimensions : `DimensionGraph` or iterable of `Dimension`
+    dimensions : `DimensionGraph` or iterable of `Dimension` or `str`
         Dimensions used to label and relate instances of this `DatasetType`.
         If not a `DimensionGraph`, ``universe`` must be provided as well.
     storageClass : `StorageClass` or `str`
@@ -172,7 +172,7 @@ class DatasetType:
     def __init__(
         self,
         name: str,
-        dimensions: Union[DimensionGraph, Iterable[Dimension]],
+        dimensions: Union[DimensionGraph, Iterable[Union[Dimension, str]]],
         storageClass: Union[StorageClass, str],
         parentStorageClass: Optional[Union[StorageClass, str]] = None,
         *,
