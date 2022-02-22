@@ -988,6 +988,30 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def explain_no_results(self) -> Iterator[str]:
+        """Return human-readable messages that may help explain why the query
+        yields no results.
+
+        Returns
+        -------
+        messages : `Iterator` [ `str` ]
+            String messages that describe reasons the query might not yield any
+            results.
+
+        Notes
+        -----
+        Messages related to post-query filtering are only available if the
+        iterator has been exhausted, or if `any` or `count` was already called
+        (with ``exact=True`` for the latter two).
+
+        This method first yields messages that are generated while the query is
+        being built or filtered, but may then proceed to diagnostics generated
+        by performing what should be inexpensive follow-up queries.  Callers
+        can short-circuit this at any time by simply not iterating further.
+        """
+        raise NotImplementedError()
+
 
 class _DimensionRecordKey:
     """Class for objects used as keys in ordering `DimensionRecord` instances.
@@ -1115,3 +1139,7 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
         # Docstring inherited from base class.
         self._dataIds = self._dataIds.limit(limit, offset)
         return self
+
+    def explain_no_results(self) -> Iterator[str]:
+        # Docstring inherited.
+        return self._dataIds.explain_no_results()

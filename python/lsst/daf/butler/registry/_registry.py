@@ -47,7 +47,6 @@ from lsst.utils import doImportType
 from ..core import (
     Config,
     DataCoordinate,
-    DataCoordinateIterable,
     DataId,
     DatasetAssociation,
     DatasetId,
@@ -67,6 +66,7 @@ from ._collectionType import CollectionType
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
 from .interfaces import DatasetIdGenEnum
+from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 from .summaries import CollectionSummary
 from .wildcards import CollectionSearch
 
@@ -1092,6 +1092,15 @@ class Registry(ABC):
             A data ID that includes full metadata for all of the dimensions it
             identifies, i.e. guarantees that ``expanded.hasRecords()`` and
             ``expanded.hasFull()`` both return `True`.
+
+        Raises
+        ------
+        LookupError
+            Raised when ``dataId`` or keyword arguments specify unknown
+            dimensions or values.
+        InconsistentDataIdError
+            Raised when a data ID contains contradictory key-value pairs,
+            according to dimension relationships.
         """
         raise NotImplementedError()
 
@@ -1258,7 +1267,7 @@ class Registry(ABC):
         bind: Optional[Mapping[str, Any]] = None,
         check: bool = True,
         **kwargs: Any,
-    ) -> Iterable[DatasetRef]:
+    ) -> DatasetQueryResults:
         """Query for and iterate over dataset references matching user-provided
         criteria.
 
@@ -1337,6 +1346,12 @@ class Registry(ABC):
             collection wildcard is passed when ``findFirst`` is `True`, or
             when ``collections`` is `None` and``self.defaults.collections`` is
             also `None`.
+        LookupError
+            Raised when ``dataId`` or keyword arguments specify unknown
+            dimensions or values.
+        InconsistentDataIdError
+            Raised when a ``dataId`` or keyword arguments specify
+            contradictory key-value pairs.
 
         Notes
         -----
@@ -1365,7 +1380,7 @@ class Registry(ABC):
         bind: Optional[Mapping[str, Any]] = None,
         check: bool = True,
         **kwargs: Any,
-    ) -> DataCoordinateIterable:
+    ) -> DataCoordinateQueryResults:
         """Query for data IDs matching user-provided criteria.
 
         Parameters
@@ -1443,6 +1458,12 @@ class Registry(ABC):
         TypeError
             Raised if ``collections`` is `None`, ``self.defaults.collections``
             is `None`, and ``datasets`` is not `None`.
+        LookupError
+            Raised when ``dataId`` or keyword arguments specify unknown
+            dimensions or values.
+        InconsistentDataIdError
+            Raised when a ``dataId`` or keyword arguments specify
+            contradictory key-value pairs.
         """
         raise NotImplementedError()
 
@@ -1459,7 +1480,7 @@ class Registry(ABC):
         bind: Optional[Mapping[str, Any]] = None,
         check: bool = True,
         **kwargs: Any,
-    ) -> Iterable[DimensionRecord]:
+    ) -> DimensionRecordQueryResults:
         """Query for dimension information matching user-provided criteria.
 
         Parameters
@@ -1506,8 +1527,17 @@ class Registry(ABC):
 
         Returns
         -------
-        dataIds : `Iterator` [ `DimensionRecord` ]
+        dataIds : `DimensionRecordQueryResults`
             Data IDs matching the given query parameters.
+
+        Raises
+        ------
+        LookupError
+            Raised when ``dataId`` or keyword arguments specify unknown
+            dimensions or values.
+        InconsistentDataIdError
+            Raised when a ``dataId`` or keyword arguments specify
+            contradictory key-value pairs.
         """
         raise NotImplementedError()
 

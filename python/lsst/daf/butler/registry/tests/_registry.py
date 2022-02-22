@@ -2411,6 +2411,11 @@ class RegistryTests(ABC):
                 registry.queryDatasets("flat", collections=re.compile("potato.+")),
                 ["potato"],
             ),
+            (
+                # Dataset type name doesn't match any existing dataset types.
+                registry.queryDimensionRecords("detector", datasets=["nonexistent"], collections=...),
+                ["nonexistent"],
+            ),
         ]:
 
             self.assertFalse(query.any(execute=False, exact=False))
@@ -2434,6 +2439,11 @@ class RegistryTests(ABC):
             (
                 # No records for one of the involved dimensions.
                 registry.queryDataIds(["subfilter"]),
+                ["dimension records", "subfilter"],
+            ),
+            (
+                # No records for one of the involved dimensions.
+                registry.queryDimensionRecords("subfilter"),
                 ["dimension records", "subfilter"],
             ),
         ]:
@@ -2495,6 +2505,15 @@ class RegistryTests(ABC):
         messages = list(query4.explain_no_results())
         self.assertTrue(messages)
         self.assertTrue(any("regions did not overlap" in message for message in messages))
+
+        # And there are cases when queries make empty results but we do not
+        # know how to explain that yet (could we just say miracles happen?)
+        query5 = registry.queryDimensionRecords(
+            "detector", where="detector.purpose = 'no-purpose'", instrument="Cam1"
+        )
+        self.assertEqual(query5.count(exact=True), 0)
+        messages = list(query5.explain_no_results())
+        self.assertFalse(messages)
 
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""
