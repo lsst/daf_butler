@@ -120,54 +120,60 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
         confirm_initial_tables()
 
         # Try pruning RUN without purge or unstore, should fail.
-        result = self.runner.invoke(
-            butlerCli,
-            ["prune-collection", self.root, "ingest/run"],
-            input="yes",
-        )
+        with self.assertWarns(FutureWarning):  # Capture the deprecation warning
+            result = self.runner.invoke(
+                butlerCli,
+                ["prune-collection", self.root, "ingest/run"],
+                input="yes",
+            )
         self.assertEqual(result.exit_code, 1, clickResultMsg(result))
 
         # Try pruning RUN without unstore, should fail.
-        result = self.runner.invoke(
-            butlerCli,
-            ["prune-collection", self.root, "ingest/run", "--purge"],
-            input="yes",
-        )
+        with self.assertWarns(FutureWarning):  # Capture the deprecation warning
+            result = self.runner.invoke(
+                butlerCli,
+                ["prune-collection", self.root, "ingest/run", "--purge"],
+                input="yes",
+            )
         self.assertEqual(result.exit_code, 1, clickResultMsg(result))
 
         # Try pruning RUN without purge, should fail.
-        result = self.runner.invoke(
-            butlerCli,
-            ["prune-collection", self.root, "ingest/run", "--unstore"],
-            input="yes",
-        )
+        with self.assertWarns(FutureWarning):  # Capture the deprecation warning
+            result = self.runner.invoke(
+                butlerCli,
+                ["prune-collection", self.root, "ingest/run", "--unstore"],
+                input="yes",
+            )
         self.assertEqual(result.exit_code, 1, clickResultMsg(result))
 
         # Try pruning RUN with purge and unstore but say "no" for confirmation,
         # should succeed but not change datasets.
-        result = self.runner.invoke(
-            butlerCli,
-            ["prune-collection", self.root, "ingest/run", "--purge", "--unstore"],
-            input="no",
-        )
+        with self.assertWarns(FutureWarning):  # Capture the deprecation warning
+            result = self.runner.invoke(
+                butlerCli,
+                ["prune-collection", self.root, "ingest/run", "--purge", "--unstore"],
+                input="no",
+            )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
         confirm_initial_tables()
 
         # Try pruning RUN with purge and unstore, should succeed.
-        result = self.runner.invoke(
-            butlerCli,
-            ["prune-collection", self.root, "ingest/run", "--purge", "--unstore"],
-            input="no",
-        )
+        with self.assertWarns(FutureWarning):  # Capture the deprecation warning
+            result = self.runner.invoke(
+                butlerCli,
+                ["prune-collection", self.root, "ingest/run", "--purge", "--unstore"],
+                input="no",
+            )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
         # Try pruning RUN with purge and unstore, and use --no-confirm instead
         # of confirm dialog, should succeed.
-        result = self.runner.invoke(
-            butlerCli,
-            ["prune-collection", self.root, "ingest/run", "--purge", "--unstore", "--no-confirm"],
-        )
+        with self.assertWarns(FutureWarning):  # Capture the deprecation warning
+            result = self.runner.invoke(
+                butlerCli,
+                ["prune-collection", self.root, "ingest/run", "--purge", "--unstore", "--no-confirm"],
+            )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
         result = self.runner.invoke(
@@ -185,11 +191,12 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
         # Try pruning TAGGED, should succeed.
-        result = self.runner.invoke(
-            butlerCli,
-            ["prune-collection", self.root, "ingest", "--unstore"],
-            input="yes",
-        )
+        with self.assertWarns(FutureWarning):  # Capture the deprecation warning
+            result = self.runner.invoke(
+                butlerCli,
+                ["prune-collection", self.root, "ingest", "--unstore"],
+                input="yes",
+            )
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
         result = self.runner.invoke(butlerCli, ["query-collections", self.root])
