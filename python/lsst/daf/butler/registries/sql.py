@@ -818,13 +818,16 @@ class SqlRegistry(Registry):
             for registeredDatasetType in self._managers.datasets:
                 # Components are not stored in registry so expand them here
                 allDatasetTypes = [registeredDatasetType]
-                try:
-                    allDatasetTypes.extend(registeredDatasetType.makeAllComponentDatasetTypes())
-                except KeyError as err:
-                    _LOG.warning(
-                        f"Could not load storage class {err} for {registeredDatasetType.name}; "
-                        "if it has components they will not be included in query results."
-                    )
+                if components is not False:
+                    # Only check for the components if we are being asked
+                    # for components or components is None.
+                    try:
+                        allDatasetTypes.extend(registeredDatasetType.makeAllComponentDatasetTypes())
+                    except KeyError as err:
+                        _LOG.warning(
+                            f"Could not load storage class {err} for {registeredDatasetType.name}; "
+                            "if it has components they will not be included in query results."
+                        )
                 for datasetType in allDatasetTypes:
                     if datasetType.name in done:
                         continue

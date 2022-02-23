@@ -602,6 +602,13 @@ class RegistryTests(ABC):
             startsWithTemp = NamedValueSet(registry.queryDatasetTypes(re.compile("temp.*")))
         self.assertIn("TempStorageClass", cm.output[0])
         self.assertEqual({"temporary"}, startsWithTemp.names)
+        # Querying with no components should not warn at all.
+        with self.assertLogs("lsst.daf.butler.registries", logging.WARN) as cm:
+            startsWithTemp = NamedValueSet(registry.queryDatasetTypes(re.compile("temp.*"), components=False))
+            # Must issue a warning of our own to be captured.
+            logging.getLogger("lsst.daf.butler.registries").warning("test message")
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn("test message", cm.output[0])
 
     def testComponentLookups(self):
         """Test searching for component datasets via their parents."""
