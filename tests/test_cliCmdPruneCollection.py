@@ -68,11 +68,12 @@ class PruneCollectionsTest(unittest.TestCase):
             self.assertIn(taggedName, result.output)
 
             # Verify the tagged collection can be removed:
-            result = self.runner.invoke(
-                butlerCli,
-                ["prune-collection", repoName, taggedName, "--unstore"],
-                input="yes",
-            )
+            with self.assertWarns(FutureWarning):  # Capture the deprecation warning
+                result = self.runner.invoke(
+                    butlerCli,
+                    ["prune-collection", repoName, taggedName, "--unstore"],
+                    input="yes",
+                )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             result = self.runner.invoke(butlerCli, ["query-collections", repoName])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
@@ -80,11 +81,12 @@ class PruneCollectionsTest(unittest.TestCase):
             self.assertNotIn(taggedName, result.output)
 
             # Verify the run can be removed:
-            result = self.runner.invoke(
-                butlerCli,
-                ["prune-collection", repoName, runName, "--purge", "--unstore"],
-                input="yes",
-            )
+            with self.assertWarns(FutureWarning):  # Capture the deprecation warning
+                result = self.runner.invoke(
+                    butlerCli,
+                    ["prune-collection", repoName, runName, "--purge", "--unstore"],
+                    input="yes",
+                )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             result = self.runner.invoke(butlerCli, ["query-collections", repoName])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
