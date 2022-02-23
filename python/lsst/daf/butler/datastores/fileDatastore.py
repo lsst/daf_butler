@@ -1397,13 +1397,29 @@ class FileDatastore(GenericBaseDatastore):
 
         location_factory = self.locationFactory
 
-        for ref_id, info in records.items():
-            # Key is the dataId, value is list of StoredItemInfo
-            uris = [info.file_location(location_factory).uri for info in info]
-            uris_to_check.extend(uris)
+        uri_existence: Dict[ResourcePath, bool] = {}
+        for ref_id, infos in records.items():
+            # Key is the dataset Id, value is list of StoredItemInfo
+            uris = [info.file_location(location_factory).uri for info in infos]
             location_map.update({uri: ref_id for uri in uris})
 
-        uri_existence: Dict[ResourcePath, bool] = {}
+            # Check the local cache directly for a dataset corresponding
+            # to the remote URI.
+            if self.cacheManager.file_count > 0:
+                ref = id_to_ref[ref_id]
+                for uri, storedFileInfo in zip(uris, infos):
+                    check_ref = ref
+                    if not ref.datasetType.isComponent() and (component := storedFileInfo.component):
+                        check_ref = ref.makeComponentRef(component)
+                    if self.cacheManager.known_to_cache(check_ref, uri.getExtension()):
+                        # Proxy for URI existence.
+                        uri_existence[uri] = True
+                    else:
+                        uris_to_check.append(uri)
+            else:
+                # Check all of them.
+                uris_to_check.extend(uris)
+
         if artifact_existence is not None:
             # If a URI has already been checked remove it from the list
             # and immediately add the status to the output dict.
@@ -1455,6 +1471,15 @@ class FileDatastore(GenericBaseDatastore):
         -------
         existence : `dict` of [`DatasetRef`, `bool`]
             Mapping from dataset to boolean indicating existence.
+
+        Notes
+        -----
+        To minimize potentially costly remote existence checks, the local
+        cache is checked as a proxy for existence. If a file for this
+        `DatasetRef` does exist no check is done for the actual URI. This
+        could result in possibly unexpected behavior if the dataset itself
+        has been removed from the datastore by another process whilst it is
+        still in the cache.
         """
         chunk_size = 10_000
         dataset_existence: Dict[DatasetRef, bool] = {}
@@ -1556,6 +1581,13 @@ class FileDatastore(GenericBaseDatastore):
         -------
         exists : `bool`
             `True` if the entity exists in the `Datastore`.
+
+        Notes
+        -----
+        The local cache is checked as a proxy for existence in the remote
+        object store. It is possible that another process on a different
+        compute node could remove the file from the object store even
+        though it is present in the local cache.
         """
         fileLocations = self._get_dataset_locations_info(ref)
 
@@ -1564,6 +1596,12 @@ class FileDatastore(GenericBaseDatastore):
         if not fileLocations:
             if not self.trustGetRequest:
                 return False
+
+            # First check the cache. If it is not found we must check
+            # the datastore itself. Assume that any component in the cache
+            # means that the dataset does exist somewhere.
+            if self.cacheManager.known_to_cache(ref):
+                return True
 
             # When we are guessing a dataset location we can not check
             # for the existence of every component since we can not
@@ -1575,7 +1613,14 @@ class FileDatastore(GenericBaseDatastore):
             return False
 
         # All listed artifacts must exist.
-        for location, _ in fileLocations:
+        for location, storedFileInfo in fileLocations:
+            # Checking in cache needs the component ref.
+            check_ref = ref
+            if not ref.datasetType.isComponent() and (component := storedFileInfo.component):
+                check_ref = ref.makeComponentRef(component)
+            if self.cacheManager.known_to_cache(check_ref, location.getExtension()):
+                continue
+
             if not self._artifact_exists(location):
                 return False
 

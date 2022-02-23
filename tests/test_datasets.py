@@ -476,6 +476,9 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(datasetTypeComponentB.parentStorageClass, storageClass)
         self.assertIsNone(datasetTypeComposite.parentStorageClass)
 
+        with self.assertRaises(KeyError):
+            datasetTypeComposite.makeComponentDatasetType("compF")
+
 
 class DatasetRefTestCase(unittest.TestCase):
     """Test for DatasetRef."""

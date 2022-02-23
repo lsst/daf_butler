@@ -171,6 +171,10 @@ class CacheEntry(BaseModel):
         )
 
 
+class _MarkerEntry(CacheEntry):
+    pass
+
+
 class CacheRegistry(BaseModel):
     """Collection of cache entries."""
 
@@ -179,6 +183,9 @@ class CacheRegistry(BaseModel):
 
     _entries: Dict[str, CacheEntry] = PrivateAttr({})
     """Internal collection of cache entries."""
+
+    _ref_map: Dict[DatasetId, List[str]] = PrivateAttr({})
+    """Mapping of DatasetID to corresponding keys in cache registry."""
 
     @property
     def cache_size(self) -> int:
@@ -191,9 +198,15 @@ class CacheRegistry(BaseModel):
         self._size += entry.size
         self._entries[key] = entry
 
+        # Update the mapping from ref to path.
+        if entry.ref not in self._ref_map:
+            self._ref_map[entry.ref] = []
+        self._ref_map[entry.ref].append(key)
+
     def __delitem__(self, key: str) -> None:
         entry = self._entries.pop(key)
         self._decrement(entry)
+        self._ref_map[entry.ref].remove(key)
 
     def _decrement(self, entry: Optional[CacheEntry]) -> None:
         if entry:
@@ -220,10 +233,50 @@ class CacheRegistry(BaseModel):
     def items(self) -> ItemsView[str, CacheEntry]:
         return self._entries.items()
 
-    def pop(self, key: str, default: Optional[CacheEntry] = None) -> Optional[CacheEntry]:
-        entry = self._entries.pop(key, default)
+    # An private marker to indicate that pop() should raise if no default
+    # is given.
+    __marker = _MarkerEntry(name="marker", size=0, ref=0, ctime=datetime.datetime.utcfromtimestamp(0))
+
+    def pop(self, key: str, default: Optional[CacheEntry] = __marker) -> Optional[CacheEntry]:
+        # The marker for dict.pop is not the same as our marker.
+        if default is self.__marker:
+            entry = self._entries.pop(key)
+        else:
+            entry = self._entries.pop(key, self.__marker)
+            # Should not attempt to correct for this entry being removed
+            # if we got the default value.
+            if entry is self.__marker:
+                return default
+
         self._decrement(entry)
+        # The default entry given to this method may not even be in the cache.
+        if entry and entry.ref in self._ref_map:
+            keys = self._ref_map[entry.ref]
+            if key in keys:
+                keys.remove(key)
         return entry
+
+    def get_dataset_keys(self, dataset_id: Optional[DatasetId]) -> Optional[List[str]]:
+        """Retrieve all keys associated with the given dataset ID.
+
+        Parameters
+        ----------
+        dataset_id : `DatasetId` or `None`
+            The dataset ID to look up. Returns `None` if the ID is `None`.
+
+        Returns
+        -------
+        keys : `list` [`str`]
+            Keys associated with this dataset. These keys can be used to lookup
+            the cache entry information in the `CacheRegistry`. Returns
+            `None` if the dataset is not known to the cache.
+        """
+        if dataset_id not in self._ref_map:
+            return None
+        keys = self._ref_map[dataset_id]
+        if not keys:
+            return None
+        return keys
 
 
 class DatastoreCacheManagerConfig(ConfigSubset):
@@ -279,6 +332,35 @@ class AbstractDatastoreCacheManager(ABC):
         -------
         should_cache : `bool`
             Returns `True` if the dataset should be cached; `False` otherwise.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def known_to_cache(self, ref: DatasetRef, extension: Optional[str] = None) -> bool:
+        """Report if the dataset is known to the cache.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Dataset to check for in the cache.
+        extension : `str`, optional
+            File extension expected. Should include the leading "``.``".
+            If `None` the extension is ignored and the dataset ID alone is
+            used to check in the cache. The extension must be defined if
+            a specific component is being checked.
+
+        Returns
+        -------
+        known : `bool`
+            Returns `True` if the dataset is currently known to the cache
+            and `False` otherwise.
+
+        Notes
+        -----
+        This method can only report if the dataset is known to the cache
+        in this specific instant and does not indicate whether the file
+        can be read from the cache later. `find_in_cache()` should be called
+        if the cached file is to be used.
         """
         raise NotImplementedError()
 
@@ -651,7 +733,56 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
                 "Entries no longer on disk but thought to be in cache and so removed: %s", ",".join(missing)
             )
             for path_in_cache in missing:
-                self._cache_entries.pop(path_in_cache)
+                self._cache_entries.pop(path_in_cache, None)
+
+    def known_to_cache(self, ref: DatasetRef, extension: Optional[str] = None) -> bool:
+        """Report if the dataset is known to the cache.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Dataset to check for in the cache.
+        extension : `str`, optional
+            File extension expected. Should include the leading "``.``".
+            If `None` the extension is ignored and the dataset ID alone is
+            used to check in the cache. The extension must be defined if
+            a specific component is being checked.
+
+        Returns
+        -------
+        known : `bool`
+            Returns `True` if the dataset is currently known to the cache
+            and `False` otherwise. If the dataset refers to a component and
+            an extension is given then only that component is checked.
+
+        Notes
+        -----
+        This method can only report if the dataset is known to the cache
+        in this specific instant and does not indicate whether the file
+        can be read from the cache later. `find_in_cache()` should be called
+        if the cached file is to be used.
+
+        This method does not force the cache to be re-scanned and so can miss
+        cached datasets that have recently been written by other processes.
+        """
+        if self._cache_directory is None:
+            return False
+        if self.file_count == 0:
+            return False
+
+        if extension is None:
+            # Look solely for matching dataset ref ID and not specific
+            # components.
+            cached_paths = self._cache_entries.get_dataset_keys(ref.id)
+            return True if cached_paths else False
+
+        else:
+            # Extension is known so we can do an explicit look up for the
+            # cache entry.
+            cached_location = self._construct_cache_name(ref, extension)
+            path_in_cache = cached_location.relative_to(self.cache_directory)
+            assert path_in_cache is not None  # For mypy
+            return path_in_cache in self._cache_entries
 
     def _remove_from_cache(self, cache_entries: Iterable[str]) -> None:
         """Remove the specified cache entries from cache.
@@ -665,7 +796,7 @@ class DatastoreCacheManager(AbstractDatastoreCacheManager):
         for entry in cache_entries:
             path = self.cache_directory.join(entry)
 
-            self._cache_entries.pop(entry)
+            self._cache_entries.pop(entry, None)
             log.debug("Removing file from cache: %s", path)
             try:
                 path.remove()
@@ -821,6 +952,13 @@ class DatastoreDisabledCacheManager(AbstractDatastoreCacheManager):
         Always does nothing.
         """
         return
+
+    def known_to_cache(self, ref: DatasetRef, extension: Optional[str] = None) -> bool:
+        """Report if a dataset is known to the cache.
+
+        Always returns `False`.
+        """
+        return False
 
     def __str__(self) -> str:
         return f"{type(self).__name__}()"
