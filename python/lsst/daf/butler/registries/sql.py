@@ -785,6 +785,10 @@ class SqlRegistry(Registry):
     ) -> Iterator[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
+        unknownComponentsMessage = (
+            "Could not find definition for storage class %s for dataset type %r;"
+            " if it has components they will not be included in dataset type query results."
+        )
         if wildcard is Ellipsis:
             for datasetType in self._managers.datasets:
                 # The dataset type can no longer be a component
@@ -794,10 +798,7 @@ class SqlRegistry(Registry):
                     try:
                         componentsForDatasetType = datasetType.makeAllComponentDatasetTypes()
                     except KeyError as err:
-                        _LOG.warning(
-                            f"Could not load storage class {err} for {datasetType.name}; "
-                            "if it has components they will not be included in query results."
-                        )
+                        _LOG.warning(unknownComponentsMessage, err, datasetType.name)
                     else:
                         yield from componentsForDatasetType
             return
@@ -824,10 +825,7 @@ class SqlRegistry(Registry):
                     try:
                         allDatasetTypes.extend(registeredDatasetType.makeAllComponentDatasetTypes())
                     except KeyError as err:
-                        _LOG.warning(
-                            f"Could not load storage class {err} for {registeredDatasetType.name}; "
-                            "if it has components they will not be included in query results."
-                        )
+                        _LOG.warning(unknownComponentsMessage, err, registeredDatasetType.name)
                 for datasetType in allDatasetTypes:
                     if datasetType.name in done:
                         continue
