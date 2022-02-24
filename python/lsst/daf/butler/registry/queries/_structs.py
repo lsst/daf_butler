@@ -44,6 +44,7 @@ from ...core import (
     SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
+from .._exceptions import UserExpressionSyntaxError
 from ..interfaces import CollectionManager, DatasetRecordStorageManager, DimensionRecordStorageManager
 from ..summaries import GovernorDimensionRestriction
 
@@ -73,7 +74,7 @@ class QueryWhereExpression:
                 parser = ParserYacc()
                 self._tree = parser.parse(expression)
             except Exception as exc:
-                raise RuntimeError(f"Failed to parse user expression `{expression}'.") from exc
+                raise UserExpressionSyntaxError(f"Failed to parse user expression `{expression}'.") from exc
             assert self._tree is not None
         else:
             self._tree = None

@@ -39,6 +39,7 @@ from ....core import (
     NamedKeyDict,
     NamedValueSet,
 )
+from ..._exceptions import UserExpressionError
 from ...summaries import GovernorDimensionRestriction
 from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .normalForm import NormalForm, NormalFormVisitor
@@ -355,12 +356,12 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
                     # instrument='DECam'", or data ID has one and expression
                     # has the other.
                     if governor in self.dataId:
-                        raise RuntimeError(
+                        raise UserExpressionError(
                             f"Conflict between expression containing {governor.name}={branch.dataIdValue!r} "
                             f"and data ID with {governor.name}={value!r}."
                         )
                     else:
-                        raise RuntimeError(
+                        raise UserExpressionError(
                             f"Conflicting literal values for {governor.name} in expression: "
                             f"{value!r} != {branch.dataIdValue!r}."
                         )
@@ -391,7 +392,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
             if missing <= self.defaults.keys():
                 summary.defaultsNeeded.update(missing)
             else:
-                raise RuntimeError(
+                raise UserExpressionError(
                     f"No value(s) for governor dimensions {missing - self.defaults.keys()} in expression "
                     "that references dependent dimensions. 'Governor' dimensions must always be specified "
                     "completely in either the query expression (via simple 'name=<value>' terms, not 'IN' "
@@ -430,7 +431,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
                 # while another needed to refer to the default data ID.
                 # Even if these refer to the same value, that inconsistency
                 # probably indicates user error.
-                raise RuntimeError(
+                raise UserExpressionError(
                     f"Governor dimension {governor.name} is explicitly "
                     f"constrained to {values} in one or more branches of "
                     "this query where expression, but is left to default "

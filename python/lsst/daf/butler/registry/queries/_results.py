@@ -312,6 +312,12 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             A results object corresponding to the given criteria.  May be
             ``self`` if it already qualifies.
 
+        Raises
+        ------
+        ValueError
+            Raised when ``graph`` is not a subset of the dimension graph in
+            this result.
+
         Notes
         -----
         This method can only return a "near-subset" of the original result rows

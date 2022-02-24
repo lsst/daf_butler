@@ -29,6 +29,7 @@ import sqlalchemy.sql
 from ...core import DatasetType, Dimension, DimensionElement, SimpleQuery, SkyPixDimension
 from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._collectionType import CollectionType
+from .._exceptions import DataIdValueError
 from ..interfaces import GovernorDimensionRecordStorage
 from ..wildcards import CollectionQuery, CollectionSearch
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
@@ -82,7 +83,9 @@ class QueryBuilder:
             ), f"Unexpected type of the governor dimension record storage {type(storage)}"
             if not values <= storage.values:
                 unknown = values - storage.values
-                raise LookupError(f"Unknown values specified for governor dimension {governor}: {unknown}")
+                raise DataIdValueError(
+                    f"Unknown values specified for governor dimension {governor}: {unknown}"
+                )
 
     def hasDimensionKey(self, dimension: Dimension) -> bool:
         """Return `True` if the given dimension's primary key column has

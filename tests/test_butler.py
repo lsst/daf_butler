@@ -73,7 +73,13 @@ from lsst.daf.butler import (
     script,
 )
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
-from lsst.daf.butler.registry import ConflictingDefinitionError, MissingCollectionError
+from lsst.daf.butler.registry import (
+    CollectionError,
+    CollectionTypeError,
+    ConflictingDefinitionError,
+    DataIdValueError,
+    MissingCollectionError,
+)
 from lsst.daf.butler.tests import MetricsExample, MultiDetectorFormatter
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
 from lsst.resources import ResourcePath
@@ -469,7 +475,7 @@ class ButlerPutGetTests:
         self.assertFalse(butler.registry.registerRun(run))
         ref = butler.put(metric, datasetType, dataId, run=run)
         # Putting with no run should fail with TypeError.
-        with self.assertRaises(TypeError):
+        with self.assertRaises(CollectionError):
             butler.put(metric, datasetType, dataId)
         # Dataset should exist.
         self.assertTrue(butler.datasetExists(datasetType, dataId, collections=[run]))
@@ -478,9 +484,9 @@ class ButlerPutGetTests:
         self.assertEqual(metric, butler.get(datasetType, dataId, collections=[run]))
         self.assertEqual(metric, butler.getDeferred(datasetType, dataId, collections=[run]).get())
         # Trying to find the dataset without any collection is a TypeError.
-        with self.assertRaises(TypeError):
+        with self.assertRaises(CollectionError):
             butler.datasetExists(datasetType, dataId)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(CollectionError):
             butler.get(datasetType, dataId)
         # Associate the dataset with a different collection.
         butler.registry.registerCollection("tagged")
@@ -953,7 +959,7 @@ class ButlerTests(ButlerPutGetTests):
                 # Check we can get components
                 self.assertGetComponents(butler, ref, ("summary", "data", "output"), metric)
                 raise TransactionTestError("This should roll back the entire transaction")
-        with self.assertRaises(LookupError, msg=f"Check can't expand DataId {dataId}"):
+        with self.assertRaises(DataIdValueError, msg=f"Check can't expand DataId {dataId}"):
             butler.registry.expandDataId(dataId)
         # Should raise LookupError for missing data ID value
         with self.assertRaises(LookupError, msg=f"Check can't get by {datasetTypeName} and {dataId}"):
@@ -2141,7 +2147,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
         # This should block the transfer.
         self.target_butler.pruneCollection("run2", purge=True, unstore=True)
         self.target_butler.registry.registerCollection("run2", CollectionType.CHAINED)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(CollectionTypeError):
             # Re-importing the run1 datasets can be problematic if they
             # use integer IDs so filter those out.
             to_transfer = [ref for ref in source_refs if ref.run == "run2"]

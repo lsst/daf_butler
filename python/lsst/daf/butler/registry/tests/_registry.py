@@ -58,7 +58,11 @@ from ...core import (
 from .._collectionType import CollectionType
 from .._config import RegistryConfig
 from .._exceptions import (
+    ArgumentError,
+    CollectionError,
+    CollectionTypeError,
     ConflictingDefinitionError,
+    DataIdValueError,
     InconsistentDataIdError,
     MissingCollectionError,
     OrphanedRecordError,
@@ -257,7 +261,7 @@ class RegistryTests(ABC):
             dimensionValue,
         )
         # expandDataId should raise if there is no record with the given ID.
-        with self.assertRaises(LookupError):
+        with self.assertRaises(DataIdValueError):
             registry.expandDataId({"instrument": "Unknown"}, graph=dimension.graph)
         # band doesn't have a table; insert should fail.
         with self.assertRaises(TypeError):
@@ -836,9 +840,9 @@ class RegistryTests(ABC):
         # Cam1 should exist
         self.assertEqual(registry.expandDataId(instrument="Cam1").records["instrument"].class_name, "A")
         # But Cam2 and Cam3 should both not exist
-        with self.assertRaises(LookupError):
+        with self.assertRaises(DataIdValueError):
             registry.expandDataId(instrument="Cam2")
-        with self.assertRaises(LookupError):
+        with self.assertRaises(DataIdValueError):
             registry.expandDataId(instrument="Cam3")
 
     def testNestedTransaction(self):
@@ -867,7 +871,7 @@ class RegistryTests(ABC):
                     registry.insertDimensionData(dimension, dataId1)
         self.assertTrue(checkpointReached)
         self.assertIsNotNone(registry.expandDataId(dataId1, graph=dimension.graph))
-        with self.assertRaises(LookupError):
+        with self.assertRaises(DataIdValueError):
             registry.expandDataId(dataId2, graph=dimension.graph)
 
     def testInstrumentDimensions(self):
@@ -1026,9 +1030,9 @@ class RegistryTests(ABC):
 
         # queryDataIds with only one of `datasets` and `collections` is an
         # error.
-        with self.assertRaises(TypeError):
+        with self.assertRaises(CollectionError):
             registry.queryDataIds(dimensions, datasets=rawType)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ArgumentError):
             registry.queryDataIds(dimensions, collections=run1)
 
         # expression excludes everything
@@ -1144,7 +1148,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i",))
 
         # Specifying non-existing skymap is an exception
-        with self.assertRaisesRegex(LookupError, "Unknown values specified for governor dimension"):
+        with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
             rows = registry.queryDataIds(
                 dimensions, datasets=[calexpType, mergeType], collections=run, where="skymap = 'Mars'"
             ).toSet()
@@ -1879,7 +1883,7 @@ class RegistryTests(ABC):
         collection = "Cam1/calibs/default"
         registry.registerCollection(collection, type=CollectionType.CALIBRATION)
         # Cannot associate into a calibration collection (no timespan).
-        with self.assertRaises(TypeError):
+        with self.assertRaises(CollectionTypeError):
             registry.associate(collection, [bias2a])
         # Certify 2a dataset with [t2, t4) validity.
         registry.certify(collection, [bias2a], Timespan(begin=t2, end=t4))
@@ -2651,11 +2655,15 @@ class RegistryTests(ABC):
         test_data = (
             Test("tract,visit", count=6),
             Test("tract,visit", kwargs={"instrument": "Cam1", "skymap": "SkyMap1"}, count=6),
-            Test("tract,visit", kwargs={"instrument": "Cam2", "skymap": "SkyMap1"}, exception=LookupError),
+            Test(
+                "tract,visit", kwargs={"instrument": "Cam2", "skymap": "SkyMap1"}, exception=DataIdValueError
+            ),
             Test("tract,visit", dataId={"instrument": "Cam1", "skymap": "SkyMap1"}, count=6),
-            Test("tract,visit", dataId={"instrument": "Cam1", "skymap": "SkyMap2"}, exception=LookupError),
+            Test(
+                "tract,visit", dataId={"instrument": "Cam1", "skymap": "SkyMap2"}, exception=DataIdValueError
+            ),
             Test("tract,visit", where="instrument='Cam1' AND skymap='SkyMap1'", count=6),
-            Test("tract,visit", where="instrument='Cam1' AND skymap='SkyMap5'", exception=LookupError),
+            Test("tract,visit", where="instrument='Cam1' AND skymap='SkyMap5'", exception=DataIdValueError),
             Test(
                 "tract,visit",
                 where="instrument=cam AND skymap=map",
@@ -2666,7 +2674,7 @@ class RegistryTests(ABC):
                 "tract,visit",
                 where="instrument=cam AND skymap=map",
                 bind={"cam": "Cam", "map": "SkyMap"},
-                exception=LookupError,
+                exception=DataIdValueError,
             ),
         )
 
@@ -2765,17 +2773,21 @@ class RegistryTests(ABC):
         result = registry.queryDimensionRecords("detector", where="instrument=instr", bind={"instr": "Cam1"})
         self.assertEqual(result.count(), 4)
 
-        with self.assertRaisesRegex(LookupError, "Could not fetch record for required dimension instrument"):
+        with self.assertRaisesRegex(
+            DataIdValueError, "Could not fetch record for required dimension instrument"
+        ):
             registry.queryDimensionRecords("detector", instrument="NotCam1")
 
-        with self.assertRaisesRegex(LookupError, "Could not fetch record for required dimension instrument"):
+        with self.assertRaisesRegex(
+            DataIdValueError, "Could not fetch record for required dimension instrument"
+        ):
             result = registry.queryDimensionRecords("detector", dataId={"instrument": "NotCam1"})
 
-        with self.assertRaisesRegex(LookupError, "Unknown values specified for governor dimension"):
+        with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
             result = registry.queryDimensionRecords("detector", where="instrument='NotCam1'")
             result.count()
 
-        with self.assertRaisesRegex(LookupError, "Unknown values specified for governor dimension"):
+        with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
             result = registry.queryDimensionRecords(
                 "detector", where="instrument=instr", bind={"instr": "NotCam1"}
             )

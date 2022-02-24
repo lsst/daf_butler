@@ -17,7 +17,11 @@ from lsst.daf.butler import (
     Timespan,
     ddl,
 )
-from lsst.daf.butler.registry import ConflictingDefinitionError, UnsupportedIdGeneratorError
+from lsst.daf.butler.registry import (
+    CollectionTypeError,
+    ConflictingDefinitionError,
+    UnsupportedIdGeneratorError,
+)
 from lsst.daf.butler.registry.interfaces import DatasetIdGenEnum, DatasetRecordStorage
 
 from ...summaries import GovernorDimensionRestriction
@@ -184,12 +188,12 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
     ) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if self._calibs is None:
-            raise TypeError(
+            raise CollectionTypeError(
                 f"Cannot certify datasets of type {self.datasetType.name}, for which "
                 f"DatasetType.isCalibration() is False."
             )
         if collection.type is not CollectionType.CALIBRATION:
-            raise TypeError(
+            raise CollectionTypeError(
                 f"Cannot certify into collection '{collection.name}' "
                 f"of type {collection.type.name}; must be CALIBRATION."
             )
@@ -263,12 +267,12 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
     ) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if self._calibs is None:
-            raise TypeError(
+            raise CollectionTypeError(
                 f"Cannot decertify datasets of type {self.datasetType.name}, for which "
                 f"DatasetType.isCalibration() is False."
             )
         if collection.type is not CollectionType.CALIBRATION:
-            raise TypeError(
+            raise CollectionTypeError(
                 f"Cannot decertify from collection '{collection.name}' "
                 f"of type {collection.type.name}; must be CALIBRATION."
             )

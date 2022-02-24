@@ -459,7 +459,7 @@ class Registry(ABC):
         ------
         MissingCollectionError
             Raised if ``parent`` does not exist in the `Registry`.
-        TypeError
+        CollectionTypeError
             Raised if ``parent`` does not correspond to a
             `~CollectionType.CHAINED` collection.
         """
@@ -487,7 +487,7 @@ class Registry(ABC):
         MissingCollectionError
             Raised when any of the given collections do not exist in the
             `Registry`.
-        TypeError
+        CollectionTypeError
             Raised if ``parent`` does not correspond to a
             `~CollectionType.CHAINED` collection.
         ValueError
@@ -707,7 +707,7 @@ class Registry(ABC):
 
         Raises
         ------
-        TypeError
+        NoDefaultCollectionError
             Raised if ``collections`` is `None` and
             ``self.defaults.collections`` is `None`.
         LookupError
@@ -771,7 +771,11 @@ class Registry(ABC):
 
         Raises
         ------
-        TypeError
+        DatasetTypeError
+            Raised if ``datasetType`` is not known to registry.
+        CollectionTypeError
+            Raised if ``run`` collection type is not `~CollectionType.RUN`.
+        NoDefaultCollectionError
             Raised if ``run`` is `None` and ``self.defaults.run`` is `None`.
         ConflictingDefinitionError
             If a dataset with the same dataset type and data ID as one of those
@@ -834,8 +838,11 @@ class Registry(ABC):
 
         Raises
         ------
-        TypeError
+        NoDefaultCollectionError
             Raised if ``run`` is `None` and ``self.defaults.run`` is `None`.
+        DatasetTypeError
+            Raised if datasets correspond to more than one dataset type or
+            dataset type is not known to registry.
         ConflictingDefinitionError
             If a dataset with the same dataset type and data ID as one of those
             given already exists in ``run``.
@@ -918,7 +925,7 @@ class Registry(ABC):
             Raised if ``any(ref.id is None for ref in refs)``.
         MissingCollectionError
             Raised if ``collection`` does not exist in the registry.
-        TypeError
+        CollectionTypeError
             Raise adding new datasets to the given ``collection`` is not
             allowed.
         """
@@ -945,7 +952,7 @@ class Registry(ABC):
             Raised if any of the given dataset references is unresolved.
         MissingCollectionError
             Raised if ``collection`` does not exist in the registry.
-        TypeError
+        CollectionTypeError
             Raise adding new datasets to the given ``collection`` is not
             allowed.
         """
@@ -974,7 +981,7 @@ class Registry(ABC):
             Raised if the collection already contains a different dataset with
             the same `DatasetType` and data ID and an overlapping validity
             range.
-        TypeError
+        CollectionTypeError
             Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
             collection or if one or more datasets are of a dataset type for
             which `DatasetType.isCalibration` returns `False`.
@@ -1012,7 +1019,7 @@ class Registry(ABC):
 
         Raises
         ------
-        TypeError
+        CollectionTypeError
             Raised if ``collection`` is not a `~CollectionType.CALIBRATION`
             collection or if ``datasetType.isCalibration() is False``.
         """
@@ -1095,12 +1102,11 @@ class Registry(ABC):
 
         Raises
         ------
-        LookupError
+        DataIdError
             Raised when ``dataId`` or keyword arguments specify unknown
-            dimensions or values.
-        InconsistentDataIdError
-            Raised when a data ID contains contradictory key-value pairs,
-            according to dimension relationships.
+            dimensions or values, or when a resulting data ID contains
+            contradictory key-value pairs, according to dimension
+            relationships.
         """
         raise NotImplementedError()
 
@@ -1209,6 +1215,11 @@ class Registry(ABC):
         ------
         datasetType : `DatasetType`
             A `DatasetType` instance whose name matches ``expression``.
+
+        Raises
+        ------
+        DatasetTypeExpressionError
+            Raised when ``expression`` is invalid.
         """
         raise NotImplementedError()
 
@@ -1250,6 +1261,11 @@ class Registry(ABC):
         ------
         collection : `str`
             The name of a collection that matches ``expression``.
+
+        Raises
+        ------
+        CollectionExpressionError
+            Raised when ``expression`` is invalid.
         """
         raise NotImplementedError()
 
@@ -1341,17 +1357,18 @@ class Registry(ABC):
 
         Raises
         ------
+        DatasetTypeExpressionError
+            Raised when ``datasetType`` expression is invalid.
         TypeError
             Raised when the arguments are incompatible, such as when a
             collection wildcard is passed when ``findFirst`` is `True`, or
             when ``collections`` is `None` and``self.defaults.collections`` is
             also `None`.
-        LookupError
+        DataIdError
             Raised when ``dataId`` or keyword arguments specify unknown
-            dimensions or values.
-        InconsistentDataIdError
-            Raised when a ``dataId`` or keyword arguments specify
-            contradictory key-value pairs.
+            dimensions or values, or when they contain inconsistent values.
+        UserExpressionError
+            Raised when ``where`` expression is invalid.
 
         Notes
         -----
@@ -1455,15 +1472,18 @@ class Registry(ABC):
 
         Raises
         ------
-        TypeError
-            Raised if ``collections`` is `None`, ``self.defaults.collections``
-            is `None`, and ``datasets`` is not `None`.
-        LookupError
+        NoDefaultCollectionError
+            Raised if ``collections`` is `None` and
+            ``self.defaults.collections`` is `None`.
+        CollectionExpressionError
+            Raised when ``collections`` expression is invalid.
+        DataIdError
             Raised when ``dataId`` or keyword arguments specify unknown
-            dimensions or values.
-        InconsistentDataIdError
-            Raised when a ``dataId`` or keyword arguments specify
-            contradictory key-value pairs.
+            dimensions or values, or when they contain inconsistent values.
+        DatasetTypeExpressionError
+            Raised when ``datasetType`` expression is invalid.
+        UserExpressionError
+            Raised when ``where`` expression is invalid.
         """
         raise NotImplementedError()
 
@@ -1532,12 +1552,18 @@ class Registry(ABC):
 
         Raises
         ------
-        LookupError
+        NoDefaultCollectionError
+            Raised if ``collections`` is `None` and
+            ``self.defaults.collections`` is `None`.
+        CollectionExpressionError
+            Raised when ``collections`` expression is invalid.
+        DataIdError
             Raised when ``dataId`` or keyword arguments specify unknown
-            dimensions or values.
-        InconsistentDataIdError
-            Raised when a ``dataId`` or keyword arguments specify
-            contradictory key-value pairs.
+            dimensions or values, or when they contain inconsistent values.
+        DatasetTypeExpressionError
+            Raised when ``datasetType`` expression is invalid.
+        UserExpressionError
+            Raised when ``where`` expression is invalid.
         """
         raise NotImplementedError()
 
@@ -1587,9 +1613,11 @@ class Registry(ABC):
 
         Raises
         ------
-        TypeError
+        NoDefaultCollectionError
             Raised if ``collections`` is `None` and
             ``self.defaults.collections`` is `None`.
+        CollectionExpressionError
+            Raised when ``collections`` expression is invalid.
         """
         raise NotImplementedError()
 

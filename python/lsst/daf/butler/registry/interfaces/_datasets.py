@@ -269,7 +269,7 @@ class DatasetRecordStorage(ABC):
             Raised if the collection already contains a different dataset with
             the same `DatasetType` and data ID and an overlapping validity
             range.
-        TypeError
+        CollectionTypeError
             Raised if
             ``collection.type is not CollectionType.CALIBRATION`` or if
             ``self.datasetType.isCalibration() is False``.
@@ -304,7 +304,7 @@ class DatasetRecordStorage(ABC):
 
         Raises
         ------
-        TypeError
+        CollectionTypeError
             Raised if ``collection.type is not CollectionType.CALIBRATION``.
         """
         raise NotImplementedError()
