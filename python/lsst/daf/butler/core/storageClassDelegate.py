@@ -246,8 +246,8 @@ class StorageClassDelegate:
         return component
 
     def disassemble(
-        self, composite: Any, subset: Optional[Iterable] = None, override: bool = None
-    ) -> Dict[str, Any]:
+        self, composite: Any, subset: Optional[Iterable] = None, override: Optional[Any] = None
+    ) -> Optional[Dict[str, DatasetComponent]]:
         """Disassembler a composite.
 
         This is a generic implementation of a disassembler.
@@ -269,7 +269,7 @@ class StorageClassDelegate:
 
         Returns
         -------
-        components : `dict`
+        components : `dict` or `None`
             `dict` with keys matching the components defined in
             `StorageClassDelegate.storageClass`
             and values being `DatasetComponent` instances describing the
