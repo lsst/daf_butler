@@ -1,0 +1,2 @@
+Registry methods now raise exceptions belonging to a class hierarchy rooted at `lsst.daf.butler.registry.RegistryError`.
+See also :ref:`daf_butler_query_error_handling` for details.
