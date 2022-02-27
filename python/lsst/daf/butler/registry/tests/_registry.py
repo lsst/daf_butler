@@ -58,7 +58,11 @@ from ...core import (
 from .._collectionType import CollectionType
 from .._config import RegistryConfig
 from .._exceptions import (
+    ArgumentError,
+    CollectionError,
+    CollectionTypeError,
     ConflictingDefinitionError,
+    DataIdValueError,
     InconsistentDataIdError,
     MissingCollectionError,
     OrphanedRecordError,
@@ -257,7 +261,7 @@ class RegistryTests(ABC):
             dimensionValue,
         )
         # expandDataId should raise if there is no record with the given ID.
-        with self.assertRaises(LookupError):
+        with self.assertRaises(DataIdValueError):
             registry.expandDataId({"instrument": "Unknown"}, graph=dimension.graph)
         # band doesn't have a table; insert should fail.
         with self.assertRaises(TypeError):
@@ -836,9 +840,9 @@ class RegistryTests(ABC):
         # Cam1 should exist
         self.assertEqual(registry.expandDataId(instrument="Cam1").records["instrument"].class_name, "A")
         # But Cam2 and Cam3 should both not exist
-        with self.assertRaises(LookupError):
+        with self.assertRaises(DataIdValueError):
             registry.expandDataId(instrument="Cam2")
-        with self.assertRaises(LookupError):
+        with self.assertRaises(DataIdValueError):
             registry.expandDataId(instrument="Cam3")
 
     def testNestedTransaction(self):
@@ -867,7 +871,7 @@ class RegistryTests(ABC):
                     registry.insertDimensionData(dimension, dataId1)
         self.assertTrue(checkpointReached)
         self.assertIsNotNone(registry.expandDataId(dataId1, graph=dimension.graph))
-        with self.assertRaises(LookupError):
+        with self.assertRaises(DataIdValueError):
             registry.expandDataId(dataId2, graph=dimension.graph)
 
     def testInstrumentDimensions(self):
@@ -1026,9 +1030,9 @@ class RegistryTests(ABC):
 
         # queryDataIds with only one of `datasets` and `collections` is an
         # error.
-        with self.assertRaises(TypeError):
+        with self.assertRaises(CollectionError):
             registry.queryDataIds(dimensions, datasets=rawType)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ArgumentError):
             registry.queryDataIds(dimensions, collections=run1)
 
         # expression excludes everything
@@ -1143,12 +1147,11 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 4, 6, 7))
         self.assertCountEqual(set(dataId["band"] for dataId in rows), ("i",))
 
-        # expression excludes everything, specifying non-existing skymap is
-        # not a fatal error, it's operator error
-        rows = registry.queryDataIds(
-            dimensions, datasets=[calexpType, mergeType], collections=run, where="skymap = 'Mars'"
-        ).toSet()
-        self.assertEqual(len(rows), 0)
+        # Specifying non-existing skymap is an exception
+        with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
+            rows = registry.queryDataIds(
+                dimensions, datasets=[calexpType, mergeType], collections=run, where="skymap = 'Mars'"
+            ).toSet()
 
     def testSpatialJoin(self):
         """Test queries that involve spatial overlap joins."""
@@ -1880,7 +1883,7 @@ class RegistryTests(ABC):
         collection = "Cam1/calibs/default"
         registry.registerCollection(collection, type=CollectionType.CALIBRATION)
         # Cannot associate into a calibration collection (no timespan).
-        with self.assertRaises(TypeError):
+        with self.assertRaises(CollectionTypeError):
             registry.associate(collection, [bias2a])
         # Certify 2a dataset with [t2, t4) validity.
         registry.certify(collection, [bias2a], Timespan(begin=t2, end=t4))
@@ -2333,21 +2336,6 @@ class RegistryTests(ABC):
         self.assertEqual(registry.getCollectionSummary(tag), expected2)
         self.assertEqual(registry.getCollectionSummary(calibs), expected2)
 
-    def testUnrelatedDimensionQueries(self):
-        """Test that WHERE expressions in queries can reference dimensions that
-        are not in the result set.
-        """
-        registry = self.makeRegistry()
-        # There is no data to back this query, but it should still return
-        # zero records instead of raising.
-        self.assertFalse(
-            set(
-                registry.queryDataIds(
-                    ["visit", "detector"], where="instrument='Cam1' AND skymap='not_here' AND tract=0"
-                )
-            ),
-        )
-
     def testBindInQueryDatasets(self):
         """Test that the bind parameter is correctly forwarded in
         queryDatasets recursion.
@@ -2427,6 +2415,11 @@ class RegistryTests(ABC):
                 registry.queryDatasets("flat", collections=re.compile("potato.+")),
                 ["potato"],
             ),
+            (
+                # Dataset type name doesn't match any existing dataset types.
+                registry.queryDimensionRecords("detector", datasets=["nonexistent"], collections=...),
+                ["nonexistent"],
+            ),
         ]:
 
             self.assertFalse(query.any(execute=False, exact=False))
@@ -2450,6 +2443,11 @@ class RegistryTests(ABC):
             (
                 # No records for one of the involved dimensions.
                 registry.queryDataIds(["subfilter"]),
+                ["dimension records", "subfilter"],
+            ),
+            (
+                # No records for one of the involved dimensions.
+                registry.queryDimensionRecords("subfilter"),
                 ["dimension records", "subfilter"],
             ),
         ]:
@@ -2511,6 +2509,15 @@ class RegistryTests(ABC):
         messages = list(query4.explain_no_results())
         self.assertTrue(messages)
         self.assertTrue(any("regions did not overlap" in message for message in messages))
+
+        # And there are cases when queries make empty results but we do not
+        # know how to explain that yet (could we just say miracles happen?)
+        query5 = registry.queryDimensionRecords(
+            "detector", where="detector.purpose = 'no-purpose'", instrument="Cam1"
+        )
+        self.assertEqual(query5.count(exact=True), 0)
+        messages = list(query5.explain_no_results())
+        self.assertFalse(messages)
 
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""
@@ -2629,6 +2636,68 @@ class RegistryTests(ABC):
         with self.assertRaisesRegex(ValueError, "Field 'name' does not exist in 'tract'."):
             list(do_query(("tract")).order_by("tract.name"))
 
+    def testQueryDataIdsGovernorExceptions(self):
+        """Test exceptions raised by queryDataIds() for incorrect governors."""
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        self.loadData(registry, "spatial.yaml")
+
+        def do_query(dimensions, dataId=None, where=None, bind=None, **kwargs):
+            return registry.queryDataIds(dimensions, dataId=dataId, where=where, bind=bind, **kwargs)
+
+        Test = namedtuple(
+            "testQueryDataIdExceptionsTest",
+            ("dimensions", "dataId", "where", "bind", "kwargs", "exception", "count"),
+            defaults=(None, None, None, {}, None, 0),
+        )
+
+        test_data = (
+            Test("tract,visit", count=6),
+            Test("tract,visit", kwargs={"instrument": "Cam1", "skymap": "SkyMap1"}, count=6),
+            Test(
+                "tract,visit", kwargs={"instrument": "Cam2", "skymap": "SkyMap1"}, exception=DataIdValueError
+            ),
+            Test("tract,visit", dataId={"instrument": "Cam1", "skymap": "SkyMap1"}, count=6),
+            Test(
+                "tract,visit", dataId={"instrument": "Cam1", "skymap": "SkyMap2"}, exception=DataIdValueError
+            ),
+            Test("tract,visit", where="instrument='Cam1' AND skymap='SkyMap1'", count=6),
+            Test("tract,visit", where="instrument='Cam1' AND skymap='SkyMap5'", exception=DataIdValueError),
+            Test(
+                "tract,visit",
+                where="instrument=cam AND skymap=map",
+                bind={"cam": "Cam1", "map": "SkyMap1"},
+                count=6,
+            ),
+            Test(
+                "tract,visit",
+                where="instrument=cam AND skymap=map",
+                bind={"cam": "Cam", "map": "SkyMap"},
+                exception=DataIdValueError,
+            ),
+        )
+
+        for test in test_data:
+            dimensions = test.dimensions.split(",")
+            if test.exception:
+                with self.assertRaises(test.exception):
+                    do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs).count()
+            else:
+                query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
+                self.assertEqual(query.count(), test.count)
+
+            # and materialize
+            if test.exception:
+                with self.assertRaises(test.exception):
+                    query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
+                    with query.materialize() as materialized:
+                        materialized.count()
+            else:
+                query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
+                with query.materialize() as materialized:
+                    self.assertEqual(materialized.count(), test.count)
+
     def testQueryDimensionRecordsOrderBy(self):
         """Test order_by and limit on result returned by
         queryDimensionRecords().
@@ -2685,6 +2754,44 @@ class RegistryTests(ABC):
         for order_by in ("attract", "-attract"):
             with self.assertRaisesRegex(ValueError, "Field 'attract' does not exist in 'detector'."):
                 list(do_query("detector").order_by(order_by))
+
+    def testQueryDimensionRecordsExceptions(self):
+        """Test exceptions raised by queryDimensionRecords()."""
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        self.loadData(registry, "spatial.yaml")
+
+        result = registry.queryDimensionRecords("detector")
+        self.assertEqual(result.count(), 4)
+        result = registry.queryDimensionRecords("detector", instrument="Cam1")
+        self.assertEqual(result.count(), 4)
+        result = registry.queryDimensionRecords("detector", dataId={"instrument": "Cam1"})
+        self.assertEqual(result.count(), 4)
+        result = registry.queryDimensionRecords("detector", where="instrument='Cam1'")
+        self.assertEqual(result.count(), 4)
+        result = registry.queryDimensionRecords("detector", where="instrument=instr", bind={"instr": "Cam1"})
+        self.assertEqual(result.count(), 4)
+
+        with self.assertRaisesRegex(
+            DataIdValueError, "Could not fetch record for required dimension instrument"
+        ):
+            registry.queryDimensionRecords("detector", instrument="NotCam1")
+
+        with self.assertRaisesRegex(
+            DataIdValueError, "Could not fetch record for required dimension instrument"
+        ):
+            result = registry.queryDimensionRecords("detector", dataId={"instrument": "NotCam1"})
+
+        with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
+            result = registry.queryDimensionRecords("detector", where="instrument='NotCam1'")
+            result.count()
+
+        with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
+            result = registry.queryDimensionRecords(
+                "detector", where="instrument=instr", bind={"instr": "NotCam1"}
+            )
+            result.count()
 
     def testDatasetConstrainedDimensionRecordQueries(self):
         """Test that queryDimensionRecords works even when given a dataset

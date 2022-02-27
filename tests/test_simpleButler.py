@@ -36,7 +36,7 @@ except ImportError:
 
 import astropy.time
 from lsst.daf.butler import Butler, ButlerConfig, CollectionType, DatasetRef, DatasetType, Registry, Timespan
-from lsst.daf.butler.registry import ConflictingDefinitionError, RegistryConfig, RegistryDefaults
+from lsst.daf.butler.registry import ConflictingDefinitionError, DataIdError, RegistryConfig, RegistryDefaults
 from lsst.daf.butler.tests import DatastoreMock
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
@@ -397,7 +397,7 @@ class SimpleButlerTestCase(unittest.TestCase):
             ({"x": "y"}, {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}),
         )
         for dataId, kwds in variants:
-            with self.assertRaises(ValueError):
+            with self.assertRaises(DataIdError):
                 butler.get("flat", dataId=dataId, collections=coll, **kwds)
 
     def testGetCalibration(self):
@@ -515,7 +515,7 @@ class SimpleButlerTestCase(unittest.TestCase):
         self.assertEqual(bias3b_id, bias3b.id)
 
         # Extra but inconsistent record values are a problem.
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DataIdError):
             bias3b_id, _ = butler.get(
                 "bias",
                 exposure=3,
@@ -527,7 +527,7 @@ class SimpleButlerTestCase(unittest.TestCase):
             )
 
         # Ensure that spurious kwargs cause an exception.
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DataIdError):
             butler.get(
                 "bias",
                 {"exposure.obs_id": "four", "immediate": True, "detector.full_name": "Ba"},
@@ -535,7 +535,7 @@ class SimpleButlerTestCase(unittest.TestCase):
                 instrument="Cam1",
             )
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DataIdError):
             butler.get(
                 "bias",
                 day_obs=20211114,

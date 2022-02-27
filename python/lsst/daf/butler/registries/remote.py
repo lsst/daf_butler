@@ -442,7 +442,7 @@ class RemoteRegistry(Registry):
         collections = response.json()
         return collections
 
-    def queryDatasets(
+    def queryDatasets(  # type: ignore
         self,
         datasetType: Any,
         *,
@@ -488,7 +488,7 @@ class RemoteRegistry(Registry):
             DatasetRef.from_simple(SerializedDatasetRef(**r), universe=self.dimensions) for r in simple_refs
         )
 
-    def queryDataIds(
+    def queryDataIds(  # type: ignore
         self,
         dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str],
         *,
@@ -537,7 +537,7 @@ class RemoteRegistry(Registry):
             dataIds=dataIds, graph=DimensionGraph(self.dimensions, names=cleaned_dimensions)
         )
 
-    def queryDimensionRecords(
+    def queryDimensionRecords(  # type: ignore
         self,
         element: Union[DimensionElement, str],
         *,

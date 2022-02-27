@@ -44,6 +44,7 @@ from ...core import (
     SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
+from .._exceptions import UserExpressionSyntaxError
 from ..interfaces import CollectionManager, DatasetRecordStorageManager, DimensionRecordStorageManager
 from ..summaries import GovernorDimensionRestriction
 
@@ -73,7 +74,7 @@ class QueryWhereExpression:
                 parser = ParserYacc()
                 self._tree = parser.parse(expression)
             except Exception as exc:
-                raise RuntimeError(f"Failed to parse user expression `{expression}'.") from exc
+                raise UserExpressionSyntaxError(f"Failed to parse user expression `{expression}'.") from exc
             assert self._tree is not None
         else:
             self._tree = None
@@ -145,7 +146,7 @@ class QueryWhereExpression:
                 from .expressions import CheckVisitor
 
                 # Check the expression for consistency and completeness.
-                visitor = CheckVisitor(dataId, graph, self._bind.keys(), defaults)
+                visitor = CheckVisitor(dataId, graph, self._bind, defaults)
                 try:
                     summary = expr.visit(visitor)
                 except RuntimeError as err:
@@ -164,7 +165,7 @@ class QueryWhereExpression:
             else:
                 from .expressions import InspectionVisitor
 
-                summary = self._tree.visit(InspectionVisitor(graph.universe, self._bind.keys()))
+                summary = self._tree.visit(InspectionVisitor(graph.universe, self._bind))
         else:
             from .expressions import InspectionSummary
 

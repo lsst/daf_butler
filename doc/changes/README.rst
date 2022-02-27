@@ -20,5 +20,5 @@ An example file name would therefore look like ``DM-30291.misc.rst``.
 
 If the change concerns specifically the registry or a datastore the news fragment can be placed in the relevant subdirectory.
 
-You can test how the content will be integrated into the release notes by running ``towncrier --draft --version=V.vv``.
+You can test how the content will be integrated into the release notes by running ``towncrier build --draft --version=V.vv``.
 ``towncrier`` can be installed from PyPI or conda-forge.

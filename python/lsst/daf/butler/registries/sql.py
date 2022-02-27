@@ -56,10 +56,18 @@ from ..core import (
 )
 from ..core.utils import transactional
 from ..registry import (
+    ArgumentError,
+    CollectionExpressionError,
     CollectionSearch,
     CollectionType,
+    CollectionTypeError,
     ConflictingDefinitionError,
+    DataIdValueError,
+    DatasetTypeError,
+    DatasetTypeExpressionError,
+    DimensionNameError,
     InconsistentDataIdError,
+    NoDefaultCollectionError,
     OrphanedRecordError,
     Registry,
     RegistryConfig,
@@ -348,7 +356,7 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         record = self._managers.collections.find(parent)
         if record.type is not CollectionType.CHAINED:
-            raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
+            raise CollectionTypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
         assert isinstance(record, ChainedCollectionRecord)
         return record.children
 
@@ -357,7 +365,7 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         record = self._managers.collections.find(parent)
         if record.type is not CollectionType.CHAINED:
-            raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
+            raise CollectionTypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
         assert isinstance(record, ChainedCollectionRecord)
         children = CollectionSearch.fromExpression(children)
         if children != record.children or flatten:
@@ -425,7 +433,7 @@ class SqlRegistry(Registry):
         )
         if collections is None:
             if not self.defaults.collections:
-                raise TypeError(
+                raise NoDefaultCollectionError(
                     "No collections provided to findDataset, and no defaults from registry construction."
                 )
             collections = self.defaults.collections
@@ -455,20 +463,22 @@ class SqlRegistry(Registry):
         if isinstance(datasetType, DatasetType):
             storage = self._managers.datasets.find(datasetType.name)
             if storage is None:
-                raise LookupError(f"DatasetType '{datasetType}' has not been registered.")
+                raise DatasetTypeError(f"DatasetType '{datasetType}' has not been registered.")
         else:
             storage = self._managers.datasets.find(datasetType)
             if storage is None:
-                raise LookupError(f"DatasetType with name '{datasetType}' has not been registered.")
+                raise DatasetTypeError(f"DatasetType with name '{datasetType}' has not been registered.")
         if run is None:
             if self.defaults.run is None:
-                raise TypeError(
+                raise NoDefaultCollectionError(
                     "No run provided to insertDatasets, and no default from registry construction."
                 )
             run = self.defaults.run
         runRecord = self._managers.collections.find(run)
         if runRecord.type is not CollectionType.RUN:
-            raise TypeError(f"Given collection is of type {runRecord.type.name}; RUN collection required.")
+            raise CollectionTypeError(
+                f"Given collection is of type {runRecord.type.name}; RUN collection required."
+            )
         assert isinstance(runRecord, RunRecord)
         progress = Progress("daf.butler.Registry.insertDatasets", level=logging.DEBUG)
         if expand:
@@ -510,13 +520,13 @@ class SqlRegistry(Registry):
         # find dataset type
         datasetTypes = set(dataset.datasetType for dataset in datasets)
         if len(datasetTypes) != 1:
-            raise ValueError(f"Multiple dataset types in input datasets: {datasetTypes}")
+            raise DatasetTypeError(f"Multiple dataset types in input datasets: {datasetTypes}")
         datasetType = datasetTypes.pop()
 
         # get storage handler for this dataset type
         storage = self._managers.datasets.find(datasetType.name)
         if storage is None:
-            raise LookupError(f"DatasetType '{datasetType}' has not been registered.")
+            raise DatasetTypeError(f"DatasetType '{datasetType}' has not been registered.")
 
         # find run name
         runs = set(dataset.run for dataset in datasets)
@@ -525,14 +535,14 @@ class SqlRegistry(Registry):
         run = runs.pop()
         if run is None:
             if self.defaults.run is None:
-                raise TypeError(
+                raise NoDefaultCollectionError(
                     "No run provided to ingestDatasets, and no default from registry construction."
                 )
             run = self.defaults.run
 
         runRecord = self._managers.collections.find(run)
         if runRecord.type is not CollectionType.RUN:
-            raise TypeError(
+            raise CollectionTypeError(
                 f"Given collection '{runRecord.name}' is of type {runRecord.type.name};"
                 " RUN collection required."
             )
@@ -588,7 +598,9 @@ class SqlRegistry(Registry):
         progress = Progress("lsst.daf.butler.Registry.associate", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
-            raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
+            raise CollectionTypeError(
+                f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED."
+            )
         for datasetType, refsForType in progress.iter_item_chunks(
             DatasetRef.groupByType(refs).items(), desc="Associating datasets by type"
         ):
@@ -609,7 +621,7 @@ class SqlRegistry(Registry):
         progress = Progress("lsst.daf.butler.Registry.disassociate", level=logging.DEBUG)
         collectionRecord = self._managers.collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
-            raise TypeError(
+            raise CollectionTypeError(
                 f"Collection '{collection}' has type {collectionRecord.type.name}; expected TAGGED."
             )
         for datasetType, refsForType in progress.iter_item_chunks(
@@ -681,9 +693,14 @@ class SqlRegistry(Registry):
             defaults = None
         else:
             defaults = self.defaults.dataId
-        standardized = DataCoordinate.standardize(
-            dataId, graph=graph, universe=self.dimensions, defaults=defaults, **kwargs
-        )
+        try:
+            standardized = DataCoordinate.standardize(
+                dataId, graph=graph, universe=self.dimensions, defaults=defaults, **kwargs
+            )
+        except KeyError as exc:
+            # This means either kwargs have some odd name or required
+            # dimension is missing.
+            raise DimensionNameError(str(exc)) from exc
         if standardized.hasRecords():
             return standardized
         if records is None:
@@ -700,7 +717,9 @@ class SqlRegistry(Registry):
             if record is ...:
                 if isinstance(element, Dimension) and keys.get(element.name) is None:
                     if element in standardized.graph.required:
-                        raise LookupError(f"No value or null value for required dimension {element.name}.")
+                        raise DimensionNameError(
+                            f"No value or null value for required dimension {element.name}."
+                        )
                     keys[element.name] = None
                     record = None
                 else:
@@ -724,7 +743,7 @@ class SqlRegistry(Registry):
                         )
             else:
                 if element in standardized.graph.required:
-                    raise LookupError(
+                    raise DataIdValueError(
                         f"Could not fetch record for required dimension {element.name} via keys {keys}."
                     )
                 if element.alwaysJoin:
@@ -784,7 +803,10 @@ class SqlRegistry(Registry):
         missing: Optional[List[str]] = None,
     ) -> Iterator[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
+        try:
+            wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
+        except TypeError as exc:
+            raise DatasetTypeExpressionError(f"Invalid dataset type expression '{expression}'") from exc
         unknownComponentsMessage = (
             "Could not find definition for storage class %s for dataset type %r;"
             " if it has components they will not be included in dataset type query results."
@@ -856,7 +878,10 @@ class SqlRegistry(Registry):
         # Right now the datasetTypes argument is completely ignored, but that
         # is consistent with its [lack of] guarantees.  DM-24939 or a follow-up
         # ticket will take care of that.
-        query = CollectionQuery.fromExpression(expression)
+        try:
+            query = CollectionQuery.fromExpression(expression)
+        except TypeError as exc:
+            raise CollectionExpressionError(f"Invalid collection expression '{expression}'") from exc
         collectionTypes = ensure_iterable(collectionTypes)
         for record in query.iter(
             self._managers.collections,
@@ -923,7 +948,7 @@ class SqlRegistry(Registry):
         # Standardize the collections expression.
         if collections is None:
             if not self.defaults.collections:
-                raise TypeError(
+                raise NoDefaultCollectionError(
                     "No collections provided to findDataset, and no defaults from registry construction."
                 )
             collections = self.defaults.collections
@@ -1040,7 +1065,9 @@ class SqlRegistry(Registry):
         if datasets is not None:
             if not collections:
                 if not self.defaults.collections:
-                    raise TypeError(f"Cannot pass 'datasets' (='{datasets}') without 'collections'.")
+                    raise NoDefaultCollectionError(
+                        f"Cannot pass 'datasets' (='{datasets}') without 'collections'."
+                    )
                 collections = self.defaults.collections
             else:
                 # Preprocess collections expression in case the original
@@ -1057,7 +1084,7 @@ class SqlRegistry(Registry):
                     datasetType = self.getDatasetType(parentDatasetTypeName)
                 standardizedDatasetTypes.add(datasetType)
         elif collections:
-            raise TypeError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
+            raise ArgumentError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
 
         def query_factory(
             order_by: Optional[Iterable[str]] = None, limit: Optional[Tuple[int, Optional[int]]] = None
@@ -1105,7 +1132,7 @@ class SqlRegistry(Registry):
             try:
                 element = self.dimensions[element]
             except KeyError as e:
-                raise KeyError(
+                raise DimensionNameError(
                     f"No such dimension '{element}', available dimensions: "
                     + str(self.dimensions.getStaticElements())
                 ) from e
@@ -1133,7 +1160,7 @@ class SqlRegistry(Registry):
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if collections is None:
             if not self.defaults.collections:
-                raise TypeError(
+                raise NoDefaultCollectionError(
                     "No collections provided to findDataset, and no defaults from registry construction."
                 )
             collections = self.defaults.collections

@@ -27,7 +27,7 @@ __all__ = (
 )
 
 import dataclasses
-from typing import TYPE_CHECKING, AbstractSet, List, Optional, Sequence, Set, Tuple
+from typing import TYPE_CHECKING, Any, List, Mapping, Optional, Sequence, Set, Tuple
 
 from ....core import (
     DataCoordinate,
@@ -39,6 +39,7 @@ from ....core import (
     NamedKeyDict,
     NamedValueSet,
 )
+from ..._exceptions import UserExpressionError
 from ...summaries import GovernorDimensionRestriction
 from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
 from .normalForm import NormalForm, NormalFormVisitor
@@ -160,14 +161,14 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
     ----------
     universe : `DimensionUniverse`
         All known dimensions.
-    bindKeys : `collections.abc.Set` [ `str` ]
-        Identifiers that represent bound parameter values, and hence need not
-        represent in-database entities.
+    bind : `Mapping` [ `str`, `object` ]
+        Mapping containing literal values that should be injected into the
+        query expression, keyed by the identifiers they replace.
     """
 
-    def __init__(self, universe: DimensionUniverse, bindKeys: AbstractSet[str]):
+    def __init__(self, universe: DimensionUniverse, bind: Mapping[str, Any]):
         self.universe = universe
-        self.bindKeys = bindKeys
+        self.bind = bind
 
     def visitNumericLiteral(self, value: str, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
@@ -183,8 +184,8 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
 
     def visitIdentifier(self, name: str, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitIdentifier
-        if name in self.bindKeys:
-            return TreeSummary()
+        if name in self.bind:
+            return TreeSummary(dataIdValue=self.bind[name])
         constant = categorizeConstant(name)
         if constant is ExpressionConstant.INGEST_DATE:
             return TreeSummary(hasIngestDate=True)
@@ -295,9 +296,9 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
     graph : `DimensionGraph`
         The dimensions the query would include in the absence of this
         expression.
-    bindKeys : `collections.abc.Set` [ `str` ]
-        Identifiers that represent bound parameter values, and hence need not
-        represent in-database entities.
+    bind : `Mapping` [ `str`, `object` ]
+        Mapping containing literal values that should be injected into the
+        query expression, keyed by the identifiers they replace.
     defaults : `DataCoordinate`
         A data ID containing default for governor dimensions.
     """
@@ -306,14 +307,13 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         self,
         dataId: DataCoordinate,
         graph: DimensionGraph,
-        bindKeys: AbstractSet[str],
+        bind: Mapping[str, Any],
         defaults: DataCoordinate,
     ):
         self.dataId = dataId
         self.graph = graph
-        self.bindKeys = bindKeys
         self.defaults = defaults
-        self._branchVisitor = InspectionVisitor(dataId.universe, bindKeys)
+        self._branchVisitor = InspectionVisitor(dataId.universe, bind)
 
     def visitBranch(self, node: Node) -> TreeSummary:
         # Docstring inherited from NormalFormVisitor.
@@ -356,12 +356,12 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
                     # instrument='DECam'", or data ID has one and expression
                     # has the other.
                     if governor in self.dataId:
-                        raise RuntimeError(
+                        raise UserExpressionError(
                             f"Conflict between expression containing {governor.name}={branch.dataIdValue!r} "
                             f"and data ID with {governor.name}={value!r}."
                         )
                     else:
-                        raise RuntimeError(
+                        raise UserExpressionError(
                             f"Conflicting literal values for {governor.name} in expression: "
                             f"{value!r} != {branch.dataIdValue!r}."
                         )
@@ -392,7 +392,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
             if missing <= self.defaults.keys():
                 summary.defaultsNeeded.update(missing)
             else:
-                raise RuntimeError(
+                raise UserExpressionError(
                     f"No value(s) for governor dimensions {missing - self.defaults.keys()} in expression "
                     "that references dependent dimensions. 'Governor' dimensions must always be specified "
                     "completely in either the query expression (via simple 'name=<value>' terms, not 'IN' "
@@ -408,10 +408,13 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         # columns referenced.  This aggregation is for the full query, so we
         # don't care whether things are joined by AND or OR (or + or -, etc).
         summary = OuterSummary()
-        for branch in branches:
-            summary.update(branch)
-            summary.governors.update(branch.governors)
-            summary.defaultsNeeded.update(branch.defaultsNeeded)
+        if branches:
+            # To make an OR of branch constraints start with empty selection.
+            summary.governors = GovernorDimensionRestriction.makeEmpty(self.graph.universe)
+            for branch in branches:
+                summary.update(branch)
+                summary.governors = summary.governors.union(branch.governors)
+                summary.defaultsNeeded.update(branch.defaultsNeeded)
         # See if we've referenced any dimensions that weren't in the original
         # query graph; if so, we update that to include them.  This is what
         # lets a user say "tract=X" on the command line (well, "skymap=Y AND
@@ -422,13 +425,13 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
                 self.graph.universe,
                 dimensions=(summary.dimensions | self.graph.dimensions),
             )
-        for governor, values in branch.governors.items():
+        for governor, values in summary.governors.items():
             if governor in summary.defaultsNeeded:
                 # One branch contained an explicit value for this dimension
                 # while another needed to refer to the default data ID.
                 # Even if these refer to the same value, that inconsistency
                 # probably indicates user error.
-                raise RuntimeError(
+                raise UserExpressionError(
                     f"Governor dimension {governor.name} is explicitly "
                     f"constrained to {values} in one or more branches of "
                     "this query where expression, but is left to default "
