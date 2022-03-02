@@ -551,6 +551,10 @@ class ButlerTests(ButlerPutGetTests):
                     uri = Butler.get_repo_uri("label")
                     butler = Butler(uri, writeable=False)
                     self.assertIsInstance(butler, Butler)
+                    butler = Butler("label", writeable=False)
+                    self.assertIsInstance(butler, Butler)
+                    with self.assertRaisesRegex(FileNotFoundError, "aliases:.*bad_label"):
+                        Butler("not_there", writeable=False)
                     with self.assertRaises(KeyError) as cm:
                         Butler.get_repo_uri("missing")
                     self.assertIn("not known to", str(cm.exception))
@@ -562,6 +566,9 @@ class ButlerTests(ButlerPutGetTests):
             # No environment variable set.
             Butler.get_repo_uri("label")
         self.assertIn("No repository index defined", str(cm.exception))
+        with self.assertRaisesRegex(FileNotFoundError, "no known aliases"):
+            # No aliases registered.
+            Butler("not_there")
         self.assertEqual(Butler.get_known_repos(), set())
 
     def testBasicPutGet(self):
