@@ -106,7 +106,7 @@ class LookupKey:
                     # default config but the users are using an external
                     # universe.
                     unknown = [name for name in dimension_names if universe.get(name) is None]
-                    log.warning(
+                    log.debug(
                         "A LookupKey '%s' uses unknown dimensions: %s. Possible typo?"
                         " Using the name explicitly.",
                         name,
