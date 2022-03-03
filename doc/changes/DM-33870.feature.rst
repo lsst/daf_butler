@@ -1,0 +1,1 @@
+If repository aliases have been defined for the site they can now be used in place of the Butler repository URI in both the `~lsst.daf.butler.Butler` constructor and command-line tools.
