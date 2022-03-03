@@ -114,8 +114,22 @@ class RegistryTests(ABC):
         return config
 
     @abstractmethod
-    def makeRegistry(self) -> Registry:
-        """Return the Registry instance to be tested."""
+    def makeRegistry(self, share_repo_with: Optional[Registry] = None) -> Optional[Registry]:
+        """Return the Registry instance to be tested.
+
+        Parameters
+        ----------
+        share_repo_with : `Registry`, optional
+            If provided, the new registry should point to the same data
+            repository as this existing registry.
+
+        Returns
+        -------
+        registry : `Registry`
+            New `Registry` instance, or `None` *only* if `share_repo_with` is
+            not `None` and this test case does not support that argument
+            (e.g. it is impossible with in-memory SQLite DBs).
+        """
         raise NotImplementedError()
 
     def loadData(self, registry: Registry, filename: str):

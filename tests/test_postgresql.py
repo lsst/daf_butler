@@ -26,6 +26,7 @@ import secrets
 import unittest
 import warnings
 from contextlib import contextmanager
+from typing import Optional
 
 import astropy.time
 
@@ -233,12 +234,18 @@ class PostgresqlRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self) -> Registry:
-        namespace = f"namespace_{secrets.token_hex(8).lower()}"
+    def makeRegistry(self, share_repo_with: Optional[Registry] = None) -> Registry:
+        if share_repo_with is None:
+            namespace = f"namespace_{secrets.token_hex(8).lower()}"
+        else:
+            namespace = share_repo_with._db.namespace
         config = self.makeRegistryConfig()
         config["db"] = self.server.url()
         config["namespace"] = namespace
-        return Registry.createFromConfig(config)
+        if share_repo_with is None:
+            return Registry.createFromConfig(config)
+        else:
+            return Registry.fromConfig(config)
 
 
 class PostgresqlRegistryNameKeyCollMgrTestCase(PostgresqlRegistryTests, unittest.TestCase):
