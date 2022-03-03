@@ -678,6 +678,7 @@ class RegistryTests(ABC):
     def testCollections(self):
         """Tests for registry methods that manage collections."""
         registry = self.makeRegistry()
+        other_registry = self.makeRegistry(share_repo_with=registry)
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
         run1 = "imported_g"
@@ -760,6 +761,15 @@ class RegistryTests(ABC):
         self.assertEqual(list(registry.getCollectionChain(chain1)), [tag1, run2])
         self.assertEqual(registry.getCollectionParentChains(tag1), {chain1})
         self.assertEqual(registry.getCollectionParentChains(run2), {chain1})
+        # Refresh the other registry that points to the same repo, and make
+        # sure it can see the things we've done (note that this does require
+        # an explicit refresh(); that's the documented behavior, because
+        # caching is ~impossible otherwise).
+        if other_registry is not None:
+            other_registry.refresh()
+            self.assertEqual(list(other_registry.getCollectionChain(chain1)), [tag1, run2])
+            self.assertEqual(other_registry.getCollectionParentChains(tag1), {chain1})
+            self.assertEqual(other_registry.getCollectionParentChains(run2), {chain1})
         # Searching for dataId1 or dataId2 in the chain should return ref1 and
         # ref2, because both are in tag1.
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain1), ref1)
