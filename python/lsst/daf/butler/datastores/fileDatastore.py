@@ -118,10 +118,10 @@ class DatastoreFileGetInformation:
     info: StoredFileInfo
     """Stored information about this file and its formatter."""
 
-    assemblerParams: Dict[str, Any]
+    assemblerParams: Mapping[str, Any]
     """Parameters to use for post-processing the retrieved dataset."""
 
-    formatterParams: Dict[str, Any]
+    formatterParams: Mapping[str, Any]
     """Parameters that were understood by the associated formatter."""
 
     component: Optional[str]
@@ -2069,6 +2069,12 @@ class FileDatastore(GenericBaseDatastore):
         artifacts = []
         if doDisassembly:
             components = ref.datasetType.storageClass.delegate().disassemble(inMemoryDataset)
+            if components is None:
+                raise RuntimeError(
+                    f"Inconsistent configuration: dataset type {ref.datasetType.name} "
+                    f"with storage class {ref.datasetType.storageClass.name} "
+                    "is configured to be disassembled, but cannot be."
+                )
             for component, componentInfo in components.items():
                 # Don't recurse because we want to take advantage of
                 # bulk insert -- need a new DatasetRef that refers to the

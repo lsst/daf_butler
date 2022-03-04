@@ -364,12 +364,12 @@ class StorageClass:
             unknown = "', '".join(diff)
             raise KeyError(f"Parameter{s} '{unknown}' not understood by StorageClass {self.name}")
 
-    def filterParameters(self, parameters: Dict[str, Any], subset: Collection = None) -> Dict[str, Any]:
+    def filterParameters(self, parameters: Mapping[str, Any], subset: Collection = None) -> Mapping[str, Any]:
         """Filter out parameters that are not known to this `StorageClass`.
 
         Parameters
         ----------
-        parameters : `dict`, optional
+        parameters : `Mapping`, optional
             Candidate parameters. Can be `None` if no parameters have
             been provided.
         subset : `~collections.abc.Collection`, optional
@@ -380,7 +380,7 @@ class StorageClass:
 
         Returns
         -------
-        filtered : `dict`
+        filtered : `Mapping`
             Valid parameters. Empty `dict` if none are suitable.
 
         Raises
