@@ -114,8 +114,22 @@ class RegistryTests(ABC):
         return config
 
     @abstractmethod
-    def makeRegistry(self) -> Registry:
-        """Return the Registry instance to be tested."""
+    def makeRegistry(self, share_repo_with: Optional[Registry] = None) -> Optional[Registry]:
+        """Return the Registry instance to be tested.
+
+        Parameters
+        ----------
+        share_repo_with : `Registry`, optional
+            If provided, the new registry should point to the same data
+            repository as this existing registry.
+
+        Returns
+        -------
+        registry : `Registry`
+            New `Registry` instance, or `None` *only* if `share_repo_with` is
+            not `None` and this test case does not support that argument
+            (e.g. it is impossible with in-memory SQLite DBs).
+        """
         raise NotImplementedError()
 
     def loadData(self, registry: Registry, filename: str):
@@ -664,6 +678,7 @@ class RegistryTests(ABC):
     def testCollections(self):
         """Tests for registry methods that manage collections."""
         registry = self.makeRegistry()
+        other_registry = self.makeRegistry(share_repo_with=registry)
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
         run1 = "imported_g"
@@ -746,6 +761,15 @@ class RegistryTests(ABC):
         self.assertEqual(list(registry.getCollectionChain(chain1)), [tag1, run2])
         self.assertEqual(registry.getCollectionParentChains(tag1), {chain1})
         self.assertEqual(registry.getCollectionParentChains(run2), {chain1})
+        # Refresh the other registry that points to the same repo, and make
+        # sure it can see the things we've done (note that this does require
+        # an explicit refresh(); that's the documented behavior, because
+        # caching is ~impossible otherwise).
+        if other_registry is not None:
+            other_registry.refresh()
+            self.assertEqual(list(other_registry.getCollectionChain(chain1)), [tag1, run2])
+            self.assertEqual(other_registry.getCollectionParentChains(tag1), {chain1})
+            self.assertEqual(other_registry.getCollectionParentChains(run2), {chain1})
         # Searching for dataId1 or dataId2 in the chain should return ref1 and
         # ref2, because both are in tag1.
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain1), ref1)

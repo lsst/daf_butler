@@ -25,6 +25,7 @@ import stat
 import tempfile
 import unittest
 from contextlib import contextmanager
+from typing import Optional
 
 import sqlalchemy
 from lsst.daf.butler import ddl
@@ -195,11 +196,17 @@ class SqliteFileRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self) -> Registry:
-        _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
+    def makeRegistry(self, share_repo_with: Optional[Registry] = None) -> Registry:
+        if share_repo_with is None:
+            _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
+        else:
+            filename = share_repo_with._db.filename
         config = self.makeRegistryConfig()
         config["db"] = f"sqlite:///{filename}"
-        return Registry.createFromConfig(config, butlerRoot=self.root)
+        if share_repo_with is None:
+            return Registry.createFromConfig(config, butlerRoot=self.root)
+        else:
+            return Registry.fromConfig(config, butlerRoot=self.root)
 
 
 class SqliteFileRegistryNameKeyCollMgrTestCase(SqliteFileRegistryTests, unittest.TestCase):
@@ -257,7 +264,9 @@ class SqliteMemoryRegistryTests(RegistryTests):
     def getDataDir(cls) -> str:
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
-    def makeRegistry(self) -> Registry:
+    def makeRegistry(self, share_repo_with: Optional[Registry] = None) -> Optional[Registry]:
+        if share_repo_with is not None:
+            return None
         config = self.makeRegistryConfig()
         config["db"] = "sqlite://"
         return Registry.createFromConfig(config)

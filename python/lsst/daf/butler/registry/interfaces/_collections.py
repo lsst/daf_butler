@@ -206,7 +206,13 @@ class ChainedCollectionRecord(CollectionRecord):
             The object that manages this records instance and all records
             instances that may appear as its children.
         """
+        # Clear out the old reverse mapping (from child to parents).
+        for child in self._children:
+            manager._parents_by_child[manager.find(child).key].discard(self.key)
         self._children = self._load(manager)
+        # Update the reverse mapping (from child to parents) in the manager.
+        for child in self._children:
+            manager._parents_by_child[manager.find(child).key].add(self.key)
 
     @abstractmethod
     def _update(self, manager: CollectionManager, children: CollectionSearch) -> None:
