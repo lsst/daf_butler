@@ -25,7 +25,7 @@ __all__ = ("SqlRegistry",)
 
 import contextlib
 import logging
-from collections import defaultdict
+import warnings
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -78,7 +78,6 @@ from ..registry import (
     ConflictingDefinitionError,
     DataIdValueError,
     DatasetTypeError,
-    DatasetTypeExpressionError,
     DimensionNameError,
     InconsistentDataIdError,
     NoDefaultCollectionError,
@@ -90,7 +89,7 @@ from ..registry import (
 )
 from ..registry.interfaces import ChainedCollectionRecord, DatasetIdFactory, DatasetIdGenEnum, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
-from ..registry.wildcards import CategorizedWildcard, CollectionWildcard, Ellipsis
+from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
@@ -827,69 +826,21 @@ class SqlRegistry(Registry):
         *,
         components: Optional[bool] = None,
         missing: Optional[List[str]] = None,
-    ) -> Iterator[DatasetType]:
+    ) -> Iterable[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        try:
-            wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
-        except TypeError as exc:
-            raise DatasetTypeExpressionError(f"Invalid dataset type expression '{expression}'") from exc
-        unknownComponentsMessage = (
-            "Could not find definition for storage class %s for dataset type %r;"
-            " if it has components they will not be included in dataset type query results."
+        wildcard = DatasetTypeWildcard.from_expression(expression)
+        composition_dict = self._managers.datasets.resolve_wildcard(
+            wildcard,
+            components=components,
+            missing=missing,
         )
-        if wildcard is Ellipsis:
-            for datasetType in self._managers.datasets:
-                # The dataset type can no longer be a component
-                yield datasetType
-                if components:
-                    # Automatically create the component dataset types
-                    try:
-                        componentsForDatasetType = datasetType.makeAllComponentDatasetTypes()
-                    except KeyError as err:
-                        _LOG.warning(unknownComponentsMessage, err, datasetType.name)
-                    else:
-                        yield from componentsForDatasetType
-            return
-        done: Set[str] = set()
-        for name in wildcard.strings:
-            storage = self._managers.datasets.find(name)
-            done.add(name)
-            if storage is None:
-                if missing is not None:
-                    missing.append(name)
-            else:
-                yield storage.datasetType
-        if wildcard.patterns:
-            # If components (the argument) is None, we'll save component
-            # dataset that we might want to match, but only if their parents
-            # didn't get included.
-            componentsForLater = []
-            for registeredDatasetType in self._managers.datasets:
-                # Components are not stored in registry so expand them here
-                allDatasetTypes = [registeredDatasetType]
-                if components is not False:
-                    # Only check for the components if we are being asked
-                    # for components or components is None.
-                    try:
-                        allDatasetTypes.extend(registeredDatasetType.makeAllComponentDatasetTypes())
-                    except KeyError as err:
-                        _LOG.warning(unknownComponentsMessage, err, registeredDatasetType.name)
-                for datasetType in allDatasetTypes:
-                    if datasetType.name in done:
-                        continue
-                    parentName, componentName = datasetType.nameAndComponent()
-                    if componentName is not None and not components:
-                        if components is None and parentName not in done:
-                            componentsForLater.append(datasetType)
-                        continue
-                    if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
-                        done.add(datasetType.name)
-                        yield datasetType
-            # Go back and try to match saved components.
-            for datasetType in componentsForLater:
-                parentName, _ = datasetType.nameAndComponent()
-                if parentName not in done and any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
-                    yield datasetType
+        result: list[DatasetType] = []
+        for parent_dataset_type, components_for_parent in composition_dict.items():
+            result.extend(
+                parent_dataset_type.makeComponentDatasetType(c) if c is not None else parent_dataset_type
+                for c in components_for_parent
+            )
+        return result
 
     def queryCollections(
         self,
@@ -960,7 +911,7 @@ class SqlRegistry(Registry):
         mode: Literal["find_first"] | Literal["find_all"] | Literal["constrain"] = "constrain",
         *,
         doomed_by: list[str],
-    ) -> tuple[defaultdict[DatasetType, list[str | None]], CollectionWildcard | None]:
+    ) -> tuple[dict[DatasetType, list[str | None]], CollectionWildcard | None]:
         """Preprocess dataset arguments passed to query* methods.
 
         Parameters
@@ -1004,7 +955,7 @@ class SqlRegistry(Registry):
         collections : `CollectionWildcard`
             Processed collection expression.
         """
-        composition: defaultdict[DatasetType, list[str | None]] = defaultdict(list)
+        composition: dict[DatasetType, list[str | None]] = {}
         if datasets is not None:
             if not collections:
                 if not self.defaults.collections:
@@ -1017,13 +968,16 @@ class SqlRegistry(Registry):
                         f"Collection pattern(s) {collections.patterns} not allowed in this context."
                     )
             missing: list[str] = []
-            if mode == "constrain" and datasets is Ellipsis:
-                raise TypeError("Cannot pass the universal wildcard '...' for dataset types in this context.")
-            for dataset_type in self.queryDatasetTypes(datasets, components=components, missing=missing):
-                if dataset_type.isComponent():
-                    composition[dataset_type.makeCompositeDatasetType()].append(dataset_type.component())
-                else:
-                    composition[dataset_type].append(None)
+            composition = self._managers.datasets.resolve_wildcard(
+                datasets, components=components, missing=missing, explicit_only=(mode == "constrain")
+            )
+            if missing and mode == "constrain":
+                # After v26 this should raise MissingDatasetTypeError, to be
+                # implemented on DM-36303.
+                warnings.warn(
+                    f"Dataset type(s) {missing} are not registered; this will be an error after v26.",
+                    FutureWarning,
+                )
             doomed_by.extend(f"Dataset type {name} is not registered." for name in missing)
         elif collections:
             raise ArgumentError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")

@@ -6,15 +6,19 @@ __all__ = (
 )
 
 import copy
-from collections.abc import Iterator
+import logging
+import warnings
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
+from lsst.utils.ellipsis import Ellipsis
 
 from ....core import DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
 from ..._collection_summary import CollectionSummary
-from ..._exceptions import ConflictingDefinitionError, OrphanedRecordError
+from ..._exceptions import ConflictingDefinitionError, DatasetTypeError, OrphanedRecordError
 from ...interfaces import DatasetIdGenEnum, DatasetRecordStorage, DatasetRecordStorageManager, VersionTuple
+from ...wildcards import DatasetTypeWildcard
 from ._storage import (
     ByDimensionsDatasetRecordStorage,
     ByDimensionsDatasetRecordStorageInt,
@@ -44,6 +48,8 @@ if TYPE_CHECKING:
 # This has to be updated on every schema change
 _VERSION_INT = VersionTuple(1, 0, 0)
 _VERSION_UUID = VersionTuple(1, 0, 0)
+
+_LOG = logging.getLogger(__name__)
 
 
 class MissingDatabaseTableError(RuntimeError):
@@ -327,9 +333,88 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             inserted = False
         return storage, bool(inserted)
 
-    def __iter__(self) -> Iterator[DatasetType]:
-        for storage in self._byName.values():
-            yield storage.datasetType
+    def resolve_wildcard(
+        self,
+        expression: Any,
+        components: bool | None = None,
+        missing: list[str] | None = None,
+        explicit_only: bool = False,
+    ) -> dict[DatasetType, list[str | None]]:
+        wildcard = DatasetTypeWildcard.from_expression(expression)
+        result: defaultdict[DatasetType, set[str | None]] = defaultdict(set)
+        for name, dataset_type in wildcard.values.items():
+            parent_name, component_name = DatasetType.splitDatasetTypeName(name)
+            if (found_storage := self.find(parent_name)) is not None:
+                found_parent = found_storage.datasetType
+                if component_name is not None:
+                    found = found_parent.makeComponentDatasetType(component_name)
+                else:
+                    found = found_parent
+                if dataset_type is not None:
+                    if dataset_type.is_compatible_with(found):
+                        # Prefer the given dataset type to enable storage class
+                        # conversions.
+                        if component_name is not None:
+                            found_parent = dataset_type.makeCompositeDatasetType()
+                        else:
+                            found_parent = dataset_type
+                    else:
+                        raise DatasetTypeError(
+                            f"Dataset type definition in query expression {dataset_type} is "
+                            f"not compatible with the registered type {found}."
+                        )
+                result[found_parent].add(component_name)
+            elif missing is not None:
+                missing.append(name)
+        if wildcard.patterns is Ellipsis:
+            if explicit_only:
+                raise TypeError(
+                    "Universal wildcard '...' is not permitted for dataset types in this context."
+                )
+            for storage in self._byName.values():
+                result[storage.datasetType].add(None)
+                if components:
+                    try:
+                        result[storage.datasetType].update(
+                            storage.datasetType.storageClass.allComponents().keys()
+                        )
+                    except KeyError as err:
+                        _LOG.warning(
+                            f"Could not load storage class {err} for {storage.datasetType.name}; "
+                            "if it has components they will not be included in query results.",
+                        )
+        elif wildcard.patterns:
+            if explicit_only:
+                # After v26 this should raise DatasetTypeExpressionError, to
+                # be implemented on DM-36303.
+                warnings.warn(
+                    "Passing wildcard patterns here is deprecated and will be prohibited after v26.",
+                    FutureWarning,
+                )
+            for storage in self._byName.values():
+                if any(p.fullmatch(storage.datasetType.name) for p in wildcard.patterns):
+                    result[storage.datasetType].add(None)
+            if components is not False:
+                for storage in self._byName.values():
+                    if components is None and storage.datasetType in result:
+                        continue
+                    try:
+                        components_for_parent = storage.datasetType.storageClass.allComponents().keys()
+                    except KeyError as err:
+                        _LOG.warning(
+                            f"Could not load storage class {err} for {storage.datasetType.name}; "
+                            "if it has components they will not be included in query results."
+                        )
+                        continue
+                    for component_name in components_for_parent:
+                        if any(
+                            p.fullmatch(
+                                DatasetType.nameWithComponent(storage.datasetType.name, component_name)
+                            )
+                            for p in wildcard.patterns
+                        ):
+                            result[storage.datasetType].add(component_name)
+        return {k: list(v) for k, v in result.items()}
 
     def getDatasetRef(self, id: DatasetId) -> DatasetRef | None:
         # Docstring inherited from DatasetRecordStorageManager.

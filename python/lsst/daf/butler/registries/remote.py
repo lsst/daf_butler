@@ -391,7 +391,7 @@ class RemoteRegistry(Registry):
         *,
         components: Optional[bool] = None,
         missing: Optional[List[str]] = None,
-    ) -> Iterator[DatasetType]:
+    ) -> Iterable[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if missing is not None:
             raise NotImplementedError("RemoteRegistry does not support the 'missing' parameter.")
@@ -417,10 +417,10 @@ class RemoteRegistry(Registry):
         # Really could do with a ListSerializedDatasetType model but for
         # now do it explicitly.
         datasetTypes = response.json()
-        return (
+        return [
             DatasetType.from_simple(SerializedDatasetType(**d), universe=self.dimensions)
             for d in datasetTypes
-        )
+        ]
 
     def queryCollections(
         self,

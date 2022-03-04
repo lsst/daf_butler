@@ -587,7 +587,10 @@ class RegistryTests(ABC):
         # (though it will warn).
         tempStorageClass = StorageClass(
             name="TempStorageClass",
-            components={"data", registry.storageClasses.getStorageClass("StructuredDataDict")},
+            components={
+                "data1": registry.storageClasses.getStorageClass("StructuredDataDict"),
+                "data2": registry.storageClasses.getStorageClass("StructuredDataDict"),
+            },
         )
         registry.storageClasses.registerStorageClass(tempStorageClass)
         datasetType = DatasetType(
@@ -603,7 +606,7 @@ class RegistryTests(ABC):
         # Querying for all dataset types, including components, should include
         # at least all non-component dataset types (and I don't want to
         # enumerate all of the Exposure components for bias and flat here).
-        with self.assertLogs("lsst.daf.butler.registries", logging.WARN) as cm:
+        with self.assertLogs("lsst.daf.butler.registry", logging.WARN) as cm:
             everything = NamedValueSet(registry.queryDatasetTypes(components=True))
         self.assertIn("TempStorageClass", cm.output[0])
         self.assertLess({"bias", "flat", "temporary"}, everything.names)
@@ -617,8 +620,8 @@ class RegistryTests(ABC):
         self.assertNotIn("temporary.data", everything.names)
         # Query for dataset types that start with "temp".  This should again
         # not include the component, and also not fail.
-        with self.assertLogs("lsst.daf.butler.registries", logging.WARN) as cm:
-            startsWithTemp = NamedValueSet(registry.queryDatasetTypes(re.compile("temp.*")))
+        with self.assertLogs("lsst.daf.butler.registry", logging.WARN) as cm:
+            startsWithTemp = NamedValueSet(registry.queryDatasetTypes(re.compile("temp.*"), components=True))
         self.assertIn("TempStorageClass", cm.output[0])
         self.assertEqual({"temporary"}, startsWithTemp.names)
         # Querying with no components should not warn at all.
@@ -2490,7 +2493,7 @@ class RegistryTests(ABC):
         # These queries yield no results due to various problems that can be
         # spotted prior to execution, yielding helpful diagnostics.
         base_query = registry.queryDataIds(["detector", "physical_filter"])
-        for query, snippets in [
+        queries_and_snippets = [
             (
                 # Dataset type name doesn't match any existing dataset types.
                 registry.queryDatasets("nonexistent", collections=...),
@@ -2499,11 +2502,6 @@ class RegistryTests(ABC):
             (
                 # Dataset type name doesn't match any existing dataset types.
                 base_query.findDatasets("nonexistent", collections=["biases"]),
-                ["nonexistent"],
-            ),
-            (
-                # Dataset type name doesn't match any existing dataset types.
-                registry.queryDataIds(["detector"], datasets=["nonexistent"], collections=...),
                 ["nonexistent"],
             ),
             (
@@ -2547,13 +2545,28 @@ class RegistryTests(ABC):
                 registry.queryDatasets("flat", collections=re.compile("potato.+")),
                 ["potato"],
             ),
-            (
-                # Dataset type name doesn't match any existing dataset types.
-                registry.queryDimensionRecords("detector", datasets=["nonexistent"], collections=...),
-                ["nonexistent"],
-            ),
-        ]:
-
+        ]
+        # The behavior of these additional queries is slated to change in the
+        # future, so we also check for deprecation warnings.
+        with self.assertWarns(FutureWarning):
+            queries_and_snippets.append(
+                (
+                    # Dataset type name doesn't match any existing dataset
+                    # types.
+                    registry.queryDataIds(["detector"], datasets=["nonexistent"], collections=...),
+                    ["nonexistent"],
+                )
+            )
+        with self.assertWarns(FutureWarning):
+            queries_and_snippets.append(
+                (
+                    # Dataset type name doesn't match any existing dataset
+                    # types.
+                    registry.queryDimensionRecords("detector", datasets=["nonexistent"], collections=...),
+                    ["nonexistent"],
+                )
+            )
+        for query, snippets in queries_and_snippets:
             self.assertFalse(query.any(execute=False, exact=False))
             self.assertFalse(query.any(execute=True, exact=False))
             self.assertFalse(query.any(execute=True, exact=True))
@@ -2568,6 +2581,12 @@ class RegistryTests(ABC):
                 ),
                 messages,
             )
+
+        # This query does yield results, but should also emit a warning because
+        # dataset type patterns to queryDataIds is deprecated; just look for
+        # the warning.
+        with self.assertWarns(FutureWarning):
+            registry.queryDataIds(["detector"], datasets=re.compile("^nonexistent$"), collections=...)
 
         # These queries yield no results due to problems that can be identified
         # by cheap follow-up queries, yielding helpful diagnostics.

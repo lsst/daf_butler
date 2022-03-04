@@ -659,13 +659,41 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def __iter__(self) -> Iterator[DatasetType]:
-        """Return an iterator over the the dataset types present in this layer.
+    def resolve_wildcard(
+        self,
+        expression: Any,
+        components: bool | None = None,
+        missing: list[str] | None = None,
+        explicit_only: bool = False,
+    ) -> dict[DatasetType, list[str | None]]:
+        """Resolve a dataset type wildcard expression.
 
-        Notes
-        -----
-        Dataset types registered by another client of the same layer since
-        the last call to `initialize` or `refresh` may not be included.
+        Parameters
+        ----------
+        expression
+            Expression to resolve.  Will be passed to
+            `DatasetTypeWildcard.from_expression`.
+        components : `bool`, optional
+            If `True`, apply all expression patterns to component dataset type
+            names as well.  If `False`, never apply patterns to components.  If
+            `None` (default), apply patterns to components only if their parent
+            datasets were not matched by the expression.  Fully-specified
+            component datasets (`str` or `DatasetType` instances) are always
+            included.
+        missing : `list` of `str`, optional
+            String dataset type names that were explicitly given (i.e. not
+            regular expression patterns) but not found will be appended to this
+            list, if it is provided.
+        explicit_only : `bool`, optional
+            If `True`, require explicit `DatasetType` instances or `str` names,
+            with `re.Pattern` instances deprecated and ``...`` prohibited.
+
+        Returns
+        -------
+        dataset_types : `dict` [ `DatasetType`, `list` [ `None`, `str` ] ]
+            A mapping with resolved dataset types as keys and lists of
+            matched component names as values, where `None` indicates the
+            parent composite dataset type was matched.
         """
         raise NotImplementedError()
 

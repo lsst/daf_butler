@@ -152,9 +152,10 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         self.assertIn("No dimensions in common", msg)
 
         # Check that we get a reason returned if no dataset type is found.
-        res, msg = self._queryDataIds(
-            repo=self.root, dimensions=("visit",), collections=("foo",), datasets="raw"
-        )
+        with self.assertWarns(FutureWarning):
+            res, msg = self._queryDataIds(
+                repo=self.root, dimensions=("visit",), collections=("foo",), datasets="raw"
+            )
         self.assertIsNone(res)
         self.assertEqual(msg, "Dataset type raw is not registered.")
 

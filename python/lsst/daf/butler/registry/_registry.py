@@ -1195,7 +1195,7 @@ class Registry(ABC):
         *,
         components: Optional[bool] = None,
         missing: Optional[List[str]] = None,
-    ) -> Iterator[DatasetType]:
+    ) -> Iterable[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
 
         Parameters
@@ -1218,10 +1218,11 @@ class Registry(ABC):
             regular expression patterns) but not found will be appended to this
             list, if it is provided.
 
-        Yields
-        ------
-        datasetType : `DatasetType`
-            A `DatasetType` instance whose name matches ``expression``.
+        Returns
+        -------
+        dataset_types : `Iterable` [ `DatasetType`]
+            An `Iterable` of `DatasetType` instances whose names match
+            ``expression``.
 
         Raises
         ------
@@ -1432,10 +1433,9 @@ class Registry(ABC):
             ``exposure``, ``detector``, and ``physical_filter`` values to only
             those for which at least one "raw" dataset exists in
             ``collections``.  Allowed types include `DatasetType`, `str`,
-            `re.Pattern`, and iterables thereof.  Unlike other dataset type
-            expressions, ``...`` is not permitted - it doesn't make sense to
-            constrain data IDs on the existence of *all* datasets.
-            See :ref:`daf_butler_dataset_type_expressions` for more
+            and iterables thereof.  Regular expression objects (i.e.
+            `re.Pattern`) are deprecated and will be removed after the v26
+            release.  See :ref:`daf_butler_dataset_type_expressions` for more
             information.
         collections: `Any`, optional
             An expression that identifies the collections to search for

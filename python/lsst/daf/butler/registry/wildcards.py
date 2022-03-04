@@ -24,11 +24,12 @@ __all__ = (
     "CategorizedWildcard",
     "CollectionWildcard",
     "CollectionSearch",
+    "DatasetTypeWildcard",
 )
 
 import dataclasses
 import re
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any
 
 from deprecated.sphinx import deprecated
@@ -36,8 +37,9 @@ from lsst.utils.ellipsis import Ellipsis, EllipsisType
 from lsst.utils.iteration import ensure_iterable
 from pydantic import BaseModel
 
+from ..core import DatasetType
 from ..core.utils import globToRegex
-from ._exceptions import CollectionExpressionError
+from ._exceptions import CollectionExpressionError, DatasetTypeExpressionError
 
 
 @dataclasses.dataclass
@@ -462,6 +464,12 @@ class CollectionWildcard:
         -------
         names : `tuple` [ `str` ]
             Ordered tuple of collection names.
+
+        Raises
+        ------
+        CollectionExpressionError
+            Raised if the patterns has regular expression, glob patterns, or
+            the ``...`` wildcard.
         """
         if self.patterns:
             raise CollectionExpressionError(
@@ -474,5 +482,88 @@ class CollectionWildcard:
             return "..."
         else:
             terms = list(self.strings)
+            terms.extend(str(p) for p in self.patterns)
+            return "[{}]".format(", ".join(terms))
+
+
+@dataclasses.dataclass
+class DatasetTypeWildcard:
+    """A validated expression that resolves to one or more dataset types.
+
+    The `from_expression` method should almost always be used to construct
+    instances, as the regular constructor performs no checking of inputs (and
+    that can lead to confusing error messages downstream).
+    """
+
+    values: Mapping[str, DatasetType | None] = dataclasses.field(default_factory=dict)
+    """A mapping with `str` dataset type name keys and optional `DatasetType`
+    instances.
+    """
+
+    patterns: tuple[re.Pattern, ...] | EllipsisType = Ellipsis
+    """Regular expressions to be matched against dataset type names, or the
+    special value ``...`` indicating all dataset types.
+
+    Any pattern matching a dataset type is considered an overall match for
+    the expression.
+    """
+
+    @classmethod
+    def from_expression(cls, expression: Any) -> DatasetTypeWildcard:
+        """Construct an instance by analyzing the given expression.
+
+        Parameters
+        ----------
+        expression
+            Expression to analyze.  May be any of the following:
+
+            - a `str` dataset type name;
+            - a `DatasetType` instance;
+            - a `re.Pattern` to match against dataset type names;
+            - an iterable whose elements may be any of the above (any dataset
+              type matching any element in the list is an overall match);
+            - an existing `DatasetTypeWildcard` instance;
+            - the special ``...`` ellipsis object, which matches any dataset
+              type.
+
+        Returns
+        -------
+        query : `DatasetTypeWildcard`
+            An instance of this class (new unless an existing instance was
+            passed in).
+
+        Raises
+        ------
+        DatasetTypeExpressionError
+            Raised if the given expression does not have one of the allowed
+            types.
+        """
+        if isinstance(expression, cls):
+            return expression
+        try:
+            wildcard = CategorizedWildcard.fromExpression(
+                expression, coerceUnrecognized=lambda d: (d.name, d)
+            )
+        except TypeError as err:
+            raise DatasetTypeExpressionError(f"Invalid dataset type expression: {expression!r}.") from err
+        if wildcard is Ellipsis:
+            return cls()
+        values: dict[str, DatasetType | None] = {}
+        for name in wildcard.strings:
+            values[name] = None
+        for name, item in wildcard.items:
+            if not isinstance(item, DatasetType):
+                raise DatasetTypeExpressionError(
+                    f"Invalid value '{item}' of type {type(item)} in dataset type expression; "
+                    "expected str, re.Pattern, DatasetType objects, iterables thereof, or '...'."
+                )
+            values[name] = item
+        return cls(values, patterns=tuple(wildcard.patterns))
+
+    def __str__(self) -> str:
+        if self.patterns is Ellipsis:
+            return "..."
+        else:
+            terms = list(self.values.keys())
             terms.extend(str(p) for p in self.patterns)
             return "[{}]".format(", ".join(terms))
