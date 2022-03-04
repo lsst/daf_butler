@@ -20,21 +20,29 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from lsst.daf.butler.core.named import NamedValueAbstractSet
+
 __all__ = (
     "CategorizedWildcard",
     "CollectionWildcard",
     "CollectionSearch",
+    "DatasetTypeQuery",
 )
 
+import itertools
+import logging
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     AbstractSet,
     Any,
     Callable,
+    Dict,
     Iterator,
     List,
+    Mapping,
     Optional,
     Sequence,
     Set,
@@ -50,9 +58,13 @@ from pydantic import BaseModel
 from ..core import DatasetType
 from ..core.utils import globToRegex
 from ._collectionType import CollectionType
+from ._exceptions import DatasetTypeError, DatasetTypeExpressionError
 
 if TYPE_CHECKING:
     from .interfaces import CollectionManager, CollectionRecord
+
+
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass
@@ -711,3 +723,214 @@ class CollectionWildcard:
             names.update(q._search)
             patterns.update(q._patterns)
         return CollectionWildcard(CollectionSearch.fromExpression(names), tuple(patterns))
+
+
+class DatasetTypeQuery:
+    """A validated expression that resolves to one or more dataset types.
+
+    The `fromExpression` method should almost always be used to construct
+    instances, as the regular constructor performs no checking of inputs (and
+    that can lead to confusing error messages downstream).
+
+    Parameters
+    ----------
+    explicit : `Mapping` [ `str`, `DatasetType` or `None` ] or ``...``
+        Either a mapping with `str` dataset type name keys and optional
+        `DatasetType` instances, or the special value ``...`` for an expression
+        that matches any dataset type.
+    patterns : `tuple` [ `re.Pattern` ]
+        Regular expressions to be matched against dataset type names; any
+        pattern matching the dataset type is considered an overall match for
+        the expression.
+    """
+
+    def __init__(
+        self,
+        explicit: Union[Mapping[str, Optional[DatasetType]], EllipsisType] = Ellipsis,
+        patterns: Tuple[re.Pattern, ...] = (),
+    ):
+        self._explicit = explicit
+        self._patterns = patterns
+
+    __slots__ = ("_explicit", "_patterns")
+
+    @classmethod
+    def from_expression(cls, expression: Any) -> DatasetTypeQuery:
+        """Construct an instance by analyzing the given expression.
+
+        Parameters
+        ----------
+        expression
+            Expression to analyze.  May be any of the following:
+
+            - a `str` dataset type name;
+            - a `DatasetType` instance;
+            - a `re.Pattern` to match against dataset type names;
+            - an iterable whose elements may be any of the above (any dataset
+              type matching any element in the list is an overall match);
+            - an existing `DatasetTypeQuery instance;
+            - the special ``...`` ellipsis object, which matches any dataset
+              type.
+
+        Returns
+        -------
+        query : `DatasetTypeQuery`
+            An instance of this class (new unless an existing instance was
+            passed in).
+
+        Raises
+        ------
+        DatasetTypeExpressionError
+            Raised if the given expression does not have one of the allowed
+            types.
+        """
+        if isinstance(expression, cls):
+            return expression
+        try:
+            wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
+        except TypeError as err:
+            raise DatasetTypeExpressionError(f"Invalid dataset type expression: {expression!r}.") from err
+        if wildcard is Ellipsis:
+            return cls()
+        explicit: Dict[str, Optional[DatasetType]] = {}
+        for name in wildcard.strings:
+            explicit[name] = None
+        for name, item in wildcard.items:
+            if not isinstance(item, DatasetType):
+                raise DatasetTypeExpressionError(
+                    f"Invalid value '{item}' of type {type(item)} in dataset type expression; "
+                    "expected str, re.Pattern, DatasetType objects, iterables thereof, or '...'"
+                )
+            explicit[name] = item
+        return cls(explicit, patterns=tuple(wildcard.patterns))
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, DatasetTypeQuery):
+            return self._explicit == other._explicit and self._patterns == other._patterns
+        else:
+            return False
+
+    def __str__(self) -> str:
+        if self._explicit is Ellipsis:
+            return "..."
+        else:
+            terms = list(self._explicit)
+            terms.extend(str(p) for p in self._patterns)
+            return "[{}]".format(", ".join(terms))
+
+    def resolve_dataset_types(
+        self,
+        candidate_parents: NamedValueAbstractSet[DatasetType],
+        components: Optional[bool] = None,
+        missing: Optional[List[str]] = None,
+    ) -> Iterator[DatasetType]:
+        """Apply the expression to a set of `DatasetType` instances and yield
+        those that match.
+
+        Parameters
+        ----------
+        candidate_parents : `NamedValueAbstractSet` [ `DatasetType` ]
+            A set-like object containing the parent `DatasetType` instances to
+            check the expression against.
+        components : `bool`, optional
+            If `True`, yield component dataset types that match the expression.
+            If `False,` do not yield any component dataset types.  If `None`,
+            yield only component dataset types whose full names are given
+            explicitly, or whose parents did not match the expression.
+        missing : `list` [ `str` ], optional
+            A `list` of full dataset type names that were given explicitly
+            (i.e. as `str` or `DatasetType` instances) that were not found.
+
+        Notes
+        -----
+        DatasetTypeError
+            Raised if a `DatasetType` instance was given, but the match dataset
+            type with the same name had a different definition.
+        """
+        if self._explicit is Ellipsis:
+            for parent in candidate_parents:
+                yield parent
+                if components:
+                    try:
+                        yield from parent.makeAllComponentDatasetTypes()
+                    except KeyError as err:
+                        _LOG.warning(
+                            f"Could not load storage class {err} for {parent.name}; "
+                            "if it has components they will not be included in query results."
+                        )
+            return
+        done: Set[DatasetType] = set()
+        for name, dataset_type in self._explicit.items():
+            parent_name, component_name = DatasetType.splitDatasetTypeName(name)
+            if (found := candidate_parents.get(parent_name)) is not None:
+                if component_name is not None:
+                    found = found.makeComponentDatasetType(component_name)
+                if dataset_type is not None and found != dataset_type:
+                    # TODO: allow dataset types with compatible storage types.
+                    raise DatasetTypeError(
+                        f"Dataset type definition in query expression {dataset_type} does "
+                        f"not match the registered type {found}."
+                    )
+                done.add(found)
+                yield found
+            elif missing is not None:
+                missing.append(name)
+        if self._patterns:
+            for parent in candidate_parents:
+                if parent not in done and any(p.fullmatch(parent.name) for p in self._patterns):
+                    done.add(parent)
+                    yield parent
+            if components is not False:
+                for parent in candidate_parents:
+                    if components is None and parent in done:
+                        continue
+                    try:
+                        components_for_parent = parent.makeAllComponentDatasetTypes()
+                    except KeyError as err:
+                        _LOG.warning(
+                            f"Could not load storage class {err} for {parent.name}; "
+                            "if it has components they will not be included in query results."
+                        )
+                        continue
+                    for component in components_for_parent:
+                        if component not in done and any(p.fullmatch(component.name) for p in self._patterns):
+                            done.add(component)
+                            yield component
+
+    def union(*args: DatasetTypeQuery) -> DatasetTypeQuery:
+        """Return a new `DatasetTypeQuery` that matches any dataset type
+        matched by the given `DatasetTypeQuery` objects.
+
+        Parameters
+        ----------
+        *args : `DatasetTypeQuery`
+            Expressions to merge with ``self``.
+
+        Returns
+        -------
+        merged : `DatasetTypeQuery`
+            Union expression.
+        """
+        explicit_all: defaultdict[str, set[Optional[DatasetType]]] = defaultdict(set)
+        patterns: Set[re.Pattern] = set()
+        for q in args:
+            if q._explicit is Ellipsis:
+                return q
+            for name, dataset_type in q._explicit.items():
+                explicit_all[name].add(dataset_type)
+            patterns.update(q._patterns)
+        explicit: dict[str, Optional[DatasetType]] = {}
+        for name, dataset_types in explicit_all.items():
+            dataset_types.discard(None)
+            if not dataset_types:
+                explicit[name] = None
+            else:
+                (first, *rest) = dataset_types
+                if not rest:
+                    explicit[name] = first
+                else:
+                    raise DatasetTypeError(
+                        f"Cannot merge dataset type expressions with different definitions for {name}: "
+                        f"{rest}."
+                    )
+        return DatasetTypeQuery(explicit, tuple(patterns))
