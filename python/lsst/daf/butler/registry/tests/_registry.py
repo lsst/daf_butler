@@ -586,7 +586,10 @@ class RegistryTests(ABC):
         # (though it will warn).
         tempStorageClass = StorageClass(
             name="TempStorageClass",
-            components={"data", registry.storageClasses.getStorageClass("StructuredDataDict")},
+            components={
+                "data1": registry.storageClasses.getStorageClass("StructuredDataDict"),
+                "data2": registry.storageClasses.getStorageClass("StructuredDataDict"),
+            },
         )
         registry.storageClasses.registerStorageClass(tempStorageClass)
         datasetType = DatasetType(
@@ -602,7 +605,7 @@ class RegistryTests(ABC):
         # Querying for all dataset types, including components, should include
         # at least all non-component dataset types (and I don't want to
         # enumerate all of the Exposure components for bias and flat here).
-        with self.assertLogs("lsst.daf.butler.registries", logging.WARN) as cm:
+        with self.assertLogs("lsst.daf.butler.registry", logging.WARN) as cm:
             everything = NamedValueSet(registry.queryDatasetTypes(components=True))
         self.assertIn("TempStorageClass", cm.output[0])
         self.assertLess({"bias", "flat", "temporary"}, everything.names)
@@ -616,8 +619,8 @@ class RegistryTests(ABC):
         self.assertNotIn("temporary.data", everything.names)
         # Query for dataset types that start with "temp".  This should again
         # not include the component, and also not fail.
-        with self.assertLogs("lsst.daf.butler.registries", logging.WARN) as cm:
-            startsWithTemp = NamedValueSet(registry.queryDatasetTypes(re.compile("temp.*")))
+        with self.assertLogs("lsst.daf.butler.registry", logging.WARN) as cm:
+            startsWithTemp = NamedValueSet(registry.queryDatasetTypes(re.compile("temp.*"), components=True))
         self.assertIn("TempStorageClass", cm.output[0])
         self.assertEqual({"temporary"}, startsWithTemp.names)
         # Querying with no components should not warn at all.

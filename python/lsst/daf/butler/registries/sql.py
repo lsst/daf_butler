@@ -64,7 +64,6 @@ from ..registry import (
     ConflictingDefinitionError,
     DataIdValueError,
     DatasetTypeError,
-    DatasetTypeExpressionError,
     DimensionNameError,
     InconsistentDataIdError,
     NoDefaultCollectionError,
@@ -78,7 +77,7 @@ from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, Run
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.queries import Query
 from ..registry.summaries import CollectionSummary
-from ..registry.wildcards import CategorizedWildcard, CollectionQuery, Ellipsis
+from ..registry.wildcards import CollectionQuery, DatasetTypeQuery
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
@@ -803,67 +802,12 @@ class SqlRegistry(Registry):
         missing: Optional[List[str]] = None,
     ) -> Iterator[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        try:
-            wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
-        except TypeError as exc:
-            raise DatasetTypeExpressionError(f"Invalid dataset type expression '{expression}'") from exc
-        unknownComponentsMessage = (
-            "Could not find definition for storage class %s for dataset type %r;"
-            " if it has components they will not be included in dataset type query results."
+        query = DatasetTypeQuery.from_expression(expression)
+        return query.resolve_dataset_types(
+            self._managers.datasets.parent_dataset_types,
+            components=components,
+            missing=missing,
         )
-        if wildcard is Ellipsis:
-            for datasetType in self._managers.datasets:
-                # The dataset type can no longer be a component
-                yield datasetType
-                if components:
-                    # Automatically create the component dataset types
-                    try:
-                        componentsForDatasetType = datasetType.makeAllComponentDatasetTypes()
-                    except KeyError as err:
-                        _LOG.warning(unknownComponentsMessage, err, datasetType.name)
-                    else:
-                        yield from componentsForDatasetType
-            return
-        done: Set[str] = set()
-        for name in wildcard.strings:
-            storage = self._managers.datasets.find(name)
-            done.add(name)
-            if storage is None:
-                if missing is not None:
-                    missing.append(name)
-            else:
-                yield storage.datasetType
-        if wildcard.patterns:
-            # If components (the argument) is None, we'll save component
-            # dataset that we might want to match, but only if their parents
-            # didn't get included.
-            componentsForLater = []
-            for registeredDatasetType in self._managers.datasets:
-                # Components are not stored in registry so expand them here
-                allDatasetTypes = [registeredDatasetType]
-                if components is not False:
-                    # Only check for the components if we are being asked
-                    # for components or components is None.
-                    try:
-                        allDatasetTypes.extend(registeredDatasetType.makeAllComponentDatasetTypes())
-                    except KeyError as err:
-                        _LOG.warning(unknownComponentsMessage, err, registeredDatasetType.name)
-                for datasetType in allDatasetTypes:
-                    if datasetType.name in done:
-                        continue
-                    parentName, componentName = datasetType.nameAndComponent()
-                    if componentName is not None and not components:
-                        if components is None and parentName not in done:
-                            componentsForLater.append(datasetType)
-                        continue
-                    if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
-                        done.add(datasetType.name)
-                        yield datasetType
-            # Go back and try to match saved components.
-            for datasetType in componentsForLater:
-                parentName, _ = datasetType.nameAndComponent()
-                if parentName not in done and any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
-                    yield datasetType
 
     def queryCollections(
         self,
