@@ -21,6 +21,7 @@
 
 import datetime
 import logging
+import os
 from typing import Dict, Optional, Tuple
 
 try:
@@ -85,6 +86,24 @@ class CliLog:
     _fileHandlers = []
     """Any FileHandler classes attached to the root logger by this class
     that need to be closed on reset."""
+
+    @staticmethod
+    def root_logger() -> None:
+        """Return the default root logger.
+
+        Returns
+        -------
+        log_name : `str`
+            The name of the root logger to use when the log level is
+            being set without a log name being specified.
+
+        Notes
+        -----
+        The default is ``lsst`` but this can be over-ridden by setting
+        the environment variable ``DAF_BUTLER_ROOT_LOGGER``.
+        """
+        envvar = "DAF_BUTLER_ROOT_LOGGER"
+        return "lsst" if envvar not in os.environ else os.environ[envvar]
 
     @classmethod
     def initLog(
@@ -236,8 +255,13 @@ class CliLog:
         logLevels : `list` of `tuple`
             per-component logging levels, each item in the list is a tuple
             (component, level), `component` is a logger name or an empty string
-            or `None` for root logger, `level` is a logging level name, one of
-            CRITICAL, ERROR, WARNING, INFO, DEBUG (case insensitive).
+            or `None` for default root logger, `level` is a logging level name,
+            one of CRITICAL, ERROR, WARNING, INFO, DEBUG (case insensitive).
+
+        Notes
+        -----
+        The special name ``__root__`` can be used to set the Python root
+        logger.
         """
         if isinstance(logLevels, dict):
             logLevels = logLevels.items()
@@ -261,6 +285,10 @@ class CliLog:
         level : `str`
             A valid python logging level.
         """
+        if not component:
+            component = cls.root_logger()
+        elif component == "__root__":
+            component = None
         cls._recordComponentSetting(component)
         if lsstLog is not None:
             lsstLogger = lsstLog.Log.getLogger(component or "")

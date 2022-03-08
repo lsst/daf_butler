@@ -57,13 +57,13 @@ def command_log_settings_test(
     LogLevel = namedtuple("LogLevel", ("expected", "actual", "name"))
 
     logLevels = [
-        LogLevel(expected_pyroot_level, logging.getLogger().level, "pyRoot"),
+        LogLevel(expected_pyroot_level, logging.getLogger("lsst").level, "pyRoot"),
         LogLevel(expected_pybutler_level, logging.getLogger("lsst.daf.butler").level, "pyButler"),
     ]
     if lsstLog is not None:
         logLevels.extend(
             [
-                LogLevel(expected_lsstroot_level, lsstLog.getLogger("").getLevel(), "lsstRoot"),
+                LogLevel(expected_lsstroot_level, lsstLog.getLogger("lsst").getLevel(), "lsstRoot"),
                 LogLevel(
                     expected_lsstbutler_level, lsstLog.getLogger("lsst.daf.butler").getLevel(), "lsstButler"
                 ),
@@ -108,6 +108,7 @@ class CliLogTestBase:
         state or expected state when command execution finishes."""
         pyRoot = self.PythonLogger(None)
         pyButler = self.PythonLogger("lsst.daf.butler")
+        pyLsstRoot = self.PythonLogger("lsst")
         lsstRoot = self.LsstLogger("")
         lsstButler = self.LsstLogger("lsst.daf.butler")
 
@@ -117,7 +118,8 @@ class CliLogTestBase:
             result = cmd()
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-        self.assertEqual(pyRoot.logger.level, logging.INFO)
+        self.assertEqual(pyRoot.logger.level, logging.WARNING)
+        self.assertEqual(pyLsstRoot.logger.level, logging.INFO)
         self.assertEqual(pyButler.logger.level, pyButler.initialLevel)
         if lsstLog is not None:
             self.assertEqual(lsstRoot.logger.getLevel(), lsstLog.INFO)
@@ -251,11 +253,13 @@ class CliLogTestBase:
 
                 if suffix == ".json":
                     records = ButlerLogRecords.from_file(filename)
+                    self.assertGreater(len(records), num)
                     self.assertEqual(records[num].levelname, "DEBUG", str(records[num]))
                     self.assertEqual(records[0].MDC, dict(K1="v1", K2="v2", K3="v3"))
                 else:
                     with open(filename) as fd:
                         records = fd.readlines()
+                    self.assertGreater(len(records), num)
                     self.assertIn("DEBUG", records[num], str(records[num]))
                     self.assertNotIn("{", records[num], str(records[num]))
 
