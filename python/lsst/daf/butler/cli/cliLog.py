@@ -150,13 +150,13 @@ class CliLog:
             defaultHandler.setFormatter(formatter)
 
             logging.basicConfig(
-                level=logging.INFO,
+                level=logging.WARNING,
                 force=True,
                 handlers=[defaultHandler],
             )
 
         else:
-            logging.basicConfig(level=logging.INFO, format=cls.pylog_normalFmt, style="{")
+            logging.basicConfig(level=logging.WARNING, format=cls.pylog_normalFmt, style="{")
 
         # Initialize root logger level.
         cls._setLogLevel(None, "INFO")
