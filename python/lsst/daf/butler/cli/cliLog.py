@@ -22,7 +22,7 @@
 import datetime
 import logging
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 try:
     import lsst.log as lsstLog
@@ -88,22 +88,27 @@ class CliLog:
     that need to be closed on reset."""
 
     @staticmethod
-    def root_logger() -> None:
+    def root_loggers() -> Set[str]:
         """Return the default root logger.
 
         Returns
         -------
-        log_name : `str`
-            The name of the root logger to use when the log level is
+        log_name : `set` of `str`
+            The name(s) of the root logger(s) to use when the log level is
             being set without a log name being specified.
 
         Notes
         -----
-        The default is ``lsst`` but this can be over-ridden by setting
-        the environment variable ``DAF_BUTLER_ROOT_LOGGER``.
+        The default is ``lsst`` (which controls the butler infrastructure)
+        but additional loggers can be specified by setting the environment
+        variable ``DAF_BUTLER_ROOT_LOGGER``. This variable can contain
+        multiple default loggers separated by a ``:``.
         """
+        log_names = set(["lsst"])
         envvar = "DAF_BUTLER_ROOT_LOGGER"
-        return "lsst" if envvar not in os.environ else os.environ[envvar]
+        if envvar in os.environ:
+            log_names |= set(os.environ[envvar].split(":"))
+        return log_names
 
     @classmethod
     def initLog(
@@ -285,15 +290,19 @@ class CliLog:
         level : `str`
             A valid python logging level.
         """
+        components: Set[Optional[str]]
         if not component:
-            component = cls.root_logger()
+            components = cls.root_loggers()
         elif component == "__root__":
-            component = None
-        cls._recordComponentSetting(component)
-        if lsstLog is not None:
-            lsstLogger = lsstLog.Log.getLogger(component or "")
-            lsstLogger.setLevel(cls._getLsstLogLevel(level))
-        logging.getLogger(component or None).setLevel(cls._getPyLogLevel(level))
+            components = {None}
+        else:
+            components = {component}
+        for component in components:
+            cls._recordComponentSetting(component)
+            if lsstLog is not None:
+                lsstLogger = lsstLog.Log.getLogger(component or "")
+                lsstLogger.setLevel(cls._getLsstLogLevel(level))
+            logging.getLogger(component or None).setLevel(cls._getPyLogLevel(level))
 
     @staticmethod
     def _getPyLogLevel(level):

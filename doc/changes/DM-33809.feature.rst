@@ -1,4 +1,4 @@
 The command-line tooling has changed how it sets the default logger when using ``--log-level``.
-Now only the default logger (``lsst`` or the value stored in the ``$DAF_BUTLER_ROOT_LOGGER``) will be affected by using ``--log-level`` without a specific logger name.
+Now only the default logger(s) (``lsst`` and the colon-separated values stored in the ``$DAF_BUTLER_ROOT_LOGGER``) will be affected by using ``--log-level`` without a specific logger name.
 By default only this default logger will be set to ``INFO`` log level and all other loggers will remain as ``WARNING``.
-Use ``--log-level __root__=INFO`` to change the root logger (this will not change the default logger level and so an additional call to ``--log-level DEBUG`` may be needed to turn on debugging for all loggers).
+Use ``--log-level __root__=level`` to change the root logger (this will not change the default logger level and so an additional call to ``--log-level DEBUG`` may be needed to turn on debugging for all loggers).
