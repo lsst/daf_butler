@@ -102,6 +102,11 @@ class ConfigDumpUseTest(unittest.TestCase):
             self.assertIn("root", cfg)
             self.assertIn("templates", cfg)
 
+            # Test that a subset that returns a scalar quantity does work.
+            result = self.runner.invoke(butler.cli, ["config-dump", "here", "--subset", ".datastore.root"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertEqual(result.stdout.strip(), ".datastore.root: <butlerRoot>")
+
     def test_invalidSubset(self):
         """Test selecting a subset key that does not exist in the config."""
         with self.runner.isolated_filesystem():
