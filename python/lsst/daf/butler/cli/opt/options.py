@@ -119,7 +119,7 @@ dataset_type_option = MWOptionDecorator(
 datasets_option = MWOptionDecorator("--datasets")
 
 
-logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "VERBOSE", "DEBUG"]
+logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "VERBOSE", "DEBUG", "TRACE"]
 log_level_option = MWOptionDecorator(
     "--log-level",
     callback=partial(

@@ -29,7 +29,7 @@ try:
 except ModuleNotFoundError:
     lsstLog = None
 
-from lsst.utils.logging import VERBOSE
+from lsst.utils.logging import TRACE, VERBOSE
 
 from ..core.logging import ButlerMDC, JsonLogFormatter
 
@@ -322,6 +322,8 @@ class CliLog:
         """
         if level == "VERBOSE":
             return VERBOSE
+        elif level == "TRACE":
+            return TRACE
         return getattr(logging, level, None)
 
     @staticmethod
@@ -345,13 +347,16 @@ class CliLog:
 
         Notes
         -----
-        ``VERBOSE`` logging is not supported by the LSST logger and so will
-        always be converted to ``INFO``.
+        ``VERBOSE`` and ``TRACE`` logging are not supported by the LSST logger.
+        ``VERBOSE`` will be converted to ``INFO`` and ``TRACE`` will be
+        converted to ``DEBUG``.
         """
         if lsstLog is None:
             return None
         if level == "VERBOSE":
             level = "INFO"
+        elif level == "TRACE":
+            level = "DEBUG"
         pylog_level = CliLog._getPyLogLevel(level)
         return lsstLog.LevelTranslator.logging2lsstLog(pylog_level)
 
