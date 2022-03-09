@@ -265,7 +265,7 @@ class CliLog:
 
         Notes
         -----
-        The special name ``__root__`` can be used to set the Python root
+        The special name ``.`` can be used to set the Python root
         logger.
         """
         if isinstance(logLevels, dict):
@@ -288,14 +288,14 @@ class CliLog:
         component : `str` or None
             The name of the log component or None for the default logger.
             The root logger can be specified either by an empty string or
-            with the special name ``__root__``.
+            with the special name ``.``.
         level : `str`
             A valid python logging level.
         """
         components: Set[Optional[str]]
         if component is None:
             components = cls.root_loggers()
-        elif not component or component == "__root__":
+        elif not component or component == ".":
             components = {None}
         else:
             components = {component}

@@ -131,8 +131,7 @@ log_level_option = MWOptionDecorator(
         default_key=None,  # No separator
     ),
     help=f"The logging level. Without an explicit logger name, will only affect the default root loggers "
-    f"({', '.join(CliLog.root_loggers())}). "
-    f"To modify the root logger set '__root__=LEVEL' or '=LEVEL'. "
+    f"({', '.join(CliLog.root_loggers())}). To modify the root logger use '.=LEVEL'. "
     f"Supported levels are [{'|'.join(logLevelChoices)}]",
     is_eager=True,
     metavar="LEVEL|COMPONENT=LEVEL",

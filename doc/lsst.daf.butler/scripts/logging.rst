@@ -13,7 +13,7 @@ Additional loggers (and their descendants) can be treated the same as the defaul
 The logging level can be changed by using the ``--log-level`` command line option.
 To change all the default loggers to ``DEBUG`` use ``--log-level DEBUG``.
 The help text will list all the supported level names.
-To change the logging level of the root python logger use either ``--log-level "=LEVEL"`` or ``--log-level __root__=LEVEL`` (where ``LEVEL`` is the required level from the supported list).
+To change the logging level of the root python logger use either ``--log-level .=LEVEL`` (where ``LEVEL`` is the required level from the supported list).
 Since the default logger is always set to ``INFO``, in order to set all loggers to, say, ``DEBUG`` then both the default and root logger must be set explicitly: ``--log-level "=DEBUG" --log-level DEBUG``.
 
 This syntax demonstrates how to specify finer control of specific loggers.
