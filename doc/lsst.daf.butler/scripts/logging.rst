@@ -8,7 +8,7 @@ These can be listed using ``butler --help`` and are available to all command-lin
 The logging options must be given before any subcommand is specified.
 
 By default the ``lsst`` log hierarchy is set to ``INFO`` logging level and the python root logger is left at its default level of ``WARNING``.
-Additional root loggers can be treated as the default loggers by setting the ``$DAF_BUTLER_ROOT_LOGGER`` environment variable to a colon-separated list of logger names.
+Additional loggers (and their descendants) can be treated the same as the default ``lsst`` logger by setting the ``$DAF_BUTLER_DEFAULT_LOGGER`` environment variable to a colon-separated list of logger names.
 
 The logging level can be changed by using the ``--log-level`` command line option.
 To change all the default loggers to ``DEBUG`` use ``--log-level DEBUG``.
@@ -30,6 +30,6 @@ These options will:
 
 * set the ``lsst`` logger to ``INFO`` and the butler logger to ``DEBUG``;
 * generate formatted log messages that will use the long format that includes time stamps with every log message containing the special text ``MY_ID``;
-* Will create a log file containing a JSON representation of the log messages.
+* create a log file containing a JSON representation of the log messages.
 
 The JSON output always includes every piece of information from the log record; the ``--long-log`` option has no effect on the content of the JSON file.
