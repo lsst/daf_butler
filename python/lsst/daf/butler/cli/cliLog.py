@@ -286,14 +286,16 @@ class CliLog:
         Parameters
         ----------
         component : `str` or None
-            The name of the log component or None for the root logger.
+            The name of the log component or None for the default logger.
+            The root logger can be specified either by an empty string or
+            with the special name ``__root__``.
         level : `str`
             A valid python logging level.
         """
         components: Set[Optional[str]]
-        if not component:
+        if component is None:
             components = cls.root_loggers()
-        elif component == "__root__":
+        elif not component or component == "__root__":
             components = {None}
         else:
             components = {component}
