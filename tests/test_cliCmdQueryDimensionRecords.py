@@ -265,7 +265,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
         result = self.runner.invoke(butlerCli, ["query-dimension-records", self.root, "skymap"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-        rows = array((("example_skymap", "3200000000000000", "None", "None", "None")))
+        rows = array((("example_skymap", "0x3200000000000000", "None", "None", "None")))
         expected = AstropyTable(rows, names=["name", "hash", "tract_max", "patch_nx_max", "patch_ny_max"])
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 

@@ -58,7 +58,7 @@ def queryDimensionRecords(repo, element, datasets, collections, where, no_check,
         if isinstance(v, Timespan):
             v = (v.begin, v.end)
         elif isinstance(v, bytes):
-            v = v.hex()
+            v = "0x" + v.hex()
         return v
 
     return Table([[conform(getattr(record, key, None)) for record in records] for key in keys], names=keys)
