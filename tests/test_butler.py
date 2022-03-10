@@ -132,7 +132,7 @@ class ButlerPutGetTests:
     butler configurations."""
 
     root = None
-    default_run = "ingest"
+    default_run = "ingésτ"
 
     @staticmethod
     def addDatasetType(datasetTypeName, dimensions, storageClass, registry):

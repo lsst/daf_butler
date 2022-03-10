@@ -383,7 +383,7 @@ class RegistryTests(ABC):
         """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
-        run = "test"
+        run = "tésτ"
         registry.registerRun(run)
         datasetType = registry.getDatasetType("bias")
         dataId = {"instrument": "Cam1", "detector": 2}
@@ -400,7 +400,7 @@ class RegistryTests(ABC):
         """Tests for `Registry.findDataset`."""
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
-        run = "test"
+        run = "tésτ"
         datasetType = registry.getDatasetType("bias")
         dataId = {"instrument": "Cam1", "detector": 4}
         registry.registerRun(run)
@@ -516,7 +516,7 @@ class RegistryTests(ABC):
 
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
-        run = "test"
+        run = "tésτ"
         registry.registerRun(run)
         datasetTypeBias = registry.getDatasetType("bias")
         datasetTypeFlat = registry.getDatasetType("flat")
@@ -1101,7 +1101,7 @@ class RegistryTests(ABC):
             )
 
         # dataset types
-        run = "test"
+        run = "tésτ"
         registry.registerRun(run)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
