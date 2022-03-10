@@ -254,6 +254,21 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
         expected = AstropyTable(rows, names=self.expectedColumnNames)
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
+    def testSkymap(self):
+        butler = Butler(self.root, run="foo")
+        # try replacing the testRepo's butler with the one with the "foo" run.
+        self.testRepo.butler = butler
+
+        skymapRecord = {"name": "example_skymap", "hash": (50).to_bytes(8, byteorder="little")}
+        self.testRepo.butler.registry.insertDimensionData("skymap", skymapRecord)
+
+        result = self.runner.invoke(butlerCli, ["query-dimension-records", self.root, "skymap"])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+
+        rows = array((("example_skymap", "3200000000000000", "None", "None", "None")))
+        expected = AstropyTable(rows, names=["name", "hash", "tract_max", "patch_nx_max", "patch_ny_max"])
+        self.assertAstropyTablesEqual(readTable(result.output), expected)
+
 
 if __name__ == "__main__":
     unittest.main()
