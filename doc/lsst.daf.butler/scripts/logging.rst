@@ -28,7 +28,7 @@ As an example of how the log options can be combined:
 
 These options will:
 
-* set the ``lsst`` logger to ``INFO`` and the butler logger to ``DEBUG``;
+* set the ``lsst`` logger to ``INFO`` and the butler logger to ``DEBUG``, leaving all non-lsst loggers at ``WARNING``;
 * generate formatted log messages that will use the long format that includes time stamps with every log message containing the special text ``MY_ID``;
 * create a log file containing a JSON representation of the log messages.
 
