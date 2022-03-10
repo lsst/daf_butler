@@ -103,7 +103,8 @@ def globToRegex(
     if not expressions or "*" in expressions:
         return Ellipsis
 
-    nomagic = re.compile(r"^[\w/\.\-@]+$")
+    # The character class range at the end adds support for emoji.
+    nomagic = re.compile(r"^[\w/\.\-@\u263a-\U0001f645]+$")
 
     # Try not to convert simple string to a regex.
     results: List[Union[str, Pattern]] = []
