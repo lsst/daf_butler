@@ -50,11 +50,6 @@ log = logging.getLogger(__name__)
 typeStrAcceptsMultiple = "TEXT ..."
 typeStrAcceptsSingle = "TEXT"
 
-# For parameters that support key-value inputs, this defines the separator
-# for those inputs.
-split_kv_separator = "="
-
-
 # The standard help string for the --where option when it takes a WHERE clause.
 where_help = (
     "A string expression similar to a SQL WHERE clause. May involve any column of a "

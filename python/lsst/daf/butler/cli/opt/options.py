@@ -25,6 +25,7 @@ from functools import partial
 import click
 from lsst.daf.butler.registry import CollectionType
 
+from ..cliLog import CliLog
 from ..utils import MWOptionDecorator, MWPath, split_commas, split_kv, unwrap, yaml_presets
 
 
@@ -118,7 +119,7 @@ dataset_type_option = MWOptionDecorator(
 datasets_option = MWOptionDecorator("--datasets")
 
 
-logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "VERBOSE", "DEBUG"]
+logLevelChoices = ["CRITICAL", "ERROR", "WARNING", "INFO", "VERBOSE", "DEBUG", "TRACE"]
 log_level_option = MWOptionDecorator(
     "--log-level",
     callback=partial(
@@ -127,8 +128,11 @@ log_level_option = MWOptionDecorator(
         normalize=True,
         unseparated_okay=True,
         add_to_default=True,
+        default_key=None,  # No separator
     ),
-    help=f"The logging level. Supported levels are [{'|'.join(logLevelChoices)}]",
+    help=f"The logging level. Without an explicit logger name, will only affect the default root loggers "
+    f"({', '.join(CliLog.root_loggers())}). To modify the root logger use '.=LEVEL'. "
+    f"Supported levels are [{'|'.join(logLevelChoices)}]",
     is_eager=True,
     metavar="LEVEL|COMPONENT=LEVEL",
     multiple=True,

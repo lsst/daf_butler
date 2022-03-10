@@ -413,6 +413,8 @@ The settings for ``obs_base`` are like this:
 
     envPrepend(DAF_BUTLER_PLUGINS, $OBS_BASE_DIR/python/lsst/obs/base/cli/resources.yaml)
 
+.. _daf_butler_cli-other_commands:
+
 Writing Other Commands
 ======================
 

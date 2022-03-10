@@ -25,6 +25,7 @@ it can't be tested there because daf_butler does not directly depend on
 lsst.log, and only uses it if it has been setup by another package."""
 
 import logging
+import os
 import re
 import subprocess
 import tempfile
@@ -32,40 +33,62 @@ import unittest
 from collections import namedtuple
 from functools import partial
 from io import StringIO
+from logging import DEBUG, INFO, WARNING
 
 import click
 from lsst.daf.butler.cli.butler import cli as butlerCli
 from lsst.daf.butler.cli.cliLog import CliLog
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg, command_test_env
 from lsst.daf.butler.core.logging import ButlerLogRecords
+from lsst.utils.logging import TRACE
 
 try:
     import lsst.log as lsstLog
+
+    lsstLog_INFO = lsstLog.INFO
+    lsstLog_DEBUG = lsstLog.DEBUG
+    lsstLog_WARN = lsstLog.WARN
 except ModuleNotFoundError:
     lsstLog = None
+    lsstLog_INFO = 0
+    lsstLog_DEBUG = 0
+    lsstLog_WARN = 0
 
 
 @click.command()
 @click.option("--expected-pyroot-level", type=int)
+@click.option("--expected-pylsst-level", type=int)
 @click.option("--expected-pybutler-level", type=int)
 @click.option("--expected-lsstroot-level", type=int)
 @click.option("--expected-lsstbutler-level", type=int)
+@click.option("--expected-lsstx-level", type=int)
 def command_log_settings_test(
-    expected_pyroot_level, expected_pybutler_level, expected_lsstroot_level, expected_lsstbutler_level
+    expected_pyroot_level,
+    expected_pylsst_level,
+    expected_pybutler_level,
+    expected_lsstroot_level,
+    expected_lsstbutler_level,
+    expected_lsstx_level,
 ):
 
     LogLevel = namedtuple("LogLevel", ("expected", "actual", "name"))
 
     logLevels = [
         LogLevel(expected_pyroot_level, logging.getLogger().level, "pyRoot"),
-        LogLevel(expected_pybutler_level, logging.getLogger("lsst.daf.butler").level, "pyButler"),
+        LogLevel(expected_pylsst_level, logging.getLogger("lsst").getEffectiveLevel(), "pyLsst"),
+        LogLevel(
+            expected_pybutler_level, logging.getLogger("lsst.daf.butler").getEffectiveLevel(), "pyButler"
+        ),
+        LogLevel(expected_lsstx_level, logging.getLogger("lsstx").getEffectiveLevel(), "pyLsstx"),
     ]
     if lsstLog is not None:
         logLevels.extend(
             [
-                LogLevel(expected_lsstroot_level, lsstLog.getLogger("").getLevel(), "lsstRoot"),
+                LogLevel(expected_lsstroot_level, lsstLog.getLogger("lsst").getEffectiveLevel(), "lsstRoot"),
                 LogLevel(
-                    expected_lsstbutler_level, lsstLog.getLogger("lsst.daf.butler").getLevel(), "lsstButler"
+                    expected_lsstbutler_level,
+                    lsstLog.getLogger("lsst.daf.butler").getEffectiveLevel(),
+                    "lsstButler",
                 ),
             ]
         )
@@ -108,6 +131,7 @@ class CliLogTestBase:
         state or expected state when command execution finishes."""
         pyRoot = self.PythonLogger(None)
         pyButler = self.PythonLogger("lsst.daf.butler")
+        pyLsstRoot = self.PythonLogger("lsst")
         lsstRoot = self.LsstLogger("")
         lsstButler = self.LsstLogger("lsst.daf.butler")
 
@@ -117,7 +141,8 @@ class CliLogTestBase:
             result = cmd()
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
-        self.assertEqual(pyRoot.logger.level, logging.INFO)
+        self.assertEqual(pyRoot.logger.level, logging.WARNING)
+        self.assertEqual(pyLsstRoot.logger.level, logging.INFO)
         self.assertEqual(pyButler.logger.level, pyButler.initialLevel)
         if lsstLog is not None:
             self.assertEqual(lsstRoot.logger.getLevel(), lsstLog.INFO)
@@ -136,27 +161,79 @@ class CliLogTestBase:
         of the command execution and resets the logging system to its previous
         state or expected state when command execution finishes."""
 
-        self.runTest(
-            partial(
-                self.runner.invoke,
-                butlerCli,
-                [
-                    "--log-level",
-                    "WARNING",
-                    "--log-level",
-                    "lsst.daf.butler=DEBUG",
-                    "command-log-settings-test",
-                    "--expected-pyroot-level",
-                    logging.WARNING,
-                    "--expected-pybutler-level",
-                    logging.DEBUG,
-                    "--expected-lsstroot-level",
-                    lsstLog.WARN if lsstLog else 0,
-                    "--expected-lsstbutler-level",
-                    lsstLog.DEBUG if lsstLog else 0,
-                ],
-            )
+        # Run with two different log level settings.
+        log_levels = (
+            # --log-level / --log-level / expected pyroot, pylsst, pybutler,
+            # lsstroot, lsstbutler, lsstx
+            (
+                "WARNING",
+                "lsst.daf.butler=DEBUG",
+                WARNING,
+                WARNING,
+                DEBUG,
+                lsstLog_WARN,
+                lsstLog_DEBUG,
+                WARNING,
+            ),
+            ("DEBUG", "lsst.daf.butler=TRACE", WARNING, DEBUG, TRACE, lsstLog_DEBUG, lsstLog_DEBUG, WARNING),
+            (".=DEBUG", "lsst.daf.butler=WARNING", DEBUG, INFO, WARNING, lsstLog_INFO, lsstLog_WARN, DEBUG),
+            (".=DEBUG", "DEBUG", DEBUG, DEBUG, DEBUG, lsstLog_DEBUG, lsstLog_DEBUG, DEBUG),
+            (".=DEBUG", "conda=DEBUG", DEBUG, INFO, INFO, lsstLog_INFO, lsstLog_INFO, DEBUG),
         )
+
+        self._test_levels(log_levels)
+
+        # Check that the environment variable can set additional roots.
+        log_levels = (
+            # --log-level / --log-level / expected pyroot, pylsst, pybutler,
+            # lsstroot, lsstbutler, lsstx
+            (
+                "WARNING",
+                "lsst.daf.butler=DEBUG",
+                WARNING,
+                WARNING,
+                DEBUG,
+                lsstLog_WARN,
+                lsstLog_DEBUG,
+                WARNING,
+            ),
+            ("DEBUG", "lsst.daf.butler=TRACE", WARNING, DEBUG, TRACE, lsstLog_DEBUG, lsstLog_DEBUG, DEBUG),
+            (".=DEBUG", "lsst.daf.butler=WARNING", DEBUG, INFO, WARNING, lsstLog_INFO, lsstLog_WARN, INFO),
+            (".=DEBUG", "DEBUG", DEBUG, DEBUG, DEBUG, lsstLog_DEBUG, lsstLog_DEBUG, DEBUG),
+            (".=DEBUG", "conda=DEBUG", DEBUG, INFO, INFO, lsstLog_INFO, lsstLog_INFO, INFO),
+        )
+
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_ROOT_LOGGER": "lsstx"}):
+            self._test_levels(log_levels)
+
+    def _test_levels(self, log_levels):
+        for level1, level2, x_pyroot, x_pylsst, x_pybutler, x_lsstroot, x_lsstbutler, x_lsstx in log_levels:
+            with self.subTest("Test different log levels", level1=level1, level2=level2):
+                self.runTest(
+                    partial(
+                        self.runner.invoke,
+                        butlerCli,
+                        [
+                            "--log-level",
+                            level1,
+                            "--log-level",
+                            level2,
+                            "command-log-settings-test",
+                            "--expected-pyroot-level",
+                            x_pyroot,
+                            "--expected-pylsst-level",
+                            x_pylsst,
+                            "--expected-pybutler-level",
+                            x_pybutler,
+                            "--expected-lsstroot-level",
+                            x_lsstroot,
+                            "--expected-lsstbutler-level",
+                            x_lsstbutler,
+                            "--expected-lsstx-level",
+                            x_lsstx,
+                        ],
+                    )
+                )
 
     def test_helpLogReset(self):
         """Verify that when a command does not execute, like when the help menu
@@ -251,11 +328,13 @@ class CliLogTestBase:
 
                 if suffix == ".json":
                     records = ButlerLogRecords.from_file(filename)
+                    self.assertGreater(len(records), num)
                     self.assertEqual(records[num].levelname, "DEBUG", str(records[num]))
                     self.assertEqual(records[0].MDC, dict(K1="v1", K2="v2", K3="v3"))
                 else:
                     with open(filename) as fd:
                         records = fd.readlines()
+                    self.assertGreater(len(records), num)
                     self.assertIn("DEBUG", records[num], str(records[num]))
                     self.assertNotIn("{", records[num], str(records[num]))
 

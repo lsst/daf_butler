@@ -21,14 +21,15 @@
 
 import datetime
 import logging
-from typing import Dict, Optional, Tuple
+import os
+from typing import Dict, Optional, Set, Tuple
 
 try:
     import lsst.log as lsstLog
 except ModuleNotFoundError:
     lsstLog = None
 
-from lsst.utils.logging import VERBOSE
+from lsst.utils.logging import TRACE, VERBOSE
 
 from ..core.logging import ButlerMDC, JsonLogFormatter
 
@@ -85,6 +86,29 @@ class CliLog:
     _fileHandlers = []
     """Any FileHandler classes attached to the root logger by this class
     that need to be closed on reset."""
+
+    @staticmethod
+    def root_loggers() -> Set[str]:
+        """Return the default root logger.
+
+        Returns
+        -------
+        log_name : `set` of `str`
+            The name(s) of the root logger(s) to use when the log level is
+            being set without a log name being specified.
+
+        Notes
+        -----
+        The default is ``lsst`` (which controls the butler infrastructure)
+        but additional loggers can be specified by setting the environment
+        variable ``DAF_BUTLER_ROOT_LOGGER``. This variable can contain
+        multiple default loggers separated by a ``:``.
+        """
+        log_names = set(["lsst"])
+        envvar = "DAF_BUTLER_ROOT_LOGGER"
+        if envvar in os.environ:
+            log_names |= set(os.environ[envvar].split(":"))
+        return log_names
 
     @classmethod
     def initLog(
@@ -150,13 +174,13 @@ class CliLog:
             defaultHandler.setFormatter(formatter)
 
             logging.basicConfig(
-                level=logging.INFO,
+                level=logging.WARNING,
                 force=True,
                 handlers=[defaultHandler],
             )
 
         else:
-            logging.basicConfig(level=logging.INFO, format=cls.pylog_normalFmt, style="{")
+            logging.basicConfig(level=logging.WARNING, format=cls.pylog_normalFmt, style="{")
 
         # Initialize root logger level.
         cls._setLogLevel(None, "INFO")
@@ -236,8 +260,13 @@ class CliLog:
         logLevels : `list` of `tuple`
             per-component logging levels, each item in the list is a tuple
             (component, level), `component` is a logger name or an empty string
-            or `None` for root logger, `level` is a logging level name, one of
-            CRITICAL, ERROR, WARNING, INFO, DEBUG (case insensitive).
+            or `None` for default root logger, `level` is a logging level name,
+            one of CRITICAL, ERROR, WARNING, INFO, DEBUG (case insensitive).
+
+        Notes
+        -----
+        The special name ``.`` can be used to set the Python root
+        logger.
         """
         if isinstance(logLevels, dict):
             logLevels = logLevels.items()
@@ -257,15 +286,25 @@ class CliLog:
         Parameters
         ----------
         component : `str` or None
-            The name of the log component or None for the root logger.
+            The name of the log component or None for the default logger.
+            The root logger can be specified either by an empty string or
+            with the special name ``.``.
         level : `str`
             A valid python logging level.
         """
-        cls._recordComponentSetting(component)
-        if lsstLog is not None:
-            lsstLogger = lsstLog.Log.getLogger(component or "")
-            lsstLogger.setLevel(cls._getLsstLogLevel(level))
-        logging.getLogger(component or None).setLevel(cls._getPyLogLevel(level))
+        components: Set[Optional[str]]
+        if component is None:
+            components = cls.root_loggers()
+        elif not component or component == ".":
+            components = {None}
+        else:
+            components = {component}
+        for component in components:
+            cls._recordComponentSetting(component)
+            if lsstLog is not None:
+                lsstLogger = lsstLog.Log.getLogger(component or "")
+                lsstLogger.setLevel(cls._getLsstLogLevel(level))
+            logging.getLogger(component or None).setLevel(cls._getPyLogLevel(level))
 
     @staticmethod
     def _getPyLogLevel(level):
@@ -283,6 +322,8 @@ class CliLog:
         """
         if level == "VERBOSE":
             return VERBOSE
+        elif level == "TRACE":
+            return TRACE
         return getattr(logging, level, None)
 
     @staticmethod
@@ -306,13 +347,16 @@ class CliLog:
 
         Notes
         -----
-        ``VERBOSE`` logging is not supported by the LSST logger and so will
-        always be converted to ``INFO``.
+        ``VERBOSE`` and ``TRACE`` logging are not supported by the LSST logger.
+        ``VERBOSE`` will be converted to ``INFO`` and ``TRACE`` will be
+        converted to ``DEBUG``.
         """
         if lsstLog is None:
             return None
         if level == "VERBOSE":
             level = "INFO"
+        elif level == "TRACE":
+            level = "DEBUG"
         pylog_level = CliLog._getPyLogLevel(level)
         return lsstLog.LevelTranslator.logging2lsstLog(pylog_level)
 
