@@ -1,0 +1,3 @@
+The constraints on collection names have been relaxed.
+Previously collection names were limited to ASCII alphanumeric characters plus a limited selection of symbols (directory separator, @-sign).
+Now all unicode alphanumerics can be used along with emoji.

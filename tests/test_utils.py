@@ -160,23 +160,27 @@ class GlobToRegexTestCase(unittest.TestCase):
         """Test that a list of glob strings converts as expected to a regex and
         returns in the expected list.
         """
-        # test an absolute string
-        patterns = globToRegex(["bar"])
-        self.assertEqual(len(patterns), 1)
-        self.assertTrue(bool(re.fullmatch(patterns[0], "bar")))
-        self.assertIsNone(re.fullmatch(patterns[0], "boz"))
+        # These strings should be returned unchanged.
+        strings = ["bar", "😺", "ingésτ", "ex]", "[xe", "[!no", "e[x"]
+        self.assertEqual(globToRegex(strings), strings)
 
-        # test leading & trailing wildcard in multiple patterns
-        patterns = globToRegex(["ba*", "*.fits"])
-        self.assertEqual(len(patterns), 2)
-        # check the "ba*" pattern:
-        self.assertTrue(bool(re.fullmatch(patterns[0], "bar")))
-        self.assertTrue(bool(re.fullmatch(patterns[0], "baz")))
-        self.assertIsNone(re.fullmatch(patterns[0], "boz.fits"))
-        # check the "*.fits" pattern:
-        self.assertTrue(bool(re.fullmatch(patterns[1], "bar.fits")))
-        self.assertTrue(re.fullmatch(patterns[1], "boz.fits"))
-        self.assertIsNone(re.fullmatch(patterns[1], "boz.hdf5"))
+        # Globs with strings that match the glob and strings that do not.
+        tests = (
+            ("bar", ["bar"], ["baz"]),
+            ("ba*", ["bar", "baz"], ["az"]),
+            ("ba[rz]", ["bar", "baz"], ["bat"]),
+            ("ba[rz]x[y", ["barx[y", "bazx[y"], ["batx[y"]),
+            ("ba[!rz]", ["bat", "baτ"], ["bar", "baz"]),
+            ("b?r", ["bor", "bar", "b😺r"], ["bat"]),
+            ("*.fits", ["boz.fits"], ["boz.fits.gz", "boz.hdf5"]),
+        )
+
+        for glob, matches, no_matches in tests:
+            patterns = globToRegex(glob)
+            for match in matches:
+                self.assertTrue(bool(re.fullmatch(patterns[0], match)))
+            for no_match in no_matches:
+                self.assertIsNone(re.fullmatch(patterns[0], no_match))
 
 
 if __name__ == "__main__":

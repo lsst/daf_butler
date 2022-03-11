@@ -132,6 +132,7 @@ class ButlerPutGetTests:
     butler configurations."""
 
     root = None
+    default_run = "ingésτ😺"
 
     @staticmethod
     def addDatasetType(datasetTypeName, dimensions, storageClass, registry):
@@ -211,7 +212,7 @@ class ButlerPutGetTests:
     def runPutGetTest(self, storageClass, datasetTypeName):
         # New datasets will be added to run and tag, but we will only look in
         # tag when looking up datasets.
-        run = "ingest"
+        run = self.default_run
         butler, datasetType = self.create_butler(run, storageClass, datasetTypeName)
 
         # Create and store a dataset
@@ -510,17 +511,17 @@ class ButlerTests(ButlerPutGetTests):
 
     def testConstructor(self):
         """Independent test of constructor."""
-        butler = Butler(self.tmpConfigFile, run="ingest")
+        butler = Butler(self.tmpConfigFile, run=self.default_run)
         self.assertIsInstance(butler, Butler)
 
         # Check that butler.yaml is added automatically.
         if self.tmpConfigFile.endswith(end := "/butler.yaml"):
             config_dir = self.tmpConfigFile[: -len(end)]
-            butler = Butler(config_dir, run="ingest")
+            butler = Butler(config_dir, run=self.default_run)
             self.assertIsInstance(butler, Butler)
 
         collections = set(butler.registry.queryCollections())
-        self.assertEqual(collections, {"ingest"})
+        self.assertEqual(collections, {self.default_run})
 
         # Check that some special characters can be included in run name.
         special_run = "u@b.c-A"
@@ -581,7 +582,7 @@ class ButlerTests(ButlerPutGetTests):
         butler = self.runPutGetTest(storageClass, "test_metric")
 
         # Should *not* be disassembled
-        datasets = list(butler.registry.queryDatasets(..., collections="ingest"))
+        datasets = list(butler.registry.queryDatasets(..., collections=self.default_run))
         self.assertEqual(len(datasets), 1)
         uri, components = butler.getURIs(datasets[0])
         self.assertIsInstance(uri, ResourcePath)
@@ -602,7 +603,7 @@ class ButlerTests(ButlerPutGetTests):
         butler = self.runPutGetTest(storageClass, "test_metric_comp")
 
         # Should be disassembled
-        datasets = list(butler.registry.queryDatasets(..., collections="ingest"))
+        datasets = list(butler.registry.queryDatasets(..., collections=self.default_run))
         self.assertEqual(len(datasets), 1)
         uri, components = butler.getURIs(datasets[0])
 
@@ -639,7 +640,7 @@ class ButlerTests(ButlerPutGetTests):
                 self.assertEqual(compuri.fragment, "predicted", f"Checking for fragment in {compuri}")
 
     def testIngest(self):
-        butler = Butler(self.tmpConfigFile, run="ingest")
+        butler = Butler(self.tmpConfigFile, run=self.default_run)
 
         # Create and register a DatasetType
         dimensions = butler.registry.dimensions.extract(["instrument", "visit", "detector"])
@@ -861,7 +862,7 @@ class ButlerTests(ButlerPutGetTests):
 
     def testPickle(self):
         """Test pickle support."""
-        butler = Butler(self.tmpConfigFile, run="ingest")
+        butler = Butler(self.tmpConfigFile, run=self.default_run)
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut._config, butler._config)
@@ -869,7 +870,7 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(butlerOut.run, butler.run)
 
     def testGetDatasetTypes(self):
-        butler = Butler(self.tmpConfigFile, run="ingest")
+        butler = Butler(self.tmpConfigFile, run=self.default_run)
         dimensions = butler.registry.dimensions.extract(["instrument", "visit", "physical_filter"])
         dimensionEntries = [
             (
@@ -936,7 +937,7 @@ class ButlerTests(ButlerPutGetTests):
         )
 
     def testTransaction(self):
-        butler = Butler(self.tmpConfigFile, run="ingest")
+        butler = Butler(self.tmpConfigFile, run=self.default_run)
         datasetTypeName = "test_metric"
         dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
         dimensionEntries = (
@@ -1022,7 +1023,7 @@ class ButlerTests(ButlerPutGetTests):
             Butler.makeRepo(self.root, standalone=True, config=Config(self.configFile), overwrite=False)
 
     def testStringification(self):
-        butler = Butler(self.tmpConfigFile, run="ingest")
+        butler = Butler(self.tmpConfigFile, run=self.default_run)
         butlerStr = str(butler)
 
         if self.datastoreStr is not None:
@@ -1039,7 +1040,7 @@ class ButlerTests(ButlerPutGetTests):
     def testButlerRewriteDataId(self):
         """Test that dataIds can be rewritten based on dimension records."""
 
-        butler = Butler(self.tmpConfigFile, run="ingest")
+        butler = Butler(self.tmpConfigFile, run=self.default_run)
 
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataDict")
         datasetTypeName = "random_data"
@@ -1105,7 +1106,7 @@ class FileDatastoreButlerTests(ButlerTests):
 
     def testPutTemplates(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler(self.tmpConfigFile, run="ingest")
+        butler = Butler(self.tmpConfigFile, run=self.default_run)
 
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
@@ -1136,7 +1137,9 @@ class FileDatastoreButlerTests(ButlerTests):
         ref = butler.put(metric, "metric1", dataId1)
         uri = butler.getURI(ref)
         self.assertTrue(
-            self.checkFileExists(butler.datastore.root, "ingest/metric1/??#?/d-r/DummyCamComp_423.pickle"),
+            self.checkFileExists(
+                butler.datastore.root, f"{self.default_run}/metric1/??#?/d-r/DummyCamComp_423.pickle"
+            ),
             f"Checking existence of {uri}",
         )
 
@@ -1150,7 +1153,9 @@ class FileDatastoreButlerTests(ButlerTests):
         ref = butler.put(metric, "metric2", dataId2)
         uri = butler.getURI(ref)
         self.assertTrue(
-            self.checkFileExists(butler.datastore.root, "ingest/metric2/d-r/DummyCamComp_v423.pickle"),
+            self.checkFileExists(
+                butler.datastore.root, f"{self.default_run}/metric2/d-r/DummyCamComp_v423.pickle"
+            ),
             f"Checking existence of {uri}",
         )
 
@@ -1215,7 +1220,7 @@ class FileDatastoreButlerTests(ButlerTests):
                         skip_dimensions=None,
                         reuse_ids=False,
                     )
-                importButler = Butler(importDir, run="ingest")
+                importButler = Butler(importDir, run=self.default_run)
                 for ref in datasets:
                     with self.subTest(ref=ref):
                         # Test for existence by passing in the DatasetType and
@@ -1276,7 +1281,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
     def testPathConstructor(self):
         """Independent test of constructor using PathLike."""
-        butler = Butler(self.tmpConfigFile, run="ingest")
+        butler = Butler(self.tmpConfigFile, run=self.default_run)
         self.assertIsInstance(butler, Butler)
 
         # And again with a Path object with the butler yaml
@@ -1389,7 +1394,7 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         # Store some data with the normal example storage class.
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         datasetTypeName = "test_metric"
-        butler, _ = self.create_butler("ingest", storageClass, datasetTypeName)
+        butler, _ = self.create_butler(self.default_run, storageClass, datasetTypeName)
 
         dataId = {"instrument": "DummyCamComp", "visit": 423}
 
