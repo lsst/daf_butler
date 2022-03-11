@@ -103,16 +103,19 @@ def globToRegex(
     if not expressions or "*" in expressions:
         return Ellipsis
 
-    # The character class range at the end adds support for emoji.
-    nomagic = re.compile(r"^[\w/\.\-@\u263a-\U0001f645]+$")
+    # List of special glob characters supported by fnmatch.
+    # See: https://docs.python.org/3/library/fnmatch.html
+    # The complication is that "[" on its own is not a glob
+    # unless there is a match "]".
+    magic = re.compile(r"[\*\?]|\[.*\]|\[!.*\]")
 
     # Try not to convert simple string to a regex.
     results: List[Union[str, Pattern]] = []
     for e in expressions:
         res: Union[str, Pattern]
-        if nomagic.match(e):
-            res = e
-        else:
+        if magic.search(e):
             res = re.compile(fnmatch.translate(e))
+        else:
+            res = e
         results.append(res)
     return results
