@@ -20,13 +20,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from typing import Mapping, Sequence
+from typing import Iterator, Mapping, Sequence
 
 import click
 
 from ... import script
 from ..opt import collection_argument, confirm_option, options_file_option, repo_argument
 from ..utils import ButlerCommand
+
 
 # messages emitted by remove-runs, defined separately for use in unit
 # tests.
@@ -37,9 +38,21 @@ didRemoveRunsMsg = "The following RUN collections were removed:"
 didRemoveDatasetsMsg = "The following datasets were removed:"
 removedRunsMsg = "Removed collections"
 abortedMsg = "Aborted."
+requiresConfirmationMsg = (
+    "Removing runs that are in parent CHAINED collections requires confirmation. "
+    "\nTry again without --no-confirm to confirm removal of RUN collections from parents, "
+    "or add the --force flag to skip confirmation."
+)
+willUnlinkMsg = "{run}: will be unlinked from {parents}"
+didUnlinkMsg = "{run}: was removed and unlinked from {parents}"
+mustBeUnlinkedMsg = "{run}: must be unlinked from {parents}"
 
 
-def _print_remove(will: bool, runs: Sequence[str], datasets: Mapping[str, int]):
+def _quoted(items: Sequence[str]) -> Iterator[str]:
+    return [f'"{i}"' for i in items]
+
+
+def _print_remove(will: bool, runs: Sequence[script.RemoveRun], datasets: Mapping[str, int]) -> None:
     """Print the formatted remove statement.
 
     Parameters
@@ -52,25 +65,42 @@ def _print_remove(will: bool, runs: Sequence[str], datasets: Mapping[str, int]):
         The dataset types & count that will be or were removed.
     """
     print(willRemoveRunsMsg if will else didRemoveRunsMsg)
-    print(", ".join(runs))
-    print(willRemoveDatasetsMsg if will else didRemoveDatasetsMsg)
+    unlinkMsg = willUnlinkMsg if will else didUnlinkMsg
+    for run in runs:
+        if run.parents:
+            print(unlinkMsg.format(run=run.name, parents=", ".join(_quoted(run.parents))))
+        else:
+            print(run.name)
+    print("\n" + willRemoveDatasetsMsg if will else didRemoveDatasetsMsg)
     print(", ".join([f"{i[0]}({i[1]})" for i in datasets.items()]))
+
+
+def _print_requires_confirmation(runs: Sequence[script.RemoveRun], datasets: Mapping[str, int]) -> None:
+    print(requiresConfirmationMsg)
+    for run in runs:
+        if run.parents:
+            print(mustBeUnlinkedMsg.format(run=run.name, parents=", ".join(_quoted(run.parents))))
 
 
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
+@click.pass_context
 @collection_argument(
     help="COLLECTION is a glob-style expression that identifies the RUN collection(s) to remove."
 )
 @confirm_option()
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Required to remove RUN collections from parent collections if using --no-confirm.",
+)
 @options_file_option()
-def remove_runs(**kwargs):
+def remove_runs(context, confirm, force, **kwargs):
     """Remove one or more RUN collections.
 
     This command can be used to remove RUN collections and the datasets within
     them.
     """
-    confirm = kwargs.pop("confirm")
     result = script.removeRuns(**kwargs)
     canRemoveRuns = len(result.runs)
     if not canRemoveRuns:
@@ -85,5 +115,11 @@ def remove_runs(**kwargs):
         else:
             print(abortedMsg)
     else:
+        # if the user opted out of confirmation but there are runs with
+        # parent collections then they must confirm; print a message
+        # and exit.
+        if any(run.parents for run in result.runs) and not force:
+            _print_requires_confirmation(result.runs, result.datasets)
+            context.exit(1)
         result.onConfirmation()
         _print_remove(False, result.runs, result.datasets)

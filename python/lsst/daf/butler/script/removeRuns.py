@@ -31,6 +31,16 @@ from ..registry.queries import DatasetQueryResults
 
 
 @dataclass
+class RemoveRun:
+    """Represents a RUN collection to remove."""
+
+    # the name of the run:
+    name: str
+    # parent CHAINED collections the RUN belongs to:
+    parents: List[str]
+
+
+@dataclass
 class RemoveRunsResult:
     """Container to return to the cli command.
 
@@ -42,7 +52,7 @@ class RemoveRunsResult:
     # the callback function to do the removal
     onConfirmation: Callable[[], None]
     # list of the run collections that will be removed
-    runs: Sequence[str]
+    runs: Sequence[RemoveRun]
     # mapping of dataset type name to how many will be removed.
     datasets: Mapping[str, int]
 
@@ -50,7 +60,7 @@ class RemoveRunsResult:
 def _getCollectionInfo(
     repo: str,
     collection: str,
-) -> Tuple[List[str], Mapping[str, int]]:
+) -> Tuple[List[RemoveRun], Mapping[str, int]]:
     """Get the names and types of collections that match the collection
     string.
 
@@ -64,8 +74,8 @@ def _getCollectionInfo(
 
     Returns
     -------
-    runs : `list` of `str`
-        The runs that will be removed.
+    runs : `list` of `RemoveRun`
+        Describes the runs that will be removed.
     datasets : `dict` [`str`, `int`]
         The dataset types and and how many will be removed.
     """
@@ -84,7 +94,8 @@ def _getCollectionInfo(
     datasets: Dict[str, int] = defaultdict(int)
     for collectionName in collectionNames:
         assert butler.registry.getCollectionType(collectionName).name == "RUN"
-        runs.append(collectionName)
+        parents = butler.registry.getCollectionParentChains(collectionName)
+        runs.append(RemoveRun(collectionName, list(parents)))
         all_results = butler.registry.queryDatasets(..., collections=collectionName)
         assert isinstance(all_results, DatasetQueryResults)
         for r in all_results.byParentDatasetType():
@@ -113,10 +124,16 @@ def removeRuns(
     """
     runs, datasets = _getCollectionInfo(repo, collection)
 
-    def doRemove(runs: Sequence[str]) -> None:
+    def doRemove(runs: Sequence[RemoveRun]) -> None:
         """Perform the remove step."""
         butler = Butler(repo, writeable=True)
-        butler.removeRuns(runs, unstore=True)
+        with butler.transaction():
+            for run in runs:
+                for parent in run.parents:
+                    children = list(butler.registry.getCollectionChain(parent))
+                    children.remove(run.name)
+                    butler.registry.setCollectionChain(parent, children, flatten=False)
+            butler.removeRuns([r.name for r in runs], unstore=True)
 
     result = RemoveRunsResult(
         onConfirmation=partial(doRemove, runs),
