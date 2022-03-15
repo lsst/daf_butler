@@ -27,7 +27,7 @@ import click
 from ... import script
 from ..opt import collection_argument, confirm_option, options_file_option, repo_argument
 from ..utils import ButlerCommand
-
+from .commands import existingRepoHelp
 
 # messages emitted by remove-runs, defined separately for use in unit
 # tests.
@@ -83,8 +83,11 @@ def _print_requires_confirmation(runs: Sequence[script.RemoveRun], datasets: Map
 
 
 @click.command(cls=ButlerCommand)
-@repo_argument(required=True)
 @click.pass_context
+@repo_argument(
+    help=existingRepoHelp,
+    required=True,
+)
 @collection_argument(
     help="COLLECTION is a glob-style expression that identifies the RUN collection(s) to remove."
 )
