@@ -32,10 +32,12 @@ from lsst.daf.butler.cli.cmd._remove_runs import (
     abortedMsg,
     didRemoveDatasetsMsg,
     didRemoveRunsMsg,
+    mustBeUnlinkedMsg,
     noRunCollectionsMsg,
     removedRunsMsg,
     willRemoveDatasetsMsg,
     willRemoveRunsMsg,
+    willUnlinkMsg,
 )
 from lsst.daf.butler.cli.utils import LogCliRunner, clickResultMsg
 from lsst.daf.butler.tests.utils import MetricTestRepo
@@ -59,35 +61,97 @@ class RemoveCollectionTest(unittest.TestCase):
                 DatasetType("no_datasets", repo.butler.registry.dimensions.empty, "StructuredDataDict")
             )
 
-            # Execute cmd but say no, check for expected outputs.
+            # Execute remove-runs but say no, check for expected outputs.
+            result = self.runner.invoke(butler.cli, ["remove-runs", root, "ingest*"], input="no")
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertIn(willRemoveRunsMsg, result.output)
+            self.assertIn(abortedMsg, result.output)
+            self.assertNotIn("no_datasets", result.output)
+            self.assertIn(
+                "ingest/run",
+                list(repo.butler.registry.queryCollections()),
+            )
+
+            # Add the run to a CHAINED collection.
+            parentCollection = "aParentCollection"
+            result = self.runner.invoke(
+                butler.cli, f"collection-chain {root} {parentCollection} ingest/run".split()
+            )
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            result = self.runner.invoke(butler.cli, ["query-collections", root])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertIn(parentCollection, result.output)
+
+            # Execute remove-runs but say no, check for expected outputs
+            # including the CHAINED collection.
             result = self.runner.invoke(butler.cli, ["remove-runs", root, "ingest*"], input="no")
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             self.assertIn(willRemoveRunsMsg, result.output)
             self.assertIn(willRemoveDatasetsMsg, result.output)
+            self.assertIn(
+                willUnlinkMsg.format(run="ingest/run", parents=f'"{parentCollection}"'), result.output
+            )
             self.assertIn(abortedMsg, result.output)
             self.assertNotIn("no_datasets", result.output)
+            result = self.runner.invoke(butler.cli, ["query-collections", root])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertIn("ingest/run", result.output)
+            self.assertIn(parentCollection, result.output)
 
-            # ...say yes
+            # Do the same remove-runs command, but say yes.
             result = self.runner.invoke(butler.cli, ["remove-runs", root, "ingest*"], input="yes")
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             self.assertIn(willRemoveRunsMsg, result.output)
             self.assertIn(willRemoveDatasetsMsg, result.output)
             self.assertIn(removedRunsMsg, result.output)
+            result = self.runner.invoke(butler.cli, ["query-collections", root])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertNotIn("ingest/run", result.output)
+            self.assertIn(parentCollection, result.output)
 
-            # now they've been deleted, try again and check for "none found"
+            # Now they've been deleted, try again and check for "none found".
             result = self.runner.invoke(butler.cli, ["remove-runs", root, "ingest*"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             self.assertIn(noRunCollectionsMsg, result.output)
 
-            # remake the repo and check --no-confirm option
+            # Remake the repo and check --no-confirm option.
             root = "repo1"
             MetricTestRepo(root, configFile=os.path.join(TESTDIR, "config/basic/butler.yaml"))
 
-            # Execute cmd but say no, check for expected outputs.
+            # Add the run to a CHAINED collection.
+            parentCollection = "parent"
+            result = self.runner.invoke(
+                butler.cli, f"collection-chain {root} {parentCollection} ingest/run".split()
+            )
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            result = self.runner.invoke(butler.cli, ["query-collections", root])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertIn("ingest/run", result.output)
+            self.assertIn(parentCollection, result.output)
+
+            # Execute remove-runs with --no-confirm, should fail because there
+            # is a parent CHAINED collection.
             result = self.runner.invoke(butler.cli, ["remove-runs", root, "ingest*", "--no-confirm"])
+            self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertIn(
+                mustBeUnlinkedMsg.format(run="ingest/run", parents=f'"{parentCollection}"'), result.output
+            )
+            result = self.runner.invoke(butler.cli, ["query-collections", root])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertIn("ingest/run", result.output)
+            self.assertIn(parentCollection, result.output)
+
+            # Execute remove-runs with --no-confirm and --force
+            result = self.runner.invoke(
+                butler.cli, ["remove-runs", root, "ingest*", "--no-confirm", "--force"]
+            )
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             self.assertIn(didRemoveRunsMsg, result.output)
             self.assertIn(didRemoveDatasetsMsg, result.output)
+            result = self.runner.invoke(butler.cli, ["query-collections", root])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertNotIn("ingest/run", result.output)
+            self.assertIn(parentCollection, result.output)
 
             # Execute cmd looking for a non-existant collection
             result = self.runner.invoke(butler.cli, ["remove-runs", root, "foo"])

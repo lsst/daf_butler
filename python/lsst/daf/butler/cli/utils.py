@@ -196,6 +196,9 @@ def addArgumentHelp(doc, helpText):
         # (Lines after the first blank line will be argument help.)
         while len(doclines) > 1 and doclines[1]:
             doclines[0] = " ".join((doclines[0], doclines.pop(1).strip()))
+        # Add standard indent to help text for proper alignment with command
+        # function documentation:
+        helpText = "    " + helpText
         doclines.insert(1, helpText)
         doclines.insert(1, "\n")
         doc = "\n".join(doclines)
