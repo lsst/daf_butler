@@ -1712,14 +1712,6 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
 
 
 @unittest.skipIf(WsgiDAVApp is None, "Warning: wsgidav/cheroot not found!")
-# Mock required environment variables during tests
-@unittest.mock.patch.dict(
-    os.environ,
-    {
-        "LSST_HTTP_AUTH_BEARER_TOKEN": os.path.join(TESTDIR, "config/testConfigs/webdav/token"),
-        "LSST_HTTP_CACERT_BUNDLE": "/path/to/ca/certs",
-    },
-)
 class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
     """WebdavDatastore specialization of a butler; a Webdav storage Datastore +
     a local in-memory SqlRegistry.
@@ -1795,14 +1787,6 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         # Wait for the thread to exit
         cls.serverThread.join()
 
-    # Mock required environment variables during tests
-    @unittest.mock.patch.dict(
-        os.environ,
-        {
-            "LSST_HTTP_AUTH_BEARER_TOKEN": os.path.join(TESTDIR, "config/testConfigs/webdav/token"),
-            "LSST_HTTP_CACERT_BUNDLE": "/path/to/ca/certs",
-        },
-    )
     def setUp(self):
         config = Config(self.configFile)
 
@@ -1824,14 +1808,6 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         Butler.makeRepo(self.rooturi, config=config, forceConfigRoot=False)
         self.tmpConfigFile = posixpath.join(self.rooturi, "butler.yaml")
 
-    # Mock required environment variables during tests
-    @unittest.mock.patch.dict(
-        os.environ,
-        {
-            "LSST_HTTP_AUTH_BEARER_TOKEN": os.path.join(TESTDIR, "config/testConfigs/webdav/token"),
-            "LSST_HTTP_CACERT_BUNDLE": "/path/to/ca/certs",
-        },
-    )
     def tearDown(self):
         # Clear temporary directory
         ResourcePath(self.rooturi).remove()
