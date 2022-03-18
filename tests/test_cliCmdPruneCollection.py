@@ -116,7 +116,7 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
         def confirm_initial_tables():
             result = self.runner.invoke(butlerCli, ["query-collections", self.root])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-            expected = Table(array((("ingest/run", "RUN"), ("ingest", "TAGGED"))), names=("Name", "Type"))
+            expected = Table(array((("ingest", "TAGGED"), ("ingest/run", "RUN"))), names=("Name", "Type"))
             self.assertAstropyTablesEqual(readTable(result.output), expected)
 
         confirm_initial_tables()
@@ -189,7 +189,7 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
     def testPruneTagged(self):
         result = self.runner.invoke(butlerCli, ["query-collections", self.root])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        expected = Table(array((("ingest/run", "RUN"), ("ingest", "TAGGED"))), names=("Name", "Type"))
+        expected = Table(array((("ingest", "TAGGED"), ("ingest/run", "RUN"))), names=("Name", "Type"))
         self.assertAstropyTablesEqual(readTable(result.output), expected)
 
         # Try pruning TAGGED, should succeed.

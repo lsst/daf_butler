@@ -55,12 +55,22 @@ class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
 
     def test_minimal(self):
         """Test only required parameters, and omit optional parameters."""
-        self.run_test(["query-collections", "here"], self.makeExpected(repo="here"))
+        self.run_test(["query-collections", "here", "--chains", "TABLE"], self.makeExpected(repo="here"))
 
     def test_all(self):
         """Test all parameters"""
         self.run_test(
-            ["query-collections", "here", "foo*", "--collection-type", "TAGGED", "--collection-type", "RUN"],
+            [
+                "query-collections",
+                "here",
+                "foo*",
+                "--collection-type",
+                "TAGGED",
+                "--collection-type",
+                "RUN",
+                "--chains",
+                "TABLE",
+            ],
             self.makeExpected(
                 repo="here",
                 glob=("foo*",),
@@ -147,45 +157,97 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             # the command line interface.
             table = queryCollections("here", glob=(), collection_type=CollectionType.all(), chains="TREE")
 
-            # self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             expected = Table(
                 array(
                     (
+                        ("calibration1", "CALIBRATION"),
+                        ("chain1", "CHAINED"),
+                        ("  chain2", "CHAINED"),
+                        ("    calibration1", "CALIBRATION"),
+                        ("    run1", "RUN"),
+                        ("  run1", "RUN"),
+                        ("  tag1", "TAGGED"),
+                        ("chain2", "CHAINED"),
+                        ("  calibration1", "CALIBRATION"),
+                        ("  run1", "RUN"),
                         ("imported_g", "RUN"),
                         ("imported_r", "RUN"),
                         ("run1", "RUN"),
                         ("tag1", "TAGGED"),
-                        ("calibration1", "CALIBRATION"),
-                        ("chain2", "CHAINED"),
-                        ("  calibration1", "CALIBRATION"),
-                        ("  run1", "RUN"),
-                        ("chain1", "CHAINED"),
-                        ("  tag1", "TAGGED"),
-                        ("  run1", "RUN"),
-                        ("  chain2", "CHAINED"),
-                        ("    calibration1", "CALIBRATION"),
-                        ("    run1", "RUN"),
                     )
                 ),
                 names=("Name", "Type"),
             )
             self.assertAstropyTablesEqual(table, expected)
 
-            result = self.runner.invoke(cli, ["query-collections", "here"])
+            # Test table with inverse == True
+            table = queryCollections(
+                "here",
+                glob=(),
+                collection_type=CollectionType.all(),
+                chains="INVERSE-TREE",
+            )
+            expected = Table(
+                array(
+                    (
+                        ("calibration1", "CALIBRATION"),
+                        ("  chain2", "CHAINED"),
+                        ("    chain1", "CHAINED"),
+                        ("chain1", "CHAINED"),
+                        ("chain2", "CHAINED"),
+                        ("  chain1", "CHAINED"),
+                        ("imported_g", "RUN"),
+                        ("imported_r", "RUN"),
+                        ("run1", "RUN"),
+                        ("  chain1", "CHAINED"),
+                        ("  chain2", "CHAINED"),
+                        ("    chain1", "CHAINED"),
+                        ("tag1", "TAGGED"),
+                        ("  chain1", "CHAINED"),
+                    )
+                ),
+                names=("Name", "Type"),
+            )
+            self.assertAstropyTablesEqual(table, expected)
+
+            result = self.runner.invoke(cli, ["query-collections", "here", "--chains", "TABLE"])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             expected = Table(
                 array(
                     (
+                        ("calibration1", "CALIBRATION", ""),
+                        ("chain1", "CHAINED", "chain2"),
+                        ("", "", "run1"),
+                        ("", "", "tag1"),
+                        ("chain2", "CHAINED", "calibration1"),
+                        ("", "", "run1"),
                         ("imported_g", "RUN", ""),
                         ("imported_r", "RUN", ""),
                         ("run1", "RUN", ""),
                         ("tag1", "TAGGED", ""),
-                        ("calibration1", "CALIBRATION", ""),
-                        ("chain2", "CHAINED", "[calibration1, run1]"),
-                        ("chain1", "CHAINED", "[tag1, run1, chain2]"),
                     )
                 ),
-                names=("Name", "Type", "Definition"),
+                names=("Name", "Type", "Children"),
+            )
+            table = readTable(result.output)
+            self.assertAstropyTablesEqual(readTable(result.output), expected)
+
+            result = self.runner.invoke(cli, ["query-collections", "here", "--chains", "INVERSE-TABLE"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            expected = Table(
+                array(
+                    (
+                        ("calibration1", "CALIBRATION", "chain2"),
+                        ("chain1", "CHAINED", ""),
+                        ("chain2", "CHAINED", "chain1"),
+                        ("imported_g", "RUN", ""),
+                        ("imported_r", "RUN", ""),
+                        ("run1", "RUN", "chain1"),
+                        ("", "", "chain2"),
+                        ("tag1", "TAGGED", "chain1"),
+                    )
+                ),
+                names=("Name", "Type", "Parents"),
             )
             table = readTable(result.output)
             self.assertAstropyTablesEqual(readTable(result.output), expected)
@@ -195,16 +257,16 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
             expected = Table(
                 array(
                     (
+                        ("calibration1", "CALIBRATION"),
+                        ("calibration1", "CALIBRATION"),
+                        ("calibration1", "CALIBRATION"),
                         ("imported_g", "RUN"),
                         ("imported_r", "RUN"),
                         ("run1", "RUN"),
-                        ("tag1", "TAGGED"),
-                        ("calibration1", "CALIBRATION"),
-                        ("calibration1", "CALIBRATION"),
+                        ("run1", "RUN"),
                         ("run1", "RUN"),
                         ("tag1", "TAGGED"),
-                        ("run1", "RUN"),
-                        ("calibration1", "CALIBRATION"),
+                        ("tag1", "TAGGED"),
                     )
                 ),
                 names=("Name", "Type"),

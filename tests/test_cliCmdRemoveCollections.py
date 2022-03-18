@@ -102,11 +102,11 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
             if len(rows[0]) == 2:
                 return ("Name", "Type")
             elif len(rows[0]) == 3:
-                return ("Name", "Type", "Definition")
+                return ("Name", "Type", "Children")
             else:
                 raise RuntimeError(f"Unhandled column count: {len(rows[0])}")
 
-        result = self.runner.invoke(butlerCli, ["query-collections", self.root])
+        result = self.runner.invoke(butlerCli, ["query-collections", self.root, "--chains", "TABLE"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expected = Table(array(before_rows), names=_query_collection_column_names(before_rows))
         self.assertAstropyTablesEqual(readTable(result.output), expected)
@@ -148,18 +148,18 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         self._verify_remove(
             collection="chained-run-*",
             before_rows=(
-                ("ingest/run", "RUN", ""),
+                ("chained-run-1", "CHAINED", "ingest/run"),
+                ("chained-run-2", "CHAINED", "ingest/run"),
                 ("ingest", "TAGGED", ""),
-                ("chained-run-1", "CHAINED", "[ingest/run]"),
-                ("chained-run-2", "CHAINED", "[ingest/run]"),
+                ("ingest/run", "RUN", ""),
             ),
             remove_rows=(
                 ("chained-run-1", "CHAINED"),
                 ("chained-run-2", "CHAINED"),
             ),
             after_rows=(
-                ("ingest/run", "RUN"),
                 ("ingest", "TAGGED"),
+                ("ingest/run", "RUN"),
             ),
         )
 
@@ -168,8 +168,8 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         self._verify_remove(
             collection="ingest",
             before_rows=(
-                ("ingest/run", "RUN"),
                 ("ingest", "TAGGED"),
+                ("ingest/run", "RUN"),
             ),
             remove_rows=(("ingest", "TAGGED"),),
             after_rows=(("ingest/run", "RUN"),),
