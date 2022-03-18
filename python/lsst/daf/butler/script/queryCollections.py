@@ -22,14 +22,22 @@
 from __future__ import annotations
 
 import itertools
+from typing import Iterable, Union
 
 from astropy.table import Table
 from numpy import array
 
 from .._butler import Butler
+from ..registry import CollectionType
 
 
-def queryCollections(repo, glob, collection_type, chains):
+
+def queryCollections(
+    repo: str,
+    glob: Union[ellipsis, Iterable[str]],
+    collection_type: Iterable[CollectionType],
+    chains: str,
+) -> Table:
     """Get the collections whose names match an expression.
 
     Parameters
@@ -37,7 +45,7 @@ def queryCollections(repo, glob, collection_type, chains):
     repo : `str`
         URI to the location of the repo or URI to a config file describing the
         repo and its location.
-    glob : iterable [`str`]
+    glob : `Iterable` [`str`] or `union`
         A list of glob-style search string that fully or partially identify
         the dataset type names to search for.
     collection_type : `Iterable` [ `CollectionType` ], optional
