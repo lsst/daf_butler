@@ -91,10 +91,7 @@ from .registry import (
     CollectionType,
     ConflictingDefinitionError,
     DataIdError,
-    DataIdValueError,
     DatasetIdGenEnum,
-    DimensionNameError,
-    InconsistentDataIdError,
     Registry,
     RegistryConfig,
     RegistryDefaults,
@@ -843,7 +840,7 @@ class Butler(LimitedButler):
             never_found = set(not_dimensions) - matched_dims
 
             if never_found:
-                raise DimensionNameError(f"Unrecognized keyword args given: {never_found}")
+                raise ValueError(f"Unrecognized keyword args given: {never_found}")
 
             # There is a chance we have allocated a single dataId item
             # to multiple dimensions. Need to decide which should be retained.
@@ -906,7 +903,7 @@ class Butler(LimitedButler):
                     try:
                         recs = list(self.registry.queryDimensionRecords(dimensionName, dataId=newDataId))
                     except DataIdError:
-                        raise DataIdValueError(
+                        raise ValueError(
                             f"Could not find dimension '{dimensionName}'"
                             f" with dataId {newDataId} as part of comparing with"
                             f" record values {byRecord[dimensionName]}"
@@ -917,7 +914,7 @@ class Butler(LimitedButler):
                             if (recval := getattr(recs[0], k)) != v:
                                 errmsg.append(f"{k}({recval} != {v})")
                         if errmsg:
-                            raise InconsistentDataIdError(
+                            raise ValueError(
                                 f"Dimension {dimensionName} in dataId has explicit value"
                                 " inconsistent with records: " + ", ".join(errmsg)
                             )
@@ -943,12 +940,12 @@ class Butler(LimitedButler):
                         log.debug("Received %d records from constraints of %s", len(records), str(values))
                         for r in records:
                             log.debug("- %s", str(r))
-                        raise InconsistentDataIdError(
+                        raise ValueError(
                             f"DataId specification for dimension {dimensionName} is not"
                             f" uniquely constrained to a single dataset by {values}."
                             f" Got {len(records)} results."
                         )
-                    raise InconsistentDataIdError(
+                    raise ValueError(
                         f"DataId specification for dimension {dimensionName} matched no"
                         f" records when constrained by {values}"
                     )
