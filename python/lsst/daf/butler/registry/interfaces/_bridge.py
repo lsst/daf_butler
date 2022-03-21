@@ -362,12 +362,12 @@ class DatastoreRegistryBridgeManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def findDatastores(self, ref: DatasetRef) -> Iterable[str]:
+    def findDatastores(self, ref: DatasetIdRef) -> Iterable[str]:
         """Retrieve datastore locations for a given dataset.
 
         Parameters
         ----------
-        ref : `DatasetRef`
+        ref : `DatasetIdRef`
             A reference to the dataset for which to retrieve storage
             information.
 

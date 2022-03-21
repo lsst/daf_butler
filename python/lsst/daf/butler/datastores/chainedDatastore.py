@@ -37,6 +37,7 @@ from lsst.daf.butler import (
     DatasetTypeNotSupportedError,
     Datastore,
     DatastoreConfig,
+    DatastoreRecordData,
     DatastoreValidationError,
     FileDataset,
 )
@@ -45,7 +46,7 @@ from lsst.utils import doImportType
 
 if TYPE_CHECKING:
     from lsst.daf.butler import Config, DatasetType, LookupKey, StorageClass
-    from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
+    from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
@@ -849,3 +850,25 @@ class ChainedDatastore(Datastore):
         # So we pessimistically check if any datastore would need an expanded
         # data ID for this transfer mode.
         return any(datastore.needs_expanded_data_ids(transfer) for datastore in self.datastores)
+
+    def import_records(self, data: Mapping[str, DatastoreRecordData]) -> None:
+        # Docstring inherited from the base class.
+
+        for datastore in self.datastores:
+            datastore.import_records(data)
+
+    def export_records(self, refs: Iterable[DatasetIdRef]) -> Mapping[str, DatastoreRecordData]:
+        # Docstring inherited from the base class.
+
+        all_records: Dict[str, DatastoreRecordData] = {}
+
+        # Merge all sub-datastore records into one structure
+        for datastore in self.datastores:
+            sub_records = datastore.export_records(refs)
+            for name, record_data in sub_records.items():
+                # All datastore names must be unique in a chain.
+                if name in all_records:
+                    raise ValueError("Non-unique datastore name found in datastore {datastore}")
+                all_records[name] = record_data
+
+        return all_records

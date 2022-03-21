@@ -62,6 +62,7 @@ if TYPE_CHECKING:
     from .configSupport import LookupKey
     from .datasets import DatasetRef, DatasetType
     from .storageClass import StorageClass
+    from .storedFileInfo import StoredDatastoreItemInfo
 
 
 class DatastoreConfig(ConfigSubset):
@@ -80,17 +81,18 @@ class DatastoreValidationError(ValidationError):
 
 @dataclasses.dataclass
 class DatastoreRecordData:
-    """A struct that represents a tabular data export from one or more
-    datastores.
+    """A struct that represents a tabular data export from a single
+    datastore.
     """
 
-    locations: Dict[str, List[DatasetIdRef]] = dataclasses.field(default_factory=lambda: defaultdict(list))
-    """Mapping from datastore name to the datasets in that datastore.
+    refs: List[DatasetIdRef] = dataclasses.field(default_factory=list)
+    """List of DatasetRefs known to this datastore.
     """
 
-    records: Dict[str, List[Dict[str, Any]]] = dataclasses.field(default_factory=lambda: defaultdict(list))
-    """Opaque table data that backs one or more datastores, grouped by
-    opaque table name.
+    records: Dict[str, List[StoredDatastoreItemInfo]] = dataclasses.field(
+        default_factory=lambda: defaultdict(list)
+    )
+    """Opaque table data, grouped by opaque table name.
     """
 
 
@@ -1035,20 +1037,20 @@ class Datastore(metaclass=ABCMeta):
         """
         return True
 
-    # TODO: make abstract, implement in all concrete datastores
+    @abstractmethod
     def import_records(
         self,
-        data: DatastoreRecordData,
+        data: Mapping[str, DatastoreRecordData],
     ) -> None:
         """Import datastore location and record data from an in-memory data
         structure.
 
         Parameters
         ----------
-        data : `DatastoreRecordData`
-            Data structure to load from.  May contain data for other
-            `Datastore` instances (generally because they are chained to this
-            one), which should be ignored.
+        data : `Mapping` [ `str`, `DatastoreRecordData` ]
+            Datastore records indexed by datastore name.  May contain data for
+            other `Datastore` instances (generally because they are chained to
+            this one), which should be ignored.
 
         Notes
         -----
@@ -1063,12 +1065,12 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    # TODO: make abstract, implement in all concrete datastores
+    @abstractmethod
     def export_records(
         self,
         refs: Iterable[DatasetIdRef],
-    ) -> DatastoreRecordData:
-        """Export datastore records and locations from an in-memory data
+    ) -> Mapping[str, DatastoreRecordData]:
+        """Export datastore records and locations to an in-memory data
         structure.
 
         Parameters
@@ -1079,7 +1081,7 @@ class Datastore(metaclass=ABCMeta):
 
         Returns
         -------
-        data : `DatastoreRecordData`
-            Populated data structure.
+        data : `Mapping` [ `str`, `DatastoreRecordData` ]
+            Exported datastore records indexed by datastore name.
         """
         raise NotImplementedError()

@@ -43,6 +43,7 @@ from .core import (
     DimensionUniverse,
     Quantum,
     StorageClassFactory,
+    StoredDatastoreItemInfo,
     ddl,
 )
 from .registry.bridge.monolithic import MonolithicDatastoreRegistryBridgeManager
@@ -333,20 +334,21 @@ class QuantumBackedButler(LimitedButler):
                 self._predicted_inputs - checked_inputs,
             )
         datastore_records = self.datastore.export_records(self._actual_output_refs)
+        locations: Dict[str, Set[DatasetId]] = defaultdict(set)
+        records: Dict[str, List[StoredDatastoreItemInfo]] = defaultdict(list)
+        for datastore_name, record_data in datastore_records.items():
+            locations[datastore_name].update(ref.getCheckedId() for ref in record_data.refs)
+            for table_name, table_records in record_data.records.items():
+                records[table_name].extend(table_records)
+
         return QuantumProvenanceData(
             predicted_inputs=self._predicted_inputs,
             available_inputs=self._available_inputs,
             actual_inputs=self._actual_inputs,
             predicted_outputs=self._predicted_outputs,
             actual_outputs={ref.getCheckedId() for ref in self._actual_output_refs},
-            locations=defaultdict(
-                set,
-                {
-                    name: {ref.getCheckedId() for ref in refs}
-                    for name, refs in datastore_records.locations.items()
-                },
-            ),
-            records=datastore_records.records,
+            locations=locations,
+            records=records,
         )
 
 
@@ -412,9 +414,9 @@ class QuantumProvenanceData(pydantic.BaseModel):
     written by this quantum.
     """
 
-    records: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    records: Dict[str, List[StoredDatastoreItemInfo]] = defaultdict(list)
     """Rows from the opaque tables used by datastores for the `actual_output`
-    datasets written by this quantum.
+    datasets written by this quantum, indexed by opaque table name.
     """
 
     @staticmethod
@@ -453,7 +455,7 @@ class QuantumProvenanceData(pydantic.BaseModel):
         ignored.
         """
         all_refs: List[DatasetRef] = []
-        datastore_records = DatastoreRecordData()
+        datastore_records: Dict[str, DatastoreRecordData] = defaultdict(DatastoreRecordData)
         for quantum, provenance_for_quantum in zip(quanta, provenance):
             quantum_refs_by_id: Dict[DatasetId, DatasetRef] = {}
             quantum_refs_by_id.update(
@@ -465,10 +467,10 @@ class QuantumProvenanceData(pydantic.BaseModel):
             )
             all_refs.extend(quantum_refs_by_id.values())
             for datastore_name in set(butler.datastore.names) & provenance_for_quantum.locations.keys():
-                datastore_records.locations[datastore_name].extend(
+                datastore_records[datastore_name].refs.extend(
                     quantum_refs_by_id[id] for id in provenance_for_quantum.locations[datastore_name]
                 )
             for opaque_table_name, records_for_table in provenance_for_quantum.records.items():
-                datastore_records.records[opaque_table_name].extend(records_for_table)
+                datastore_records[datastore_name].records[opaque_table_name].extend(records_for_table)
         butler.registry._importDatasets(all_refs)
         butler.datastore.import_records(datastore_records)

@@ -28,7 +28,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, cast
 
 import sqlalchemy
-from lsst.daf.butler import DatasetRef, NamedValueSet, StoredDatastoreItemInfo, ddl
+from lsst.daf.butler import NamedValueSet, StoredDatastoreItemInfo, ddl
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 from lsst.daf.butler.registry.interfaces import (
     DatasetIdRef,
@@ -352,7 +352,7 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
             return self._ephemeral.setdefault(name, EphemeralDatastoreRegistryBridge(name))
         return MonolithicDatastoreRegistryBridge(name, db=self._db, tables=self._tables)
 
-    def findDatastores(self, ref: DatasetRef) -> Iterable[str]:
+    def findDatastores(self, ref: DatasetIdRef) -> Iterable[str]:
         # Docstring inherited from DatastoreRegistryBridge
         sql = (
             sqlalchemy.sql.select(self._tables.dataset_location.columns.datastore_name)
