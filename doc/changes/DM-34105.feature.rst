@@ -1,0 +1,1 @@
+Added a formatter for `lsst.utils.packages.Packages` Python types in `lsst.daf.butler.formatters.packages.PackagesFormatter`.
