@@ -1,0 +1,4 @@
+Improves "butler query-collections":
+* TABLE output formatting is easier to read.
+* Adds INVERSE modes for TABLE and TREE output, to view CHAINED parent(s) of collections (non-INVERSE lists children of CHAINED collections).
+* Sorts datasets before printing them.

@@ -883,13 +883,17 @@ class SqlRegistry(Registry):
         except TypeError as exc:
             raise CollectionExpressionError(f"Invalid collection expression '{expression}'") from exc
         collectionTypes = ensure_iterable(collectionTypes)
-        for record in query.iter(
-            self._managers.collections,
-            collectionTypes=frozenset(collectionTypes),
-            flattenChains=flattenChains,
-            includeChains=includeChains,
-        ):
-            yield record.name
+        recordNames = [
+            record.name
+            for record in query.iter(
+                self._managers.collections,
+                collectionTypes=frozenset(collectionTypes),
+                flattenChains=flattenChains,
+                includeChains=includeChains,
+            )
+        ]
+        for name in sorted(recordNames):
+            yield name
 
     def _makeQueryBuilder(
         self, summary: queries.QuerySummary, doomed_by: Iterable[str] = ()

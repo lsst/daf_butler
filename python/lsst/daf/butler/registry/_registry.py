@@ -1234,6 +1234,8 @@ class Registry(ABC):
     ) -> Iterator[str]:
         """Iterate over the collections whose names match an expression.
 
+        Collection names are sorted alphabetically.
+
         Parameters
         ----------
         expression : `Any`, optional

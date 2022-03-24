@@ -432,15 +432,33 @@ def prune_datasets(**kwargs):
 @collection_type_option()
 @click.option(
     "--chains",
-    default="table",
-    help=unwrap(
-        """Affects how results are presented. TABLE lists each dataset in a row with
-                          chained datasets' children listed in a Definition column. TREE lists children below
-                          their parent in tree form. FLATTEN lists all datasets, including child datasets in
-                          one list.Defaults to TABLE. """
-    ),
+    default="TREE",
+    help="""Affects how results are presented:
+
+        TABLE lists each dataset in table form, with columns for dataset name
+        and type, and a column that lists children of CHAINED datasets (if any
+        CHAINED datasets are found).
+
+        INVERSE-TABLE is like TABLE but instead of a column listing CHAINED
+        dataset children, it lists the parents of the dataset if it is contained
+        in any CHAINED collections.
+
+        TREE recursively lists children below each CHAINED dataset in tree form.
+
+        INVERSE-TREE recursively lists parent datasets below each dataset in
+        tree form.
+
+        FLATTEN lists all datasets, including child datasets, in one list.
+
+        [default: TREE]""",
+    # above, the default value is included, instead of using show_default, so
+    # that the default is printed on its own line instead of coming right after
+    # the FLATTEN text.
     callback=to_upper,
-    type=click.Choice(("TABLE", "TREE", "FLATTEN"), case_sensitive=False),
+    type=click.Choice(
+        ("TABLE", "INVERSE-TABLE", "TREE", "INVERSE-TREE", "FLATTEN"),
+        case_sensitive=False,
+    ),
 )
 @options_file_option()
 def query_collections(*args, **kwargs):
