@@ -67,7 +67,7 @@ def _getTable(
         butler.registry.queryCollections(collectionTypes=frozenset(collection_type), expression=glob or ...)
     )
     if inverse:
-        for name in sorted(names):
+        for name in names:
             type = butler.registry.getCollectionType(name)
             parentNames = butler.registry.getCollectionParentChains(name)
             if parentNames:
@@ -82,7 +82,7 @@ def _getTable(
         if not any(c for c in table[descriptionCol]):
             del table[descriptionCol]
     else:
-        for name in sorted(names):
+        for name in names:
             type = butler.registry.getCollectionType(name)
             if type == CollectionType.CHAINED:
                 children = butler.registry.getCollectionChain(name)
@@ -152,7 +152,7 @@ def _getTree(
     collections = butler.registry.queryCollections(
         collectionTypes=frozenset(collection_type), expression=glob or ...
     )
-    for collection in sorted(collections):
+    for collection in collections:
         addCollection(collection)
     return table
 
@@ -163,11 +163,12 @@ def _getFlatten(
     collection_type: Iterable[CollectionType],
 ) -> Table:
     butler = Butler(repo)
-    collectionNames = sorted(
+    collectionNames = list(
         butler.registry.queryCollections(
             collectionTypes=frozenset(collection_type), flattenChains=True, expression=glob or ...
         )
     )
+
     collectionTypes = [butler.registry.getCollectionType(c).name for c in collectionNames]
     return Table((collectionNames, collectionTypes), names=("Name", "Type"))
 

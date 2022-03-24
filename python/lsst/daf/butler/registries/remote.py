@@ -440,7 +440,8 @@ class RemoteRegistry(Registry):
         response.raise_for_status()
 
         collections = response.json()
-        return collections
+        for c in sorted(collections):
+            yield c
 
     def queryDatasets(  # type: ignore
         self,
