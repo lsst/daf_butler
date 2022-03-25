@@ -69,7 +69,7 @@ from lsst.daf.butler.registry import MissingCollectionError, ConflictingDefiniti
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core._butlerUri.s3utils import (setAwsEnvCredentials,
                                                      unsetAwsEnvCredentials)
-from lsst.daf.butler.core._butlerUri.http import isWebdavEndpoint
+from lsst.daf.butler.core._butlerUri.http import _is_webdav_endpoint
 
 from lsst.daf.butler.tests import MultiDetectorFormatter, MetricsExample
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir, safeTestTempDir
@@ -1559,7 +1559,7 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         self.datastoreStr = f"datastore={self.root}"
         self.datastoreName = [f"FileDatastore@{self.rooturi}"]
 
-        if not isWebdavEndpoint(self.rooturi):
+        if not _is_webdav_endpoint(self.rooturi):
             raise OSError("Webdav server not running properly: cannot run tests.")
 
         Butler.makeRepo(self.rooturi, config=config, forceConfigRoot=False)

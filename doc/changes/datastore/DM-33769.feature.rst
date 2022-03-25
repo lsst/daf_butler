@@ -1,0 +1,11 @@
+* Improve client timeout and retries.
+
+* Improve management of persistent connections to avoid exhausting server
+resources when there are thousands of simultaneous clients.
+
+* Rename environment variables previously named ``LSST_BUTLER_*`` by:
+    * ``LSST_HTTP_CACERT_BUNDLE``
+    * ``LSST_HTTP_AUTH_BEARER_TOKEN``
+    * ``LSST_HTTP_AUTH_CLIENT_CERT``
+    * ``LSST_HTTP_AUTH_CLIENT_KEY``
+    * ``LSST_HTTP_PUT_SEND_EXPECT_HEADER``
