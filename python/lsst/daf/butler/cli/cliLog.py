@@ -182,7 +182,12 @@ class CliLog:
         else:
             logging.basicConfig(level=logging.WARNING, format=cls.pylog_normalFmt, style="{")
 
-        # Initialize root logger level.
+        # Initialize the root logger. Calling this ensures that both
+        # python loggers and lsst loggers are consistent in their default
+        # logging level.
+        cls._setLogLevel(".", "WARNING")
+
+        # Initialize default root logger level.
         cls._setLogLevel(None, "INFO")
 
         # also capture warnings and send them to logging
