@@ -2405,10 +2405,16 @@ class RegistryTests(ABC):
         self.assertFalse(list(query2.explain_no_results()))
         # These queries yield no results due to various problems that can be
         # spotted prior to execution, yielding helpful diagnostics.
+        base_query = registry.queryDataIds(["detector", "physical_filter"])
         for query, snippets in [
             (
                 # Dataset type name doesn't match any existing dataset types.
                 registry.queryDatasets("nonexistent", collections=...),
+                ["nonexistent"],
+            ),
+            (
+                # Dataset type name doesn't match any existing dataset types.
+                base_query.findDatasets("nonexistent", collections=["biases"]),
                 ["nonexistent"],
             ),
             (
@@ -2430,8 +2436,26 @@ class RegistryTests(ABC):
                 ["nonexistent"],
             ),
             (
+                # Dataset type object isn't registered.
+                base_query.findDatasets(
+                    DatasetType(
+                        "nonexistent",
+                        dimensions=["instrument"],
+                        universe=registry.dimensions,
+                        storageClass="Image",
+                    ),
+                    collections=["biases"],
+                ),
+                ["nonexistent"],
+            ),
+            (
                 # No datasets of this type in this collection.
                 registry.queryDatasets("flat", collections=["biases"]),
+                ["flat", "biases"],
+            ),
+            (
+                # No datasets of this type in this collection.
+                base_query.findDatasets("flat", collections=["biases"]),
                 ["flat", "biases"],
             ),
             (
