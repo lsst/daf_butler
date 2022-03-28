@@ -407,7 +407,6 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         """
         if not isinstance(datasetType, DatasetType):
             datasetType = self._query.managers.datasets[datasetType].datasetType
-        # moving component handling down into managers.
         if not datasetType.dimensions.issubset(self.graph):
             raise ValueError(
                 f"findDatasets requires that the dataset type have the same dimensions as "
