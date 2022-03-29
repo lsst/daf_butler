@@ -990,7 +990,8 @@ class SqlRegistry(Registry):
                 return queries.ChainedDatasetQueryResults(
                     [],
                     doomed_by=[
-                        f"No registered dataset type matching {t!r} found."
+                        f"No registered dataset type matching {t!r} found, so no matching datasets can "
+                        "exist in any collection."
                         for t in ensure_iterable(datasetType)
                     ],
                 )

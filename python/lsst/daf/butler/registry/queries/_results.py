@@ -372,7 +372,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     def findDatasets(
         self, datasetType: Union[DatasetType, str], collections: Any, *, findFirst: bool = True
-    ) -> ParentDatasetQueryResults:
+    ) -> DatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
         Parameters
@@ -394,7 +394,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
         Returns
         -------
-        datasets : `ParentDatasetQueryResults`
+        datasets : `DatasetQueryResults`
             A lazy-evaluation object representing dataset query results,
             iterable over `DatasetRef` objects.  If ``self.hasRecords()``, all
             nested data IDs in those dataset references will have records as
@@ -406,11 +406,20 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             Raised if ``datasetType.dimensions.issubset(self.graph) is False``.
         """
         if not isinstance(datasetType, DatasetType):
-            datasetType = self._query.managers.datasets[datasetType].datasetType
-        # moving component handling down into managers.
+            storage = self._query.managers.datasets.find(datasetType)
+            if storage is None:
+                return ChainedDatasetQueryResults(
+                    [],
+                    doomed_by=[
+                        f"No registered dataset type {datasetType!r} found, so no instances can "
+                        "exist in any collection."
+                    ],
+                )
+            else:
+                datasetType = storage.datasetType
         if not datasetType.dimensions.issubset(self.graph):
             raise ValueError(
-                f"findDatasets requires that the dataset type have the same dimensions as "
+                f"findDatasets requires that the dataset type have only dimensions in "
                 f"the DataCoordinateQueryResult used as input to the search, but "
                 f"{datasetType.name} has dimensions {datasetType.dimensions}, while the input "
                 f"dimensions are {self.graph}."
@@ -731,9 +740,9 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         if datasetType is None:
             datasetType = query.datasetType
         assert datasetType is not None, "Query used to initialize dataset results must have a dataset."
-        assert (
-            datasetType.dimensions == query.graph
-        ), f"Query dimensions {query.graph} do not match dataset type dimesions {datasetType.dimensions}."
+        assert datasetType.dimensions.issubset(
+            query.graph
+        ), f"Query dimensions {query.graph} do not match dataset type dimensions {datasetType.dimensions}."
         self._datasetType = datasetType
 
     __slots__ = ("_db", "_query", "_dimensions", "_components", "_records")
