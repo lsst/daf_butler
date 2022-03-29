@@ -409,7 +409,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             datasetType = self._query.managers.datasets[datasetType].datasetType
         if not datasetType.dimensions.issubset(self.graph):
             raise ValueError(
-                f"findDatasets requires that the dataset type have the same dimensions as "
+                f"findDatasets requires that the dataset type have only dimensions in "
                 f"the DataCoordinateQueryResult used as input to the search, but "
                 f"{datasetType.name} has dimensions {datasetType.dimensions}, while the input "
                 f"dimensions are {self.graph}."
@@ -730,9 +730,9 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         if datasetType is None:
             datasetType = query.datasetType
         assert datasetType is not None, "Query used to initialize dataset results must have a dataset."
-        assert (
-            datasetType.dimensions == query.graph
-        ), f"Query dimensions {query.graph} do not match dataset type dimesions {datasetType.dimensions}."
+        assert datasetType.dimensions.issubset(
+            query.graph
+        ), f"Query dimensions {query.graph} do not match dataset type dimensions {datasetType.dimensions}."
         self._datasetType = datasetType
 
     __slots__ = ("_db", "_query", "_dimensions", "_components", "_records")
