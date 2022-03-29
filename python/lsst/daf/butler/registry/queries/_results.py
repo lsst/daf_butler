@@ -372,7 +372,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     def findDatasets(
         self, datasetType: Union[DatasetType, str], collections: Any, *, findFirst: bool = True
-    ) -> ParentDatasetQueryResults:
+    ) -> DatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
         Parameters
@@ -394,7 +394,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
         Returns
         -------
-        datasets : `ParentDatasetQueryResults`
+        datasets : `DatasetQueryResults`
             A lazy-evaluation object representing dataset query results,
             iterable over `DatasetRef` objects.  If ``self.hasRecords()``, all
             nested data IDs in those dataset references will have records as
@@ -406,7 +406,17 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             Raised if ``datasetType.dimensions.issubset(self.graph) is False``.
         """
         if not isinstance(datasetType, DatasetType):
-            datasetType = self._query.managers.datasets[datasetType].datasetType
+            storage = self._query.managers.datasets.find(datasetType)
+            if storage is None:
+                return ChainedDatasetQueryResults(
+                    [],
+                    doomed_by=[
+                        f"No registered dataset type {datasetType!r} found, so no instances can "
+                        "exist in any collection."
+                    ],
+                )
+            else:
+                datasetType = storage.datasetType
         if not datasetType.dimensions.issubset(self.graph):
             raise ValueError(
                 f"findDatasets requires that the dataset type have only dimensions in "
