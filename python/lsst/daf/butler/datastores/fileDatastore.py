@@ -54,6 +54,7 @@ from lsst.daf.butler import (
     DatastoreCacheManager,
     DatastoreConfig,
     DatastoreDisabledCacheManager,
+    DatastoreRecordData,
     DatastoreValidationError,
     FileDataset,
     FileDescriptor,
@@ -65,6 +66,7 @@ from lsst.daf.butler import (
     LocationFactory,
     Progress,
     StorageClass,
+    StoredDatastoreItemInfo,
     StoredFileInfo,
     ddl,
 )
@@ -244,6 +246,8 @@ class FileDatastore(GenericBaseDatastore):
         super().__init__(config, bridgeManager)
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
+
+        self._bridgeManager = bridgeManager
 
         # Name ourselves either using an explicit name or a name
         # derived from the (unexpanded) root
@@ -558,6 +562,7 @@ class FileDatastore(GenericBaseDatastore):
                     component=component,
                     checksum=None,
                     file_size=-1,
+                    dataset_id=ref.getCheckedId(),
                 ),
             )
             for location, formatter, storageClass, component in all_info
@@ -985,6 +990,7 @@ class FileDatastore(GenericBaseDatastore):
             component=ref.datasetType.component(),
             file_size=size,
             checksum=checksum,
+            dataset_id=ref.getCheckedId(),
         )
 
     def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
@@ -2689,3 +2695,32 @@ class FileDatastore(GenericBaseDatastore):
         # dataset type, but that's not necessary for correctness; it just
         # enables more optimizations (perhaps only in theory).
         return transfer not in ("direct", None)
+
+    def import_records(self, data: Mapping[str, DatastoreRecordData]) -> None:
+        # Docstring inherited from the base class.
+        record_data = data.get(self.name)
+        if not record_data:
+            return
+
+        if record_data.refs:
+            self._bridge.insert(record_data.refs)
+
+        # TODO: Verify that there are no unexpected table names in the dict?
+        records = record_data.records.get(self._table.name)
+        if records:
+            unpacked_records = []
+            for info in records:
+                assert isinstance(info, StoredFileInfo), "Expecting StoredFileInfo records"
+                unpacked_records.append(info.to_record())
+            self._table.insert(*unpacked_records)
+
+    def export_records(self, refs: Iterable[DatasetIdRef]) -> Mapping[str, DatastoreRecordData]:
+        # Docstring inherited from the base class.
+        exported_refs = list(self._bridge.check(refs))
+
+        id2ref = {ref.id: ref for ref in exported_refs}
+        rows = self._table.fetch(dataset_id=list(id2ref.keys()))
+        records: List[StoredDatastoreItemInfo] = [StoredFileInfo.from_record(row) for row in rows]
+
+        record_data = DatastoreRecordData(refs=exported_refs, records={self._table.name: records})
+        return {self.name: record_data}

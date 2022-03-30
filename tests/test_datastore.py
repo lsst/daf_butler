@@ -25,6 +25,7 @@ import tempfile
 import time
 import unittest
 from dataclasses import dataclass
+from itertools import chain
 
 import lsst.utils.tests
 import yaml
@@ -773,6 +774,55 @@ class DatastoreTests(DatastoreTestsBase):
                     # Cleanup the file for next time round loop
                     # since it will get the same file name in store
                     datastore.remove(ref)
+
+    def testExportImportRecords(self):
+        """Test for export_records and import_records methods."""
+
+        datastore = self.makeDatastore("test_datastore")
+
+        # For now only the FileDatastore can be used for this test.
+        # ChainedDatastore that only includes InMemoryDatastores have to be
+        # skipped as well.
+        for name in datastore.names:
+            if not name.startswith("InMemoryDatastore"):
+                break
+        else:
+            raise unittest.SkipTest("in-memory datastore does not support record export/import")
+
+        metrics = makeExampleMetrics()
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        sc = self.storageClassFactory.getStorageClass("StructuredData")
+
+        refs = []
+        for visit in (2048, 2049, 2050):
+            dataId = {"instrument": "dummy", "visit": visit, "physical_filter": "Uprime"}
+            ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
+            datastore.put(metrics, ref)
+            refs.append(ref)
+
+        for exported_refs in (refs, refs[1:]):
+            n_refs = len(exported_refs)
+            records = datastore.export_records(exported_refs)
+            self.assertGreater(len(records), 0)
+            self.assertTrue(set(records.keys()) <= set(datastore.names))
+            # In a ChainedDatastore each FileDatastore will have a complete set
+            for datastore_name in records:
+                record_data = records[datastore_name]
+                self.assertEqual(len(record_data.refs), n_refs)
+                self.assertEqual(len(list(chain(*record_data.records.values()))), n_refs)
+
+        # Use the same datastore name to import relative path.
+        datastore2 = self.makeDatastore("test_datastore")
+
+        records = datastore.export_records(refs[1:])
+        datastore2.import_records(records)
+
+        with self.assertRaises(FileNotFoundError):
+            data = datastore2.get(refs[0])
+        data = datastore2.get(refs[1])
+        self.assertIsNotNone(data)
+        data = datastore2.get(refs[2])
+        self.assertIsNotNone(data)
 
 
 class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):

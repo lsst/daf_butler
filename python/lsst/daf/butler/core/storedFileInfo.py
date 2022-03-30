@@ -34,7 +34,7 @@ from .location import Location, LocationFactory
 from .storageClass import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
-    from .datasets import DatasetRef
+    from .datasets import DatasetId, DatasetRef
 
 # String to use when a Python None is encountered
 NULLSTR = "__NULL_STRING__"
@@ -80,12 +80,17 @@ class StoredDatastoreItemInfo:
         """
         raise NotImplementedError()
 
+    @property
+    def dataset_id(self) -> DatasetId:
+        """Dataset ID associated with this record (`DatasetId`)"""
+        raise NotImplementedError()
+
 
 @dataclass(frozen=True)
 class StoredFileInfo(StoredDatastoreItemInfo):
     """Datastore-private metadata associated with a Datastore file."""
 
-    __slots__ = {"formatter", "path", "storageClass", "component", "checksum", "file_size"}
+    __slots__ = {"formatter", "path", "storageClass", "component", "checksum", "file_size", "dataset_id"}
 
     storageClassFactory = StorageClassFactory()
 
@@ -97,6 +102,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         component: Optional[str],
         checksum: Optional[str],
         file_size: int,
+        dataset_id: DatasetId,
     ):
 
         # Use these shenanigans to allow us to use a frozen dataclass
@@ -105,6 +111,7 @@ class StoredFileInfo(StoredDatastoreItemInfo):
         object.__setattr__(self, "component", component)
         object.__setattr__(self, "checksum", checksum)
         object.__setattr__(self, "file_size", file_size)
+        object.__setattr__(self, "dataset_id", dataset_id)
 
         if isinstance(formatter, str):
             # We trust that this string refers to a Formatter
@@ -137,18 +144,22 @@ class StoredFileInfo(StoredDatastoreItemInfo):
     file_size: int
     """Size of the serialized dataset in bytes."""
 
-    def to_record(self, ref: DatasetRef) -> Dict[str, Any]:
+    dataset_id: DatasetId
+    """DatasetId associated with this record."""
+
+    def to_record(self, ref: Optional[DatasetRef] = None) -> Dict[str, Any]:
         """Convert the supplied ref to a database record."""
-        component = ref.datasetType.component()
+        component = ref.datasetType.component() if ref is not None else None
         if component is None and self.component is not None:
             component = self.component
         if component is None:
             # Use empty string since we want this to be part of the
             # primary key.
             component = NULLSTR
+        dataset_id = ref.id if ref is not None else self.dataset_id
 
         return dict(
-            dataset_id=ref.id,
+            dataset_id=dataset_id,
             formatter=self.formatter,
             path=self.path,
             storage_class=self.storageClass.name,
@@ -202,5 +213,6 @@ class StoredFileInfo(StoredDatastoreItemInfo):
             component=component,
             checksum=record["checksum"],
             file_size=record["file_size"],
+            dataset_id=record["dataset_id"],
         )
         return info

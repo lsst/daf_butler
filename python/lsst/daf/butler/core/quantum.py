@@ -209,7 +209,7 @@ class Quantum:
         initInputs: Optional[Union[Mapping[DatasetType, DatasetRef], Iterable[DatasetRef]]] = None,
         inputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
         outputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
-        datastore_records: Optional[DatastoreRecordData] = None,
+        datastore_records: Optional[Mapping[str, DatastoreRecordData]] = None,
     ):
         if taskClass is not None:
             taskName = f"{taskClass.__module__}.{taskClass.__name__}"
@@ -228,7 +228,7 @@ class Quantum:
         self._inputs = NamedKeyDict[DatasetType, List[DatasetRef]](inputs).freeze()
         self._outputs = NamedKeyDict[DatasetType, List[DatasetRef]](outputs).freeze()
         if datastore_records is None:
-            datastore_records = DatastoreRecordData()
+            datastore_records = {}
         self._datastore_records = datastore_records
 
     def to_simple(self, accumulator: Optional[DimensionRecordsAccumulator] = None) -> SerializedQuantum:
@@ -505,7 +505,7 @@ class Quantum:
         return self._outputs
 
     @property
-    def datastore_records(self) -> DatastoreRecordData:
+    def datastore_records(self) -> Mapping[str, DatastoreRecordData]:
         """Tabular data stored with this quantum (`dict`).
 
         This attribute may be modified in place, but not assigned to.
@@ -547,7 +547,7 @@ class Quantum:
         initInputs: Optional[Union[Mapping[DatasetType, DatasetRef], Iterable[DatasetRef]]],
         inputs: Optional[Mapping[DatasetType, List[DatasetRef]]],
         outputs: Optional[Mapping[DatasetType, List[DatasetRef]]],
-        datastore_records: Optional[DatastoreRecordData] = None,
+        datastore_records: Optional[Mapping[str, DatastoreRecordData]] = None,
     ) -> Quantum:
         return Quantum(
             taskName=taskName,
