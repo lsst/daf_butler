@@ -1656,6 +1656,22 @@ class RegistryTests(ABC):
                     dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True),
                     [dataset2],
                 )
+        # Query for non-empty data IDs with a constraint on an empty-data-ID
+        # dataset that exists.
+        dataIds = registry.queryDataIds(["instrument"], datasets="schema", collections=...)
+        self.checkQueryResults(
+            dataIds.subset(unique=True),
+            [DataCoordinate.standardize(instrument="Cam1", universe=registry.dimensions)],
+        )
+        # Again query for non-empty data IDs with a constraint on empty-data-ID
+        # datasets, but when the datasets don't exist.  We delete the existing
+        # dataset and query just that collection rather than creating a new
+        # empty collection because this is a bit less likely for our build-time
+        # logic to shortcut-out (via the collection summaries), and such a
+        # shortcut would make this test a bit more trivial than we'd like.
+        registry.removeDatasets([dataset2])
+        dataIds = registry.queryDataIds(["instrument"], datasets="schema", collections=run2)
+        self.checkQueryResults(dataIds, [])
 
     def testDimensionDataModifications(self):
         """Test that modifying dimension records via:

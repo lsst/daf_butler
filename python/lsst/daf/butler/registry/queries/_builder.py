@@ -278,13 +278,18 @@ class QueryBuilder:
         -------
         sql : `sqlalchemy.sql.FromClause`
             A SQLAlchemy aliased subquery object.  Has columns for each
-            dataset type dimension.
+            dataset type dimension, or an unspecified column (just to prevent
+            SQL syntax errors) where there is no data ID.
         """
         return (
             storage.select(
                 *collections,
                 dataId=SimpleQuery.Select,
-                id=None,
+                # If this dataset type has no dimensions, we're in danger of
+                # generating an invalid subquery that has no columns in the
+                # SELECT clause.  An easy fix is to just select some arbitrary
+                # column that goes unused, like the dataset ID.
+                id=None if storage.datasetType.dimensions else SimpleQuery.Select,
                 run=None,
                 ingestDate=None,
                 timespan=None,
