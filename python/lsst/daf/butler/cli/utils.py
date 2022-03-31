@@ -505,7 +505,16 @@ class MWPath(click.Path):
         self.mustNotExist = exists is False
         if exists is None:
             exists = False
-        super().__init__(exists, file_okay, dir_okay, writable, readable, resolve_path, allow_dash, path_type)
+        super().__init__(
+            exists=exists,
+            file_okay=file_okay,
+            dir_okay=dir_okay,
+            writable=writable,
+            readable=readable,
+            resolve_path=resolve_path,
+            allow_dash=allow_dash,
+            path_type=path_type,
+        )
 
     def convert(self, value, param, ctx):
         """Called by click.ParamType to "convert values through types".
