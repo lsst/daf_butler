@@ -124,6 +124,15 @@ class SplitKvTestCase(unittest.TestCase):
             {"1": "first", "second": "key"},
         )
 
+    def test_invalidResultType(self):
+        with self.assertRaises(click.ClickException):
+            split_kv(
+                "context",
+                "param",
+                "first=1,second=2",
+                return_type=set,
+            )
+
 
 class SplitKvCmdTestCase(unittest.TestCase):
     """Tests using split_kv with a command."""
