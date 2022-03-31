@@ -375,7 +375,9 @@ def split_kv(
     elif return_type is tuple:
         ret = RetTuple()
     else:
-        raise click.ClickException(f"Internal error: invalid return type '{return_type}' for split_kv.")
+        raise click.ClickException(
+            message=f"Internal error: invalid return type '{return_type}' for split_kv."
+        )
     if multiple:
         vals = split_commas(context, param, vals)
     for val in ensure_iterable(vals):
@@ -390,7 +392,7 @@ def split_kv(
                     choice(v)  # will raise if val is an invalid choice
             except ValueError:
                 raise click.ClickException(
-                    f"Could not parse key-value pair '{val}' using separator '{separator}', "
+                    message=f"Could not parse key-value pair '{val}' using separator '{separator}', "
                     f"with multiple values {'allowed' if multiple else 'not allowed'}."
                 )
             ret.add(k, norm(v))
@@ -811,7 +813,11 @@ def yaml_presets(ctx, param, value):
                     continue
                 overrides[name] = overrides.pop(option)
         except Exception as e:
-            raise click.BadOptionUsage(param.name, f"Error reading overrides file: {e}", ctx)
+            raise click.BadOptionUsage(
+                option_name=param.name,
+                message=f"Error reading overrides file: {e}",
+                ctx=ctx,
+            )
         # Override the defaults for this subcommand
         ctx.default_map.update(overrides)
     return

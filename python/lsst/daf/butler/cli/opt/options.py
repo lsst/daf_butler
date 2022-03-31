@@ -53,7 +53,7 @@ collection_type_option = MWOptionDecorator(
     callback=CollectionTypeCallback.makeCollectionTypes,
     multiple=True,
     help="If provided, only list collections of this type.",
-    type=click.Choice(CollectionTypeCallback.collectionTypes, case_sensitive=False),
+    type=click.Choice(choices=CollectionTypeCallback.collectionTypes, case_sensitive=False),
 )
 
 
@@ -124,7 +124,7 @@ log_level_option = MWOptionDecorator(
     "--log-level",
     callback=partial(
         split_kv,
-        choice=click.Choice(logLevelChoices, case_sensitive=False),
+        choice=click.Choice(choices=logLevelChoices, case_sensitive=False),
         normalize=True,
         unseparated_okay=True,
         add_to_default=True,
@@ -209,7 +209,8 @@ transfer_option = MWOptionDecorator(
     default="auto",  # set to `None` if using `required=True`
     help="The external data transfer mode.",
     type=click.Choice(
-        ["auto", "link", "symlink", "hardlink", "copy", "move", "relsymlink", "direct"], case_sensitive=False
+        choices=["auto", "link", "symlink", "hardlink", "copy", "move", "relsymlink", "direct"],
+        case_sensitive=False,
     ),
 )
 

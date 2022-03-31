@@ -111,7 +111,7 @@ def remove_runs(context, confirm, force, **kwargs):
         return
     if confirm:
         _print_remove(True, result.runs, result.datasets)
-        doContinue = click.confirm("Continue?", default=False)
+        doContinue = click.confirm(text="Continue?", default=False)
         if doContinue:
             result.onConfirmation()
             print(removedRunsMsg)

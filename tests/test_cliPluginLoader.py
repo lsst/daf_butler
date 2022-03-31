@@ -36,7 +36,7 @@ from lsst.daf.butler.cli.utils import LogCliRunner, command_test_env
 
 @click.command()
 def command_test():
-    click.echo("test command")
+    click.echo(message="test command")
 
 
 @contextmanager

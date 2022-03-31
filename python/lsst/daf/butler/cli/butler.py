@@ -289,7 +289,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
             if len(packages) > 1:
                 msg += f"Command '{command}' exists in packages {', '.join(packages)}. "
         if msg:
-            raise click.ClickException(msg + "Duplicate commands are not supported, aborting.")
+            raise click.ClickException(message=msg + "Duplicate commands are not supported, aborting.")
 
 
 class ButlerCLI(LoaderCLI):

@@ -77,4 +77,4 @@ class ClickProgressHandler(ProgressHandler):
         self, iterable: Optional[Iterable[_T]], desc: Optional[str], total: Optional[int], level: int
     ) -> ContextManager[ProgressBar[_T]]:
         # Docstring inherited.
-        return click.progressbar(iterable, length=total, label=desc, **self._kwargs)
+        return click.progressbar(iterable=iterable, length=total, label=desc, **self._kwargs)

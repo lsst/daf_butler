@@ -170,7 +170,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
             callback=partial(
                 split_kv,
                 unseparated_okay=True,
-                choice=click.Choice(choices, case_sensitive=False),
+                choice=click.Choice(choices=choices, case_sensitive=False),
                 normalize=True,
             ),
         )
