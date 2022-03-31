@@ -277,7 +277,11 @@ class QueryBuilder:
             storage.select(
                 *collections,
                 dataId=SimpleQuery.Select,
-                id=None,
+                # If this dataset type has no dimensions, we're in danger of
+                # generating an invalid subquery that has no columns in the
+                # SELECT clause.  Any easy fix is to just select some arbitrary
+                # column that goes unused, like the dataset ID.
+                id=None if storage.datasetType.dimensions else SimpleQuery.Select,
                 run=None,
                 ingestDate=None,
                 timespan=None,
