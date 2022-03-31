@@ -30,7 +30,7 @@ from ...core import DatasetType, Dimension, DimensionElement, SimpleQuery, SkyPi
 from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._collectionType import CollectionType
 from .._exceptions import DataIdValueError
-from ..interfaces import GovernorDimensionRecordStorage
+from ..interfaces import CollectionRecord, DatasetRecordStorage, GovernorDimensionRecordStorage
 from ..wildcards import CollectionQuery, CollectionSearch
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryManagers
@@ -187,17 +187,9 @@ class QueryBuilder:
                 "any collection."
             )
             return False
-        subsubqueries = []
-        runKeyName = self._managers.collections.getRunForeignKeyName()
-        baseColumnNames = {"id", runKeyName, "ingest_date"} if isResult else set()
-        baseColumnNames.update(datasetType.dimensions.required.names)
-        if not findFirst:
-            calibration_collections = []
-            other_collections = []
+        collectionRecords: List[CollectionRecord] = []
         rejections: List[str] = []
-        for rank, collectionRecord in enumerate(
-            collections.iter(self._managers.collections, collectionTypes=collectionTypes)
-        ):
+        for collectionRecord in collections.iter(self._managers.collections, collectionTypes=collectionTypes):
             # Only include collections that (according to collection summaries)
             # might have datasets of this type and governor dimensions
             # consistent with the query's WHERE clause.
@@ -224,7 +216,7 @@ class QueryBuilder:
                             f"collection '{collectionRecord.name}' is not yet supported."
                         )
                     else:
-                        calibration_collections.append(collectionRecord)
+                        collectionRecords.append(collectionRecord)
                 else:
                     # We can never find a non-calibration dataset in a
                     # CALIBRATION collection.
@@ -233,141 +225,223 @@ class QueryBuilder:
                         f"in CALIBRATION collection {collectionRecord.name!r}."
                     )
                     continue
-            elif findFirst:
-                # If findFirst=True, each collection gets its own subquery so
-                # we can add a literal rank for it.
-                ssq = datasetRecordStorage.select(
-                    collectionRecord,
-                    dataId=SimpleQuery.Select,
-                    id=SimpleQuery.Select if isResult else None,
-                    run=SimpleQuery.Select if isResult else None,
-                    ingestDate=SimpleQuery.Select if isResult else None,
-                )
-                assert {c.name for c in ssq.columns} == baseColumnNames
-                ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
-                subsubqueries.append(ssq.combine())
             else:
-                # If findFirst=False, we have one subquery for all CALIBRATION
-                # collections and one subquery for all other collections; we'll
-                # assemble those later after grouping by collection type.
-                other_collections.append(collectionRecord)
-        if not findFirst:
-            if other_collections:
-                ssq = datasetRecordStorage.select(
-                    *other_collections,
-                    dataId=SimpleQuery.Select,
-                    id=SimpleQuery.Select if isResult else None,
-                    run=SimpleQuery.Select if isResult else None,
-                    ingestDate=SimpleQuery.Select if isResult else None,
-                )
-                subsubqueries.append(ssq.combine())
-            if calibration_collections:
-                ssq = datasetRecordStorage.select(
-                    *calibration_collections,
-                    dataId=SimpleQuery.Select,
-                    id=SimpleQuery.Select if isResult else None,
-                    run=SimpleQuery.Select if isResult else None,
-                    ingestDate=SimpleQuery.Select if isResult else None,
-                )
-                subsubqueries.append(ssq.combine())
-        if not subsubqueries:
+                collectionRecords.append(collectionRecord)
+        if collectionRecords:
+            if isResult:
+                if findFirst:
+                    subquery, columns = self._build_dataset_search_subquery(
+                        datasetRecordStorage,
+                        collectionRecords,
+                    )
+                else:
+                    subquery, columns = self._build_dataset_query_subquery(
+                        datasetRecordStorage,
+                        collectionRecords,
+                    )
+            else:
+                subquery = self._build_dataset_constraint_subquery(datasetRecordStorage, collectionRecords)
+                columns = None
+            self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
+        else:
             if rejections:
                 self._doomed_by.extend(rejections)
             else:
                 self._doomed_by.append(f"No collections to search matching expression {collections}.")
-            # Make a single subquery with no collections that never yields
-            # results; this should never get executed, but downstream code
-            # still needs to access the SQLAlchemy column objects.
-            ssq = datasetRecordStorage.select(
-                dataId=SimpleQuery.Select,
-                id=SimpleQuery.Select if isResult else None,
-                run=SimpleQuery.Select if isResult else None,
-                ingestDate=SimpleQuery.Select if isResult else None,
-            )
-            if findFirst:
-                ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
-            subsubqueries.append(ssq.combine())
-        # Although one would expect that these subqueries can be
-        # UNION ALL instead of UNION because each subquery is already
-        # distinct, it turns out that with many
-        # subqueries this causes catastrophic performance problems
-        # with both sqlite and postgres.  Using UNION may require
-        # more table scans, but a much simpler query plan given our
-        # table structures.  See DM-31429.
-        subquery = sqlalchemy.sql.union(*subsubqueries)
-        columns: Optional[DatasetQueryColumns] = None
-        if isResult:
-            if findFirst:
-                # Rewrite the subquery (currently a UNION ALL over
-                # per-collection subsubqueries) to select the rows with the
-                # lowest rank per data ID.  The block below will set subquery
-                # to something like this:
-                #
-                # WITH {dst}_search AS (
-                #     SELECT {data-id-cols}, id, run_id, 1 AS rank
-                #         FROM <collection1>
-                #     UNION ALL
-                #     SELECT {data-id-cols}, id, run_id, 2 AS rank
-                #         FROM <collection2>
-                #     UNION ALL
-                #     ...
-                # )
-                # SELECT
-                #     {dst}_window.{data-id-cols},
-                #     {dst}_window.id,
-                #     {dst}_window.run_id
-                # FROM (
-                #     SELECT
-                #         {dst}_search.{data-id-cols},
-                #         {dst}_search.id,
-                #         {dst}_search.run_id,
-                #         ROW_NUMBER() OVER (
-                #             PARTITION BY {dst_search}.{data-id-cols}
-                #             ORDER BY rank
-                #         ) AS rownum
-                #     ) {dst}_window
-                # WHERE
-                #     {dst}_window.rownum = 1;
-                #
-                search = subquery.cte(f"{datasetType.name}_search")
-                windowDataIdCols = [
-                    search.columns[name].label(name) for name in datasetType.dimensions.required.names
-                ]
-                windowSelectCols = [
-                    search.columns["id"].label("id"),
-                    search.columns[runKeyName].label(runKeyName),
-                    search.columns["ingest_date"].label("ingest_date"),
-                ]
-                windowSelectCols += windowDataIdCols
-                assert {c.name for c in windowSelectCols} == baseColumnNames
-                windowSelectCols.append(
-                    sqlalchemy.sql.func.row_number()
-                    .over(partition_by=windowDataIdCols, order_by=search.columns["rank"])
-                    .label("rownum")
-                )
-                window = (
-                    sqlalchemy.sql.select(*windowSelectCols)
-                    .select_from(search)
-                    .alias(f"{datasetType.name}_window")
-                )
-                subquery = (
-                    sqlalchemy.sql.select(*[window.columns[name].label(name) for name in baseColumnNames])
-                    .select_from(window)
-                    .where(window.columns["rownum"] == 1)
-                    .alias(datasetType.name)
-                )
-            else:
-                subquery = subquery.alias(datasetType.name)
-            columns = DatasetQueryColumns(
-                datasetType=datasetType,
-                id=subquery.columns["id"],
-                runKey=subquery.columns[runKeyName],
-                ingestDate=subquery.columns["ingest_date"],
-            )
-        else:
-            subquery = subquery.alias(datasetType.name)
-        self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
+            return False
         return not self._doomed_by
+
+    def _build_dataset_constraint_subquery(
+        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
+    ) -> sqlalchemy.sql.FromClause:
+        """Internal helper method to build a dataset subquery for a parent
+        query that does not return dataset results.
+
+        Parameters
+        ----------
+        storage : `DatasetRecordStorage`
+            Storage object for the dataset type the subquery is for.
+        collections : `list` [ `CollectionRecord` ]
+            Records for the collections to be searched.  Collections with no
+            datasets of this type or with governor dimensions incompatible with
+            the rest of the query should already have been filtered out.
+            `~CollectionType.CALIBRATION` collections should also be filtered
+            out if this is a temporal query.
+
+        Returns
+        -------
+        sql : `sqlalchemy.sql.FromClause`
+            A SQLAlchemy aliased subquery object.
+        """
+        return (
+            storage.select(
+                *collections,
+                dataId=SimpleQuery.Select,
+                id=None,
+                run=None,
+                ingestDate=None,
+                timespan=None,
+            )
+            .combine()
+            .alias(storage.datasetType.name)
+        )
+
+    def _build_dataset_query_subquery(
+        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
+    ) -> tuple[sqlalchemy.sql.FromClause, DatasetQueryColumns]:
+        """Internal helper method to build a dataset subquery for a parent
+        query that returns all matching dataset results.
+
+        Parameters
+        ----------
+        storage : `DatasetRecordStorage`
+            Storage object for the dataset type the subquery is for.
+        collections : `list` [ `CollectionRecord` ]
+            Records for the collections to be searched.  Collections with no
+            datasets of this type or with governor dimensions incompatible with
+            the rest of the query should already have been filtered out.
+            `~CollectionType.CALIBRATION` collections should also be filtered
+            out if this is a temporal query.
+
+        Returns
+        -------
+        sql : `sqlalchemy.sql.FromClause`
+            A SQLAlchemy aliased subquery object.
+        columns : `DatasetQueryColumns`
+            Object holding the columns that describe the dataset in the
+            subquery.
+        """
+        sql = (
+            storage.select(
+                *collections,
+                dataId=SimpleQuery.Select,
+                id=SimpleQuery.Select,
+                run=SimpleQuery.Select,
+                ingestDate=SimpleQuery.Select,
+                timespan=None,
+            )
+            .combine()
+            .alias(storage.datasetType.name)
+        )
+        columns = DatasetQueryColumns(
+            datasetType=storage.datasetType,
+            id=sql.columns["id"],
+            runKey=sql.columns[self._managers.collections.getRunForeignKeyName()],
+            ingestDate=sql.columns["ingest_date"],
+        )
+        return sql, columns
+
+    def _build_dataset_search_subquery(
+        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
+    ) -> sqlalchemy.sql.FromClause:
+        """Internal helper method to build a dataset subquery for a parent
+        query that returns the first matching dataset for each data ID and
+        dataset type name from an ordered list of collections.
+
+        Parameters
+        ----------
+        storage : `DatasetRecordStorage`
+            Storage object for the dataset type the subquery is for.
+        collections : `list` [ `CollectionRecord` ]
+            Records for the collections to be searched.  Collections with no
+            datasets of this type or with governor dimensions incompatible with
+            the rest of the query should already have been filtered out.
+            `~CollectionType.CALIBRATION` collections should be filtered out as
+            well.
+
+        Returns
+        -------
+        sql : `sqlalchemy.sql.FromClause`
+            A SQLAlchemy aliased subquery object.
+        columns : `DatasetQueryColumns`
+            Object holding the columns that describe the dataset in the
+            subquery.
+        """
+        # In the more general case, we build a subquery of the form below to
+        # search the collections in order.
+        #
+        # WITH {dst}_search AS (
+        #     SELECT {data-id-cols}, id, run_id, 1 AS rank
+        #         FROM <collection1>
+        #     UNION ALL
+        #     SELECT {data-id-cols}, id, run_id, 2 AS rank
+        #         FROM <collection2>
+        #     UNION ALL
+        #     ...
+        # )
+        # SELECT
+        #     {dst}_window.{data-id-cols},
+        #     {dst}_window.id,
+        #     {dst}_window.run_id
+        # FROM (
+        #     SELECT
+        #         {dst}_search.{data-id-cols},
+        #         {dst}_search.id,
+        #         {dst}_search.run_id,
+        #         ROW_NUMBER() OVER (
+        #             PARTITION BY {dst_search}.{data-id-cols}
+        #             ORDER BY rank
+        #         ) AS rownum
+        #     ) {dst}_window
+        # WHERE
+        #     {dst}_window.rownum = 1;
+        #
+        # We'll start with the Common Table Expression (CTE) at the top.
+        subqueries = []
+        for rank, collection_record in enumerate(collections):
+            ssq = storage.select(
+                collection_record,
+                dataId=SimpleQuery.Select,
+                id=SimpleQuery.Select,
+                run=SimpleQuery.Select,
+                ingestDate=SimpleQuery.Select,
+                timespan=None,
+            )
+            ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
+            subqueries.append(ssq.combine())
+        # Although one would expect that these subqueries can be UNION ALL
+        # instead of UNION because each subquery is already distinct, it turns
+        # out that with many subqueries this causes catastrophic performance
+        # problems with both sqlite and postgres.  Using UNION may require more
+        # table scans, but a much simpler query plan given our table
+        # structures.  See DM-31429.
+        search = sqlalchemy.sql.union(*subqueries).cte(f"{storage.datasetType.name}_search")
+        # Now we fill out the SELECT the CTE, and the subquery it contains (at
+        # the same time, since they have the same columns, aside from the OVER
+        # clause).
+        run_key_name = self._managers.collections.getRunForeignKeyName()
+        window_data_id_cols = [
+            search.columns[name].label(name) for name in storage.datasetType.dimensions.required.names
+        ]
+        window_select_cols = [
+            search.columns["id"].label("id"),
+            search.columns[run_key_name].label(run_key_name),
+            search.columns["ingest_date"].label("ingest_date"),
+        ]
+        window_select_cols += window_data_id_cols
+        window_select_cols.append(
+            sqlalchemy.sql.func.row_number()
+            .over(partition_by=window_data_id_cols, order_by=search.columns["rank"])
+            .label("rownum")
+        )
+        window = (
+            sqlalchemy.sql.select(*window_select_cols)
+            .select_from(search)
+            .alias(f"{storage.datasetType.name}_window")
+        )
+        sql = (
+            sqlalchemy.sql.select(*[window.columns[col.name].label(col.name) for col in window_select_cols])
+            .select_from(window)
+            .where(window.columns["rownum"] == 1)
+            .alias(storage.datasetType.name)
+        )
+        columns = DatasetQueryColumns(
+            datasetType=storage.datasetType,
+            id=sql.columns["id"],
+            runKey=sql.columns[self._managers.collections.getRunForeignKeyName()],
+            ingestDate=sql.columns["ingest_date"],
+        )
+        return sql, columns
 
     def joinTable(
         self,
