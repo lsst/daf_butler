@@ -37,6 +37,7 @@ from lsst.daf.butler.cli.cmd.commands import (
     pruneDatasets_didRemoveAforementioned,
     pruneDatasets_didRemoveMsg,
     pruneDatasets_errNoCollectionRestriction,
+    pruneDatasets_errNoOp,
     pruneDatasets_errPruneOnNotRun,
     pruneDatasets_errPurgeAndDisassociate,
     pruneDatasets_errQuietWithDryRun,
@@ -365,6 +366,18 @@ class PruneDatasetsTestCase(unittest.TestCase):
             exQueryDatasetsCallArgs=None,  # should not make it far enough to call this.
             exGetTablesCalled=False,  # ...or this.
             exMsgs=(pruneDatasets_errPurgeAndDisassociate,),
+            exPruneDatasetsExitCode=1,
+        )
+
+    def test_purgeNoOp(self):
+        """Verify there is an error when none of --purge, --unstore, or
+        --disassociate are passed."""
+        self.run_test(
+            cliArgs=[],
+            exPruneDatasetsCallArgs=None,
+            exQueryDatasetsCallArgs=None,  # should not make it far enough to call this.
+            exGetTablesCalled=False,  # ...or this.
+            exMsgs=(pruneDatasets_errNoOp,),
             exPruneDatasetsExitCode=1,
         )
 

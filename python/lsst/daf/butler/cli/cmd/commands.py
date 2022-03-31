@@ -386,7 +386,6 @@ def prune_datasets(**kwargs):
 
     if result.errPurgeAndDisassociate:
         raise click.ClickException(message=pruneDatasets_errPurgeAndDisassociate)
-        return
     if result.errNoCollectionRestriction:
         raise click.ClickException(message=pruneDatasets_errNoCollectionRestriction)
     if result.errPruneOnNotRun:
