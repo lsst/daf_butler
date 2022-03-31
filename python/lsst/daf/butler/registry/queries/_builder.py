@@ -357,6 +357,10 @@ class QueryBuilder:
             Object holding the columns that describe the dataset in the
             subquery.
         """
+        # Query-simplification shortcut: if there is only one collection, a
+        # find-first search is just a regular result subquery.
+        if len(collections) == 1:
+            return self._build_dataset_query_subquery(storage, collections)
         # In the more general case, we build a subquery of the form below to
         # search the collections in order.
         #
