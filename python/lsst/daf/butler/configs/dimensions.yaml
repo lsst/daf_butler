@@ -8,6 +8,9 @@ skypix:
   htm:
     class: lsst.sphgeom.HtmPixelization
     max_level: 24
+  healpix:
+    class: lsst.sphgeom.HealpixPixelization
+    max_level: 17
 
 elements:
   instrument:
