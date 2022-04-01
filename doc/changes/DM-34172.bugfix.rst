@@ -1,0 +1,1 @@
+The automatic addition of ``butler.yaml`` to the Butler configuration URI now also happens when a ``ResourcePath`` instance is given.
