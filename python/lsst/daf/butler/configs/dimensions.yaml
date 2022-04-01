@@ -168,6 +168,10 @@ elements:
           Day of observation as defined by the observatory (YYYYMMDD format).
           If a visit crosses multiple days this entry will be the earliest
           day of any of the exposures that make up the visit.
+      - name: seq_num
+        type: int
+        doc: >
+          The sequence number of the first exposure that is part of this visit.
       -
         name: exposure_time
         type: float
@@ -269,6 +273,16 @@ elements:
           Counter for the observation within a larger sequence. Context
           of the sequence number is observatory specific. Can be
           a global counter or counter within day_obs.
+      -
+        name: seq_start
+        type: int
+        doc: >
+          Earliest sequence number that might be related to this exposure.
+      -
+        name: seq_end
+        type: int
+        doc: >
+          Oldest sequence number that might be related to this exposure.
       -
         name: group_name
         type: string
