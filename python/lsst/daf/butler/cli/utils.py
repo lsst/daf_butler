@@ -375,7 +375,9 @@ def split_kv(
     elif return_type is tuple:
         ret = RetTuple()
     else:
-        raise click.ClickException(f"Internal error: invalid return type '{return_type}' for split_kv.")
+        raise click.ClickException(
+            message=f"Internal error: invalid return type '{return_type}' for split_kv."
+        )
     if multiple:
         vals = split_commas(context, param, vals)
     for val in ensure_iterable(vals):
@@ -390,7 +392,7 @@ def split_kv(
                     choice(v)  # will raise if val is an invalid choice
             except ValueError:
                 raise click.ClickException(
-                    f"Could not parse key-value pair '{val}' using separator '{separator}', "
+                    message=f"Could not parse key-value pair '{val}' using separator '{separator}', "
                     f"with multiple values {'allowed' if multiple else 'not allowed'}."
                 )
             ret.add(k, norm(v))
@@ -505,7 +507,16 @@ class MWPath(click.Path):
         self.mustNotExist = exists is False
         if exists is None:
             exists = False
-        super().__init__(exists, file_okay, dir_okay, writable, readable, resolve_path, allow_dash, path_type)
+        super().__init__(
+            exists=exists,
+            file_okay=file_okay,
+            dir_okay=dir_okay,
+            writable=writable,
+            readable=readable,
+            resolve_path=resolve_path,
+            allow_dash=allow_dash,
+            path_type=path_type,
+        )
 
     def convert(self, value, param, ctx):
         """Called by click.ParamType to "convert values through types".
@@ -802,7 +813,11 @@ def yaml_presets(ctx, param, value):
                     continue
                 overrides[name] = overrides.pop(option)
         except Exception as e:
-            raise click.BadOptionUsage(param.name, f"Error reading overrides file: {e}", ctx)
+            raise click.BadOptionUsage(
+                option_name=param.name,
+                message=f"Error reading overrides file: {e}",
+                ctx=ctx,
+            )
         # Override the defaults for this subcommand
         ctx.default_map.update(overrides)
     return

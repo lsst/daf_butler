@@ -94,7 +94,9 @@ def command_log_settings_test(
         )
     for expected, actual, name in logLevels:
         if expected != actual:
-            raise (click.ClickException(f"expected {name} level to be {expected!r}, actual:{actual!r}"))
+            raise (
+                click.ClickException(message=f"expected {name} level to be {expected!r}, actual:{actual!r}")
+            )
 
 
 class CliLogTestBase:

@@ -93,7 +93,7 @@ def associate(**kwargs):
     "datasets.  If this is not an absolute path, does not exist in the current working "
     "directory, and --dir is provided, it is assumed to be in that directory.  Defaults "
     'to "export.yaml".',
-    type=click.File("r"),
+    type=click.File(mode="r"),
 )
 @click.option(
     "--skip-dimensions",
@@ -159,7 +159,7 @@ def create(*args, **kwargs):
 @click.option(
     "--file",
     "outfile",
-    type=click.File("w"),
+    type=click.File(mode="w"),
     default="-",
     help="Print the (possibly-expanded) configuration for a repository to a file, or to stdout "
     "by default.",
@@ -234,7 +234,7 @@ def prune_collection(**kwargs):
     if result.confirm:
         print("The following collections will be removed:")
         result.removeTable.pprint_all(align="<")
-        doContinue = click.confirm("Continue?", default=False)
+        doContinue = click.confirm(text="Continue?", default=False)
     else:
         doContinue = True
     if doContinue:
@@ -379,20 +379,19 @@ def prune_datasets(**kwargs):
     quiet = kwargs.pop("quiet", False)
     if quiet:
         if kwargs["dry_run"]:
-            raise click.ClickException(pruneDatasets_errQuietWithDryRun)
+            raise click.ClickException(message=pruneDatasets_errQuietWithDryRun)
         kwargs["confirm"] = False
 
     result = script.pruneDatasets(**kwargs)
 
     if result.errPurgeAndDisassociate:
-        raise click.ClickException(pruneDatasets_errPurgeAndDisassociate)
-        return
+        raise click.ClickException(message=pruneDatasets_errPurgeAndDisassociate)
     if result.errNoCollectionRestriction:
-        raise click.ClickException(pruneDatasets_errNoCollectionRestriction)
+        raise click.ClickException(message=pruneDatasets_errNoCollectionRestriction)
     if result.errPruneOnNotRun:
-        raise click.ClickException(pruneDatasets_errPruneOnNotRun.format(**result.errDict))
+        raise click.ClickException(message=pruneDatasets_errPruneOnNotRun.format(**result.errDict))
     if result.errNoOp:
-        raise click.ClickException(pruneDatasets_errNoOp)
+        raise click.ClickException(message=pruneDatasets_errNoOp)
     if result.dryRun:
         if result.action["disassociate"] and result.action["unstore"]:
             msg = pruneDatasets_wouldDisassociateAndRemoveMsg
@@ -409,7 +408,7 @@ def prune_datasets(**kwargs):
             return
         print(pruneDatasets_willRemoveMsg)
         printAstropyTables(result.tables)
-        doContinue = click.confirm(pruneDatasets_askContinueMsg, default=False)
+        doContinue = click.confirm(text=pruneDatasets_askContinueMsg, default=False)
         if doContinue:
             result.onConfirmation()
             print(pruneDatasets_didRemoveAforementioned)
@@ -456,7 +455,7 @@ def prune_datasets(**kwargs):
     # the FLATTEN text.
     callback=to_upper,
     type=click.Choice(
-        ("TABLE", "INVERSE-TABLE", "TREE", "INVERSE-TREE", "FLATTEN"),
+        choices=("TABLE", "INVERSE-TABLE", "TREE", "INVERSE-TREE", "FLATTEN"),
         case_sensitive=False,
     ),
 )

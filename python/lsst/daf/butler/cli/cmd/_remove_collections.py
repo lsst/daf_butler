@@ -68,7 +68,7 @@ def remove_collections(**kwargs):
             result.runsTable.pprint_all(align="<")
             print()
         if canRemoveCollections:
-            doContinue = click.confirm("Continue?", default=False)
+            doContinue = click.confirm(text="Continue?", default=False)
     if doContinue:
         result.onConfirmation()
         if confirm:
