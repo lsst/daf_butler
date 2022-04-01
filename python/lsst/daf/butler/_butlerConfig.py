@@ -79,7 +79,9 @@ class ButlerConfig(Config):
             self.configDir = copy.copy(other.configDir)
             return
 
-        if isinstance(other, (str, os.PathLike)):
+        # Include ResourcePath here in case it refers to a directory.
+        # Creating a ResourcePath from a ResourcePath is a no-op.
+        if isinstance(other, (str, os.PathLike, ResourcePath)):
             # This will only allow supported schemes
             uri = ResourcePath(other)
 
