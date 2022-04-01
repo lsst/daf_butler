@@ -858,6 +858,14 @@ class Butler(LimitedButler):
                     else:
                         candidateDimensions = assignedDimensions
 
+                        # If this is a choice between visit and exposure and
+                        # neither was a required part of the dataset type,
+                        # (hence in this branch) always prefer exposure over
+                        # visit since exposures are always defined and visits
+                        # are defined from exposures.
+                        if candidateDimensions == {"exposure", "visit"}:
+                            candidateDimensions = {"exposure"}
+
                     # Select the relevant items and get a new restricted
                     # counter.
                     theseCounts = {k: v for k, v in counter.items() if k in candidateDimensions}
