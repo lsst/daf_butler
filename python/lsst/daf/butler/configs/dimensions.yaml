@@ -340,6 +340,13 @@ elements:
         type: float
         doc: >
           Angle in degrees from the zenith at the start of the exposure.
+      - name: has_simulated
+        type: bool
+        doc: >
+          True if this exposure has some content that was simulated.
+          This can be if the data itself were simulated or if
+          parts of the header came from simulated systems, such as observations
+          in the lab that are recorded as on-sky.
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
