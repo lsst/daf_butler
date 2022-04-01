@@ -194,12 +194,20 @@ elements:
         length: 64
         doc: Observing program (survey or proposal) identifier.
       -
+        name: azimuth
+        type: float
+        doc: >
+          Approximate azimuth of the telescope in degrees during the visit.
+          Can only be approximate since it is continually changing during
+          an observation and multiple exposures can be combined from a
+          relatively long period.
+      -
         name: zenith_angle
         type: float
         doc: >
           Approximate zenith angle in degrees during the visit.
           Can only be approximate since it is continuously changing during
-          and observation and multiple visits can be combined from a
+          an observation and multiple exposures can be combined from a
           relatively long period.
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
@@ -305,6 +313,13 @@ elements:
           Angle of the instrument focal plane on the sky in degrees. Can
           be NULL for observations that are not on sky, or for observations
           where the sky angle changes during the observation.
+      -
+        name: azimuth
+        type: float
+        doc: >
+          Azimuth of the telescope at the start of the exposure in degrees.
+          Can be NULL for observations that are not on sky, or for observations
+          where the azimuth is not relevant.
       -
         name: zenith_angle
         type: float
