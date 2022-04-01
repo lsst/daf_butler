@@ -520,6 +520,10 @@ class ButlerTests(ButlerPutGetTests):
             butler = Butler(config_dir, run=self.default_run)
             self.assertIsInstance(butler, Butler)
 
+            # Even with a ResourcePath.
+            butler = Butler(ResourcePath(config_dir, forceDirectory=True), run=self.default_run)
+            self.assertIsInstance(butler, Butler)
+
         collections = set(butler.registry.queryCollections())
         self.assertEqual(collections, {self.default_run})
 
