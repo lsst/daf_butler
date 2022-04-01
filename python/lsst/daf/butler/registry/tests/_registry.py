@@ -259,9 +259,10 @@ class RegistryTests(ABC):
         dimensionValue = {
             "name": "DummyCam",
             "visit_max": 10,
+            "visit_system": 0,
             "exposure_max": 10,
             "detector_max": 2,
-            "class_name": "lsst.obs.base.Instrument",
+            "class_name": "lsst.pipe.base.Instrument",
         }
         registry.insertDimensionData(dimensionName, dimensionValue)
         # Inserting the same value twice should fail

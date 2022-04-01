@@ -31,6 +31,11 @@ elements:
           Maximum value for the 'visit' field for visits associated with
           this instrument (exclusive).
       -
+        name: visit_system
+        type: int
+        doc: >
+          The preferred visit system for this instrument.
+      -
         name: exposure_max
         type: int
         doc: >
