@@ -255,6 +255,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         storageA = StorageClass("test_a", pytype=set, converters={"list": "builtins.set"})
         storageB = StorageClass("test_b", pytype=list)
         storageC = StorageClass("test_c", pytype=dict)
+        storageD = StorageClass("test_d", pytype=list, converters={"set": "builtins.list"})
         self.assertTrue(storageA.can_convert(storageB))
         dimensionsA = self.universe.extract(["instrument"])
 
@@ -267,6 +268,13 @@ class DatasetTypeTestCase(unittest.TestCase):
 
         dA3 = DatasetType("a", dimensionsA, storageC)
         self.assertFalse(dA.is_compatible_with(dA3))
+        self.assertTrue(dA.is_compatible_with(dA3, ignore_storage_classes=True))
+
+        dA4 = DatasetType("a", dimensionsA, storageD)
+        self.assertTrue(dA.is_compatible_with(dA4))
+        self.assertTrue(dA4.is_compatible_with(dA))
+        self.assertTrue(dA.is_compatible_with(dA4, reversible=True))
+        self.assertTrue(dA4.is_compatible_with(dA, reversible=True))
 
     def testJson(self):
         storageA = StorageClass("test_a")

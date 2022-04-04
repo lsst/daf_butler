@@ -281,7 +281,9 @@ class DatasetType:
                 return False
         return True
 
-    def is_compatible_with(self, other: DatasetType) -> bool:
+    def is_compatible_with(
+        self, other: DatasetType, *, reversible: bool = False, ignore_storage_classes: bool = False
+    ) -> bool:
         """Determine if the given `DatasetType` is compatible with this one.
 
         Compatibility requires a matching name and dimensions and a storage
@@ -292,6 +294,13 @@ class DatasetType:
         ----------
         other : `DatasetType`
             Dataset type to check.
+        reversible : `bool`, optional
+            If `True` (`False` is default), also require that the python type
+            associated with ``self`` can be converted to the python type
+            associated with ``other``.
+        ignore_storage_classes: `bool`, optional
+            If `True` (`False` is default), do not check storage class
+            compatibility at all.
 
         Returns
         -------
@@ -305,14 +314,14 @@ class DatasetType:
             return False
 
         # If the storage class names match then they are compatible.
-        if self._storageClassName == other._storageClassName:
+        if self._storageClassName == other._storageClassName or ignore_storage_classes:
             return True
 
         # Now required to check the full storage class.
         self_sc = self.storageClass
         other_sc = other.storageClass
 
-        return self_sc.can_convert(other_sc)
+        return self_sc.can_convert(other_sc) and (not reversible or other_sc.can_convert(self_sc))
 
     def __hash__(self) -> int:
         """Hash DatasetType instance.
