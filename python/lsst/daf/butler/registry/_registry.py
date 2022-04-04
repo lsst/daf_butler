@@ -639,7 +639,7 @@ class Registry(ABC):
 
         Raises
         ------
-        KeyError
+        MissingDatasetTypeError
             Requested named DatasetType could not be found in registry.
         """
         raise NotImplementedError()
