@@ -66,7 +66,7 @@ class DatasetTypeError(RegistryError):
     """Exception raised for problems with dataset types."""
 
 
-class DatasetTypeExpressionError(RegistryError):
+class DatasetTypeExpressionError(DatasetTypeError):
     """Exception raised for an incorrect dataset type expression."""
 
 
