@@ -28,6 +28,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Tuple
 
 from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl
+from .._exceptions import MissingDatasetTypeError
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -507,7 +508,7 @@ class DatasetRecordStorageManager(VersionedExtension):
 
         Raises
         ------
-        KeyError
+        MissingDatasetTypeError
             Raised if there is no dataset type with the given name.
 
         Notes
@@ -517,7 +518,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         """
         result = self.find(name)
         if result is None:
-            raise KeyError(f"Dataset type with name '{name}' not found.")
+            raise MissingDatasetTypeError(f"Dataset type with name '{name}' not found.")
         return result
 
     @abstractmethod
@@ -576,6 +577,10 @@ class DatasetRecordStorageManager(VersionedExtension):
         ----------
         name : `str`
             Name of the dataset type.
+
+        Notes
+        -----
+        This is a no-op if no such dataset type exists.
         """
         raise NotImplementedError()
 
@@ -605,6 +610,12 @@ class DatasetRecordStorageManager(VersionedExtension):
         ref : `DatasetRef` or `None`
             Object representing the dataset, or `None` if no dataset with the
             given primary key values exists in this layer.
+
+        Raises
+        ------
+        MissingDatasetTypeError
+            Raised if there is no dataset type with the given name.
+
         """
         raise NotImplementedError()
 

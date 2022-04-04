@@ -34,6 +34,7 @@ __all__ = (
     "InconsistentDataIdError",
     "MissingCollectionError",
     "NoDefaultCollectionError",
+    "MissingDatasetTypeError",
     "OrphanedRecordError",
     "RegistryError",
     "UnsupportedIdGeneratorError",
@@ -68,6 +69,10 @@ class DatasetTypeError(RegistryError):
 
 class DatasetTypeExpressionError(DatasetTypeError):
     """Exception raised for an incorrect dataset type expression."""
+
+
+class MissingDatasetTypeError(DatasetTypeError, KeyError):
+    """Exception raised when a dataset type does not exist in the registry."""
 
 
 class DataIdError(RegistryError):
