@@ -25,16 +25,11 @@ __all__ = ("EphemeralDatastoreRegistryBridge",)
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Set, Tuple, Type
 
-from lsst.daf.butler import DatasetId
-from lsst.daf.butler.registry.interfaces import (
-    DatasetIdRef,
-    DatastoreRegistryBridge,
-    FakeDatasetRef,
-    OpaqueTableStorage,
-)
+from ...core import DatasetId
+from ..interfaces import DatasetIdRef, DatastoreRegistryBridge, FakeDatasetRef, OpaqueTableStorage
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import StoredDatastoreItemInfo
+    from ...core import StoredDatastoreItemInfo
 
 
 class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):

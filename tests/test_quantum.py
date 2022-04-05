@@ -76,7 +76,7 @@ class QuantumTestCase(unittest.TestCase):
             name="test_visit",
             region=region,
         )
-        visit_record_42 = visit.RecordClass(
+        visit_record_43 = visit.RecordClass(
             id=43,
             instrument="test",
             name="test_visit",
@@ -96,7 +96,7 @@ class QuantumTestCase(unittest.TestCase):
             band: bandRecord,
             physical_filter: physical_filter_record,
             visit_system: visit_system_record,
-            visit: visit_record_42,
+            visit: visit_record_43,
         }
 
         dataId42 = DataCoordinate.standardize(

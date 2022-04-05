@@ -365,7 +365,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore
-        records = [info.to_record(ref) for ref, info in zip(refs, infos)]
+        records = [info.rebase(ref).to_record() for ref, info in zip(refs, infos)]
         self._table.insert(*records)
 
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredFileInfo]:

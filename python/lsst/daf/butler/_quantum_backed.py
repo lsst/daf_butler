@@ -21,15 +21,18 @@
 
 from __future__ import annotations
 
-__all__ = ("QuantumBackedButler",)
+__all__ = ("QuantumBackedButler", "QuantumProvenanceData")
 
+import dataclasses
+import functools
 import itertools
 import logging
 import uuid
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Type, Union
 
-import pydantic
+from lsst.utils import doImportType
+from lsst.utils.introspection import get_full_type_name
 
 from ._butlerConfig import ButlerConfig
 from ._deferredDatasetHandle import DeferredDatasetHandle
@@ -53,6 +56,7 @@ from .registry.opaque import ByNameOpaqueTableStorageManager
 
 if TYPE_CHECKING:
     from ._butler import Butler
+    from .registry import Registry
 
 _LOG = logging.getLogger(__name__)
 
@@ -223,6 +227,8 @@ class QuantumBackedButler(LimitedButler):
         # TODO: We need to inform `Datastore` here that it needs to support
         # predictive reads; right now that's a configuration option, but after
         # execution butler is retired it could just be a kwarg we pass here.
+        # For now just force this option as we cannot work without it.
+        butler_config["datastore", "trust_get_request"] = True
         datastore = Datastore.fromConfig(butler_config, bridge_manager, butler_root)
         datastore.import_records(quantum.datastore_records)
         storageClasses = StorageClassFactory()
@@ -347,12 +353,13 @@ class QuantumBackedButler(LimitedButler):
             actual_inputs=self._actual_inputs,
             predicted_outputs=self._predicted_outputs,
             actual_outputs={ref.getCheckedId() for ref in self._actual_output_refs},
-            locations=locations,
-            records=records,
+            locations=dict(locations),
+            records=dict(records),
         )
 
 
-class QuantumProvenanceData(pydantic.BaseModel):
+@dataclasses.dataclass(frozen=True)
+class QuantumProvenanceData:
     """A serializable struct for per-quantum provenance information and
     datastore records.
 
@@ -371,12 +378,12 @@ class QuantumProvenanceData(pydantic.BaseModel):
     # `~CollectionType.RUN` level, such as the compute node ID). but adding it
     # now is out of scope for this prototype.
 
-    predicted_inputs: Set[uuid.UUID]
+    predicted_inputs: Set[DatasetId]
     """Unique IDs of datasets that were predicted as inputs to this quantum
     when the QuantumGraph was built.
     """
 
-    available_inputs: Set[uuid.UUID]
+    available_inputs: Set[DatasetId]
     """Unique IDs of input datasets that were actually present in the datastore
     when this quantum was executed.
 
@@ -385,7 +392,7 @@ class QuantumProvenanceData(pydantic.BaseModel):
     task.
     """
 
-    actual_inputs: Set[uuid.UUID]
+    actual_inputs: Set[DatasetId]
     """Unique IDs of datasets that were actually used as inputs by this task.
 
     This is a subset of `available_inputs`.
@@ -399,25 +406,130 @@ class QuantumProvenanceData(pydantic.BaseModel):
     that input as actually used.
     """
 
-    predicted_outputs: Set[uuid.UUID]
+    predicted_outputs: Set[DatasetId]
     """Unique IDs of datasets that were predicted as outputs of this quantum
     when the QuantumGraph was built.
     """
 
-    actual_outputs: Set[uuid.UUID]
+    actual_outputs: Set[DatasetId]
     """Unique IDs of datasets that were actually written when this quantum
     was executed.
     """
 
-    locations: Dict[str, Set[uuid.UUID]] = defaultdict(set)
+    locations: Dict[str, Set[DatasetId]]
     """Mapping from datastore name to the set of `actual_output` dataset IDs
     written by this quantum.
     """
 
-    records: Dict[str, List[StoredDatastoreItemInfo]] = defaultdict(list)
+    records: Dict[str, List[StoredDatastoreItemInfo]]
     """Rows from the opaque tables used by datastores for the `actual_output`
     datasets written by this quantum, indexed by opaque table name.
     """
+
+    def to_simple(self, minimal: bool = False) -> Dict[str, Any]:
+        """Make representation of the provenance suitable for serialization.
+
+        Implements `~lsst.daf.butler.core.json.SupportsSimple` protocol.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            If True produce minimal representation, not used by this method.
+
+        Returns
+        -------
+        simple : `dict`
+            Representation of this instance as a simple dictionary.
+        """
+        # dataclasses.asdict does not know how to handle some types, have to
+        # do it manually. Also have to replace sets with lists as some
+        # serializers do not support set type.
+        def _serialize_dataset_id(id: DatasetId) -> Union[int, str]:
+            return id if isinstance(id, int) else f"urn:uuid:{id}"
+
+        def _serialize_dataset_ids(ids: Set[DatasetId]) -> List[Union[int, str]]:
+            return [_serialize_dataset_id(id) for id in ids]
+
+        records: Dict[str, List[Dict[str, Any]]] = {}
+        for table_name, table_records in self.records.items():
+            records[table_name] = []
+            for record in table_records:
+                record_dict = record.to_record()
+                # Have to remember actual class name of the record.
+                record_dict["__class__"] = get_full_type_name(record)
+                if "dataset_id" in record_dict:
+                    record_dict["dataset_id"] = _serialize_dataset_id(record_dict["dataset_id"])
+                records[table_name].append(record_dict)
+        locations = {datastore: _serialize_dataset_ids(ids) for datastore, ids in self.locations.items()}
+        return dict(
+            predicted_inputs=_serialize_dataset_ids(self.predicted_inputs),
+            available_inputs=_serialize_dataset_ids(self.available_inputs),
+            actual_inputs=_serialize_dataset_ids(self.actual_inputs),
+            predicted_outputs=_serialize_dataset_ids(self.predicted_outputs),
+            actual_outputs=_serialize_dataset_ids(self.actual_outputs),
+            locations=locations,
+            records=records,
+        )
+
+    @classmethod
+    def from_simple(
+        cls,
+        simple: Dict[str, Any],
+        universe: Optional[DimensionUniverse] = None,
+        registry: Optional[Registry] = None,
+    ) -> QuantumProvenanceData:
+        """Make an instance of this class from serialized data.
+
+        Implements `~lsst.daf.butler.core.json.SupportsSimple` protocol.
+
+        Parameters
+        ----------
+        data : `dict`
+            Serialized representation returned from `to_simple` method.
+        universe : `DimensionUniverse`, optional
+            Dimension universe, not used by this method.
+        registry : `Registry`, optional
+            Registry instance, not used by this method.
+
+        Returns
+        -------
+        provenance : `QuantumProvenanceData`
+            De-serialized instance of `QuantumProvenanceData`.
+        """
+
+        def _deserialize_dataset_id(id: Union[int, str]) -> DatasetId:
+            return id if isinstance(id, int) else uuid.UUID(id)
+
+        def _deserialize_dataset_ids(ids: List[Union[int, str]]) -> Set[DatasetId]:
+            return set(_deserialize_dataset_id(id) for id in ids)
+
+        @functools.lru_cache(maxsize=None)
+        def _get_class(class_name: str) -> Type:
+            """Get class type for a given class name"""
+            return doImportType(class_name)
+
+        # unpack records
+        records: Dict[str, List[StoredDatastoreItemInfo]] = {}
+        for table_name, table_records in simple["records"].items():
+            records[table_name] = []
+            for record in table_records:
+                cls = _get_class(record.pop("__class__"))
+                if "dataset_id" in record:
+                    record["dataset_id"] = _deserialize_dataset_id(record["dataset_id"])
+                records[table_name].append(cls.from_record(record))
+        locations = {
+            datastore: _deserialize_dataset_ids(ids) for datastore, ids in simple["locations"].items()
+        }
+
+        return QuantumProvenanceData(
+            predicted_inputs=_deserialize_dataset_ids(simple["predicted_inputs"]),
+            available_inputs=_deserialize_dataset_ids(simple["available_inputs"]),
+            actual_inputs=_deserialize_dataset_ids(simple["actual_inputs"]),
+            predicted_outputs=_deserialize_dataset_ids(simple["predicted_outputs"]),
+            actual_outputs=_deserialize_dataset_ids(simple["actual_outputs"]),
+            locations=locations,
+            records=records,
+        )
 
     @staticmethod
     def collect_and_transfer(
@@ -454,23 +566,22 @@ class QuantumProvenanceData(pydantic.BaseModel):
         present only in execution or only in the more permanent butler are
         ignored.
         """
-        all_refs: List[DatasetRef] = []
+        grouped_refs = defaultdict(list)
         datastore_records: Dict[str, DatastoreRecordData] = defaultdict(DatastoreRecordData)
         for quantum, provenance_for_quantum in zip(quanta, provenance):
-            quantum_refs_by_id: Dict[DatasetId, DatasetRef] = {}
-            quantum_refs_by_id.update(
-                {
-                    ref.getCheckedId(): ref
-                    for ref in itertools.chain.from_iterable(quantum.outputs.values())
-                    if ref.getCheckedId() in provenance_for_quantum.actual_outputs
-                }
-            )
-            all_refs.extend(quantum_refs_by_id.values())
+            quantum_refs_by_id = {
+                ref.getCheckedId(): ref
+                for ref in itertools.chain.from_iterable(quantum.outputs.values())
+                if ref.getCheckedId() in provenance_for_quantum.actual_outputs
+            }
+            for ref in quantum_refs_by_id.values():
+                grouped_refs[ref.datasetType, ref.run].append(ref)
             for datastore_name in set(butler.datastore.names) & provenance_for_quantum.locations.keys():
                 datastore_records[datastore_name].refs.extend(
                     quantum_refs_by_id[id] for id in provenance_for_quantum.locations[datastore_name]
                 )
             for opaque_table_name, records_for_table in provenance_for_quantum.records.items():
                 datastore_records[datastore_name].records[opaque_table_name].extend(records_for_table)
-        butler.registry._importDatasets(all_refs)
+        for refs in grouped_refs.values():
+            butler.registry._importDatasets(refs)
         butler.datastore.import_records(datastore_records)
