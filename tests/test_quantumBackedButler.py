@@ -1,0 +1,333 @@
+# This file is part of daf_butler.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (http://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import os
+import unittest
+import uuid
+
+from lsst.daf.butler import (
+    Butler,
+    Config,
+    DatasetRef,
+    DatasetType,
+    DimensionUniverse,
+    Quantum,
+    QuantumBackedButler,
+    QuantumProvenanceData,
+    Registry,
+    RegistryConfig,
+    StorageClass,
+)
+from lsst.daf.butler.core.json import from_json_generic, to_json_generic
+from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
+
+
+class QuantumBackedButlerTestCase(unittest.TestCase):
+    """Test case for QuantumBackedButler."""
+
+    def setUp(self):
+        self.root = makeTestTempDir(TESTDIR)
+        self.config = Config()
+        self.config["root"] = self.root
+        self.universe = DimensionUniverse()
+
+        # Make a butler and import dimension definitions.
+        registryConfig = RegistryConfig(self.config.get("registry"))
+        Registry.createFromConfig(registryConfig, butlerRoot=self.root)
+        self.butler = Butler(self.config, writeable=True, run="RUN")
+        self.butler.import_(filename=os.path.join(TESTDIR, "data", "registry", "base.yaml"))
+
+        # make all dataset types
+        graph = self.universe.extract(("instrument", "detector"))
+        storageClass = StorageClass("StructuredDataDict")
+        self.datasetTypeInit = DatasetType("test_ds_init", graph, storageClass)
+        self.datasetTypeInput = DatasetType("test_ds_input", graph, storageClass)
+        self.datasetTypeOutput = DatasetType("test_ds_output", graph, storageClass)
+        self.datasetTypeOutput2 = DatasetType("test_ds_output2", graph, storageClass)
+        self.datasetTypeExtra = DatasetType("test_ds_extra", graph, storageClass)
+        self.butler.registry.registerDatasetType(self.datasetTypeInit)
+        self.butler.registry.registerDatasetType(self.datasetTypeInput)
+        self.butler.registry.registerDatasetType(self.datasetTypeOutput)
+        self.butler.registry.registerDatasetType(self.datasetTypeOutput2)
+        self.butler.registry.registerDatasetType(self.datasetTypeExtra)
+
+        dataIds = [
+            self.butler.registry.expandDataId(dict(instrument="Cam1", detector=detector_id))
+            for detector_id in (1, 2, 3, 4)
+        ]
+
+        # make actual input datasets
+        self.input_refs = [
+            self.butler.put({"data": dataId["detector"]}, self.datasetTypeInput, dataId) for dataId in dataIds
+        ]
+        self.init_inputs_refs = [self.butler.put({"data": -1}, self.datasetTypeInit, dataIds[0])]
+
+        # generate dataset refs for outputs
+        self.output_refs = [
+            DatasetRef(self.datasetTypeOutput, dataId, id=uuid.uuid4(), run="RUN") for dataId in dataIds
+        ]
+        self.output_refs2 = [
+            DatasetRef(self.datasetTypeOutput2, dataId, id=uuid.uuid4(), run="RUN") for dataId in dataIds
+        ]
+
+        self.missing_refs = [
+            DatasetRef(self.datasetTypeExtra, dataId, id=uuid.uuid4(), run="RUN") for dataId in dataIds
+        ]
+
+    def tearDown(self):
+        removeTestTempDir(self.root)
+
+    def make_quantum(self, step: int = 1) -> Quantum:
+        """Make a Quantum which includes datastore records."""
+
+        if step == 1:
+            datastore_records = self.butler.datastore.export_records(self.input_refs + self.init_inputs_refs)
+            predictedInputs = {self.datasetTypeInput: self.input_refs}
+            outputs = {self.datasetTypeOutput: self.output_refs}
+            initInputs = {self.datasetTypeInit: self.init_inputs_refs}
+        elif step == 2:
+            # The result should be empty, this is just to test that it works.
+            datastore_records = self.butler.datastore.export_records(self.output_refs)
+            predictedInputs = {self.datasetTypeInput: self.output_refs}
+            outputs = {self.datasetTypeOutput2: self.output_refs2}
+            initInputs = {}
+
+        return Quantum(
+            taskName="some.task.name",
+            inputs=predictedInputs,
+            outputs=outputs,
+            initInputs=initInputs,
+            datastore_records=datastore_records,
+        )
+
+    def test_initialize(self):
+        """Test for initialize method"""
+
+        quantum = self.make_quantum()
+        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+
+        # check state after initialize
+        self.assertTrue(qbb.isWriteable())
+        self.assertEqual(qbb._predicted_inputs, set(ref.id for ref in self.input_refs))
+        self.assertEqual(qbb._predicted_outputs, set(ref.id for ref in self.output_refs))
+        self.assertEqual(qbb._available_inputs, set())
+        self.assertEqual(qbb._unavailable_inputs, set())
+        self.assertEqual(qbb._actual_inputs, set())
+        self.assertEqual(qbb._actual_output_refs, set())
+
+    def test_getPutDirect(self):
+        """Test for getDirect/putDirect methods"""
+
+        quantum = self.make_quantum()
+        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+
+        # Verify all input data are readable.
+        for ref in self.input_refs:
+            data = qbb.getDirect(ref)
+            self.assertEqual(data, {"data": ref.dataId["detector"]})
+        for ref in self.init_inputs_refs:
+            data = qbb.getDirect(ref)
+            self.assertEqual(data, {"data": -1})
+        for ref in self.missing_refs:
+            with self.assertRaises(FileNotFoundError):
+                data = qbb.getDirect(ref)
+
+        self.assertEqual(qbb._available_inputs, qbb._predicted_inputs)
+        self.assertEqual(qbb._actual_inputs, qbb._predicted_inputs)
+        self.assertEqual(qbb._unavailable_inputs, set(ref.id for ref in self.missing_refs))
+
+        # Write all expected outputs.
+        for ref in self.output_refs:
+            qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
+
+        # Must be able to read them back
+        for ref in self.output_refs:
+            data = qbb.getDirect(ref)
+            self.assertEqual(data, {"data": ref.dataId["detector"] ** 2})
+
+        self.assertEqual(qbb._actual_output_refs, set(self.output_refs))
+
+    def test_getDirectDeferred(self):
+        """Test for getDirectDeferred method"""
+
+        quantum = self.make_quantum()
+        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+
+        # get some input data
+        input_refs = self.input_refs[:2]
+        for ref in input_refs:
+            data = qbb.getDirectDeferred(ref)
+            self.assertEqual(data.get(), {"data": ref.dataId["detector"]})
+        for ref in self.init_inputs_refs:
+            data = qbb.getDirectDeferred(ref)
+            self.assertEqual(data.get(), {"data": -1})
+        for ref in self.missing_refs:
+            data = qbb.getDirectDeferred(ref)
+            with self.assertRaises(FileNotFoundError):
+                data.get()
+
+        # _avalable_inputs is not
+        self.assertEqual(qbb._available_inputs, set(ref.id for ref in input_refs))
+        self.assertEqual(qbb._actual_inputs, set(ref.id for ref in input_refs))
+        self.assertEqual(qbb._unavailable_inputs, set(ref.id for ref in self.missing_refs))
+
+    def test_datasetExistsDirect(self):
+        """Test for datasetExistsDirect method"""
+
+        quantum = self.make_quantum()
+        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+
+        # get some input data
+        input_refs = self.input_refs[:2]
+        for ref in input_refs:
+            exists = qbb.datasetExistsDirect(ref)
+            self.assertTrue(exists)
+        for ref in self.init_inputs_refs:
+            exists = qbb.datasetExistsDirect(ref)
+            self.assertTrue(exists)
+        for ref in self.missing_refs:
+            exists = qbb.datasetExistsDirect(ref)
+            self.assertFalse(exists)
+
+        # _avalable_inputs is not
+        self.assertEqual(qbb._available_inputs, set(ref.id for ref in input_refs))
+        self.assertEqual(qbb._actual_inputs, set())
+        self.assertEqual(qbb._unavailable_inputs, set())  # this is not consistent with getDirect?
+
+    def test_markInputUnused(self):
+        """Test for markInputUnused method"""
+
+        quantum = self.make_quantum()
+        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+
+        # get some input data
+        for ref in self.input_refs:
+            data = qbb.getDirect(ref)
+            self.assertEqual(data, {"data": ref.dataId["detector"]})
+        for ref in self.init_inputs_refs:
+            data = qbb.getDirect(ref)
+            self.assertEqual(data, {"data": -1})
+
+        self.assertEqual(qbb._available_inputs, qbb._predicted_inputs)
+        self.assertEqual(qbb._actual_inputs, qbb._predicted_inputs)
+
+        qbb.markInputUnused(self.input_refs[0])
+        self.assertEqual(qbb._actual_inputs, set(ref.id for ref in self.input_refs[1:]))
+
+    def test_extract_provenance_data(self):
+        """Test for extract_provenance_data method"""
+
+        quantum = self.make_quantum()
+        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+
+        # read/store everything
+        for ref in self.input_refs:
+            qbb.getDirect(ref)
+        for ref in self.init_inputs_refs:
+            qbb.getDirect(ref)
+        for ref in self.output_refs:
+            qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
+
+        provenance = qbb.extract_provenance_data()
+        input_ids = set(ref.id for ref in self.input_refs)
+        self.assertEqual(provenance.predicted_inputs, input_ids)
+        self.assertEqual(provenance.available_inputs, input_ids)
+        self.assertEqual(provenance.actual_inputs, input_ids)
+        output_ids = set(ref.id for ref in self.output_refs)
+        self.assertEqual(provenance.predicted_outputs, output_ids)
+        self.assertEqual(provenance.actual_outputs, output_ids)
+        self.assertEqual(provenance.actual_outputs, output_ids)
+        self.assertEqual(provenance.locations, {"FileDatastore@<butlerRoot>/datastore": output_ids})
+
+    def test_provenance_serialize(self):
+        """Test for serialization of provenance data"""
+
+        quantum = self.make_quantum()
+        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+
+        # read/store everything
+        for ref in self.input_refs:
+            qbb.getDirect(ref)
+        for ref in self.init_inputs_refs:
+            qbb.getDirect(ref)
+        for ref in self.output_refs:
+            qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
+
+        orig_prov = qbb.extract_provenance_data()
+        for use_json in (False, True):
+            if use_json:
+                prov_json = to_json_generic(orig_prov)
+                provenance = from_json_generic(QuantumProvenanceData, prov_json)
+            else:
+                prov_dict = orig_prov.to_simple()
+                provenance = QuantumProvenanceData.from_simple(prov_dict)
+
+            input_ids = set(ref.id for ref in self.input_refs)
+            self.assertEqual(provenance.predicted_inputs, input_ids)
+            self.assertEqual(provenance.available_inputs, input_ids)
+            self.assertEqual(provenance.actual_inputs, input_ids)
+            output_ids = set(ref.id for ref in self.output_refs)
+            self.assertEqual(provenance.predicted_outputs, output_ids)
+            self.assertEqual(provenance.actual_outputs, output_ids)
+            self.assertEqual(provenance.actual_outputs, output_ids)
+            self.assertEqual(provenance.locations, {"FileDatastore@<butlerRoot>/datastore": output_ids})
+
+    def test_collect_and_transfer(self):
+        """Test for collect_and_transfer method"""
+
+        quantum1 = self.make_quantum(1)
+        qbb1 = QuantumBackedButler.initialize(config=self.config, quantum=quantum1, dimensions=self.universe)
+
+        quantum2 = self.make_quantum(2)
+        qbb2 = QuantumBackedButler.initialize(config=self.config, quantum=quantum2, dimensions=self.universe)
+
+        # read/store everything
+        for ref in self.input_refs:
+            qbb1.getDirect(ref)
+        for ref in self.init_inputs_refs:
+            qbb1.getDirect(ref)
+        for ref in self.output_refs:
+            qbb1.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
+
+        for ref in self.output_refs:
+            qbb2.getDirect(ref)
+        for ref in self.output_refs2:
+            qbb2.putDirect({"data": ref.dataId["detector"] ** 3}, ref)
+
+        QuantumProvenanceData.collect_and_transfer(
+            self.butler,
+            [quantum1, quantum2],
+            [qbb1.extract_provenance_data(), qbb2.extract_provenance_data()],
+        )
+
+        for ref in self.output_refs:
+            data = self.butler.getDirect(ref)
+            self.assertEqual(data, {"data": ref.dataId["detector"] ** 2})
+
+        for ref in self.output_refs2:
+            data = self.butler.getDirect(ref)
+            self.assertEqual(data, {"data": ref.dataId["detector"] ** 3})
+
+
+if __name__ == "__main__":
+    unittest.main()
