@@ -116,6 +116,8 @@ def pruneCollection(
         for name in collectionNames:
             addCollection(name)
 
+        collections = {k: collections[k] for k in sorted(collections.keys())}
+
         queryDatasets = QueryDatasets(
             repo=repo,
             glob=None,
@@ -127,7 +129,7 @@ def pruneCollection(
         for datasetRef in queryDatasets.getDatasets():
             collectionInfo = collections[datasetRef.run]
             if collectionInfo.count is None:
-                raise RuntimeError(f"Unexpected datasaset in collection of type {collectionInfo.type}")
+                raise RuntimeError(f"Unexpected dataset in collection of type {collectionInfo.type}")
             collectionInfo.count += 1
 
         result.removeTable = Table(
