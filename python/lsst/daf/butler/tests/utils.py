@@ -103,7 +103,7 @@ def safeTestTempDir(default_base: str) -> str:
 class ButlerTestHelper:
     """Mixin with helpers for unit tests."""
 
-    def assertAstropyTablesEqual(self, tables, expectedTables, filterColumns=False):
+    def assertAstropyTablesEqual(self, tables, expectedTables, filterColumns=False, unorderedRows=False):
         """Verify that a list of astropy tables matches a list of expected
         astropy tables.
 
@@ -118,6 +118,9 @@ class ButlerTestHelper:
         filterColumns : `bool`
             If `True` then only compare columns that exist in
             ``expectedTables``.
+        unorderedRows : `bool`, optional
+            If `True` (`False` is default), don't require tables to have their
+            rows in the same order.
         """
         # If a single table is passed in for tables or expectedTables, put it
         # in a list.
@@ -134,6 +137,11 @@ class ButlerTestHelper:
             if filterColumns:
                 table = table.copy()
                 table.keep_columns(expected.colnames)
+            if unorderedRows:
+                table = table.copy()
+                table.sort(table.colnames)
+                expected = expected.copy()
+                expected.sort(expected.colnames)
             # Assert that they match:
             self.assertTrue(report_diff_values(table, expected, fileobj=diff), msg="\n" + diff.getvalue())
 
