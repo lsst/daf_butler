@@ -117,7 +117,7 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
             result = self.runner.invoke(butlerCli, ["query-collections", self.root])
             self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             expected = Table(array((("ingest", "TAGGED"), ("ingest/run", "RUN"))), names=("Name", "Type"))
-            self.assertAstropyTablesEqual(readTable(result.output), expected)
+            self.assertAstropyTablesEqual(readTable(result.output), expected, unorderedRows=True)
 
         confirm_initial_tables()
 
@@ -190,7 +190,7 @@ class PruneCollectionExecutionTest(unittest.TestCase, ButlerTestHelper):
         result = self.runner.invoke(butlerCli, ["query-collections", self.root])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expected = Table(array((("ingest", "TAGGED"), ("ingest/run", "RUN"))), names=("Name", "Type"))
-        self.assertAstropyTablesEqual(readTable(result.output), expected)
+        self.assertAstropyTablesEqual(readTable(result.output), expected, unorderedRows=True)
 
         # Try pruning TAGGED, should succeed.
         with self.assertWarns(FutureWarning):  # Capture the deprecation warning

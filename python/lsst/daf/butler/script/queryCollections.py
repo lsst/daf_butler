@@ -63,7 +63,7 @@ def _getTable(
         dtype=(str, str, str),
     )
     butler = Butler(repo)
-    names = list(
+    names = sorted(
         butler.registry.queryCollections(collectionTypes=frozenset(collection_type), expression=glob or ...)
     )
     if inverse:
@@ -146,13 +146,13 @@ def _getTree(
         else:
             if collectionType == CollectionType.CHAINED:
                 childNames = butler.registry.getCollectionChain(name)
-                for name in sorted(childNames):
+                for name in childNames:
                     addCollection(name, level + 1)
 
     collections = butler.registry.queryCollections(
         collectionTypes=frozenset(collection_type), expression=glob or ...
     )
-    for collection in collections:
+    for collection in sorted(collections):
         addCollection(collection)
     return table
 
