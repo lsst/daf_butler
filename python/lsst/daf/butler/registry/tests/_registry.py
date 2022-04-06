@@ -63,8 +63,10 @@ from .._exceptions import (
     CollectionTypeError,
     ConflictingDefinitionError,
     DataIdValueError,
+    DatasetTypeComponentError,
     InconsistentDataIdError,
     MissingCollectionError,
+    MissingDatasetTypeError,
     OrphanedRecordError,
 )
 from ..interfaces import ButlerAttributeExistsError, DatasetIdGenEnum
@@ -248,6 +250,221 @@ class RegistryTests(ABC):
 
         allTypes = set(registry.queryDatasetTypes())
         self.assertEqual(allTypes, {outDatasetType1, outDatasetType2})
+
+    def testConformDatasetType(self):
+        """Test for SqlRegistry.conformDatasetTypes, and its implementation
+        in DatasetRecordStorageManager.conform.
+        """
+        # Set up and register a bunch of storage classes.
+        storage_classes = {
+            sc.name: sc
+            for sc in (
+                # set-based storage classes, one of which can be converted from
+                # list.
+                StorageClass("set", pytype=set),
+                StorageClass("set_conv", pytype=set, converters={"list": "builtins.set"}),
+                # list-based storage classes, one of which can be converted
+                # from set.
+                StorageClass("list", pytype=list),
+                StorageClass("list_conv", pytype=list, converters={"set": "builtins.list"}),
+            )
+        }
+        storage_classes.update(
+            {
+                # storage classes that have one of the above as a derived
+                # component (parent python type here is unused by this test)
+                f"hold_{sc.name}": StorageClass(f"hold_{sc.name}", pytype=dict, derivedComponents={"a": sc})
+                for sc in storage_classes.values()
+            }
+        )
+        registry = self.makeRegistry()
+        for sc in storage_classes.values():
+            registry.storageClasses.registerStorageClass(sc)
+
+        # Tests for when the dataset type has not been registered.
+        with self.assertRaises(MissingDatasetTypeError):
+            # Everything provided, but user expected an existing dataset type.
+            registry.conformDatasetType("nonexistent", (), storage_classes["set"], require_registered=True)
+        with self.assertRaises(MissingDatasetTypeError):
+            # Dimensions not provided.
+            registry.conformDatasetType("nonexistent", storage_class=storage_classes["set"])
+        with self.assertRaises(MissingDatasetTypeError):
+            # Storage class not provided.
+            registry.conformDatasetType("nonexistent", ())
+        with self.assertRaises(MissingDatasetTypeError):
+            # Parent storage class not provided for component.
+            registry.conformDatasetType("nonexistent.a", (), storage_classes["set"])
+        with self.assertRaises(MissingDatasetTypeError):
+            # Attempt to use the 'skypix' placeholder.
+            registry.conformDatasetType("nonexistent", ("skypix",), storage_classes["set"])
+
+        # Tests that don't require the dataset to be registered.
+        with self.assertRaises(DatasetTypeComponentError):
+            # Parent storage class doesn't have component.
+            registry.conformDatasetType("nonexistent.b", (), parent_storage_class=storage_classes["hold_set"])
+        with self.assertRaises(DatasetTypeComponentError):
+            # Parent storage class has a different type for component.
+            registry.conformDatasetType(
+                "nonexistent.a",
+                (),
+                "set",
+                parent_storage_class=storage_classes["hold_list"],
+            )
+        self.assertEqual(
+            registry.conformDatasetType("nonexistent", (), storage_classes["set"]),
+            (
+                DatasetType(
+                    "nonexistent",
+                    (),
+                    storage_classes["set"],
+                    universe=registry.dimensions,
+                ),
+                None,
+            ),
+        )
+        self.assertEqual(
+            registry.conformDatasetType("nonexistent", (), storage_classes["set"], is_calibration=True),
+            (
+                DatasetType(
+                    "nonexistent",
+                    (),
+                    storage_classes["set"],
+                    universe=registry.dimensions,
+                    isCalibration=True,
+                ),
+                None,
+            ),
+        )
+        self.assertEqual(
+            registry.conformDatasetType(
+                "nonexistent.a", (), parent_storage_class=storage_classes["hold_set"]
+            ),
+            (
+                DatasetType(
+                    "nonexistent.a",
+                    (),
+                    storage_classes["set"],
+                    storage_classes["hold_set"],
+                    universe=registry.dimensions,
+                ),
+                None,
+            ),
+        )
+
+        # Tests that require the dataset type to have been registered.
+        basic = DatasetType("basic", ["htm7"], storage_classes["set"], universe=registry.dimensions)
+        registry.registerDatasetType(basic)
+        with self.assertRaises(ConflictingDefinitionError):
+            # Different dimensions.
+            registry.conformDatasetType(basic.name, (), storage_class=basic.storageClass)
+        with self.assertRaises(ConflictingDefinitionError):
+            # Not a calibration
+            registry.conformDatasetType(
+                basic.name,
+                basic.dimensions.names,
+                basic.storageClass,
+                is_calibration=True,
+            )
+        with self.assertRaises(ConflictingDefinitionError):
+            # Incompatible storage class.
+            registry.conformDatasetType(basic.name, basic.dimensions.names, storage_classes["list"])
+        # 'skypix' placeholder filled in.
+        self.assertEqual(
+            registry.conformDatasetType(basic.name, ["skypix"], basic.storageClass),
+            (basic, basic),
+        )
+        # Incompatible storage class explicitly ignored.
+        self.assertEqual(
+            registry.conformDatasetType(
+                basic.name,
+                basic.dimensions.names,
+                storage_class=storage_classes["list"],
+                write_compatible=False,
+                read_compatible=False,
+            ),
+            (
+                DatasetType(basic.name, basic.dimensions, storage_classes["list"]),
+                basic,
+            ),
+        )
+        # Semi-compatible storage class allowed.
+        self.assertEqual(
+            registry.conformDatasetType(
+                basic.name,
+                basic.dimensions.names,
+                storage_class=storage_classes["list_conv"],
+                write_compatible=False,
+                read_compatible=True,
+            ),
+            (
+                DatasetType(basic.name, basic.dimensions, storage_classes["list_conv"]),
+                basic,
+            ),
+        )
+        # Dimensions filled in automatically.
+        self.assertEqual(
+            registry.conformDatasetType(basic.name, storage_class=basic.storageClass, is_calibration=False),
+            (basic, basic),
+        )
+        # Storage class filled in automatically.
+        self.assertEqual(
+            registry.conformDatasetType(basic.name, basic.dimensions.names, is_calibration=False),
+            (basic, basic),
+        )
+        # Calibration filled in automatically, even when it is true.
+        self.assertEqual(registry.conformDatasetType(basic.name, basic.dimensions.names), (basic, basic))
+        calibration = DatasetType(
+            "calibration",
+            (),
+            storage_classes["set"],
+            isCalibration=True,
+            universe=registry.dimensions,
+        )
+        registry.registerDatasetType(calibration)
+        self.assertEqual(
+            registry.conformDatasetType(calibration.name, dimensions=calibration.dimensions.names),
+            (calibration, calibration),
+        )
+        # Semi-compatible storage class allowed, read_compatible=True edition.
+        convertible = DatasetType(
+            "convertible",
+            (),
+            storage_classes["set_conv"],
+            universe=registry.dimensions,
+        )
+        registry.registerDatasetType(convertible)
+        self.assertEqual(
+            registry.conformDatasetType(
+                convertible.name,
+                convertible.dimensions.names,
+                storage_class=storage_classes["list"],
+                write_compatible=True,
+                read_compatible=False,
+            ),
+            (
+                DatasetType(convertible.name, convertible.dimensions, storage_classes["list"]),
+                convertible,
+            ),
+        )
+        # Bidirectionally compatible storage class allowed.
+        self.assertEqual(
+            registry.conformDatasetType(
+                convertible.name,
+                convertible.dimensions.names,
+                storage_class=storage_classes["list_conv"],
+                write_compatible=True,
+                read_compatible=True,
+            ),
+            (
+                DatasetType(convertible.name, convertible.dimensions, storage_classes["list_conv"]),
+                convertible,
+            ),
+        )
+
+        # Tests for conforming component datasets when the parent composite is
+        # registered.
+        composite = DatasetType("composite", (), storage_classes["hold_set"], universe=registry.dimensions)
+        registry.registerDatasetType(composite)
 
     def testDimensions(self):
         """Tests for `Registry.insertDimensionData`,
@@ -629,7 +846,7 @@ class RegistryTests(ABC):
         self.assertIn("test message", cm.output[0])
 
     def testComponentLookups(self):
-        """Test searching for component datasets via their parents."""
+        """Test searching for component datasets via their ."""
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")

@@ -25,10 +25,25 @@ __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage", "DatasetIdGenE
 
 import enum
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Tuple, Union
 
-from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl
-from .._exceptions import MissingDatasetTypeError
+from ...core import (
+    DataCoordinate,
+    DatasetId,
+    DatasetRef,
+    DatasetType,
+    SimpleQuery,
+    SkyPixDimension,
+    StorageClass,
+    Timespan,
+    ddl,
+)
+from .._exceptions import (
+    ConflictingDefinitionError,
+    DatasetTypeComponentError,
+    DatasetTypeError,
+    MissingDatasetTypeError,
+)
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -544,6 +559,204 @@ class DatasetRecordStorageManager(VersionedExtension):
         """
         raise NotImplementedError()
 
+    def conform(
+        self,
+        name: str,
+        dimensions: Optional[Iterable[str]] = None,
+        storage_class: Optional[Union[str, StorageClass]] = None,
+        parent_storage_class: Optional[Union[StorageClass, str]] = None,
+        *,
+        is_calibration: Optional[bool] = None,
+        require_registered: bool = False,
+        read_compatible: bool = True,
+        write_compatible: bool = True,
+    ) -> tuple[DatasetType, Optional[DatasetRecordStorage]]:
+        """Define a dataset type compatible with any existing dataset type with
+        the same name, or raise if this is impossible.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the dataset type.  Considered a component if a ``.``
+            separator is present.
+        dimensions : `Iterable` [ `str` ], optional
+            Names of the dimensions for the dataset type's data IDs.  If not
+            given, the dataset type must already be registered.  The special
+            string ``skypix`` can be used as a placeholder for any skypix
+            dimension, but this requires that the dataset type already be
+            registered.
+        storage_class : `str` or `StorageClass`, optional
+            Storage class instance or name for this dataset type.  If not
+            given, either the dataset type name must indicate a component and
+            ``parent_storage_class`` must be given, or the dataset must already
+            be registered.
+        parent_storage_class : `str` or `StorageClass`, optional
+            Storage class instance or name for the parent of this component
+            dataset type.  Ignored if ``name`` does not indicate a component.
+            Required if ``name`` does indicate a component and the dataset type
+            has not been registered.
+        is_calibration : `bool`, optional
+            Whether the dataset type can be stored in
+            `~CollectionType.CALIBRATION` collections.  If not provided, the
+            value for the registered dataset type is used.  If the dataset type
+            is not registered, `False` is assumed.
+        require_registered : `bool`, optional
+            If `True` (`False` is default), require the dataset to already be
+            registered.  This is also implied by ``dimensions`` being `None`,
+            by ``storage_class`` being `None` for non-component dataset types,
+            by ``parent_storage_class`` being `None` for component dataset
+            types, or by ``skypix`` being used as a dimension placeholder.
+        read_compatible : `bool`, optional
+            If `True` (default), only allow the requested storage class to
+            differ from the registered one if the registered one can be
+            converted to the requested one.  If `False`, this is not checked.
+            This is ignored if the dataset type is not registered.
+        write_compatible : `bool`, optional
+            If `True` (default), only allow the requested storage class to
+            differ from the registered one if the requested one can be
+            converted to the registered one.  If `False`, this is not checked.
+            This is ignored if the dataset type is not registered.
+
+        Returns
+        -------
+        dataset_type : `DatasetType`
+            A dataset type instance with the given parameters, with any missing
+            parameters filled in and any placeholders replaced.  This is
+            a component dataset type if ``name`` indicates a component.
+        record_storage : `DatasetRecordStorage` or `None`
+            The storage object for the dataset type, if it is already
+            registered (`None` if it is not registered).
+            ``record_storage.datasetType`` will be the parent dataset type of
+            the requested one if the requested one is a component.
+
+        Raises
+        ------
+        MissingDatasetTypeError
+            Raised if one or more arguments requires the dataset type to
+            already exist, and it does not.
+        DatasetTypeError
+            Raised directly if the ``skypix`` dimension placeholder is used
+            but the registered dataset type has multiple skypix dimensions.
+        ConflictingDefinitionError
+            Raised if the already registered dataset type is not compatible
+            with the given attributes.  Dimensions and ``is_calibration`` are
+            always checked, with storage classes checked according to
+            ``read_compatible`` and ``write_compatible``.
+        """
+        # Docstring inherited.
+        composite_name, component_name = DatasetType.splitDatasetTypeName(name)
+        record_storage = self.find(composite_name)
+        if dimensions is not None:
+            dimensions = set(dimensions)
+        internal_dataset_type = None
+        if record_storage is not None:
+            internal_dataset_type = record_storage.datasetType
+            if dimensions is None:
+                dimensions = set(record_storage.datasetType.dimensions.names)
+            if component_name is not None:
+                if parent_storage_class is None:
+                    parent_storage_class = record_storage.datasetType.storageClass
+                internal_dataset_type = record_storage.datasetType.makeComponentDatasetType(component_name)
+            elif storage_class is None:
+                storage_class = record_storage.datasetType.storageClass
+            if "skypix" in dimensions:
+                assert record_storage is not None, "guaranteed by require_registered definition and check"
+                replacement_dimension, *extras = {
+                    d.name for d in record_storage.datasetType.dimensions if isinstance(d, SkyPixDimension)
+                }
+                if extras:
+                    raise DatasetTypeError(
+                        f"Dataset type '{name}' uses 'skypix' as a dimension placeholder, but the "
+                        "registered dataset type actually has multiple skypix dimensions: "
+                        f"{set([replacement_dimension]) | set(extras)}."
+                        "This dataset type must be defined without placeholders."
+                    )
+                dimensions.remove("skypix")
+                dimensions.add(replacement_dimension)
+            if is_calibration is None:
+                is_calibration = record_storage.datasetType.isCalibration()
+        else:
+            if (
+                require_registered
+                or dimensions is None
+                or (component_name is None and storage_class is None)
+                or (component_name is not None and parent_storage_class is None)
+                or "skypix" in dimensions
+            ):
+                raise MissingDatasetTypeError(
+                    f"Dataset type '{name}' is not registered, but is being requested in a context "
+                    "where datasets of this type are expected to exist."
+                    "This usually means the datasets of this type care needed as an input."
+                )
+            if is_calibration is None:
+                is_calibration = False
+        if component_name is not None:
+            assert parent_storage_class is not None, "guaranteed by require_registered (...) check above"
+            if storage_class is None:
+                parent_external_dataset_type = DatasetType(
+                    composite_name,
+                    dimensions,
+                    storageClass=parent_storage_class,
+                    isCalibration=is_calibration,
+                    universe=self.dimensions.universe,
+                )
+                try:
+                    external_dataset_type = parent_external_dataset_type.makeComponentDatasetType(
+                        component_name
+                    )
+                except KeyError:
+                    raise DatasetTypeComponentError(
+                        f"'{component_name}' is not a valid component for dataset type '{composite_name}' "
+                        f"with storage class '{parent_storage_class}'."
+                    ) from None
+            else:
+                external_dataset_type = DatasetType(
+                    name,
+                    dimensions,
+                    storageClass=storage_class,
+                    isCalibration=is_calibration,
+                    parentStorageClass=parent_storage_class,
+                    universe=self.dimensions.universe,
+                )
+                components = external_dataset_type.parentStorageClass.allComponents()  # type: ignore
+                if (
+                    expected_storage_class := components[component_name]
+                ) != external_dataset_type.storageClass:
+                    raise DatasetTypeComponentError(
+                        f"Component {component_name}='{external_dataset_type.storageClass}' for dataset "
+                        f"type '{name}' is inconsistent with parent storage class "
+                        f"'{external_dataset_type.parentStorageClass}', which has "
+                        f"{component_name}='{expected_storage_class}'."
+                    )
+        else:
+            assert storage_class is not None, "guaranteed by require_registered (...) check above"
+            external_dataset_type = DatasetType(
+                name,
+                dimensions,
+                storageClass=storage_class,
+                isCalibration=is_calibration,
+                universe=self.dimensions.universe,
+            )
+        if internal_dataset_type is not None:
+            if read_compatible:
+                compatible = external_dataset_type.is_compatible_with(
+                    internal_dataset_type,
+                    reversible=write_compatible,
+                )
+            elif write_compatible:
+                compatible = internal_dataset_type.is_compatible_with(external_dataset_type)
+            else:
+                compatible = internal_dataset_type.is_compatible_with(
+                    external_dataset_type,
+                    ignore_storage_classes=True,
+                )
+            if not compatible:
+                raise ConflictingDefinitionError(
+                    f"Requested {external_dataset_type} is not consistent "
+                    f"with registered {internal_dataset_type}."
+                )
+        return external_dataset_type, record_storage
+
     @abstractmethod
     def register(self, datasetType: DatasetType) -> Tuple[DatasetRecordStorage, bool]:
         """Ensure that this `Registry` can hold records for the given
@@ -635,4 +848,10 @@ class DatasetRecordStorageManager(VersionedExtension):
             Summary of the dataset types and governor dimension values in
             this collection.
         """
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def dimensions(self) -> DimensionRecordStorageManager:
+        """Manager object for dimensions used to construct dataset types."""
         raise NotImplementedError()

@@ -27,6 +27,7 @@ __all__ = (
     "CollectionTypeError",
     "ConflictingDefinitionError",
     "DataIdError",
+    "DatasetTypeComponentError",
     "DataIdValueError",
     "DatasetTypeError",
     "DatasetTypeExpressionError",
@@ -73,6 +74,12 @@ class DatasetTypeExpressionError(DatasetTypeError):
 
 class MissingDatasetTypeError(DatasetTypeError, KeyError):
     """Exception raised when a dataset type does not exist in the registry."""
+
+
+class DatasetTypeComponentError(DatasetTypeError):
+    """Exception raised when a dataset type component is inconsistent with its
+    parent's storage class.
+    """
 
 
 class DataIdError(RegistryError):

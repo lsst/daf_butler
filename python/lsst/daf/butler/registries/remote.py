@@ -53,6 +53,7 @@ from ..core import (
     SerializedDatasetRef,
     SerializedDatasetType,
     SerializedDimensionRecord,
+    StorageClass,
     StorageClassFactory,
     Timespan,
 )
@@ -254,6 +255,21 @@ class RemoteRegistry(Registry):
 
     def getDatasetType(self, name: str) -> DatasetType:
         # Docstring inherited from lsst.daf.butler.registry.Registry
+        raise NotImplementedError()
+
+    def conformDatasetType(
+        self,
+        name: str,
+        dimensions: Optional[Iterable[str]] = None,
+        storage_class: Optional[Union[str, StorageClass]] = None,
+        parent_storage_class: Optional[Union[StorageClass, str]] = None,
+        *,
+        is_calibration: Optional[bool] = None,
+        require_registered: bool = False,
+        read_compatible: bool = True,
+        write_compatible: bool = True,
+    ) -> tuple[DatasetType, Optional[DatasetType]]:
+        # Docstring inherited.
         raise NotImplementedError()
 
     def supportsIdGenerationMode(self, mode: DatasetIdGenEnum) -> bool:

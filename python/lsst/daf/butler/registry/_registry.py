@@ -59,6 +59,7 @@ from ..core import (
     DimensionRecord,
     DimensionUniverse,
     NameLookupMapping,
+    StorageClass,
     StorageClassFactory,
     Timespan,
 )
@@ -641,6 +642,91 @@ class Registry(ABC):
         ------
         MissingDatasetTypeError
             Requested named DatasetType could not be found in registry.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def conformDatasetType(
+        self,
+        name: str,
+        dimensions: Optional[Iterable[str]] = None,
+        storage_class: Optional[Union[str, StorageClass]] = None,
+        parent_storage_class: Optional[Union[StorageClass, str]] = None,
+        *,
+        is_calibration: Optional[bool] = None,
+        require_registered: bool = False,
+        read_compatible: bool = True,
+        write_compatible: bool = True,
+    ) -> tuple[DatasetType, Optional[DatasetType]]:
+        """Define a dataset type compatible with any existing dataset type with
+        the same name, or raise if this is impossible.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the dataset type.  Considered a component if a ``.``
+            separator is present.
+        dimensions : `Iterable` [ `str` ], optional
+            Names of the dimensions for the dataset type's data IDs.  If not
+            given, the dataset type must already be registered.  The special
+            string ``skypix`` can be used as a placeholder for any skypix
+            dimension, but this requires that the dataset type already be
+            registered.
+        storage_class : `str` or `StorageClass`, optional
+            Storage class instance or name for this dataset type.  If not
+            given, either the dataset type name must indicate a component and
+            ``parent_storage_class`` must be given, or the dataset must already
+            be registered.
+        parent_storage_class : `str` or `StorageClass`, optional
+            Storage class instance or name for the parent of this component
+            dataset type.  Ignored if ``name`` does not indicate a component.
+            Required if ``name`` does indicate a component and the dataset type
+            has not been registered.
+        is_calibration : `bool`, optional
+            Whether the dataset type can be stored in
+            `~CollectionType.CALIBRATION` collections.  If not provided, the
+            value for the registered dataset type is used.  If the dataset type
+            is not registered, `False` is assumed.
+        require_registered : `bool`, optional
+            If `True` (`False` is default), require the dataset to already be
+            registered.  This is also implied by ``dimensions`` being `None`,
+            by ``storage_class`` being `None` for non-component dataset types,
+            by ``parent_storage_class`` being `None` for component dataset
+            types, or by ``skypix`` being used as a dimension placeholder.
+        read_compatible : `bool`, optional
+            If `True` (default), only allow the requested storage class to
+            differ from the registered one if the registered one can be
+            converted to the requested one.  If `False`, this is not checked.
+            This is ignored if the dataset type is not registered.
+        write_compatible : `bool`, optional
+            If `True` (default), only allow the requested storage class to
+            differ from the registered one if the requested one can be
+            converted to the registered one.  If `False`, this is not checked.
+            This is ignored if the dataset type is not registered.
+
+        Returns
+        -------
+        requested_dataset_type : `DatasetType`
+            A dataset type instance with the given parameters, with any missing
+            parameters filled in and any placeholders replaced.  This is
+            a component dataset type if ``name`` indicates a component.
+        registered_dataset_type : `DatasetRecordStorage` or `None`
+            The already-registered *parent* dataset type, if it is already
+            registered (`None` if it is not registered).
+
+        Raises
+        ------
+        MissingDatasetTypeError
+            Raised if one or more arguments requires the dataset type to
+            already exist, and it does not.
+        DatasetTypeError
+            Raised directly if the ``skypix`` dimension placeholder is used
+            but the registered dataset type has multiple skypix dimensions.
+        ConflictingDefinitionError
+            Raised if the already registered dataset type is not compatible
+            with the given attributes.  Dimensions and ``is_calibration`` are
+            always checked, with storage classes checked according to
+            ``read_compatible`` and ``write_compatible``.
         """
         raise NotImplementedError()
 

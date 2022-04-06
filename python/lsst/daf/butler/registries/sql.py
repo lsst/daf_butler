@@ -50,6 +50,7 @@ from ..core import (
     NamedKeyMapping,
     NameLookupMapping,
     Progress,
+    StorageClass,
     StorageClassFactory,
     Timespan,
     ddl,
@@ -405,6 +406,31 @@ class SqlRegistry(Registry):
     def getDatasetType(self, name: str) -> DatasetType:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         return self._managers.datasets[name].datasetType
+
+    def conformDatasetType(
+        self,
+        name: str,
+        dimensions: Optional[Iterable[str]] = None,
+        storage_class: Optional[Union[str, StorageClass]] = None,
+        parent_storage_class: Optional[Union[StorageClass, str]] = None,
+        *,
+        is_calibration: Optional[bool] = None,
+        require_registered: bool = False,
+        read_compatible: bool = True,
+        write_compatible: bool = True,
+    ) -> tuple[DatasetType, Optional[DatasetType]]:
+        # Docstring inherited.
+        requested, storage = self._managers.datasets.conform(
+            name,
+            dimensions=dimensions,
+            storage_class=storage_class,
+            is_calibration=is_calibration,
+            parent_storage_class=parent_storage_class,
+            require_registered=require_registered,
+            read_compatible=read_compatible,
+            write_compatible=write_compatible,
+        )
+        return requested, storage.datasetType if storage is not None else None
 
     def supportsIdGenerationMode(self, mode: DatasetIdGenEnum) -> bool:
         # Docstring inherited from lsst.daf.butler.registry.Registry
