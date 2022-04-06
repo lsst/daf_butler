@@ -1234,8 +1234,6 @@ class Registry(ABC):
     ) -> Iterator[str]:
         """Iterate over the collections whose names match an expression.
 
-        Collection names are sorted alphabetically.
-
         Parameters
         ----------
         expression : `Any`, optional
@@ -1268,6 +1266,15 @@ class Registry(ABC):
         ------
         CollectionExpressionError
             Raised when ``expression`` is invalid.
+
+        Notes
+        -----
+        The order in which collections are returned is unspecified, except that
+        the children of a `~CollectionType.CHAINED` collection are guaranteed
+        to be in the order in which they are searched.  When multiple parent
+        `~CollectionType.CHAINED` collections match the same criteria, the
+        order in which the two lists appear is unspecified, and the lists of
+        children may be incomplete if a child has multiple parents.
         """
         raise NotImplementedError()
 

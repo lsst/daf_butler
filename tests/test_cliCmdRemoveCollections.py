@@ -109,7 +109,7 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         result = self.runner.invoke(butlerCli, ["query-collections", self.root, "--chains", "TABLE"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expected = Table(array(before_rows), names=_query_collection_column_names(before_rows))
-        self.assertAstropyTablesEqual(readTable(result.output), expected)
+        self.assertAstropyTablesEqual(readTable(result.output), expected, unorderedRows=True)
 
         removal = removeCollections(
             repo=self.root,
@@ -123,7 +123,7 @@ class RemoveCollectionTest(unittest.TestCase, ButlerTestHelper):
         result = self.runner.invoke(butlerCli, ["query-collections", self.root])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         expected = Table(array(after_rows), names=_query_collection_column_names(after_rows))
-        self.assertAstropyTablesEqual(readTable(result.output), expected)
+        self.assertAstropyTablesEqual(readTable(result.output), expected, unorderedRows=True)
 
     def testRemoveScript(self):
         """Test removing collections.

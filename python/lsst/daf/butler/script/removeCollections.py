@@ -77,7 +77,7 @@ def _getCollectionInfo(
     """
     butler = Butler(repo)
     try:
-        names = list(
+        names = sorted(
             butler.registry.queryCollections(
                 collectionTypes=frozenset(
                     (
