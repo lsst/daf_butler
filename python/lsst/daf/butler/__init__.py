@@ -9,6 +9,7 @@ from ._butler import *
 from ._butlerConfig import *
 from ._butlerRepoIndex import *
 from ._deferredDatasetHandle import *
+from ._quantum_backed import *
 from .core import *
 
 # Import the registry subpackage directly for other symbols.

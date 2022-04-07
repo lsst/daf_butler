@@ -80,6 +80,10 @@ class StoredDatastoreItemInfo:
         """
         raise NotImplementedError()
 
+    def to_record(self) -> Dict[str, Any]:
+        """Convert record contents to a dictionary."""
+        raise NotImplementedError()
+
     @property
     def dataset_id(self) -> DatasetId:
         """Dataset ID associated with this record (`DatasetId`)"""
@@ -147,23 +151,43 @@ class StoredFileInfo(StoredDatastoreItemInfo):
     dataset_id: DatasetId
     """DatasetId associated with this record."""
 
-    def to_record(self, ref: Optional[DatasetRef] = None) -> Dict[str, Any]:
-        """Convert the supplied ref to a database record."""
-        component = ref.datasetType.component() if ref is not None else None
-        if component is None and self.component is not None:
-            component = self.component
-        if component is None:
-            # Use empty string since we want this to be part of the
-            # primary key.
-            component = NULLSTR
-        dataset_id = ref.id if ref is not None else self.dataset_id
+    def rebase(self, ref: DatasetRef) -> StoredFileInfo:
+        """Return a copy of the record suitable for a specified reference.
 
-        return dict(
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            DatasetRef which provides component name and dataset ID for the
+            new returned record.
+
+        Returns
+        -------
+        record : `StoredFileInfo`
+            New record instance.
+        """
+        # take component and dataset_id from the ref, rest comes from self
+        component = ref.datasetType.component()
+        if component is None:
+            component = self.component
+        dataset_id = ref.getCheckedId()
+        return StoredFileInfo(
             dataset_id=dataset_id,
             formatter=self.formatter,
             path=self.path,
-            storage_class=self.storageClass.name,
+            storageClass=self.storageClass,
             component=component,
+            checksum=self.checksum,
+            file_size=self.file_size,
+        )
+
+    def to_record(self) -> Dict[str, Any]:
+        """Convert the supplied ref to a database record."""
+        return dict(
+            dataset_id=self.dataset_id,
+            formatter=self.formatter,
+            path=self.path,
+            storage_class=self.storageClass.name,
+            component=self.component,
             checksum=self.checksum,
             file_size=self.file_size,
         )

@@ -28,9 +28,9 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, cast
 
 import sqlalchemy
-from lsst.daf.butler import NamedValueSet, StoredDatastoreItemInfo, ddl
-from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
-from lsst.daf.butler.registry.interfaces import (
+
+from ...core import NamedValueSet, StoredDatastoreItemInfo, ddl
+from ..interfaces import (
     DatasetIdRef,
     DatastoreRegistryBridge,
     DatastoreRegistryBridgeManager,
@@ -38,11 +38,12 @@ from lsst.daf.butler.registry.interfaces import (
     OpaqueTableStorage,
     VersionTuple,
 )
-from lsst.daf.butler.registry.opaque import ByNameOpaqueTableStorage
+from ..opaque import ByNameOpaqueTableStorage
+from .ephemeral import EphemeralDatastoreRegistryBridge
 
 if TYPE_CHECKING:
-    from lsst.daf.butler import DimensionUniverse
-    from lsst.daf.butler.registry.interfaces import (
+    from ...core import DimensionUniverse
+    from ..interfaces import (
         Database,
         DatasetRecordStorageManager,
         OpaqueTableStorageManager,
