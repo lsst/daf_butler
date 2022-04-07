@@ -182,12 +182,17 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
     def to_record(self) -> Dict[str, Any]:
         """Convert the supplied ref to a database record."""
+        component = self.component
+        if component is None:
+            # Use empty string since we want this to be part of the
+            # primary key.
+            component = NULLSTR
         return dict(
             dataset_id=self.dataset_id,
             formatter=self.formatter,
             path=self.path,
             storage_class=self.storageClass.name,
-            component=self.component,
+            component=component,
             checksum=self.checksum,
             file_size=self.file_size,
         )
