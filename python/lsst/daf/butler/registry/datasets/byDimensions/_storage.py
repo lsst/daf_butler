@@ -405,8 +405,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # generate a valid SQL query that can't yield results.  This should
             # never get executed, but lots of downstream code will still try
             # to access the SQLAlchemy objects representing the columns in the
-            # subquery.  That's not idea, but it'd take a lot of refactoring to
-            # fix it.
+            # subquery.  That's not ideal, but it'd take a lot of refactoring
+            # to fix it (DM-31725).
             query.where.append(sqlalchemy.sql.literal(False))
         else:
             query.where.append(collection_col.in_([collection.key for collection in collections]))
