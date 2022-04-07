@@ -2873,3 +2873,32 @@ class RegistryTests(ABC):
             collections="imported_r",
         )
         self.assertEqual({record.name for record in records}, {"Cam1-R1", "Cam1-R2"})
+
+    def testSkyPixDatasetQueries(self):
+        """Test that we can build queries involving skypix dimensions as long
+        as a dataset type that uses those dimensions is included.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        dataset_type = DatasetType(
+            "a", dimensions=["htm7", "instrument"], universe=registry.dimensions, storageClass="int"
+        )
+        registry.registerDatasetType(dataset_type)
+        run = "r"
+        registry.registerRun(run)
+        # First try queries where there are no datasets; the concern is whether
+        # we can even build and execute these queries without raising, even
+        # when "doomed" query shortcuts are in play.
+        self.assertFalse(
+            list(registry.queryDataIds(["htm7", "instrument"], datasets=dataset_type, collections=run))
+        )
+        self.assertFalse(list(registry.queryDatasets(dataset_type, collections=run)))
+        # Now add a dataset and see that we can get it back.
+        htm7 = registry.dimensions.skypix["htm"][7].pixelization
+        data_id = registry.expandDataId(instrument="Cam1", htm7=htm7.universe()[0][0])
+        (ref,) = registry.insertDatasets(dataset_type, [data_id], run=run)
+        self.assertEqual(
+            set(registry.queryDataIds(["htm7", "instrument"], datasets=dataset_type, collections=run)),
+            {data_id},
+        )
+        self.assertEqual(set(registry.queryDatasets(dataset_type, collections=run)), {ref})

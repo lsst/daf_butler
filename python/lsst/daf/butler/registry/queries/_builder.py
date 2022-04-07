@@ -227,29 +227,28 @@ class QueryBuilder:
                     continue
             else:
                 collectionRecords.append(collectionRecord)
-        if collectionRecords:
-            if isResult:
-                if findFirst:
-                    subquery = self._build_dataset_search_subquery(
-                        datasetRecordStorage,
-                        collectionRecords,
-                    )
-                else:
-                    subquery = self._build_dataset_query_subquery(
-                        datasetRecordStorage,
-                        collectionRecords,
-                    )
-                columns = DatasetQueryColumns(
-                    datasetType=datasetType,
-                    id=subquery.columns["id"],
-                    runKey=subquery.columns[self._managers.collections.getRunForeignKeyName()],
-                    ingestDate=subquery.columns["ingest_date"],
+        if isResult:
+            if findFirst:
+                subquery = self._build_dataset_search_subquery(
+                    datasetRecordStorage,
+                    collectionRecords,
                 )
             else:
-                subquery = self._build_dataset_constraint_subquery(datasetRecordStorage, collectionRecords)
-                columns = None
-            self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
+                subquery = self._build_dataset_query_subquery(
+                    datasetRecordStorage,
+                    collectionRecords,
+                )
+            columns = DatasetQueryColumns(
+                datasetType=datasetType,
+                id=subquery.columns["id"],
+                runKey=subquery.columns[self._managers.collections.getRunForeignKeyName()],
+                ingestDate=subquery.columns["ingest_date"],
+            )
         else:
+            subquery = self._build_dataset_constraint_subquery(datasetRecordStorage, collectionRecords)
+            columns = None
+        self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
+        if not collectionRecords:
             if rejections:
                 self._doomed_by.extend(rejections)
             else:
@@ -362,8 +361,9 @@ class QueryBuilder:
             collection key, and the ingest date.
         """
         # Query-simplification shortcut: if there is only one collection, a
-        # find-first search is just a regular result subquery.
-        if len(collections) == 1:
+        # find-first search is just a regular result subquery.  Same is true
+        # if this is a doomed query with no collections to search.
+        if len(collections) <= 1:
             return self._build_dataset_query_subquery(storage, collections)
         # In the more general case, we build a subquery of the form below to
         # search the collections in order.
