@@ -202,19 +202,40 @@ class QueryBuilder:
             ):
                 continue
             if collectionRecord.type is CollectionType.CALIBRATION:
-                # If collection name was provided explicitly then say sorry,
-                # otherwise collection is a part of chained one and we skip it.
-                if datasetType.isCalibration() and collectionRecord.name in explicitCollections:
+                # If collection name was provided explicitly then say sorry if
+                # this is a kind of query we don't support yet; otherwise
+                # collection is a part of chained one or regex match and we
+                # skip it to not break queries of other included collections.
+                if datasetType.isCalibration():
                     if self.summary.temporal or self.summary.mustHaveKeysJoined.temporal:
-                        raise NotImplementedError(
-                            f"Temporal query for dataset type '{datasetType.name}' in CALIBRATION-type "
-                            f"collection '{collectionRecord.name}' is not yet supported."
-                        )
+                        if collectionRecord.name in explicitCollections:
+                            raise NotImplementedError(
+                                f"Temporal query for dataset type '{datasetType.name}' in CALIBRATION-type "
+                                f"collection '{collectionRecord.name}' is not yet supported."
+                            )
+                        else:
+                            rejections.append(
+                                f"Not searching for dataset {datasetType.name!r} in CALIBRATION collection "
+                                f"{collectionRecord.name!r} because temporal calibration queries aren't "
+                                "implemented; this is not an error only because the query structure implies "
+                                "that searching this collection may be incidental."
+                            )
+                            continue
                     elif findFirst:
-                        raise NotImplementedError(
-                            f"Find-first query for dataset type '{datasetType.name}' in CALIBRATION-type "
-                            f"collection '{collectionRecord.name}' is not yet supported."
-                        )
+                        if collectionRecord.name in explicitCollections:
+                            raise NotImplementedError(
+                                f"Find-first query for dataset type '{datasetType.name}' in "
+                                f"CALIBRATION-type collection '{collectionRecord.name}' is not yet "
+                                "supported."
+                            )
+                        else:
+                            rejections.append(
+                                f"Not searching for dataset {datasetType.name!r} in CALIBRATION collection "
+                                f"{collectionRecord.name!r} because find-first calibration queries aren't "
+                                "implemented; this is not an error only because the query structure implies "
+                                "that searching this collection may be incidental."
+                            )
+                            continue
                     else:
                         collectionRecords.append(collectionRecord)
                 else:
