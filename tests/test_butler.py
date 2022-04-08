@@ -22,6 +22,7 @@
 """Tests for Butler.
 """
 
+import gc
 import logging
 import os
 import pathlib
@@ -34,6 +35,8 @@ import string
 import tempfile
 import time
 import unittest
+from tempfile import gettempdir
+from threading import Thread
 
 try:
     import boto3
@@ -48,15 +51,23 @@ except ImportError:
 
 
 try:
+    # It's possible but silly to have testing.postgresql installed without
+    # having the postgresql server installed (because then nothing in
+    # testing.postgresql would work), so we use the presence of that module
+    # to test whether we can expect the server to be available.
+    import testing.postgresql
+except ImportError:
+    testing = None
+
+
+try:
     from cheroot import wsgi
     from wsgidav.wsgidav_app import WsgiDAVApp
 except ImportError:
     WsgiDAVApp = None
 
-from tempfile import gettempdir
-from threading import Thread
-
 import astropy.time
+import sqlalchemy
 from lsst.daf.butler import (
     Butler,
     ButlerConfig,
@@ -1487,6 +1498,64 @@ class PosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
             butler.get(datasetTypeName, dataId=dataId)
 
 
+@unittest.skipUnless(testing is not None, "testing.postgresql module not found")
+class PostgresPosixDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
+    """PosixDatastore specialization of a butler using Postgres"""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+    fullConfigKey = ".datastore.formatters"
+    validationCanFail = True
+    datastoreStr = ["/tmp"]
+    datastoreName = [f"FileDatastore@{BUTLER_ROOT_TAG}"]
+    registryStr = "PostgreSQL@test"
+
+    @staticmethod
+    def _handler(postgresql):
+        engine = sqlalchemy.engine.create_engine(postgresql.url())
+        with engine.begin() as connection:
+            connection.execute(sqlalchemy.text("CREATE EXTENSION btree_gist;"))
+
+    @classmethod
+    def setUpClass(cls):
+        # Create the postgres test server.
+        cls.postgresql = testing.postgresql.PostgresqlFactory(
+            cache_initialized_db=True, on_initialized=cls._handler
+        )
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        # Clean up any lingering SQLAlchemy engines/connections
+        # so they're closed before we shut down the server.
+        gc.collect()
+        cls.postgresql.clear_cache()
+        super().tearDownClass()
+
+    def setUp(self):
+        self.server = self.postgresql()
+
+        # Need to add a registry section to the config.
+        self._temp_config = False
+        config = Config(self.configFile)
+        config["registry", "db"] = self.server.url()
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as fh:
+            config.dump(fh)
+            self.configFile = fh.name
+            self._temp_config = True
+        super().setUp()
+
+    def tearDown(self):
+        self.server.stop()
+        if self._temp_config and os.path.exists(self.configFile):
+            os.remove(self.configFile)
+        super().tearDown()
+
+    def testMakeRepo(self):
+        # The base class test assumes that it's using sqlite and assumes
+        # the config file is acceptable to sqlite.
+        raise unittest.SkipTest("Postgres config is not compatible with this test.")
+
+
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """InMemoryDatastore specialization of a butler"""
 
@@ -1714,6 +1783,8 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         if self.useTempRoot and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
 
+        super().tearDown()
+
 
 @unittest.skipIf(WsgiDAVApp is None, "Warning: wsgidav/cheroot not found!")
 class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
@@ -1790,6 +1861,7 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         cls.stopWebdavServer = True
         # Wait for the thread to exit
         cls.serverThread.join()
+        super().tearDownClass()
 
     def setUp(self):
         config = Config(self.configFile)
@@ -1822,6 +1894,8 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
 
         if self.useTempRoot and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
+
+        super().tearDown()
 
     def _serveWebdav(self, port: int, stopWebdavServer):
         """Starts a local webdav-compatible HTTP server,
