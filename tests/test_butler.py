@@ -1714,6 +1714,8 @@ class S3DatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
         if self.useTempRoot and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
 
+        super().tearDown()
+
 
 @unittest.skipIf(WsgiDAVApp is None, "Warning: wsgidav/cheroot not found!")
 class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase):
@@ -1790,6 +1792,7 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
         cls.stopWebdavServer = True
         # Wait for the thread to exit
         cls.serverThread.join()
+        super().tearDownClass()
 
     def setUp(self):
         config = Config(self.configFile)
@@ -1822,6 +1825,8 @@ class WebdavDatastoreButlerTestCase(FileDatastoreButlerTests, unittest.TestCase)
 
         if self.useTempRoot and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
+
+        super().tearDown()
 
     def _serveWebdav(self, port: int, stopWebdavServer):
         """Starts a local webdav-compatible HTTP server,
