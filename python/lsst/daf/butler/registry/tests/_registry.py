@@ -1927,6 +1927,35 @@ class RegistryTests(ABC):
             registry.associate(collection, [bias2a])
         # Certify 2a dataset with [t2, t4) validity.
         registry.certify(collection, [bias2a], Timespan(begin=t2, end=t4))
+        # Test that we can query for this dataset via the new collection, both
+        # on its own and with a RUN collection, as long as we don't try to join
+        # in temporal dimensions or use findFirst=True.
+        self.assertEqual(
+            set(registry.queryDatasets("bias", findFirst=False, collections=collection)),
+            {bias2a},
+        )
+        self.assertEqual(
+            set(registry.queryDatasets("bias", findFirst=False, collections=[collection, "imported_r"])),
+            {
+                bias2a,
+                bias2b,
+                bias3b,
+                registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
+            },
+        )
+        self.assertEqual(
+            set(registry.queryDataIds("detector", datasets="bias", collections=collection)),
+            {registry.expandDataId(instrument="Cam1", detector=2)},
+        )
+        self.assertEqual(
+            set(registry.queryDataIds("detector", datasets="bias", collections=[collection, "imported_r"])),
+            {
+                registry.expandDataId(instrument="Cam1", detector=2),
+                registry.expandDataId(instrument="Cam1", detector=3),
+                registry.expandDataId(instrument="Cam1", detector=4),
+            },
+        )
+
         # We should not be able to certify 2b with anything overlapping that
         # window.
         with self.assertRaises(ConflictingDefinitionError):

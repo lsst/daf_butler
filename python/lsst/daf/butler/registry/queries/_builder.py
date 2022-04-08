@@ -301,22 +301,18 @@ class QueryBuilder:
             dataset type dimension, or an unspecified column (just to prevent
             SQL syntax errors) where there is no data ID.
         """
-        return (
-            storage.select(
-                *collections,
-                dataId=SimpleQuery.Select,
-                # If this dataset type has no dimensions, we're in danger of
-                # generating an invalid subquery that has no columns in the
-                # SELECT clause.  An easy fix is to just select some arbitrary
-                # column that goes unused, like the dataset ID.
-                id=None if storage.datasetType.dimensions else SimpleQuery.Select,
-                run=None,
-                ingestDate=None,
-                timespan=None,
-            )
-            .combine()
-            .alias(storage.datasetType.name)
-        )
+        return storage.select(
+            *collections,
+            dataId=SimpleQuery.Select,
+            # If this dataset type has no dimensions, we're in danger of
+            # generating an invalid subquery that has no columns in the
+            # SELECT clause.  An easy fix is to just select some arbitrary
+            # column that goes unused, like the dataset ID.
+            id=None if storage.datasetType.dimensions else SimpleQuery.Select,
+            run=None,
+            ingestDate=None,
+            timespan=None,
+        ).alias(storage.datasetType.name)
 
     def _build_dataset_query_subquery(
         self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
@@ -342,18 +338,14 @@ class QueryBuilder:
             type dimension, the dataset ID, the `~CollectionType.RUN`
             collection key, and the ingest date.
         """
-        sql = (
-            storage.select(
-                *collections,
-                dataId=SimpleQuery.Select,
-                id=SimpleQuery.Select,
-                run=SimpleQuery.Select,
-                ingestDate=SimpleQuery.Select,
-                timespan=None,
-            )
-            .combine()
-            .alias(storage.datasetType.name)
-        )
+        sql = storage.select(
+            *collections,
+            dataId=SimpleQuery.Select,
+            id=SimpleQuery.Select,
+            run=SimpleQuery.Select,
+            ingestDate=SimpleQuery.Select,
+            timespan=None,
+        ).alias(storage.datasetType.name)
         return sql
 
     def _build_dataset_search_subquery(
@@ -426,8 +418,7 @@ class QueryBuilder:
                 ingestDate=SimpleQuery.Select,
                 timespan=None,
             )
-            ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
-            subqueries.append(ssq.combine())
+            subqueries.append(ssq.add_columns(sqlalchemy.sql.literal(rank).label("rank")))
         # Although one would expect that these subqueries can be UNION ALL
         # instead of UNION because each subquery is already distinct, it turns
         # out that with many subqueries this causes catastrophic performance

@@ -27,6 +27,8 @@ import enum
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Tuple
 
+import sqlalchemy.sql
+
 from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl
 from ._versioning import VersionedExtension
 
@@ -318,7 +320,7 @@ class DatasetRecordStorage(ABC):
         run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
         timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
         ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
-    ) -> SimpleQuery:
+    ) -> sqlalchemy.sql.Selectable:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
         this `DatasetType`.
 
@@ -351,7 +353,9 @@ class DatasetRecordStorage(ABC):
             If `Select` (default), include the validity range timespan in the
             result columns.  If a `Timespan` instance, constrain the results to
             those whose validity ranges overlap that given timespan.  Ignored
-            unless ``collection.type is CollectionType.CALIBRATION``.
+            for collection types other than `~CollectionType.CALIBRATION``,
+            but `None` should be passed explicitly if a mix of
+            `~CollectionType.CALIBRATION` and other types are passed in.
         ingestDate : `None`, `Select`, or `Timespan`
             If `Select` include the ingest timestamp in the result columns.
             If a `Timespan` instance, constrain the results to those whose
@@ -361,9 +365,8 @@ class DatasetRecordStorage(ABC):
 
         Returns
         -------
-        query : `SimpleQuery`
-            A struct containing the SQLAlchemy object that representing a
-            simple ``SELECT`` query.
+        query : `sqlalchemy.sql.Selectable`
+            A SQLAlchemy object representing a simple ``SELECT`` query.
         """
         raise NotImplementedError()
 
