@@ -34,6 +34,8 @@ import string
 import tempfile
 import time
 import unittest
+from tempfile import gettempdir
+from threading import Thread
 
 try:
     import boto3
@@ -52,9 +54,6 @@ try:
     from wsgidav.wsgidav_app import WsgiDAVApp
 except ImportError:
     WsgiDAVApp = None
-
-from tempfile import gettempdir
-from threading import Thread
 
 import astropy.time
 from lsst.daf.butler import (
