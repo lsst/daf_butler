@@ -164,7 +164,7 @@ elements:
         type: string
         length: 64
     requires: [instrument]
-    implies: [physical_filter, visit_system]
+    implies: [physical_filter]
     metadata:
       -
         name: day_obs
@@ -218,6 +218,14 @@ elements:
           Can only be approximate since it is continuously changing during
           an observation and multiple exposures can be combined from a
           relatively long period.
+
+      -
+        name: visit_system_mask
+        type: int
+        doc: >
+          A bitwise OR of ``2**(visit_system.id)`` for the visit systems this
+          visit belongs to, provided to allow queries to sometimes avoid
+          joining in ``visit_system`` and ``visit_system_membership``.
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
@@ -436,6 +444,12 @@ elements:
     doc: >
       A system of self-consistent visit definitions, within which each
       exposure should appear at most once.
+
+      A visit may belong to multiple visit systems, if the logical definitions
+      for those systems happen to result in the same set of exposures - the
+      main (and probably only) example is when a single-snap visit is observed,
+      for which both the "one-to-one" visit system and a "group by header metadata" visit
+      system will define the same single-exposure visit.
     keys:
       -
         name: id
@@ -454,8 +468,16 @@ elements:
     doc: >
       A many-to-many join table that relates exposures to the visits they
       belong to.
-    requires: [exposure, visit_system]
-    implies: [visit]
+    requires: [exposure, visit]
+    always_join: true
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  visit_system_membership:
+    doc: >
+      A many-to-many join table that relates visits to the visit_systems they
+      belong to.
+    requires: [visit, visit_system]
     always_join: true
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage

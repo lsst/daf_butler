@@ -64,7 +64,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "423",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.data/"
@@ -77,7 +76,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.data/"
@@ -92,7 +90,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                     "band",
                     "instrument",
                     "physical_filter",
-                    "visit_system",
                     "visit",
                     "URI",
                 ),
@@ -106,7 +103,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "423",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.output/"
@@ -119,7 +115,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.output/"
@@ -134,7 +129,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                     "band",
                     "instrument",
                     "physical_filter",
-                    "visit_system",
                     "visit",
                     "URI",
                 ),
@@ -148,7 +142,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "423",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.summary/"
@@ -161,7 +154,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.summary/"
@@ -176,7 +168,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                     "band",
                     "instrument",
                     "physical_filter",
-                    "visit_system",
                     "visit",
                     "URI",
                 ),
@@ -193,11 +184,11 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             AstropyTable(
                 array(
                     (
-                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423"),
-                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424"),
+                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "423"),
+                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "424"),
                     )
                 ),
-                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit"),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit"),
             ),
         )
 
@@ -211,8 +202,8 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
 
         expectedTables = (
             AstropyTable(
-                array(("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423")),
-                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit"),
+                array(("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "423")),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit"),
             ),
         )
 
@@ -229,7 +220,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                 "id": 425,
                 "name": "fourtwentyfive",
                 "physical_filter": "d-r",
-                "visit_system": 1,
             },
         )
 
@@ -249,15 +239,15 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             AstropyTable(
                 array(
                     (
-                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "423"),
-                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "424"),
+                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "423"),
+                        ("test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "424"),
                     )
                 ),
-                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit"),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit"),
             ),
             AstropyTable(
-                array((("alt_test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "1", "425"))),
-                names=("type", "run", "band", "instrument", "physical_filter", "visit_system", "visit"),
+                array((("alt_test_metric_comp", "ingest/run", "R", "DummyCamComp", "d-r", "425"))),
+                names=("type", "run", "band", "instrument", "physical_filter", "visit"),
             ),
         )
 
@@ -284,7 +274,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "foo/test_metric_comp.data/"
@@ -298,7 +287,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "423",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.data/"
@@ -312,7 +300,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.data/"
@@ -328,7 +315,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                     "band",
                     "instrument",
                     "physical_filter",
-                    "visit_system",
                     "visit",
                     "URI",
                 ),
@@ -343,7 +329,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "foo/test_metric_comp.output/"
@@ -357,7 +342,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "423",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.output/"
@@ -371,7 +355,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.output/"
@@ -387,7 +370,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                     "band",
                     "instrument",
                     "physical_filter",
-                    "visit_system",
                     "visit",
                     "URI",
                 ),
@@ -402,7 +384,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "foo/test_metric_comp.summary/"
@@ -416,7 +397,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "423",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.summary/"
@@ -430,7 +410,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.summary/"
@@ -446,7 +425,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                     "band",
                     "instrument",
                     "physical_filter",
-                    "visit_system",
                     "visit",
                     "URI",
                 ),
@@ -472,7 +450,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "foo/test_metric_comp.data/test_metric_comp_v00000424_fDummyCamComp_data.yaml"
@@ -485,7 +462,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "423",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.data/"
@@ -501,7 +477,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                     "band",
                     "instrument",
                     "physical_filter",
-                    "visit_system",
                     "visit",
                     "URI",
                 ),
@@ -516,7 +491,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "foo/test_metric_comp.output/"
@@ -530,7 +504,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "423",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.output/"
@@ -546,7 +519,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                     "band",
                     "instrument",
                     "physical_filter",
-                    "visit_system",
                     "visit",
                     "URI",
                 ),
@@ -561,7 +533,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "424",
                             self.testRepo.butler.datastore.root.join(
                                 "foo/test_metric_comp.summary/"
@@ -575,7 +546,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                             "R",
                             "DummyCamComp",
                             "d-r",
-                            "1",
                             "423",
                             self.testRepo.butler.datastore.root.join(
                                 "ingest/run/test_metric_comp.summary/"
@@ -591,7 +561,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                     "band",
                     "instrument",
                     "physical_filter",
-                    "visit_system",
                     "visit",
                     "URI",
                 ),
