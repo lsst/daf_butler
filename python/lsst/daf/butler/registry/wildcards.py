@@ -32,6 +32,7 @@ __all__ = (
 import itertools
 import logging
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -899,3 +900,41 @@ class DatasetTypeQuery:
                         if component not in done and any(p.fullmatch(component.name) for p in self._patterns):
                             done.add(component)
                             yield component
+
+    def union(self, *others: DatasetTypeQuery) -> DatasetTypeQuery:
+        """Return a new `DatasetTypeQuery` that matches any dataset type
+        matched by the given `DatasetTypeQuery` objects.
+
+        Parameters
+        ----------
+        *others : `DatasetTypeQuery`
+            Expressions to merge with ``self``.
+
+        Returns
+        -------
+        merged : `DatasetTypeQuery`
+            Union expression.
+        """
+        explicit_all: defaultdict[str, set[Optional[DatasetType]]] = defaultdict(set)
+        patterns: Set[re.Pattern] = set()
+        for q in itertools.chain((self,), others):
+            if q._explicit is Ellipsis:
+                return q
+            for name, dataset_type in q._explicit.items():
+                explicit_all[name].add(dataset_type)
+            patterns.update(q._patterns)
+        explicit: dict[str, Optional[DatasetType]] = {}
+        for name, dataset_types in explicit_all.items():
+            dataset_types.discard(None)
+            if not dataset_types:
+                explicit[name] = None
+            else:
+                (first, *rest) = dataset_types
+                if not rest:
+                    explicit[name] = first
+                else:
+                    raise DatasetTypeError(
+                        f"Cannot merge dataset type expressions with different definitions for {name}: "
+                        f"{rest}."
+                    )
+        return DatasetTypeQuery(explicit, tuple(patterns))
