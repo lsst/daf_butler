@@ -119,11 +119,11 @@ class StaticTablesContext:
             _checkExistingTableDefinition(
                 name, spec, self._inspector.get_columns(name, schema=self._db.namespace)
             )
-        table = self._db._convertTableSpec(name, spec, self._db._metadata)
+        metadata = self._db._metadata
+        assert metadata is not None, "Guaranteed by context manager that returns this object."
+        table = self._db._convertTableSpec(name, spec, metadata)
         for foreignKeySpec in spec.foreignKeys:
-            self._foreignKeys.append(
-                (table, self._db._convertForeignKeySpec(name, foreignKeySpec, self._db._metadata))
-            )
+            self._foreignKeys.append((table, self._db._convertForeignKeySpec(name, foreignKeySpec, metadata)))
         return table
 
     def addTableTuple(self, specs: Tuple[ddl.TableSpec, ...]) -> Tuple[sqlalchemy.schema.Table, ...]:
@@ -228,8 +228,11 @@ class Session:
         """
         if name is None:
             name = f"tmp_{uuid.uuid4().hex}"
+        metadata = self._db._metadata
+        if metadata is None:
+            raise RuntimeError("Cannot create temporary table before static schema is defined.")
         table = self._db._convertTableSpec(
-            name, spec, self._db._metadata, prefixes=["TEMPORARY"], schema=sqlalchemy.schema.BLANK_SCHEMA
+            name, spec, metadata, prefixes=["TEMPORARY"], schema=sqlalchemy.schema.BLANK_SCHEMA
         )
         if table.key in self._db._tempTables:
             if table.key != name:
@@ -238,7 +241,7 @@ class Session:
                     f"Database) already exists."
                 )
         for foreignKeySpec in spec.foreignKeys:
-            table.append_constraint(self._db._convertForeignKeySpec(name, foreignKeySpec, self._db._metadata))
+            table.append_constraint(self._db._convertForeignKeySpec(name, foreignKeySpec, metadata))
         with self._db._connection() as connection:
             table.create(connection)
         self._db._tempTables.add(table.key)
@@ -511,6 +514,7 @@ class Database(ABC):
             # `Connection.in_nested_transaction()` method.
             savepoint = savepoint or connection.info.get(_IN_SAVEPOINT_TRANSACTION, False)
             connection.info[_IN_SAVEPOINT_TRANSACTION] = savepoint
+            trans: sqlalchemy.engine.Transaction
             if connection.in_transaction() and savepoint:
                 trans = connection.begin_nested()
             elif not connection.in_transaction():
@@ -1676,13 +1680,13 @@ class Database(ABC):
             return connection.execute(sql, rows).rowcount
 
     def query(
-        self, sql: sqlalchemy.sql.FromClause, *args: Any, **kwargs: Any
+        self, sql: sqlalchemy.sql.Selectable, *args: Any, **kwargs: Any
     ) -> sqlalchemy.engine.ResultProxy:
         """Run a SELECT query against the database.
 
         Parameters
         ----------
-        sql : `sqlalchemy.sql.FromClause`
+        sql : `sqlalchemy.sql.Selectable`
             A SQLAlchemy representation of a ``SELECT`` query.
         *args
             Additional positional arguments are forwarded to
