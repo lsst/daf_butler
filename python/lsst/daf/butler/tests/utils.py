@@ -239,7 +239,7 @@ class MetricTestRepo:
                 id=423,
                 name="fourtwentythree",
                 physical_filter="d-r",
-                visit_system=1,
+                visit_system_mask=2,  # 2**1
                 datetimeBegin=visitStart,
                 datetimeEnd=visitEnd,
             ),
@@ -251,7 +251,7 @@ class MetricTestRepo:
                 id=424,
                 name="fourtwentyfour",
                 physical_filter="d-r",
-                visit_system=1,
+                visit_system_mask=2,
             ),
         )
 

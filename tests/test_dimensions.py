@@ -157,10 +157,10 @@ class DimensionTestCase(unittest.TestCase):
         graph = DimensionGraph(self.universe, names=("exposure", "detector", "visit"))
         self.assertCountEqual(
             graph.dimensions.names,
-            ("instrument", "exposure", "detector", "visit", "physical_filter", "band", "visit_system"),
+            ("instrument", "exposure", "detector", "visit", "physical_filter", "band"),
         )
         self.assertCountEqual(graph.required.names, ("instrument", "exposure", "detector", "visit"))
-        self.assertCountEqual(graph.implied.names, ("physical_filter", "band", "visit_system"))
+        self.assertCountEqual(graph.implied.names, ("physical_filter", "band"))
         self.assertCountEqual(
             graph.elements.names - graph.dimensions.names, ("visit_detector_region", "visit_definition")
         )
@@ -178,10 +178,10 @@ class DimensionTestCase(unittest.TestCase):
         graph = DimensionGraph(self.universe, names=("exposure", "detector", "visit"))
         self.assertCountEqual(
             graph.dimensions.names,
-            ("instrument", "detector", "visit", "exposure", "physical_filter", "band", "visit_system"),
+            ("instrument", "detector", "visit", "exposure", "physical_filter", "band"),
         )
         self.assertCountEqual(graph.required.names, ("instrument", "detector", "exposure", "visit"))
-        self.assertCountEqual(graph.implied.names, ("physical_filter", "band", "visit_system"))
+        self.assertCountEqual(graph.implied.names, ("physical_filter", "band"))
         self.assertCountEqual(
             graph.elements.names - graph.dimensions.names, ("visit_detector_region", "visit_definition")
         )
