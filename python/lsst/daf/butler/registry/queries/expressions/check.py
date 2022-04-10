@@ -24,6 +24,7 @@ __all__ = (
     "CheckVisitor",
     "InspectionVisitor",
     "InspectionSummary",
+    "OuterSummary",
 )
 
 import dataclasses
