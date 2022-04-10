@@ -885,6 +885,7 @@ class DatasetTypeQuery:
                 if component_name is not None:
                     found = found.makeComponentDatasetType(component_name)
                 if dataset_type is not None and found != dataset_type:
+                    # TODO: allow dataset types with compatible storage types.
                     raise DatasetTypeError(
                         f"Dataset type definition in query expression {dataset_type} does "
                         f"not match the registered type {found}."
