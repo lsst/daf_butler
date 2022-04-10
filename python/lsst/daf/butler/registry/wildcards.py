@@ -823,6 +823,20 @@ class DatasetTypeQuery:
             explicit[name] = item
         return cls(explicit, patterns=tuple(wildcard.patterns))
 
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, DatasetTypeQuery):
+            return self._explicit == other._explicit and self._patterns == other._patterns
+        else:
+            return False
+
+    def __str__(self) -> str:
+        if self._explicit is Ellipsis:
+            return "..."
+        else:
+            terms = list(self._explicit)
+            terms.extend(str(p) for p in self._patterns)
+            return "[{}]".format(", ".join(terms))
+
     def resolve_dataset_types(
         self,
         candidate_parents: NamedValueAbstractSet[DatasetType],
