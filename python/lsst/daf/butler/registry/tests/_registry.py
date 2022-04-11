@@ -1656,6 +1656,22 @@ class RegistryTests(ABC):
                     dataIds.findDatasets(schema, collections=[run2, run1], findFirst=True),
                     [dataset2],
                 )
+        # Query for non-empty data IDs with a constraint on an empty-data-ID
+        # dataset that exists.
+        dataIds = registry.queryDataIds(["instrument"], datasets="schema", collections=...)
+        self.checkQueryResults(
+            dataIds.subset(unique=True),
+            [DataCoordinate.standardize(instrument="Cam1", universe=registry.dimensions)],
+        )
+        # Again query for non-empty data IDs with a constraint on empty-data-ID
+        # datasets, but when the datasets don't exist.  We delete the existing
+        # dataset and query just that collection rather than creating a new
+        # empty collection because this is a bit less likely for our build-time
+        # logic to shortcut-out (via the collection summaries), and such a
+        # shortcut would make this test a bit more trivial than we'd like.
+        registry.removeDatasets([dataset2])
+        dataIds = registry.queryDataIds(["instrument"], datasets="schema", collections=run2)
+        self.checkQueryResults(dataIds, [])
 
     def testDimensionDataModifications(self):
         """Test that modifying dimension records via:
@@ -1911,6 +1927,35 @@ class RegistryTests(ABC):
             registry.associate(collection, [bias2a])
         # Certify 2a dataset with [t2, t4) validity.
         registry.certify(collection, [bias2a], Timespan(begin=t2, end=t4))
+        # Test that we can query for this dataset via the new collection, both
+        # on its own and with a RUN collection, as long as we don't try to join
+        # in temporal dimensions or use findFirst=True.
+        self.assertEqual(
+            set(registry.queryDatasets("bias", findFirst=False, collections=collection)),
+            {bias2a},
+        )
+        self.assertEqual(
+            set(registry.queryDatasets("bias", findFirst=False, collections=[collection, "imported_r"])),
+            {
+                bias2a,
+                bias2b,
+                bias3b,
+                registry.findDataset("bias", instrument="Cam1", detector=4, collections="imported_r"),
+            },
+        )
+        self.assertEqual(
+            set(registry.queryDataIds("detector", datasets="bias", collections=collection)),
+            {registry.expandDataId(instrument="Cam1", detector=2)},
+        )
+        self.assertEqual(
+            set(registry.queryDataIds("detector", datasets="bias", collections=[collection, "imported_r"])),
+            {
+                registry.expandDataId(instrument="Cam1", detector=2),
+                registry.expandDataId(instrument="Cam1", detector=3),
+                registry.expandDataId(instrument="Cam1", detector=4),
+            },
+        )
+
         # We should not be able to certify 2b with anything overlapping that
         # window.
         with self.assertRaises(ConflictingDefinitionError):
@@ -2857,3 +2902,32 @@ class RegistryTests(ABC):
             collections="imported_r",
         )
         self.assertEqual({record.name for record in records}, {"Cam1-R1", "Cam1-R2"})
+
+    def testSkyPixDatasetQueries(self):
+        """Test that we can build queries involving skypix dimensions as long
+        as a dataset type that uses those dimensions is included.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        dataset_type = DatasetType(
+            "a", dimensions=["htm7", "instrument"], universe=registry.dimensions, storageClass="int"
+        )
+        registry.registerDatasetType(dataset_type)
+        run = "r"
+        registry.registerRun(run)
+        # First try queries where there are no datasets; the concern is whether
+        # we can even build and execute these queries without raising, even
+        # when "doomed" query shortcuts are in play.
+        self.assertFalse(
+            list(registry.queryDataIds(["htm7", "instrument"], datasets=dataset_type, collections=run))
+        )
+        self.assertFalse(list(registry.queryDatasets(dataset_type, collections=run)))
+        # Now add a dataset and see that we can get it back.
+        htm7 = registry.dimensions.skypix["htm"][7].pixelization
+        data_id = registry.expandDataId(instrument="Cam1", htm7=htm7.universe()[0][0])
+        (ref,) = registry.insertDatasets(dataset_type, [data_id], run=run)
+        self.assertEqual(
+            set(registry.queryDataIds(["htm7", "instrument"], datasets=dataset_type, collections=run)),
+            {data_id},
+        )
+        self.assertEqual(set(registry.queryDatasets(dataset_type, collections=run)), {ref})

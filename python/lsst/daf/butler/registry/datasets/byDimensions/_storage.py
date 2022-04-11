@@ -3,7 +3,7 @@ from __future__ import annotations
 __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 import uuid
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 
 import sqlalchemy
 from lsst.daf.butler import (
@@ -77,7 +77,6 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         sql = self.select(
             collection, dataId=dataId, id=SimpleQuery.Select, run=SimpleQuery.Select, timespan=timespan
         )
-        sql = sql.combine()
         results = self._db.query(sql)
         row = results.fetchone()
         if row is None:
@@ -324,12 +323,12 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
         timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
         ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
-    ) -> SimpleQuery:
+    ) -> sqlalchemy.sql.Selectable:
         # Docstring inherited from DatasetRecordStorage.
         collection_types = {collection.type for collection in collections}
         assert CollectionType.CHAINED not in collection_types, "CHAINED collections must be flattened."
         #
-        # There are two tables in play here:
+        # There are two kinds of table in play here:
         #
         #  - the static dataset table (with the dataset ID, dataset type ID,
         #    run ID/name, and ingest date);
@@ -353,12 +352,11 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # redundant columns in the JOIN ON expression, however, because the
         # FOREIGN KEY (and its index) are defined only on dataset_id.
         #
-        # We'll start with an empty SimpleQuery, and accumulate kwargs to pass
-        # to its `join` method when we bring in the tags/calibs table.
-        query = SimpleQuery()
-        # We get the data ID or constrain it in the tags/calibs table, but
-        # that's multiple columns, not one, so we need to transform the one
-        # Select.Or argument into a dictionary of them.
+        # We'll start by accumulating kwargs to pass to SimpleQuery.join when
+        # we bring in the tags/calibs table.  We get the data ID or constrain
+        # it in the tags/calibs table(s), but that's multiple columns, not one,
+        # so we need to transform the one Select.Or argument into a dictionary
+        # of them.
         kwargs: Dict[str, Any]
         if dataId is SimpleQuery.Select:
             kwargs = {dim.name: SimpleQuery.Select for dim in self.datasetType.dimensions.required}
@@ -367,9 +365,25 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # We always constrain (never retrieve) the dataset type in at least the
         # tags/calibs table.
         kwargs["dataset_type_id"] = self._dataset_type_id
-        # Join in the tags or calibs table, turning those 'kwargs' entries into
-        # WHERE constraints or SELECT columns as appropriate.
-        if collection_types == {CollectionType.CALIBRATION}:
+        # Join in the tags and/or calibs tables, turning those 'kwargs' entries
+        # into WHERE constraints or SELECT columns as appropriate.
+        if collection_types != {CollectionType.CALIBRATION}:
+            # We'll need a subquery for the tags table if any of the given
+            # collections are not a CALIBRATION collection.  This intentionally
+            # also fires when the list of collections is empty as a way to
+            # create a dummy subquery that we know will fail.
+            tags_query = SimpleQuery()
+            tags_query.join(self._tags, **kwargs)
+            self._finish_single_select(
+                tags_query, self._tags, collections, id=id, run=run, ingestDate=ingestDate
+            )
+        else:
+            tags_query = None
+        if CollectionType.CALIBRATION in collection_types:
+            # If at least one collection is a CALIBRATION collection, we'll
+            # need a subquery for the calibs table, and could include the
+            # timespan as a result or constraint.
+            calibs_query = SimpleQuery()
             assert (
                 self._calibs is not None
             ), "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
@@ -379,23 +393,42 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             if timespan is SimpleQuery.Select:
                 kwargs.update({k: SimpleQuery.Select for k in TimespanReprClass.getFieldNames()})
             elif timespan is not None:
-                query.where.append(
+                calibs_query.where.append(
                     TimespanReprClass.fromSelectable(self._calibs).overlaps(
                         TimespanReprClass.fromLiteral(timespan)
                     )
                 )
-            query.join(self._calibs, **kwargs)
-            dataset_id_col = self._calibs.columns.dataset_id
-            collection_col = self._calibs.columns[self._collections.getCollectionForeignKeyName()]
-        elif CollectionType.CALIBRATION not in collection_types:
-            query.join(self._tags, **kwargs)
-            dataset_id_col = self._tags.columns.dataset_id
-            collection_col = self._tags.columns[self._collections.getCollectionForeignKeyName()]
-        else:
-            raise TypeError(
-                "Cannot query for CALIBRATION collections in the same "
-                "subquery as other kinds of collections."
+            calibs_query.join(self._calibs, **kwargs)
+            self._finish_single_select(
+                calibs_query, self._calibs, collections, id=id, run=run, ingestDate=ingestDate
             )
+        else:
+            calibs_query = None
+        if calibs_query is not None:
+            if tags_query is not None:
+                if timespan is not None:
+                    raise TypeError(
+                        "Cannot query for timespan when the collections include both calibration and "
+                        "non-calibration collections."
+                    )
+                return tags_query.combine().union(calibs_query.combine())
+            else:
+                return calibs_query.combine()
+        else:
+            assert tags_query is not None, "Earlier logic should guaranteed at least one is not None."
+            return tags_query.combine()
+
+    def _finish_single_select(
+        self,
+        query: SimpleQuery,
+        table: sqlalchemy.schema.Table,
+        collections: Sequence[CollectionRecord],
+        id: SimpleQuery.Select.Or[Optional[int]],
+        run: SimpleQuery.Select.Or[None],
+        ingestDate: SimpleQuery.Select.Or[Optional[Timespan]],
+    ) -> None:
+        dataset_id_col = table.columns.dataset_id
+        collection_col = table.columns[self._collections.getCollectionForeignKeyName()]
         # We always constrain (never retrieve) the collection(s) in the
         # tags/calibs table.
         if len(collections) == 1:
@@ -405,8 +438,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # generate a valid SQL query that can't yield results.  This should
             # never get executed, but lots of downstream code will still try
             # to access the SQLAlchemy objects representing the columns in the
-            # subquery.  That's not idea, but it'd take a lot of refactoring to
-            # fix it.
+            # subquery.  That's not ideal, but it'd take a lot of refactoring
+            # to fix it (DM-31725).
             query.where.append(sqlalchemy.sql.literal(False))
         else:
             query.where.append(collection_col.in_([collection.key for collection in collections]))
@@ -464,7 +497,6 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # that that's a good idea IFF it's in the foreign key, and right
             # now it isn't.
             query.where.append(self._static.dataset.columns.dataset_type_id == self._dataset_type_id)
-        return query
 
     def getDataId(self, id: DatasetId) -> DataCoordinate:
         """Return DataId for a dataset.
