@@ -23,7 +23,7 @@
 
 from __future__ import annotations
 
-__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError", "DatastoreRecordData")
+__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
 
 import contextlib
 import dataclasses
@@ -61,8 +61,8 @@ if TYPE_CHECKING:
     from ..registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
     from .configSupport import LookupKey
     from .datasets import DatasetRef, DatasetType
+    from .datastoreRecordData import DatastoreRecordData
     from .storageClass import StorageClass
-    from .storedFileInfo import StoredDatastoreItemInfo
 
 
 class DatastoreConfig(ConfigSubset):
@@ -77,23 +77,6 @@ class DatastoreValidationError(ValidationError):
     """There is a problem with the Datastore configuration."""
 
     pass
-
-
-@dataclasses.dataclass
-class DatastoreRecordData:
-    """A struct that represents a tabular data export from a single
-    datastore.
-    """
-
-    refs: List[DatasetIdRef] = dataclasses.field(default_factory=list)
-    """List of DatasetRefs known to this datastore.
-    """
-
-    records: Dict[str, List[StoredDatastoreItemInfo]] = dataclasses.field(
-        default_factory=lambda: defaultdict(list)
-    )
-    """Opaque table data, grouped by opaque table name.
-    """
 
 
 @dataclasses.dataclass(frozen=True)
@@ -135,7 +118,7 @@ class DatastoreTransaction:
 
     Event: ClassVar[Type] = Event
 
-    parent: Optional["DatastoreTransaction"]
+    parent: Optional[DatastoreTransaction]
     """The parent transaction. (`DatastoreTransaction`, optional)"""
 
     def __init__(self, parent: Optional[DatastoreTransaction] = None):

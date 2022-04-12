@@ -36,7 +36,6 @@ from lsst.daf.butler import (
     RegistryConfig,
     StorageClass,
 )
-from lsst.daf.butler.core.json import from_json_generic, to_json_generic
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -273,24 +272,19 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         for ref in self.output_refs:
             qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
 
-        orig_prov = qbb.extract_provenance_data()
-        for use_json in (False, True):
-            if use_json:
-                prov_json = to_json_generic(orig_prov)
-                provenance = from_json_generic(QuantumProvenanceData, prov_json)
-            else:
-                prov_dict = orig_prov.to_simple()
-                provenance = QuantumProvenanceData.from_simple(prov_dict)
+        provenance = qbb.extract_provenance_data()
+        prov_json = provenance.json()
+        provenance = QuantumProvenanceData.parse_raw(prov_json)
 
-            input_ids = set(ref.id for ref in self.input_refs)
-            self.assertEqual(provenance.predicted_inputs, input_ids)
-            self.assertEqual(provenance.available_inputs, input_ids)
-            self.assertEqual(provenance.actual_inputs, input_ids)
-            output_ids = set(ref.id for ref in self.output_refs)
-            self.assertEqual(provenance.predicted_outputs, output_ids)
-            self.assertEqual(provenance.actual_outputs, output_ids)
-            self.assertEqual(provenance.actual_outputs, output_ids)
-            self.assertEqual(provenance.locations, {"FileDatastore@<butlerRoot>/datastore": output_ids})
+        input_ids = set(ref.id for ref in self.input_refs)
+        self.assertEqual(provenance.predicted_inputs, input_ids)
+        self.assertEqual(provenance.available_inputs, input_ids)
+        self.assertEqual(provenance.actual_inputs, input_ids)
+        output_ids = set(ref.id for ref in self.output_refs)
+        self.assertEqual(provenance.predicted_outputs, output_ids)
+        self.assertEqual(provenance.actual_outputs, output_ids)
+        self.assertEqual(provenance.actual_outputs, output_ids)
+        self.assertEqual(provenance.locations, {"FileDatastore@<butlerRoot>/datastore": output_ids})
 
     def test_collect_and_transfer(self):
         """Test for collect_and_transfer method"""

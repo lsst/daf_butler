@@ -21,23 +21,68 @@
 
 from __future__ import annotations
 
-__all__ = ("StoredFileInfo", "StoredDatastoreItemInfo")
+__all__ = ("SerializedStoredDatastoreItemInfo", "StoredFileInfo", "StoredDatastoreItemInfo")
 
+import functools
 import inspect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type
 
 from lsst.resources import ResourcePath
+from lsst.utils import doImportType
+from lsst.utils.introspection import get_full_type_name
+from pydantic import BaseModel
 
 from .formatter import Formatter, FormatterParameter
 from .location import Location, LocationFactory
 from .storageClass import StorageClass, StorageClassFactory
 
 if TYPE_CHECKING:
+    from ..registry import Registry
     from .datasets import DatasetId, DatasetRef
+    from .dimensions import DimensionUniverse
 
 # String to use when a Python None is encountered
 NULLSTR = "__NULL_STRING__"
+
+
+class SerializedStoredDatastoreItemInfo(BaseModel):
+    """Representation of `StoredDatastoreItemInfo` used for serialization.
+
+    Note that this class supports polymorphism by storing actual class name of
+    the items together with all other data members. It depends on a correct
+    implementation of ``to_record`` and ``from_record`` methods in each
+    sub-class.
+    """
+
+    class_name: str
+    """Actual fully-qualified name of the item class."""
+
+    record: Dict[str, Any]
+    """Values of all record attributes."""
+
+    @classmethod
+    def direct(
+        cls,
+        *,
+        class_name: str,
+        record: Dict[str, Any],
+    ) -> SerializedStoredDatastoreItemInfo:
+        """Construct a `SerializedStoredDatastoreItemInfo` directly without
+        validators.
+
+        This differs from the pydantic "construct" method in that the
+        arguments are explicitly what the model requires, and it will recurse
+        through members, constructing them from their corresponding `direct`
+        methods.
+
+        This method should only be called when the inputs are trusted.
+        """
+        data = SerializedStoredDatastoreItemInfo.__new__(cls)
+        setter = object.__setattr__
+        setter(data, "class_name", class_name)
+        setter(data, "record", record)
+        return data
 
 
 class StoredDatastoreItemInfo:
@@ -88,6 +133,59 @@ class StoredDatastoreItemInfo:
     def dataset_id(self) -> DatasetId:
         """Dataset ID associated with this record (`DatasetId`)"""
         raise NotImplementedError()
+
+    def to_simple(self, minimal: bool = False) -> SerializedStoredDatastoreItemInfo:
+        """Make representation of the object for serialization.
+
+        Implements `~lsst.daf.butler.core.json.SupportsSimple` protocol.
+
+        Parameters
+        ----------
+        minimal : `bool`, optional
+            If True produce minimal representation, not used by this method.
+
+        Returns
+        -------
+        simple : `dict`
+            Representation of this instance as a simple dictionary.
+        """
+        class_name = get_full_type_name(self)
+        record = self.to_record()
+        return SerializedStoredDatastoreItemInfo(class_name=class_name, record=record)
+
+    @classmethod
+    def from_simple(
+        cls,
+        simple: SerializedStoredDatastoreItemInfo,
+        universe: Optional[DimensionUniverse] = None,
+        registry: Optional[Registry] = None,
+    ) -> StoredDatastoreItemInfo:
+        """Make an instance of this class from serialized data.
+
+        Implements `~lsst.daf.butler.core.json.SupportsSimple` protocol.
+
+        Parameters
+        ----------
+        data : `dict`
+            Serialized representation returned from `to_simple` method.
+        universe : `DimensionUniverse`, optional
+            Dimension universe, not used by this method.
+        registry : `Registry`, optional
+            Registry instance, not used by this method.
+
+        Returns
+        -------
+        item_info : `StoredDatastoreItemInfo`
+            De-serialized instance of `StoredDatastoreItemInfo`.
+        """
+
+        @functools.lru_cache(maxsize=None)
+        def _get_class(class_name: str) -> Type:
+            """Get class type for a given class name"""
+            return doImportType(class_name)
+
+        subclass = _get_class(simple.class_name)
+        return subclass.from_record(simple.record)
 
 
 @dataclass(frozen=True)

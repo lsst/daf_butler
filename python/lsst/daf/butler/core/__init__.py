@@ -13,6 +13,7 @@ from .constraints import *
 from .datasets import *
 from .datastore import *
 from .datastoreCacheManager import *
+from .datastoreRecordData import *
 from .dimensions import *
 from .exceptions import *
 from .fileDataset import *
