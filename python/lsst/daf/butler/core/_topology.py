@@ -367,7 +367,7 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
         raise NotImplementedError()
 
     @abstractmethod
-    def flatten(self, name: Optional[str]) -> Iterator[sqlalchemy.sql.ColumnElement]:
+    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
         """Return the actual column(s) that comprise this logical column.
 
         Parameters
@@ -487,6 +487,8 @@ class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentatio
         # Docstring inherited
         return self.column.is_(None)
 
-    def flatten(self, name: Optional[str]) -> Iterator[sqlalchemy.sql.ColumnElement]:
+    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
         # Docstring inherited
-        yield self.column
+        if name is None:
+            name = self.name
+        yield self.column.label(name)
