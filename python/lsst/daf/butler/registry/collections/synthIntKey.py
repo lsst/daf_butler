@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Type
 import sqlalchemy
 
 from ...core import TimespanDatabaseRepresentation, ddl
+from ...core.named import NamedValueAbstractSet, NameMappingSetView
 from ..interfaces import CollectionRecord, VersionTuple
 from ._base import (
     CollectionTablesTuple,
@@ -165,6 +166,11 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
                 ddl.ForeignKeySpec("run", source=(copy.name,), target=(original.name,), onDelete=onDelete)
             )
         return copy
+
+    @property
+    def records(self) -> NamedValueAbstractSet[CollectionRecord]:
+        # Docstring inherited.
+        return NameMappingSetView(self._nameCache)
 
     def _setRecordCache(self, records: Iterable[CollectionRecord]) -> None:
         """Set internal record cache to contain given records,

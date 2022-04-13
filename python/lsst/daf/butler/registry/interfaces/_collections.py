@@ -32,7 +32,9 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, DefaultDict, Iterator, Optional, Set, Tuple
 
 from ...core import DimensionUniverse, Timespan, ddl
+from ...core.named import NamedValueAbstractSet
 from .._collectionType import CollectionType
+from .._exceptions import MissingCollectionError
 from ..wildcards import CollectionSearch
 from ._versioning import VersionedExtension
 
@@ -512,7 +514,6 @@ class CollectionManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def find(self, name: str) -> CollectionRecord:
         """Return the collection record associated with the given name.
 
@@ -539,7 +540,10 @@ class CollectionManager(VersionedExtension):
         Collections registered by another client of the same layer since the
         last call to `initialize` or `refresh` may not be found.
         """
-        raise NotImplementedError()
+        try:
+            return self.records[name]
+        except KeyError:
+            raise MissingCollectionError(f"No collection with name '{name}' found.") from None
 
     @abstractmethod
     def __getitem__(self, key: Any) -> CollectionRecord:
@@ -571,7 +575,6 @@ class CollectionManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def __iter__(self) -> Iterator[CollectionRecord]:
         """Iterate over all collections.
 
@@ -580,7 +583,7 @@ class CollectionManager(VersionedExtension):
         record : `CollectionRecord`
             The record for a managed collection.
         """
-        raise NotImplementedError()
+        return iter(self.records)
 
     @abstractmethod
     def getDocumentation(self, key: Any) -> Optional[str]:
@@ -624,3 +627,14 @@ class CollectionManager(VersionedExtension):
             result = self[parent_key]
             assert isinstance(result, ChainedCollectionRecord)
             yield result
+
+    @property
+    @abstractmethod
+    def records(self) -> NamedValueAbstractSet[CollectionRecord]:
+        """A set-like view of all collection records (`NamedValueAbstractSet`).
+
+        This is not guaranteed to be backed by an in-memory collection; SQL
+        operations may be used as part of the implementation of various set
+        operations.
+        """
+        raise NotImplementedError()
