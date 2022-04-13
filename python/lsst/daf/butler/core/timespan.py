@@ -631,13 +631,14 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
 
     @classmethod
     @abstractmethod
-    def fromLiteral(cls: Type[_S], timespan: Timespan) -> _S:
+    def fromLiteral(cls: Type[_S], timespan: Optional[Timespan]) -> _S:
         """Construct a database timespan from a literal `Timespan` instance.
 
         Parameters
         ----------
-        timespan : `Timespan`
-            Literal timespan to convert.
+        timespan : `Timespan` or `None`
+            Literal timespan to convert, or `None` to make logically ``NULL``
+            timespan.
 
         Returns
         -------
@@ -911,8 +912,10 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return cls(nsec=(selectable.columns[f"{name}_begin"], selectable.columns[f"{name}_end"]), name=name)
 
     @classmethod
-    def fromLiteral(cls, timespan: Timespan) -> _CompoundTimespanDatabaseRepresentation:
+    def fromLiteral(cls, timespan: Optional[Timespan]) -> _CompoundTimespanDatabaseRepresentation:
         # Docstring inherited.
+        if timespan is None:
+            return cls(nsec=(sqlalchemy.sql.null(), sqlalchemy.sql.null()), name=cls.NAME)
         return cls(
             nsec=(sqlalchemy.sql.literal(timespan._nsec[0]), sqlalchemy.sql.literal(timespan._nsec[1])),
             name=cls.NAME,
