@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Optional, Type
 import sqlalchemy
 
 from ...core import TimespanDatabaseRepresentation, ddl
+from ...core.named import NamedValueAbstractSet, NameMappingSetView
 from ..interfaces import VersionTuple
 from ._base import (
     CollectionTablesTuple,
@@ -141,6 +142,11 @@ class NameKeyCollectionManager(DefaultCollectionManager):
                 ddl.ForeignKeySpec("run", source=(copy.name,), target=(original.name,), onDelete=onDelete)
             )
         return copy
+
+    @property
+    def records(self) -> NamedValueAbstractSet[CollectionRecord]:
+        # Docstring inherited.
+        return NameMappingSetView(self._records)
 
     def _getByName(self, name: str) -> Optional[CollectionRecord]:
         # Docstring inherited from DefaultCollectionManager.
