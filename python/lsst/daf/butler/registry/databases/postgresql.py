@@ -369,8 +369,10 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         return mapping[name]
 
     @classmethod
-    def fromLiteral(cls, timespan: Timespan) -> _RangeTimespanRepresentation:
+    def fromLiteral(cls, timespan: Optional[Timespan]) -> _RangeTimespanRepresentation:
         # Docstring inherited.
+        if timespan is None:
+            return cls(column=sqlalchemy.sql.null(), name=cls.NAME)
         return cls(
             column=sqlalchemy.sql.literal(timespan, type_=_RangeTimespanType),
             name=cls.NAME,
