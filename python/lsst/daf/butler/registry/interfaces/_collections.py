@@ -56,6 +56,14 @@ class CollectionRecord:
         Name of the collection.
     type : `CollectionType`
         Enumeration value describing the type of the collection.
+
+    Notes
+    -----
+    The `name`, `key`, and `type` attributes set by the base class should be
+    considered immutable by all users and derived classes (as these are used
+    in the definition of equality and this is a hashable type).  Other
+    attributes defined by subclasses may be mutable, as long as they do not
+    participate in some subclass equality definition.
     """
 
     def __init__(self, key: Any, name: str, type: CollectionType):
@@ -76,6 +84,21 @@ class CollectionRecord:
     """Enumeration value describing the type of the collection
     (`CollectionType`).
     """
+
+    def __eq__(self, other: Any) -> bool:
+        try:
+            return self.name == other.name and self.type == other.type and self.key == other.key
+        except AttributeError:
+            return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+    def __repr__(self) -> str:
+        return f"CollectionRecord(key={self.key!r}, name={self.name!r}, type={self.type!r})"
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class RunRecord(CollectionRecord):
@@ -119,6 +142,9 @@ class RunRecord(CollectionRecord):
         bounds.
         """
         raise NotImplementedError()
+
+    def __repr__(self) -> str:
+        return f"RunRecord(key={self.key!r}, name={self.name!r})"
 
 
 class ChainedCollectionRecord(CollectionRecord):
@@ -255,6 +281,9 @@ class ChainedCollectionRecord(CollectionRecord):
             collection.  Guaranteed not to contain cycles.
         """
         raise NotImplementedError()
+
+    def __repr__(self) -> str:
+        return f"ChainedCollectionRecord(key={self.key!r}, name={self.name!r}, children={self.children!r})"
 
 
 class CollectionManager(VersionedExtension):
