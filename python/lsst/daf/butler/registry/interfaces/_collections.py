@@ -190,13 +190,13 @@ class ChainedCollectionRecord(CollectionRecord):
             Raised when the child collections contain a cycle.
         """
         for record in children.iter(
-            manager, flattenChains=True, includeChains=True, collectionTypes={CollectionType.CHAINED}
+            manager.records, flattenChains=True, includeChains=True, collectionTypes={CollectionType.CHAINED}
         ):
             if record == self:
                 raise ValueError(f"Cycle in collection chaining when defining '{self.name}'.")
         if flatten:
             children = CollectionSearch.fromExpression(
-                tuple(record.name for record in children.iter(manager, flattenChains=True))
+                tuple(record.name for record in children.iter(manager.records, flattenChains=True))
             )
         # Delegate to derived classes to do the database updates.
         self._update(manager, children)

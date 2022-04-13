@@ -261,7 +261,7 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
         # Docstring inherited from ChainedCollectionRecord.
         rows = []
         position = itertools.count()
-        for child in children.iter(manager, flattenChains=False):
+        for child in children.iter(manager.records, flattenChains=False):
             rows.append(
                 {
                     "parent": self.key,

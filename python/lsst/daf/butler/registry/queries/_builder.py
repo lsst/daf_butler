@@ -189,7 +189,9 @@ class QueryBuilder:
             return False
         collectionRecords: List[CollectionRecord] = []
         rejections: List[str] = []
-        for collectionRecord in collections.iter(self._managers.collections, collectionTypes=collectionTypes):
+        for collectionRecord in collections.iter(
+            self._managers.collections.records, collectionTypes=collectionTypes
+        ):
             # Only include collections that (according to collection summaries)
             # might have datasets of this type and governor dimensions
             # consistent with the query's WHERE clause.

@@ -438,7 +438,7 @@ class SqlRegistry(Registry):
             collections = self.defaults.collections
         else:
             collections = CollectionSearch.fromExpression(collections)
-        for collectionRecord in collections.iter(self._managers.collections):
+        for collectionRecord in collections.iter(self._managers.collections.records):
             if collectionRecord.type is CollectionType.CALIBRATION and (
                 not storage.datasetType.isCalibration() or timespan is None
             ):
@@ -828,7 +828,7 @@ class SqlRegistry(Registry):
             raise CollectionExpressionError(f"Invalid collection expression '{expression}'") from exc
         collectionTypes = ensure_iterable(collectionTypes)
         for record in query.iter(
-            self._managers.collections,
+            self._managers.collections.records,
             collectionTypes=frozenset(collectionTypes),
             flattenChains=flattenChains,
             includeChains=includeChains,
@@ -1117,7 +1117,7 @@ class SqlRegistry(Registry):
         else:
             storage = self._managers.datasets[datasetType.name]
         for collectionRecord in collections.iter(
-            self._managers.collections,
+            self._managers.collections.records,
             collectionTypes=frozenset(collectionTypes),
             flattenChains=flattenChains,
         ):

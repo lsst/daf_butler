@@ -57,7 +57,7 @@ from pydantic import BaseModel
 from ..core import DatasetType
 from ..core.utils import globToRegex
 from ._collectionType import CollectionType
-from ._exceptions import DatasetTypeExpressionError, DatasetTypeError
+from ._exceptions import DatasetTypeError, DatasetTypeExpressionError, MissingCollectionError
 
 if TYPE_CHECKING:
     # Workaround for `...` not having an exposed type in Python, borrowed from
@@ -72,7 +72,7 @@ if TYPE_CHECKING:
     # Sphinx, and probably more confusing than helpful overall.
     from enum import Enum
 
-    from .interfaces import CollectionManager, CollectionRecord
+    from .interfaces import CollectionRecord
 
     class EllipsisType(Enum):
         Ellipsis = "..."
@@ -337,7 +337,7 @@ class CategorizedWildcard:
 
 
 def _yieldCollectionRecords(
-    manager: CollectionManager,
+    all_records: NamedValueAbstractSet[CollectionRecord],
     record: CollectionRecord,
     collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
     done: Optional[Set[str]] = None,
@@ -350,7 +350,7 @@ def _yieldCollectionRecords(
 
     Parameters
     ----------
-    manager : `CollectionManager`
+    all_records : `NamedValueAbstractSet[CollectionRecord]`
         Object responsible for managing the collection tables in a `Registry`.
     record : `CollectionRecord`
         Record to conditionally yield.
@@ -385,7 +385,7 @@ def _yieldCollectionRecords(
         # We know this is a ChainedCollectionRecord because of the enum value,
         # but MyPy doesn't.
         yield from record.children.iter(  # type: ignore
-            manager,
+            all_records,
             collectionTypes=collectionTypes,
             done=done,
             flattenChains=flattenChains,
@@ -468,7 +468,7 @@ class CollectionSearch(BaseModel, Sequence[str]):
 
     def iter(
         self,
-        manager: CollectionManager,
+        all_records: NamedValueAbstractSet[CollectionRecord],
         *,
         datasetType: Optional[DatasetType] = None,
         collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
@@ -485,7 +485,7 @@ class CollectionSearch(BaseModel, Sequence[str]):
 
         Parameters
         ----------
-        manager : `CollectionManager`
+        all_records : `NamedValueAbstractSet[CollectionRecord]`
             Object responsible for managing the collection tables in a
             `Registry`.
         collectionTypes : `AbstractSet` [ `CollectionType` ], optional
@@ -509,14 +509,24 @@ class CollectionSearch(BaseModel, Sequence[str]):
         ------
         record : `CollectionRecord`
             Matching collection records.
+
+        Raises
+        ------
+        MissingCollectionError
+            Raised if the given collection does not exist.
+
         """
         if done is None:
             done = set()
         for name in self:
             if name not in done:
+                try:
+                    record = all_records[name]
+                except KeyError:
+                    raise MissingCollectionError(f"No collection with name '{name}' found.") from None
                 yield from _yieldCollectionRecords(
-                    manager,
-                    manager.find(name),
+                    all_records,
+                    record,
                     collectionTypes=collectionTypes,
                     done=done,
                     flattenChains=flattenChains,
@@ -635,7 +645,7 @@ class CollectionQuery:
 
     def iter(
         self,
-        manager: CollectionManager,
+        all_records: NamedValueAbstractSet[CollectionRecord],
         *,
         collectionTypes: AbstractSet[CollectionType] = CollectionType.all(),
         flattenChains: bool = True,
@@ -650,7 +660,7 @@ class CollectionQuery:
 
         Parameters
         ----------
-        manager : `CollectionManager`
+        all_records : `NamedValueAbstractSet[CollectionRecord]`
             Object responsible for managing the collection tables in a
             `Registry`.
         collectionTypes : `AbstractSet` [ `CollectionType` ], optional
@@ -670,9 +680,9 @@ class CollectionQuery:
             Matching collection records.
         """
         if self._search is Ellipsis:
-            for record in manager:
+            for record in all_records:
                 yield from _yieldCollectionRecords(
-                    manager,
+                    all_records,
                     record,
                     collectionTypes=collectionTypes,
                     flattenChains=flattenChains,
@@ -681,16 +691,16 @@ class CollectionQuery:
         else:
             done: Set[str] = set()
             yield from self._search.iter(
-                manager,
+                all_records,
                 collectionTypes=collectionTypes,
                 done=done,
                 flattenChains=flattenChains,
                 includeChains=includeChains,
             )
-            for record in manager:
+            for record in all_records:
                 if record.name not in done and any(p.fullmatch(record.name) for p in self._patterns):
                     yield from _yieldCollectionRecords(
-                        manager,
+                        all_records,
                         record,
                         collectionTypes=collectionTypes,
                         done=done,
