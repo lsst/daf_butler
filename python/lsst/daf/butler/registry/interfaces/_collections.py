@@ -56,6 +56,14 @@ class CollectionRecord:
         Name of the collection.
     type : `CollectionType`
         Enumeration value describing the type of the collection.
+
+    Notes
+    -----
+    The `name`, `key`, and `type` attributes set by the base class should be
+    considered immutable by all users and derived classes (as these are used
+    in the definition of equality and this is a hashable type).  Other
+    attributes defined by subclasses may be mutable, as long as they do not
+    participate in some subclass equality definition.
     """
 
     def __init__(self, key: Any, name: str, type: CollectionType):
@@ -76,6 +84,15 @@ class CollectionRecord:
     """Enumeration value describing the type of the collection
     (`CollectionType`).
     """
+
+    def __eq__(self, other: Any) -> bool:
+        try:
+            return self.name == other.name and self.type == other.type and self.key == other.key
+        except AttributeError:
+            return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self.name)
 
 
 class RunRecord(CollectionRecord):
