@@ -327,6 +327,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # Docstring inherited from DatasetRecordStorage.
         collection_types = {collection.type for collection in collections}
         assert CollectionType.CHAINED not in collection_types, "CHAINED collections must be flattened."
+        TimespanReprClass = self._db.getTimespanRepresentation()
         #
         # There are two kinds of table in play here:
         #
@@ -374,6 +375,14 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # create a dummy subquery that we know will fail.
             tags_query = SimpleQuery()
             tags_query.join(self._tags, **kwargs)
+            # If the timespan is requested or contrained, simulate a
+            # potentially compound column whose values are always null.
+            if timespan is SimpleQuery.Select:
+                tags_query.columns.extend(TimespanReprClass.fromLiteral(None).flatten())
+            elif timespan is not None:
+                tags_query.where.append(
+                    TimespanReprClass.fromLiteral(None).overlaps(TimespanReprClass.fromLiteral(timespan))
+                )
             self._finish_single_select(
                 tags_query, self._tags, collections, id=id, run=run, ingestDate=ingestDate
             )
@@ -387,18 +396,17 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             assert (
                 self._calibs is not None
             ), "DatasetTypes with isCalibration() == False can never be found in a CALIBRATION collection."
-            TimespanReprClass = self._db.getTimespanRepresentation()
+            calibs_query.join(self._calibs, **kwargs)
             # Add the timespan column(s) to the result columns, or constrain
             # the timespan via an overlap condition.
             if timespan is SimpleQuery.Select:
-                kwargs.update({k: SimpleQuery.Select for k in TimespanReprClass.getFieldNames()})
+                calibs_query.columns.extend(TimespanReprClass.fromSelectable(self._calibs).flatten())
             elif timespan is not None:
                 calibs_query.where.append(
                     TimespanReprClass.fromSelectable(self._calibs).overlaps(
                         TimespanReprClass.fromLiteral(timespan)
                     )
                 )
-            calibs_query.join(self._calibs, **kwargs)
             self._finish_single_select(
                 calibs_query, self._calibs, collections, id=id, run=run, ingestDate=ingestDate
             )
@@ -406,11 +414,6 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             calibs_query = None
         if calibs_query is not None:
             if tags_query is not None:
-                if timespan is not None:
-                    raise TypeError(
-                        "Cannot query for timespan when the collections include both calibration and "
-                        "non-calibration collections."
-                    )
                 return tags_query.combine().union(calibs_query.combine())
             else:
                 return calibs_query.combine()

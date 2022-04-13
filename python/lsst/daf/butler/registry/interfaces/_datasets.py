@@ -353,10 +353,12 @@ class DatasetRecordStorage(ABC):
         timespan : `None`, `Select`, or `Timespan`
             If `Select` (default), include the validity range timespan in the
             result columns.  If a `Timespan` instance, constrain the results to
-            those whose validity ranges overlap that given timespan.  Ignored
-            for collection types other than `~CollectionType.CALIBRATION``,
-            but `None` should be passed explicitly if a mix of
-            `~CollectionType.CALIBRATION` and other types are passed in.
+            those whose validity ranges overlap that given timespan.  For
+            collections whose type is not `~CollectionType.CALIBRATION`, if
+            `Select` is passed a column with a literal ``NULL`` value will be
+            added, and ``sqlalchemy.sql.expressions.Null` may be passed to
+            force a constraint that the value be null (since `None` is
+            interpreted as meaning "do not select or constrain this column").
         ingestDate : `None`, `Select`, or `Timespan`
             If `Select` include the ingest timestamp in the result columns.
             If a `Timespan` instance, constrain the results to those whose
