@@ -409,27 +409,18 @@ class QueryBuilder:
         #     {dst}_window.rownum = 1;
         #
         # We'll start with the Common Table Expression (CTE) at the top.
-        subqueries = []
-        for rank, collection_record in enumerate(collections):
-            ssq = storage.select(
-                collection_record,
-                dataId=SimpleQuery.Select,
-                id=SimpleQuery.Select,
-                run=SimpleQuery.Select,
-                ingestDate=SimpleQuery.Select,
-                timespan=None,
-            )
-            subqueries.append(ssq.add_columns(sqlalchemy.sql.literal(rank).label("rank")))
-        # Although one would expect that these subqueries can be UNION ALL
-        # instead of UNION because each subquery is already distinct, it turns
-        # out that with many subqueries this causes catastrophic performance
-        # problems with both sqlite and postgres.  Using UNION may require more
-        # table scans, but a much simpler query plan given our table
-        # structures.  See DM-31429.
-        search = sqlalchemy.sql.union(*subqueries).cte(f"{storage.datasetType.name}_search")
-        # Now we fill out the SELECT the CTE, and the subquery it contains (at
-        # the same time, since they have the same columns, aside from the OVER
-        # clause).
+        search = storage.select(
+            *collections,
+            dataId=SimpleQuery.Select,
+            id=SimpleQuery.Select,
+            run=SimpleQuery.Select,
+            ingestDate=SimpleQuery.Select,
+            timespan=None,
+            rank=SimpleQuery.Select,
+        ).cte(f"{storage.datasetType.name}_search")
+        # Now we fill out the SELECT from the CTE, and the subquery it contains
+        # (at the same time, since they have the same columns, aside from the
+        # OVER clause).
         run_key_name = self._managers.collections.getRunForeignKeyName()
         window_data_id_cols = [
             search.columns[name].label(name) for name in storage.datasetType.dimensions.required.names
