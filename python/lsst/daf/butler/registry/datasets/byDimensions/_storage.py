@@ -345,6 +345,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
         timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
         ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
+        rank: SimpleQuery.Select.Or[None] = None,
     ) -> sqlalchemy.sql.Selectable:
         # Docstring inherited from DatasetRecordStorage.
         collection_types = {collection.type for collection in collections}
@@ -405,7 +406,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             if timespan is SimpleQuery.Select:
                 tags_query.columns.extend(TimespanReprClass.fromLiteral(Timespan(None, None)).flatten())
             self._finish_single_select(
-                tags_query, self._tags, collections, id=id, run=run, ingestDate=ingestDate
+                tags_query,
+                self._tags,
+                collections,
+                id=id,
+                run=run,
+                ingestDate=ingestDate,
+                rank=rank,
             )
         else:
             tags_query = None
@@ -429,7 +436,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                     )
                 )
             self._finish_single_select(
-                calibs_query, self._calibs, collections, id=id, run=run, ingestDate=ingestDate
+                calibs_query,
+                self._calibs,
+                collections,
+                id=id,
+                run=run,
+                ingestDate=ingestDate,
+                rank=rank,
             )
         else:
             calibs_query = None
@@ -450,6 +463,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         id: SimpleQuery.Select.Or[Optional[int]],
         run: SimpleQuery.Select.Or[None],
         ingestDate: SimpleQuery.Select.Or[Optional[Timespan]],
+        rank: SimpleQuery.Select.Or[None],
     ) -> None:
         dataset_id_col = table.columns.dataset_id
         collection_col = table.columns[self._collections.getCollectionForeignKeyName()]
@@ -467,6 +481,16 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             query.where.append(sqlalchemy.sql.literal(False))
         else:
             query.where.append(collection_col.in_([collection.key for collection in collections]))
+        # Add rank if requested as a CASE-based calculation the collection
+        # column.
+        if rank is not None:
+            assert rank is SimpleQuery.Select, "Cannot constraint rank, only select it."
+            query.columns.append(
+                sqlalchemy.sql.case(
+                    {record.key: n for n, record in enumerate(collections)},
+                    value=collection_col,
+                ).label("rank")
+            )
         # We can always get the dataset_id from the tags/calibs table or
         # constrain it there.  Can't use kwargs for that because we need to
         # alias it to 'id'.
