@@ -321,6 +321,7 @@ class DatasetRecordStorage(ABC):
         run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
         timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
         ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
+        rank: SimpleQuery.Select.Or[None] = None,
     ) -> sqlalchemy.sql.Selectable:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
         this `DatasetType`.
@@ -365,6 +366,10 @@ class DatasetRecordStorage(ABC):
             ingest times which are inside given timespan and also include
             timestamp in the result columns. If `None` (default) then there is
             no constraint and timestamp is not returned.
+        rank : `Select` or `None`
+            If `Select`, include a calculated column that is the integer rank
+            of the row's collection in the given list of collections, starting
+            from zero.
 
         Returns
         -------
