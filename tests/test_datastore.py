@@ -25,7 +25,6 @@ import tempfile
 import time
 import unittest
 from dataclasses import dataclass
-from itertools import chain
 
 import lsst.utils.tests
 import yaml
@@ -808,8 +807,8 @@ class DatastoreTests(DatastoreTestsBase):
             # In a ChainedDatastore each FileDatastore will have a complete set
             for datastore_name in records:
                 record_data = records[datastore_name]
-                self.assertEqual(len(record_data.refs), n_refs)
-                self.assertEqual(len(list(chain(*record_data.records.values()))), n_refs)
+                self.assertEqual(len(record_data.dataset_ids), n_refs)
+                self.assertEqual(len(record_data.records), n_refs)
 
         # Use the same datastore name to import relative path.
         datastore2 = self.makeDatastore("test_datastore")

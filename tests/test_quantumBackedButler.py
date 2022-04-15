@@ -248,43 +248,32 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
 
         provenance = qbb.extract_provenance_data()
-        input_ids = set(ref.id for ref in self.input_refs)
-        self.assertEqual(provenance.predicted_inputs, input_ids)
-        self.assertEqual(provenance.available_inputs, input_ids)
-        self.assertEqual(provenance.actual_inputs, input_ids)
-        output_ids = set(ref.id for ref in self.output_refs)
-        self.assertEqual(provenance.predicted_outputs, output_ids)
-        self.assertEqual(provenance.actual_outputs, output_ids)
-        self.assertEqual(provenance.actual_outputs, output_ids)
-        self.assertEqual(provenance.locations, {"FileDatastore@<butlerRoot>/datastore": output_ids})
+        for i in range(2):
+            if i == 1:
+                # round trip to JSON format
+                provenance = qbb.extract_provenance_data()
+                prov_json = provenance.json()
+                provenance = QuantumProvenanceData.parse_raw(prov_json)
 
-    def test_provenance_serialize(self):
-        """Test for serialization of provenance data"""
-
-        quantum = self.make_quantum()
-        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
-
-        # read/store everything
-        for ref in self.input_refs:
-            qbb.getDirect(ref)
-        for ref in self.init_inputs_refs:
-            qbb.getDirect(ref)
-        for ref in self.output_refs:
-            qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
-
-        provenance = qbb.extract_provenance_data()
-        prov_json = provenance.json()
-        provenance = QuantumProvenanceData.parse_raw(prov_json)
-
-        input_ids = set(ref.id for ref in self.input_refs)
-        self.assertEqual(provenance.predicted_inputs, input_ids)
-        self.assertEqual(provenance.available_inputs, input_ids)
-        self.assertEqual(provenance.actual_inputs, input_ids)
-        output_ids = set(ref.id for ref in self.output_refs)
-        self.assertEqual(provenance.predicted_outputs, output_ids)
-        self.assertEqual(provenance.actual_outputs, output_ids)
-        self.assertEqual(provenance.actual_outputs, output_ids)
-        self.assertEqual(provenance.locations, {"FileDatastore@<butlerRoot>/datastore": output_ids})
+            input_ids = set(ref.id for ref in self.input_refs)
+            self.assertEqual(provenance.predicted_inputs, input_ids)
+            self.assertEqual(provenance.available_inputs, input_ids)
+            self.assertEqual(provenance.actual_inputs, input_ids)
+            output_ids = set(ref.id for ref in self.output_refs)
+            self.assertEqual(provenance.predicted_outputs, output_ids)
+            self.assertEqual(provenance.actual_outputs, output_ids)
+            datastore_name = "FileDatastore@<butlerRoot>/datastore"
+            self.assertEqual(set(provenance.datastore_records.keys()), {datastore_name})
+            datastore_records = provenance.datastore_records[datastore_name]
+            self.assertEqual(set(datastore_records.dataset_ids), output_ids)
+            class_name = "lsst.daf.butler.core.storedFileInfo.StoredFileInfo"
+            table_name = "file_datastore_records"
+            self.assertEqual(set(datastore_records.records.keys()), {class_name})
+            self.assertEqual(set(datastore_records.records[class_name].keys()), {table_name})
+            self.assertEqual(
+                set(record["dataset_id"] for record in datastore_records.records[class_name][table_name]),
+                output_ids,
+            )
 
     def test_collect_and_transfer(self):
         """Test for collect_and_transfer method"""

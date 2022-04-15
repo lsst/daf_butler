@@ -42,9 +42,8 @@ from .core import (
     DatastoreRecordData,
     DimensionUniverse,
     Quantum,
-    SerializedStoredDatastoreItemInfo,
+    SerializedDatastoreRecordData,
     StorageClassFactory,
-    StoredDatastoreItemInfo,
     ddl,
 )
 from .registry.bridge.monolithic import MonolithicDatastoreRegistryBridgeManager
@@ -337,12 +336,9 @@ class QuantumBackedButler(LimitedButler):
                 self._predicted_inputs - checked_inputs,
             )
         datastore_records = self.datastore.export_records(self._actual_output_refs)
-        locations: Dict[str, Set[DatasetId]] = defaultdict(set)
-        records: Dict[str, List[SerializedStoredDatastoreItemInfo]] = defaultdict(list)
-        for datastore_name, record_data in datastore_records.items():
-            locations[datastore_name].update(ref.getCheckedId() for ref in record_data.refs)
-            for table_name, table_records in record_data.records.items():
-                records[table_name].extend([record.to_simple() for record in table_records])
+        provenance_records = {
+            datastore_name: records.to_simple() for datastore_name, records in datastore_records.items()
+        }
 
         return QuantumProvenanceData(
             predicted_inputs=self._predicted_inputs,
@@ -350,8 +346,7 @@ class QuantumBackedButler(LimitedButler):
             actual_inputs=self._actual_inputs,
             predicted_outputs=self._predicted_outputs,
             actual_outputs={ref.getCheckedId() for ref in self._actual_output_refs},
-            locations=locations,
-            records=records,
+            datastore_records=provenance_records,
         )
 
 
@@ -412,15 +407,8 @@ class QuantumProvenanceData(BaseModel):
     was executed.
     """
 
-    locations: Dict[str, Set[uuid.UUID]]
-    """Mapping from datastore name to the set of `actual_output` dataset IDs
-    written by this quantum.
-    """
-
-    records: Dict[str, List[SerializedStoredDatastoreItemInfo]]
-    """Rows from the opaque tables used by datastores for the `actual_output`
-    datasets written by this quantum, indexed by opaque table name.
-    """
+    datastore_records: Dict[str, SerializedDatastoreRecordData]
+    """Datastore records indexed by datastore name."""
 
     @staticmethod
     def collect_and_transfer(
@@ -458,7 +446,7 @@ class QuantumProvenanceData(BaseModel):
         ignored.
         """
         grouped_refs = defaultdict(list)
-        datastore_records: Dict[str, DatastoreRecordData] = defaultdict(DatastoreRecordData)
+        summary_records: Dict[str, DatastoreRecordData] = {}
         for quantum, provenance_for_quantum in zip(quanta, provenance):
             quantum_refs_by_id = {
                 ref.getCheckedId(): ref
@@ -467,14 +455,15 @@ class QuantumProvenanceData(BaseModel):
             }
             for ref in quantum_refs_by_id.values():
                 grouped_refs[ref.datasetType, ref.run].append(ref)
-            for datastore_name in set(butler.datastore.names) & provenance_for_quantum.locations.keys():
-                datastore_records[datastore_name].refs.extend(
-                    quantum_refs_by_id[id] for id in provenance_for_quantum.locations[datastore_name]
-                )
-            for opaque_table_name, records_for_table in provenance_for_quantum.records.items():
-                datastore_records[datastore_name].records[opaque_table_name].extend(
-                    StoredDatastoreItemInfo.from_simple(record) for record in records_for_table
-                )
+
+            # merge datastore records into a summary structure
+            for datastore_name, serialized_records in provenance_for_quantum.datastore_records.items():
+                quantum_records = DatastoreRecordData.from_simple(serialized_records)
+                if (records := summary_records.get(datastore_name)) is not None:
+                    records.update(quantum_records)
+                else:
+                    summary_records[datastore_name] = quantum_records
+
         for refs in grouped_refs.values():
             butler.registry._importDatasets(refs)
-        butler.datastore.import_records(datastore_records)
+        butler.datastore.import_records(summary_records)

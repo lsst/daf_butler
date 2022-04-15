@@ -28,32 +28,68 @@ __all__ = ("DatastoreRecordData", "SerializedDatastoreRecordData")
 import dataclasses
 import uuid
 from collections import defaultdict
-from typing import TYPE_CHECKING, AbstractSet, Dict, List, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any, Dict, List, Optional, Set
 
-from pydantic import BaseModel
+from lsst.utils import doImportType
+from lsst.utils.introspection import get_full_type_name
+from pydantic import BaseModel, validator
 
 from .datasets import DatasetId
 from .dimensions import DimensionUniverse
-from .storedFileInfo import SerializedStoredDatastoreItemInfo, StoredDatastoreItemInfo
+from .storedFileInfo import StoredDatastoreItemInfo
 
 if TYPE_CHECKING:
 
     from ..registry import Registry
-    from ..registry.interfaces import DatasetIdRef
+
+_Record = Dict[str, Any]
+
+
+def _str_to_uuid(dataset_id: Any) -> uuid.UUID:
+    """Convert dataset_id from string back to UUID, e.g. after JSON
+    round-trip.
+    """
+    if isinstance(dataset_id, str):
+        return uuid.UUID(dataset_id)
+    else:
+        assert isinstance(dataset_id, uuid.UUID), "Expecting UUIDs"
+        return dataset_id
 
 
 class SerializedDatastoreRecordData(BaseModel):
     """Representation of a `DatastoreRecordData` suitable for serialization."""
 
-    ref_ids: List[uuid.UUID]
-    records: Dict[str, List[SerializedStoredDatastoreItemInfo]]
+    dataset_ids: List[uuid.UUID]
+    """List of dataset IDs"""
+
+    records: Dict[str, Dict[str, List[_Record]]]
+    """List of records indexed by record class name and table name."""
+
+    @validator("dataset_ids")
+    def dataset_ids_to_uuid(cls: Any, ids: List[Any]) -> List[uuid.UUID]:  # noqa: N805
+        """Convert string dataset IDs to UUIDs"""
+        return [_str_to_uuid(id) for id in ids]
+
+    @validator("records")
+    def record_ids_to_uuid(
+        cls: Any, records: Dict[str, Dict[str, List[_Record]]]  # noqa: N805
+    ) -> Dict[str, Dict[str, List[_Record]]]:
+        """Convert string dataset IDs to UUIDs"""
+        for table_data in records.values():
+            for table_records in table_data.values():
+                for record in table_records:
+                    # This only checks dataset_id value, if there are any other
+                    # columns that are UUIDs we'd need more generic approach.
+                    if (dataset_id := record.get("dataset_id")) is not None:
+                        record["dataset_id"] = _str_to_uuid(dataset_id)
+        return records
 
     @classmethod
     def direct(
         cls,
         *,
-        ref_ids: List[uuid.UUID],
-        records: Dict[str, List[Dict]],
+        dataset_ids: List[uuid.UUID],
+        records: Dict[str, Dict[str, List[_Record]]],
     ) -> SerializedDatastoreRecordData:
         """Construct a `SerializedDatastoreRecordData` directly without
         validators.
@@ -67,12 +103,14 @@ class SerializedDatastoreRecordData(BaseModel):
         """
         data = SerializedDatastoreRecordData.__new__(cls)
         setter = object.__setattr__
-        setter(data, "ref_ids", ref_ids)
-        setter(
-            data,
-            "records",
-            {k: [SerializedStoredDatastoreItemInfo.direct(**item) for item in v] for k, v in records.items()},
-        )
+        setter(data, "dataset_ids", [_str_to_uuid(dataset_id) for dataset_id in dataset_ids])
+        # See also comments in record_ids_to_uuid()
+        for table_data in records.values():
+            for table_records in table_data.values():
+                for record in table_records:
+                    if (dataset_id := record.get("dataset_id")) is not None:
+                        record["dataset_id"] = _str_to_uuid(dataset_id)
+        setter(data, "records", records)
         return data
 
 
@@ -82,15 +120,29 @@ class DatastoreRecordData:
     datastore.
     """
 
-    refs: List["DatasetIdRef"] = dataclasses.field(default_factory=list)
-    """List of DatasetRefs known to this datastore.
+    dataset_ids: Set[DatasetId] = dataclasses.field(default_factory=set)
+    """List of DatasetIds known to this datastore.
     """
 
-    records: Dict[str, List[StoredDatastoreItemInfo]] = dataclasses.field(
-        default_factory=lambda: defaultdict(list)
+    records: Dict[DatasetId, Dict[str, List[StoredDatastoreItemInfo]]] = dataclasses.field(
+        default_factory=lambda: defaultdict(lambda: defaultdict(list))
     )
-    """Opaque table data, grouped by opaque table name.
-    """
+    """Opaque table data, indexed by dataset ID and grouped by opaque table
+    name."""
+
+    def update(self, other: DatastoreRecordData) -> None:
+        """Update contents of this instance with data from another instance.
+
+        Parameters
+        ----------
+        other : `DatastoreRecordData`
+            Records tho merge into this instance.
+        """
+        self.dataset_ids.update(other.dataset_ids)
+        for dataset_id, table_records in other.records.items():
+            this_table_records = self.records.setdefault(dataset_id, {})
+            for table_name, records in table_records.items():
+                this_table_records.setdefault(table_name, []).extend(records)
 
     def subset(self, dataset_ids: AbstractSet[DatasetId]) -> Optional[DatastoreRecordData]:
         """Extract a subset of the records that match given dataset IDs.
@@ -105,14 +157,13 @@ class DatastoreRecordData:
         record_data : `DatastoreRecordData` or `None`
             `None` is returned if there are no matching refs.
         """
-        matching_refs = [ref for ref in self.refs if ref.id in dataset_ids]
-        records: Dict[str, List[StoredDatastoreItemInfo]] = {}
-        for table_name, record_data in self.records.items():
-            matching_records = [record for record in record_data if record.dataset_id in dataset_ids]
-            if matching_records:
-                records[table_name] = matching_records
-        if matching_refs or matching_records:
-            return DatastoreRecordData(refs=matching_refs, records=records)
+        matching_ids = self.dataset_ids & dataset_ids
+        matching_records: Dict[DatasetId, Dict[str, List[StoredDatastoreItemInfo]]] = {}
+        for dataset_id in matching_ids:
+            if (id_records := self.records.get(dataset_id)) is not None:
+                matching_records[dataset_id] = id_records
+        if matching_ids or matching_records:
+            return DatastoreRecordData(dataset_ids=matching_ids, records=matching_records)
         else:
             return None
 
@@ -131,12 +182,24 @@ class DatastoreRecordData:
         simple : `dict`
             Representation of this instance as a simple dictionary.
         """
-        ref_ids = [ref.id for ref in self.refs]
-        record_data = {
-            table_name: [record.to_simple() for record in records]
-            for table_name, records in self.records.items()
-        }
-        return SerializedDatastoreRecordData(ref_ids=ref_ids, records=record_data)
+
+        def _class_name(records: list[StoredDatastoreItemInfo]) -> str:
+            """Get fully qualified class name for the records. Empty string
+            returned if list is empty. Exception is raised if records are of
+            different classes.
+            """
+            if not records:
+                return ""
+            classes = set(record.__class__ for record in records)
+            assert len(classes) == 1, f"Records have to be of the same class: {classes}"
+            return get_full_type_name(classes.pop())
+
+        records: Dict[str, Dict[str, List[_Record]]] = defaultdict(lambda: defaultdict(list))
+        for table_data in self.records.values():
+            for table_name, table_records in table_data.items():
+                class_name = _class_name(table_records)
+                records[class_name][table_name].extend([record.to_record() for record in table_records])
+        return SerializedDatastoreRecordData(dataset_ids=list(self.dataset_ids), records=records)
 
     @classmethod
     def from_simple(
@@ -163,12 +226,13 @@ class DatastoreRecordData:
         item_info : `StoredDatastoreItemInfo`
             De-serialized instance of `StoredDatastoreItemInfo`.
         """
-        # this causes dependency cycle if imported at top level
-        from ..registry.interfaces import FakeDatasetRef
-
-        refs: List[DatasetIdRef] = [FakeDatasetRef(id) for id in simple.ref_ids]
-        record_data = {
-            table_name: [StoredDatastoreItemInfo.from_simple(record) for record in records]
-            for table_name, records in simple.records.items()
-        }
-        return cls(refs=refs, records=record_data)
+        records: Dict[DatasetId, Dict[str, List[StoredDatastoreItemInfo]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        for class_name, table_data in simple.records.items():
+            klass = doImportType(class_name)
+            for table_name, table_records in table_data.items():
+                for record in table_records:
+                    info = klass.from_record(record)
+                    records[info.dataset_id][table_name].append(info)
+        return cls(dataset_ids=set(simple.dataset_ids), records=records)

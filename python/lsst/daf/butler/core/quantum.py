@@ -84,7 +84,7 @@ class SerializedQuantum(BaseModel):
     inputs: Mapping[str, List[Tuple[SerializedDatasetRef, List[int]]]]
     outputs: Mapping[str, List[Tuple[SerializedDatasetRef, List[int]]]]
     dimensionRecords: Optional[Dict[int, SerializedDimensionRecord]] = None
-    datastore_records: Optional[Dict[str, SerializedDatastoreRecordData]] = None
+    datastoreRecords: Optional[Dict[str, SerializedDatastoreRecordData]] = None
 
     @classmethod
     def direct(
@@ -97,7 +97,7 @@ class SerializedQuantum(BaseModel):
         inputs: Mapping[str, List[Tuple[Dict, List[int]]]],
         outputs: Mapping[str, List[Tuple[Dict, List[int]]]],
         dimensionRecords: Optional[Dict[int, Dict]],
-        datastore_records: Optional[Dict[str, Dict]],
+        datastoreRecords: Optional[Dict[str, Dict]],
     ) -> SerializedQuantum:
         """Construct a `SerializedQuantum` directly without validators.
 
@@ -140,10 +140,10 @@ class SerializedQuantum(BaseModel):
         )
         setter(
             node,
-            "datastore_records",
-            datastore_records
-            if datastore_records is None
-            else {k: SerializedDatastoreRecordData.direct(**v) for k, v in datastore_records.items()},
+            "datastoreRecords",
+            datastoreRecords
+            if datastoreRecords is None
+            else {k: SerializedDatastoreRecordData.direct(**v) for k, v in datastoreRecords.items()},
         )
         setter(
             node,
@@ -384,7 +384,7 @@ class Quantum:
             inputs=inputs,
             outputs=outputs,
             dimensionRecords=dimensionRecords,
-            datastore_records=datastore_records,
+            datastoreRecords=datastore_records,
         )
 
     @classmethod
@@ -459,10 +459,10 @@ class Quantum:
         )
 
         datastore_records: Optional[Dict[str, DatastoreRecordData]] = None
-        if simple.datastore_records is not None:
+        if simple.datastoreRecords is not None:
             datastore_records = {
                 datastore_name: DatastoreRecordData.from_simple(record_data)
-                for datastore_name, record_data in simple.datastore_records.items()
+                for datastore_name, record_data in simple.datastoreRecords.items()
             }
 
         return Quantum(
