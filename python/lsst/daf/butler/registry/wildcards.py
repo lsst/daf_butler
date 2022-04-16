@@ -29,7 +29,6 @@ __all__ = (
     "DatasetTypeQuery",
 )
 
-import itertools
 import logging
 import re
 from collections import defaultdict
@@ -730,14 +729,14 @@ class CollectionQuery:
     def __repr__(self) -> str:
         return f"CollectionQuery({self._search!r}, {self._patterns!r})"
 
-    def union(self, *others: CollectionQuery) -> CollectionQuery:
+    def union(*args: CollectionQuery) -> CollectionQuery:
         """Return a new `CollectionQuery` that matches any collection matched
-        by the given `CollectionQuery` objects.
+        by any of the given `CollectionQuery` objects.
 
         Parameters
         ----------
         *others : `CollectionQuery`
-            Expressions to merge with ``self``.
+            Expressions to merge.
 
         Returns
         -------
@@ -746,7 +745,7 @@ class CollectionQuery:
         """
         names: Set[str] = set()
         patterns: Set[re.Pattern] = set()
-        for q in itertools.chain((self,), others):
+        for q in args:
             if q._search is Ellipsis:
                 return q
             names.update(q._search)
@@ -926,13 +925,13 @@ class DatasetTypeQuery:
                             done.add(component)
                             yield component
 
-    def union(self, *others: DatasetTypeQuery) -> DatasetTypeQuery:
+    def union(*args: DatasetTypeQuery) -> DatasetTypeQuery:
         """Return a new `DatasetTypeQuery` that matches any dataset type
         matched by the given `DatasetTypeQuery` objects.
 
         Parameters
         ----------
-        *others : `DatasetTypeQuery`
+        *args : `DatasetTypeQuery`
             Expressions to merge with ``self``.
 
         Returns
@@ -942,7 +941,7 @@ class DatasetTypeQuery:
         """
         explicit_all: defaultdict[str, set[Optional[DatasetType]]] = defaultdict(set)
         patterns: Set[re.Pattern] = set()
-        for q in itertools.chain((self,), others):
+        for q in args:
             if q._explicit is Ellipsis:
                 return q
             for name, dataset_type in q._explicit.items():
