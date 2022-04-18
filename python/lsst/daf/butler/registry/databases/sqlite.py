@@ -34,6 +34,7 @@ import sqlalchemy.dialects.sqlite
 import sqlalchemy.ext.compiler
 
 from ...core import ddl
+from ...core.named import NamedValueAbstractSet
 from ..interfaces import Database, StaticTablesContext
 
 
@@ -333,6 +334,28 @@ class SqliteDatabase(Database):
             query = query.on_conflict_do_nothing()
         with self._connection() as connection:
             return connection.execute(query, rows).rowcount
+
+    def constant_rows(
+        self,
+        fields: NamedValueAbstractSet[ddl.FieldSpec],
+        *rows: dict,
+        name: Optional[str] = None,
+    ) -> sqlalchemy.sql.FromClause:
+        # Docstring inherited.
+        # While SQLite supports VALUES, it doesn't support assigning a name
+        # to that construct or the names of its columns, and hence there's no
+        # way to actually join it into a SELECT query.  It seems the only
+        # alternative is something like:
+        #
+        #    SELECT ? AS a, ? AS b
+        #    UNION ALL
+        #    SELECT ? AS a, ? AS b
+        #
+        selects = [
+            sqlalchemy.sql.select(*[sqlalchemy.sql.literal(row[name]).label(name) for name in fields.names])
+            for row in rows
+        ]
+        return sqlalchemy.sql.union_all(*selects).alias(name)
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).

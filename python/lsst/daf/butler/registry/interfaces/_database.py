@@ -39,6 +39,7 @@ import astropy.time
 import sqlalchemy
 
 from ...core import SpatialRegionDatabaseRepresentation, TimespanDatabaseRepresentation, ddl, time_utils
+from ...core.named import NamedValueAbstractSet
 from .._exceptions import ConflictingDefinitionError
 
 _IN_SAVEPOINT_TRANSACTION = "IN_SAVEPOINT_TRANSACTION"
@@ -1723,6 +1724,65 @@ class Database(ABC):
             connection = self._engine.connect(close_with_result=True)
         # TODO: should we guard against non-SELECT queries here?
         return connection.execute(sql, *args, **kwargs)
+
+    @abstractmethod
+    def constant_rows(
+        self,
+        fields: NamedValueAbstractSet[ddl.FieldSpec],
+        *rows: dict,
+        name: Optional[str] = None,
+    ) -> sqlalchemy.sql.FromClause:
+        """Return a SQLAlchemy object that represents a small number of
+        constant-valued rows.
+
+        Parameters
+        ----------
+        fields : `NamedValueAbstractSet` [ `ddl.FieldSpec` ]
+            The columns of the rows.  Unique and foreign key constraints are
+            ignored.
+        *rows : `dict`
+            Values for the rows.
+        name : `str`, optional
+            If provided, the name of the SQL construct.  If not provided, an
+            opaque but unique identifier is generated.
+
+        Returns
+        -------
+        from_clause : `sqlalchemy.sql.FromClause`
+            SQLAlchemy object representing the given rows.  This is guaranteed
+            to be something that can be directly joined into a ``SELECT``
+            query's ``FROM`` clause, and will not involve a temporary table
+            that needs to be cleaned up later.
+
+        Notes
+        -----
+        The default implementation uses the SQL-standard ``VALUES`` construct,
+        but support for that construct is varied enough across popular RDBMSs
+        that the method is still marked abstract to force explicit opt-in via
+        delegation to `super`.
+        """
+        if name is None:
+            name = f"tmp_{uuid.uuid4().hex}"
+        return sqlalchemy.sql.values(
+            *[sqlalchemy.Column(field.name, field.getSizedColumnType()) for field in fields],
+            name=name,
+        ).data([tuple(row[name] for name in fields.names) for row in rows])
+
+    def get_constant_rows_max(self) -> int:
+        """Return the maximum number of rows that should be passed to
+        `constant_rows` for this backend.
+
+        Returns
+        -------
+        max : `int`
+            Maximum number of rows.
+
+        Notes
+        -----
+        This should reflect typical performance profiles (or a guess at these),
+        not just hard database engine limits.
+        """
+        return 100
 
     origin: int
     """An integer ID that should be used as the default for any datasets,

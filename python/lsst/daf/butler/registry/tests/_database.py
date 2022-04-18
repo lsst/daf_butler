@@ -33,7 +33,7 @@ from typing import ContextManager, Iterable, Optional, Set, Tuple
 
 import astropy.time
 import sqlalchemy
-from lsst.sphgeom import ConvexPolygon, UnitVector3d
+from lsst.sphgeom import Circle, ConvexPolygon, UnitVector3d
 
 from ...core import Timespan, ddl
 from ..interfaces import Database, DatabaseConflictError, ReadOnlyDatabaseError, SchemaAlreadyDefinedError
@@ -1077,3 +1077,42 @@ class DatabaseTests(ABC):
                 ).select_from(aTable)
                 queried = {row.lhs: (row.contains, row.less_than, row.greater_than) for row in db.query(sql)}
                 self.assertEqual(expected, queried)
+
+    def testConstantRows(self):
+        """Test Database.constant_rows."""
+        new_db = self.makeEmptyDatabase()
+        with new_db.declareStaticTables(create=True) as context:
+            static = context.addTableTuple(STATIC_TABLE_SPECS)
+        b_ids = new_db.insert(
+            static.b,
+            {"name": "b1", "value": 11},
+            {"name": "b2", "value": 12},
+            {"name": "b3", "value": 13},
+            returnIds=True,
+        )
+        values_spec = ddl.TableSpec(
+            [
+                ddl.FieldSpec(name="b", dtype=sqlalchemy.BigInteger),
+                ddl.FieldSpec(name="s", dtype=sqlalchemy.String(8)),
+                ddl.FieldSpec(name="r", dtype=ddl.Base64Region()),
+            ],
+        )
+        values_data = [
+            {"b": b_ids[0], "s": "b1", "r": None},
+            {"b": b_ids[2], "s": "b3", "r": Circle.empty()},
+        ]
+        values = new_db.constant_rows(values_spec.fields, *values_data)
+        select_values_alone = sqlalchemy.sql.select(
+            values.columns["b"], values.columns["s"], values.columns["r"]
+        )
+        self.assertCountEqual(
+            [dict(row) for row in new_db.query(select_values_alone)],
+            values_data,
+        )
+        select_values_joined = sqlalchemy.sql.select(
+            values.columns["s"].label("name"), static.b.columns["value"].label("value")
+        ).select_from(values.join(static.b, onclause=static.b.columns["id"] == values.columns["b"]))
+        self.assertCountEqual(
+            [dict(row) for row in new_db.query(select_values_joined)],
+            [{"value": 11, "name": "b1"}, {"value": 13, "name": "b3"}],
+        )
