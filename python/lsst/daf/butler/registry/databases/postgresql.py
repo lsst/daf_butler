@@ -30,6 +30,7 @@ import sqlalchemy
 import sqlalchemy.dialects.postgresql
 
 from ...core import Timespan, TimespanDatabaseRepresentation, ddl, time_utils
+from ...core.named import NamedValueAbstractSet
 from ..interfaces import Database
 from ..nameShrinker import NameShrinker
 
@@ -207,6 +208,15 @@ class PostgresqlDatabase(Database):
         query = sqlalchemy.dialects.postgresql.dml.insert(table).on_conflict_do_nothing()
         with self._connection() as connection:
             return connection.execute(query, rows).rowcount
+
+    def constant_rows(
+        self,
+        fields: NamedValueAbstractSet[ddl.FieldSpec],
+        *rows: dict,
+        name: Optional[str] = None,
+    ) -> sqlalchemy.sql.FromClause:
+        # Docstring inherited.
+        return super().constant_rows(fields, *rows, name=name)
 
 
 class _RangeTimespanType(sqlalchemy.TypeDecorator):
