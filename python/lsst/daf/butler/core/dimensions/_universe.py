@@ -165,6 +165,9 @@ class DimensionUniverse:
     def __repr__(self) -> str:
         return f"DimensionUniverse({self._version})"
 
+    def __contains__(self, name: str) -> bool:
+        return name in self._elements.names
+
     def __getitem__(self, name: str) -> DimensionElement:
         return self._elements[name]
 
