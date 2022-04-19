@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools", "lsst-versions"]
+build-backend = "setuptools.build_meta"
+
 [tool.towncrier]
     package = "lsst.daf.butler"
     package_dir = "python"
@@ -5,7 +9,6 @@
     directory = "doc/changes"
     title_format = "Butler {version} {project_date}"
     issue_format = "`{issue} <https://jira.lsstcorp.org/browse/{issue}>`_"
-
 
     [[tool.towncrier.type]]
         directory = "feature"
@@ -44,3 +47,6 @@ target-version = ["py38"]
 [tool.isort]
 profile = "black"
 line_length = 110
+
+[tool.lsst_versions]
+write_to = "python/lsst/daf/butler/version.py"

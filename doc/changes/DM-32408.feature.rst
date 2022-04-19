@@ -1,0 +1,1 @@
+Builds using ``setuptools`` now calculate versions from the Git repository, including the use of alpha releases for those associated with weekly tags.
