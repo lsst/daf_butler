@@ -27,7 +27,7 @@ import itertools
 import logging
 import uuid
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Set, Type, Union
 
 from pydantic import BaseModel
 
@@ -362,6 +362,9 @@ class QuantumProvenanceData(BaseModel):
     assumes the original `Quantum` is also available to reconstruct the
     complete provenance (e.g. by associating dataset IDs with data IDs,
     dataset types, and `~CollectionType.RUN` names.
+
+    Note that ``pydantic`` method ``parse_raw()`` is not going to work
+    correctly for this class, use `direct` method instead.
     """
 
     # This class probably should have information about its execution
@@ -467,3 +470,51 @@ class QuantumProvenanceData(BaseModel):
         for refs in grouped_refs.values():
             butler.registry._importDatasets(refs)
         butler.datastore.import_records(summary_records)
+
+    @classmethod
+    def parse_raw(cls, *args: Any, **kwargs: Any) -> QuantumProvenanceData:
+        raise NotImplementedError("parse_raw() is not usable for this class, use direct() instead.")
+
+    @classmethod
+    def direct(
+        cls,
+        *,
+        predicted_inputs: Iterable[Union[str, uuid.UUID]],
+        available_inputs: Iterable[Union[str, uuid.UUID]],
+        actual_inputs: Iterable[Union[str, uuid.UUID]],
+        predicted_outputs: Iterable[Union[str, uuid.UUID]],
+        actual_outputs: Iterable[Union[str, uuid.UUID]],
+        datastore_records: Mapping[str, Mapping],
+    ) -> QuantumProvenanceData:
+        """Construct an instance directly without validators.
+
+        This differs from the pydantic "construct" method in that the
+        arguments are explicitly what the model requires, and it will recurse
+        through members, constructing them from their corresponding `direct`
+        methods.
+
+        This method should only be called when the inputs are trusted.
+        """
+
+        def _to_uuid_set(uuids: Iterable[Union[str, uuid.UUID]]) -> Set[uuid.UUID]:
+            """Convert input UUIDs, which could be in string representation to
+            a set of `UUID` instances.
+            """
+            return set(uuid.UUID(id) if isinstance(id, str) else id for id in uuids)
+
+        data = QuantumProvenanceData.__new__(cls)
+        setter = object.__setattr__
+        setter(data, "predicted_inputs", _to_uuid_set(predicted_inputs))
+        setter(data, "available_inputs", _to_uuid_set(available_inputs))
+        setter(data, "actual_inputs", _to_uuid_set(actual_inputs))
+        setter(data, "predicted_outputs", _to_uuid_set(predicted_outputs))
+        setter(data, "actual_outputs", _to_uuid_set(actual_outputs))
+        setter(
+            data,
+            "datastore_records",
+            {
+                key: SerializedDatastoreRecordData.direct(**records)
+                for key, records in datastore_records.items()
+            },
+        )
+        return data

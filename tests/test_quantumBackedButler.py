@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import json
 import os
 import unittest
 import uuid
@@ -247,14 +248,10 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         for ref in self.output_refs:
             qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
 
-        provenance = qbb.extract_provenance_data()
-        for i in range(2):
-            if i == 1:
-                # round trip to JSON format
-                provenance = qbb.extract_provenance_data()
-                prov_json = provenance.json()
-                provenance = QuantumProvenanceData.parse_raw(prov_json)
-
+        provenance1 = qbb.extract_provenance_data()
+        prov_json = provenance1.json()
+        provenance2 = QuantumProvenanceData.direct(**json.loads(prov_json))
+        for provenance in (provenance1, provenance2):
             input_ids = set(ref.id for ref in self.input_refs)
             self.assertEqual(provenance.predicted_inputs, input_ids)
             self.assertEqual(provenance.available_inputs, input_ids)

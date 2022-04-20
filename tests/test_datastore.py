@@ -807,7 +807,6 @@ class DatastoreTests(DatastoreTestsBase):
             # In a ChainedDatastore each FileDatastore will have a complete set
             for datastore_name in records:
                 record_data = records[datastore_name]
-                self.assertEqual(len(record_data.dataset_ids), n_refs)
                 self.assertEqual(len(record_data.records), n_refs)
 
         # Use the same datastore name to import relative path.

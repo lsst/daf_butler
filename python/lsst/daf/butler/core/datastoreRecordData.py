@@ -28,11 +28,11 @@ __all__ = ("DatastoreRecordData", "SerializedDatastoreRecordData")
 import dataclasses
 import uuid
 from collections import defaultdict
-from typing import TYPE_CHECKING, AbstractSet, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, AbstractSet, Any, Dict, List, Optional, Union
 
 from lsst.utils import doImportType
 from lsst.utils.introspection import get_full_type_name
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 
 from .datasets import DatasetId
 from .dimensions import DimensionUniverse
@@ -45,17 +45,6 @@ if TYPE_CHECKING:
 _Record = Dict[str, Any]
 
 
-def _str_to_uuid(dataset_id: Any) -> uuid.UUID:
-    """Convert dataset_id from string back to UUID, e.g. after JSON
-    round-trip.
-    """
-    if isinstance(dataset_id, str):
-        return uuid.UUID(dataset_id)
-    else:
-        assert isinstance(dataset_id, uuid.UUID), "Expecting UUIDs"
-        return dataset_id
-
-
 class SerializedDatastoreRecordData(BaseModel):
     """Representation of a `DatastoreRecordData` suitable for serialization."""
 
@@ -65,30 +54,11 @@ class SerializedDatastoreRecordData(BaseModel):
     records: Dict[str, Dict[str, List[_Record]]]
     """List of records indexed by record class name and table name."""
 
-    @validator("dataset_ids")
-    def dataset_ids_to_uuid(cls: Any, ids: List[Any]) -> List[uuid.UUID]:  # noqa: N805
-        """Convert string dataset IDs to UUIDs"""
-        return [_str_to_uuid(id) for id in ids]
-
-    @validator("records")
-    def record_ids_to_uuid(
-        cls: Any, records: Dict[str, Dict[str, List[_Record]]]  # noqa: N805
-    ) -> Dict[str, Dict[str, List[_Record]]]:
-        """Convert string dataset IDs to UUIDs"""
-        for table_data in records.values():
-            for table_records in table_data.values():
-                for record in table_records:
-                    # This only checks dataset_id value, if there are any other
-                    # columns that are UUIDs we'd need more generic approach.
-                    if (dataset_id := record.get("dataset_id")) is not None:
-                        record["dataset_id"] = _str_to_uuid(dataset_id)
-        return records
-
     @classmethod
     def direct(
         cls,
         *,
-        dataset_ids: List[uuid.UUID],
+        dataset_ids: List[Union[str, uuid.UUID]],
         records: Dict[str, Dict[str, List[_Record]]],
     ) -> SerializedDatastoreRecordData:
         """Construct a `SerializedDatastoreRecordData` directly without
@@ -103,13 +73,16 @@ class SerializedDatastoreRecordData(BaseModel):
         """
         data = SerializedDatastoreRecordData.__new__(cls)
         setter = object.__setattr__
-        setter(data, "dataset_ids", [_str_to_uuid(dataset_id) for dataset_id in dataset_ids])
+        # JSON makes strings out of UUIDs, need to convert them back
+        setter(data, "dataset_ids", [uuid.UUID(id) if isinstance(id, str) else id for id in dataset_ids])
         # See also comments in record_ids_to_uuid()
         for table_data in records.values():
             for table_records in table_data.values():
                 for record in table_records:
-                    if (dataset_id := record.get("dataset_id")) is not None:
-                        record["dataset_id"] = _str_to_uuid(dataset_id)
+                    # This only checks dataset_id value, if there are any other
+                    # columns that are UUIDs we'd need more generic approach.
+                    if (id := record.get("dataset_id")) is not None:
+                        record["dataset_id"] = uuid.UUID(id) if isinstance(id, str) else id
         setter(data, "records", records)
         return data
 
@@ -120,11 +93,7 @@ class DatastoreRecordData:
     datastore.
     """
 
-    dataset_ids: Set[DatasetId] = dataclasses.field(default_factory=set)
-    """List of DatasetIds known to this datastore.
-    """
-
-    records: Dict[DatasetId, Dict[str, List[StoredDatastoreItemInfo]]] = dataclasses.field(
+    records: defaultdict[DatasetId, defaultdict[str, List[StoredDatastoreItemInfo]]] = dataclasses.field(
         default_factory=lambda: defaultdict(lambda: defaultdict(list))
     )
     """Opaque table data, indexed by dataset ID and grouped by opaque table
@@ -137,12 +106,15 @@ class DatastoreRecordData:
         ----------
         other : `DatastoreRecordData`
             Records tho merge into this instance.
+
+        Notes
+        -----
+        Merged instances can not have identical records.
         """
-        self.dataset_ids.update(other.dataset_ids)
         for dataset_id, table_records in other.records.items():
-            this_table_records = self.records.setdefault(dataset_id, {})
+            this_table_records = self.records[dataset_id]
             for table_name, records in table_records.items():
-                this_table_records.setdefault(table_name, []).extend(records)
+                this_table_records[table_name].extend(records)
 
     def subset(self, dataset_ids: AbstractSet[DatasetId]) -> Optional[DatastoreRecordData]:
         """Extract a subset of the records that match given dataset IDs.
@@ -156,14 +128,20 @@ class DatastoreRecordData:
         -------
         record_data : `DatastoreRecordData` or `None`
             `None` is returned if there are no matching refs.
+
+        Notes
+        -----
+        Records in the returned instance are shared with this instance, clients
+        should not update or extend records in the returned instance.
         """
-        matching_ids = self.dataset_ids & dataset_ids
-        matching_records: Dict[DatasetId, Dict[str, List[StoredDatastoreItemInfo]]] = {}
-        for dataset_id in matching_ids:
+        matching_records: defaultdict[
+            DatasetId, defaultdict[str, List[StoredDatastoreItemInfo]]
+        ] = defaultdict(lambda: defaultdict(list))
+        for dataset_id in dataset_ids:
             if (id_records := self.records.get(dataset_id)) is not None:
                 matching_records[dataset_id] = id_records
-        if matching_ids or matching_records:
-            return DatastoreRecordData(dataset_ids=matching_ids, records=matching_records)
+        if matching_records:
+            return DatastoreRecordData(records=matching_records)
         else:
             return None
 
@@ -194,12 +172,12 @@ class DatastoreRecordData:
             assert len(classes) == 1, f"Records have to be of the same class: {classes}"
             return get_full_type_name(classes.pop())
 
-        records: Dict[str, Dict[str, List[_Record]]] = defaultdict(lambda: defaultdict(list))
+        records: defaultdict[str, defaultdict[str, List[_Record]]] = defaultdict(lambda: defaultdict(list))
         for table_data in self.records.values():
             for table_name, table_records in table_data.items():
                 class_name = _class_name(table_records)
                 records[class_name][table_name].extend([record.to_record() for record in table_records])
-        return SerializedDatastoreRecordData(dataset_ids=list(self.dataset_ids), records=records)
+        return SerializedDatastoreRecordData(dataset_ids=list(self.records.keys()), records=records)
 
     @classmethod
     def from_simple(
@@ -226,13 +204,17 @@ class DatastoreRecordData:
         item_info : `StoredDatastoreItemInfo`
             De-serialized instance of `StoredDatastoreItemInfo`.
         """
-        records: Dict[DatasetId, Dict[str, List[StoredDatastoreItemInfo]]] = defaultdict(
+        records: defaultdict[DatasetId, defaultdict[str, List[StoredDatastoreItemInfo]]] = defaultdict(
             lambda: defaultdict(list)
         )
+        # make sure that all dataset IDs appear in the dict even if they don't
+        # have records.
+        for dataset_id in simple.dataset_ids:
+            records[dataset_id] = defaultdict(list)
         for class_name, table_data in simple.records.items():
             klass = doImportType(class_name)
             for table_name, table_records in table_data.items():
                 for record in table_records:
                     info = klass.from_record(record)
                     records[info.dataset_id][table_name].append(info)
-        return cls(dataset_ids=set(simple.dataset_ids), records=records)
+        return cls(records=records)

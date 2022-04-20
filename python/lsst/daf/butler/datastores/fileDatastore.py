@@ -2703,12 +2703,11 @@ class FileDatastore(GenericBaseDatastore):
         if not record_data:
             return
 
-        if record_data.dataset_ids:
-            self._bridge.insert(FakeDatasetRef(dataset_id) for dataset_id in record_data.dataset_ids)
+        self._bridge.insert(FakeDatasetRef(dataset_id) for dataset_id in record_data.records.keys())
 
         # TODO: Verify that there are no unexpected table names in the dict?
         unpacked_records = []
-        for dataset_id, dataset_data in record_data.records.items():
+        for dataset_data in record_data.records.values():
             records = dataset_data.get(self._table.name)
             if records:
                 for info in records:
@@ -2721,12 +2720,12 @@ class FileDatastore(GenericBaseDatastore):
         # Docstring inherited from the base class.
         exported_refs = list(self._bridge.check(refs))
         ids = {ref.getCheckedId() for ref in exported_refs}
-        records: Dict[DatasetId, Dict[str, List[StoredDatastoreItemInfo]]] = defaultdict(
-            lambda: defaultdict(list)
+        records: defaultdict[DatasetId, defaultdict[str, List[StoredDatastoreItemInfo]]] = defaultdict(
+            lambda: defaultdict(list), {id: defaultdict(list) for id in ids}
         )
         for row in self._table.fetch(dataset_id=ids):
             info: StoredDatastoreItemInfo = StoredFileInfo.from_record(row)
             records[info.dataset_id][self._table.name].append(info)
 
-        record_data = DatastoreRecordData(dataset_ids=ids, records=records)
+        record_data = DatastoreRecordData(records=records)
         return {self.name: record_data}
