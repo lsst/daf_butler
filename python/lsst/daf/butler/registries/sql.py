@@ -77,7 +77,7 @@ from ..registry import (
 from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.queries import Query
-from ..registry.wildcards import CollectionWildcard, DatasetTypeQuery, Ellipsis
+from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
@@ -803,7 +803,7 @@ class SqlRegistry(Registry):
         missing: Optional[List[str]] = None,
     ) -> Iterator[DatasetType]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-        query = DatasetTypeQuery.from_expression(expression)
+        query = DatasetTypeWildcard.from_expression(expression)
         return query.resolve_dataset_types(
             self._managers.datasets.parent_dataset_types,
             components=components,

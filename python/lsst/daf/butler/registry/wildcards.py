@@ -26,10 +26,9 @@ __all__ = (
     "CategorizedWildcard",
     "CollectionWildcard",
     "CollectionSearch",
-    "DatasetTypeQuery",
+    "DatasetTypeWildcard",
 )
 
-import itertools
 import logging
 import re
 from collections import defaultdict
@@ -735,7 +734,7 @@ class CollectionWildcard:
         return CollectionWildcard(CollectionSearch.fromExpression(names), tuple(patterns))
 
 
-class DatasetTypeQuery:
+class DatasetTypeWildcard:
     """A validated expression that resolves to one or more dataset types.
 
     The `fromExpression` method should almost always be used to construct
@@ -765,7 +764,7 @@ class DatasetTypeQuery:
     __slots__ = ("_explicit", "_patterns")
 
     @classmethod
-    def from_expression(cls, expression: Any) -> DatasetTypeQuery:
+    def from_expression(cls, expression: Any) -> DatasetTypeWildcard:
         """Construct an instance by analyzing the given expression.
 
         Parameters
@@ -778,13 +777,13 @@ class DatasetTypeQuery:
             - a `re.Pattern` to match against dataset type names;
             - an iterable whose elements may be any of the above (any dataset
               type matching any element in the list is an overall match);
-            - an existing `DatasetTypeQuery instance;
+            - an existing `DatasetTypeWildcard instance;
             - the special ``...`` ellipsis object, which matches any dataset
               type.
 
         Returns
         -------
-        query : `DatasetTypeQuery`
+        query : `DatasetTypeWildcard`
             An instance of this class (new unless an existing instance was
             passed in).
 
@@ -815,7 +814,7 @@ class DatasetTypeQuery:
         return cls(explicit, patterns=tuple(wildcard.patterns))
 
     def __eq__(self, other: Any) -> bool:
-        if isinstance(other, DatasetTypeQuery):
+        if isinstance(other, DatasetTypeWildcard):
             return self._explicit == other._explicit and self._patterns == other._patterns
         else:
             return False
@@ -907,18 +906,18 @@ class DatasetTypeQuery:
                             done.add(component)
                             yield component
 
-    def union(*args: DatasetTypeQuery) -> DatasetTypeQuery:
-        """Return a new `DatasetTypeQuery` that matches any dataset type
-        matched by the given `DatasetTypeQuery` objects.
+    def union(*args: DatasetTypeWildcard) -> DatasetTypeWildcard:
+        """Return a new `DatasetTypeWildcard` that matches any dataset type
+        matched by the given `DatasetTypeWildcard` objects.
 
         Parameters
         ----------
-        *args : `DatasetTypeQuery`
+        *args : `DatasetTypeWildcard`
             Expressions to merge with ``self``.
 
         Returns
         -------
-        merged : `DatasetTypeQuery`
+        merged : `DatasetTypeWildcard`
             Union expression.
         """
         explicit_all: defaultdict[str, set[Optional[DatasetType]]] = defaultdict(set)
@@ -943,4 +942,4 @@ class DatasetTypeQuery:
                         f"Cannot merge dataset type expressions with different definitions for {name}: "
                         f"{rest}."
                     )
-        return DatasetTypeQuery(explicit, tuple(patterns))
+        return DatasetTypeWildcard(explicit, tuple(patterns))
