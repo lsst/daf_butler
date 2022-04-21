@@ -82,6 +82,7 @@ from lsst.utils.logging import VERBOSE, getLogger
 from lsst.utils.timer import time_this
 from sqlalchemy import BigInteger, String
 
+from ..registry.interfaces import FakeDatasetRef
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
@@ -2702,25 +2703,29 @@ class FileDatastore(GenericBaseDatastore):
         if not record_data:
             return
 
-        if record_data.refs:
-            self._bridge.insert(record_data.refs)
+        self._bridge.insert(FakeDatasetRef(dataset_id) for dataset_id in record_data.records.keys())
 
         # TODO: Verify that there are no unexpected table names in the dict?
-        records = record_data.records.get(self._table.name)
-        if records:
-            unpacked_records = []
-            for info in records:
-                assert isinstance(info, StoredFileInfo), "Expecting StoredFileInfo records"
-                unpacked_records.append(info.to_record())
+        unpacked_records = []
+        for dataset_data in record_data.records.values():
+            records = dataset_data.get(self._table.name)
+            if records:
+                for info in records:
+                    assert isinstance(info, StoredFileInfo), "Expecting StoredFileInfo records"
+                    unpacked_records.append(info.to_record())
+        if unpacked_records:
             self._table.insert(*unpacked_records)
 
     def export_records(self, refs: Iterable[DatasetIdRef]) -> Mapping[str, DatastoreRecordData]:
         # Docstring inherited from the base class.
         exported_refs = list(self._bridge.check(refs))
+        ids = {ref.getCheckedId() for ref in exported_refs}
+        records: defaultdict[DatasetId, defaultdict[str, List[StoredDatastoreItemInfo]]] = defaultdict(
+            lambda: defaultdict(list), {id: defaultdict(list) for id in ids}
+        )
+        for row in self._table.fetch(dataset_id=ids):
+            info: StoredDatastoreItemInfo = StoredFileInfo.from_record(row)
+            records[info.dataset_id][self._table.name].append(info)
 
-        id2ref = {ref.id: ref for ref in exported_refs}
-        rows = self._table.fetch(dataset_id=list(id2ref.keys()))
-        records: List[StoredDatastoreItemInfo] = [StoredFileInfo.from_record(row) for row in rows]
-
-        record_data = DatastoreRecordData(refs=exported_refs, records={self._table.name: records})
+        record_data = DatastoreRecordData(records=records)
         return {self.name: record_data}

@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("StoredFileInfo", "StoredDatastoreItemInfo")
+__all__ = ("StoredDatastoreItemInfo", "StoredFileInfo")
 
 import inspect
 from dataclasses import dataclass

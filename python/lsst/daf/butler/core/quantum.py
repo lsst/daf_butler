@@ -29,7 +29,7 @@ from lsst.utils import doImportType
 from pydantic import BaseModel
 
 from .datasets import DatasetRef, DatasetType, SerializedDatasetRef, SerializedDatasetType
-from .datastore import DatastoreRecordData
+from .datastoreRecordData import DatastoreRecordData, SerializedDatastoreRecordData
 from .dimensions import (
     DataCoordinate,
     DimensionRecord,
@@ -84,6 +84,7 @@ class SerializedQuantum(BaseModel):
     inputs: Mapping[str, List[Tuple[SerializedDatasetRef, List[int]]]]
     outputs: Mapping[str, List[Tuple[SerializedDatasetRef, List[int]]]]
     dimensionRecords: Optional[Dict[int, SerializedDimensionRecord]] = None
+    datastoreRecords: Optional[Dict[str, SerializedDatastoreRecordData]] = None
 
     @classmethod
     def direct(
@@ -96,6 +97,7 @@ class SerializedQuantum(BaseModel):
         inputs: Mapping[str, List[Tuple[Dict, List[int]]]],
         outputs: Mapping[str, List[Tuple[Dict, List[int]]]],
         dimensionRecords: Optional[Dict[int, Dict]],
+        datastoreRecords: Optional[Dict[str, Dict]],
     ) -> SerializedQuantum:
         """Construct a `SerializedQuantum` directly without validators.
 
@@ -138,6 +140,13 @@ class SerializedQuantum(BaseModel):
         )
         setter(
             node,
+            "datastoreRecords",
+            datastoreRecords
+            if datastoreRecords is None
+            else {k: SerializedDatastoreRecordData.direct(**v) for k, v in datastoreRecords.items()},
+        )
+        setter(
+            node,
             "__fields_set__",
             {
                 "taskName",
@@ -147,6 +156,7 @@ class SerializedQuantum(BaseModel):
                 "inputs",
                 "outputs",
                 "dimensionRecords",
+                "datastore_records",
             },
         )
         return node
@@ -359,6 +369,13 @@ class Quantum:
         else:
             dimensionRecords = None
 
+        datastore_records: Optional[Dict[str, SerializedDatastoreRecordData]] = None
+        if self.datastore_records is not None:
+            datastore_records = {
+                datastore_name: record_data.to_simple()
+                for datastore_name, record_data in self.datastore_records.items()
+            }
+
         return SerializedQuantum(
             taskName=self._taskName,
             dataId=self.dataId.to_simple() if self.dataId is not None else None,
@@ -367,6 +384,7 @@ class Quantum:
             inputs=inputs,
             outputs=outputs,
             dimensionRecords=dimensionRecords,
+            datastoreRecords=datastore_records,
         )
 
     @classmethod
@@ -439,8 +457,21 @@ class Quantum:
             if simple.dataId is not None
             else None
         )
+
+        datastore_records: Optional[Dict[str, DatastoreRecordData]] = None
+        if simple.datastoreRecords is not None:
+            datastore_records = {
+                datastore_name: DatastoreRecordData.from_simple(record_data)
+                for datastore_name, record_data in simple.datastoreRecords.items()
+            }
+
         return Quantum(
-            taskName=simple.taskName, dataId=dataId, initInputs=initInputs, inputs=inputs, outputs=outputs
+            taskName=simple.taskName,
+            dataId=dataId,
+            initInputs=initInputs,
+            inputs=inputs,
+            outputs=outputs,
+            datastore_records=datastore_records,
         )
 
     @property

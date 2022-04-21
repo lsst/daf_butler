@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import json
 import os
 import unittest
 import uuid
@@ -36,7 +37,6 @@ from lsst.daf.butler import (
     RegistryConfig,
     StorageClass,
 )
-from lsst.daf.butler.core.json import from_json_generic, to_json_generic
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -248,40 +248,10 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
         for ref in self.output_refs:
             qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
 
-        provenance = qbb.extract_provenance_data()
-        input_ids = set(ref.id for ref in self.input_refs)
-        self.assertEqual(provenance.predicted_inputs, input_ids)
-        self.assertEqual(provenance.available_inputs, input_ids)
-        self.assertEqual(provenance.actual_inputs, input_ids)
-        output_ids = set(ref.id for ref in self.output_refs)
-        self.assertEqual(provenance.predicted_outputs, output_ids)
-        self.assertEqual(provenance.actual_outputs, output_ids)
-        self.assertEqual(provenance.actual_outputs, output_ids)
-        self.assertEqual(provenance.locations, {"FileDatastore@<butlerRoot>/datastore": output_ids})
-
-    def test_provenance_serialize(self):
-        """Test for serialization of provenance data"""
-
-        quantum = self.make_quantum()
-        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
-
-        # read/store everything
-        for ref in self.input_refs:
-            qbb.getDirect(ref)
-        for ref in self.init_inputs_refs:
-            qbb.getDirect(ref)
-        for ref in self.output_refs:
-            qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
-
-        orig_prov = qbb.extract_provenance_data()
-        for use_json in (False, True):
-            if use_json:
-                prov_json = to_json_generic(orig_prov)
-                provenance = from_json_generic(QuantumProvenanceData, prov_json)
-            else:
-                prov_dict = orig_prov.to_simple()
-                provenance = QuantumProvenanceData.from_simple(prov_dict)
-
+        provenance1 = qbb.extract_provenance_data()
+        prov_json = provenance1.json()
+        provenance2 = QuantumProvenanceData.direct(**json.loads(prov_json))
+        for provenance in (provenance1, provenance2):
             input_ids = set(ref.id for ref in self.input_refs)
             self.assertEqual(provenance.predicted_inputs, input_ids)
             self.assertEqual(provenance.available_inputs, input_ids)
@@ -289,8 +259,18 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             output_ids = set(ref.id for ref in self.output_refs)
             self.assertEqual(provenance.predicted_outputs, output_ids)
             self.assertEqual(provenance.actual_outputs, output_ids)
-            self.assertEqual(provenance.actual_outputs, output_ids)
-            self.assertEqual(provenance.locations, {"FileDatastore@<butlerRoot>/datastore": output_ids})
+            datastore_name = "FileDatastore@<butlerRoot>/datastore"
+            self.assertEqual(set(provenance.datastore_records.keys()), {datastore_name})
+            datastore_records = provenance.datastore_records[datastore_name]
+            self.assertEqual(set(datastore_records.dataset_ids), output_ids)
+            class_name = "lsst.daf.butler.core.storedFileInfo.StoredFileInfo"
+            table_name = "file_datastore_records"
+            self.assertEqual(set(datastore_records.records.keys()), {class_name})
+            self.assertEqual(set(datastore_records.records[class_name].keys()), {table_name})
+            self.assertEqual(
+                set(record["dataset_id"] for record in datastore_records.records[class_name][table_name]),
+                output_ids,
+            )
 
     def test_collect_and_transfer(self):
         """Test for collect_and_transfer method"""
