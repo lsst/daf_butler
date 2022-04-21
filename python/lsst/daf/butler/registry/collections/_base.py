@@ -25,16 +25,17 @@ __all__ = ()
 import itertools
 from abc import abstractmethod
 from collections import namedtuple
-from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from collections.abc import Iterable, Iterator, Set
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 import sqlalchemy
+from lsst.utils.ellipsis import Ellipsis
 
 from ...core import DimensionUniverse, Timespan, TimespanDatabaseRepresentation, ddl
 from .._collectionType import CollectionType
 from .._exceptions import MissingCollectionError
 from ..interfaces import ChainedCollectionRecord, CollectionManager, CollectionRecord, RunRecord
-from ..wildcards import CollectionSearch
+from ..wildcards import CollectionWildcard
 
 if TYPE_CHECKING:
     from ..interfaces import Database, DimensionRecordStorageManager
@@ -258,11 +259,11 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
         self._table = table
         self._universe = universe
 
-    def _update(self, manager: CollectionManager, children: CollectionSearch) -> None:
+    def _update(self, manager: CollectionManager, children: tuple[str, ...]) -> None:
         # Docstring inherited from ChainedCollectionRecord.
         rows = []
         position = itertools.count()
-        for child in children.iter(manager, flattenChains=False):
+        for child in manager.resolve_wildcard(CollectionWildcard.from_names(children), flatten_chains=False):
             rows.append(
                 {
                     "parent": self.key,
@@ -274,7 +275,7 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
             self._db.delete(self._table, ["parent"], {"parent": self.key})
             self._db.insert(self._table, *rows)
 
-    def _load(self, manager: CollectionManager) -> CollectionSearch:
+    def _load(self, manager: CollectionManager) -> tuple[str, ...]:
         # Docstring inherited from ChainedCollectionRecord.
         sql = (
             sqlalchemy.sql.select(
@@ -284,9 +285,7 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
             .where(self._table.columns.parent == self.key)
             .order_by(self._table.columns.position)
         )
-        return CollectionSearch.fromExpression(
-            [manager[row._mapping[self._table.columns.child]].name for row in self._db.query(sql)]
-        )
+        return tuple(manager[row._mapping[self._table.columns.child]].name for row in self._db.query(sql))
 
 
 K = TypeVar("K")
@@ -456,8 +455,49 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         except KeyError as err:
             raise MissingCollectionError(f"Collection with key '{key}' not found.") from err
 
-    def __iter__(self) -> Iterator[CollectionRecord]:
-        yield from self._records.values()
+    def resolve_wildcard(
+        self,
+        wildcard: CollectionWildcard,
+        *,
+        collection_types: Set[CollectionType] = CollectionType.all(),
+        done: set[str] | None = None,
+        flatten_chains: bool = True,
+        include_chains: bool | None = None,
+    ) -> list[CollectionRecord]:
+        # Docstring inherited
+        if done is None:
+            done = set()
+        include_chains = include_chains if include_chains is not None else not flatten_chains
+
+        def resolve_nested(record: CollectionRecord, done: set[str]) -> Iterator[CollectionRecord]:
+            if record.name in done:
+                return
+            if record.type in collection_types:
+                done.add(record.name)
+                if record.type is not CollectionType.CHAINED or include_chains:
+                    yield record
+            if flatten_chains and record.type is CollectionType.CHAINED:
+                done.add(record.name)
+                for name in cast(ChainedCollectionRecord, record).children:
+                    # flake8 can't tell that we only delete this closure when
+                    # we're totally done with it.
+                    yield from resolve_nested(self.find(name), done)  # noqa: F821
+
+        result: list[CollectionRecord] = []
+
+        if wildcard.patterns is Ellipsis:
+            for record in self._records.values():
+                result.extend(resolve_nested(record, done))
+            del resolve_nested
+            return result
+        for name in wildcard.strings:
+            result.extend(resolve_nested(self.find(name), done))
+        if wildcard.patterns:
+            for record in self._records.values():
+                if any(p.fullmatch(record.name) for p in wildcard.patterns):
+                    result.extend(resolve_nested(record, done))
+        del resolve_nested
+        return result
 
     def getDocumentation(self, key: Any) -> str | None:
         # Docstring inherited from CollectionManager.

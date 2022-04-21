@@ -25,7 +25,7 @@ __all__ = ("RemoteRegistry",)
 
 import contextlib
 import functools
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Set, Union
 
 import httpx
 from lsst.daf.butler import __version__
@@ -429,7 +429,7 @@ class RemoteRegistry(Registry):
         collectionTypes: Union[Iterable[CollectionType], CollectionType] = CollectionType.all(),
         flattenChains: bool = False,
         includeChains: Optional[bool] = None,
-    ) -> Iterator[str]:
+    ) -> Sequence[str]:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         params: Dict[str, Any] = {"flattenChains": flattenChains}
 
@@ -451,8 +451,7 @@ class RemoteRegistry(Registry):
         response.raise_for_status()
 
         collections = response.json()
-        for c in sorted(collections):
-            yield c
+        return list(collections)
 
     def queryDatasets(  # type: ignore
         self,

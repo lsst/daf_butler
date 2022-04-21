@@ -29,12 +29,12 @@ __all__ = [
 
 from abc import abstractmethod
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Iterator, Set
 from typing import TYPE_CHECKING, Any
 
 from ...core import DimensionUniverse, Timespan, ddl
 from .._collectionType import CollectionType
-from ..wildcards import CollectionSearch
+from ..wildcards import CollectionWildcard
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -164,16 +164,16 @@ class ChainedCollectionRecord(CollectionRecord):
 
     def __init__(self, key: Any, name: str, universe: DimensionUniverse):
         super().__init__(key=key, name=name, type=CollectionType.CHAINED)
-        self._children = CollectionSearch.fromExpression([])
+        self._children: tuple[str, ...] = ()
 
     @property
-    def children(self) -> CollectionSearch:
+    def children(self) -> tuple[str, ...]:
         """The ordered search path of child collections that define this chain
-        (`CollectionSearch`).
+        (`tuple` [ `str` ]).
         """
         return self._children
 
-    def update(self, manager: CollectionManager, children: CollectionSearch, flatten: bool) -> None:
+    def update(self, manager: CollectionManager, children: tuple[str, ...], flatten: bool) -> None:
         """Redefine this chain to search the given child collections.
 
         This method should be used by all external code to set children.  It
@@ -185,7 +185,7 @@ class ChainedCollectionRecord(CollectionRecord):
         manager : `CollectionManager`
             The object that manages this records instance and all records
             instances that may appear as its children.
-        children : `CollectionSearch`
+        children : `tuple` [ `str` ]
             A collection search path that should be resolved to set the child
             collections of this chain.
         flatten : `bool`
@@ -197,14 +197,18 @@ class ChainedCollectionRecord(CollectionRecord):
         ValueError
             Raised when the child collections contain a cycle.
         """
-        for record in children.iter(
-            manager, flattenChains=True, includeChains=True, collectionTypes={CollectionType.CHAINED}
+        children_as_wildcard = CollectionWildcard.from_names(children)
+        for record in manager.resolve_wildcard(
+            children_as_wildcard,
+            flatten_chains=True,
+            include_chains=True,
+            collection_types={CollectionType.CHAINED},
         ):
             if record == self:
                 raise ValueError(f"Cycle in collection chaining when defining '{self.name}'.")
         if flatten:
-            children = CollectionSearch.fromExpression(
-                tuple(record.name for record in children.iter(manager, flattenChains=True))
+            children = tuple(
+                record.name for record in manager.resolve_wildcard(children_as_wildcard, flatten_chains=True)
             )
         # Delegate to derived classes to do the database updates.
         self._update(manager, children)
@@ -242,7 +246,7 @@ class ChainedCollectionRecord(CollectionRecord):
             manager._parents_by_child[manager.find(child).key].add(self.key)
 
     @abstractmethod
-    def _update(self, manager: CollectionManager, children: CollectionSearch) -> None:
+    def _update(self, manager: CollectionManager, children: tuple[str, ...]) -> None:
         """Protected implementation hook for `update`.
 
         This method should be implemented by subclasses to update the database
@@ -254,14 +258,14 @@ class ChainedCollectionRecord(CollectionRecord):
         manager : `CollectionManager`
             The object that manages this records instance and all records
             instances that may appear as its children.
-        children : `CollectionSearch`
+        children : `tuple` [ `str` ]
             A collection search path that should be resolved to set the child
             collections of this chain.  Guaranteed not to contain cycles.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def _load(self, manager: CollectionManager) -> CollectionSearch:
+    def _load(self, manager: CollectionManager) -> tuple[str, ...]:
         """Protected implementation hook for `refresh`.
 
         This method should be implemented by subclasses to retrieve the chain's
@@ -277,7 +281,7 @@ class ChainedCollectionRecord(CollectionRecord):
 
         Returns
         -------
-        children : `CollectionSearch`
+        children : `tuple` [ `str` ]
             The ordered sequence of collection names that defines the chained
             collection.  Guaranteed not to contain cycles.
         """
@@ -585,13 +589,41 @@ class CollectionManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def __iter__(self) -> Iterator[CollectionRecord]:
-        """Iterate over all collections.
+    def resolve_wildcard(
+        self,
+        wildcard: CollectionWildcard,
+        *,
+        collection_types: Set[CollectionType] = CollectionType.all(),
+        done: set[str] | None = None,
+        flatten_chains: bool = True,
+        include_chains: bool | None = None,
+    ) -> list[CollectionRecord]:
+        """Iterate over collection records that match a wildcard.
 
-        Yields
+        Parameters
+        ----------
+        wildcard : `CollectionWildcard`
+            Names and/or patterns for collections.
+        collection_types : `collections.abc.Set` [ `CollectionType` ], optional
+            If provided, only yield collections of these types.
+        done : `set` [ `str` ], optional
+            A `set` of collection names that will not be returned (presumably
+            because they have already been returned in some higher-level logic)
+            that will also be updated with the names of the collections
+            returned.
+        flatten_chains : `bool`, optional
+            If `True` (default) recursively yield the child collections of
+            `~CollectionType.CHAINED` collections.
+        include_chains : `bool`, optional
+            If `False`, return records for `~CollectionType.CHAINED`
+            collections themselves.  The default is the opposite of
+            ``flattenChains``: either return records for CHAINED collections or
+            their children, but not both.
+
+        Returns
         ------
-        record : `CollectionRecord`
-            The record for a managed collection.
+        records : `list` [ `CollectionRecord` ]
+            Matching collection records.
         """
         raise NotImplementedError()
 

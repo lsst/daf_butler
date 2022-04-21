@@ -258,14 +258,9 @@ class ChainedCollectionsTest(ButlerTestHelper, unittest.TestCase):
                 array(
                     (
                         ("calibration1", "CALIBRATION"),
-                        ("calibration1", "CALIBRATION"),
-                        ("calibration1", "CALIBRATION"),
                         ("imported_g", "RUN"),
                         ("imported_r", "RUN"),
                         ("run1", "RUN"),
-                        ("run1", "RUN"),
-                        ("run1", "RUN"),
-                        ("tag1", "TAGGED"),
                         ("tag1", "TAGGED"),
                     )
                 ),

@@ -35,6 +35,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Type,
@@ -68,7 +69,6 @@ from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
 from .interfaces import DatasetIdFactory, DatasetIdGenEnum
 from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
-from .wildcards import CollectionSearch
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
@@ -439,7 +439,7 @@ class Registry(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def getCollectionChain(self, parent: str) -> CollectionSearch:
+    def getCollectionChain(self, parent: str) -> Sequence[str]:
         """Return the child collections in a `~CollectionType.CHAINED`
         collection.
 
@@ -451,9 +451,9 @@ class Registry(ABC):
 
         Returns
         -------
-        children : `CollectionSearch`
-            An object that defines the search path of the collection.
-            See :ref:`daf_butler_collection_expressions` for more information.
+        children : `Sequence` [ `str` ]
+            An ordered sequence of collection names that are searched when the
+            given chained collection is searched.
 
         Raises
         ------
@@ -1238,7 +1238,7 @@ class Registry(ABC):
         collectionTypes: Union[Iterable[CollectionType], CollectionType] = CollectionType.all(),
         flattenChains: bool = False,
         includeChains: Optional[bool] = None,
-    ) -> Iterator[str]:
+    ) -> Sequence[str]:
         """Iterate over the collections whose names match an expression.
 
         Parameters
@@ -1264,10 +1264,10 @@ class Registry(ABC):
             collections.  Default is the opposite of ``flattenChains``: include
             either CHAINED collections or their children, but not both.
 
-        Yields
-        ------
-        collection : `str`
-            The name of a collection that matches ``expression``.
+        Returns
+        -------
+        collections : `Sequence` [ `str` ]
+            The names of collections that match ``expression``.
 
         Raises
         ------
