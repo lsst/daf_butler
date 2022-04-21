@@ -45,7 +45,7 @@ Arguments that specify one or more collections are similar to those for dataset 
  - iterables of any of the above;
  - the special value "``...``", which matches all collections;
 
-Collection expressions are processed by the `~registry.wildcards.CollectionQuery` class.
+Collection expressions are processed by the `~registry.wildcards.CollectionWildcard` class.
 User code will rarely need to interact with these directly, but they can be passed to `Registry` instead of the expression objects themselves, and hence may be useful as a way to transform an expression that may include single-pass iterators into an equivalent form that can be reused.
 
 Ordered collection searches

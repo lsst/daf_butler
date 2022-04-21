@@ -31,7 +31,7 @@ from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._collectionType import CollectionType
 from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, DatasetRecordStorage, GovernorDimensionRecordStorage
-from ..wildcards import CollectionQuery, CollectionSearch
+from ..wildcards import CollectionSearch, CollectionWildcard
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryManagers
 from .expressions import convertExpressionToSql
@@ -168,12 +168,12 @@ class QueryBuilder:
         if isResult and findFirst:
             collections = CollectionSearch.fromExpression(collections)
         else:
-            collections = CollectionQuery.fromExpression(collections)
+            collections = CollectionWildcard.fromExpression(collections)
         explicitCollections = frozenset(collections.explicitNames())
         # If we are searching all collections with no constraints, loop over
         # RUN collections only, because that will include all datasets.
         collectionTypes: AbstractSet[CollectionType]
-        if collections == CollectionQuery():
+        if collections == CollectionWildcard():
             collectionTypes = {CollectionType.RUN}
         else:
             collectionTypes = CollectionType.all()
