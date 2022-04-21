@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = (
     "CategorizedWildcard",
-    "CollectionQuery",
+    "CollectionWildcard",
     "CollectionSearch",
 )
 
@@ -313,7 +313,7 @@ def _yieldCollectionRecords(
     includeChains: Optional[bool] = None,
 ) -> Iterator[CollectionRecord]:
     """A helper function containing common logic for `CollectionSearch.iter`
-    and `CollectionQuery.iter`: recursively yield `CollectionRecord` only if
+    and `CollectionWildcard.iter`: recursively yield `CollectionRecord` only if
     they match the criteria given in other arguments.
 
     Parameters
@@ -379,8 +379,8 @@ class CollectionSearch(BaseModel, Sequence[str]):
     A `CollectionSearch` is used to find a single dataset (or set of datasets
     with different dataset types or data IDs) according to its dataset type and
     data ID, giving preference to collections in the order in which they are
-    specified.  A `CollectionQuery` can be constructed from a broader range of
-    expressions but does not order the collections to be searched.
+    specified.  A `CollectionWildcard` can be constructed from a broader range
+    of expressions but does not order the collections to be searched.
 
     `CollectionSearch` is an immutable sequence of `str` collection names.
 
@@ -516,7 +516,7 @@ class CollectionSearch(BaseModel, Sequence[str]):
         return f"CollectionSearch({self.__root__!r})"
 
 
-class CollectionQuery:
+class CollectionWildcard:
     """An unordered query for collections and dataset type restrictions.
 
     The `fromExpression` method should almost always be used to construct
@@ -535,10 +535,10 @@ class CollectionQuery:
 
     Notes
     -----
-    A `CollectionQuery` is used to find all matching datasets in any number
+    A `CollectionWildcard` is used to find all matching datasets in any number
     of collections, or to find collections themselves.
 
-    `CollectionQuery` is expected to be rarely used outside of `Registry`
+    `CollectionWildcard` is expected to be rarely used outside of `Registry`
     (which uses it to back several of its "query" methods that take general
     expressions for collections), but it may occassionally be useful outside
     `Registry` as a way to preprocess expressions that contain single-pass
@@ -557,8 +557,8 @@ class CollectionQuery:
     __slots__ = ("_search", "_patterns")
 
     @classmethod
-    def fromExpression(cls, expression: Any) -> CollectionQuery:
-        """Process a general expression to construct a `CollectionQuery`
+    def fromExpression(cls, expression: Any) -> CollectionWildcard:
+        """Process a general expression to construct a `CollectionWildcard`
         instance.
 
         Parameters
@@ -570,15 +570,16 @@ class CollectionQuery:
                against collection names;
              - any iterable containing any of the above;
              - a `CollectionSearch` instance;
-             - another `CollectionQuery` instance (passed through unchanged).
+             - another `CollectionWildcard` instance (passed through
+               unchanged).
 
             Duplicate collection names will be removed (preserving the first
             appearance of each collection name).
 
         Returns
         -------
-        collections : `CollectionQuery`
-            A `CollectionQuery` instance.
+        collections : `CollectionWildcard`
+            A `CollectionWildcard` instance.
         """
         if isinstance(expression, cls):
             return expression
@@ -672,7 +673,7 @@ class CollectionQuery:
             yield from self._search.explicitNames()
 
     def __eq__(self, other: Any) -> bool:
-        if isinstance(other, CollectionQuery):
+        if isinstance(other, CollectionWildcard):
             return self._search == other._search and self._patterns == other._patterns
         else:
             return False
@@ -686,20 +687,20 @@ class CollectionQuery:
             return "[{}]".format(", ".join(terms))
 
     def __repr__(self) -> str:
-        return f"CollectionQuery({self._search!r}, {self._patterns!r})"
+        return f"CollectionWildcard({self._search!r}, {self._patterns!r})"
 
-    def union(*args: CollectionQuery) -> CollectionQuery:
-        """Return a new `CollectionQuery` that matches any collection matched
-        by any of the given `CollectionQuery` objects.
+    def union(*args: CollectionWildcard) -> CollectionWildcard:
+        """Return a new `CollectionWildcard` that matches any collection
+        matched by any of the given `CollectionWildcard` objects.
 
         Parameters
         ----------
-        *others : `CollectionQuery`
+        *others : `CollectionWildcard`
             Expressions to merge.
 
         Returns
         -------
-        merged : `CollectionQuery`
+        merged : `CollectionWildcard`
             Union expression.
         """
         names: Set[str] = set()
@@ -709,4 +710,4 @@ class CollectionQuery:
                 return q
             names.update(q._search)
             patterns.update(q._patterns)
-        return CollectionQuery(CollectionSearch.fromExpression(names), tuple(patterns))
+        return CollectionWildcard(CollectionSearch.fromExpression(names), tuple(patterns))

@@ -78,7 +78,7 @@ from ..registry import (
 from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.queries import Query
-from ..registry.wildcards import CategorizedWildcard, CollectionQuery, Ellipsis
+from ..registry.wildcards import CategorizedWildcard, CollectionWildcard, Ellipsis
 
 if TYPE_CHECKING:
     from .._butlerConfig import ButlerConfig
@@ -880,7 +880,7 @@ class SqlRegistry(Registry):
         # is consistent with its [lack of] guarantees.  DM-24939 or a follow-up
         # ticket will take care of that.
         try:
-            query = CollectionQuery.fromExpression(expression)
+            query = CollectionWildcard.fromExpression(expression)
         except TypeError as exc:
             raise CollectionExpressionError(f"Invalid collection expression '{expression}'") from exc
         collectionTypes = ensure_iterable(collectionTypes)
@@ -956,7 +956,7 @@ class SqlRegistry(Registry):
         elif findFirst:
             collections = CollectionSearch.fromExpression(collections)
         else:
-            collections = CollectionQuery.fromExpression(collections)
+            collections = CollectionWildcard.fromExpression(collections)
         # Standardize and expand the data ID provided as a constraint.
         standardizedDataId = self.expandDataId(dataId, **kwargs)
 
@@ -1075,7 +1075,7 @@ class SqlRegistry(Registry):
                 # Preprocess collections expression in case the original
                 # included single-pass iterators (we'll want to use it multiple
                 # times below).
-                collections = CollectionQuery.fromExpression(collections)
+                collections = CollectionWildcard.fromExpression(collections)
             for datasetType in self.queryDatasetTypes(datasets, components=components, missing=missing):
                 # If any matched dataset type is a component, just operate on
                 # its parent instead, because Registry doesn't know anything
@@ -1167,7 +1167,7 @@ class SqlRegistry(Registry):
                 )
             collections = self.defaults.collections
         else:
-            collections = CollectionQuery.fromExpression(collections)
+            collections = CollectionWildcard.fromExpression(collections)
         TimespanReprClass = self._db.getTimespanRepresentation()
         if isinstance(datasetType, str):
             storage = self._managers.datasets[datasetType]
