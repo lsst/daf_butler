@@ -153,7 +153,7 @@ class _ParquetLoader:
             A Pandas DataFrame.
         """
         if columns is None:
-            return self.file.read(use_pandas_metadata=True).to_pandas()
+            return self.file.read(use_pandas_metadata=True, use_threads=False).to_pandas()
         elif isinstance(self.columns, pd.MultiIndex):
             assert isinstance(columns, dict) or isinstance(columns, list)
             columns = list(self._standardizeColumnParameter(columns))
@@ -161,7 +161,7 @@ class _ParquetLoader:
             for column in columns:
                 if column not in self.columns:
                     raise ValueError(f"Unrecognized column name {column!r}.")
-        return self.file.read(columns=columns, use_pandas_metadata=True).to_pandas()
+        return self.file.read(columns=columns, use_pandas_metadata=True, use_threads=False).to_pandas()
 
 
 def _writeParquet(path: str, inMemoryDataset: pd.DataFrame) -> None:
