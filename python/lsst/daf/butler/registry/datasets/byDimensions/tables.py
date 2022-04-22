@@ -64,6 +64,7 @@ def addDatasetForeignKey(
     prefix: str = "dataset",
     onDelete: Optional[str] = None,
     constraint: bool = True,
+    exact_name: Optional[str] = None,
     **kwargs: Any,
 ) -> ddl.FieldSpec:
     """Add a foreign key column for datasets and (optionally) a constraint to
@@ -90,6 +91,8 @@ def addDatasetForeignKey(
     constraint: `bool`, optional
         If `False` (`True` is default), add a field that can be joined to
         the dataset primary key, but do not add a foreign key constraint.
+    exact_name : `str`, optional
+        Complete name for the field, overriding ``prefix``.
     **kwargs
         Additional keyword arguments are forwarded to the `ddl.FieldSpec`
         constructor (only the ``name`` and ``dtype`` arguments are
@@ -100,7 +103,9 @@ def addDatasetForeignKey(
     idSpec : `ddl.FieldSpec`
         Specification for the ID field.
     """
-    idFieldSpec = ddl.FieldSpec(f"{prefix}_id", dtype=dtype, **kwargs)
+    if exact_name is None:
+        exact_name = f"{prefix}_id"
+    idFieldSpec = ddl.FieldSpec(exact_name, dtype=dtype, **kwargs)
     tableSpec.fields.add(idFieldSpec)
     if constraint:
         tableSpec.foreignKeys.append(
