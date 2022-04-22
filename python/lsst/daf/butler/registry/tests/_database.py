@@ -958,7 +958,7 @@ class DatabaseTests(ABC):
                     ),
                 )
         # Test NULL checks in SELECT queries, on both tables.
-        aRepr = TimespanReprClass.fromSelectable(aTable)
+        aRepr = TimespanReprClass.from_columns(aTable.columns)
         self.assertEqual(
             [row[TimespanReprClass.NAME] is None for row in aRows],
             [
@@ -968,7 +968,7 @@ class DatabaseTests(ABC):
                 )
             ],
         )
-        bRepr = TimespanReprClass.fromSelectable(bTable)
+        bRepr = TimespanReprClass.from_columns(bTable.columns)
         self.assertEqual(
             [False for row in bRows],
             [
@@ -1027,8 +1027,8 @@ class DatabaseTests(ABC):
                 expected[lhs["id"], rhs["id"]] = (None, None, None, None)
         lhsSubquery = aTable.alias("lhs")
         rhsSubquery = aTable.alias("rhs")
-        lhsRepr = TimespanReprClass.fromSelectable(lhsSubquery)
-        rhsRepr = TimespanReprClass.fromSelectable(rhsSubquery)
+        lhsRepr = TimespanReprClass.from_columns(lhsSubquery.columns)
+        rhsRepr = TimespanReprClass.from_columns(rhsSubquery.columns)
         sql = sqlalchemy.sql.select(
             lhsSubquery.columns.id.label("lhs"),
             rhsSubquery.columns.id.label("rhs"),

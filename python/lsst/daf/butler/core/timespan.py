@@ -903,13 +903,13 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         return Timespan(None, None, _nsec=(begin_nsec, end_nsec))
 
     @classmethod
-    def fromSelectable(
-        cls, selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
+    def from_columns(
+        cls, columns: sqlalchemy.sql.ColumnCollection, name: Optional[str] = None
     ) -> _CompoundTimespanDatabaseRepresentation:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
-        return cls(nsec=(selectable.columns[f"{name}_begin"], selectable.columns[f"{name}_end"]), name=name)
+        return cls(nsec=(columns[f"{name}_begin"], columns[f"{name}_end"]), name=name)
 
     @classmethod
     def fromLiteral(cls, timespan: Optional[Timespan]) -> _CompoundTimespanDatabaseRepresentation:

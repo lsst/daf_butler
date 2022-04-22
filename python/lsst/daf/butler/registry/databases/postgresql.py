@@ -389,13 +389,13 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         )
 
     @classmethod
-    def fromSelectable(
-        cls, selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
+    def from_columns(
+        cls, columns: sqlalchemy.sql.ColumnCollection, name: Optional[str] = None
     ) -> _RangeTimespanRepresentation:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
-        return cls(selectable.columns[name], name)
+        return cls(columns[name], name)
 
     @property
     def name(self) -> str:

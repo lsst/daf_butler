@@ -318,8 +318,8 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
 
     @classmethod
     @abstractmethod
-    def fromSelectable(
-        cls: Type[_S], selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
+    def from_columns(
+        cls: Type[_S], columns: sqlalchemy.sql.ColumnCollection, name: Optional[str] = None
     ) -> _S:
         """Construct representation of a column in the table or subquery.
 
@@ -328,8 +328,8 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
 
         Parameters
         ----------
-        selectable : `sqlalchemy.sql.FromClause`
-            SQLAlchemy object representing a table or subquery.
+        columns : `sqlalchemy.sql.ColumnCollections`
+            SQLAlchemy container for raw columns.
         name : `str`, optional
             Name for the logical column; a part of the name for multi-column
             representations.  Defaults to ``cls.NAME``.
@@ -468,15 +468,15 @@ class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentatio
         return mapping[name]
 
     @classmethod
-    def fromSelectable(
+    def from_columns(
         cls: Type[SpatialRegionDatabaseRepresentation],
-        selectable: sqlalchemy.sql.FromClause,
+        columns: sqlalchemy.sql.ColumnCollection,
         name: Optional[str] = None,
     ) -> SpatialRegionDatabaseRepresentation:
         # Docstring inherited
         if name is None:
             name = cls.NAME
-        return cls(selectable.columns[name], name)
+        return cls(columns[name], name)
 
     @property
     def name(self) -> str:
