@@ -1,0 +1,1 @@
+Parquet table reading now turns off implicit threading.
