@@ -326,6 +326,7 @@ class CollectionManager(VersionedExtension):
         prefix: str = "collection",
         onDelete: Optional[str] = None,
         constraint: bool = True,
+        exact_name: Optional[str] = None,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the collection
@@ -347,6 +348,8 @@ class CollectionManager(VersionedExtension):
             If `False` (`True` is default), add a field that can be joined to
             the collection primary key, but do not add a foreign key
             constraint.
+        exact_name : `str`, optional
+            Complete name for the field, overriding ``prefix``.
         **kwargs
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are
@@ -368,6 +371,7 @@ class CollectionManager(VersionedExtension):
         prefix: str = "run",
         onDelete: Optional[str] = None,
         constraint: bool = True,
+        exact_name: Optional[str] = None,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the run
@@ -388,6 +392,8 @@ class CollectionManager(VersionedExtension):
         constraint: `bool`, optional
             If `False` (`True` is default), add a field that can be joined to
             the run primary key, but do not add a foreign key constraint.
+        exact_name : `str`, optional
+            Complete name for the field, overriding ``prefix``.
         **kwargs
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are

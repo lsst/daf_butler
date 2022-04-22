@@ -174,6 +174,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         prefix: str = "dataset",
         constraint: bool = True,
         onDelete: Optional[str] = None,
+        exact_name: Optional[str] = None,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -183,6 +184,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             prefix=prefix,
             onDelete=onDelete,
             constraint=constraint,
+            exact_name=exact_name,
             **kwargs,
         )
 

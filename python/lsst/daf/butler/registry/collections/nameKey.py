@@ -105,13 +105,14 @@ class NameKeyCollectionManager(DefaultCollectionManager):
         prefix: str = "collection",
         onDelete: Optional[str] = None,
         constraint: bool = True,
+        exact_name: Optional[str] = None,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
         original = _KEY_FIELD_SPEC
-        copy = ddl.FieldSpec(
-            cls.getCollectionForeignKeyName(prefix), dtype=original.dtype, length=original.length, **kwargs
-        )
+        if exact_name is None:
+            exact_name = cls.getCollectionForeignKeyName(prefix)
+        copy = ddl.FieldSpec(exact_name, dtype=original.dtype, length=original.length, **kwargs)
         tableSpec.fields.add(copy)
         if constraint:
             tableSpec.foreignKeys.append(
@@ -129,13 +130,14 @@ class NameKeyCollectionManager(DefaultCollectionManager):
         prefix: str = "run",
         onDelete: Optional[str] = None,
         constraint: bool = True,
+        exact_name: Optional[str] = None,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
         original = _KEY_FIELD_SPEC
-        copy = ddl.FieldSpec(
-            cls.getRunForeignKeyName(prefix), dtype=original.dtype, length=original.length, **kwargs
-        )
+        if exact_name is None:
+            exact_name = cls.getRunForeignKeyName(prefix)
+        copy = ddl.FieldSpec(exact_name, dtype=original.dtype, length=original.length, **kwargs)
         tableSpec.fields.add(copy)
         if constraint:
             tableSpec.foreignKeys.append(
