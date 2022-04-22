@@ -61,7 +61,7 @@ def addDatasetForeignKey(
     tableSpec: ddl.TableSpec,
     dtype: type,
     *,
-    name: str = "dataset",
+    prefix: str = "dataset",
     onDelete: Optional[str] = None,
     constraint: bool = True,
     **kwargs: Any,
@@ -80,9 +80,9 @@ def addDatasetForeignKey(
     dtype: `type`
         Type of the column, same as the column type of the PK column of
         a referenced table (``dataset.id``).
-    name: `str`, optional
+    prefix: `str`, optional
         A name to use for the prefix of the new field; the full name is
-        ``{name}_id``.
+        ``{prefix}_id``.
     onDelete: `str`, optional
         One of "CASCADE" or "SET NULL", indicating what should happen to
         the referencing row if the collection row is deleted.  `None`
@@ -100,7 +100,7 @@ def addDatasetForeignKey(
     idSpec : `ddl.FieldSpec`
         Specification for the ID field.
     """
-    idFieldSpec = ddl.FieldSpec(f"{name}_id", dtype=dtype, **kwargs)
+    idFieldSpec = ddl.FieldSpec(f"{prefix}_id", dtype=dtype, **kwargs)
     tableSpec.fields.add(idFieldSpec)
     if constraint:
         tableSpec.foreignKeys.append(

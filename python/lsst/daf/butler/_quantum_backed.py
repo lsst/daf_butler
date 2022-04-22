@@ -80,13 +80,13 @@ class _DatasetRecordStorageManagerDatastoreConstructionMimic:
         cls,
         tableSpec: ddl.TableSpec,
         *,
-        name: str = "dataset",
+        prefix: str = "dataset",
         constraint: bool = True,
         onDelete: Optional[str] = None,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         # Docstring inherited.
-        idFieldSpec = ddl.FieldSpec(f"{name}_id", dtype=ddl.GUID, **kwargs)
+        idFieldSpec = ddl.FieldSpec(f"{prefix}_id", dtype=ddl.GUID, **kwargs)
         tableSpec.fields.add(idFieldSpec)
         return idFieldSpec
 

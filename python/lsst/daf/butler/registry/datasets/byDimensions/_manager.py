@@ -171,14 +171,19 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         cls,
         tableSpec: ddl.TableSpec,
         *,
-        name: str = "dataset",
+        prefix: str = "dataset",
         constraint: bool = True,
         onDelete: Optional[str] = None,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         # Docstring inherited from DatasetRecordStorageManager.
         return addDatasetForeignKey(
-            tableSpec, cls.getIdColumnType(), name=name, onDelete=onDelete, constraint=constraint, **kwargs
+            tableSpec,
+            cls.getIdColumnType(),
+            prefix=prefix,
+            onDelete=onDelete,
+            constraint=constraint,
+            **kwargs,
         )
 
     def refresh(self) -> None:

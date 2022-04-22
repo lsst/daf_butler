@@ -461,7 +461,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         cls,
         tableSpec: ddl.TableSpec,
         *,
-        name: str = "dataset",
+        prefix: str = "dataset",
         constraint: bool = True,
         onDelete: Optional[str] = None,
         **kwargs: Any,
@@ -474,9 +474,9 @@ class DatasetRecordStorageManager(VersionedExtension):
         tableSpec : `ddl.TableSpec`
             Specification for the table that should reference the dataset
             table.  Will be modified in place.
-        name: `str`, optional
+        prefix: `str`, optional
             A name to use for the prefix of the new field; the full name is
-            ``{name}_id``.
+            ``{prefix}_id``.
         onDelete: `str`, optional
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
