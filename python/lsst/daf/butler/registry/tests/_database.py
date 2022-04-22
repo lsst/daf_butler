@@ -261,8 +261,8 @@ class DatabaseTests(ABC):
 
     def testTemporaryTables(self):
         """Tests for `Database.makeTemporaryTable`,
-        `Database.dropTemporaryTable`, and `Database.insert` with
-        the ``select`` argument.
+        `Database.dropTemporaryTable`, `Session.temporary_table`, and
+        `Database.insert` with the ``select`` argument.
         """
         # Need to start with the static schema; also insert some test data.
         newDatabase = self.makeEmptyDatabase()
@@ -306,37 +306,37 @@ class DatabaseTests(ABC):
                 with existingReadOnlyDatabase.declareStaticTables(create=False) as context:
                     context.addTableTuple(STATIC_TABLE_SPECS)
                 with existingReadOnlyDatabase.session() as session2:
-                    table2 = session2.makeTemporaryTable(TEMPORARY_TABLE_SPEC)
-                    self.checkTable(TEMPORARY_TABLE_SPEC, table2)
-                    # Those tables should not be the same, despite having the
-                    # same ddl.
-                    self.assertIsNot(table1, table2)
-                    # Do a slightly different insert into this table, to check
-                    # that it works in a read-only database.  This time we
-                    # pass column names as a kwarg to insert instead of by
-                    # labeling the columns in the select.
-                    existingReadOnlyDatabase.insert(
-                        table2,
-                        select=sqlalchemy.sql.select(static.a.columns.name, static.b.columns.id)
-                        .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
-                        .where(
-                            sqlalchemy.sql.and_(
-                                static.a.columns.name == "a2",
-                                static.b.columns.value >= 12,
-                            )
-                        ),
-                        names=["a_name", "b_id"],
-                    )
-                    # Check that the inserted rows are present.
-                    self.assertCountEqual(
-                        [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
-                        [row._asdict() for row in existingReadOnlyDatabase.query(table2.select())],
-                    )
-                    # Drop the temporary table from the read-only DB.  It's
-                    # unspecified whether attempting to use it after this
-                    # point is an error or just never returns any results, so
-                    # we can't test what it does, only that it's not an error.
-                    session2.dropTemporaryTable(table2)
+                    with session2.temporary_table(TEMPORARY_TABLE_SPEC) as table2:
+                        self.checkTable(TEMPORARY_TABLE_SPEC, table2)
+                        # Those tables should not be the same, despite having
+                        # the same ddl.
+                        self.assertIsNot(table1, table2)
+                        # Do a slightly different insert into this table, to
+                        # check that it works in a read-only database.  This
+                        # time we pass column names as a kwarg to insert
+                        # instead of by labeling the columns in the select.
+                        existingReadOnlyDatabase.insert(
+                            table2,
+                            select=sqlalchemy.sql.select(static.a.columns.name, static.b.columns.id)
+                            .select_from(static.a.join(static.b, onclause=sqlalchemy.sql.literal(True)))
+                            .where(
+                                sqlalchemy.sql.and_(
+                                    static.a.columns.name == "a2",
+                                    static.b.columns.value >= 12,
+                                )
+                            ),
+                            names=["a_name", "b_id"],
+                        )
+                        # Check that the inserted rows are present.
+                        self.assertCountEqual(
+                            [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
+                            [row._asdict() for row in existingReadOnlyDatabase.query(table2.select())],
+                        )
+                        # Exiting the context manager will drop the temporary
+                        # table from the read-only DB.  It's unspecified
+                        # whether attempting to use it after this point is an
+                        # error or just never returns any results, so we can't
+                        # test what it does, only that it's not an error.
             # Drop the original temporary table.
             session.dropTemporaryTable(table1)
 
