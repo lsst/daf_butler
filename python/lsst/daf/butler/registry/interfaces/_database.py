@@ -265,6 +265,31 @@ class Session:
             raise TypeError(f"Table {table.key} was not created by makeTemporaryTable.")
 
     @contextmanager
+    def temporary_table(self, spec: ddl.TableSpec, name: Optional[str]) -> Iterator[sqlalchemy.schema.Table]:
+        """Return a context manager that creates and then drops a context
+        manager.
+
+        Parameters
+        ----------
+        spec : `ddl.TableSpec`
+            Specification for the columns.  Unique and foreign key constraints
+            may be ignored.
+        name : `str`, optional
+            If provided, the name of the SQL construct.  If not provided, an
+            opaque but unique identifier is generated.
+
+        Returns
+        -------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy representation of the table.
+        """
+        table = self.makeTemporaryTable(spec=spec, name=name)
+        try:
+            yield table
+        finally:
+            self.dropTemporaryTable(table)
+
+    @contextmanager
     def upload(
         self,
         spec: ddl.TableSpec,
@@ -304,12 +329,9 @@ class Session:
         if len(rows) < self._db.get_constant_rows_max():
             yield self._db.constant_rows(spec.fields, *rows, name=name)
         else:
-            table = self.makeTemporaryTable(spec=spec, name=name)
-            self._db.insert(table, *rows)
-            try:
+            with self.temporary_table(spec=spec, name=name) as table:
+                self._db.insert(table, *rows)
                 yield table
-            finally:
-                self.dropTemporaryTable(table)
 
 
 class Database(ABC):
@@ -1401,7 +1423,7 @@ class Database(ABC):
         table: sqlalchemy.schema.Table,
         *rows: dict,
         returnIds: bool = False,
-        select: Optional[sqlalchemy.sql.Select] = None,
+        select: Optional[sqlalchemy.sql.expression.SelectBase] = None,
         names: Optional[Iterable[str]] = None,
     ) -> Optional[List[int]]:
         """Insert one or more rows into a table, optionally returning
@@ -1414,7 +1436,7 @@ class Database(ABC):
         returnIds: `bool`
             If `True` (`False` is default), return the values of the table's
             autoincrement primary key field (which much exist).
-        select : `sqlalchemy.sql.Select`, optional
+        select : `sqlalchemy.sql.SelectBase`, optional
             A SELECT query expression to insert rows from.  Cannot be provided
             with either ``rows`` or ``returnIds=True``.
         names : `Iterable` [ `str` ], optional
