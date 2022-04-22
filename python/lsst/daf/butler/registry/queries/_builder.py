@@ -686,7 +686,7 @@ class QueryBuilder:
 
                 if order_by_column.column in ("timespan.begin", "timespan.end"):
                     TimespanReprClass = self._managers.TimespanReprClass
-                    timespan_repr = TimespanReprClass.fromSelectable(table)
+                    timespan_repr = TimespanReprClass.from_columns(table.columns)
                     if order_by_column.column == "timespan.begin":
                         column = timespan_repr.lower()
                         label = f"{order_by_column.element.name}_timespan_begin"

@@ -179,13 +179,13 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 self._skyPixOverlap.select(self.element.universe.commonSkyPix, Ellipsis),
                 dimensions,
             )
-            regionsInTable = self._db.getSpatialRegionRepresentation().fromSelectable(self._table)
+            regionsInTable = self._db.getSpatialRegionRepresentation().from_columns(self._table.columns)
             regions[self.element] = regionsInTable
         joinOn = builder.startJoin(
             self._table, self.element.dimensions, self.element.RecordClass.fields.dimensions.names
         )
         if timespans is not None:
-            timespanInTable = self._db.getTimespanRepresentation().fromSelectable(self._table)
+            timespanInTable = self._db.getTimespanRepresentation().from_columns(self._table.columns)
             for timespanInQuery in timespans.values():
                 joinOn.append(timespanInQuery.overlaps(timespanInTable))
             timespans[self.element] = timespanInTable
