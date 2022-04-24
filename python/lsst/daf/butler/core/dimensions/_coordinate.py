@@ -623,7 +623,12 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
                 return None
             else:
                 timespans.append(record.timespan)
-        return Timespan.intersection(*timespans)
+        if not timespans:
+            return None
+        elif len(timespans) == 1:
+            return timespans[0]
+        else:
+            return Timespan.intersection(*timespans)
 
     def pack(self, name: str, *, returnMaxBits: bool = False) -> Union[Tuple[int, int], int]:
         """Pack this data ID into an integer.
