@@ -33,6 +33,7 @@ __all__ = (
     "DimensionNameError",
     "InconsistentDataIdError",
     "MissingCollectionError",
+    "MissingSpatialOverlapError",
     "NoDefaultCollectionError",
     "OrphanedRecordError",
     "RegistryError",
@@ -139,4 +140,10 @@ class OrphanedRecordError(RegistryError):
 class UnsupportedIdGeneratorError(ValueError):
     """Exception raised when an unsupported `DatasetIdGenEnum` option is
     used for insert/import.
+    """
+
+
+class MissingSpatialOverlapError(RegistryError):
+    """Exception raised when a spatial overlap relationship needed by a query
+    has not been precomputed and cannot be computed on-the-fly.
     """
