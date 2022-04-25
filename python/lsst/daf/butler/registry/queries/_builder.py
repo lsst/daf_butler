@@ -22,31 +22,23 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from collections.abc import Iterable
-from typing import Any
+from typing import Any, Tuple, cast
 
 import sqlalchemy.sql
-from lsst.daf.relation import Diagnostics, Predicate
+from lsst.daf.relation import ColumnTag, Diagnostics, Predicate, Relation
 
 from ...core import (
-    DatasetColumnTag,
+    ColumnCategorization,
     DatasetType,
-    Dimension,
-    DimensionElement,
     DimensionKeyColumnTag,
     DimensionRecordColumnTag,
     SimpleQuery,
-    SkyPixDimension,
-    is_timespan_column,
 )
-from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
-from .._exceptions import DataIdValueError
-from ..interfaces import GovernorDimensionRecordStorage
 from ..wildcards import CollectionWildcard
-from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
+from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, Query
 from ._query_backend import QueryBackend
 from ._sql_query_context import SqlQueryContext
-from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
+from ._structs import QueryColumns, QuerySummary
 
 
 class QueryBuilder:
@@ -59,81 +51,27 @@ class QueryBuilder:
         Struct organizing the dimensions involved in the query.
     backend : `QueryBackend`
         Backend object that represents the `Registry` implementation.
-    doomed_by : `Iterable` [ `str` ], optional
-        A list of messages (appropriate for e.g. logging or exceptions) that
-        explain why the query is known to return no results even before it is
-        executed.  Queries with a non-empty list will never be executed.
+    context : `.queries.SqlQueryContext`
+        Object that manages relation engines and database-side state
+        (e.g. temporary tables) for the query.
+    relation : `~lsst.daf.relation.Relation`, optional
+        Initial relation for the query.
     """
 
     def __init__(
         self,
         summary: QuerySummary,
         backend: QueryBackend[SqlQueryContext],
-        doomed_by: Iterable[str] = (),
+        context: SqlQueryContext | None = None,
+        relation: Relation | None = None,
     ):
         self.summary = summary
         self._backend = backend
-        self._context = backend.context()
-        self._simpleQuery = SimpleQuery()
-        self._elements: NamedKeyDict[DimensionElement, sqlalchemy.sql.FromClause] = NamedKeyDict()
-        self._columns = QueryColumns()
-        self._doomed_by = list(doomed_by)
-
-        self._validateGovernors()
-
-    def _validateGovernors(self) -> None:
-        """Check that governor dimensions specified by query actually exist.
-
-        This helps to avoid mistakes in governor values. It also implements
-        consistent failure behavior for cases when governor dimensions are
-        specified in either DataId ow WHERE clause.
-
-        Raises
-        ------
-        DataIdValueError
-            Raised when governor dimension values are not found.
-        """
-        for dimension, bounds in self.summary.where.governor_constraints.items():
-            storage = self._backend.managers.dimensions[self._backend.universe[dimension]]
-            if isinstance(storage, GovernorDimensionRecordStorage):
-                if not (storage.values >= bounds):
-                    raise DataIdValueError(
-                        f"Unknown values specified for governor dimension {dimension}: "
-                        f"{set(bounds - storage.values)}."
-                    )
-
-    def hasDimensionKey(self, dimension: Dimension) -> bool:
-        """Return `True` if the given dimension's primary key column has
-        been included in the query (possibly via a foreign key column on some
-        other table).
-        """
-        return dimension in self._columns.keys
-
-    def joinDimensionElement(self, element: DimensionElement) -> None:
-        """Add the table for a `DimensionElement` to the query.
-
-        This automatically joins the element table to all other tables in the
-        query with which it is related, via both dimension keys and spatial
-        and temporal relationships.
-
-        External calls to this method should rarely be necessary; `finish` will
-        automatically call it if the `DimensionElement` has been identified as
-        one that must be included.
-
-        Parameters
-        ----------
-        element : `DimensionElement`
-            Element for which a table should be added.  The element must be
-            associated with a database table (see `DimensionElement.hasTable`).
-        """
-        assert element not in self._elements, "Element already included in query."
-        storage = self._backend.managers.dimensions[element]
-        fromClause = storage.join(
-            self,
-            regions=self._columns.regions if element in self.summary.spatial else None,
-            timespans=self._columns.timespans if element in self.summary.temporal else None,
+        self._context = backend.context() if context is None else context
+        self.relation = self._context.make_initial_relation(relation)
+        self._governor_constraints = self._backend.resolve_governor_constraints(
+            self.summary.dimensions, self.summary.where.governor_constraints, self._context
         )
-        self._elements[element] = fromClause
 
     def joinDataset(
         self, datasetType: DatasetType, collections: Any, *, isResult: bool = True, findFirst: bool = False
@@ -187,10 +125,10 @@ class QueryBuilder:
         collection_records = self._backend.resolve_dataset_collections(
             datasetType,
             collections,
-            governor_constraints=self.summary.where.governor_constraints,
+            governor_constraints=self._governor_constraints,
             rejections=rejections,
             allow_calibration_collections=(
-                not findFirst and not (self.summary.temporal or self.summary.mustHaveKeysJoined.temporal)
+                not findFirst and not (self.summary.temporal or self.summary.dimensions.temporal)
             ),
         )
         columns_requested = {"dataset_id", "run", "ingest_date"} if isResult else frozenset()
@@ -212,197 +150,50 @@ class QueryBuilder:
                 columns_requested,
                 self._context,
             )
-        subquery = self._context.sql_engine.to_executable(relation).subquery()
-        if isResult:
-            columns = DatasetQueryColumns(
-                datasetType=datasetType,
-                id=subquery.columns[DatasetColumnTag(datasetType.name, "dataset_id").qualified_name],
-                runKey=subquery.columns[DatasetColumnTag(datasetType.name, "run").qualified_name],
-                ingestDate=subquery.columns[DatasetColumnTag(datasetType.name, "ingest_date").qualified_name],
-            )
-        else:
-            columns = None
-        self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
-        diagnostics = Diagnostics.run(relation)
-        if diagnostics.is_doomed:
-            self._doomed_by.extend(diagnostics.messages)
-        return not self._doomed_by
+        self.relation = self.relation.join(relation)
+        return not Diagnostics.run(relation).is_doomed
 
-    def joinTable(
-        self,
-        table: sqlalchemy.sql.FromClause,
-        dimensions: NamedValueAbstractSet[Dimension],
-        *,
-        datasets: DatasetQueryColumns | None = None,
-    ) -> None:
-        """Join an arbitrary table to the query via dimension relationships.
-
-        External calls to this method should only be necessary for tables whose
-        records represent neither datasets nor dimension elements.
-
-        Parameters
-        ----------
-        table : `sqlalchemy.sql.FromClause`
-            SQLAlchemy object representing the logical table (which may be a
-            join or subquery expression) to be joined.
-        dimensions : iterable of `Dimension`
-            The dimensions that relate this table to others that may be in the
-            query.  The table must have columns with the names of the
-            dimensions.
-        datasets : `DatasetQueryColumns`, optional
-            Columns that identify a dataset that is part of the query results.
-        """
-        unexpectedDimensions = NamedValueSet(dimensions - self.summary.mustHaveKeysJoined.dimensions)
-        unexpectedDimensions.discard(self._backend.universe.commonSkyPix)
-        if unexpectedDimensions:
-            raise NotImplementedError(
-                f"QueryBuilder does not yet support joining in dimensions {unexpectedDimensions} that "
-                f"were not provided originally to the QuerySummary object passed at construction."
-            )
-        joinOn = self.startJoin(table, dimensions, dimensions.names)
-        self.finishJoin(table, joinOn)
-        if datasets is not None:
-            assert (
-                self._columns.datasets is None
-            ), "At most one result dataset type can be returned by a query."
-            self._columns.datasets = datasets
-
-    def startJoin(
-        self, table: sqlalchemy.sql.FromClause, dimensions: Iterable[Dimension], columnNames: Iterable[str]
-    ) -> list[sqlalchemy.sql.ColumnElement]:
-        """Begin a join on dimensions.
-
-        Must be followed by call to `finishJoin`.
-
-        Parameters
-        ----------
-        table : `sqlalchemy.sql.FromClause`
-            SQLAlchemy object representing the logical table (which may be a
-            join or subquery expression) to be joined.
-        dimensions : iterable of `Dimension`
-            The dimensions that relate this table to others that may be in the
-            query.  The table must have columns with the names of the
-            dimensions.
-        columnNames : iterable of `str`
-            Names of the columns that correspond to dimension key values; must
-            be `zip` iterable with ``dimensions``.
-
-        Returns
-        -------
-        joinOn : `list` of `sqlalchemy.sql.ColumnElement`
-            Sequence of boolean expressions that should be combined with AND
-            to form (part of) the ON expression for this JOIN.
-        """
-        joinOn = []
-        for dimension, columnName in zip(dimensions, columnNames):
-            columnInTable = table.columns[columnName]
-            columnsInQuery = self._columns.keys.setdefault(dimension, [])
-            for columnInQuery in columnsInQuery:
-                joinOn.append(columnInQuery == columnInTable)
-            columnsInQuery.append(columnInTable)
-        return joinOn
-
-    def finishJoin(
-        self, table: sqlalchemy.sql.FromClause, joinOn: list[sqlalchemy.sql.ColumnElement]
-    ) -> None:
-        """Complete a join on dimensions.
-
-        Must be preceded by call to `startJoin`.
-
-        Parameters
-        ----------
-        table : `sqlalchemy.sql.FromClause`
-            SQLAlchemy object representing the logical table (which may be a
-            join or subquery expression) to be joined.  Must be the same object
-            passed to `startJoin`.
-        joinOn : `list` of `sqlalchemy.sql.ColumnElement`
-            Sequence of boolean expressions that should be combined with AND
-            to form (part of) the ON expression for this JOIN.  Should include
-            at least the elements of the list returned by `startJoin`.
-        """
-        onclause: sqlalchemy.sql.ColumnElement | None
-        if len(joinOn) == 0:
-            onclause = None
-        elif len(joinOn) == 1:
-            onclause = joinOn[0]
-        else:
-            onclause = sqlalchemy.sql.and_(*joinOn)
-        self._simpleQuery.join(table, onclause=onclause)
-
-    def _joinMissingDimensionElements(self) -> None:
-        """Join all dimension element tables that were identified as necessary
-        by `QuerySummary` and have not yet been joined.
-
-        For internal use by `QueryBuilder` only; will be called (and should
-        only by called) by `finish`.
-        """
-        # Join all DimensionElement tables that we need for spatial/temporal
-        # joins/filters or a nontrivial WHERE expression.
-        # We iterate over these in *reverse* topological order to minimize the
-        # number of tables joined.  For example, the "visit" table provides
-        # the primary key value for the "instrument" table it depends on, so we
-        # don't need to join "instrument" as well unless we had a nontrivial
-        # expression on it (and hence included it already above).
-        for element in self._backend.universe.sorted(self.summary.mustHaveTableJoined, reverse=True):
-            self.joinDimensionElement(element)
-        # Join in any requested Dimension tables that don't already have their
-        # primary keys identified by the query.
-        for dimension in self._backend.universe.sorted(self.summary.mustHaveKeysJoined, reverse=True):
-            if dimension not in self._columns.keys:
-                self.joinDimensionElement(dimension)
-
-    def _addWhereClause(self) -> None:
+    def _addWhereClause(self, categorized_columns: ColumnCategorization) -> None:
         """Add a WHERE clause to the query under construction, connecting all
         joined dimensions to the expression and data ID dimensions from
         `QuerySummary`.
 
         For internal use by `QueryBuilder` only; will be called (and should
         only by called) by `finish`.
+
+        Parameters
+        ----------
+        categorized_columns : `ColumnCategorization`
+            Struct that organizes the columns in ``self.relation`` by
+            `ColumnTag` type.
         """
-        # Make a new-style column mapping to feed to predicates.  After
-        # Relation is fully integrated into query builder this will be created
-        # automatically.
-        logical_columns = self._columns.make_logical_column_mapping()
-        if self.summary.where.expression_predicate is not None:
-            # Most column types are tracked in self._columns, and handled above
-            # this block; we only need to worry about scalar dimension record
-            # fact columns referenced by the expression here.
-            for tag in self.summary.where.expression_predicate.columns_required:
-                match tag:
-                    case DimensionRecordColumnTag(element=element_name, column=column_name):
-                        table = self._elements[element_name]
-                        if not is_timespan_column(tag):
-                            logical_columns[tag] = table.columns[column_name]
-                    case _:
-                        pass
         # Append WHERE clause terms from predicates.
         predicate: Predicate = Predicate.literal(True)
         if self.summary.where.expression_predicate is not None:
             predicate = predicate.logical_and(self.summary.where.expression_predicate)
         if self.summary.where.data_id:
-            known_dimensions = self.summary.where.data_id.graph.intersection(self.summary.mustHaveKeysJoined)
+            known_dimensions = self.summary.where.data_id.graph.intersection(self.summary.dimensions)
             known_data_id = self.summary.where.data_id.subset(known_dimensions)
             predicate = predicate.logical_and(self._context.make_data_coordinate_predicate(known_data_id))
         if self.summary.where.region is not None:
-            for tag in DimensionKeyColumnTag.filter_from(logical_columns):
-                dimension = self._backend.universe[tag.dimension]
-                if tag.dimension not in self.summary.where.data_id.graph.names and isinstance(
-                    dimension, SkyPixDimension
-                ):
+            for skypix_dimension in categorized_columns.filter_skypix(self._backend.universe):
+                if skypix_dimension not in self.summary.where.data_id.graph:
                     predicate = predicate.logical_and(
                         self._context.make_spatial_region_skypix_predicate(
-                            dimension,
+                            skypix_dimension,
                             self.summary.where.region,
                         )
                     )
         if self.summary.where.timespan is not None:
-            for tag in DimensionRecordColumnTag.filter_from(logical_columns):
-                if tag.element not in self.summary.where.data_id.graph.names and tag.column == "timespan":
+            for element in categorized_columns.filter_timespan_dimension_elements():
+                if element not in self.summary.where.data_id.graph.names:
                     predicate = predicate.logical_and(
-                        self._context.make_timespan_overlap_predicate(tag, self.summary.where.timespan)
+                        self._context.make_timespan_overlap_predicate(
+                            DimensionRecordColumnTag(element, "timespan"), self.summary.where.timespan
+                        )
                     )
-        self._simpleQuery.where.extend(
-            self._context.sql_engine.convert_flattened_predicate(predicate, logical_columns)
+        self.relation = self.relation.with_rows_satisfying(
+            predicate, preferred_engine=self._context.preferred_engine, require_preferred_engine=True
         )
 
     def finish(self, joinMissing: bool = True) -> Query:
@@ -424,66 +215,55 @@ class QueryBuilder:
             A `Query` object that can be executed and used to interpret result
             rows.
         """
+        columns_required: set[ColumnTag] = set()
+        if self.summary.where.expression_predicate is not None:
+            columns_required.update(self.summary.where.expression_predicate.columns_required)
+        if self.summary.order_by is not None:
+            columns_required.update(self.summary.order_by.columns_required)
+        columns_required.update(DimensionKeyColumnTag.generate(self.summary.requested.names))
         if joinMissing:
-            self._joinMissingDimensionElements()
-        self._addWhereClause()
-        if self._columns.isEmpty():
+            self.relation = self._backend.make_dimension_relation(
+                self.summary.dimensions,
+                columns=columns_required,
+                context=self._context,
+                spatial_joins=(
+                    [cast(Tuple[str, str], tuple(self.summary.spatial.names))]
+                    if len(self.summary.spatial) == 2
+                    else []
+                ),
+                initial_relation=self.relation,
+                governor_constraints=self._governor_constraints,
+            )
+        categorized_columns = ColumnCategorization.from_iterable(columns_required)
+        self._addWhereClause(categorized_columns)
+        diagnostics = Diagnostics.run(self.relation)
+        if not self.relation.columns:
             return EmptyQuery(
                 self._backend.universe,
                 backend=self._backend,
-                doomed_by=self._doomed_by,
+                doomed_by=diagnostics.messages if diagnostics.is_doomed else [],
+            )
+        payload = self._context.sql_engine.to_payload(self.relation)
+        simple_query = SimpleQuery()
+        simple_query.join(payload.from_clause)
+        simple_query.where.extend(payload.where)
+        old_columns = QueryColumns.from_logical_columns(
+            payload.columns_available, self.summary.datasets, self._backend.managers.column_types
+        )
+        order_by: list[sqlalchemy.sql.ColumnElement] = []
+        if self.summary.order_by is not None:
+            order_by.extend(
+                self._context.sql_engine.convert_sort_term(term, payload.columns_available)
+                for term in self.summary.order_by.terms
             )
         return DirectQuery(
             graph=self.summary.requested,
             uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
             whereRegion=self.summary.where.region,
-            simpleQuery=self._simpleQuery,
-            columns=self._columns,
-            order_by_columns=self._order_by_columns(),
+            simpleQuery=simple_query,
+            columns=old_columns,
+            order_by_columns=order_by,
             limit=self.summary.limit,
             backend=self._backend,
-            doomed_by=self._doomed_by,
+            doomed_by=diagnostics.messages if diagnostics.is_doomed else [],
         )
-
-    def _order_by_columns(self) -> Iterable[OrderByColumn]:
-        """Generate columns to be used for ORDER BY clause.
-
-        Returns
-        -------
-        order_by_columns : `Iterable` [ `ColumnIterable` ]
-            Sequence of columns to appear in ORDER BY clause.
-        """
-        order_by_columns: list[OrderByColumn] = []
-        if not self.summary.order_by:
-            return order_by_columns
-
-        for order_by_column in self.summary.order_by.order_by_columns:
-
-            column: sqlalchemy.sql.ColumnElement
-            if order_by_column.column is None:
-                # dimension name, it has to be in SELECT list already, only
-                # add it to ORDER BY
-                assert isinstance(order_by_column.element, Dimension), "expecting full Dimension"
-                column = self._columns.getKeyColumn(order_by_column.element)
-            else:
-                table = self._elements[order_by_column.element]
-
-                if order_by_column.column in ("timespan.begin", "timespan.end"):
-                    TimespanReprClass = self._backend.managers.column_types.timespan_cls
-                    timespan_repr = TimespanReprClass.from_columns(table.columns)
-                    if order_by_column.column == "timespan.begin":
-                        column = timespan_repr.lower()
-                        label = f"{order_by_column.element.name}_timespan_begin"
-                    else:
-                        column = timespan_repr.upper()
-                        label = f"{order_by_column.element.name}_timespan_end"
-                else:
-                    column = table.columns[order_by_column.column]
-                    # make a unique label for it
-                    label = f"{order_by_column.element.name}_{order_by_column.column}"
-
-                column = column.label(label)
-
-            order_by_columns.append(OrderByColumn(column=column, ordering=order_by_column.ordering))
-
-        return order_by_columns

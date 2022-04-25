@@ -44,13 +44,13 @@ from typing import (
 )
 
 import sqlalchemy
+from lsst.daf.relation import LeafRelation, Relation
 from lsst.resources import ResourcePathExpression
 from lsst.utils.iteration import ensure_iterable
 
 from ..core import (
     Config,
     DataCoordinate,
-    DataCoordinateIterable,
     DataId,
     DatasetAssociation,
     DatasetColumnTag,
@@ -584,7 +584,8 @@ class SqlRegistry(Registry):
         try:
             refs = list(storage.insert(runRecord, expandedDataIds, idGenerationMode))
             if self._managers.obscore:
-                self._managers.obscore.add_datasets(refs)
+                context = queries.SqlQueryContext(self._db, self._managers.column_types)
+                self._managers.obscore.add_datasets(refs, context)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 f"A database constraint failure was triggered by inserting "
@@ -656,7 +657,8 @@ class SqlRegistry(Registry):
         try:
             refs = list(storage.import_(runRecord, expandedDatasets, idGenerationMode, reuseIds))
             if self._managers.obscore:
-                self._managers.obscore.add_datasets(refs)
+                context = queries.SqlQueryContext(self._db, self._managers.column_types)
+                self._managers.obscore.add_datasets(refs, context)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 f"A database constraint failure was triggered by inserting "
@@ -705,7 +707,8 @@ class SqlRegistry(Registry):
                 if self._managers.obscore:
                     # If a TAGGED collection is being monitored by ObsCore
                     # manager then we may need to save the dataset.
-                    self._managers.obscore.associate(refsForType, collectionRecord)
+                    context = queries.SqlQueryContext(self._db, self._managers.column_types)
+                    self._managers.obscore.associate(refsForType, collectionRecord, context)
             except sqlalchemy.exc.IntegrityError as err:
                 raise ConflictingDefinitionError(
                     f"Constraint violation while associating dataset of type {datasetType.name} with "
@@ -813,6 +816,7 @@ class SqlRegistry(Registry):
         if isinstance(dataId, DataCoordinate) and dataId.hasRecords():
             records.update(dataId.records.byName())
         keys = standardized.byName()
+        context = queries.SqlQueryContext(self._db, self._managers.column_types)
         for element in standardized.graph.primaryKeyTraversalOrder:
             record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
             if record is ...:
@@ -825,14 +829,7 @@ class SqlRegistry(Registry):
                     record = None
                 else:
                     storage = self._managers.dimensions[element]
-                    dataIdSet = DataCoordinateIterable.fromScalar(
-                        DataCoordinate.standardize(keys, graph=element.graph)
-                    )
-                    fetched = tuple(storage.fetch(dataIdSet))
-                    try:
-                        (record,) = fetched
-                    except ValueError:
-                        record = None
+                    record = storage.fetch_one(DataCoordinate.standardize(keys, graph=element.graph), context)
                 records[element.name] = record
             if record is not None:
                 for d in element.implied:
@@ -876,7 +873,7 @@ class SqlRegistry(Registry):
         else:
             # Ignore typing since caller said to trust them with conform=False.
             records = data  # type: ignore
-        storage = self._managers.dimensions[element]  # type: ignore
+        storage = self._managers.dimensions[element]
         storage.insert(*records, replace=replace, skip_existing=skip_existing)
 
     def syncDimensionData(
@@ -894,7 +891,7 @@ class SqlRegistry(Registry):
         else:
             # Ignore typing since caller said to trust them with conform=False.
             record = row  # type: ignore
-        storage = self._managers.dimensions[element]  # type: ignore
+        storage = self._managers.dimensions[element]
         return storage.sync(record, update=update)
 
     def queryDatasetTypes(
@@ -974,10 +971,48 @@ class SqlRegistry(Registry):
         builder : `queries.QueryBuilder`
             Object that can be used to construct and perform advanced queries.
         """
+        doomed_by = list(doomed_by)
+        backend = queries.SqlQueryBackend(self._db, self._managers)
+        context = backend.context()
+        relation: Relation | None = None
+        if doomed_by:
+            relation = LeafRelation.make_doomed(context.sql_engine, set(), doomed_by)
         return queries.QueryBuilder(
             summary,
-            backend=queries.SqlQueryBackend(self._db, self._managers),
-            doomed_by=doomed_by,
+            backend=backend,
+            context=context,
+            relation=relation,
+        )
+
+    def _standardize_query_data_id_args(
+        self, data_id: DataId | None, *, doomed_by: list[str], **kwargs: Any
+    ) -> DataCoordinate:
+        """Preprocess the data ID arguments passed to query* methods.
+
+        Parameters
+        ----------
+        data_id : `DataId` or `None`
+            Data ID that constrains the query results.
+        doomed_by : `list` [ `str` ]
+            List to append messages indicating why the query is doomed to
+            yield no results.
+        **kwargs
+            Additional data ID key-value pairs, extending and overriding
+            ``data_id``.
+
+        Returns
+        -------
+        data_id : `DataCoordinate`
+            Standardized data ID.  Will be fully expanded unless expansion
+            fails, in which case a message will be appended to ``doomed_by``
+            on return.
+        """
+        try:
+            return self.expandDataId(data_id, **kwargs)
+        except DataIdValueError as err:
+            doomed_by.append(str(err))
+        return DataCoordinate.standardize(
+            data_id, **kwargs, universe=self.dimensions, defaults=self.defaults.dataId
         )
 
     def _standardize_query_dataset_args(
@@ -1080,7 +1115,7 @@ class SqlRegistry(Registry):
     ) -> queries.DatasetQueryResults:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         doomed_by: list[str] = []
-        data_id = self.expandDataId(dataId, **kwargs)
+        data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
         dataset_composition, collections = self._standardize_query_dataset_args(
             datasetType,
             collections,
@@ -1149,7 +1184,7 @@ class SqlRegistry(Registry):
         dimensions = ensure_iterable(dimensions)
         requestedDimensions = self.dimensions.extract(dimensions)
         doomed_by: list[str] = []
-        data_id = self.expandDataId(dataId, **kwargs)
+        data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
         dataset_composition, collections = self._standardize_query_dataset_args(
             datasets, collections, components, doomed_by=doomed_by
         )
@@ -1209,7 +1244,11 @@ class SqlRegistry(Registry):
             check=check,
             **kwargs,
         )
-        return queries.DatabaseDimensionRecordQueryResults(dataIds, self._managers.dimensions[element])
+        return queries.DatabaseDimensionRecordQueryResults(
+            dataIds,
+            self._managers.dimensions[element],
+            context=queries.SqlQueryContext(self._db, self._managers.column_types),
+        )
 
     def queryDatasetAssociations(
         self,

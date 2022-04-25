@@ -26,27 +26,24 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 import sqlalchemy
+from lsst.daf.relation import Join, Relation
 from lsst.utils import doImportType
 
 from ...core import (
     DatabaseDimensionElement,
     DataCoordinate,
     DataCoordinateIterable,
-    DataCoordinateSet,
-    DimensionElement,
     DimensionRecord,
     GovernorDimension,
-    NamedKeyDict,
     NamedKeyMapping,
-    TimespanDatabaseRepresentation,
 )
+from .. import queries
 from ..interfaces import (
     Database,
     DatabaseDimensionRecordStorage,
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
-from ..queries import QueryBuilder
 
 
 class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
@@ -62,7 +59,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def __init__(self, nested: DatabaseDimensionRecordStorage):
         self._nested = nested
-        self._cache: dict[DataCoordinate, DimensionRecord | None] = {}
+        self._cache: dict[DataCoordinate, DimensionRecord] | None = None
 
     @classmethod
     def initialize(
@@ -89,58 +86,61 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
-        self._cache.clear()
+        self._cache = None
         self._nested.clearCaches()
 
-    def join(
-        self,
-        builder: QueryBuilder,
-        *,
-        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
-        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
-    ) -> None:
-        # Docstring inherited from DimensionRecordStorage.
-        return self._nested.join(builder, regions=regions, timespans=timespans)
+    def make_relation(self, context: queries.SqlQueryContext) -> Relation:
+        # Docstring inherited.
+        return self._nested.make_relation(context)
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         self._nested.insert(*records, replace=replace, skip_existing=skip_existing)
-        for record in records:
-            # We really shouldn't ever get into a situation where the record
-            # here differs from the one in the DB, but the last thing we want
-            # is to make it harder to debug by making the cache different from
-            # the DB.
-            if skip_existing:
-                self._cache.setdefault(record.dataId, record)
-            else:
-                self._cache[record.dataId] = record
+        if self._cache is not None:
+            for record in records:
+                # We really shouldn't ever get into a situation where the
+                # record here differs from the one in the DB, but the last
+                # thing we want is to make it harder to debug by making the
+                # cache different from the DB.
+                if skip_existing:
+                    self._cache.setdefault(record.dataId, record)
+                else:
+                    self._cache[record.dataId] = record
 
     def sync(self, record: DimensionRecord, update: bool = False) -> bool | dict[str, Any]:
         # Docstring inherited from DimensionRecordStorage.sync.
         inserted_or_updated = self._nested.sync(record, update=update)
-        if inserted_or_updated:
+        if self._cache is not None and inserted_or_updated:
             self._cache[record.dataId] = record
         return inserted_or_updated
 
-    def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
+    def fetch(
+        self, dataIds: DataCoordinateIterable, context: queries.SqlQueryContext
+    ) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
-        missing: set[DataCoordinate] = set()
-        for dataId in dataIds:
-            # Use ... as sentinal value so we can also cache None == "no such
-            # record exists".
-            record = self._cache.get(dataId, ...)
-            if record is ...:
-                missing.add(dataId)
-            elif record is not None:
-                yield record
-        if missing:
-            toFetch = DataCoordinateSet(missing, graph=self.element.graph)
-            for record in self._nested.fetch(toFetch):
-                self._cache[record.dataId] = record
-                yield record
-            missing -= self._cache.keys()
-            for dataId in missing:
-                self._cache[dataId] = None
+        cache = self.get_record_cache(context)
+        return [record for data_id in dataIds if (record := cache.get(data_id)) is not None]
+
+    def fetch_one(self, data_id: DataCoordinate, context: queries.SqlQueryContext) -> DimensionRecord | None:
+        # Docstring inherited from DimensionRecordStorage.
+        cache = self.get_record_cache(context)
+        return cache.get(data_id)
+
+    def get_record_cache(self, context: queries.SqlQueryContext) -> Mapping[DataCoordinate, DimensionRecord]:
+        # Docstring inherited.
+        if self._cache is None:
+            relation = self._nested.join(
+                context.make_initial_relation(),
+                Join(),
+                context,
+            )
+            reader = queries.DimensionRecordReader(self.element)
+            cache: dict[DataCoordinate, DimensionRecord] = {}
+            for row in context.fetch_iterable(relation):
+                record = reader.read(row)
+                cache[record.dataId] = record
+            self._cache = cache
+        return self._cache
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.

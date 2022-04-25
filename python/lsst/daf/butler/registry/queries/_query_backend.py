@@ -26,9 +26,16 @@ from abc import abstractmethod
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from lsst.daf.relation import ColumnTag, LeafRelation, Relation
+from lsst.daf.relation import (
+    BinaryOperationRelation,
+    ColumnTag,
+    LeafRelation,
+    MarkerRelation,
+    Relation,
+    UnaryOperationRelation,
+)
 
-from ...core import DatasetColumnTag, DatasetType, DimensionKeyColumnTag, DimensionUniverse
+from ...core import DatasetColumnTag, DatasetType, DimensionGraph, DimensionKeyColumnTag, DimensionUniverse
 from .._collectionType import CollectionType
 from .._exceptions import DatasetTypeError, MissingDatasetTypeError
 from ..wildcards import CollectionWildcard
@@ -518,7 +525,7 @@ class QueryBackend(Generic[_C]):
         messages : `Iterable` [ `str` ]
             Diagnostic messages that explain why the query is doomed to yield
             no rows.
-        context : `QueryContext`, optional
+        context : `QueryContext`
             Context that manages per-query state.
 
         Results
@@ -530,6 +537,180 @@ class QueryBackend(Generic[_C]):
             DimensionKeyColumnTag.generate(dataset_type.dimensions.required.names)
         )
         column_tags.update(DatasetColumnTag.generate(dataset_type.name, columns))
-        return LeafRelation.make_doomed(
-            context.preferred_engine, columns=column_tags, messages=list(messages)
-        )
+        return context.preferred_engine.make_doomed_relation(columns=column_tags, messages=list(messages))
+
+    @abstractmethod
+    def make_dimension_relation(
+        self,
+        dimensions: DimensionGraph,
+        columns: Set[ColumnTag],
+        context: _C,
+        *,
+        initial_relation: Relation | None = None,
+        initial_join_max_columns: frozenset[ColumnTag] | None = None,
+        initial_dimension_relationships: Set[frozenset[str]] | None = None,
+        spatial_joins: Iterable[tuple[str, str]] = (),
+        governor_constraints: Mapping[str, Set[str]],
+    ) -> Relation:
+        """Construct a relation that provides columns and constraints from
+        dimension records.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGraph`
+            Dimensions to include.  The key columns for all dimensions (both
+            required and implied) will be included in the returned relation.
+        columns : `~collections.abc.Set` [ `ColumnTag` ]
+            Dimension record columns to include.  This set may include key
+            column tags as well, though these may be ignored; the set of key
+            columns to include is determined by the ``dimensions`` argument
+            instead.
+        context : `QueryContext`
+            Context that manages per-query state.
+        initial_relation : `~lsst.daf.relation.Relation`, optional
+            Initial relation to join to the dimension relations.  If this
+            relation provides record columns, key columns, and relationships
+            between key columns (see ``initial_dimension_relationships`` below)
+            that would otherwise have been added by joining in a dimension
+            element's relation, that relation may not be joined in at all.
+        initial_join_max_columns : `frozenset` [ `ColumnTag` ], optional
+            Maximum superset of common columns for joins to
+            ``initial_relation`` (i.e. columns in the ``ON`` expression of SQL
+            ``JOIN`` clauses).  If provided, this is a subset of the dimension
+            key columns in ``initial_relation``, which are otherwise all
+            considered as potential common columns for joins.  Ignored if
+            ``initial_relation`` is not provided.
+        initial_dimension_relationships : `~collections.abc.Set` [ `frozenset`
+                [ `str` ] ], optional
+            A set of sets of dimension names representing relationships between
+            dimensions encoded in the rows of ``initial_relation``.  If not
+            provided (and ``initial_relation`` is),
+            `extract_dimension_relationships` will be called on
+            ``initial_relation``.
+        spatial_joins : `collections.abc.Iterable` [ `tuple` [ `str`, `str` ] ]
+            Iterable of dimension element name pairs that should be spatially
+            joined.
+        governor_constraints : `Mapping` [ `str` [ `~collections.abc.Set`
+                [ `str` ] ] ], optional
+            Constraints on governor dimensions that are provided by other parts
+            of the query that either have been included in ``initial_relation``
+            or are guaranteed to be added in the future. This is a mapping from
+            governor dimension name to sets of values that dimension may tke.
+
+        Results
+        -------
+        relation : `lsst.daf.relation.Relation`
+            Relation containing the given dimension columns and constraints.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def resolve_governor_constraints(
+        self, dimensions: DimensionGraph, constraints: Mapping[str, Set[str]], context: _C
+    ) -> Mapping[str, Set[str]]:
+        """Resolve governor dimension constraints provided by user input to
+        a query against the content in the `Registry`.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGraph`
+            Dimensions that bound the governor dimensions to consider (via
+            ``dimensions.governors``, more specifically).
+        constraints : `Mapping` [ `str`,  [ `~collections.abc.Set`
+                [ `str` ] ] ]
+            Constraints from user input to the query (e.g. from data IDs and
+            string expression predicates).
+        context : `QueryContext`
+            Object that manages state for the query; used here to fetch the
+            governor dimension record cache if it has not already been loaded.
+
+        Returns
+        -------
+        resolved : `Mapping` [ `str`,  [ `~collections.abc.Set`
+                [ `str` ] ] ]
+            A shallow copy of ``constraints`` with keys equal to
+            ``dimensions.governors.names` and value sets constrained by the
+            Registry content if they were not already in ``constraints``.
+
+        Raises
+        ------
+        DataIdValueError
+            Raised if ``constraints`` includes governor dimension values that
+            are not present in the `Registry`.
+        """
+        raise NotImplementedError()
+
+    def extract_dimension_relationships(self, relation: Relation) -> set[frozenset[str]]:
+        """Extract the dimension key relationships encoded in a relation tree.
+
+        Parameters
+        ----------
+        relation : `Relation`
+            Relation tree to process.
+
+        Returns
+        -------
+        relationships : `set` [ `frozenset` [ `str` ] ]
+            Set of sets of dimension names, where each inner set represents a
+            relationship between dimensions.
+
+        Notes
+        -----
+        Dimension relationships include both many-to-one implied dependencies
+        and many-to-many joins backed by "always-join" dimension elements, and
+        it's important to join in the dimension table that defines a
+        relationship in any query involving dimensions that are a superset of
+        that relationship.  For example, let's consider a relation tree that
+        joins dataset existence-check relations for two dataset types, with
+        dimensions ``{instrument, exposure, detector}`` and ``{instrument,
+        physical_filter}``.  The joined relation appears to have all dimension
+        keys in its expanded graph present except ``band``, and the system
+        could easily correct this by joining that dimension in directly.  But
+        it's also missing the ``{instrument, exposure, physical_filter}``
+        relationship we'd get from the ``exposure`` dimension's own relation
+        (``exposure`` implies ``phyiscal_filter``) and the similar
+        ``{instrument, physical_filter, band}`` relationship from the
+        ``physical_filter`` dimension relation; we need the relationship logic
+        to recognize that those dimensions need to be joined in as well in
+        order for the full relation to have rows that represent valid data IDs.
+
+        The implementation of this method relies on the assumption that
+        `LeafRelation` objects always have rows that are consistent with all
+        defined relationships (i.e. are valid data IDs).  This is true for not
+        just dimension relations themselves, but anything created from queries
+        based on them, including datasets and query results.  It is possible to
+        construct `LeafRelation` objects that don't satisfy this criteria (e.g.
+        when accepting in user-provided data IDs(, and in this case
+        higher-level guards or warnings must be provided.``
+        """
+        return {
+            frozenset(
+                tag.dimension
+                for tag in DimensionKeyColumnTag.filter_from(leaf_relation.columns & relation.columns)
+            )
+            for leaf_relation in self._extract_leaf_relations(relation).values()
+        }
+
+    def _extract_leaf_relations(self, relation: Relation) -> dict[str, LeafRelation]:
+        """Recursively extract leaf relations from a relation tree.
+
+        Parameters
+        ----------
+        relation : `Relation`
+            Tree to process.
+
+        Returns
+        -------
+        leaves : `dict` [ `str`, `LeafRelation` ]
+            Leaf relations, keyed and deduplicated by name.
+        """
+        match relation:
+            case LeafRelation() as leaf:
+                return {leaf.name: leaf}
+            case UnaryOperationRelation(target=target):
+                return self._extract_leaf_relations(target)
+            case BinaryOperationRelation(lhs=lhs, rhs=rhs):
+                return self._extract_leaf_relations(lhs) | self._extract_leaf_relations(rhs)
+            case MarkerRelation(target=target):
+                return self._extract_leaf_relations(target)
+        raise AssertionError("Match should be exhaustive and all branches should return.")

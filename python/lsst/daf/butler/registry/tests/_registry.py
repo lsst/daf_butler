@@ -2516,15 +2516,15 @@ class RegistryTests(ABC):
         self.assertEqual(query1.count(exact=False), 2)
         self.assertEqual(query1.count(exact=True), 2)
         self.assertFalse(list(query1.explain_no_results()))
-        # Second query should yield no results, but this isn't detectable
-        # unless we actually run a query.
+        # Second query should yield no results, which we should see when
+        # we attempt to expand the data ID.
         query2 = registry.queryDataIds(["physical_filter"], band="h")
-        self.assertTrue(query2.any(execute=False, exact=False))
+        self.assertFalse(query2.any(execute=False, exact=False))
         self.assertFalse(query2.any(execute=True, exact=False))
         self.assertFalse(query2.any(execute=True, exact=True))
         self.assertEqual(query2.count(exact=False), 0)
         self.assertEqual(query2.count(exact=True), 0)
-        self.assertFalse(list(query2.explain_no_results()))
+        self.assertTrue(list(query2.explain_no_results()))
         # These queries yield no results due to various problems that can be
         # spotted prior to execution, yielding helpful diagnostics.
         base_query = registry.queryDataIds(["detector", "physical_filter"])
@@ -2676,16 +2676,7 @@ class RegistryTests(ABC):
         self.assertEqual(query4.count(exact=True), 0)
         messages = list(query4.explain_no_results())
         self.assertTrue(messages)
-        self.assertTrue(any("regions did not overlap" in message for message in messages))
-
-        # And there are cases when queries make empty results but we do not
-        # know how to explain that yet (could we just say miracles happen?)
-        query5 = registry.queryDimensionRecords(
-            "detector", where="detector.purpose = 'no-purpose'", instrument="Cam1"
-        )
-        self.assertEqual(query5.count(exact=True), 0)
-        messages = list(query5.explain_no_results())
-        self.assertFalse(messages)
+        self.assertTrue(any("overlap" in message for message in messages))
         # This query should yield results from one dataset type but not the
         # other, which is not registered.
         query5 = registry.queryDatasets(["bias", "nonexistent"], collections=["biases"])
@@ -2695,7 +2686,17 @@ class RegistryTests(ABC):
         self.assertTrue(query5.any(execute=True, exact=True))
         self.assertGreaterEqual(query5.count(exact=False), 1)
         self.assertGreaterEqual(query5.count(exact=True), 1)
-        self.assertFalse(messages, list(query5.explain_no_results()))
+        self.assertFalse(list(query5.explain_no_results()))
+        # This query applies a selection that yields no results, fully in the
+        # database.  Explaining why it fails involves traversing the relation
+        # tree and running a LIMIT 1 query at each level that has the potential
+        # to remove rows.
+        query6 = registry.queryDimensionRecords(
+            "detector", where="detector.purpose = 'no-purpose'", instrument="Cam1"
+        )
+        self.assertEqual(query6.count(exact=True), 0)
+        messages = list(query6.explain_no_results())
+        self.assertFalse(messages)
 
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""

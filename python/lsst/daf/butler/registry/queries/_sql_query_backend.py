@@ -23,17 +23,26 @@ from __future__ import annotations
 __all__ = ("SqlQueryBackend",)
 
 from collections.abc import Iterable, Mapping, Sequence, Set
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from lsst.daf.relation import Relation
+from lsst.daf.relation import ColumnError, ColumnTag, Join, Relation
 
-from ...core import DatasetType, DimensionUniverse
+from ...core import (
+    ColumnCategorization,
+    DatasetType,
+    DimensionGraph,
+    DimensionKeyColumnTag,
+    DimensionRecordColumnTag,
+    DimensionUniverse,
+    SkyPixDimension,
+)
 from .._collectionType import CollectionType
+from .._exceptions import DataIdValueError
+from ..interfaces import CollectionRecord, Database
 from ._query_backend import QueryBackend
 from ._sql_query_context import SqlQueryContext
 
 if TYPE_CHECKING:
-    from ..interfaces import CollectionRecord, Database
     from ..managers import RegistryManagerInstances
 
 
@@ -162,3 +171,131 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                 columns=columns,
                 context=context,
             )
+
+    def make_dimension_relation(
+        self,
+        dimensions: DimensionGraph,
+        columns: Set[ColumnTag],
+        context: SqlQueryContext,
+        *,
+        initial_relation: Relation | None = None,
+        initial_join_max_columns: frozenset[ColumnTag] | None = None,
+        initial_dimension_relationships: Set[frozenset[str]] | None = None,
+        spatial_joins: Iterable[tuple[str, str]] = (),
+        governor_constraints: Mapping[str, Set[str]],
+    ) -> Relation:
+        # Docstring inherited.
+
+        default_join = Join(max_columns=initial_join_max_columns)
+
+        # Set up the relation variable we'll update as we join more relations
+        # in, and ensure it is in the SQL engine.
+        relation = context.make_initial_relation(initial_relation)
+
+        if initial_dimension_relationships is None:
+            initial_dimension_relationships = self.extract_dimension_relationships(relation)
+
+        # Make a mutable copy of the columns argument.
+        columns_required = set(columns)
+
+        # Next we'll handle spatial joins, since those can require refinement
+        # predicates that will need region columns to be included in the
+        # relations we'll join.
+        for element1, element2 in spatial_joins:
+            overlaps, needs_refinement = self._managers.dimensions.make_spatial_join_relation(
+                element1, element2, context=context, governor_constraints=governor_constraints
+            )
+            if needs_refinement:
+                columns_required.add(DimensionRecordColumnTag(element1, "region"))
+                columns_required.add(DimensionRecordColumnTag(element2, "region"))
+            relation = relation.join(overlaps)
+
+        # All skypix columns need to come from either the initial_relation or a
+        # spatial join, since we need all dimension key columns present in the
+        # SQL engine and skypix regions are added by postprocessing in the
+        # native iteration engine.
+        for dimension in dimensions:
+            if DimensionKeyColumnTag(dimension.name) not in relation.columns and isinstance(
+                dimension, SkyPixDimension
+            ):
+                raise NotImplementedError(
+                    f"Cannot construct query involving skypix dimension {dimension.name} unless "
+                    "it is part of a dataset subquery, spatial join, or other initial relation."
+                )
+
+        # Categorize columns not yet included in the relation to associate them
+        # with dimension elements and detect bad inputs.
+        missing_columns = ColumnCategorization.from_iterable(columns_required - relation.columns)
+        if not (missing_columns.dimension_keys <= dimensions.names):
+            raise ColumnError(
+                "Cannot add dimension key column(s) "
+                f"{{{', '.join(name for name in missing_columns.dimension_keys)}}} "
+                f"that were not included in the given dimensions {dimensions}."
+            )
+        if missing_columns.datasets:
+            raise ColumnError(
+                f"Unexpected dataset columns {missing_columns.datasets} in call to make_dimension_relation; "
+                "use make_dataset_query_relation or make_dataset_search relation instead, or filter them "
+                "out if they have already been added or will be added later."
+            )
+        for element_name in missing_columns.dimension_records.keys():
+            if element_name not in dimensions.elements.names:
+                raise ColumnError(
+                    f"Cannot join dimension element {element_name} whose dimensions are not a "
+                    f"subset of {dimensions}."
+                )
+
+        # Iterate over all dimension elements whose relations definitely have
+        # to be joined in.  The order doesn't matter as long as we can assume
+        # the database query optimizer is going to try to reorder them anyway.
+        for element in dimensions.elements:
+            columns_still_needed = missing_columns.dimension_records[element.name]
+            # Two separate conditions in play here:
+            # - if we need a record column (not just key columns) from this
+            #   element, we have to join in its relation;
+            # - if the element establishes a relationship between key columns
+            #   that wasn't already established by the initial relation, we
+            #   always join that element's relation.  Any element with
+            #   implied dependencies or the alwaysJoin flag establishes such a
+            #   relationship.
+            if columns_still_needed or (
+                (element.alwaysJoin or element.implied)
+                and frozenset(element.dimensions.names) not in initial_dimension_relationships
+            ):
+                storage = self._managers.dimensions[element]
+                relation = storage.join(relation, default_join, context)
+        # At this point we've joined in all of the element relations that
+        # definitely need to be included, but we may not have all of the
+        # dimension key columns in the query that we want.  To fill out that
+        # set, we iterate over just the given DimensionGraph's dimensions (not
+        # all dimension *elements*) in reverse topological order.  That order
+        # should reduce the total number of tables we bring in, since each
+        # dimension will bring in keys for its required dependencies before we
+        # get to those required dependencies.
+        for dimension in self.universe.sorted(dimensions, reverse=True):
+            if DimensionKeyColumnTag(dimension.name) not in relation.columns:
+                storage = self._managers.dimensions[dimension]
+                relation = storage.join(relation, default_join, context)
+
+        return relation
+
+    def resolve_governor_constraints(
+        self, dimensions: DimensionGraph, constraints: Mapping[str, Set[str]], context: SqlQueryContext
+    ) -> Mapping[str, Set[str]]:
+        # Docstring inherited.
+        result: dict[str, Set[str]] = {}
+        for dimension in dimensions.governors:
+            storage = self._managers.dimensions[dimension]
+            records = storage.get_record_cache(context)
+            assert records is not None, "Governor dimensions are always cached."
+            all_values = {cast(str, data_id[dimension.name]) for data_id in records.keys()}
+            if (constraint_values := constraints.get(dimension.name)) is not None:
+                if not (constraint_values <= all_values):
+                    raise DataIdValueError(
+                        f"Unknown values specified for governor dimension {dimension.name}: "
+                        f"{constraint_values - all_values}."
+                    )
+                result[dimension.name] = constraint_values
+            else:
+                result[dimension.name] = all_values
+        return result

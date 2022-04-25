@@ -50,6 +50,7 @@ from ...core import (
 )
 from ..interfaces import Database, DimensionRecordStorage
 from ._query import Query
+from ._sql_query_context import SqlQueryContext
 from ._structs import ElementOrderByClause, QuerySummary
 
 QueryFactoryMethod = Callable[[Optional[Iterable[str]], Optional[tuple[int, Optional[int]]]], Query]
@@ -261,13 +262,14 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                 for dataId in dataIdsWithRecords:
                     ...
         """
+        context = SqlQueryContext(self._db, self._query.backend.managers.column_types)
         if self._records is None:
             records = {}
             for element in self.graph.elements:
                 subset = self.subset(graph=element.graph, unique=True)
                 records[element.name] = {
                     tuple(record.dataId.values()): record
-                    for record in self._query.backend.managers.dimensions[element].fetch(subset)
+                    for record in self._query.backend.managers.dimensions[element].fetch(subset, context)
                 }
 
             return self._clone(query=self._query, records=records)
@@ -1093,19 +1095,28 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
         Iterator for DataIds.
     recordStorage : `DimensionRecordStorage`
         Instance of storage class for dimension records.
+    context : `.queries.SqlQueryContext`
+        Context to be used to execute queries when no cached result is
+        available.
     """
 
-    def __init__(self, dataIds: DataCoordinateQueryResults, recordStorage: DimensionRecordStorage):
+    def __init__(
+        self,
+        dataIds: DataCoordinateQueryResults,
+        recordStorage: DimensionRecordStorage,
+        context: SqlQueryContext,
+    ):
         self._dataIds = dataIds
         self._recordStorage = recordStorage
         self._order_by: Iterable[str] = ()
+        self._context = context
 
     def __iter__(self) -> Iterator[DimensionRecord]:
         # LIMIT is already applied at DataCoordinateQueryResults level
         # (assumption here is that if DataId exists then dimension record
         # exists too and their counts must be equal). fetch() does not
         # guarantee ordering, so we need to sort records in memory below.
-        recordIter = self._recordStorage.fetch(self._dataIds)
+        recordIter = self._recordStorage.fetch(self._dataIds, self._context)
         if not self._order_by:
             return iter(recordIter)
 

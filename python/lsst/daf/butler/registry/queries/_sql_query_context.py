@@ -72,6 +72,13 @@ class SqlQueryContext(QueryContext):
         return result
 
     @property
+    def column_types(self) -> ColumnTypeInfo:
+        """Information about column types that depend on registry configuration
+        (`ColumnTypeInfo`).
+        """
+        return self.sql_engine.column_types
+
+    @property
     def preferred_engine(self) -> Engine:
         # Docstring inherited.
         return self.sql_engine

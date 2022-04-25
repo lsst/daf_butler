@@ -22,7 +22,6 @@ from __future__ import annotations
 
 __all__ = ("Query",)
 
-import dataclasses
 import enum
 import itertools
 from abc import ABC, abstractmethod
@@ -30,45 +29,32 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, ContextManager, Dict, Iterable, Iterator, Mapping, Optional, Tuple
 
 import sqlalchemy
+from lsst.daf.relation import ColumnTag, LeafRelation, Relation, sql
 from lsst.sphgeom import Region
 
 from ...core import (
     DataCoordinate,
+    DatasetColumnTag,
     DatasetRef,
     DatasetType,
     Dimension,
     DimensionElement,
     DimensionGraph,
+    DimensionKeyColumnTag,
     DimensionRecord,
     DimensionUniverse,
+    LogicalColumn,
     SimpleQuery,
     addDimensionForeignKey,
     ddl,
 )
 from ..interfaces import Database
 from ._query_backend import QueryBackend
+from ._sql_query_context import SqlQueryContext
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
 
 if TYPE_CHECKING:
     from ._builder import QueryBuilder
-
-
-@dataclasses.dataclass(frozen=True)
-class OrderByColumn:
-    """Information about single column in ORDER BY clause."""
-
-    column: sqlalchemy.sql.ColumnElement
-    """Name of the column or `None` for primary key (`str` or `None`)"""
-
-    ordering: bool
-    """True for ascending order, False for descending (`bool`)."""
-
-    @property
-    def column_order(self) -> sqlalchemy.sql.ColumnElement:
-        """Column element for use in ORDER BY clause
-        (`sqlalchemy.sql.ColumnElement`)
-        """
-        return self.column.asc() if self.ordering else self.column.desc()
 
 
 class Query(ABC):
@@ -101,7 +87,7 @@ class Query(ABC):
         *,
         graph: DimensionGraph,
         whereRegion: Optional[Region],
-        backend: QueryBackend,
+        backend: QueryBackend[SqlQueryContext],
         doomed_by: Iterable[str] = (),
     ):
         self.graph = graph
@@ -672,7 +658,7 @@ class Query(ABC):
     must overlap (`lsst.sphgeom.Region` or `None`).
     """
 
-    backend: QueryBackend
+    backend: QueryBackend[SqlQueryContext]
     """Backend object that represents the `Registry` implementation.
     """
 
@@ -735,7 +721,7 @@ class DirectQuery(Query):
         graph: DimensionGraph,
         whereRegion: Optional[Region],
         backend: QueryBackend,
-        order_by_columns: Iterable[OrderByColumn] = (),
+        order_by_columns: Iterable[sqlalchemy.sql.ColumnElement] = (),
         limit: Optional[Tuple[int, Optional[int]]] = None,
         doomed_by: Iterable[str] = (),
     ):
@@ -808,7 +794,7 @@ class DirectQuery(Query):
         assert not simpleQuery.order_by, "Input query cannot have ORDER BY"
         if self._order_by_columns:
             # add ORDER BY column
-            order_by_columns = [column.column_order for column in self._order_by_columns]
+            order_by_columns = list(self._order_by_columns)
             order_by_column = sqlalchemy.func.row_number().over(order_by=order_by_columns).label("_orderby")
             simpleQuery.columns.append(order_by_column)
             simpleQuery.order_by = [order_by_column]
@@ -916,11 +902,19 @@ class DirectQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        builder = QueryBuilder(summary, backend=self.backend, doomed_by=self._doomed_by)
-        builder.joinTable(
-            self.sql.alias(), dimensions=self.graph.dimensions, datasets=self.getDatasetColumns()
-        )
-        return builder
+        columns = self._columns.make_logical_column_mapping()
+        context = self.backend.context()
+        relation: Relation
+        if self._doomed_by:
+            relation = LeafRelation.make_doomed(context.sql_engine, columns.keys(), messages=self._doomed_by)
+        else:
+            payload = sql.Payload[LogicalColumn](self._simpleQuery.from_)
+            payload.columns_available.update(columns)
+            payload.where.extend(self._simpleQuery.where)
+            relation = context.sql_engine.make_leaf(payload.columns_available.keys(), payload=payload)
+        if self._uniqueness is DirectQueryUniqueness.NEEDS_DISTINCT:
+            relation = relation.without_duplicates()
+        return QueryBuilder(summary, backend=self.backend, context=context, relation=relation)
 
 
 class MaterializedQuery(Query):
@@ -965,7 +959,7 @@ class MaterializedQuery(Query):
         isUnique: bool,
         graph: DimensionGraph,
         whereRegion: Optional[Region],
-        backend: QueryBackend,
+        backend: QueryBackend[SqlQueryContext],
         doomed_by: Iterable[str] = (),
     ):
         super().__init__(graph=graph, whereRegion=whereRegion, backend=backend, doomed_by=doomed_by)
@@ -1049,9 +1043,30 @@ class MaterializedQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        builder = QueryBuilder(summary, backend=self.backend, doomed_by=self._doomed_by)
-        builder.joinTable(self._table, dimensions=self.graph.dimensions, datasets=self.getDatasetColumns())
-        return builder
+        context = self.backend.context()
+        leaf: Relation
+        if self._doomed_by:
+            columns: set[ColumnTag] = set()
+            columns.update(DimensionKeyColumnTag.generate(self.graph.names))
+            if self.datasetType is not None:
+                columns.add(DatasetColumnTag(self.datasetType.name, "dataset_id"))
+                columns.add(DatasetColumnTag(self.datasetType.name, "run"))
+            leaf = LeafRelation.make_doomed(context.sql_engine, columns, messages=self._doomed_by)
+        else:
+            payload = sql.Payload[LogicalColumn](self._table)
+            for dimension_name in self.graph.names:
+                payload.columns_available[
+                    DimensionKeyColumnTag(dimension_name)
+                ] = payload.from_clause.columns[dimension_name]
+            if self.datasetType is not None:
+                payload.columns_available[
+                    DatasetColumnTag(self.datasetType.name, "dataset_id")
+                ] = payload.from_clause.columns["dataset_id"]
+                payload.columns_available[
+                    DatasetColumnTag(self.datasetType.name, "run")
+                ] = self._table.columns[self.backend.managers.collections.getRunForeignKeyName()]
+            leaf = context.sql_engine.make_leaf(payload.columns_available.keys(), payload=payload)
+        return QueryBuilder(summary, backend=self.backend, context=context, relation=leaf)
 
 
 class EmptyQuery(Query):
@@ -1073,7 +1088,7 @@ class EmptyQuery(Query):
     def __init__(
         self,
         universe: DimensionUniverse,
-        backend: QueryBackend,
+        backend: QueryBackend[SqlQueryContext],
         doomed_by: Iterable[str] = (),
     ):
         super().__init__(graph=universe.empty, whereRegion=None, backend=backend, doomed_by=doomed_by)
@@ -1132,4 +1147,10 @@ class EmptyQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        return QueryBuilder(summary, backend=self.backend, doomed_by=self._doomed_by)
+        context = self.backend.context()
+        relation: Relation
+        if self._doomed_by:
+            relation = LeafRelation.make_doomed(context.sql_engine, set(), self._doomed_by)
+        else:
+            relation = context.make_initial_relation()
+        return QueryBuilder(summary, backend=self.backend, context=context, relation=relation)

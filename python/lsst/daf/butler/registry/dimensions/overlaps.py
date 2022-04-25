@@ -24,9 +24,11 @@ from __future__ import annotations
 __all__ = ("CrossFamilyDimensionOverlapStorage",)
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Set
+from typing import TYPE_CHECKING
 
 import sqlalchemy
+from lsst.daf.relation import Relation
 
 from ...core import DatabaseDimensionElement, addDimensionForeignKey, ddl
 from ..interfaces import (
@@ -36,6 +38,10 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
+
+if TYPE_CHECKING:
+    from .. import queries
+
 
 _LOG = logging.getLogger(__name__)
 
@@ -104,7 +110,7 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
             cls._OVERLAP_TABLE_NAME_SPEC.format(*elements),
             cls._makeOverlapTableSpec(elements),
         )
-        return CrossFamilyDimensionOverlapStorage(
+        return cls(
             db,
             elementStorage,
             governorStorage,
@@ -181,3 +187,15 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
                 if dimension != element.spatial.governor:
                     addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
         return tableSpec
+
+    def clearCaches(self) -> None:
+        # Docstring inherited from DatabaseDimensionOverlapStorage.
+        pass
+
+    def make_relation(
+        self,
+        context: queries.SqlQueryContext,
+        governor_constraints: Mapping[str, Set[str]],
+    ) -> Relation | None:
+        # Docstring inherited.
+        return None

@@ -31,6 +31,7 @@ from lsst.daf.relation import (
     ColumnTag,
     Engine,
     EngineError,
+    LeafRelation,
     Predicate,
     Processor,
     Relation,
@@ -88,6 +89,22 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         operations in (`lsst.daf.relation.Engine`).
         """
         return self.iteration_engine
+
+    def make_initial_relation(self, relation: Relation | None = None) -> Relation:
+        """Construct an initial relation suitable for this context.
+
+        Parameters
+        ----------
+        relation : `Relation`, optional
+            A user-provided initial relation.  Must be included by
+            implementations when provided, but may be modified (e.g. by adding
+            a transfer to a new engine) when need to satisfy the context's
+            invariants.
+
+        """
+        if relation is None:
+            return LeafRelation.make_join_identity(self.preferred_engine)
+        return relation
 
     def fetch_iterable(self, relation: Relation) -> iteration.RowIterable:
         """Execute the given relation and return its rows as an iterable of

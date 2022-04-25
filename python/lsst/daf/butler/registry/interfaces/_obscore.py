@@ -33,6 +33,7 @@ from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
     from ...core import DatasetRef, DimensionUniverse
+    from ..queries import SqlQueryContext
     from ._collections import CollectionRecord
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
@@ -91,7 +92,7 @@ class ObsCoreTableManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    def add_datasets(self, refs: Iterable[DatasetRef]) -> int:
+    def add_datasets(self, refs: Iterable[DatasetRef], context: SqlQueryContext) -> int:
         """Possibly add datasets to the obscore table.
 
         This method should be called when new datasets are added to a RUN
@@ -103,6 +104,8 @@ class ObsCoreTableManager(VersionedExtension):
             Dataset refs to add. Dataset refs have to be completely expanded.
             If a record with the same dataset ID is already in obscore table,
             the dataset is ignored.
+        context : `SqlQueryContext`
+            Context used to execute queries for additional dimension metadata.
 
         Returns
         -------
@@ -124,7 +127,9 @@ class ObsCoreTableManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    def associate(self, refs: Iterable[DatasetRef], collection: CollectionRecord) -> int:
+    def associate(
+        self, refs: Iterable[DatasetRef], collection: CollectionRecord, context: SqlQueryContext
+    ) -> int:
         """Possibly add datasets to the obscore table.
 
         This method should be called when existing datasets are associated with
@@ -138,6 +143,8 @@ class ObsCoreTableManager(VersionedExtension):
             the dataset is ignored.
         collection : `CollectionRecord`
             Collection record for a TAGGED collection.
+        context : `SqlQueryContext`
+            Context used to execute queries for additional dimension metadata.
 
         Returns
         -------
