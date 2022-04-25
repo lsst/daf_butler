@@ -218,14 +218,6 @@ elements:
           Can only be approximate since it is continuously changing during
           an observation and multiple exposures can be combined from a
           relatively long period.
-
-      -
-        name: visit_system_mask
-        type: int
-        doc: >
-          A bitwise OR of ``2**(visit_system.id)`` for the visit systems this
-          visit belongs to, provided to allow queries to sometimes avoid
-          joining in ``visit_system`` and ``visit_system_membership``.
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
