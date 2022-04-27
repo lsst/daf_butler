@@ -27,6 +27,7 @@ import math
 import pickle
 from typing import (
     TYPE_CHECKING,
+    Any,
     ClassVar,
     Dict,
     FrozenSet,
@@ -186,6 +187,9 @@ class DimensionUniverse:
 
     def __getitem__(self, name: str) -> DimensionElement:
         return self._elements[name]
+
+    def __contains__(self, name: Any) -> bool:
+        return name in self._elements
 
     def get(self, name: str, default: Optional[DimensionElement] = None) -> Optional[DimensionElement]:
         """Return the `DimensionElement` with the given name or a default.
