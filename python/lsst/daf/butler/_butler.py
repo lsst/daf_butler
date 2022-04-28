@@ -945,18 +945,62 @@ class Butler(LimitedButler):
 
                 if len(records) != 1:
                     if len(records) > 1:
-                        log.debug("Received %d records from constraints of %s", len(records), str(values))
-                        for r in records:
-                            log.debug("- %s", str(r))
+                        # visit can have an ambiguous answer without involving
+                        # visit_system. The default visit_system is defined
+                        # by the instrument.
+                        if (
+                            dimensionName == "visit"
+                            and "visit_system_membership" in self.registry.dimensions
+                            and "visit_system"
+                            in self.registry.dimensions["instrument"].metadata  # type: ignore
+                        ):
+                            instrument_records = list(
+                                self.registry.queryDimensionRecords(
+                                    "instrument",
+                                    dataId=newDataId,
+                                    **kwargs,
+                                )
+                            )
+                            if len(instrument_records) == 1:
+                                visit_system = instrument_records[0].visit_system
+                                if visit_system is None:
+                                    # Set to a value that will never match.
+                                    visit_system = -1
+
+                                # Look up each visit in the
+                                # visit_system_membership records.
+                                for rec in records:
+                                    membership = list(
+                                        self.registry.queryDimensionRecords(
+                                            # Use bind to allow zero results.
+                                            # This is a fully-specified query.
+                                            "visit_system_membership",
+                                            where="instrument = inst AND visit_system = system AND visit = v",
+                                            bind=dict(
+                                                inst=instrument_records[0].name, system=visit_system, v=rec.id
+                                            ),
+                                        )
+                                    )
+                                    if membership:
+                                        # This record is the right answer.
+                                        records = set([rec])
+                                        break
+
+                        # The ambiguity may have been resolved so check again.
+                        if len(records) > 1:
+                            log.debug("Received %d records from constraints of %s", len(records), str(values))
+                            for r in records:
+                                log.debug("- %s", str(r))
+                            raise ValueError(
+                                f"DataId specification for dimension {dimensionName} is not"
+                                f" uniquely constrained to a single dataset by {values}."
+                                f" Got {len(records)} results."
+                            )
+                    else:
                         raise ValueError(
-                            f"DataId specification for dimension {dimensionName} is not"
-                            f" uniquely constrained to a single dataset by {values}."
-                            f" Got {len(records)} results."
+                            f"DataId specification for dimension {dimensionName} matched no"
+                            f" records when constrained by {values}"
                         )
-                    raise ValueError(
-                        f"DataId specification for dimension {dimensionName} matched no"
-                        f" records when constrained by {values}"
-                    )
 
                 # Get the primary key from the real dimension object
                 dimension = self.registry.dimensions.getStaticDimensions()[dimensionName]
