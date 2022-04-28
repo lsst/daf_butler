@@ -39,6 +39,10 @@ from ._packer import DimensionPackerConstructionVisitor
 from ._skypix import SkyPixConstructionVisitor
 from .construction import DimensionConstructionBuilder, DimensionConstructionVisitor
 
+# The default namespace to use on older dimension config files that only
+# have a version.
+_DEFAULT_NAMESPACE = "daf_butler"
+
 
 class DimensionConfig(ConfigSubset):
     """Configuration that defines a `DimensionUniverse`.
@@ -48,6 +52,9 @@ class DimensionConfig(ConfigSubset):
 
     - version: an integer version number, used as keys in a singleton registry
       of all `DimensionUniverse` instances;
+
+    - namespace: a string to be associated with the version in the singleton
+      registry of all `DimensionUnivers` instances;
 
     - skypix: a dictionary whose entries each define a `SkyPixSystem`,
       along with a special "common" key whose value is the name of a skypix
@@ -259,7 +266,12 @@ class DimensionConfig(ConfigSubset):
             configuration.  The `~DimensionConstructionBuilder.finish` method
             will not have been called.
         """
-        builder = DimensionConstructionBuilder(self["version"], self["skypix", "common"], self)
+        builder = DimensionConstructionBuilder(
+            self["version"],
+            self["skypix", "common"],
+            self,
+            namespace=self.get("namespace", _DEFAULT_NAMESPACE),
+        )
         builder.update(self._extractSkyPixVisitors())
         builder.update(self._extractElementVisitors())
         builder.update(self._extractTopologyVisitors())

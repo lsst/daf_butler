@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Dict, Iterable
+from typing import TYPE_CHECKING, AbstractSet, Dict, Iterable, Optional
 
 from .._topology import TopologicalFamily, TopologicalSpace
 from ..named import NamedValueSet
@@ -110,6 +110,8 @@ class DimensionConstructionBuilder:
     commonSkyPixName : `str`
         Name of the "common" skypix dimension that is used to relate all other
         spatial `TopologicalRelationshipEndpoint` objects.
+    namespace : `str`, optional
+        The namespace to assign to this universe.
     visitors : `Iterable` [ `DimensionConstructionVisitor` ]
         Visitor instances to include from the start.
     """
@@ -120,6 +122,7 @@ class DimensionConstructionBuilder:
         commonSkyPixName: str,
         config: DimensionConfig,
         *,
+        namespace: Optional[str] = None,
         visitors: Iterable[DimensionConstructionVisitor] = (),
     ) -> None:
         self.dimensions = NamedValueSet()
@@ -127,6 +130,7 @@ class DimensionConstructionBuilder:
         self.topology = {space: NamedValueSet() for space in TopologicalSpace.__members__.values()}
         self.packers = {}
         self.version = version
+        self.namespace = namespace
         self.config = config
         self.commonSkyPixName = commonSkyPixName
         self._todo: Dict[str, DimensionConstructionVisitor] = {v.name: v for v in visitors}
@@ -172,6 +176,12 @@ class DimensionConstructionBuilder:
 
     version: int
     """Version number for the `DimensionUniverse` (`int`).
+
+    Populated at builder construction.
+    """
+
+    namespace: Optional[str]
+    """Namespace for the `DimensionUniverse` (`str`)
 
     Populated at builder construction.
     """

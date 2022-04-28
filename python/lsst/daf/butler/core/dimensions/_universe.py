@@ -35,6 +35,7 @@ from typing import (
     Mapping,
     Optional,
     Set,
+    Tuple,
     TypeVar,
     Union,
 )
@@ -44,7 +45,7 @@ from lsst.utils.classes import cached_getter, immutable
 from .._topology import TopologicalFamily, TopologicalSpace
 from ..config import Config
 from ..named import NamedValueAbstractSet, NamedValueSet
-from ._config import DimensionConfig
+from ._config import _DEFAULT_NAMESPACE, DimensionConfig
 from ._database import DatabaseDimensionElement
 from ._elements import Dimension, DimensionElement
 from ._governor import GovernorDimension
@@ -68,10 +69,10 @@ class DimensionUniverse:
     dimensions and their relationships.
 
     `DimensionUniverse` is not a class-level singleton, but all instances are
-    tracked in a singleton map keyed by the version number in the configuration
-    they were loaded from.  Because these universes are solely responsible for
-    constructing `DimensionElement` instances, these are also indirectly
-    tracked by that singleton as well.
+    tracked in a singleton map keyed by the version number and namespace
+    in the configuration they were loaded from.  Because these universes
+    are solely responsible for constructing `DimensionElement` instances,
+    these are also indirectly tracked by that singleton as well.
 
     Parameters
     ----------
@@ -82,6 +83,10 @@ class DimensionUniverse:
     version : `int`, optional
         Integer version for this `DimensionUniverse`.  If not provided, a
         version will be obtained from ``builder`` or ``config``.
+    namespace : `str`, optional
+        Namespace of this `DimensionUniverse`, combined with the version
+        to provide universe safety for registries that use different
+        dimension definitions.
     builder : `DimensionConstructionBuilder`, optional
         Builder object used to initialize a new instance.  Ignored if
         ``version`` is provided and an instance with that version already
@@ -89,7 +94,7 @@ class DimensionUniverse:
         called; this will be called if needed by `DimensionUniverse`.
     """
 
-    _instances: ClassVar[Dict[int, DimensionUniverse]] = {}
+    _instances: ClassVar[Dict[Tuple[int, str], DimensionUniverse]] = {}
     """Singleton dictionary of all instances, keyed by version.
 
     For internal use only.
@@ -100,6 +105,7 @@ class DimensionUniverse:
         config: Optional[Config] = None,
         *,
         version: Optional[int] = None,
+        namespace: Optional[str] = None,
         builder: Optional[DimensionConstructionBuilder] = None,
     ) -> DimensionUniverse:
         # Try to get a version first, to look for existing instances; try to
@@ -111,8 +117,19 @@ class DimensionUniverse:
             else:
                 version = builder.version
 
+        # Then a namespace.
+        if namespace is None:
+            if builder is None:
+                config = DimensionConfig(config)
+                namespace = config.get("namespace", _DEFAULT_NAMESPACE)
+            else:
+                namespace = builder.namespace
+        # if still None use the default
+        if namespace is None:
+            namespace = _DEFAULT_NAMESPACE
+
         # See if an equivalent instance already exists.
-        self: Optional[DimensionUniverse] = cls._instances.get(version)
+        self: Optional[DimensionUniverse] = cls._instances.get((version, namespace))
         if self is not None:
             return self
 
@@ -145,13 +162,15 @@ class DimensionUniverse:
         # Add attribute for special subsets of the graph.
         self.empty = DimensionGraph(self, (), conform=False)
 
-        # Use the version number from the config as a key in the singleton
-        # dict containing all instances; that will let us transfer dimension
-        # objects between processes using pickle without actually going
-        # through real initialization, as long as a universe with the same
-        # version has already been constructed in the receiving process.
+        # Use the version number and namespace from the config as a key in
+        # the singleton dict containing all instances; that will let us
+        # transfer dimension objects between processes using pickle without
+        # actually going through real initialization, as long as a universe
+        # with the same version and namespace has already been constructed in
+        # the receiving process.
         self._version = version
-        cls._instances[self._version] = self
+        self._namespace = namespace
+        cls._instances[self._version, self._namespace] = self
 
         # Build mappings from element to index.  These are used for
         # topological-sort comparison operators in DimensionElement itself.
@@ -163,7 +182,7 @@ class DimensionUniverse:
         return self
 
     def __repr__(self) -> str:
-        return f"DimensionUniverse({self._version})"
+        return f"DimensionUniverse({self._version}, {self._namespace})"
 
     def __getitem__(self, name: str) -> DimensionElement:
         return self._elements[name]
@@ -412,18 +431,21 @@ class DimensionUniverse:
         return math.ceil(len(self._dimensions) / 8)
 
     @classmethod
-    def _unpickle(cls, version: int) -> DimensionUniverse:
+    def _unpickle(cls, version: int, namespace: Optional[str] = None) -> DimensionUniverse:
         """Return an unpickled dimension universe.
 
         Callable used for unpickling.
 
         For internal use only.
         """
+        if namespace is None:
+            # Old pickled universe.
+            namespace = _DEFAULT_NAMESPACE
         try:
-            return cls._instances[version]
+            return cls._instances[version, namespace]
         except KeyError as err:
             raise pickle.UnpicklingError(
-                f"DimensionUniverse with version '{version}' "
+                f"DimensionUniverse with version '{version}' and namespace {namespace!r} "
                 f"not found.  Note that DimensionUniverse objects are not "
                 f"truly serialized; when using pickle to transfer them "
                 f"between processes, an equivalent instance with the same "
@@ -431,7 +453,7 @@ class DimensionUniverse:
             ) from err
 
     def __reduce__(self) -> tuple:
-        return (self._unpickle, (self._version,))
+        return (self._unpickle, (self._version, self._namespace))
 
     def __deepcopy__(self, memo: dict) -> DimensionUniverse:
         # DimensionUniverse is recursively immutable; see note in @immutable
@@ -468,3 +490,5 @@ class DimensionUniverse:
     _packers: Dict[str, DimensionPackerFactory]
 
     _version: int
+
+    _namespace: Optional[str]
