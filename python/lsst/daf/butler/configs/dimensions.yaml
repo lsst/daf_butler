@@ -1,4 +1,5 @@
 version: 1
+namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
   # dimensions.  Its value is a string formed by concatenating one of the
