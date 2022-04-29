@@ -763,6 +763,7 @@ class SqlRegistry(Registry):
         *data: Union[Mapping[str, Any], DimensionRecord],
         conform: bool = True,
         replace: bool = False,
+        skip_existing: bool = False,
     ) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         if conform:
@@ -775,7 +776,7 @@ class SqlRegistry(Registry):
             # Ignore typing since caller said to trust them with conform=False.
             records = data  # type: ignore
         storage = self._managers.dimensions[element]  # type: ignore
-        storage.insert(*records, replace=replace)
+        storage.insert(*records, replace=replace, skip_existing=skip_existing)
 
     def syncDimensionData(
         self,

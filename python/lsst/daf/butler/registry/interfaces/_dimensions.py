@@ -133,7 +133,7 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         """Insert one or more records into storage.
 
         Parameters
@@ -144,6 +144,9 @@ class DimensionRecordStorage(ABC):
         replace: `bool`, optional
             If `True` (`False` is default), replace existing records in the
             database if there is a conflict.
+        skip_existing : `bool`, optional
+            If `True` (`False` is default), skip insertion if a record with
+            the same primary key values already exists.
 
         Raises
         ------

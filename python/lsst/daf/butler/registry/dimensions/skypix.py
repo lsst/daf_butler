@@ -84,7 +84,7 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
             return
         raise NotImplementedError(f"Cannot includeSkyPix dimension {self.element.name} directly in query.")
 
-    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         raise TypeError(f"Cannot insert into SkyPix dimension {self._dimension.name}.")
 
