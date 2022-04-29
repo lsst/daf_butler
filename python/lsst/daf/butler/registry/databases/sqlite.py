@@ -30,6 +30,7 @@ from contextlib import closing
 from typing import Any, ContextManager, Iterable, List, Optional
 
 import sqlalchemy
+import sqlalchemy.dialects.sqlite
 import sqlalchemy.ext.compiler
 
 from ...core import ddl
@@ -56,58 +57,6 @@ def _onSqlite3Begin(connection: sqlalchemy.engine.Connection) -> sqlalchemy.engi
     # deadlocks).
     connection.execute(sqlalchemy.text("BEGIN IMMEDIATE"))
     return connection
-
-
-class _Replace(sqlalchemy.sql.Insert):
-    """A SQLAlchemy query that compiles to INSERT ... ON CONFLICT REPLACE
-    on the primary key constraint for the table.
-    """
-
-    inherit_cache = True  # make it cacheable
-
-
-# SQLite and PostgreSQL use similar syntax for their ON CONFLICT extension,
-# but SQLAlchemy only knows about PostgreSQL's, so we have to compile some
-# custom text SQL ourselves.
-
-# Hard to infer what types these should be from SQLAlchemy docs; just disable
-# static typing by calling everything "Any".
-@sqlalchemy.ext.compiler.compiles(_Replace, "sqlite")
-def _replace(insert: Any, compiler: Any, **kwargs: Any) -> Any:
-    """Generate an INSERT ... ON CONFLICT REPLACE query."""
-    result = compiler.visit_insert(insert, **kwargs)
-    preparer = compiler.preparer
-    pk_columns = ", ".join([preparer.format_column(col) for col in insert.table.primary_key])
-    result += f" ON CONFLICT ({pk_columns})"
-    columns = [
-        preparer.format_column(col)
-        for col in insert.table.columns
-        if col.name not in insert.table.primary_key
-    ]
-    updates = ", ".join([f"{col} = excluded.{col}" for col in columns])
-    result += f" DO UPDATE SET {updates}"
-    return result
-
-
-class _Ensure(sqlalchemy.sql.Insert):
-    """A SQLAlchemy query that compiles to
-    ``INSERT ... ON CONFLICT DO NOTHING``.
-    """
-
-    inherit_cache = True  # make it cacheable
-
-
-@sqlalchemy.ext.compiler.compiles(_Ensure, "sqlite")
-def _ensure(insert: Any, compiler: Any, **kwargs: Any) -> Any:
-    """Generate an INSERT ... ON CONFLICT DO NOTHING query."""
-    result = compiler.visit_insert(insert, **kwargs)
-    result += " ON CONFLICT DO NOTHING"
-    return result
-
-
-_AUTOINCR_TABLE_SPEC = ddl.TableSpec(
-    fields=[ddl.FieldSpec(name="id", dtype=sqlalchemy.Integer, primaryKey=True)]
-)
 
 
 class SqliteDatabase(Database):
@@ -362,15 +311,25 @@ class SqliteDatabase(Database):
         self.assertTableWriteable(table, f"Cannot replace into read-only table {table}.")
         if not rows:
             return
+        query = sqlalchemy.dialects.sqlite.insert(table)
+        excluded = query.excluded
+        data = {
+            column.name: getattr(excluded, column.name)
+            for column in table.columns
+            if column.name not in table.primary_key
+        }
+        query = query.on_conflict_do_update(index_elements=table.primary_key, set_=data)
         with self._connection() as connection:
-            connection.execute(_Replace(table), rows)
+            connection.execute(query, rows)
 
     def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
         self.assertTableWriteable(table, f"Cannot ensure into read-only table {table}.")
         if not rows:
             return 0
+        query = sqlalchemy.dialects.sqlite.insert(table)
+        query = query.on_conflict_do_nothing()
         with self._connection() as connection:
-            return connection.execute(_Ensure(table), rows).rowcount
+            return connection.execute(query, rows).rowcount
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).
