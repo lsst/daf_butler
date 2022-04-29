@@ -58,7 +58,6 @@ STATIC_TABLE_SPECS = StaticTablesTuple(
     c=ddl.TableSpec(
         fields=[
             ddl.FieldSpec("id", dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True),
-            ddl.FieldSpec("origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
             ddl.FieldSpec("b_id", dtype=sqlalchemy.BigInteger, nullable=True),
         ],
         foreignKeys=[
@@ -70,11 +69,10 @@ STATIC_TABLE_SPECS = StaticTablesTuple(
 DYNAMIC_TABLE_SPEC = ddl.TableSpec(
     fields=[
         ddl.FieldSpec("c_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
-        ddl.FieldSpec("c_origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
         ddl.FieldSpec("a_name", dtype=sqlalchemy.String, length=16, nullable=False),
     ],
     foreignKeys=[
-        ddl.ForeignKeySpec("c", source=("c_id", "c_origin"), target=("id", "origin"), onDelete="CASCADE"),
+        ddl.ForeignKeySpec("c", source=("c_id",), target=("id",), onDelete="CASCADE"),
         ddl.ForeignKeySpec("a", source=("a_name",), target=("name",), onDelete="CASCADE"),
     ],
 )
@@ -393,10 +391,9 @@ class DatabaseTests(ABC):
         expected = [dict(row, id=id) for row, id in zip(rows, ids)]
         self.assertCountEqual(results, expected)
         self.assertTrue(all(result["id"] is not None for result in results))
-        # Insert multiple rows into a table with an autoincrement+origin
-        # primary key, then use the returned IDs to insert into a dynamic
-        # table.
-        rows = [{"origin": db.origin, "b_id": results[0]["id"]}, {"origin": db.origin, "b_id": None}]
+        # Insert multiple rows into a table with an autoincrement primary key,
+        # then use the returned IDs to insert into a dynamic table.
+        rows = [{"b_id": results[0]["id"]}, {"b_id": None}]
         ids = db.insert(tables.c, *rows, returnIds=True)
         results = [r._asdict() for r in db.query(tables.c.select())]
         expected = [dict(row, id=id) for row, id in zip(rows, ids)]
@@ -405,19 +402,15 @@ class DatabaseTests(ABC):
         # Add the dynamic table.
         d = db.ensureTableExists("d", DYNAMIC_TABLE_SPEC)
         # Insert into it.
-        rows = [{"c_origin": db.origin, "c_id": id, "a_name": "a1"} for id in ids]
+        rows = [{"c_id": id, "a_name": "a1"} for id in ids]
         db.insert(d, *rows)
         results = [r._asdict() for r in db.query(d.select())]
         self.assertCountEqual(rows, results)
-        # Insert multiple rows into a table with an autoincrement+origin
-        # primary key (this is especially tricky for SQLite, but good to test
-        # for all DBs), but pass in a value for the autoincrement key.
-        # For extra complexity, we re-use the autoincrement value with a
-        # different value for origin.
+        # Insert multiple rows into a table with an autoincrement primary key,
+        # but pass in a value for the autoincrement key.
         rows2 = [
-            {"id": 700, "origin": db.origin, "b_id": None},
-            {"id": 700, "origin": 60, "b_id": None},
-            {"id": 1, "origin": 60, "b_id": None},
+            {"id": 700, "b_id": None},
+            {"id": 701, "b_id": None},
         ]
         db.insert(tables.c, *rows2)
         results = [r._asdict() for r in db.query(tables.c.select())]
