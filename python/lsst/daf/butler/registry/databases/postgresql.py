@@ -196,15 +196,17 @@ class PostgresqlDatabase(Database):
         with self._connection() as connection:
             connection.execute(query, rows)
 
-    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
+    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict, primary_key_only: bool = False) -> int:
         # Docstring inherited.
         self.assertTableWriteable(table, f"Cannot ensure into read-only table {table}.")
         if not rows:
             return 0
-        # Like `replace`, this uses UPSERT, but it's a bit simpler because
-        # we don't care which constraint is violated or specify which columns
-        # to update.
-        query = sqlalchemy.dialects.postgresql.dml.insert(table).on_conflict_do_nothing()
+        # Like `replace`, this uses UPSERT.
+        base_insert = sqlalchemy.dialects.postgresql.dml.insert(table)
+        if primary_key_only:
+            query = base_insert.on_conflict_do_nothing(constraint=table.primary_key)
+        else:
+            query = base_insert.on_conflict_do_nothing()
         with self._connection() as connection:
             return connection.execute(query, rows).rowcount
 

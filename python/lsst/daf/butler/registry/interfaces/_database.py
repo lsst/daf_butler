@@ -1463,9 +1463,9 @@ class Database(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
+    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict, primary_key_only: bool = False) -> int:
         """Insert one or more rows into a table, skipping any rows for which
-        insertion would violate any constraint.
+        insertion would violate a unique constraint.
 
         Parameters
         ----------
@@ -1475,6 +1475,10 @@ class Database(ABC):
             Positional arguments are the rows to be inserted, as dictionaries
             mapping column name to value.  The keys in all dictionaries must
             be the same.
+        primary_key_only : `bool`, optional
+            If `True` (`False` is default), only skip rows that violate the
+            primary key constraint, and raise an exception (and rollback
+            transactions) for other constraint violations.
 
         Returns
         -------

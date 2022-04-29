@@ -620,6 +620,25 @@ class DatabaseTests(ABC):
         row3 = {"name": "a3", "region": None}
         self.assertEqual(db.ensure(tables.a, row3, row2a, row1a), 1)
         self.assertCountEqual([r._asdict() for r in db.query(tables.a.select())], [row1, row2, row3])
+        # Add some data to a table with both a primary key and a different
+        # unique constraint.
+        row_b = {"id": 5, "name": "five", "value": 50}
+        db.insert(tables.b, row_b)
+        # Attempt ensure with primary_key_only=False and a conflict for the
+        # non-PK constraint.  This should do nothing.
+        db.ensure(tables.b, {"id": 10, "name": "five", "value": 200})
+        self.assertEqual([r._asdict() for r in db.query(tables.b.select())], [row_b])
+        # Now use primary_key_only=True with conflict in only the non-PK field.
+        # This should be an integrity error and nothing should change.
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
+            db.ensure(tables.b, {"id": 10, "name": "five", "value": 200}, primary_key_only=True)
+        self.assertEqual([r._asdict() for r in db.query(tables.b.select())], [row_b])
+        # With primary_key_only=True a conflict in the primary key is ignored
+        # regardless of whether there is a conflict elsewhere.
+        db.ensure(tables.b, {"id": 5, "name": "ten", "value": 100}, primary_key_only=True)
+        self.assertEqual([r._asdict() for r in db.query(tables.b.select())], [row_b])
+        db.ensure(tables.b, {"id": 5, "name": "five", "value": 100}, primary_key_only=True)
+        self.assertEqual([r._asdict() for r in db.query(tables.b.select())], [row_b])
 
     def testTransactionNesting(self):
         """Test that transactions can be nested with the behavior in the

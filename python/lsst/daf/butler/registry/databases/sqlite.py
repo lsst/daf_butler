@@ -322,12 +322,15 @@ class SqliteDatabase(Database):
         with self._connection() as connection:
             connection.execute(query, rows)
 
-    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict) -> int:
+    def ensure(self, table: sqlalchemy.schema.Table, *rows: dict, primary_key_only: bool = False) -> int:
         self.assertTableWriteable(table, f"Cannot ensure into read-only table {table}.")
         if not rows:
             return 0
         query = sqlalchemy.dialects.sqlite.insert(table)
-        query = query.on_conflict_do_nothing()
+        if primary_key_only:
+            query = query.on_conflict_do_nothing(index_elements=table.primary_key)
+        else:
+            query = query.on_conflict_do_nothing()
         with self._connection() as connection:
             return connection.execute(query, rows).rowcount
 
