@@ -187,9 +187,9 @@ class SimpleButlerTestCase(unittest.TestCase):
             [self.comparableRef(ref) for ref in datasets2],
         )
 
-    def testDatasetImportTwice(self):
-        """Test exporting all datasets from a repo and then importing them all
-        back in again twice.
+    def testImportTwice(self):
+        """Test exporting dimension records and datasets from a repo and then
+        importing them all back in again twice.
         """
         if self.datasetsIdType is not uuid.UUID:
             self.skipTest("This test can only work for UUIDs")
@@ -204,11 +204,8 @@ class SimpleButlerTestCase(unittest.TestCase):
             butler2 = self.makeButler(writeable=True)
             # Import it once.
             butler2.import_(filename=file.name)
-            # Import it again, but ignore all dimensions
-            dimensions = set(
-                dimension.name for dimension in butler2.registry.dimensions.getStaticDimensions()
-            )
-            butler2.import_(filename=file.name, skip_dimensions=dimensions)
+            # Import it again
+            butler2.import_(filename=file.name)
         datasets1 = list(butler1.registry.queryDatasets(..., collections=...))
         datasets2 = list(butler2.registry.queryDatasets(..., collections=...))
         self.assertTrue(all(isinstance(ref.id, self.datasetsIdType) for ref in datasets1))
