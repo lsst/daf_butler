@@ -26,7 +26,20 @@ import itertools
 import logging
 import warnings
 from collections import defaultdict
-from typing import AbstractSet, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Set, Union
+from typing import (
+    TYPE_CHECKING,
+    AbstractSet,
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Union,
+)
 
 import sqlalchemy
 
@@ -55,8 +68,14 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
+from ..interfaces.queries import ColumnTypeData, DimensionKeyColumnTag, DimensionRecordColumnTag, Relation
 from ..queries import QueryBuilder
+from ..summaries import GovernorDimensionRestriction
 from ..wildcards import Ellipsis, EllipsisType
+
+if TYPE_CHECKING:
+    from lsst.sphgeom import RangeSet
+
 
 _LOG = logging.getLogger(__name__)
 
@@ -107,7 +126,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             )
         }
         self._skyPixOverlap = skyPixOverlap
-        self._otherOverlaps: List[DatabaseDimensionOverlapStorage] = []
+        self._otherOverlaps = NamedKeyDict[DatabaseDimensionElement, DatabaseDimensionOverlapStorage]()
 
     @classmethod
     def initialize(
@@ -176,7 +195,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             dimensions.add(self.element.universe.commonSkyPix)
             assert self._skyPixOverlap is not None
             builder.joinTable(
-                self._skyPixOverlap.select(self.element.universe.commonSkyPix, Ellipsis),
+                self._skyPixOverlap.select(self.element.universe.commonSkyPix, Ellipsis).to_sql_from(),
                 dimensions,
             )
             regionsInTable = self._db.getSpatialRegionRepresentation().from_columns(self._table.columns)
@@ -191,6 +210,46 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             timespans[self.element] = timespanInTable
         builder.finishJoin(self._table, joinOn)
         return self._table
+
+    def select(
+        self, restriction: GovernorDimensionRestriction, spatial_bounds: Optional[RangeSet] = None
+    ) -> Relation:
+        # Docstring inherited
+        builder = Relation.build(self._table)
+        column_type_data = ColumnTypeData.from_database(self._db)
+        for dimension_name, field_name in zip(
+            self.element.dimensions.names, self.element.RecordClass.fields.dimensions.names
+        ):
+            builder.columns[DimensionKeyColumnTag(dimension_name)] = self._table.columns[field_name]
+        for field_name in self.element.RecordClass.fields.facts.names:
+            builder.columns[DimensionRecordColumnTag(self.element.name, field_name)] = self._table.columns[
+                field_name
+            ]
+        if self.element.spatial:
+            builder.columns[
+                DimensionRecordColumnTag(self.element.name, "region")
+            ] = column_type_data.spatial_region_cls.from_columns(self._table.columns)
+        if self.element.spatial:
+            builder.columns[
+                DimensionRecordColumnTag(self.element.name, "timespan")
+            ] = column_type_data.timespan_cls.from_columns(self._table.columns)
+        return builder.finish(column_type_data, name=self.element.name)
+
+    def select_spatial_overlap(
+        self,
+        element: DimensionElement,
+        restriction: GovernorDimensionRestriction,
+        spatial_bounds: Optional[RangeSet] = None,
+    ) -> Relation:
+        if isinstance(element, SkyPixDimension):
+            assert self._skyPixOverlap is not None, "Spatial elements must have skypix overlaps."
+            assert self.element.governor is not None, "Spatial elements must have a governor dimension."
+            return self._skyPixOverlap.select(element, restriction.get(self.element.governor, ...))
+        else:
+            assert isinstance(
+                element, DatabaseDimensionElement
+            ), "Only SkyPixDimensions and DatabaseDimensionElements are spatial."
+            return self._otherOverlaps[element].select(restriction)
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
@@ -275,7 +334,8 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def connect(self, overlaps: DatabaseDimensionOverlapStorage) -> None:
         # Docstring inherited from DatabaseDimensionRecordStorage.
-        self._otherOverlaps.append(overlaps)
+        other_element = overlaps.elements[0] if overlaps.elements[1] == self.element else overlaps.elements[1]
+        self._otherOverlaps[other_element] = overlaps
 
 
 class _SkyPixOverlapStorage:
@@ -782,7 +842,7 @@ class _SkyPixOverlapStorage:
         self,
         skypix: SkyPixDimension,
         governorValues: Union[AbstractSet[str], EllipsisType],
-    ) -> sqlalchemy.sql.FromClause:
+    ) -> Relation:
         """Construct a subquery expression containing overlaps between the
         given skypix dimension and governor values.
 
@@ -800,15 +860,15 @@ class _SkyPixOverlapStorage:
 
         Returns
         -------
-        subquery : `sqlalchemy.sql.FromClause`
-            A SELECT query with an alias, intended for use as a subquery, with
-            columns equal to ``self.element.required.names`` + ``skypix.name``.
+        relation : `Relation`
+            # TODO
         """
         if skypix != self.element.universe.commonSkyPix:
             # We guarantee elsewhere that we always materialize all overlaps
             # vs. commonSkyPix, but for everything else, we need to check that
             # we have materialized this combination of governor values and
             # skypix.
+            # TODO: cache this
             summaryWhere = [
                 self._summaryTable.columns.skypix_system == skypix.system.name,
                 self._summaryTable.columns.skypix_level == skypix.level,
@@ -832,22 +892,19 @@ class _SkyPixOverlapStorage:
                     f"(for {self._governor.element.name} in {missingGovernorValues}), but these "
                     f"have not been materialized."
                 )
-        columns = [self._overlapTable.columns.skypix_index.label(skypix.name)]
-        columns.extend(self._overlapTable.columns[name] for name in self.element.graph.required.names)
-        overlapWhere = [
-            self._overlapTable.columns.skypix_system == skypix.system.name,
-            self._overlapTable.columns.skypix_level == skypix.level,
-        ]
+        builder = Relation.build(self._overlapTable)
+        builder.columns[DimensionKeyColumnTag(skypix.name)] = self._overlapTable.columns.skypix_index
+        builder.extract_dimension_keys(self.element.graph.required.names)
+        builder.where.append(self._overlapTable.columns.skypix_system == skypix.system.name)
+        builder.where.append(self._overlapTable.columns.skypix_level == skypix.level)
         if governorValues is not Ellipsis:
-            overlapWhere.append(
+            builder.where.append(
                 self._overlapTable.columns[self._governor.element.name].in_(list(governorValues))
             )
-        overlapQuery = (
-            sqlalchemy.sql.select(*columns)
-            .select_from(self._overlapTable)
-            .where(sqlalchemy.sql.and_(*overlapWhere))
+        return builder.finish(
+            ColumnTypeData.from_database(self._db),
+            name=f"{self.element.name}_{skypix.name}_overlap",
         )
-        return overlapQuery.alias(f"{self.element.name}_{skypix.name}_overlap")
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         """Return tables used for schema digest.

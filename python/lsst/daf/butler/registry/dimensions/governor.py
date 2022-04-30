@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["BasicGovernorDimensionRecordStorage"]
 
-from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Optional, Union
+from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Optional, Union
 
 import sqlalchemy
 
@@ -35,7 +35,13 @@ from ...core import (
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
+from ..interfaces.queries import ColumnTypeData, DimensionKeyColumnTag, DimensionRecordColumnTag, Relation
 from ..queries import QueryBuilder
+
+if TYPE_CHECKING:
+    from lsst.sphgeom import RangeSet
+
+    from ..summaries import GovernorDimensionRestriction
 
 
 class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
@@ -127,6 +133,24 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         )
         builder.finishJoin(self._table, joinOn)
         return self._table
+
+    def select(
+        self, restriction: GovernorDimensionRestriction, spatial_bounds: Optional[RangeSet] = None
+    ) -> Relation:
+        # Docstring inherited
+        builder = Relation.build(self._table)
+        for dimension_name, field_name in zip(
+            self.element.dimensions.names, self.element.RecordClass.fields.dimensions.names
+        ):
+            builder.columns[DimensionKeyColumnTag(dimension_name)] = self._table.columns[field_name]
+        for field_name in self.element.RecordClass.fields.facts.names:
+            builder.columns[DimensionRecordColumnTag(self.element.name, field_name)] = self._table.columns[
+                field_name
+            ]
+        return builder.finish(
+            name=self.element.name,
+            column_type_data=ColumnTypeData.from_database(self._db),
+        )
 
     def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

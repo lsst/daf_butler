@@ -21,15 +21,17 @@
 
 from __future__ import annotations
 
-__all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage", "DatasetIdGenEnum")
+__all__ = (
+    "DatasetRecordStorageManager",
+    "DatasetRecordStorage",
+    "DatasetIdGenEnum",
+)
 
 import enum
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Tuple
+from typing import TYPE_CHECKING, AbstractSet, Any, Iterable, Iterator, Optional, Tuple
 
-import sqlalchemy.sql
-
-from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl
+from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, Timespan, ddl
 from ...core.named import NamedValueAbstractSet
 from ._versioning import VersionedExtension
 
@@ -38,6 +40,7 @@ if TYPE_CHECKING:
     from ._collections import CollectionManager, CollectionRecord, RunRecord
     from ._database import Database, StaticTablesContext
     from ._dimensions import DimensionRecordStorageManager
+    from .queries import Relation
 
 
 class DatasetIdGenEnum(enum.Enum):
@@ -313,23 +316,9 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def select(
-        self,
-        *collections: CollectionRecord,
-        dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
-        id: SimpleQuery.Select.Or[Optional[DatasetId]] = SimpleQuery.Select,
-        run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
-        timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
-        ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
-        rank: SimpleQuery.Select.Or[None] = None,
-    ) -> sqlalchemy.sql.Selectable:
-        """Return a SQLAlchemy object that represents a ``SELECT`` query for
-        this `DatasetType`.
-
-        All arguments can either be a value that constrains the query or
-        the `SimpleQuery.Select` tag object to indicate that the value should
-        be returned in the columns in the ``SELECT`` clause.  The default is
-        `SimpleQuery.Select`.
+    def select(self, *collections: CollectionRecord, columns: AbstractSet[str]) -> Relation:
+        """Yield a SQLAlchemy objects that represent a possibly-compound
+        ``SELECT`` query for this `DatasetType`.
 
         Parameters
         ----------
@@ -338,43 +327,34 @@ class DatasetRecordStorage(ABC):
             not be of type `CollectionType.CHAINED`.  If multiple collections
             are passed, the query will search all of them in an unspecified
             order, and all collections must have the same type.
-        dataId : `DataCoordinate` or `Select`
-            The data ID to restrict results with, or an instruction to return
-            the data ID via columns with names
-            ``self.datasetType.dimensions.names``.
-        id : `DatasetId`, `Select` or None,
-            The primary key value for the dataset, an instruction to return it
-            via a ``id`` column, or `None` to ignore it entirely.
-        run : `None` or `Select`
-            If `Select` (default), include the dataset's run key value (as
-            column labeled with the return value of
-            ``CollectionManager.getRunForeignKeyName``).
-            If `None`, do not include this column (to constrain the run,
-            pass a `RunRecord` as the ``collection`` argument instead).
-        timespan : `None`, `Select`, or `Timespan`
-            If `Select` (default), include the validity range timespan in the
-            result columns.  If a `Timespan` instance, constrain the results to
-            those whose validity ranges overlap that given timespan.  For
-            collections whose type is not `~CollectionType.CALIBRATION`, if
-            `Select` is passed a column with a literal ``NULL`` value will be
-            added, and ``sqlalchemy.sql.expressions.Null` may be passed to
-            force a constraint that the value be null (since `None` is
-            interpreted as meaning "do not select or constrain this column").
-        ingestDate : `None`, `Select`, or `Timespan`
-            If `Select` include the ingest timestamp in the result columns.
-            If a `Timespan` instance, constrain the results to those whose
-            ingest times which are inside given timespan and also include
-            timestamp in the result columns. If `None` (default) then there is
-            no constraint and timestamp is not returned.
-        rank : `Select` or `None`
-            If `Select`, include a calculated column that is the integer rank
-            of the row's collection in the given list of collections, starting
-            from zero.
+        columns : `AbstractSet` [ `str` ]
+            Columns to include in the ``SELECT`` clause(s) of the query.  Valid
+            columns are:
+
+            - ``dataset_id``: the unique identifier of the dataset.  The type
+              is implementation-dependent.  Never nullable.
+
+            - ``ingest_date``: the date and time the dataset was added to the
+              date pository.
+
+            - ``run``: the foreign key column to the `~CollectionType.RUN`
+              collection holding the dataset (not necessarily the collection
+              name).  The type is dependent on the collection manager
+              implementation.
+
+            - ``timespan``: the validity range for datasets found in a
+              `~CollectionType.CALIBRATION` collection, or ``NULL`` for other
+              collection types.
+
+            - ``rank``: a calculated integer column holding the index of the
+              collection the dataset was found in, within the ``collections``
+              sequence given.
+
 
         Returns
-        -------
-        query : `sqlalchemy.sql.Selectable`
-            A SQLAlchemy object representing a simple ``SELECT`` query.
+        ------
+        relation : `Relation`
+            # TODO
         """
         raise NotImplementedError()
 

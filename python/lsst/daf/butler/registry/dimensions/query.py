@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["QueryDimensionRecordStorage"]
 
-from typing import Any, Iterable, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Optional
 
 import sqlalchemy
 
@@ -44,7 +44,13 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
+from ..interfaces.queries import ColumnTypeData, Relation
 from ..queries import QueryBuilder
+
+if TYPE_CHECKING:
+    from lsst.sphgeom import RangeSet
+
+    from ..summaries import GovernorDimensionRestriction
 
 
 class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
@@ -156,6 +162,29 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         )
         builder.finishJoin(self._query, joinOn)
         return self._query
+
+    def select(
+        self, restriction: GovernorDimensionRestriction, spatial_bounds: Optional[RangeSet] = None
+    ) -> Relation:
+        targetTable = self._db.getExistingTable(self._target.name, self._targetSpec)
+        assert targetTable is not None
+        # Start with a Relation Builder that makes a non-DISTINCT query, since
+        # Relation can't handle SELECT DISTINCT (making it do so is intriguing
+        # but difficult, at least if we want it to be clever about knowing when
+        # DISTINCT is needed).
+        builder = Relation.build(targetTable)
+        # The only columns for this dimension are ones for its required
+        # dependencies and its own primary key (guaranteed by the checks in
+        # the ctor).
+        builder.extract_dimension_keys(self.element.required.names)
+        # Make that first Relation and then immediately make it into a
+        # SQLAlchemy SELECT.
+        column_type_data = ColumnTypeData.from_database(self._db)
+        base_select = builder.finish(column_type_data=column_type_data).to_sql_executable()
+        # Make a new Relation by manually transforming that into a subquery.
+        return Relation.build(
+            base_select.distinct().alias(self.element.name),
+        ).finish(column_type_data)
 
     def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

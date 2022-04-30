@@ -74,6 +74,7 @@ from ..registry import (
     queries,
 )
 from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
+from ..registry.interfaces.queries import ColumnTag, DatasetColumnTag
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.queries import Query
 from ..registry.summaries import CollectionSummary
@@ -1121,16 +1122,19 @@ class SqlRegistry(Registry):
             collectionTypes=frozenset(collectionTypes),
             flattenChains=flattenChains,
         ):
-            query = storage.select(collectionRecord)
-            for row in self._db.query(query).mappings():
-                dataId = DataCoordinate.fromRequiredValues(
-                    storage.datasetType.dimensions,
-                    tuple(row[name] for name in storage.datasetType.dimensions.required.names),
+            relation = storage.select(
+                collectionRecord,
+                columns={"dataset_id", "run", "timespan"},
+            )
+            for row in self._db.query(relation.to_sql_executable()):
+                ref = ColumnTag.read_dataset_ref(
+                    storage.datasetType, row, collections=self._managers.collections, full=False
                 )
-                runRecord = self._managers.collections[row[self._managers.collections.getRunForeignKeyName()]]
-                ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name, conform=False)
                 if collectionRecord.type is CollectionType.CALIBRATION:
-                    timespan = TimespanReprClass.extract(row)
+                    timespan = TimespanReprClass.extract(
+                        row,
+                        name=str(DatasetColumnTag(storage.datasetType.name, "timespan")),
+                    )
                 else:
                     timespan = None
                 yield DatasetAssociation(ref=ref, collection=collectionRecord.name, timespan=timespan)

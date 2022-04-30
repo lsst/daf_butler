@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["CachingDimensionRecordStorage"]
 
-from typing import Any, Dict, Iterable, Mapping, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Mapping, Optional, Set, Union
 
 import sqlalchemy
 from lsst.utils import doImportType
@@ -47,6 +47,12 @@ from ..interfaces import (
     StaticTablesContext,
 )
 from ..queries import QueryBuilder
+
+if TYPE_CHECKING:
+    from lsst.sphgeom import RangeSet
+
+    from ..interfaces.queries import Relation
+    from ..summaries import GovernorDimensionRestriction
 
 
 class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
@@ -101,6 +107,11 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         return self._nested.join(builder, regions=regions, timespans=timespans)
+
+    def select(
+        self, restriction: GovernorDimensionRestriction, spatial_bounds: Optional[RangeSet] = None
+    ) -> Relation:
+        return self._nested.select(restriction=restriction, spatial_bounds=spatial_bounds)
 
     def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

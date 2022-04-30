@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["BasicSkyPixDimensionRecordStorage"]
 
-from typing import Iterable, Optional
+from typing import TYPE_CHECKING, Iterable, Optional
 
 import sqlalchemy
 
@@ -36,7 +36,13 @@ from ...core import (
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import SkyPixDimensionRecordStorage
+from ..interfaces.queries import Relation
 from ..queries import QueryBuilder
+
+if TYPE_CHECKING:
+    from lsst.sphgeom import RangeSet
+
+    from ..summaries import GovernorDimensionRestriction
 
 
 class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
@@ -83,6 +89,16 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
             # joining them in anyway.
             return
         raise NotImplementedError(f"Cannot includeSkyPix dimension {self.element.name} directly in query.")
+
+    def select(
+        self, restriction: GovernorDimensionRestriction, spatial_bounds: Optional[RangeSet] = None
+    ) -> Relation:
+        if spatial_bounds is None:
+            raise RuntimeError(f"Cannot select {self.element.name} records without spatial bounds.")
+        # TODO: Iterate over spatial_bounds and generate a list of IDs (and
+        # regions?) to pass to Session.upload, once we figure out how to get
+        # a session here and manage the temp table's lifetime.
+        raise NotImplementedError(f"TODO: cannot select {self.element.name} without temp table context.")
 
     def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

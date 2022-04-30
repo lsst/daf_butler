@@ -36,6 +36,8 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
+from ..interfaces.queries import ColumnTypeData, Relation
+from ..summaries import GovernorDimensionRestriction
 
 _LOG = logging.getLogger(__name__)
 
@@ -181,3 +183,14 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
                 if dimension != element.spatial.governor:
                     addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
         return tableSpec
+
+    def select(self, restriction: GovernorDimensionRestriction) -> Relation:
+        # TODO: check summary table against restriction, with caching.
+        builder = Relation.build(self._overlapTable)
+        builder.extract_dimension_keys(self.elements[0].graph.required.names)
+        builder.extract_dimension_keys(self.elements[1].graph.required.names)
+        builder.apply_governor_restriction(restriction)
+        return builder.finish(
+            name=f"{self.elements[0].name}_{self.elements[1].name}_overlap",
+            column_type_data=ColumnTypeData.from_database(self._db),
+        )

@@ -30,14 +30,29 @@ __all__ = (
 )
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, Iterable, Mapping, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    AbstractSet,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Mapping,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
 
 import sqlalchemy
 
 from ...core import DatabaseDimensionElement, DimensionGraph, GovernorDimension, SkyPixDimension
+from .._exceptions import MissingSpatialOverlapError
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
+    from lsst.sphgeom import RangeSet
+
     from ...core import (
         DataCoordinateIterable,
         DimensionElement,
@@ -48,7 +63,9 @@ if TYPE_CHECKING:
         TimespanDatabaseRepresentation,
     )
     from ..queries import QueryBuilder
+    from ..summaries import GovernorDimensionRestriction
     from ._database import Database, StaticTablesContext
+    from .queries import Relation
 
 
 OverlapSide = Union[SkyPixDimension, Tuple[DatabaseDimensionElement, str]]
@@ -130,6 +147,12 @@ class DimensionRecordStorage(ABC):
         ``regions`` and ``timespans`` cannot be assumed to be not `None` just
         because an element has a region or timespan.
         """
+        raise NotImplementedError()
+
+    def select(
+        self, restriction: GovernorDimensionRestriction, spatial_bounds: Optional[RangeSet] = None
+    ) -> Relation:
+        # TODO: docs
         raise NotImplementedError()
 
     @abstractmethod
@@ -386,6 +409,14 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         """
         raise NotImplementedError(f"{type(self).__name__} does not support spatial elements.")
 
+    def select_spatial_overlap(
+        self,
+        other: DimensionElement,
+        restriction: GovernorDimensionRestriction,
+        spatial_bounds: Optional[RangeSet] = None,
+    ) -> Relation:
+        raise NotImplementedError()
+
 
 class DatabaseDimensionOverlapStorage(ABC):
     """A base class for objects that manage overlaps between a pair of
@@ -442,6 +473,11 @@ class DatabaseDimensionOverlapStorage(ABC):
         tables : `Iterable` [ `sqlalchemy.schema.Table` ]
             Possibly empty set of tables for schema digest calculations.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def select(self, restriction: GovernorDimensionRestriction) -> Relation:
+        # TODO: docs
         raise NotImplementedError()
 
 
@@ -616,6 +652,32 @@ class DimensionRecordStorageManager(VersionedExtension):
         present in persistent storage.
         """
         raise NotImplementedError()
+
+    def select_spatial_overlap(
+        self,
+        a: DimensionElement,
+        b: DimensionElement,
+        restriction: GovernorDimensionRestriction,
+        spatial_bounds: Optional[RangeSet] = None,
+    ) -> Relation:
+        # TODO: docs
+        if isinstance(a, DatabaseDimensionElement):
+            a_storage = cast(DatabaseDimensionRecordStorage, self[a])
+            return a_storage.select_spatial_overlap(b, restriction=restriction, spatial_bounds=spatial_bounds)
+        if isinstance(b, DatabaseDimensionElement):
+            b_storage = cast(DatabaseDimensionRecordStorage, self[b])
+            return b_storage.select_spatial_overlap(a, restriction=restriction, spatial_bounds=spatial_bounds)
+        assert isinstance(a, SkyPixDimension) and isinstance(
+            b, SkyPixDimension
+        ), "Only DatabaseDimensionElements and SkyPixDimensions are spatial."
+        if spatial_bounds is None:
+            raise MissingSpatialOverlapError(
+                f"Cannot compute {a.name}-{b.name} overlaps on a spatially-unbounded query."
+            )
+        raise NotImplementedError(
+            "TODO: compute overlaps between skypix systems over spatial bounds and pass to Session.upload. "
+            "Needs a context manager to manage a possible temp table's lifetime."
+        )
 
     universe: DimensionUniverse
     """Universe of all dimensions and dimension elements known to the

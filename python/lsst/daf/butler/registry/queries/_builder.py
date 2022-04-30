@@ -31,6 +31,7 @@ from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._collectionType import CollectionType
 from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, DatasetRecordStorage, GovernorDimensionRecordStorage
+from ..interfaces.queries import ColumnTag, DatasetColumnTag, DimensionKeyColumnTag, Relation
 from ..wildcards import CollectionSearch, CollectionWildcard
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryManagers
@@ -252,23 +253,31 @@ class QueryBuilder:
                 collectionRecords.append(collectionRecord)
         if isResult:
             if findFirst:
-                subquery = self._build_dataset_search_subquery(
+                relation = self._build_dataset_search_relation(
                     datasetRecordStorage,
                     collectionRecords,
                 )
             else:
-                subquery = self._build_dataset_query_subquery(
+                relation = self._build_dataset_query_relation(
                     datasetRecordStorage,
                     collectionRecords,
                 )
+            subquery = relation.to_sql_from()
             columns = DatasetQueryColumns(
                 datasetType=datasetType,
-                id=subquery.columns["id"],
-                runKey=subquery.columns[self._managers.collections.getRunForeignKeyName()],
-                ingestDate=subquery.columns["ingest_date"],
+                id=DatasetColumnTag(datasetType.name, "dataset_id").extract_logical_column(
+                    subquery.columns, relation.column_type_data
+                ),
+                runKey=DatasetColumnTag(datasetType.name, "run").extract_logical_column(
+                    subquery.columns, relation.column_type_data
+                ),
+                ingestDate=DatasetColumnTag(datasetType.name, "ingest_date").extract_logical_column(
+                    subquery.columns, relation.column_type_data
+                ),
             )
         else:
-            subquery = self._build_dataset_constraint_subquery(datasetRecordStorage, collectionRecords)
+            relation = self._build_dataset_constraint_relation(datasetRecordStorage, collectionRecords)
+            subquery = relation.to_sql_from()
             columns = None
         self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
         if not collectionRecords:
@@ -279,9 +288,9 @@ class QueryBuilder:
             return False
         return not self._doomed_by
 
-    def _build_dataset_constraint_subquery(
+    def _build_dataset_constraint_relation(
         self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
-    ) -> sqlalchemy.sql.FromClause:
+    ) -> Relation:
         """Internal helper method to build a dataset subquery for a parent
         query that does not return dataset results.
 
@@ -298,27 +307,13 @@ class QueryBuilder:
 
         Returns
         -------
-        sql : `sqlalchemy.sql.FromClause`
-            A SQLAlchemy aliased subquery object.  Has columns for each
-            dataset type dimension, or an unspecified column (just to prevent
-            SQL syntax errors) where there is no data ID.
+        # TODO
         """
-        return storage.select(
-            *collections,
-            dataId=SimpleQuery.Select,
-            # If this dataset type has no dimensions, we're in danger of
-            # generating an invalid subquery that has no columns in the
-            # SELECT clause.  An easy fix is to just select some arbitrary
-            # column that goes unused, like the dataset ID.
-            id=None if storage.datasetType.dimensions else SimpleQuery.Select,
-            run=None,
-            ingestDate=None,
-            timespan=None,
-        ).alias(storage.datasetType.name)
+        return storage.select(*collections, columns=frozenset())
 
-    def _build_dataset_query_subquery(
+    def _build_dataset_query_relation(
         self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
-    ) -> sqlalchemy.sql.FromClause:
+    ) -> Relation:
         """Internal helper method to build a dataset subquery for a parent
         query that returns all matching dataset results.
 
@@ -335,24 +330,13 @@ class QueryBuilder:
 
         Returns
         -------
-        sql : `sqlalchemy.sql.FromClause`
-            A SQLAlchemy aliased subquery object.  Has columns for each dataset
-            type dimension, the dataset ID, the `~CollectionType.RUN`
-            collection key, and the ingest date.
+        # TODO
         """
-        sql = storage.select(
-            *collections,
-            dataId=SimpleQuery.Select,
-            id=SimpleQuery.Select,
-            run=SimpleQuery.Select,
-            ingestDate=SimpleQuery.Select,
-            timespan=None,
-        ).alias(storage.datasetType.name)
-        return sql
+        return storage.select(*collections, columns={"dataset_id", "run", "ingest_date"})
 
-    def _build_dataset_search_subquery(
+    def _build_dataset_search_relation(
         self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
-    ) -> sqlalchemy.sql.FromClause:
+    ) -> Relation:
         """Internal helper method to build a dataset subquery for a parent
         query that returns the first matching dataset for each data ID and
         dataset type name from an ordered list of collections.
@@ -379,7 +363,7 @@ class QueryBuilder:
         # find-first search is just a regular result subquery.  Same is true
         # if this is a doomed query with no collections to search.
         if len(collections) <= 1:
-            return self._build_dataset_query_subquery(storage, collections)
+            return self._build_dataset_query_relation(storage, collections)
         # In the more general case, we build a subquery of the form below to
         # search the collections in order.
         #
@@ -410,45 +394,61 @@ class QueryBuilder:
         #     {dst}_window.rownum = 1;
         #
         # We'll start with the Common Table Expression (CTE) at the top.
-        search = storage.select(
-            *collections,
-            dataId=SimpleQuery.Select,
-            id=SimpleQuery.Select,
-            run=SimpleQuery.Select,
-            ingestDate=SimpleQuery.Select,
-            timespan=None,
-            rank=SimpleQuery.Select,
-        ).cte(f"{storage.datasetType.name}_search")
-        # Now we fill out the SELECT from the CTE, and the subquery it contains
-        # (at the same time, since they have the same columns, aside from the
-        # OVER clause).
-        run_key_name = self._managers.collections.getRunForeignKeyName()
-        window_data_id_cols = [
-            search.columns[name].label(name) for name in storage.datasetType.dimensions.required.names
-        ]
-        window_select_cols = [
-            search.columns["id"].label("id"),
-            search.columns[run_key_name].label(run_key_name),
-            search.columns["ingest_date"].label("ingest_date"),
-        ]
-        window_select_cols += window_data_id_cols
-        window_select_cols.append(
+        # We get most  of that directly by delegating to DatasetRecordStorage,
+        # in the form of a Relation object.
+        search_relation = storage.select(*collections, columns={"dataset_id", "run", "ingest_date", "rank"})
+        search_cte = search_relation.to_sql_executable().cte(f"{storage.datasetType.name}_search")
+        # Create a columns object that holds the SQLAlchemy objects for the
+        # columns that are SELECT'd in the CTE, and hence available downstream.
+        search_columns = ColumnTag.extract_mapping(
+            search_relation.columns,
+            search_cte.columns,
+            search_relation.column_type_data,
+        )
+
+        # Now we fill out the inner SELECT subquery from the CTE.  We replace
+        # the rank column with the window-function 'rownum' calculated from it;
+        # which is like the rank in that it orders datasets by the collection
+        # in which they are found (separately for each data ID), but critically
+        # it doesn't have gaps where the dataset wasn't found in one the input
+        # collections, and hence ``rownum=1`` reliably picks out the find-first
+        # result.  We use SQLAlchemy objects directly here instead of Relation,
+        # because it involves some advanced SQL constructs we don't want
+        # Relation to try to wrap.  We still use our columns classes to let
+        # them encapsulate actual column names.
+        rank_tag = DatasetColumnTag(storage.datasetType.name, "rank")
+        rownum_column = (
             sqlalchemy.sql.func.row_number()
-            .over(partition_by=window_data_id_cols, order_by=search.columns["rank"])
+            .over(
+                partition_by=[
+                    search_columns[DimensionKeyColumnTag(dimension_name)]
+                    for dimension_name in storage.datasetType.dimensions.required.names
+                ],
+                order_by=search_columns[rank_tag],
+            )
             .label("rownum")
         )
-        window = (
-            sqlalchemy.sql.select(*window_select_cols)
-            .select_from(search)
-            .alias(f"{storage.datasetType.name}_window")
+        del search_columns[rank_tag]
+        window_subquery = ColumnTag.select(search_columns.items(), search_cte, rownum_column).alias(
+            f"{storage.datasetType.name}_window"
         )
-        sql = (
-            sqlalchemy.sql.select(*[window.columns[col.name].label(col.name) for col in window_select_cols])
-            .select_from(window)
-            .where(window.columns["rownum"] == 1)
-            .alias(storage.datasetType.name)
+        # Create a new columns object to hold the columns SELECT'd by the
+        # subquery.  This does not include the calculated 'rownum' column,
+        # which we'll handle separately; this works out well because we
+        # only want it in the WHERE clause anyway.
+        window_columns = ColumnTag.extract_mapping(
+            search_columns.keys(), window_subquery.columns, search_relation.column_type_data
         )
-        return sql
+
+        # We'll want to package up the full query as Relation instance, so we
+        # build one from SQL parts instead of using SQLAlchemy to make a SELECT
+        # directly.
+        builder = Relation.build(window_subquery)
+        builder.columns.update(window_columns)
+        builder.where.append(window_subquery.columns["rownum"] == 1)
+        return builder.finish(
+            name=storage.datasetType.name, column_type_data=search_relation.column_type_data
+        )
 
     def joinTable(
         self,
