@@ -170,7 +170,7 @@ class DimensionElementFields:
         # don't want *recursive* implied dependencies.
         self.implied = NamedValueSet()
         for dimension in element.implied:
-            fieldSpec = addDimensionForeignKey(self._tableSpec, dimension, primaryKey=False, nullable=True)
+            fieldSpec = addDimensionForeignKey(self._tableSpec, dimension, primaryKey=False, nullable=False)
             self.implied.add(fieldSpec)
             self.dimensions.add(fieldSpec)
             self.standard.add(fieldSpec)
