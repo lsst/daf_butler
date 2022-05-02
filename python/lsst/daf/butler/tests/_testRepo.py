@@ -107,7 +107,8 @@ def makeTestRepo(
     butler = Butler(newConfig, writeable=True)
     dimensionRecords = _makeRecords(dataIds, butler.registry.dimensions)
     for dimension, records in dimensionRecords.items():
-        butler.registry.insertDimensionData(dimension, *records)
+        if butler.registry.dimensions[dimension].viewOf is None:
+            butler.registry.insertDimensionData(dimension, *records)
     return butler
 
 
@@ -183,7 +184,7 @@ def _makeRecords(dataIds: Mapping[str, Iterable], universe: DimensionUniverse) -
             # Do not recurse, to keep the user from having to provide
             # irrelevant dimensions
             for other in dimension.implied:
-                if other != dimension and other.name in expandedIds and other.viewOf is None:
+                if other.name in expandedIds:
                     relation = expandedIds[other.name][0]
                     value[other.name] = relation[other.primaryKey.name]
 
@@ -393,6 +394,11 @@ def addDataIdValue(butler: Butler, dimension: str, value: Any, **related: Any):
             f"Unexpected keywords {extraKeys} not found "
             f"in {fullDimension.required | fullDimension.implied}"
         )
+
+    if fullDimension.viewOf:
+        # Nothing to do; this dimension's records aren't actually saved in the
+        # database directly anyway (and caller shouldn't have to know this).
+        return
 
     # Define secondary keys (e.g., detector name given detector id)
     expandedValue = _fillAllKeys(fullDimension, value)
