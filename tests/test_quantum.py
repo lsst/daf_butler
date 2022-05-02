@@ -62,7 +62,7 @@ class QuantumTestCase(unittest.TestCase):
         bandRecord = band.RecordClass(name="r")
 
         physical_filter = universe["physical_filter"]
-        physical_filter_record = physical_filter.RecordClass(name="r", instrument="test")
+        physical_filter_record = physical_filter.RecordClass(name="r", instrument="test", band="r")
 
         visit_system = universe["visit_system"]
         visit_system_record = visit_system.RecordClass(id=9, instrument="test", name="test_visit_system")
@@ -74,12 +74,14 @@ class QuantumTestCase(unittest.TestCase):
             id=42,
             instrument="test",
             name="test_visit",
+            physical_filter="r",
             region=region,
         )
         visit_record_43 = visit.RecordClass(
             id=43,
             instrument="test",
             name="test_visit",
+            physical_filter="r",
             region=region,
         )
 
