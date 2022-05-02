@@ -1117,6 +1117,7 @@ class Registry(ABC):
         *data: Union[Mapping[str, Any], DimensionRecord],
         conform: bool = True,
         replace: bool = False,
+        skip_existing: bool = False,
     ) -> None:
         """Insert one or more dimension records into the database.
 
@@ -1132,9 +1133,15 @@ class Registry(ABC):
             and assume that ``element`` is a `DimensionElement` instance and
             ``data`` is a one or more `DimensionRecord` instances of the
             appropriate subclass.
-        replace: `bool`, optional
+        replace : `bool`, optional
             If `True` (`False` is default), replace existing records in the
             database if there is a conflict.
+        skip_existing : `bool`, optional
+            If `True` (`False` is default), skip insertion if a record with
+            the same primary key values already exists.  Unlike
+            `syncDimensionData`, this will not detect when the given record
+            differs from what is in the database, and should not be used when
+            this is a concern.
         """
         raise NotImplementedError()
 

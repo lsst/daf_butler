@@ -219,7 +219,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                     values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
                 yield RecordClass(**values)
 
-    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         elementRows = [record.toDict() for record in records]
         if self.element.temporal is not None:
@@ -230,6 +230,8 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         with self._db.transaction():
             if replace:
                 self._db.replace(self._table, *elementRows)
+            elif skip_existing:
+                self._db.ensure(self._table, *elementRows, primary_key_only=True)
             else:
                 self._db.insert(self._table, *elementRows)
             if self._skyPixOverlap is not None:

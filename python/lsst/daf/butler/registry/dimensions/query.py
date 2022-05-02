@@ -157,7 +157,7 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         builder.finishJoin(self._query, joinOn)
         return self._query
 
-    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         raise TypeError(
             f"Cannot insert {self.element.name} records, define as part of {self._viewOf} instead."

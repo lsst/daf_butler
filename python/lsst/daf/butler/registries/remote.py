@@ -360,6 +360,7 @@ class RemoteRegistry(Registry):
         *data: Union[Mapping[str, Any], DimensionRecord],
         conform: bool = True,
         replace: bool = False,
+        skip_existing: bool = False,
     ) -> None:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         raise NotImplementedError()

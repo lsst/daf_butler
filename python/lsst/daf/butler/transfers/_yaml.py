@@ -372,7 +372,12 @@ class YamlRepoImportBackend(RepoImportBackend):
         for element, dimensionRecords in self.dimensions.items():
             if skip_dimensions and element in skip_dimensions:
                 continue
-            self.registry.insertDimensionData(element, *dimensionRecords)
+            # Using skip_existing=True here assumes that the records in the
+            # database are either equivalent or at least preferable to the ones
+            # being imported.  It'd be ideal to check that, but that would mean
+            # using syncDimensionData, which is not vectorized and is hence
+            # unacceptably slo.
+            self.registry.insertDimensionData(element, *dimensionRecords, skip_existing=True)
         # FileDatasets to ingest into the datastore (in bulk):
         fileDatasets = []
         for (datasetTypeName, run), records in self.datasets.items():

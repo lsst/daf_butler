@@ -128,16 +128,25 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         builder.finishJoin(self._table, joinOn)
         return self._table
 
-    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         elementRows = [record.toDict() for record in records]
         with self._db.transaction():
             if replace:
                 self._db.replace(self._table, *elementRows)
+            elif skip_existing:
+                self._db.ensure(self._table, *elementRows, primary_key_only=True)
             else:
                 self._db.insert(self._table, *elementRows)
         for record in records:
-            self._cache[getattr(record, self.element.primaryKey.name)] = record
+            # We really shouldn't ever get into a situation where the record
+            # here differs from the one in the DB, but the last thing we want
+            # is to make it harder to debug by making the cache different from
+            # the DB.
+            if skip_existing:
+                self._cache.setdefault(getattr(record, self.element.primaryKey.name), record)
+            else:
+                self._cache[getattr(record, self.element.primaryKey.name)] = record
             for callback in self._callbacks:
                 callback(record)
 

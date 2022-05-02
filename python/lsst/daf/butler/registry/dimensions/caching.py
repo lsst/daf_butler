@@ -102,11 +102,18 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.
         return self._nested.join(builder, regions=regions, timespans=timespans)
 
-    def insert(self, *records: DimensionRecord, replace: bool = False) -> None:
+    def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
-        self._nested.insert(*records, replace=replace)
+        self._nested.insert(*records, replace=replace, skip_existing=skip_existing)
         for record in records:
-            self._cache[record.dataId] = record
+            # We really shouldn't ever get into a situation where the record
+            # here differs from the one in the DB, but the last thing we want
+            # is to make it harder to debug by making the cache different from
+            # the DB.
+            if skip_existing:
+                self._cache.setdefault(record.dataId, record)
+            else:
+                self._cache[record.dataId] = record
 
     def sync(self, record: DimensionRecord, update: bool = False) -> Union[bool, Dict[str, Any]]:
         # Docstring inherited from DimensionRecordStorage.sync.
