@@ -53,7 +53,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         addDataIdValue(cls.creatorButler, "instrument", "notACam")
         addDataIdValue(cls.creatorButler, "instrument", "dummyCam")
         addDataIdValue(cls.creatorButler, "physical_filter", "k2020", band="k", instrument="notACam")
-        addDataIdValue(cls.creatorButler, "physical_filter", "l2019", instrument="dummyCam")
+        addDataIdValue(cls.creatorButler, "physical_filter", "l2019", band="l", instrument="dummyCam")
         addDataIdValue(cls.creatorButler, "visit", 101, instrument="notACam", physical_filter="k2020")
         addDataIdValue(cls.creatorButler, "visit", 102, instrument="notACam", physical_filter="k2020")
         addDataIdValue(cls.creatorButler, "detector", 5)
