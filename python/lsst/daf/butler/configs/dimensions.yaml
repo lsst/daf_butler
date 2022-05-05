@@ -1,4 +1,5 @@
-version: 0
+version: 1
+namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
   # dimensions.  Its value is a string formed by concatenating one of the
@@ -8,6 +9,9 @@ skypix:
   htm:
     class: lsst.sphgeom.HtmPixelization
     max_level: 24
+  healpix:
+    class: lsst.sphgeom.HealpixPixelization
+    max_level: 17
 
 elements:
   instrument:

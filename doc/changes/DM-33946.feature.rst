@@ -1,0 +1,2 @@
+* Added a definition for using healpix in skypix definitions.
+* Change dimension universe caching to support a namespace in addition to a version number.

@@ -130,7 +130,7 @@ class DimensionTestCase(unittest.TestCase):
 
     def testConfigRead(self):
         self.assertEqual(
-            self.universe.getStaticDimensions().names,
+            set(self.universe.getStaticDimensions().names),
             {
                 "instrument",
                 "visit",
@@ -144,7 +144,8 @@ class DimensionTestCase(unittest.TestCase):
                 "tract",
                 "patch",
             }
-            | {f"htm{level}" for level in range(25)},
+            | {f"htm{level}" for level in range(25)}
+            | {f"healpix{level}" for level in range(18)},
         )
 
     def testGraphs(self):
