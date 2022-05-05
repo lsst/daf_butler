@@ -26,7 +26,7 @@ import copy
 from typing import TYPE_CHECKING, Tuple, Type
 
 from .. import ddl
-from .._topology import SpatialRegionDatabaseRepresentation
+from .._spatial_regions import SpatialRegionDatabaseRepresentation
 from ..named import NamedValueSet
 from ..timespan import TimespanDatabaseRepresentation
 

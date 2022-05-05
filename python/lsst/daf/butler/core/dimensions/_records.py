@@ -29,7 +29,7 @@ import lsst.sphgeom
 from lsst.utils.classes import immutable
 from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
-from .._topology import SpatialRegionDatabaseRepresentation
+from .._spatial_regions import SpatialRegionDatabaseRepresentation
 from ..json import from_json_pydantic, to_json_pydantic
 from ..timespan import Timespan, TimespanDatabaseRepresentation
 from ._elements import Dimension, DimensionElement
