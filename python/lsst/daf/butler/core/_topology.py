@@ -31,7 +31,7 @@ __all__ = (
 
 import enum
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Dict, Generic, Iterator, Mapping, Optional, Tuple, Type, TypeVar
+from typing import Any, ClassVar, Dict, Generic, Mapping, Optional, Type, TypeVar
 
 import lsst.sphgeom
 import sqlalchemy
@@ -202,7 +202,7 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
     @abstractmethod
     def makeFieldSpecs(
         cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
-    ) -> Tuple[ddl.FieldSpec, ...]:
+    ) -> tuple[ddl.FieldSpec, ...]:
         """Make objects that reflect the fields that must be added to table.
 
         Makes one or more `ddl.FieldSpec` objects that reflect the fields
@@ -234,7 +234,7 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
 
     @classmethod
     @abstractmethod
-    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
+    def getFieldNames(cls, name: Optional[str] = None) -> tuple[str, ...]:
         """Return the actual field names used by this representation.
 
         Parameters
@@ -367,7 +367,7 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
         raise NotImplementedError()
 
     @abstractmethod
-    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
+    def flatten(self, name: Optional[str] = None) -> tuple[sqlalchemy.sql.ColumnElement, ...]:
         """Return the actual column(s) that comprise this logical column.
 
         Parameters
@@ -379,7 +379,7 @@ class TopologicalExtentDatabaseRepresentation(Generic[_R]):
 
         Returns
         -------
-        columns : `Iterator` [ `sqlalchemy.sql.ColumnElement` ]
+        columns : `tuple` [ `sqlalchemy.sql.ColumnElement` ]
             The true column or columns that back this object.
         """
         raise NotImplementedError()
@@ -424,7 +424,7 @@ class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentatio
     @classmethod
     def makeFieldSpecs(
         cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
-    ) -> Tuple[ddl.FieldSpec, ...]:
+    ) -> tuple[ddl.FieldSpec, ...]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -439,7 +439,7 @@ class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentatio
         return (ddl.FieldSpec(name, nbytes=2048, dtype=ddl.Base64Region),)
 
     @classmethod
-    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
+    def getFieldNames(cls, name: Optional[str] = None) -> tuple[str, ...]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -487,8 +487,8 @@ class SpatialRegionDatabaseRepresentation(TopologicalExtentDatabaseRepresentatio
         # Docstring inherited
         return self.column.is_(None)
 
-    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
+    def flatten(self, name: Optional[str] = None) -> tuple[sqlalchemy.sql.ColumnElement, ...]:
         # Docstring inherited
         if name is None:
             name = self.name
-        yield self.column.label(name)
+        return (self.column.label(name),)

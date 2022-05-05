@@ -34,11 +34,9 @@ from typing import (
     ClassVar,
     Dict,
     Generator,
-    Iterator,
     List,
     Mapping,
     Optional,
-    Tuple,
     Type,
     TypeVar,
     Union,
@@ -150,7 +148,7 @@ class Timespan:
         begin: TimespanBound,
         end: TimespanBound,
         padInstantaneous: bool = True,
-        _nsec: Optional[Tuple[int, int]] = None,
+        _nsec: Optional[tuple[int, int]] = None,
     ):
         converter = TimeConverter()
         if _nsec is None:
@@ -825,7 +823,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
     by our integer-time mapping.
     """
 
-    def __init__(self, nsec: Tuple[sqlalchemy.sql.ColumnElement, sqlalchemy.sql.ColumnElement], name: str):
+    def __init__(self, nsec: tuple[sqlalchemy.sql.ColumnElement, sqlalchemy.sql.ColumnElement], name: str):
         self._nsec = nsec
         self._name = name
 
@@ -834,7 +832,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
     @classmethod
     def makeFieldSpecs(
         cls, nullable: bool, name: Optional[str] = None, **kwargs: Any
-    ) -> Tuple[ddl.FieldSpec, ...]:
+    ) -> tuple[ddl.FieldSpec, ...]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -856,7 +854,7 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         )
 
     @classmethod
-    def getFieldNames(cls, name: Optional[str] = None) -> Tuple[str, ...]:
+    def getFieldNames(cls, name: Optional[str] = None) -> tuple[str, ...]:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
@@ -977,13 +975,15 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         # Docstring inherited.
         return sqlalchemy.sql.functions.coalesce(self._nsec[1], sqlalchemy.sql.literal(0))
 
-    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
+    def flatten(self, name: Optional[str] = None) -> tuple[sqlalchemy.sql.ColumnElement, ...]:
         # Docstring inherited.
         if name is None:
-            yield from self._nsec
+            return self._nsec
         else:
-            yield self._nsec[0].label(f"{name}_begin")
-            yield self._nsec[1].label(f"{name}_end")
+            return (
+                self._nsec[0].label(f"{name}_begin"),
+                self._nsec[1].label(f"{name}_end"),
+            )
 
 
 TimespanDatabaseRepresentation.Compound = _CompoundTimespanDatabaseRepresentation

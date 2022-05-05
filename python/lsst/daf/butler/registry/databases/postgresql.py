@@ -463,9 +463,9 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
             sqlalchemy.sql.func.upper(self.column), sqlalchemy.sql.literal(0)
         )
 
-    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
+    def flatten(self, name: Optional[str] = None) -> tuple[sqlalchemy.sql.ColumnElement]:
         # Docstring inherited.
         if name is None:
-            yield self.column
+            return (self.column,)
         else:
-            yield self.column.label(name)
+            return (self.column.label(name),)
