@@ -1,4 +1,4 @@
-version: 1
+version: 2
 namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
