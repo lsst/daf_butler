@@ -39,7 +39,7 @@ from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequ
 import astropy.time
 import sqlalchemy
 
-from ...core import SpatialRegionDatabaseRepresentation, TimespanDatabaseRepresentation, ddl, time_utils
+from ...core import TimespanDatabaseRepresentation, ddl, time_utils
 from ...core.named import NamedValueAbstractSet
 from .._exceptions import ConflictingDefinitionError
 
@@ -1123,28 +1123,6 @@ class Database(ABC):
            representations there.
         """
         return TimespanDatabaseRepresentation.Compound
-
-    @classmethod
-    def getSpatialRegionRepresentation(cls) -> Type[SpatialRegionDatabaseRepresentation]:
-        """Return a `type` that encapsulates the way `lsst.sphgeom.Region`
-        objects are stored in this database.
-
-        `Database` does not automatically use the return type of this method
-        anywhere else; calling code is responsible for making sure that DDL
-        and queries are consistent with it.
-
-        Returns
-        -------
-        RegionReprClass : `type` (`SpatialRegionDatabaseRepresention` subclass)
-            A type that encapsulates the way `lsst.sphgeom.Region` objects
-            should be stored in this database.
-
-        Notes
-        -----
-        See `getTimespanRepresentation` for comments on why this method is not
-        more tightly integrated with the rest of the `Database` interface.
-        """
-        return SpatialRegionDatabaseRepresentation
 
     def sync(
         self,

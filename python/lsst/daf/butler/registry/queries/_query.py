@@ -42,7 +42,6 @@ from ...core import (
     DimensionRecord,
     DimensionUniverse,
     SimpleQuery,
-    SpatialRegionDatabaseRepresentation,
     addDimensionForeignKey,
     ddl,
 )
@@ -791,7 +790,7 @@ class DirectQuery(Query):
         # Docstring inherited from Query.
         column = self._regionColumns.get(name)
         if column is None:
-            column = self._columns.regions[name].column.label(f"{name}_region")
+            column = self._columns.regions[name].label(f"{name}_region")
             self._regionColumns[name] = column
         return column
 
@@ -865,12 +864,7 @@ class DirectQuery(Query):
         for dimension in self.graph:
             addDimensionForeignKey(spec, dimension, primaryKey=unique, constraint=constraints)
         for element in self.spatial:
-            spec.fields.update(
-                SpatialRegionDatabaseRepresentation.makeFieldSpecs(
-                    nullable=True,
-                    name=f"{element.name}_region",
-                )
-            )
+            spec.fields.add(ddl.FieldSpec.for_region(f"{element.name}_region"))
         datasetColumns = self.getDatasetColumns()
         if datasetColumns is not None:
             self.managers.datasets.addDatasetForeignKey(spec, primaryKey=unique, constraint=constraints)

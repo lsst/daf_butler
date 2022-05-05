@@ -381,21 +381,23 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         return mapping[name]
 
     @classmethod
-    def fromLiteral(cls, timespan: Timespan) -> _RangeTimespanRepresentation:
+    def fromLiteral(cls, timespan: Optional[Timespan]) -> _RangeTimespanRepresentation:
         # Docstring inherited.
+        if timespan is None:
+            return cls(column=sqlalchemy.sql.null(), name=cls.NAME)
         return cls(
             column=sqlalchemy.sql.literal(timespan, type_=_RangeTimespanType),
             name=cls.NAME,
         )
 
     @classmethod
-    def fromSelectable(
-        cls, selectable: sqlalchemy.sql.FromClause, name: Optional[str] = None
+    def from_columns(
+        cls, columns: sqlalchemy.sql.ColumnCollection, name: Optional[str] = None
     ) -> _RangeTimespanRepresentation:
         # Docstring inherited.
         if name is None:
             name = cls.NAME
-        return cls(selectable.columns[name], name)
+        return cls(columns[name], name)
 
     @property
     def name(self) -> str:
@@ -461,9 +463,9 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
             sqlalchemy.sql.func.upper(self.column), sqlalchemy.sql.literal(0)
         )
 
-    def flatten(self, name: Optional[str] = None) -> Iterator[sqlalchemy.sql.ColumnElement]:
+    def flatten(self, name: Optional[str] = None) -> tuple[sqlalchemy.sql.ColumnElement]:
         # Docstring inherited.
         if name is None:
-            yield self.column
+            return (self.column,)
         else:
-            yield self.column.label(name)
+            return (self.column.label(name),)

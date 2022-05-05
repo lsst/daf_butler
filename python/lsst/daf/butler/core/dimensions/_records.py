@@ -29,7 +29,6 @@ import lsst.sphgeom
 from lsst.utils.classes import immutable
 from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr, create_model
 
-from .._topology import SpatialRegionDatabaseRepresentation
 from ..json import from_json_pydantic, to_json_pydantic
 from ..timespan import Timespan, TimespanDatabaseRepresentation
 from ._elements import Dimension, DimensionElement
@@ -59,7 +58,7 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
     fields = DimensionElementFields(definition)
     slots = list(fields.standard.names)
     if definition.spatial:
-        slots.append(SpatialRegionDatabaseRepresentation.NAME)
+        slots.append("region")
     if definition.temporal:
         slots.append(TimespanDatabaseRepresentation.NAME)
     d = {"definition": definition, "__slots__": tuple(slots), "fields": fields}

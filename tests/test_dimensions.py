@@ -41,7 +41,6 @@ from lsst.daf.butler import (
     NamedKeyDict,
     NamedValueSet,
     Registry,
-    SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
     YamlRepoImportBackend,
 )
@@ -281,7 +280,6 @@ class DimensionTestCase(unittest.TestCase):
         for element in self.universe.getStaticElements():
             if element.hasTable and element.viewOf is None:
                 tableSpecs[element] = element.RecordClass.fields.makeTableSpec(
-                    RegionReprClass=SpatialRegionDatabaseRepresentation,
                     TimespanReprClass=TimespanDatabaseRepresentation.Compound,
                 )
         for element, tableSpec in tableSpecs.items():

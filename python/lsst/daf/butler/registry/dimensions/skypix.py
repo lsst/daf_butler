@@ -32,7 +32,6 @@ from ...core import (
     DimensionRecord,
     NamedKeyDict,
     SkyPixDimension,
-    SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import SkyPixDimensionRecordStorage
@@ -67,7 +66,7 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
         self,
         builder: QueryBuilder,
         *,
-        regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
+        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         if builder.hasDimensionKey(self._dimension):

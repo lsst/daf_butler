@@ -41,7 +41,6 @@ from ...core import (
     NamedValueAbstractSet,
     NamedValueSet,
     SkyPixDimension,
-    SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
 from .._exceptions import UserExpressionSyntaxError
@@ -570,10 +569,10 @@ class QueryColumns:
     in `QuerySummary.temporal`.
     """
 
-    regions: NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]
+    regions: NamedKeyDict[DimensionElement, ColumnElement]
     """Columns that correspond to regions for elements that participate in a
     spatial join or filter in the query (`NamedKeyDict` mapping
-    `DimensionElement` to `SpatialRegionDatabaseRepresentation`).
+    `DimensionElement` to `sqlalchemy.sql.ColumnElement`).
 
     In a `Query`, the keys of this dictionary must be exactly the elements
     in `QuerySummary.spatial`.

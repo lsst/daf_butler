@@ -366,6 +366,27 @@ class FieldSpec:
         self.doc = stripIfNotNone(config.get("doc", None))
         return self
 
+    @classmethod
+    def for_region(cls, name: str = "region", nullable: bool = True, nbytes: int = 2048) -> FieldSpec:
+        """Create a `FieldSpec` for a spatial region column.
+
+        Parameters
+        ----------
+        name : `str`, optional
+            Name for the field.
+        nullable : `bool`, optional
+            Whether NULL values are permitted.
+        nbytes : `int`, optional
+            Maximum number of bytes for serialized regions.  The actual column
+            size will be larger to allow for base-64 encoding.
+
+        Returns
+        -------
+        spec : `FieldSpec`
+            Specification structure for a region column.
+        """
+        return cls(name, nullable=nullable, dtype=Base64Region, nbytes=nbytes)
+
     def isStringType(self) -> bool:
         """Indicate that this is a sqlalchemy.String field spec.
 

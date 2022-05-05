@@ -44,7 +44,6 @@ from ...core import (
     SimpleQuery,
     SkyPixDimension,
     SkyPixSystem,
-    SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
     addDimensionForeignKey,
     ddl,
@@ -120,10 +119,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
-        spec = element.RecordClass.fields.makeTableSpec(
-            RegionReprClass=db.getSpatialRegionRepresentation(),
-            TimespanReprClass=db.getTimespanRepresentation(),
-        )
+        spec = element.RecordClass.fields.makeTableSpec(TimespanReprClass=db.getTimespanRepresentation())
         if context is not None:
             table = context.addTable(element.name, spec)
         else:
@@ -167,7 +163,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         self,
         builder: QueryBuilder,
         *,
-        regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
+        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
@@ -179,13 +175,13 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 self._skyPixOverlap.select(self.element.universe.commonSkyPix, Ellipsis),
                 dimensions,
             )
-            regionsInTable = self._db.getSpatialRegionRepresentation().fromSelectable(self._table)
+            regionsInTable = self._table.columns["region"]
             regions[self.element] = regionsInTable
         joinOn = builder.startJoin(
             self._table, self.element.dimensions, self.element.RecordClass.fields.dimensions.names
         )
         if timespans is not None:
-            timespanInTable = self._db.getTimespanRepresentation().fromSelectable(self._table)
+            timespanInTable = self._db.getTimespanRepresentation().from_columns(self._table.columns)
             for timespanInQuery in timespans.values():
                 joinOn.append(timespanInQuery.overlaps(timespanInTable))
             timespans[self.element] = timespanInTable

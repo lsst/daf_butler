@@ -199,7 +199,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # Add WHERE clause for timespan overlaps.
         TimespanReprClass = self._db.getTimespanRepresentation()
         query.where.append(
-            TimespanReprClass.fromSelectable(self._calibs).overlaps(TimespanReprClass.fromLiteral(timespan))
+            TimespanReprClass.from_columns(self._calibs.columns).overlaps(
+                TimespanReprClass.fromLiteral(timespan)
+            )
         )
         return query
 
@@ -414,7 +416,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 kwargs.update({k: SimpleQuery.Select for k in TimespanReprClass.getFieldNames()})
             elif timespan is not None:
                 calibs_query.where.append(
-                    TimespanReprClass.fromSelectable(self._calibs).overlaps(
+                    TimespanReprClass.from_columns(self._calibs.columns).overlaps(
                         TimespanReprClass.fromLiteral(timespan)
                     )
                 )
