@@ -658,6 +658,11 @@ class DataCoordinateTestCase(unittest.TestCase):
             self.assertIsNotNone(dataId.timespan)
             self.assertEqual(dataId.graph.temporal.names, {"observation_timespans"})
             self.assertEqual(dataId.timespan, dataId.records["visit"].timespan)
+        # Also test the case for non-temporal DataIds.
+        for dataId in self.randomDataIds(n=4).subset(
+            DimensionGraph(self.allDataIds.universe, names=["patch"])
+        ):
+            self.assertIsNone(dataId.timespan)
 
     def testIterableStatusFlags(self):
         """Test that DataCoordinateSet and DataCoordinateSequence compute
