@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
 
 __all__ = [
     "makeTestRepo",
@@ -30,10 +31,9 @@ __all__ = [
 ]
 
 import random
-from typing import Any, Iterable, Mapping, Optional, Set, Tuple
+from typing import Any, Iterable, Mapping, Optional, Set, Tuple, Union
 from unittest.mock import MagicMock
 
-import sqlalchemy
 from lsst.daf.butler import (
     Butler,
     Config,
@@ -43,8 +43,8 @@ from lsst.daf.butler import (
     Dimension,
     DimensionUniverse,
     FileDataset,
-    Registry,
 )
+from lsst.daf.butler.registry import ConflictingDefinitionError
 
 
 def makeTestRepo(
@@ -57,11 +57,12 @@ def makeTestRepo(
     root : `str`
         The location of the root directory for the repository.
     dataIds : `~collections.abc.Mapping` [`str`, `iterable`], optional
-        A mapping keyed by the dimensions used in the test. Each value
-        is an iterable of names for that dimension (e.g., detector IDs for
-        `"detector"`). Related dimensions (e.g., instruments and detectors)
-        are linked arbitrarily. This parameter is provided for compatibility
-        with old code; newer code should make the repository, then call
+        A mapping keyed by the dimensions used in the test. Each value is an
+        iterable of names for that dimension (e.g., detector IDs for
+        `"detector"`). Related dimensions (e.g., instruments and detectors) are
+        linked arbitrarily, with values created randomly when needed. This
+        parameter is provided for compatibility with old code; newer code
+        should make the repository, then call
         `~lsst.daf.butler.tests.addDataIdValue`.
     config : `lsst.daf.butler.Config`, optional
         A configuration for the repository (for details, see
@@ -165,36 +166,41 @@ def _makeRecords(dataIds: Mapping[str, Iterable], universe: DimensionUniverse) -
         `~lsst.daf.butler.DimensionRecord` for each input name. Related
         dimensions (e.g., instruments and detectors) are linked arbitrarily.
     """
-    expandedIds = {}
-    # Provide alternate keys like detector names
-    for name, values in dataIds.items():
-        expandedIds[name] = []
+
+    # Create values for all dimensions that are (recursive) required or implied
+    # dependencies of the given ones.
+    complete_data_id_values = {}
+    for dimension in universe.extract(dataIds.keys()):
+        if dimension.name in dataIds:
+            complete_data_id_values[dimension.name] = list(dataIds[dimension.name])
+        if dimension.name not in complete_data_id_values:
+            complete_data_id_values[dimension.name] = [_makeRandomDataIdValue(dimension)]
+
+    # Start populating dicts that will become DimensionRecords by providing
+    # alternate keys like detector names
+    record_dicts_by_dimension_name = {}
+    for name, values in complete_data_id_values.items():
+        record_dicts_by_dimension_name[name] = []
         dimension = universe[name]
         for value in values:
-            expandedIds[name].append(_fillAllKeys(dimension, value))
+            record_dicts_by_dimension_name[name].append(_fillAllKeys(dimension, value))
 
     # Pick cross-relationships arbitrarily
-    for name, values in expandedIds.items():
+    for name, record_dicts in record_dicts_by_dimension_name.items():
         dimension = universe[name]
-        for value in values:
-            for other in dimension.required:
+        for record_dict in record_dicts:
+            for other in dimension.dimensions:
                 if other != dimension:
-                    relation = expandedIds[other.name][0]
-                    value[other.name] = relation[other.primaryKey.name]
-            # Do not recurse, to keep the user from having to provide
-            # irrelevant dimensions
-            for other in dimension.implied:
-                if other.name in expandedIds:
-                    relation = expandedIds[other.name][0]
-                    value[other.name] = relation[other.primaryKey.name]
+                    relation = record_dicts_by_dimension_name[other.name][0]
+                    record_dict[other.name] = relation[other.primaryKey.name]
 
     return {
-        dimension: [universe[dimension].RecordClass(**value) for value in values]
-        for dimension, values in expandedIds.items()
+        dimension: [universe[dimension].RecordClass(**record_dict) for record_dict in record_dicts]
+        for dimension, record_dicts in record_dicts_by_dimension_name.items()
     }
 
 
-def _fillAllKeys(dimension: Dimension, value: Any) -> Mapping[str, Any]:
+def _fillAllKeys(dimension: Dimension, value: Union[str, int]) -> Mapping[str, Union[str, int]]:
     """Create an arbitrary mapping of all required keys for a given dimension
     that do not refer to other dimensions.
 
@@ -215,7 +221,11 @@ def _fillAllKeys(dimension: Dimension, value: Any) -> Mapping[str, Any]:
     expandedValue = {}
     for key in dimension.uniqueKeys:
         if key.nbytes:
-            castType = bytes
+            # bytes(str(...)) would normally fail, bringing us to the
+            # except clause below, and that in particular is a problem because
+            # of the skymap dimensions' bytes 'hash' field, which has a
+            # unique constraint.
+            castType = lambda x: str(x).encode()  # noqa: E731
         else:
             castType = key.dtype().python_type
         try:
@@ -229,72 +239,23 @@ def _fillAllKeys(dimension: Dimension, value: Any) -> Mapping[str, Any]:
     return expandedValue
 
 
-def _matchAnyDataId(record: Mapping[str, Any], registry: Registry, dimension: Dimension):
-    """Matches a partial dimension record to an existing record along a
-    specific dimension.
+def _makeRandomDataIdValue(dimension: Dimension) -> Union[int, str]:
+    """Generate a random value of the appropriate type for a data ID key.
 
     Parameters
     ----------
-    record : `dict` [`str`]
-        A mapping representing the record to be matched.
-    registry : `lsst.daf.butler.Registry`
-        The registry with all known dimension records.
-    dimension : `lsst.daf.butler.Dimension`
-        The dimension on which to find a match for ``record``.
-
-    Raises
-    ------
-    RuntimeError
-        Raised if there are no existing records for ``dimension``.
-    """
-    matches = list(registry.queryDimensionRecords(dimension.name))
-    if matches:
-        record[dimension.name] = matches[0].dataId[dimension.name]
-    else:
-        raise RuntimeError(f"No matching values for {dimension.name} found.")
-
-
-def _fillRelationships(
-    dimension: Dimension, dimensionInfo: Mapping[str, Any], existing: Registry
-) -> Mapping[str, Any]:
-    """Create arbitrary mappings from one dimension to all dimensions it
-    depends on.
-
-    Parameters
-    ----------
-    dimension : `lsst.daf.butler.Dimension`
-        The dimension for which to generate relationships.
-    dimensionInfo : `dict` [`str`]
-        A mapping of dimension keys to values.
-    existing : `lsst.daf.butler.Registry`
-        The registry with all previously registered dimensions.
+    dimension : `Dimension`
+        Dimension the value corresponds to.
 
     Returns
     -------
-    filledInfo : `dict` [`str`]
-        A version of ``dimensionInfo`` with extra mappings for any
-        relationships required by ``dimension``. Any relationships already
-        defined in ``dimensionInfo`` are preserved.
-
-    Raises
-    ------
-    ValueError
-        Raised if ``dimension`` depends on a dimension for which no values
-        exist yet.
+    value : `int` or `str`
+        Random value.
     """
-    filledInfo = dimensionInfo.copy()
-    for other in dimension.required:
-        if other != dimension and other.name not in filledInfo:
-            _matchAnyDataId(filledInfo, existing, other)
-    # Do not recurse, to keep the user from having to provide
-    # irrelevant dimensions.
-    for other in dimension.implied:
-        toUpdate = other != dimension and other.name not in filledInfo
-        updatable = other.viewOf is None
-        # Do not run query if either toUpdate or updatable is false
-        if toUpdate and updatable and list(existing.queryDimensionRecords(other)):
-            _matchAnyDataId(filledInfo, existing, other)
-    return filledInfo
+    if dimension.primaryKey.getPythonType() is str:
+        return str(random.randrange(1000))
+    else:
+        return random.randrange(1000)
 
 
 def expandUniqueId(butler: Butler, partialId: Mapping[str, Any]) -> DataCoordinate:
@@ -350,14 +311,14 @@ def expandUniqueId(butler: Butler, partialId: Mapping[str, Any]) -> DataCoordina
         raise ValueError(f"Found {len(dataId)} matches for {partialId}, expected 1.")
 
 
-def addDataIdValue(butler: Butler, dimension: str, value: Any, **related: Any):
+def addDataIdValue(butler: Butler, dimension: str, value: Union[str, int], **related: Union[str, int]):
     """Add a new data ID to a repository.
 
-    Related dimensions (e.g., the instrument associated with a detector) may
-    be specified using ``related``. While these keywords are sometimes needed
-    to get self-consistent repositories, you do not need to define
-    relationships you do not use. Any unspecified dimensions will be
-    linked arbitrarily.
+    Related dimensions (e.g., the instrument associated with a detector) may be
+    specified using ``related``. While these keywords are sometimes needed to
+    get self-consistent repositories, you do not need to define relationships
+    you do not use. Any unspecified dimensions will be linked arbitrarily,
+    withe values created randomly when needed.
 
     Parameters
     ----------
@@ -388,32 +349,71 @@ def addDataIdValue(butler: Butler, dimension: str, value: Any, **related: Any):
     except KeyError as e:
         raise ValueError from e
     # Bad keys ignored by registry code
-    extraKeys = related.keys() - (fullDimension.required | fullDimension.implied)
+    extraKeys = related.keys() - fullDimension.graph.dimensions.names
     if extraKeys:
         raise ValueError(
-            f"Unexpected keywords {extraKeys} not found "
-            f"in {fullDimension.required | fullDimension.implied}"
+            f"Unexpected keywords {extraKeys} not found " f"in {fullDimension.graph.dimensions.names}"
         )
 
-    if fullDimension.viewOf:
-        # Nothing to do; this dimension's records aren't actually saved in the
-        # database directly anyway (and caller shouldn't have to know this).
-        return
+    # Assemble a dictionary data ID holding the given primary dimension value
+    # and all of the related ones.
+    data_id: dict[str, Union[int, str]] = {dimension: value}
+    data_id.update(related)
 
-    # Define secondary keys (e.g., detector name given detector id)
-    expandedValue = _fillAllKeys(fullDimension, value)
-    expandedValue.update(**related)
-    completeValue = _fillRelationships(fullDimension, expandedValue, butler.registry)
+    # Compute the set of all dimensions that these recursively depend on.
+    all_dimensions = butler.registry.dimensions.extract(data_id.keys())
 
-    dimensionRecord = fullDimension.RecordClass(**completeValue)
-    try:
-        butler.registry.syncDimensionData(dimension, dimensionRecord)
-    except sqlalchemy.exc.IntegrityError as e:
-        raise RuntimeError(
-            "Could not create data ID value. Automatic relationship generation "
-            "may have failed; try adding keywords to assign a specific instrument, "
-            "physical_filter, etc. based on the nested exception message."
-        ) from e
+    # Create dicts that will become DimensionRecords for all of these data IDs.
+    # This iteration is guaranteed to be in topological order, so we can count
+    # on new data ID values being invented before they are needed.
+    record_dicts_by_dimension: dict[Dimension, dict[str, Any]] = {}
+    for dimension_obj in all_dimensions:
+        dimension_value = data_id.get(dimension_obj.name)
+        if dimension_value is None:
+            # No values given by caller for this dimension.  See if any exist
+            # in the registry that are consistent with the values of dimensions
+            # we do have:
+            match_data_id = {key: data_id[key] for key in data_id.keys() & dimension_obj.dimensions.names}
+            matches = list(
+                butler.registry.queryDimensionRecords(dimension_obj, dataId=match_data_id).limit(1)
+            )
+            if not matches:
+                # Nothing in the registry matches: invent a data ID value
+                # with the right type (actual value does not matter).
+                dimension_value = _makeRandomDataIdValue(dimension_obj)
+                data_id[dimension_obj.name] = dimension_value
+            else:
+                # A record does exist in the registry.  Use its data ID value,
+                # and skip the rest of the record-fabrication logic.
+                data_id[dimension_obj.name] = matches[0].dataId[dimension_obj.name]
+                continue
+        if dimension_obj.viewOf is not None:
+            # Don't need to bother generating full records for dimensions whose
+            # records are just a view into some other's records anyway.
+            continue
+        # Add the primary key field for this dimension.
+        record_dict: dict[str, Any] = {dimension_obj.primaryKey.name: dimension_value}
+        # Define secondary keys (e.g., detector name given detector id)
+        record_dict.update(_fillAllKeys(dimension_obj, dimension_value))
+        # Set the foreign key values for any related dimensions that should
+        # appear in the record.
+        for related_dimension in dimension_obj.dimensions:
+            if related_dimension.name != dimension_obj.name:
+                record_dict[related_dimension.name] = data_id[related_dimension.name]
+
+        record_dicts_by_dimension[dimension_obj] = record_dict
+
+    # Sync those dimension record dictionaries with the database.
+    for dimension_obj, record_dict in record_dicts_by_dimension.items():
+        record = dimension_obj.RecordClass(**record_dict)
+        try:
+            butler.registry.syncDimensionData(dimension_obj, record)
+        except ConflictingDefinitionError as e:
+            raise RuntimeError(
+                "Could not create data ID value. Automatic relationship generation "
+                "may have failed; try adding keywords to assign a specific instrument, "
+                "physical_filter, etc. based on the nested exception message."
+            ) from e
 
 
 def addDatasetType(butler: Butler, name: str, dimensions: Set[str], storageClass: str) -> DatasetType:

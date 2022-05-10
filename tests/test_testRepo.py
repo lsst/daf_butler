@@ -87,7 +87,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
     def _checkButlerDimension(self, dimensions, query, expected):
         result = list(self.butler.registry.queryDataIds(dimensions, where=query, check=False))
         self.assertEqual(len(result), 1)
-        self.assertIn(dict(result[0]), expected)
+        self.assertIn(result[0].byName(), expected)
 
     def testButlerDimensions(self):
         self._checkButlerDimension(
@@ -126,15 +126,16 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         with self.assertRaises(ValueError):
             addDataIdValue(self.butler, "detector", 101, nonsenseField="string")
 
-        # Keywords imply different instruments
-        with self.assertRaises(RuntimeError):
-            addDataIdValue(self.butler, "exposure", 101, instrument="dummyCam", physical_filter="k2020")
-
-        # No skymap defined
-        with self.assertRaises(RuntimeError):
-            addDataIdValue(self.butler, "tract", 42)
-        with self.assertRaises(RuntimeError):
-            addDataIdValue(self.butler, "tract", 43, skymap="map")
+        # No skymap defined; should be created automatically.
+        addDataIdValue(self.butler, "tract", 42)
+        (tract_data_id,) = set(self.butler.registry.queryDataIds(["tract"]).limit(1))
+        self.assertEqual(tract_data_id["tract"], 42)
+        # And then a new one created here, since the now-existing one should
+        # have a random name that isn't 'map'.
+        addDataIdValue(self.butler, "tract", 43, skymap="map")
+        self._checkButlerDimension(
+            {"tract", "skymap"}, "tract=43 AND skymap='map'", [{"skymap": "map", "tract": 43}]
+        )
 
     def testAddDatasetType(self):
         # 1 for StructuredDataNoComponents, 4 for StructuredData
