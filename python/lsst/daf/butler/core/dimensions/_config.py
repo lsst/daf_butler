@@ -214,6 +214,7 @@ class DimensionConfig(ConfigSubset):
                     metadata=metadata,
                     alwaysJoin=subconfig.get("always_join", False),
                     uniqueKeys=uniqueKeys,
+                    populated_by=subconfig.get("populated_by", None),
                 )
 
     def _extractTopologyVisitors(self) -> Iterator[DimensionConstructionVisitor]:
