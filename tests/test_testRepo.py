@@ -87,7 +87,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
     def _checkButlerDimension(self, dimensions, query, expected):
         result = list(self.butler.registry.queryDataIds(dimensions, where=query, check=False))
         self.assertEqual(len(result), 1)
-        self.assertIn(dict(result[0]), expected)
+        self.assertIn(result[0].byName(), expected)
 
     def testButlerDimensions(self):
         self._checkButlerDimension(
@@ -133,6 +133,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         # No skymap defined
         with self.assertRaises(RuntimeError):
             addDataIdValue(self.butler, "tract", 42)
+        # Didn't create skymap "map" first.
         with self.assertRaises(RuntimeError):
             addDataIdValue(self.butler, "tract", 43, skymap="map")
 
