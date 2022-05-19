@@ -44,7 +44,7 @@ from .interfaces import (
     OpaqueTableStorageManager,
     StaticTablesContext,
 )
-from .versions import ButlerVersionsManager, DigestMismatchError
+from .versions import ButlerVersionsManager
 
 _Attributes = TypeVar("_Attributes")
 _Dimensions = TypeVar("_Dimensions")
@@ -202,13 +202,6 @@ class RegistryManagerTypes(
         # verify that configured versions are compatible with schema
         versions.checkManagersConfig()
         versions.checkManagersVersions(database.isWriteable())
-        try:
-            versions.checkManagersDigests()
-        except DigestMismatchError as exc:
-            # potentially digest mismatch is a serious error but during
-            # development it could be benign, treat this as warning for
-            # now.
-            _LOG.warning(f"Registry schema digest mismatch: {exc}")
         # Load content from database that we try to keep in-memory.
         instances.refresh()
         return instances

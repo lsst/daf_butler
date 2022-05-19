@@ -33,6 +33,8 @@ __all__ = [
 import logging
 from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional
 
+from deprecated.sphinx import deprecated
+
 from .interfaces import VersionedExtension, VersionTuple
 
 if TYPE_CHECKING:
@@ -316,6 +318,7 @@ class ButlerVersionsManager:
                         f"{storedVersion} for extension {extension.extensionName()}"
                     )
 
+    @deprecated(reason="Schema checksums are ignored", category=FutureWarning, version="v24.0")
     def checkManagersDigests(self) -> None:
         """Compare current schema digests with digests stored in database.
 
@@ -323,6 +326,11 @@ class ButlerVersionsManager:
         ------
         DigestMismatchError
             Raised if digests are not equal.
+
+        Notes
+        -----
+        This method is not used currently and will probably disappear in the
+        future as we remove schema checksums.
         """
         if self._attributesEmpty:
             return
