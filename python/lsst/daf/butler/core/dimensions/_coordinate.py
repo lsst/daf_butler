@@ -32,7 +32,7 @@ import numbers
 from abc import abstractmethod
 from typing import TYPE_CHECKING, AbstractSet, Any, Dict, Iterator, Mapping, Optional, Tuple, Union
 
-from lsst.sphgeom import Region
+from lsst.sphgeom import IntersectionRegion, Region
 from pydantic import BaseModel
 
 from ..json import from_json_pydantic, to_json_pydantic
@@ -94,20 +94,14 @@ def _intersectRegions(*args: Region) -> Optional[Region]:
     For internal use by `ExpandedDataCoordinate` only.
 
     If no regions are provided, returns `None`.
-
-    This is currently a placeholder; it actually returns `NotImplemented`
-    (it does *not* raise an exception) when multiple regions are given, which
-    propagates to `ExpandedDataCoordinate`.  This reflects the fact that we
-    don't want to fail to construct an `ExpandedDataCoordinate` entirely when
-    we can't compute its region, and at present we don't have a high-level use
-    case for the regions of these particular data IDs.
     """
     if len(args) == 0:
         return None
-    elif len(args) == 1:
-        return args[0]
     else:
-        return NotImplemented
+        result = args[0]
+        for n in range(1, len(args)):
+            result = IntersectionRegion(result, args[n])
+        return result
 
 
 class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
