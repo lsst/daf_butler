@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Iterator, Optional
 
+import lsst.sphgeom
 from lsst.daf.butler import (
     Config,
     DataCoordinate,
@@ -708,6 +709,11 @@ class DataCoordinateTestCase(unittest.TestCase):
             self.assertIsNotNone(dataId.region)
             self.assertEqual(dataId.graph.spatial.names, {"skymap_regions"})
             self.assertEqual(dataId.region, dataId.records["patch"].region)
+        for data_id in self.randomDataIds(n=1).subset(
+            DimensionGraph(self.allDataIds.universe, names=["visit", "tract"])
+        ):
+            self.assertEqual(data_id.region.relate(data_id.records["visit"].region), lsst.sphgeom.WITHIN)
+            self.assertEqual(data_id.region.relate(data_id.records["tract"].region), lsst.sphgeom.WITHIN)
 
     def testTimespans(self):
         """Test that data IDs for a few known dimensions have the expected
