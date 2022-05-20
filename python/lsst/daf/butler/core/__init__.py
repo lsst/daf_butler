@@ -3,7 +3,7 @@
 # Do not export the utility routines from utils and queries.
 
 from . import progress  # most symbols are only used by handler implementors
-from . import ddl, time_utils
+from . import ddl, sql, time_utils
 from ._butlerUri import *
 from ._spatial_regions import *
 from ._topology import *
