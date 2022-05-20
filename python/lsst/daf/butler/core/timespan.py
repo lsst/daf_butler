@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 __all__ = (
+    "TemporalConstraint",
     "Timespan",
     "TimespanDatabaseRepresentation",
 )
@@ -34,6 +35,7 @@ from typing import (
     ClassVar,
     Dict,
     Generator,
+    Iterator,
     List,
     Mapping,
     Optional,
@@ -54,6 +56,7 @@ try:
 except ImportError:
     erfa = None
 
+from lsst.sphgeom import RangeSet
 from lsst.utils.classes import cached_getter
 
 from . import ddl
@@ -102,9 +105,8 @@ class Timespan:
         finite-duration timespan.  If `False`, ``begin == end`` evaluates to
         the empty timespan.
     _nsec : `tuple` of `int`, optional
-        Integer nanosecond representation, for internal use by `Timespan` and
-        `TimespanDatabaseRepresentation` implementation only.  If provided,
-        all other arguments are are ignored.
+        Integer nanosecond representation, for internal use by this module only
+        implementation only.  If provided, all other arguments are are ignored.
 
     Raises
     ------
@@ -315,7 +317,7 @@ class Timespan:
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, Timespan):
-            return False
+            return NotImplemented
         # Correctness of this simple implementation depends on __init__
         # standardizing all empty timespans to a single value.
         return self._nsec == other._nsec
@@ -584,6 +586,17 @@ class Timespan:
             d = loader.construct_mapping(node)
             return Timespan(d["begin"], d["end"])
 
+    def _to_ranges(self) -> RangeSet:
+        """Return an integer nanosecond `RangeSet` representation of this
+        timespan.
+
+        This method is package-private: for use by `lsst.daf.butler` code only.
+        """
+        if self.isEmpty():
+            return RangeSet()
+        else:
+            return RangeSet(*self._nsec)
+
 
 # Register Timespan -> YAML conversion method with Dumper class
 yaml.Dumper.add_representer(Timespan, Timespan.to_yaml)
@@ -645,6 +658,24 @@ class TimespanDatabaseRepresentation(TopologicalExtentDatabaseRepresentation[Tim
             column expressions.
         """
         raise NotImplementedError()
+
+    @classmethod
+    def from_constraint(cls: type[_S], constraint: TemporalConstraint) -> list[_S]:
+        """Return a list of instances from a `TemporalConstraint`.
+
+        Parameters
+        ----------
+        constraint : `TemporalConstraint`
+            Constraint to unpack and transform into a list of database timespan
+            represnetations.
+
+        Returns
+        -------
+        ts_repr : `TimespanDatabaseRepresentation`
+            A timespan expression object backed by `sqlalchemy.sql.literal`
+            column expressions.
+        """
+        return [cls.fromLiteral(Timespan(None, None, _nsec=pair)) for pair in constraint._to_ranges()]
 
     @abstractmethod
     def isEmpty(self) -> sqlalchemy.sql.ColumnElement:
@@ -987,3 +1018,162 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
 
 
 TimespanDatabaseRepresentation.Compound = _CompoundTimespanDatabaseRepresentation
+
+
+class TemporalConstraint:
+    """A temporal query constraint that may encompass multiple disjoint
+    timespans.
+
+    Parameters
+    ----------
+    ranges : `RangeSet`
+        Integer nanosecond ranges to include in the constraint.
+
+    Notes
+    -----
+    Iteration over a `TemporalConstraint` yields the mutually disjoint,
+    non-adjacent, and non-empty timespans it contains.
+    """
+
+    def __init__(self, ranges: RangeSet):
+        self._ranges = ranges
+        self._ranges &= RangeSet(TimeConverter().valid_nsec)
+
+    @classmethod
+    def make_empty(cls) -> TemporalConstraint:
+        """Make a constraint that includes no timespans.
+
+        Returns
+        -------
+        constraint : `TemporalConstraint`
+            New constraint object.
+        """
+        return cls(RangeSet())
+
+    @classmethod
+    def make_full(cls) -> TemporalConstraint:
+        """Make a constraint that includes the entire range of valid times.
+
+        Returns
+        -------
+        constraint : `TemporalConstraint`
+            New constraint object.
+        """
+        return cls(RangeSet().complemented())  # rely on constructor to clip to valid values
+
+    @classmethod
+    def from_timespan(cls, timespan: Timespan) -> TemporalConstraint:
+        """Construct a temporal constraint from a single `Timespan`.
+
+        Parameters
+        ----------
+        timespan : `Timespan`
+            The single timespan that the constraint will represent.
+
+        Returns
+        -------
+        constraint : `TemporalConstraint`
+            New constraint object.
+        """
+        return cls(timespan._to_ranges())
+
+    def __eq__(self, rhs: Any) -> bool:
+        try:
+            return self._ranges == rhs._to_ranges()
+        except AttributeError:
+            return NotImplemented
+
+    def __iter__(self) -> Iterator[Timespan]:
+        for nsec in self._ranges:
+            yield Timespan(None, None, _nsec=nsec)
+
+    def __bool__(self) -> bool:
+        return not self._ranges.empty()
+
+    def issubset(self, rhs: Union[Timespan, TemporalConstraint]) -> bool:
+        """Test whether this constraint is a subset of another.
+
+        Parameters
+        ----------
+        rhs : `Timespan` or `TemporalConstraint`
+            Other operand.
+
+        Returns
+        -------
+        Whether this constraint is fully covered by ``rhs``.
+        """
+        return self._ranges.isWithin(rhs._to_ranges())
+
+    def issuperset(self, rhs: Union[Timespan, TemporalConstraint]) -> bool:
+        """Test whether this constraint is a superset of another.
+
+        Parameters
+        ----------
+        rhs : `Timespan` or `TemporalConstraint`
+            Other operand.
+
+        Returns
+        -------
+        Whether this constraint fully covers ``rhs``.
+        """
+        return self._ranges.contains(rhs._to_ranges())
+
+    def isdisjoint(self, rhs: Union[Timespan, TemporalConstraint]) -> bool:
+        """Test whether this constraint has any times in common with another.
+
+        Parameters
+        ----------
+        rhs : `Timespan` or `TemporalConstraint`
+            Other operand.
+
+        Returns
+        -------
+        Whether this constraint has any times in common with ``rhs``.
+        """
+        return self._ranges.isDisjointFrom(rhs._to_ranges())
+
+    def union(*args: Union[Timespan, TemporalConstraint]) -> TemporalConstraint:
+        """Compute the union of zero or more timespans or temporal constraints.
+
+        Parameters
+        ----------
+        *args : `Timespan` or `TemporalConstraint`
+            Operands.
+
+        Returns
+        -------
+        union : `TemporalConstraint`
+            The union of the operands; empty if there are no operands.
+        """
+        ranges = RangeSet()
+        for arg in args:
+            ranges |= arg._to_ranges()
+        return TemporalConstraint(ranges)
+
+    def intersection(*args: Union[Timespan, TemporalConstraint]) -> TemporalConstraint:
+        """Compute the intersection of zero or more timespans or temporal
+        constraints.
+
+        Parameters
+        ----------
+        *args : `Timespan` or `TemporalConstraint`
+            Operands.
+
+        Returns
+        -------
+        union : `TemporalConstraint`
+            The intersection of the operands; full if there are no operands.
+        """
+        ranges = RangeSet()
+        ranges.complement()
+        for arg in args:
+            ranges &= arg._to_ranges()
+        return TemporalConstraint(ranges)
+
+    def _to_ranges(self) -> RangeSet:
+        """Return the integer nanosecond `RangeSet` representation of this
+        timespan.
+
+        This method is package-private: for use by `lsst.daf.butler` code only.
+        """
+        return self._ranges

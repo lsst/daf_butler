@@ -37,6 +37,7 @@ try:
 except ImportError:
     erfa = None
 
+from lsst.sphgeom import RangeSet
 from lsst.utils.classes import Singleton
 
 _LOG = logging.getLogger(__name__)
@@ -57,6 +58,7 @@ class TimeConverter(metaclass=Singleton):
         self.max_time = astropy.time.Time("2100-01-01 00:00:00", format="iso", scale="tai")
         self.min_nsec = 0
         self.max_nsec = self.astropy_to_nsec(self.max_time)
+        self.valid_nsec = RangeSet(self.min_nsec, self.max_nsec)
 
     def astropy_to_nsec(self, astropy_time: astropy.time.Time) -> int:
         """Convert astropy time to nanoseconds since epoch.
@@ -188,6 +190,11 @@ class TimeConverter(metaclass=Singleton):
     max_nsec: int
     """Maximum value returned by `astropy_to_nsec`, corresponding to
     `max_time` (`int`).
+    """
+
+    valid_nsec: RangeSet
+    """RangeSet object that contains only valid nsec values
+    (`lsst.sphgeom.RangeSet`).
     """
 
 
