@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional, Pattern, TypeVa
 from lsst.utils.iteration import ensure_iterable
 
 if TYPE_CHECKING:
-    from ..registry.wildcards import Ellipsis, EllipsisType
+    from lsst.utils.sets.ellipsis import Ellipsis, EllipsisType
 
 
 _LOG = logging.getLogger(__name__)

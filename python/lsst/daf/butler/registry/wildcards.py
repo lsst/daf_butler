@@ -44,6 +44,7 @@ from typing import (
 
 import sqlalchemy
 from lsst.utils.iteration import ensure_iterable
+from lsst.utils.sets.ellipsis import Ellipsis, EllipsisType
 from pydantic import BaseModel
 
 from ..core import DatasetType
@@ -51,28 +52,7 @@ from ..core.utils import globToRegex
 from ._collectionType import CollectionType
 
 if TYPE_CHECKING:
-    # Workaround for `...` not having an exposed type in Python, borrowed from
-    # https://github.com/python/typing/issues/684#issuecomment-548203158
-    # Along with that, we need to either use `Ellipsis` instead of `...` for
-    # the actual sentinal value internally, and tell MyPy to ignore conversions
-    # from `...` to `Ellipsis` at the public-interface boundary.
-    #
-    # `Ellipsis` and `EllipsisType` should be directly imported from this
-    # module by related code that needs them; hopefully that will stay confined
-    # to `lsst.daf.butler.registry`.  Putting these in __all__ is bad for
-    # Sphinx, and probably more confusing than helpful overall.
-    from enum import Enum
-
     from .interfaces import CollectionManager, CollectionRecord
-
-    class EllipsisType(Enum):
-        Ellipsis = "..."
-
-    Ellipsis = EllipsisType.Ellipsis
-
-else:
-    EllipsisType = type(Ellipsis)
-    Ellipsis = Ellipsis
 
 
 @dataclass

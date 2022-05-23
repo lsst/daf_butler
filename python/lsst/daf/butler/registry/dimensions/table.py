@@ -29,6 +29,7 @@ from collections import defaultdict
 from typing import AbstractSet, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Set, Union
 
 import sqlalchemy
+from lsst.utils.sets.ellipsis import Ellipsis, EllipsisType
 
 from ...core import (
     DatabaseDimensionElement,
@@ -56,7 +57,6 @@ from ..interfaces import (
     StaticTablesContext,
 )
 from ..queries import QueryBuilder
-from ..wildcards import Ellipsis, EllipsisType
 
 _LOG = logging.getLogger(__name__)
 
