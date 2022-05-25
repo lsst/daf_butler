@@ -185,3 +185,30 @@ Test utilities
 .. automodapi:: lsst.daf.butler.tests
    :no-main-docstr:
    :no-inheritance-diagram:
+
+Command Line Inteface API
+-------------------------
+
+.. warning::
+   The command line interface API (everything in ``lsst.daf.butler.cli``) is for only for developer use to write command line interfaces, and is not intended for general use.
+
+.. automodapi:: lsst.daf.butler.cli.butler
+   :no-main-docstr:
+
+
+.. automodapi:: lsst.daf.butler.cli.cmd
+   :no-main-docstr:
+   :include-all-objects:
+
+.. automodapi:: lsst.daf.butler.cli.opt
+   :no-main-docstr:
+   :include-all-objects:
+
+.. automodapi:: lsst.daf.butler.cli.utils
+   :no-main-docstr:
+
+.. automodapi:: lsst.daf.butler.cli.cliLog
+   :no-main-docstr:
+
+.. automodapi:: lsst.daf.butler.cli.progress
+   :no-main-docstr:
