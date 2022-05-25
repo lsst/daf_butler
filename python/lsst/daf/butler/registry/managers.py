@@ -28,8 +28,10 @@ __all__ = (
 
 import dataclasses
 import logging
+import warnings
 from typing import Any, Dict, Generic, Type, TypeVar
 
+import sqlalchemy
 from lsst.utils import doImportType
 
 from ..core import Config, DimensionConfig, DimensionUniverse
@@ -151,6 +153,12 @@ class RegistryManagerTypes(
         """
         universe = DimensionUniverse(dimensionConfig)
         with database.declareStaticTables(create=True) as context:
+            if self.datasets.getIdColumnType() == sqlalchemy.BigInteger:
+                warnings.warn(
+                    "New data repositories should be created with UUID dataset IDs instead of autoincrement "
+                    "integer dataset IDs; support for integers will be removed after v25.",
+                    FutureWarning,
+                )
             instances = RegistryManagerInstances.initialize(database, context, types=self, universe=universe)
             versions = instances.getVersions()
         # store managers and their versions in attributes table
