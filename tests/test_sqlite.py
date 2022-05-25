@@ -227,17 +227,6 @@ class SqliteFileRegistryNameKeyCollMgrTestCase(SqliteFileRegistryTests, unittest
     datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
-class SqliteFileRegistrySynthIntKeyCollMgrTestCase(SqliteFileRegistryTests, unittest.TestCase):
-    """Tests for `Registry` backed by a SQLite file-based database.
-
-    This test case uses SynthIntKeyCollectionManager and
-    ByDimensionsDatasetRecordStorageManager.
-    """
-
-    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
-    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
-
-
 class SqliteFileRegistryNameKeyCollMgrUUIDTestCase(SqliteFileRegistryTests, unittest.TestCase):
     """Tests for `Registry` backed by a SQLite file-based database.
 
@@ -288,28 +277,6 @@ class SqliteMemoryRegistryTests(RegistryTests):
         config["db"] = "sqlite://"
         with self.assertRaises(sqlalchemy.exc.OperationalError):
             Registry.fromConfig(config)
-
-
-class SqliteMemoryRegistryNameKeyCollMgrTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
-    """Tests for `Registry` backed by a SQLite in-memory database.
-
-    This test case uses NameKeyCollectionManager and
-    ByDimensionsDatasetRecordStorageManager.
-    """
-
-    collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
-    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
-
-
-class SqliteMemoryRegistrySynthIntKeyCollMgrTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
-    """Tests for `Registry` backed by a SQLite in-memory database.
-
-    This test case uses SynthIntKeyCollectionManager and
-    ByDimensionsDatasetRecordStorageManager.
-    """
-
-    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
-    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
 class SqliteMemoryRegistryNameKeyCollMgrUUIDTestCase(unittest.TestCase, SqliteMemoryRegistryTests):

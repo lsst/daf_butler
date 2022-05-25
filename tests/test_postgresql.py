@@ -266,17 +266,6 @@ class PostgresqlRegistryNameKeyCollMgrTestCase(PostgresqlRegistryTests, unittest
     datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
 
 
-class PostgresqlRegistrySynthIntKeyCollMgrTestCase(PostgresqlRegistryTests, unittest.TestCase):
-    """Tests for `Registry` backed by a PostgreSQL database.
-
-    This test case uses SynthIntKeyCollectionManager and
-    ByDimensionsDatasetRecordStorageManager.
-    """
-
-    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
-    datasetsManager = "lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager"
-
-
 class PostgresqlRegistryNameKeyCollMgrUUIDTestCase(PostgresqlRegistryTests, unittest.TestCase):
     """Tests for `Registry` backed by a PostgreSQL database.
 
