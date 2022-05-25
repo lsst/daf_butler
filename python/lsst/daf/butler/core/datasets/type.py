@@ -479,7 +479,12 @@ class DatasetType:
             raise ValueError(
                 f"Parent storage class is not set. Unable to create composite type from {self.name}"
             )
-        return DatasetType(composite_name, dimensions=self.dimensions, storageClass=self.parentStorageClass)
+        return DatasetType(
+            composite_name,
+            dimensions=self.dimensions,
+            storageClass=self.parentStorageClass,
+            isCalibration=self.isCalibration(),
+        )
 
     def makeComponentDatasetType(self, component: str) -> DatasetType:
         """Return a component dataset type from a composite.
@@ -502,6 +507,7 @@ class DatasetType:
             dimensions=self.dimensions,
             storageClass=self.storageClass.allComponents()[component],
             parentStorageClass=self.storageClass,
+            isCalibration=self.isCalibration(),
         )
 
     def makeAllComponentDatasetTypes(self) -> List[DatasetType]:

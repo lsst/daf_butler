@@ -105,10 +105,11 @@ def categorizeElementId(universe: DimensionUniverse, name: str) -> Tuple[Dimensi
             # possibly not actually a column name, though we can guess
             # what they were trying to do.
             # Encourage them to clean that up and try again.
+            name = universe[column].primaryKey.name  # type: ignore
             raise RuntimeError(
-                f"Invalid reference to '{table}.{column}' "  # type: ignore
+                f"Invalid reference to '{table}.{column}' "
                 f"in expression; please use '{column}' or "
-                f"'{column}.{universe[column].primaryKey.name}' instead."
+                f"'{column}.{name}' instead."
             )
         else:
             return element, column
