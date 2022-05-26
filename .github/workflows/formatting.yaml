@@ -1,4 +1,4 @@
-name: check Python formatting
+name: Check Python formatting
 
 on:
   push:
@@ -7,22 +7,5 @@ on:
   pull_request:
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: '3.10'
-          cache: "pip"
-
-      - name: Install isort and black
-        run: pip install isort black
-
-      - name: Run isort
-        run: isort --check-only bin.src/ python/ tests/
-
-      - name: Run black
-        run: black --check --verbose --diff bin.src/* python/ tests/
+  call-workflow:
+    uses: lsst/rubin_workflows/.github/workflows/formatting.yaml@main

@@ -1,0 +1,5 @@
+types-requests
+types-PyYAML
+types-click
+types-pkg_resources
+types-Deprecated
