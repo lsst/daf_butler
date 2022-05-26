@@ -71,7 +71,11 @@ class SimpleButlerTestCase(unittest.TestCase):
 
         # have to make a registry first
         registryConfig = RegistryConfig(config.get("registry"))
-        Registry.createFromConfig(registryConfig)
+        if self.datasetsIdType is int:
+            with self.assertWarns(FutureWarning):
+                Registry.createFromConfig(registryConfig)
+        else:
+            Registry.createFromConfig(registryConfig)
 
         butler = Butler(config, **kwargs)
         DatastoreMock.apply(butler)
