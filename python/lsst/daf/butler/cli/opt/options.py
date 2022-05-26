@@ -20,6 +20,35 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+__all__ = (
+    "CollectionTypeCallback",
+    "collection_type_option",
+    "collections_option",
+    "components_option",
+    "config_option",
+    "config_file_option",
+    "confirm_option",
+    "dataset_type_option",
+    "datasets_option",
+    "log_level_option",
+    "long_log_option",
+    "log_file_option",
+    "log_label_option",
+    "log_tty_option",
+    "options_file_option",
+    "processes_option",
+    "regex_option",
+    "register_dataset_types_option",
+    "run_option",
+    "transfer_option",
+    "verbose_option",
+    "where_option",
+    "order_by_option",
+    "limit_option",
+    "offset_option",
+)
+
+
 from functools import partial
 
 import click

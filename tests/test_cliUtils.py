@@ -30,6 +30,8 @@ from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 from lsst.daf.butler.cli.utils import (
     LogCliRunner,
     MWArgumentDecorator,
+    MWCommand,
+    MWCtxObj,
     MWOption,
     MWOptionDecorator,
     MWPath,
@@ -364,6 +366,64 @@ class MWPathTest(unittest.TestCase):
                 result = self.runner.invoke(mustNotExistCmd, args)
                 self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
                 self.assertIn('"foo.txt" should not exist.', result.output)
+
+
+class MWCommandTest(unittest.TestCase):
+    def setUp(self):
+        self.runner = click.testing.CliRunner()
+        self.ctx = None
+
+    def testCaptureOptions(self):
+        """Test that command options are captured in order."""
+
+        @click.command(cls=MWCommand)
+        @click.argument("ARG_A", required=False)
+        @click.argument("ARG_B", required=False)
+        @click.option("-o", "--an-option")
+        @click.option("-s", "--second-option")
+        @click.option("-f", is_flag=True)
+        @click.option("-d/-n", "--do/--do-not", "do_or_do_not")
+        @click.option("--multi", multiple=True)
+        @click.pass_context
+        def cmd(ctx, arg_a, arg_b, an_option, second_option, f, do_or_do_not, multi):
+            self.assertIsNotNone(ctx)
+            self.ctx = ctx
+
+        # When `expected` is `None`, the expected args are exactly the same as
+        # as the result of `args.split()`. If `expected` is not `None` then
+        # the expected args are the same as `expected.split()`.
+        for args, expected in (
+            ("--an-option foo --second-option bar", None),
+            ("--second-option bar --an-option foo", None),
+            ("--an-option foo", None),
+            ("--second-option bar", None),
+            ("--an-option foo -f --second-option bar", None),
+            ("-o foo -s bar", "--an-option foo --second-option bar"),
+            ("--an-option foo -f -s bar", "--an-option foo -f --second-option bar"),
+            ("--an-option=foo", "--an-option foo"),
+            # NB when using a short flag everything that follows, including an
+            # equals sign, is part of the value!
+            ("-o=foo", "--an-option =foo"),
+            ("--do", None),
+            ("--do-not", None),
+            ("-d", "--do"),
+            ("-n", "--do-not"),
+            # Arguments always come last, but the order of Arguments is still
+            # preserved:
+            ("myarg --an-option foo", "--an-option foo myarg"),
+            ("argA --an-option foo", "--an-option foo argA"),
+            ("argA argB --an-option foo", "--an-option foo argA argB"),
+            ("argA --an-option foo argB", "--an-option foo argA argB"),
+            ("--an-option foo argA argB", "--an-option foo argA argB"),
+            ("--multi one --multi two", None),
+        ):
+            split_args = args.split()
+            expected_args = split_args if expected is None else expected.split()
+            result = self.runner.invoke(cmd, split_args)
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.assertIsNotNone(self.ctx)
+            ctx_obj = MWCtxObj.getFrom(self.ctx)
+            self.assertEqual(ctx_obj.args, expected_args)
 
 
 if __name__ == "__main__":

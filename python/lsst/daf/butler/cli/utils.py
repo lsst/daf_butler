@@ -19,7 +19,36 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import copy
+
+__all__ = (
+    "astropyTablesToStr",
+    "printAstropyTables",
+    "textTypeStr",
+    "LogCliRunner",
+    "clickResultMsg",
+    "command_test_env",
+    "addArgumentHelp",
+    "split_commas",
+    "split_kv",
+    "to_upper",
+    "unwrap",
+    "option_section",
+    "MWPath",
+    "MWOption",
+    "MWArgument",
+    "OptionSection",
+    "MWOptionDecorator",
+    "MWArgumentDecorator",
+    "MWCommand",
+    "ButlerCommand",
+    "OptionGroup",
+    "MWCtxObj",
+    "yaml_presets",
+    "sortAstropyTable",
+    "catch_and_exit",
+)
+
+
 import itertools
 import logging
 import os
@@ -27,6 +56,7 @@ import sys
 import textwrap
 import traceback
 import uuid
+from collections import Counter
 from contextlib import contextmanager
 from functools import partial, wraps
 from unittest.mock import patch
@@ -689,8 +719,86 @@ class MWCommand(click.Command):
             kwargs["callback"] = catch_and_exit(callback)
         super().__init__(*args, **kwargs)
 
+    def _capture_args(self, ctx, args):
+        """Capture the command line options and arguments.
+
+        See details about what is captured and the order in which it is stored
+        in the documentation of `MWCtxObj`.
+
+        Parameters
+        ----------
+        ctx : `click.Context`
+            The current Context.
+        args : `list` [`str`]
+            The list of arguments from the command line, split at spaces but
+            not at separators (like "=").
+        """
+        parser = self.make_parser(ctx)
+        opts, _, param_order = parser.parse_args(args=list(args))
+        # `param_order` is a list of click.Option and click.Argument, there is
+        # one item for each time the Option or Argument was used on the
+        # command line. Options will precede Arguments, within each sublist
+        # they are in the order they were used on the command line. Note that
+        # click.Option and click.Argument do not contain the value from the
+        # command line; values are in `opts`.
+        #
+        # `opts` is a dict where the key is the argument name to the
+        # click.Command function, this name matches the `click.Option.name` or
+        # `click.Argument.name`. For Options, an item will only be present if
+        # the Option was used on the command line. For Arguments, an item will
+        # always be present and if no value was provided on the command line
+        # the value will be `None`. If the option accepts multiple values, the
+        # value in `opts` is a tuple, otherwise it is a single item.
+        next_idx = Counter()
+        captured_args = []
+        for param in param_order:
+            if isinstance(param, click.Option):
+                if param.multiple:
+                    val = opts[param.name][next_idx[param.name]]
+                    next_idx[param.name] += 1
+                else:
+                    val = opts[param.name]
+                if param.is_flag:
+                    # Bool options store their True flags in opts and their
+                    # False flags in secondary_opts.
+                    if val:
+                        flag = max(param.opts, key=len)
+                    else:
+                        flag = max(param.secondary_opts, key=len)
+                    captured_args.append(flag)
+                else:
+                    captured_args.append(max(param.opts, key=len))
+                    captured_args.append(val)
+            elif isinstance(param, click.Argument):
+                if (opt := opts[param.name]) is not None:
+                    captured_args.append(opt)
+            else:
+                assert False  # All parameters should be an Option or an Argument.
+        MWCtxObj.getFrom(ctx).args = captured_args
+
     def parse_args(self, ctx, args):
-        MWCtxObj.getFrom(ctx).args = copy.copy(args)
+        """Given a context and a list of arguments this creates the parser and
+        parses the arguments, then modifies the context as necessary. This is
+        automatically invoked by make_context().
+
+        This function overrides `click.Command.parse_args`.
+
+        The call to `_capture_args` in this override stores the arguments
+        (option names, option value, and argument values) that were used by the
+        caller on the command line in the context object. These stored
+        arugments can be used by the command function, e.g. to process options
+        in the order they appeared on the command line (pipetask uses this
+        feature to create pipeline actions in an order from different options).
+
+        Parameters
+        ----------
+        ctx : `click.core.Context`
+            The current Context.ß
+        args : `list` [`str`]
+            The list of arguments from the command line, split at spaces but
+            not at separators (like "=").
+        """
+        self._capture_args(ctx, args)
         super().parse_args(ctx, args)
 
     @property
@@ -731,14 +839,45 @@ class MWCtxObj:
     obj data to be managed in a consistent way.
 
     `Context.obj` defaults to None. `MWCtxObj.getFrom(ctx)` can be used to
-    initialize the obj if needed and return a new or existing MWCtxObj.
+    initialize the obj if needed and return a new or existing `MWCtxObj`.
+
+    The `args` attribute contains a list of options, option values, and
+    argument values that is similar to the list of arguments and options that
+    were passed in on the command line, with differences noted below:
+
+    * Option namess and option values are first in the list, and argument
+      values come last. The order of options and option values is preserved
+      within the options. The order of argument values is preserved.
+
+    * The longest option name is used for the option in the `args` list, e.g.
+      if an option accepts both short and long names "-o / --option" and the
+      short option name "-o" was used on the command line, the longer name will
+      be the one that appears in `args`.
+
+    * A long option name (which begins with two dashes "--") and its value may
+      be separated by an equal sign; the name and value are split at the equal
+      sign and it is removed. In `args`, the option is in one list item, and
+      the option value (without the equal sign) is in the next list item. e.g.
+      "--option=foo" and "--option foo" both become `["--opt", "foo"]` in
+      `args`.
+
+    * A short option name, (which begins with one dash "-") and its value are
+      split immediately after the short option name, and if there is
+      whitespace between the short option name and its value it is removed.
+      Everything after the short option name (excluding whitespace) is included
+      in the value. If the `Option` has a long name, the long name will be used
+      in `args` e.g. for the option "-o / --option": "-ofoo" and "-o foo"
+      become `["--option", "foo"]`, and (note!) "-o=foo" will become
+      `["--option", "=foo"]` (because everything after the short option name,
+      except whitespace, is used for the value (as is standard with unix
+      command line tools).
 
     Attributes
     ----------
     args : `list` [`str`]
-        The list of arguments (argument values, option flags, and option
-        values), split using whitespace, that were passed in on the command
-        line for the subcommand represented by the parent context object.
+        A list of options, option values, and arguments simialr to those that
+        were passed in on the command line. See comments about captured options
+        & arguments above.
     """
 
     def __init__(self):
@@ -747,8 +886,8 @@ class MWCtxObj:
 
     @staticmethod
     def getFrom(ctx):
-        """If needed, initialize `ctx.obj` with a new MWCtxObj, and return the
-        new or already existing MWCtxObj."""
+        """If needed, initialize `ctx.obj` with a new `MWCtxObj`, and return
+        the new or already existing `MWCtxObj`."""
         if ctx.obj is not None:
             return ctx.obj
         ctx.obj = MWCtxObj()

@@ -19,6 +19,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+__all__ = (
+    "collection_argument",
+    "collections_argument",
+    "dimensions_argument",
+    "directory_argument",
+    "element_argument",
+    "glob_argument",
+    "locations_argument",
+    "repo_argument",
+    "destination_argument",
+)
+
+
 from ..utils import MWArgumentDecorator, split_commas
 
 collection_argument = MWArgumentDecorator("collection")

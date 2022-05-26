@@ -19,6 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+__all__ = ("query_datasets_options",)
+
+
 import click
 
 from ..utils import OptionGroup, unwrap, where_help
