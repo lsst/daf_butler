@@ -270,7 +270,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.data",
                             "foo",
-                            "3",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -283,7 +282,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.data",
                             "ingest/run",
-                            "1",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -296,7 +294,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.data",
                             "ingest/run",
-                            "2",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -311,7 +308,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                 names=(
                     "type",
                     "run",
-                    "id",
                     "band",
                     "instrument",
                     "physical_filter",
@@ -325,7 +321,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.output",
                             "foo",
-                            "3",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -338,7 +333,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.output",
                             "ingest/run",
-                            "1",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -351,7 +345,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.output",
                             "ingest/run",
-                            "2",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -366,7 +359,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                 names=(
                     "type",
                     "run",
-                    "id",
                     "band",
                     "instrument",
                     "physical_filter",
@@ -380,7 +372,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.summary",
                             "foo",
-                            "3",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -393,7 +384,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.summary",
                             "ingest/run",
-                            "1",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -406,7 +396,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.summary",
                             "ingest/run",
-                            "2",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -421,7 +410,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                 names=(
                     "type",
                     "run",
-                    "id",
                     "band",
                     "instrument",
                     "physical_filter",
@@ -431,7 +419,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             ),
         )
 
-        self.assertAstropyTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
         # Verify that with find first the duplicate dataset is eliminated and
         # the more recent dataset is returned.
@@ -446,7 +434,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.data",
                             "foo",
-                            "3",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -458,7 +445,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.data",
                             "ingest/run",
-                            "1",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -473,7 +459,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                 names=(
                     "type",
                     "run",
-                    "id",
                     "band",
                     "instrument",
                     "physical_filter",
@@ -487,7 +472,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.output",
                             "foo",
-                            "3",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -500,7 +484,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.output",
                             "ingest/run",
-                            "1",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -515,7 +498,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                 names=(
                     "type",
                     "run",
-                    "id",
                     "band",
                     "instrument",
                     "physical_filter",
@@ -529,7 +511,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.summary",
                             "foo",
-                            "3",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -542,7 +523,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                         (
                             "test_metric_comp.summary",
                             "ingest/run",
-                            "1",
                             "R",
                             "DummyCamComp",
                             "d-r",
@@ -557,7 +537,6 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
                 names=(
                     "type",
                     "run",
-                    "id",
                     "band",
                     "instrument",
                     "physical_filter",
@@ -567,7 +546,7 @@ class QueryDatasetsTest(unittest.TestCase, ButlerTestHelper):
             ),
         )
 
-        self.assertAstropyTablesEqual(tables, expectedTables)
+        self.assertAstropyTablesEqual(tables, expectedTables, filterColumns=True)
 
 
 if __name__ == "__main__":
