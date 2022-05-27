@@ -2044,7 +2044,7 @@ class Butler(LimitedButler):
             filename = os.path.join(directory, filename)
         BackendClass = get_class_of(self._config["repo_transfer_formats"][format]["export"])
         with open(filename, "w") as stream:
-            backend = BackendClass(stream)
+            backend = BackendClass(stream, universe=self.registry.dimensions)
             try:
                 helper = RepoExportContext(
                     self.registry, self.datastore, backend=backend, directory=directory, transfer=transfer

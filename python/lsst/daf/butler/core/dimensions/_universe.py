@@ -182,6 +182,30 @@ class DimensionUniverse:
 
         return self
 
+    @property
+    def version(self) -> int:
+        """The version number of this universe.
+
+        Returns
+        -------
+        version : `int`
+            An integer representing the version number of this universe.
+            Uniquely defined when combined with the `namespace`.
+        """
+        return self._version
+
+    @property
+    def namespace(self) -> str:
+        """The namespace associated with this universe.
+
+        Returns
+        -------
+        namespace : `str`
+            The namespace. When combined with the `version` can uniquely
+            define this universe.
+        """
+        return self._namespace
+
     def __repr__(self) -> str:
         return f"DimensionUniverse({self._version}, {self._namespace})"
 
@@ -495,4 +519,4 @@ class DimensionUniverse:
 
     _version: int
 
-    _namespace: Optional[str]
+    _namespace: str

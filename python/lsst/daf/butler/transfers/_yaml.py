@@ -43,6 +43,7 @@ from ..core import (
     Datastore,
     DimensionElement,
     DimensionRecord,
+    DimensionUniverse,
     FileDataset,
     Timespan,
 )
@@ -94,8 +95,9 @@ class YamlRepoExportBackend(RepoExportBackend):
         A writeable file-like object.
     """
 
-    def __init__(self, stream: IO):
+    def __init__(self, stream: IO, universe: DimensionUniverse):
         self.stream = stream
+        self.universe = universe
         self.data: List[Dict[str, Any]] = []
 
     def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord) -> None:
@@ -195,6 +197,8 @@ class YamlRepoExportBackend(RepoExportBackend):
             {
                 "description": "Butler Data Repository Export",
                 "version": str(EXPORT_FORMAT_VERSION),
+                "universe_version": self.universe.version,
+                "universe_namespace": self.universe.namespace,
                 "data": self.data,
             },
             stream=self.stream,
@@ -248,13 +252,20 @@ class YamlRepoImportBackend(RepoImportBackend):
         self.refsByFileId: Dict[DatasetId, DatasetRef] = {}
         self.registry: Registry = registry
 
+        universe_version = wrapper.get("universe_version", 0)
+        universe_namespace = wrapper.get("universe_namespace", "daf_butler")
+
         # If this is data exported before the reorganization of visits
         # and visit systems and that new schema is in use, some filtering
         # will be needed. The entry in the visit dimension record will be
         # silently dropped when visit is created but the
         # visit_system_membership must be constructed.
         migrate_visit_system = False
-        if fileVersion < VersionTuple(1, 0, 2) and "visit_system_membership" in self.registry.dimensions:
+        if (
+            universe_version < 2
+            and universe_namespace == "daf_butler"
+            and "visit_system_membership" in self.registry.dimensions
+        ):
             migrate_visit_system = True
 
         datasetData = []

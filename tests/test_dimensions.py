@@ -128,6 +128,11 @@ class DimensionTestCase(unittest.TestCase):
         config = self.universe.dimensionConfig
         self.assertIsInstance(config, DimensionConfig)
 
+    def testVersion(self):
+        self.assertEqual(self.universe.namespace, "daf_butler")
+        # Test was added starting at version 2.
+        self.assertGreaterEqual(self.universe.version, 2)
+
     def testConfigRead(self):
         self.assertEqual(
             set(self.universe.getStaticDimensions().names),
