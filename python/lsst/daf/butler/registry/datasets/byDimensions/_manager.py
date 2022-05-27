@@ -246,6 +246,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 calibs=calibs,
                 dataset_type_id=row["id"],
                 collections=self._collections,
+                column_types=self._column_types,
             )
             byDatasetType[datasetType] = storage
             byId[storage._dataset_type_id] = storage
@@ -346,6 +347,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 calibs=calibs,
                 dataset_type_id=row["id"],
                 collections=self._collections,
+                column_types=self._column_types,
             )
             self._byDatasetType[datasetType] = storage
             self._byId[storage._dataset_type_id] = storage

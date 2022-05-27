@@ -22,16 +22,15 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import AbstractSet, Any, Iterable, List, Optional
+from typing import Any, Iterable, List, Optional
 
 import sqlalchemy.sql
 
-from ...core import DatasetType, Dimension, DimensionElement, SimpleQuery, SkyPixDimension
+from ...core import DatasetType, Dimension, DimensionElement, SimpleQuery, SkyPixDimension, sql
 from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
-from .._collectionType import CollectionType
 from .._exceptions import DataIdValueError
 from .._query_backend import QueryBackend
-from ..interfaces import CollectionRecord, DatasetRecordStorage, GovernorDimensionRecordStorage
+from ..interfaces import GovernorDimensionRecordStorage
 from ..wildcards import CollectionSearch, CollectionWildcard
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
@@ -173,286 +172,47 @@ class QueryBuilder:
             collections = CollectionSearch.fromExpression(collections)
         else:
             collections = CollectionWildcard.fromExpression(collections)
-        explicitCollections = frozenset(collections.explicitNames())
-        # If we are searching all collections with no constraints, loop over
-        # RUN collections only, because that will include all datasets.
-        collectionTypes: AbstractSet[CollectionType]
-        if collections == CollectionWildcard():
-            collectionTypes = {CollectionType.RUN}
-        else:
-            collectionTypes = CollectionType.all()
-        datasetRecordStorage = self._backend.managers.datasets.find(datasetType.name)
-        if datasetRecordStorage is None:
-            # Unrecognized dataset type means no results.  It might be better
-            # to raise here, but this is consistent with previous behavior,
-            # which is expected by QuantumGraph generation code in pipe_base.
-            self._doomed_by.append(
-                f"Dataset type {datasetType.name!r} is not registered, so no instances of it can exist in "
-                "any collection."
-            )
-            return False
-        collectionRecords: List[CollectionRecord] = []
-        rejections: List[str] = []
-        for collectionRecord in collections.iter(
-            self._backend.managers.collections.records, collectionTypes=collectionTypes
-        ):
-            # Only include collections that (according to collection summaries)
-            # might have datasets of this type and governor dimensions
-            # consistent with the query's WHERE clause.
-            collection_summary = self._backend.managers.datasets.getCollectionSummary(collectionRecord)
-            if not collection_summary.is_compatible_with(
+        rejections: list[str] = []
+        constraints = sql.LocalConstraints.from_misc(dimensions=self.summary.where.dimension_constraint)
+        collection_records = self._backend.resolve_dataset_collections(
+            datasetType,
+            collections,
+            constraints=constraints,
+            rejections=rejections,
+            allow_calibration_collections=(
+                not findFirst and not (self.summary.temporal or self.summary.mustHaveKeysJoined.temporal)
+            ),
+        )
+        columns_requested = {"dataset_id", "run", "ingest_date"} if isResult else frozenset()
+        if not collection_records:
+            relation = self._backend.make_doomed_dataset_relation(datasetType, columns_requested, rejections)
+        elif isResult and findFirst:
+            relation = self._backend.make_dataset_search_relation(
                 datasetType,
-                self.summary.where.dimension_constraint,
-                rejections=rejections,
-                name=collectionRecord.name,
-            ):
-                continue
-            if collectionRecord.type is CollectionType.CALIBRATION:
-                # If collection name was provided explicitly then say sorry if
-                # this is a kind of query we don't support yet; otherwise
-                # collection is a part of chained one or regex match and we
-                # skip it to not break queries of other included collections.
-                if datasetType.isCalibration():
-                    if self.summary.temporal or self.summary.mustHaveKeysJoined.temporal:
-                        if collectionRecord.name in explicitCollections:
-                            raise NotImplementedError(
-                                f"Temporal query for dataset type '{datasetType.name}' in CALIBRATION-type "
-                                f"collection '{collectionRecord.name}' is not yet supported."
-                            )
-                        else:
-                            rejections.append(
-                                f"Not searching for dataset {datasetType.name!r} in CALIBRATION collection "
-                                f"{collectionRecord.name!r} because temporal calibration queries aren't "
-                                "implemented; this is not an error only because the query structure implies "
-                                "that searching this collection may be incidental."
-                            )
-                            continue
-                    elif findFirst:
-                        if collectionRecord.name in explicitCollections:
-                            raise NotImplementedError(
-                                f"Find-first query for dataset type '{datasetType.name}' in "
-                                f"CALIBRATION-type collection '{collectionRecord.name}' is not yet "
-                                "supported."
-                            )
-                        else:
-                            rejections.append(
-                                f"Not searching for dataset {datasetType.name!r} in CALIBRATION collection "
-                                f"{collectionRecord.name!r} because find-first calibration queries aren't "
-                                "implemented; this is not an error only because the query structure implies "
-                                "that searching this collection may be incidental."
-                            )
-                            continue
-                    else:
-                        collectionRecords.append(collectionRecord)
-                else:
-                    # We can never find a non-calibration dataset in a
-                    # CALIBRATION collection.
-                    rejections.append(
-                        f"Not searching for non-calibration dataset {datasetType.name!r} "
-                        f"in CALIBRATION collection {collectionRecord.name!r}."
-                    )
-                    continue
-            else:
-                collectionRecords.append(collectionRecord)
+                collection_records,
+                columns_requested,
+                constraints=constraints,
+            )
+        else:
+            relation = self._backend.make_dataset_query_relation(
+                datasetType,
+                collection_records,
+                columns_requested,
+                constraints=constraints,
+            )
+        subquery = relation.to_sql_from()
         if isResult:
-            if findFirst:
-                subquery = self._build_dataset_search_subquery(
-                    datasetRecordStorage,
-                    collectionRecords,
-                )
-            else:
-                subquery = self._build_dataset_query_subquery(
-                    datasetRecordStorage,
-                    collectionRecords,
-                )
             columns = DatasetQueryColumns(
                 datasetType=datasetType,
-                id=subquery.columns["id"],
-                runKey=subquery.columns[self._backend.managers.collections.getRunForeignKeyName()],
-                ingestDate=subquery.columns["ingest_date"],
+                id=subquery.columns[str(sql.DatasetColumnTag(datasetType.name, "dataset_id"))],
+                runKey=subquery.columns[str(sql.DatasetColumnTag(datasetType.name, "run"))],
+                ingestDate=subquery.columns[str(sql.DatasetColumnTag(datasetType.name, "ingest_date"))],
             )
         else:
-            subquery = self._build_dataset_constraint_subquery(datasetRecordStorage, collectionRecords)
             columns = None
         self.joinTable(subquery, datasetType.dimensions.required, datasets=columns)
-        if not collectionRecords:
-            if rejections:
-                self._doomed_by.extend(rejections)
-            else:
-                self._doomed_by.append(f"No collections to search matching expression {collections}.")
-            return False
+        self._doomed_by.extend(relation.doomed_by)
         return not self._doomed_by
-
-    def _build_dataset_constraint_subquery(
-        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
-    ) -> sqlalchemy.sql.FromClause:
-        """Internal helper method to build a dataset subquery for a parent
-        query that does not return dataset results.
-
-        Parameters
-        ----------
-        storage : `DatasetRecordStorage`
-            Storage object for the dataset type the subquery is for.
-        collections : `list` [ `CollectionRecord` ]
-            Records for the collections to be searched.  Collections with no
-            datasets of this type or with governor dimensions incompatible with
-            the rest of the query should already have been filtered out.
-            `~CollectionType.CALIBRATION` collections should also be filtered
-            out if this is a temporal query.
-
-        Returns
-        -------
-        sql : `sqlalchemy.sql.FromClause`
-            A SQLAlchemy aliased subquery object.  Has columns for each
-            dataset type dimension, or an unspecified column (just to prevent
-            SQL syntax errors) where there is no data ID.
-        """
-        return storage.select(
-            *collections,
-            dataId=SimpleQuery.Select,
-            # If this dataset type has no dimensions, we're in danger of
-            # generating an invalid subquery that has no columns in the
-            # SELECT clause.  An easy fix is to just select some arbitrary
-            # column that goes unused, like the dataset ID.
-            id=None if storage.datasetType.dimensions else SimpleQuery.Select,
-            run=None,
-            ingestDate=None,
-            timespan=None,
-        ).alias(storage.datasetType.name)
-
-    def _build_dataset_query_subquery(
-        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
-    ) -> sqlalchemy.sql.FromClause:
-        """Internal helper method to build a dataset subquery for a parent
-        query that returns all matching dataset results.
-
-        Parameters
-        ----------
-        storage : `DatasetRecordStorage`
-            Storage object for the dataset type the subquery is for.
-        collections : `list` [ `CollectionRecord` ]
-            Records for the collections to be searched.  Collections with no
-            datasets of this type or with governor dimensions incompatible with
-            the rest of the query should already have been filtered out.
-            `~CollectionType.CALIBRATION` collections should also be filtered
-            out if this is a temporal query.
-
-        Returns
-        -------
-        sql : `sqlalchemy.sql.FromClause`
-            A SQLAlchemy aliased subquery object.  Has columns for each dataset
-            type dimension, the dataset ID, the `~CollectionType.RUN`
-            collection key, and the ingest date.
-        """
-        sql = storage.select(
-            *collections,
-            dataId=SimpleQuery.Select,
-            id=SimpleQuery.Select,
-            run=SimpleQuery.Select,
-            ingestDate=SimpleQuery.Select,
-            timespan=None,
-        ).alias(storage.datasetType.name)
-        return sql
-
-    def _build_dataset_search_subquery(
-        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
-    ) -> sqlalchemy.sql.FromClause:
-        """Internal helper method to build a dataset subquery for a parent
-        query that returns the first matching dataset for each data ID and
-        dataset type name from an ordered list of collections.
-
-        Parameters
-        ----------
-        storage : `DatasetRecordStorage`
-            Storage object for the dataset type the subquery is for.
-        collections : `list` [ `CollectionRecord` ]
-            Records for the collections to be searched.  Collections with no
-            datasets of this type or with governor dimensions incompatible with
-            the rest of the query should already have been filtered out.
-            `~CollectionType.CALIBRATION` collections should be filtered out as
-            well.
-
-        Returns
-        -------
-        sql : `sqlalchemy.sql.FromClause`
-            A SQLAlchemy aliased subquery object.  Has columns for each dataset
-            type dimension, the dataset ID, the `~CollectionType.RUN`
-            collection key, and the ingest date.
-        """
-        # Query-simplification shortcut: if there is only one collection, a
-        # find-first search is just a regular result subquery.  Same is true
-        # if this is a doomed query with no collections to search.
-        if len(collections) <= 1:
-            return self._build_dataset_query_subquery(storage, collections)
-        # In the more general case, we build a subquery of the form below to
-        # search the collections in order.
-        #
-        # WITH {dst}_search AS (
-        #     SELECT {data-id-cols}, id, run_id, 1 AS rank
-        #         FROM <collection1>
-        #     UNION ALL
-        #     SELECT {data-id-cols}, id, run_id, 2 AS rank
-        #         FROM <collection2>
-        #     UNION ALL
-        #     ...
-        # )
-        # SELECT
-        #     {dst}_window.{data-id-cols},
-        #     {dst}_window.id,
-        #     {dst}_window.run_id
-        # FROM (
-        #     SELECT
-        #         {dst}_search.{data-id-cols},
-        #         {dst}_search.id,
-        #         {dst}_search.run_id,
-        #         ROW_NUMBER() OVER (
-        #             PARTITION BY {dst_search}.{data-id-cols}
-        #             ORDER BY rank
-        #         ) AS rownum
-        #     ) {dst}_window
-        # WHERE
-        #     {dst}_window.rownum = 1;
-        #
-        # We'll start with the Common Table Expression (CTE) at the top.
-        search = storage.select(
-            *collections,
-            dataId=SimpleQuery.Select,
-            id=SimpleQuery.Select,
-            run=SimpleQuery.Select,
-            ingestDate=SimpleQuery.Select,
-            timespan=None,
-            rank=SimpleQuery.Select,
-        ).cte(f"{storage.datasetType.name}_search")
-        # Now we fill out the SELECT from the CTE, and the subquery it contains
-        # (at the same time, since they have the same columns, aside from the
-        # OVER clause).
-        run_key_name = self._backend.managers.collections.getRunForeignKeyName()
-        window_data_id_cols = [
-            search.columns[name].label(name) for name in storage.datasetType.dimensions.required.names
-        ]
-        window_select_cols = [
-            search.columns["id"].label("id"),
-            search.columns[run_key_name].label(run_key_name),
-            search.columns["ingest_date"].label("ingest_date"),
-        ]
-        window_select_cols += window_data_id_cols
-        window_select_cols.append(
-            sqlalchemy.sql.func.row_number()
-            .over(partition_by=window_data_id_cols, order_by=search.columns["rank"])
-            .label("rownum")
-        )
-        window = (
-            sqlalchemy.sql.select(*window_select_cols)
-            .select_from(search)
-            .alias(f"{storage.datasetType.name}_window")
-        )
-        sql = (
-            sqlalchemy.sql.select(*[window.columns[col.name].label(col.name) for col in window_select_cols])
-            .select_from(window)
-            .where(window.columns["rownum"] == 1)
-            .alias(storage.datasetType.name)
-        )
-        return sql
 
     def joinTable(
         self,
