@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["QueryDimensionRecordStorage"]
 
-from typing import Any, Iterable, Mapping, Optional
+from typing import AbstractSet, Any, Iterable, Mapping, Optional
 
 import sqlalchemy
 
@@ -30,13 +30,9 @@ from ...core import (
     DatabaseDimension,
     DatabaseDimensionElement,
     DataCoordinateIterable,
-    DimensionElement,
     DimensionRecord,
     GovernorDimension,
-    NamedKeyDict,
     NamedKeyMapping,
-    SpatialRegionDatabaseRepresentation,
-    TimespanDatabaseRepresentation,
     sql,
 )
 from ..interfaces import (
@@ -45,7 +41,6 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
-from ..queries import QueryBuilder
 
 
 class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
@@ -63,9 +58,20 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         dimension records.
     element : `DatabaseDimensionElement`
         The element whose records this storage will manage.
+    viewOf : `str`
+        Name of the dimension element this storage is a view of.
+    column_types : `sql.ColumnTypeInfo`
+        Information about column types that can differ between data
+        repositories and registry instances, including the dimension universe.
     """
 
-    def __init__(self, db: Database, element: DatabaseDimensionElement, viewOf: str):
+    def __init__(
+        self,
+        db: Database,
+        element: DatabaseDimensionElement,
+        viewOf: str,
+        column_types: sql.ColumnTypeInfo,
+    ):
         assert isinstance(
             element, DatabaseDimension
         ), "An element cannot be a dependency unless it is a dimension."
@@ -77,7 +83,7 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
             TimespanReprClass=self._db.getTimespanRepresentation(),
         )
         self._viewOf = viewOf
-        self._query = None  # Constructed on first use.
+        self._column_types = column_types
         if element not in self._target.graph.dimensions:
             raise NotImplementedError("Query-backed dimension must be a dependency of its target.")
         if element.metadata:
@@ -104,7 +110,7 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         viewOf = config["view_of"]
-        return cls(db, element, viewOf)
+        return cls(db, element, viewOf, column_types)
 
     @property
     def element(self) -> DatabaseDimension:
@@ -115,49 +121,28 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
-    def _ensureQuery(self) -> None:
-        if self._query is None:
-            targetTable = self._db.getExistingTable(self._target.name, self._targetSpec)
-            assert targetTable is not None
-            columns = []
-            # The only columns for this dimension are ones for its required
-            # dependencies and its own primary key (guaranteed by the checks in
-            # the ctor).
-            for dimension in self.element.required:
-                if dimension == self.element:
-                    columns.append(targetTable.columns[dimension.name].label(dimension.primaryKey.name))
-                else:
-                    columns.append(targetTable.columns[dimension.name].label(dimension.name))
-            # This query doesn't do a SELECT DISTINCT, because that's confusing
-            # and potentially wasteful if we apply a restrictive WHERE clause,
-            # as SelectableDimensionRecordStorage.fetch will do.
-            # Instead, we add DISTINCT in join() only.
-            self._query = (
-                sqlalchemy.sql.select(*columns).distinct().select_from(targetTable).alias(self.element.name)
-            )
-
     def join(
         self,
-        builder: QueryBuilder,
-        *,
-        regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
-    ) -> None:
+        relation: sql.Relation,
+        columns: Optional[AbstractSet[str]] = None,
+    ) -> sql.Relation:
         # Docstring inherited from DimensionRecordStorage.
-        assert regions is None, "Should be guaranteed by constructor checks."
-        assert timespans is None, "Should be guaranteed by constructor checks."
-        if self._target in builder.summary.mustHaveKeysJoined:
-            # Do nothing; the target dimension is already being included, so
-            # joining against a subquery referencing it would just produce a
-            # more complicated query that's guaranteed to return the same
-            # results.
-            return
-        self._ensureQuery()
-        joinOn = builder.startJoin(
-            self._query, self.element.required, self.element.RecordClass.fields.required.names
+        target_table = self._db.getExistingTable(self._target.name, self._targetSpec)
+        assert target_table is not None
+        builder = sql.Relation.build(
+            sqlalchemy.sql.select(
+                [target_table.columns[name].label(name) for name in self.element.required.names]
+            )
+            .select_from(target_table)
+            .alias(self.element.name),
+            self._column_types,
         )
-        builder.finishJoin(self._query, joinOn)
-        return self._query
+        # The only columns for this dimension are ones for its required
+        # dependencies and its own primary key (guaranteed by the checks in
+        # the ctor).
+        for name in self.element.required.names:
+            builder.columns[sql.DimensionKeyColumnTag(name)] = builder.sql_from.columns[name]
+        return relation.join(builder.finish().forced_unique())
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

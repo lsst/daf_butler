@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, Iterable, Ma
 
 import sqlalchemy
 
-from ...core import DatabaseDimensionElement, DimensionGraph, GovernorDimension, SkyPixDimension
+from ...core import DatabaseDimensionElement, DimensionGraph, GovernorDimension, SkyPixDimension, sql
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -43,12 +43,8 @@ if TYPE_CHECKING:
         DimensionElement,
         DimensionRecord,
         DimensionUniverse,
-        NamedKeyDict,
         NamedKeyMapping,
-        TimespanDatabaseRepresentation,
-        sql,
     )
-    from ..queries import QueryBuilder
     from ._database import Database, StaticTablesContext
 
 
@@ -91,45 +87,26 @@ class DimensionRecordStorage(ABC):
     @abstractmethod
     def join(
         self,
-        builder: QueryBuilder,
-        *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
-    ) -> sqlalchemy.sql.FromClause:
-        """Add the dimension element's logical table to a query under
-        construction.
-
-        This is a visitor pattern interface that is expected to be called only
-        by `QueryBuilder.joinDimensionElement`.
+        relation: sql.Relation,
+        columns: Optional[AbstractSet[str]] = None,
+    ) -> sql.Relation:
+        """Return a relation that includes columns or constraints from this
+        element.
 
         Parameters
         ----------
-        builder : `QueryBuilder`
-            Builder for the query that should contain this element.
-        regions : `NamedKeyDict`, optional
-            A mapping from `DimensionElement` to a SQLAlchemy column containing
-            the region for that element, which should be updated to include a
-            region column for this element if one exists.  If `None`,
-            ``self.element`` is not being included in the query via a spatial
-            join.
-        timespan : `NamedKeyDict`, optional
-            A mapping from `DimensionElement` to a `Timespan` of SQLALchemy
-            columns containing the timespan for that element, which should be
-            updated to include timespan columns for this element if they exist.
-            If `None`, ``self.element`` is not being included in the query via
-            a temporal join.
+        relation : `sql.Relation`
+            Input relation to join to or otherwise return a modification of.
+        columns : `AbstractSet` [ `str` ], optional
+            Fact columns that should be provided by the relation.  Does not
+            include dimension key fields, which are always provided, but may
+            include "region" and/or "timespan".  If `None`, all fields are
+            included.
 
         Returns
         -------
-        fromClause : `sqlalchemy.sql.FromClause`
-            Table or clause for the element which is joined.
-
-        Notes
-        -----
-        Elements are only included in queries via spatial and/or temporal joins
-        when necessary to connect them to other elements in the query, so
-        ``regions`` and ``timespans`` cannot be assumed to be not `None` just
-        because an element has a region or timespan.
+        joined_relation : `sql.Relation`
+            New relation.
         """
         raise NotImplementedError()
 
@@ -230,6 +207,57 @@ class DimensionRecordStorage(ABC):
         """
         raise NotImplementedError()
 
+    def _build_leaf_relation(
+        self,
+        sql_from: sqlalchemy.sql.FromClause,
+        column_types: sql.ColumnTypeInfo,
+        columns: Optional[AbstractSet[str]] = None,
+        constraints: Optional[sql.LocalConstraints] = None,
+    ) -> sql.Relation:
+        """Construct a `sql.Relation` object for a dimension element whose
+        storage is backed directly by a table.
+
+        This is a conceptually "protected" helper method for subclass
+        `join` implementations.
+
+        Parameters
+        ----------
+        sql_from : `sqlalchemy.sql.FromClause`
+            SQLAlchemy table or subquery to select from.
+        column_types : `sql.ColumnTypeInfo`
+            Information about column types that can vary with registry
+            configuration.
+        columns : `Iterable` [ `str` ], optional
+            Fact columns that should be provided by the relation.  Does not
+            include dimension key fields, which are always provided.  If `None`
+            all columns should be provided.
+        constraints : `sql.LocalConstraints`, optional
+            Constraints to include in the result.
+
+        Returns
+        -------
+        relation : `sql.Relation`
+            New relation.
+        """
+        builder = sql.Relation.build(sql_from, column_types)
+        for dimension_name, field_name in zip(
+            self.element.dimensions.names,
+            self.element.RecordClass.fields.dimensions.names,
+        ):
+            builder.columns[sql.DimensionKeyColumnTag(dimension_name)] = builder.sql_from.columns[field_name]
+        if columns is None:
+            columns = set(self.element.RecordClass.fields.facts.names)
+            if self.element.spatial:
+                columns.add("region")
+            if self.element.temporal:
+                columns.add("timespan")
+        for field_name in columns:
+            tag = sql.DimensionRecordColumnTag(self.element.name, field_name)
+            builder.columns[tag] = tag.extract_logical_column(
+                builder.sql_from.columns, column_types, name=field_name
+            )
+        return builder.finish(constraints=constraints)
+
 
 class GovernorDimensionRecordStorage(DimensionRecordStorage):
     """Intermediate interface for `DimensionRecordStorage` objects that provide
@@ -307,6 +335,12 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         (`sqlalchemy.schema.Table`).
         """
         raise NotImplementedError
+
+    def get_local_constraints(self) -> sql.LocalConstraints:
+        """Return a `sql.LocalConstraint` that limits the values of this
+        dimension to ``self.values``.
+        """
+        return sql.LocalConstraints.from_misc(dimensions={self.element.name: self.values})
 
     @abstractmethod
     def registerInsertionListener(self, callback: Callable[[DimensionRecord], None]) -> None:
@@ -403,6 +437,32 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         """
         raise NotImplementedError(f"{type(self).__name__} does not support spatial elements.")
 
+    def get_spatial_join_relation(
+        self,
+        other: DimensionElement,
+        constraints: Optional[sql.LocalConstraints] = None,
+    ) -> Optional[sql.Relation]:
+        """Return a `sql.Relation` that represents the spatial overlap join
+        between two dimension elements.
+
+        Parameters
+        ----------
+        other : `DimensionElement`
+            Element to compute overlaps for.  Guaranteed by caller to be
+            spatial (as is ``self``), with a different topological family.  May
+            be a `DatabaseDimensionElement` or a `SkyPixDimension`.
+        constraints : `sql.LocalConstraints`,
+            Constraints on the query's result rows that are known in advance.
+
+        Returns
+        -------
+        relation : `sql.Relation` or `None`
+            Join relation.  Should be `None` when no direct overlaps for this
+            combination are stored; higher-level code is responsible for
+            working out alternative approaches involving multiple joins.
+        """
+        return None
+
 
 class DatabaseDimensionOverlapStorage(ABC):
     """A base class for objects that manage overlaps between a pair of
@@ -451,6 +511,12 @@ class DatabaseDimensionOverlapStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def clearCaches(self) -> None:
+        """Clear any cached state about which overlaps have been
+        materialized."""
+        raise NotImplementedError()
+
+    @abstractmethod
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         """Return tables used for schema digest.
 
@@ -458,6 +524,24 @@ class DatabaseDimensionOverlapStorage(ABC):
         -------
         tables : `Iterable` [ `sqlalchemy.schema.Table` ]
             Possibly empty set of tables for schema digest calculations.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_relation(self, constraints: Optional[sql.LocalConstraints] = None) -> Optional[sql.Relation]:
+        """Return a `sql.Relation` that represents the join table.
+
+        Parameters
+        ----------
+        constraints : `sql.LocalConstraints`,
+            Constraints on the query's result rows that are known in advance.
+
+        Returns
+        -------
+        relation : `sql.Relation` or `None`
+            Join relation.  Should be `None` when no direct overlaps for this
+            combination are stored; higher-level code is responsible for
+            working out alternative approaches involving multiple joins.
         """
         raise NotImplementedError()
 

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["CachingDimensionRecordStorage"]
 
-from typing import Any, Dict, Iterable, Mapping, Optional, Set, Union
+from typing import AbstractSet, Any, Dict, Iterable, Mapping, Optional, Set, Union
 
 import sqlalchemy
 from lsst.utils import doImportType
@@ -32,13 +32,9 @@ from ...core import (
     DataCoordinate,
     DataCoordinateIterable,
     DataCoordinateSet,
-    DimensionElement,
     DimensionRecord,
     GovernorDimension,
-    NamedKeyDict,
     NamedKeyMapping,
-    SpatialRegionDatabaseRepresentation,
-    TimespanDatabaseRepresentation,
     sql,
 )
 from ..interfaces import (
@@ -47,7 +43,6 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
-from ..queries import QueryBuilder
 
 
 class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
@@ -98,13 +93,10 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def join(
         self,
-        builder: QueryBuilder,
-        *,
-        regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
-    ) -> None:
-        # Docstring inherited from DimensionRecordStorage.
-        return self._nested.join(builder, regions=regions, timespans=timespans)
+        relation: sql.Relation,
+        columns: Optional[AbstractSet[str]] = None,
+    ) -> sql.Relation:
+        return self._nested.join(relation, columns)
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

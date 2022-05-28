@@ -22,7 +22,6 @@ from __future__ import annotations
 
 __all__ = ("Query",)
 
-import dataclasses
 import enum
 import itertools
 from abc import ABC, abstractmethod
@@ -45,6 +44,7 @@ from ...core import (
     SpatialRegionDatabaseRepresentation,
     addDimensionForeignKey,
     ddl,
+    sql,
 )
 from .._query_backend import QueryBackend
 from ..interfaces import Database
@@ -52,24 +52,6 @@ from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
 
 if TYPE_CHECKING:
     from ._builder import QueryBuilder
-
-
-@dataclasses.dataclass(frozen=True)
-class OrderByColumn:
-    """Information about single column in ORDER BY clause."""
-
-    column: sqlalchemy.sql.ColumnElement
-    """Name of the column or `None` for primary key (`str` or `None`)"""
-
-    ordering: bool
-    """True for ascending order, False for descending (`bool`)."""
-
-    @property
-    def column_order(self) -> sqlalchemy.sql.ColumnElement:
-        """Column element for use in ORDER BY clause
-        (`sqlalchemy.sql.ColumnElement`)
-        """
-        return self.column.asc() if self.ordering else self.column.desc()
 
 
 class Query(ABC):
@@ -734,7 +716,7 @@ class DirectQuery(Query):
         graph: DimensionGraph,
         spatial_constraint: Optional[SpatialConstraint],
         backend: QueryBackend,
-        order_by_columns: Iterable[OrderByColumn] = (),
+        order_by_columns: Iterable[sqlalchemy.sql.ColumnElement] = (),
         limit: Optional[Tuple[int, Optional[int]]] = None,
         doomed_by: Iterable[str] = (),
     ):
@@ -812,7 +794,7 @@ class DirectQuery(Query):
         assert not simpleQuery.order_by, "Input query cannot have ORDER BY"
         if self._order_by_columns:
             # add ORDER BY column
-            order_by_columns = [column.column_order for column in self._order_by_columns]
+            order_by_columns = list(self._order_by_columns)
             order_by_column = sqlalchemy.func.row_number().over(order_by=order_by_columns).label("_orderby")
             simpleQuery.columns.append(order_by_column)
             simpleQuery.order_by = [order_by_column]
@@ -927,11 +909,12 @@ class DirectQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        builder = QueryBuilder(summary, backend=self.backend, doomed_by=self._doomed_by)
-        builder.joinTable(
-            self.sql.alias(), dimensions=self.graph.dimensions, datasets=self.getDatasetColumns()
-        )
-        return builder
+        relation_builder = sql.Relation.build(self._simpleQuery.from_, self.backend.managers.column_types)
+        relation_builder.where.extend(self._simpleQuery.where)
+        relation_builder.columns.update(self._columns.make_logical_column_mapping())
+        query_builder = QueryBuilder(summary, backend=self.backend, doomed_by=self._doomed_by)
+        query_builder.relation = relation_builder.finish()
+        return query_builder
 
 
 class MaterializedQuery(Query):
@@ -1062,9 +1045,16 @@ class MaterializedQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        builder = QueryBuilder(summary, backend=self.backend, doomed_by=self._doomed_by)
-        builder.joinTable(self._table, dimensions=self.graph.dimensions, datasets=self.getDatasetColumns())
-        return builder
+        relation_builder = sql.Relation.build(self._table, self.backend.managers.column_types)
+        relation_builder.add(*self.graph.names)
+        if self.datasetType is not None:
+            relation_builder.add(dataset_id=sql.DatasetColumnTag(self.datasetType.name, "dataset_id"))
+            relation_builder.columns[
+                sql.DatasetColumnTag(self.datasetType.name, "run")
+            ] = self._table.columns[self.backend.managers.collections.getRunForeignKeyName()]
+        query_builder = QueryBuilder(summary, backend=self.backend, doomed_by=self._doomed_by)
+        query_builder.relation = relation_builder.finish(is_materialized=True)
+        return query_builder
 
 
 class EmptyQuery(Query):

@@ -26,17 +26,8 @@ from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Op
 
 import sqlalchemy
 
-from ...core import (
-    DataCoordinateIterable,
-    DimensionElement,
-    DimensionRecord,
-    GovernorDimension,
-    NamedKeyDict,
-    TimespanDatabaseRepresentation,
-    sql,
-)
+from ...core import DataCoordinateIterable, DimensionRecord, GovernorDimension, sql
 from ..interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
-from ..queries import QueryBuilder
 
 
 class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
@@ -52,14 +43,24 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         The dimension whose records this storage will manage.
     table : `sqlalchemy.schema.Table`
         The logical table for the dimension.
+    column_types : `sql.ColumnTypeInfo`
+        Information about column types that can vary with registry
+        configuration.
     """
 
-    def __init__(self, db: Database, dimension: GovernorDimension, table: sqlalchemy.schema.Table):
+    def __init__(
+        self,
+        db: Database,
+        dimension: GovernorDimension,
+        table: sqlalchemy.schema.Table,
+        column_types: sql.ColumnTypeInfo,
+    ):
         self._db = db
         self._dimension = dimension
         self._table = table
         self._cache: Dict[str, DimensionRecord] = {}
         self._callbacks: List[Callable[[DimensionRecord], None]] = []
+        self._column_types = column_types
 
     @classmethod
     def initialize(
@@ -80,7 +81,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
             table = context.addTable(element.name, spec)
         else:
             table = db.ensureTableExists(element.name, spec)
-        return cls(db, element, table)
+        return cls(db, element, table, column_types)
 
     @property
     def element(self) -> GovernorDimension:
@@ -115,20 +116,19 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
     def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         self._cache.clear()
+        self.refresh()
 
     def join(
         self,
-        builder: QueryBuilder,
-        *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
-    ) -> None:
+        relation: sql.Relation,
+        columns: Optional[AbstractSet[str]] = None,
+    ) -> sql.Relation:
         # Docstring inherited from DimensionRecordStorage.
-        joinOn = builder.startJoin(
-            self._table, self.element.dimensions, self.element.RecordClass.fields.dimensions.names
+        return relation.join(
+            self._build_leaf_relation(
+                self.table, self._column_types, columns, constraints=self.get_local_constraints()
+            )
         )
-        builder.finishJoin(self._table, joinOn)
-        return self._table
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

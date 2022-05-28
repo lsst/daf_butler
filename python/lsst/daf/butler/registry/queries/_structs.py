@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Union
+from typing import Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Union, cast
 
 from lsst.utils.classes import cached_getter, immutable
 from sqlalchemy.sql import ColumnElement
@@ -192,21 +192,28 @@ class OrderByClauseColumn:
     """True for ascending order, False for descending (`bool`)."""
 
 
-@immutable
+@dataclass(frozen=True, eq=False)
 class OrderByClause:
-    """Class for information about columns in ORDER BY clause
+    """Class for information about columns in ORDER BY clause"""
 
-    Parameters
-    ----------
-    order_by : `Iterable` [ `str` ]
-        Sequence of names to use for ordering with optional "-" prefix.
-    graph : `DimensionGraph`
-        Dimensions used by a query.
-    """
+    @classmethod
+    def parse_general(cls, order_by: Iterable[str], graph: DimensionGraph) -> OrderByClause:
+        """Parse an iterable of strings in the context of a multi-dimension
+        query.
 
-    def __init__(self, order_by: Iterable[str], graph: DimensionGraph):
+        Parameters
+        ----------
+        order_by : `Iterable` [ `str` ]
+            Sequence of names to use for ordering with optional "-" prefix.
+        graph : `DimensionGraph`
+            Dimensions used by a query.
 
-        self.order_by_columns = []
+        Returns
+        -------
+        clause : `OrderByClause`
+            New order-by clause representing the given string columns.
+        """
+        terms = []
         for name in order_by:
             if not name or name == "-":
                 raise ValueError("Empty dimension name in ORDER BY")
@@ -215,23 +222,77 @@ class OrderByClause:
                 ascending = False
                 name = name[1:]
             element, column = categorizeOrderByName(graph, name)
-            self.order_by_columns.append(
-                OrderByClauseColumn(element=element, column=column, ordering=ascending)
-            )
+            term = cls._make_term(element, column, ascending)
+            terms.append(term)
+        return cls(terms)
 
-        self.elements = NamedValueSet(
-            column.element for column in self.order_by_columns if column.column is not None
-        )
+    @classmethod
+    def parse_element(cls, order_by: Iterable[str], element: DimensionElement) -> OrderByClause:
+        """Parse an iterable of strings in the context of a single dimension
+        element query.
 
-    order_by_columns: Iterable[OrderByClauseColumn]
+        Parameters
+        ----------
+        order_by : `Iterable` [ `str` ]
+            Sequence of names to use for ordering with optional "-" prefix.
+        element : `DimensionElement`
+            Single or primary dimension element in the query
+
+        Returns
+        -------
+        clause : `OrderByClause`
+            New order-by clause representing the given string columns.
+        """
+        terms = []
+        for name in order_by:
+            if not name or name == "-":
+                raise ValueError("Empty dimension name in ORDER BY")
+            ascending = True
+            if name[0] == "-":
+                ascending = False
+                name = name[1:]
+            column = categorizeElementOrderByName(element, name)
+            term = cls._make_term(element, column, ascending)
+            terms.append(term)
+        return cls(terms)
+
+    @classmethod
+    def _make_term(cls, element: DimensionElement, column: Optional[str], ascending: bool) -> sql.OrderByTerm:
+        tag: sql.ColumnTag
+        if column is None:
+            tag = sql.DimensionKeyColumnTag(element.name)
+            term = sql.OrderByTerm.asc(tag)
+        elif column in ("timespan.begin", "timespan.end"):
+            base_column, _, subfield = column.partition(".")
+            tag = sql.DimensionRecordColumnTag(element.name, base_column)
+            term = sql.OrderByTerm.from_timespan_bound(tag, subfield)
+        else:
+            tag = sql.DimensionRecordColumnTag(element.name, column)
+            term = sql.OrderByTerm.asc(tag)
+        if not ascending:
+            term = term.reversed()
+        return term
+
+    terms: Iterable[sql.OrderByTerm]
     """Columns that appear in the ORDER BY
     (`Iterable` [ `OrderByClauseColumn` ]).
     """
 
-    elements: NamedValueSet[DimensionElement]
-    """Dimension elements whose non-key columns were referenced by order_by
-    (`NamedValueSet` [ `DimensionElement` ]).
-    """
+    @property  # type: ignore
+    @cached_getter
+    def columns_required(self) -> sql.ColumnTagSet:
+        """Set of column tags for all columns referenced by the ORDER BY clause
+        (`sql.ColumnTagSet`).
+        """
+        tags: set[sql.ColumnTag] = set()
+        for term in self.terms:
+            tags.update(term.columns)
+        return sql.ColumnTagSet._from_iterable(tags)
+
+    def to_sql_columns(
+        self, logical_columns: Mapping[sql.ColumnTag, sql.LogicalColumn]
+    ) -> Iterable[ColumnElement]:
+        return [term.to_sql_scalar(logical_columns) for term in self.terms]
 
 
 @immutable
@@ -348,7 +409,7 @@ class QuerySummary:
             dataset_type_name=dataset_type_name,
             allow_orphans=not check,
         )
-        self.order_by = None if order_by is None else OrderByClause(order_by, requested)
+        self.order_by = None if order_by is None else OrderByClause.parse_general(order_by, requested)
         self.limit = limit
 
     requested: DimensionGraph
@@ -402,10 +463,6 @@ class QuerySummary:
                 # if this element might be associated with spatial
                 # information, we don't need it for this query.
                 return NamedValueSet().freeze()
-        elif len(result) > 1:
-            # There's a spatial join.  Those require the common SkyPix
-            # system to be included in the query in order to connect them.
-            result.add(self.universe.commonSkyPix)
         return result.freeze()
 
     @property  # type: ignore
@@ -426,6 +483,7 @@ class QuerySummary:
             ) in self.where.expression_predicate.columns_required.dimension_records.items():
                 if "timespan" in column_names:
                     result.add(self.requested.universe[element_name])
+
         return result.freeze()
 
     @property  # type: ignore
@@ -456,7 +514,8 @@ class QuerySummary:
             for element_name in self.where.expression_predicate.columns_required.dimension_records.keys():
                 result.add(self.requested.universe[element_name])
         if self.order_by is not None:
-            result.update(self.order_by.elements)
+            for element_name in self.order_by.columns_required.dimension_records.keys():
+                result.add(self.requested.universe[element_name])
         for dimension in self.mustHaveKeysJoined:
             if dimension.implied:
                 result.add(dimension)
@@ -596,4 +655,59 @@ class QueryColumns:
             result[sql.DatasetColumnTag(dataset_type_name, "run")] = self.datasets.runKey
             if self.datasets.ingestDate is not None:
                 result[sql.DatasetColumnTag(dataset_type_name, "ingest_date")] = self.datasets.ingestDate
+        return result
+
+    @staticmethod
+    def from_logical_columns(
+        logical_columns: Mapping[sql.ColumnTag, sql.LogicalColumn],
+        dataset_types: NamedValueAbstractSet[DatasetType],
+        column_types: sql.ColumnTypeInfo,
+    ) -> QueryColumns:
+        """Create a `QueryColumns` instance from a mapping keyed by
+        `sql.ColumnTag`.
+
+        This is a transitional method that converts from the new way of
+        representing columns in queries to this old one.
+
+        Parameters
+        ----------
+        logical_columns : `Mapping` [ `sql.ColumnTag`, `sql.LogicalColumn` ]
+            Mapping of columns to convert.
+        dataset_types : `NamedValueAbstractSet` [ `DatasetType` ]
+            Set of all dataset types participating in the query.
+        column_types : `sql.ColumnTypeInfo`
+            Information about column types that can vary between data
+            repositories.
+
+        Returns
+        -------
+        columns : `QueryColumns`
+            Translated `QueryColumns` instance.
+        """
+        result = QueryColumns()
+        dataset_kwargs: dict[str, Any] = {}
+        for tag in logical_columns.keys():
+            match tag:
+                case sql.DimensionKeyColumnTag(dimension=dimension_name):
+                    dimension = cast(Dimension, column_types.universe[dimension_name])
+                    result.keys[dimension] = [tag.index_scalar(logical_columns)]
+                case sql.DimensionRecordColumnTag(element=element_name, column="timespan"):
+                    element = column_types.universe[element_name]
+                    result.timespans[element] = tag.index_timespan(logical_columns)
+                case sql.DimensionRecordColumnTag(element=element_name, column="region"):
+                    element = column_types.universe[element_name]
+                    result.regions[element] = tag.index_spatial_region(logical_columns)
+                case sql.DatasetColumnTag(dataset_type=dataset_type_name, column=column_name):
+                    dataset_type = dataset_types[dataset_type_name]
+                    old_dataset_type = dataset_kwargs.setdefault("datasetType", dataset_type)
+                    assert old_dataset_type == dataset_type, "Queries can only have one result dataset type."
+                    match column_name:
+                        case "dataset_id":
+                            dataset_kwargs["id"] = tag.index_scalar(logical_columns)
+                        case "run":
+                            dataset_kwargs["runKey"] = tag.index_scalar(logical_columns)
+                        case "ingest_date":
+                            dataset_kwargs["ingestDate"] = tag.index_scalar(logical_columns)
+        if dataset_kwargs:
+            result.datasets = DatasetQueryColumns(**dataset_kwargs)
         return result
