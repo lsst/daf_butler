@@ -197,17 +197,13 @@ class Query(ABC):
             return None
         return cols.datasetType
 
-    def count(self, db: Database, *, region: Optional[Region] = None, exact: bool = True) -> int:
+    def count(self, db: Database, *, exact: bool = True) -> int:
         """Count the number of rows this query would return.
 
         Parameters
         ----------
         db : `Database`
             Object managing the database connection.
-        region : `sphgeom.Region`, optional
-            A region that any result-row regions must overlap in order to be
-            yielded.  If not provided, this will be ``self.whereRegion``, if
-            that exists.
         exact : `bool`, optional
             If `True`, run the full query and perform post-query filtering if
             needed to account for that filtering in the count.  If `False`, the
@@ -232,7 +228,7 @@ class Query(ABC):
             return 1
         if exact and self.spatial:
             filtered_count = 0
-            for _ in self.rows(db, region=region):
+            for _ in self.rows(db):
                 filtered_count += 1
             return filtered_count
         else:
@@ -242,7 +238,6 @@ class Query(ABC):
         self,
         db: Database,
         *,
-        region: Optional[Region] = None,
         execute: bool = True,
         exact: bool = True,
     ) -> bool:
@@ -252,10 +247,6 @@ class Query(ABC):
         ----------
         db : `Database`
             Object managing the database connection.
-        region : `sphgeom.Region`, optional
-            A region that any result-row regions must overlap in order to be
-            yielded.  If not provided, this will be ``self.whereRegion``, if
-            that exists.
         execute : `bool`, optional
             If `True`, execute at least a ``LIMIT 1`` query if it cannot be
             determined prior to execution that the query would return no rows.
@@ -280,7 +271,7 @@ class Query(ABC):
         if exact and not execute:
             raise TypeError("Cannot obtain exact results without executing the query.")
         if exact and self.spatial:
-            for _ in self.rows(db, region=region):
+            for _ in self.rows(db):
                 return True
             return False
         elif execute:
@@ -292,7 +283,6 @@ class Query(ABC):
         self,
         db: Database,
         *,
-        region: Optional[Region] = None,
         followup: bool = True,
     ) -> Iterator[str]:
         """Return human-readable messages that may help explain why the query
@@ -302,10 +292,6 @@ class Query(ABC):
         ----------
         db : `Database`
             Object managing the database connection.
-        region : `sphgeom.Region`, optional
-            A region that any result-row regions must overlap in order to be
-            yielded.  If not provided, this will be ``self.whereRegion``, if
-            that exists.
         followup : `bool`, optional
             If `True` (default) perform inexpensive follow-up queries if no
             diagnostics are available from query generation alone.
@@ -349,7 +335,7 @@ class Query(ABC):
             followup_query = builder.finish()
             if not followup_query.any(db, exact=False):
                 yield f"No dimension records for element '{element.name}' found."
-                yield from followup_query.explain_no_results(db, region=region, followup=False)
+                yield from followup_query.explain_no_results(db, followup=False)
                 return
 
     @abstractmethod
@@ -382,19 +368,13 @@ class Query(ABC):
         """
         raise NotImplementedError()
 
-    def rows(
-        self, db: Database, *, region: Optional[Region] = None
-    ) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
+    def rows(self, db: Database) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
         """Execute the query and yield result rows, applying `predicate`.
 
         Parameters
         ----------
         db : `Database`
             Object managing the database connection.
-        region : `sphgeom.Region`, optional
-            A region that any result-row regions must overlap in order to be
-            yielded.  If not provided, this will be ``self.whereRegion``, if
-            that exists.
 
         Yields
         ------
@@ -404,12 +384,11 @@ class Query(ABC):
         """
         if self._doomed_by:
             return
-        whereRegion = region if region is not None else self.whereRegion
         self._filtered_by_where = 0
         self._filtered_by_join = 0
         for row in db.query(self.sql):
             rowRegions = [row._mapping[self.getRegionColumn(element.name)] for element in self.spatial]
-            if whereRegion and any(r.isDisjointFrom(whereRegion) for r in rowRegions):
+            if self.whereRegion and any(r.isDisjointFrom(self.whereRegion) for r in rowRegions):
                 self._filtered_by_where += 1
                 continue
             if not not any(a.isDisjointFrom(b) for a, b in itertools.combinations(rowRegions, 2)):
@@ -1119,9 +1098,7 @@ class EmptyQuery(Query):
         # Docstring inherited from Query.
         return None
 
-    def rows(
-        self, db: Database, *, region: Optional[Region] = None
-    ) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
+    def rows(self, db: Database) -> Iterator[Optional[sqlalchemy.engine.RowProxy]]:
         if not self._doomed_by:
             yield None
 
