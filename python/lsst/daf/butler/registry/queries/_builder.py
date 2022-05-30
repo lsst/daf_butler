@@ -603,10 +603,12 @@ class QueryBuilder:
             else:
                 # Dimension is not fully identified, but it might be a skypix
                 # dimension that's constrained by a given region.
-                if self.summary.where.region is not None and isinstance(dimension, SkyPixDimension):
+                if self.summary.where.spatial_constraint is not None and isinstance(
+                    dimension, SkyPixDimension
+                ):
                     # We know the region now.
                     givenSkyPixIds: List[int] = []
-                    for begin, end in dimension.pixelization.envelope(self.summary.where.region):
+                    for begin, end in self.summary.where.spatial_constraint.ranges(dimension):
                         givenSkyPixIds.extend(range(begin, end))
                     for columnInQuery in columnsInQuery:
                         self._simpleQuery.where.append(columnInQuery.in_(givenSkyPixIds))
@@ -652,7 +654,7 @@ class QueryBuilder:
         return DirectQuery(
             graph=self.summary.requested,
             uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
-            whereRegion=self.summary.where.dataId.region,
+            spatial_constraint=self.summary.where.spatial_constraint,
             simpleQuery=self._simpleQuery,
             columns=self._columns,
             order_by_columns=self._order_by_columns(),

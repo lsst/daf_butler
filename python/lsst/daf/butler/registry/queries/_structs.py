@@ -26,7 +26,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, Union
 
-from lsst.sphgeom import Region
 from lsst.utils.classes import cached_getter, immutable
 from lsst.utils.sets.unboundable import FrozenUnboundableSet, UnboundableSet
 from sqlalchemy.sql import ColumnElement
@@ -44,6 +43,7 @@ from ...core import (
     NamedValueAbstractSet,
     NamedValueSet,
     SkyPixDimension,
+    SpatialConstraint,
     SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
 )
@@ -88,7 +88,7 @@ class QueryWhereExpression:
         self,
         graph: DimensionGraph,
         dataId: Optional[DataCoordinate] = None,
-        region: Optional[Region] = None,
+        spatial_constraint: Optional[SpatialConstraint] = None,
         defaults: Optional[DataCoordinate] = None,
         check: bool = True,
     ) -> QueryWhereClause:
@@ -105,9 +105,10 @@ class QueryWhereExpression:
             A fully-expanded data ID identifying dimensions known in advance.
             If not provided, will be set to an empty data ID.
             ``dataId.hasRecords()`` must return `True`.
-        region : `lsst.sphgeom.Region`, optional
-            A spatial region that all rows must overlap.  If `None` and
-            ``dataId`` is not `None`, ``dataId.region`` will be used.
+        spatial_constraint : `SpatialConstraint`, optional
+            A spatial constrait that all rows must overlap.  If `None` and
+            ``dataId`` is not `None`, ``dataId.region`` will be used to
+            construct one.
         defaults : `DataCoordinate`, optional
             A data ID containing default for governor dimensions.  Ignored
             unless ``check=True``.
@@ -117,8 +118,8 @@ class QueryWhereExpression:
             reject some valid queries that resemble common mistakes (e.g.
             queries for visits without specifying an instrument).
         """
-        if region is None and dataId is not None:
-            region = dataId.region
+        if spatial_constraint is None and dataId is not None and dataId.region is not None:
+            spatial_constraint = SpatialConstraint(dataId.region)
         if dataId is None:
             dataId = DataCoordinate.makeEmpty(graph.universe)
         if defaults is None:
@@ -182,7 +183,7 @@ class QueryWhereExpression:
             columns=summary.columns,
             bind=self._bind,
             dimension_constraint=dimension_constraint,
-            region=region,
+            spatial_constraint=spatial_constraint,
         )
 
 
@@ -223,9 +224,9 @@ class QueryWhereClause:
     query expression, keyed by the identifiers they replace (`Mapping`).
     """
 
-    region: Optional[Region]
-    """A spatial region that all result rows must overlap
-    (`lsst.sphgeom.Region` or `None`).
+    spatial_constraint: Optional[SpatialConstraint]
+    """A spatial constraint that all result rows must overlap
+    (`SpatialConstraint` or `None`).
     """
 
     dimension_constraint: Mapping[str, UnboundableSet[DataIdValue]]
@@ -353,9 +354,10 @@ class QuerySummary:
         must return `True`.
     expression : `str` or `QueryWhereExpression`, optional
         A user-provided string WHERE expression.
-    whereRegion : `lsst.sphgeom.Region`, optional
-        A spatial region that all rows must overlap.  If `None` and ``dataId``
-        is not `None`, ``dataId.region`` will be used.
+    spatial_constraint : `SpatialConstraint`, optional
+        A spatial constraint that all rows must overlap.  If `None` and
+        ``dataId`` is not `None`, ``dataId.region`` will be used to construct
+        one.
     bind : `Mapping` [ `str`, `object` ], optional
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.
@@ -383,7 +385,7 @@ class QuerySummary:
         *,
         dataId: Optional[DataCoordinate] = None,
         expression: Optional[Union[str, QueryWhereExpression]] = None,
-        whereRegion: Optional[Region] = None,
+        spatial_constraint: Optional[SpatialConstraint] = None,
         bind: Optional[Mapping[str, Any]] = None,
         defaults: Optional[DataCoordinate] = None,
         datasets: Iterable[DatasetType] = (),
@@ -399,7 +401,11 @@ class QuerySummary:
         elif bind is not None:
             raise TypeError("New bind parameters passed, but expression is already a QueryWhereExpression.")
         self.where = expression.attach(
-            self.requested, dataId=dataId, region=whereRegion, defaults=defaults, check=check
+            self.requested,
+            dataId=dataId,
+            spatial_constraint=spatial_constraint,
+            defaults=defaults,
+            check=check,
         )
         self.datasets = NamedValueSet(datasets).freeze()
         self.order_by = None if order_by is None else OrderByClause(order_by, requested)

@@ -432,7 +432,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             components = [componentName]
         else:
             components = [None]
-        summary = QuerySummary(self.graph, whereRegion=self._query.whereRegion, datasets=[datasetType])
+        summary = QuerySummary(
+            self.graph, spatial_constraint=self._query.spatial_constraint, datasets=[datasetType]
+        )
         builder = self._query.makeBuilder(summary)
         builder.joinDataset(datasetType, collections=collections, findFirst=findFirst)
         query = builder.finish(joinMissing=False)
