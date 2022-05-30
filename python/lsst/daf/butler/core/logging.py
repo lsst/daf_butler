@@ -26,7 +26,7 @@ import logging
 import traceback
 from contextlib import contextmanager
 from logging import Formatter, LogRecord, StreamHandler
-from typing import IO, Any, ClassVar, Dict, Generator, Iterable, Iterator, List, Optional, Union
+from typing import IO, Any, Callable, ClassVar, Dict, Generator, Iterable, Iterator, List, Optional, Union
 
 from lsst.utils.introspection import get_full_type_name
 from lsst.utils.iteration import isplit
@@ -71,7 +71,7 @@ class ButlerMDC:
 
     _MDC = MDCDict()
 
-    _old_factory = None
+    _old_factory: Optional[Callable[..., logging.LogRecord]] = None
     """Old log record factory."""
 
     @classmethod
