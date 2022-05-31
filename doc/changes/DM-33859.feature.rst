@@ -1,0 +1,1 @@
+Added ``azimuth`` to the ``exposure`` and ``visit`` records.

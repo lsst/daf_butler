@@ -1,0 +1,6 @@
+Support LSST-style visit definitions where a single exposure is part of a set of related exposures all taken with the same acquisition command.
+Each exposure knows the "visit" it is part of.
+
+* Modify the ``exposure`` dimension record to include ``seq_start`` and ``seq_end`` metadata.
+* Modify ``visit`` record to include a ``seq_num`` field.
+* Remove ``visit_system`` dimension and add ``visit_system_membership`` record to allow a visit to be associated with multiple visit systems.

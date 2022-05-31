@@ -1,0 +1,4 @@
+* Added ``visit_system`` to ``instrument`` record and allowed it to be used as a tie breaker in dataset determination if a dataId is given using ``seq_num`` and ``day_obs`` and it matches multiple visit.
+* Modify export YAML format to include the dimension universe version and namespace.
+* Allow export files with older visit definitions to be read (this does not fill in the new metadata records).
+* `DimensionUniverse` now supports the ``in`` operator to check if a dimension is part of the universe.
