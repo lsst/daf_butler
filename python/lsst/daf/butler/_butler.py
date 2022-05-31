@@ -1723,45 +1723,9 @@ class Butler(LimitedButler):
         unstore: bool = False,
         tags: Iterable[str] = (),
         purge: bool = False,
-        run: Optional[str] = None,
     ) -> None:
-        """Remove one or more datasets from a collection and/or storage.
+        # docstring inherited from LimitedButler
 
-        Parameters
-        ----------
-        refs : `~collections.abc.Iterable` of `DatasetRef`
-            Datasets to prune.  These must be "resolved" references (not just
-            a `DatasetType` and data ID).
-        disassociate : `bool`, optional
-            Disassociate pruned datasets from ``tags``, or from all collections
-            if ``purge=True``.
-        unstore : `bool`, optional
-            If `True` (`False` is default) remove these datasets from all
-            datastores known to this butler.  Note that this will make it
-            impossible to retrieve these datasets even via other collections.
-            Datasets that are already not stored are ignored by this option.
-        tags : `Iterable` [ `str` ], optional
-            `~CollectionType.TAGGED` collections to disassociate the datasets
-            from.  Ignored if ``disassociate`` is `False` or ``purge`` is
-            `True`.
-        purge : `bool`, optional
-            If `True` (`False` is default), completely remove the dataset from
-            the `Registry`.  To prevent accidental deletions, ``purge`` may
-            only be `True` if all of the following conditions are met:
-
-             - All given datasets are in the given run.
-             - ``disassociate`` is `True`;
-             - ``unstore`` is `True`.
-
-            This mode may remove provenance information from datasets other
-            than those provided, and should be used with extreme care.
-
-        Raises
-        ------
-        TypeError
-            Raised if the butler is read-only, if no collection was provided,
-            or the conditions for ``purge=True`` were not met.
-        """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         if purge:
@@ -1780,6 +1744,12 @@ class Butler(LimitedButler):
                         f"Cannot disassociate from collection '{tag}' "
                         f"of non-TAGGED type {collectionType.name}."
                     )
+        # For an execution butler we want to keep existing UUIDs for the
+        # datasets, for that we need to keep them in the collections but
+        # remove from datastore.
+        if self._allow_put_of_predefined_dataset and purge:
+            purge = False
+            disassociate = False
         # Transform possibly-single-pass iterable into something we can iterate
         # over multiple times.
         refs = list(refs)

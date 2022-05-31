@@ -25,7 +25,7 @@ __all__ = ("LimitedButler",)
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Dict, Optional, Union
+from typing import Any, ClassVar, Dict, Iterable, Optional, Union
 
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from .core import AmbiguousDatasetError, DatasetRef, Datastore, DimensionUniverse, StorageClassFactory
@@ -34,15 +34,8 @@ log = logging.getLogger(__name__)
 
 
 class LimitedButler(ABC):
-    """A miminal butler interface that is sufficient to back
+    """A minimal butler interface that is sufficient to back
     `~lsst.pipe.base.PipelineTask` execution.
-
-    Notes
-    -----
-    This ABC currently does not include any support for dataset deletion; it
-    probably needs some to support clobbering and automatic retries, which are
-    problems I have not yet considered when prototyping (in the hopes that
-    addressing them later won't change the big pictures).
     """
 
     GENERATION: ClassVar[int] = 3
@@ -184,6 +177,54 @@ class LimitedButler(ABC):
         class).
         """
         pass
+
+    @abstractmethod
+    def pruneDatasets(
+        self,
+        refs: Iterable[DatasetRef],
+        *,
+        disassociate: bool = True,
+        unstore: bool = False,
+        tags: Iterable[str] = (),
+        purge: bool = False,
+    ) -> None:
+        """Remove one or more datasets from a collection and/or storage.
+
+        Parameters
+        ----------
+        refs : `~collections.abc.Iterable` of `DatasetRef`
+            Datasets to prune.  These must be "resolved" references (not just
+            a `DatasetType` and data ID).
+        disassociate : `bool`, optional
+            Disassociate pruned datasets from ``tags``, or from all collections
+            if ``purge=True``.
+        unstore : `bool`, optional
+            If `True` (`False` is default) remove these datasets from all
+            datastores known to this butler.  Note that this will make it
+            impossible to retrieve these datasets even via other collections.
+            Datasets that are already not stored are ignored by this option.
+        tags : `Iterable` [ `str` ], optional
+            `~CollectionType.TAGGED` collections to disassociate the datasets
+            from.  Ignored if ``disassociate`` is `False` or ``purge`` is
+            `True`.
+        purge : `bool`, optional
+            If `True` (`False` is default), completely remove the dataset from
+            the `Registry`.  To prevent accidental deletions, ``purge`` may
+            only be `True` if all of the following conditions are met:
+
+             - ``disassociate`` is `True`;
+             - ``unstore`` is `True`.
+
+            This mode may remove provenance information from datasets other
+            than those provided, and should be used with extreme care.
+
+        Raises
+        ------
+        TypeError
+            Raised if the butler is read-only, if no collection was provided,
+            or the conditions for ``purge=True`` were not met.
+        """
+        raise NotImplementedError()
 
     @property
     @abstractmethod

@@ -337,7 +337,7 @@ class ButlerPutGetTests:
                             self.assertEqual(set(transferred_again), set(transferred))
 
                 # Now remove the dataset completely.
-                butler.pruneDatasets([ref], purge=True, unstore=True, run=this_run)
+                butler.pruneDatasets([ref], purge=True, unstore=True)
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args, collections=this_run)
