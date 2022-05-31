@@ -39,6 +39,7 @@ from ....core import (
     DimensionUniverse,
     NamedKeyDict,
     NamedValueSet,
+    sql,
 )
 from ..._exceptions import UserExpressionError
 from .categorize import ExpressionConstant, categorizeConstant, categorizeElementId
@@ -82,6 +83,34 @@ class InspectionSummary:
     """Whether this expression includes the special dataset ingest date
     identifier (`bool`).
     """
+
+    def make_column_tag_set(self, dataset_type_name: Optional[str]) -> sql.ColumnTagSet:
+        """Transforms the columns captured here into a categorized set of
+        `sql.ColumnTag` objects.
+
+        Parameters
+        ----------
+        dataset_type_name : `str` or `None`
+            Name of the dataset type to assume for unqualified dataset columns,
+            or `None` to reject any such identifiers.
+
+        Returns
+        -------
+        tag_set : `sql.ColumnTagSet`
+            Set of categorized column tags.
+        """
+        datasets = {}
+        if self.hasIngestDate:
+            if dataset_type_name is None:
+                raise UserExpressionError(
+                    "Expression requires an ingest data, which requires " "exactly one dataset type."
+                )
+            datasets[dataset_type_name] = {"ingest_date"}
+        return sql.ColumnTagSet(
+            dimensions=self.dimensions.names,
+            dimension_records=self.columns.byName(),
+            datasets=datasets,
+        )
 
 
 @dataclasses.dataclass
@@ -299,6 +328,11 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         query expression, keyed by the identifiers they replace.
     defaults : `DataCoordinate`
         A data ID containing default for governor dimensions.
+    allow_orphans : `bool`, optional
+        If `True`, permit expressions to refer to dimensions without providing
+        a value for their governor dimensions (e.g. referring to a visit
+        without an instrument).  Should be left to default to `False` in
+        essentially all new code.
     """
 
     def __init__(
@@ -307,11 +341,13 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         graph: DimensionGraph,
         bind: Mapping[str, Any],
         defaults: DataCoordinate,
+        allow_orphans: bool = False,
     ):
         self.dataId = dataId
         self.graph = graph
         self.defaults = defaults
         self._branchVisitor = InspectionVisitor(dataId.universe, bind)
+        self._allow_orphans = allow_orphans
 
     def visitBranch(self, node: Node) -> TreeSummary:
         # Docstring inherited from NormalFormVisitor.
@@ -389,7 +425,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
             missing = governorsNeededInBranch - summary.dimension_values.keys()
             if missing <= self.defaults.names:
                 summary.defaultsNeeded.update(missing)
-            else:
+            elif not self._allow_orphans:
                 still_missing = missing - self.defaults.names
                 raise UserExpressionError(
                     f"No value(s) for governor dimensions {still_missing} in expression "

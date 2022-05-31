@@ -21,16 +21,19 @@
 
 import unittest
 
-from lsst.daf.butler import DataCoordinate, DimensionUniverse
-from lsst.daf.butler.core import NamedKeyDict, TimespanDatabaseRepresentation
-from lsst.daf.butler.registry.queries._structs import QueryColumns
-from lsst.daf.butler.registry.queries.expressions import (
-    CheckVisitor,
-    NormalForm,
-    NormalFormExpression,
-    ParserYacc,
-    convertExpressionToSql,
+import sqlalchemy
+from lsst.daf.butler import (
+    DataCoordinate,
+    DimensionUniverse,
+    SpatialRegionDatabaseRepresentation,
+    TimespanDatabaseRepresentation,
+    ddl,
+    sql,
 )
+from lsst.daf.butler.registry.queries.expressions.check import CheckVisitor
+from lsst.daf.butler.registry.queries.expressions.convert import convertExpressionToSql
+from lsst.daf.butler.registry.queries.expressions.normalForm import NormalForm, NormalFormExpression
+from lsst.daf.butler.registry.queries.expressions.parser import ParserYacc
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.schema import Column
 
@@ -43,7 +46,13 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
     """A test case for convertExpressionToSql method"""
 
     def setUp(self):
-        self.universe = DimensionUniverse()
+        self.column_types = sql.ColumnTypeInfo(
+            spatial_region_cls=SpatialRegionDatabaseRepresentation,
+            timespan_cls=TimespanDatabaseRepresentation.Compound,
+            universe=DimensionUniverse(),
+            dataset_id_spec=ddl.FieldSpec("dataset_id", dtype=ddl.GUID),
+            run_key_spec=ddl.FieldSpec("run_id", dtype=sqlalchemy.BigInteger),
+        )
 
     def test_simple(self):
         """Test with a trivial expression"""
@@ -52,11 +61,7 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
         tree = parser.parse("1 > 0")
         self.assertIsNotNone(tree)
 
-        columns = QueryColumns()
-        elements = NamedKeyDict()
-        column_element = convertExpressionToSql(
-            tree, self.universe, columns, elements, {}, TimespanDatabaseRepresentation.Compound
-        )
+        column_element = convertExpressionToSql(tree, {}, {}, self.column_types, None)
         self.assertEqual(str(column_element.compile()), ":param_1 > :param_2")
         self.assertEqual(str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 0")
 
@@ -67,11 +72,7 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
         tree = parser.parse("T'1970-01-01 00:00/tai' < T'2020-01-01 00:00/tai'")
         self.assertIsNotNone(tree)
 
-        columns = QueryColumns()
-        elements = NamedKeyDict()
-        column_element = convertExpressionToSql(
-            tree, self.universe, columns, elements, {}, TimespanDatabaseRepresentation.Compound
-        )
+        column_element = convertExpressionToSql(tree, {}, {}, self.column_types, None)
         self.assertEqual(str(column_element.compile()), ":param_1 < :param_2")
         self.assertEqual(
             str(column_element.compile(compile_kwargs={"literal_binds": True})), "0 < 1577836800000000000"
@@ -84,11 +85,12 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
         tree = parser.parse("ingest_date < T'2020-01-01 00:00/utc'")
         self.assertIsNotNone(tree)
 
-        columns = QueryColumns()
-        columns.datasets = FakeDatasetRecordStorageManager()
-        elements = NamedKeyDict()
         column_element = convertExpressionToSql(
-            tree, self.universe, columns, elements, {}, TimespanDatabaseRepresentation.Compound
+            tree,
+            {sql.DatasetColumnTag("fake", "ingest_date"): Column("ingest_date")},
+            {},
+            self.column_types,
+            "fake",
         )
 
         # render it, needs specific dialect to convert column to expression

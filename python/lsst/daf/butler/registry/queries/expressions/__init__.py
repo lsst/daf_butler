@@ -19,9 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .check import *
-from .convert import *
-from .normalForm import *
-from .parser import *
+from ._predicate import *
 
 # All other modules are for internal package use only.
