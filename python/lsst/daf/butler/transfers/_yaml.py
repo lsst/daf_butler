@@ -43,6 +43,7 @@ from ..core import (
     Datastore,
     DimensionElement,
     DimensionRecord,
+    DimensionUniverse,
     FileDataset,
     Timespan,
 )
@@ -58,7 +59,7 @@ from ..registry.interfaces import (
 from ..registry.versions import IncompatibleVersionError
 from ._interfaces import RepoExportBackend, RepoImportBackend
 
-EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 1)
+EXPORT_FORMAT_VERSION = VersionTuple(1, 0, 2)
 """Export format version.
 
 Files with a different major version or a newer minor version cannot be read by
@@ -94,8 +95,9 @@ class YamlRepoExportBackend(RepoExportBackend):
         A writeable file-like object.
     """
 
-    def __init__(self, stream: IO):
+    def __init__(self, stream: IO, universe: DimensionUniverse):
         self.stream = stream
+        self.universe = universe
         self.data: List[Dict[str, Any]] = []
 
     def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord) -> None:
@@ -195,6 +197,8 @@ class YamlRepoExportBackend(RepoExportBackend):
             {
                 "description": "Butler Data Repository Export",
                 "version": str(EXPORT_FORMAT_VERSION),
+                "universe_version": self.universe.version,
+                "universe_namespace": self.universe.namespace,
                 "data": self.data,
             },
             stream=self.stream,
@@ -247,6 +251,23 @@ class YamlRepoImportBackend(RepoImportBackend):
         self.calibAssociations: Dict[str, Dict[Timespan, List[DatasetId]]] = defaultdict(dict)
         self.refsByFileId: Dict[DatasetId, DatasetRef] = {}
         self.registry: Registry = registry
+
+        universe_version = wrapper.get("universe_version", 0)
+        universe_namespace = wrapper.get("universe_namespace", "daf_butler")
+
+        # If this is data exported before the reorganization of visits
+        # and visit systems and that new schema is in use, some filtering
+        # will be needed. The entry in the visit dimension record will be
+        # silently dropped when visit is created but the
+        # visit_system_membership must be constructed.
+        migrate_visit_system = False
+        if (
+            universe_version < 2
+            and universe_namespace == "daf_butler"
+            and "visit_system_membership" in self.registry.dimensions
+        ):
+            migrate_visit_system = True
+
         datasetData = []
         for data in wrapper["data"]:
             if data["type"] == "dimension":
@@ -262,6 +283,16 @@ class YamlRepoImportBackend(RepoImportBackend):
                 element = self.registry.dimensions[data["element"]]
                 RecordClass: Type[DimensionRecord] = element.RecordClass
                 self.dimensions[element].extend(RecordClass(**r) for r in data["records"])
+
+                if data["element"] == "visit" and migrate_visit_system:
+                    # Must create the visit_system_membership records.
+                    element = self.registry.dimensions["visit_system_membership"]
+                    RecordClass = element.RecordClass
+                    self.dimensions[element].extend(
+                        RecordClass(instrument=r["instrument"], visit_system=r["visit_system"], visit=r["id"])
+                        for r in data["records"]
+                    )
+
             elif data["type"] == "collection":
                 collectionType = CollectionType.from_name(data["collection_type"])
                 if collectionType is CollectionType.RUN:
@@ -291,10 +322,13 @@ class YamlRepoImportBackend(RepoImportBackend):
                 # Also support old form of saving a run with no extra info.
                 self.runs[data["name"]] = (None, Timespan(None, None))
             elif data["type"] == "dataset_type":
+                dimensions = data["dimensions"]
+                if migrate_visit_system and "visit" in dimensions and "visit_system" in dimensions:
+                    dimensions.remove("visit_system")
                 self.datasetTypes.add(
                     DatasetType(
                         data["name"],
-                        dimensions=data["dimensions"],
+                        dimensions=dimensions,
                         storageClass=data["storage_class"],
                         universe=self.registry.dimensions,
                         isCalibration=data.get("is_calibration", False),

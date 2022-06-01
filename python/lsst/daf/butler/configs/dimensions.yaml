@@ -1,4 +1,4 @@
-version: 1
+version: 2
 namespace: daf_butler
 skypix:
   # 'common' is the skypix system and level used to relate all other spatial
@@ -31,6 +31,11 @@ elements:
         doc: >
           Maximum value for the 'visit' field for visits associated with
           this instrument (exclusive).
+      -
+        name: visit_system
+        type: int
+        doc: >
+          The preferred visit system for this instrument.
       -
         name: exposure_max
         type: int
@@ -159,7 +164,7 @@ elements:
         type: string
         length: 64
     requires: [instrument]
-    implies: [physical_filter, visit_system]
+    implies: [physical_filter]
     metadata:
       -
         name: day_obs
@@ -168,6 +173,10 @@ elements:
           Day of observation as defined by the observatory (YYYYMMDD format).
           If a visit crosses multiple days this entry will be the earliest
           day of any of the exposures that make up the visit.
+      - name: seq_num
+        type: int
+        doc: >
+          The sequence number of the first exposure that is part of this visit.
       -
         name: exposure_time
         type: float
@@ -194,12 +203,20 @@ elements:
         length: 64
         doc: Observing program (survey or proposal) identifier.
       -
+        name: azimuth
+        type: float
+        doc: >
+          Approximate azimuth of the telescope in degrees during the visit.
+          Can only be approximate since it is continually changing during
+          an observation and multiple exposures can be combined from a
+          relatively long period.
+      -
         name: zenith_angle
         type: float
         doc: >
           Approximate zenith angle in degrees during the visit.
           Can only be approximate since it is continuously changing during
-          and observation and multiple visits can be combined from a
+          an observation and multiple exposures can be combined from a
           relatively long period.
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
@@ -262,6 +279,16 @@ elements:
           of the sequence number is observatory specific. Can be
           a global counter or counter within day_obs.
       -
+        name: seq_start
+        type: int
+        doc: >
+          Earliest sequence number that might be related to this exposure.
+      -
+        name: seq_end
+        type: int
+        doc: >
+          Oldest sequence number that might be related to this exposure.
+      -
         name: group_name
         type: string
         length: 64
@@ -306,10 +333,24 @@ elements:
           be NULL for observations that are not on sky, or for observations
           where the sky angle changes during the observation.
       -
+        name: azimuth
+        type: float
+        doc: >
+          Azimuth of the telescope at the start of the exposure in degrees.
+          Can be NULL for observations that are not on sky, or for observations
+          where the azimuth is not relevant.
+      -
         name: zenith_angle
         type: float
         doc: >
           Angle in degrees from the zenith at the start of the exposure.
+      - name: has_simulated
+        type: bool
+        doc: >
+          True if this exposure has some content that was simulated.
+          This can be if the data itself were simulated or if
+          parts of the header came from simulated systems, such as observations
+          in the lab that are recorded as on-sky.
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
@@ -393,6 +434,12 @@ elements:
     doc: >
       A system of self-consistent visit definitions, within which each
       exposure should appear at most once.
+
+      A visit may belong to multiple visit systems, if the logical definitions
+      for those systems happen to result in the same set of exposures - the
+      main (and probably only) example is when a single-snap visit is observed,
+      for which both the "one-to-one" visit system and a "group by header metadata" visit
+      system will define the same single-exposure visit.
     keys:
       -
         name: id
@@ -411,8 +458,16 @@ elements:
     doc: >
       A many-to-many join table that relates exposures to the visits they
       belong to.
-    requires: [exposure, visit_system]
-    implies: [visit]
+    requires: [exposure, visit]
+    always_join: true
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  visit_system_membership:
+    doc: >
+      A many-to-many join table that relates visits to the visit_systems they
+      belong to.
+    requires: [visit, visit_system]
     always_join: true
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage

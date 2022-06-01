@@ -31,7 +31,9 @@ jobs:
           pip install wheel
 
       - name: Install postgresql (server)
-        run: sudo apt install postgresql
+        run: |
+          sudo apt-get update
+          sudo apt-get install postgresql
 
       - name: Install postgresql Python packages
         run: pip install psycopg2 testing.postgresql

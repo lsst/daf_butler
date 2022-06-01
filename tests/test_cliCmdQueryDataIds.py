@@ -65,8 +65,8 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         """Test getting a dimension."""
         res = self._queryDataIds(self.root, dimensions=("visit",))
         expected = AstropyTable(
-            array((("R", "DummyCamComp", "d-r", 1, 423), ("R", "DummyCamComp", "d-r", 1, 424))),
-            names=("band", "instrument", "physical_filter", "visit_system", "visit"),
+            array((("R", "DummyCamComp", "d-r", 423), ("R", "DummyCamComp", "d-r", 424))),
+            names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
 
@@ -81,8 +81,8 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             self.root, dimensions=("visit",), where="instrument='DummyCamComp' AND visit=423"
         )
         expected = AstropyTable(
-            array((("R", "DummyCamComp", "d-r", 1, 423),)),
-            names=("band", "instrument", "physical_filter", "visit_system", "visit"),
+            array((("R", "DummyCamComp", "d-r", 423),)),
+            names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
 
@@ -98,7 +98,6 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
                 "id": 425,
                 "name": "fourtwentyfive",
                 "physical_filter": "d-r",
-                "visit_system": 1,
             },
         )
         self.repo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425}, run="foo")
@@ -108,8 +107,8 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             repo=self.root, dimensions=("visit",), collections=("ingest/run",), datasets="test_metric_comp"
         )
         expected = AstropyTable(
-            array((("R", "DummyCamComp", "d-r", 1, 423), ("R", "DummyCamComp", "d-r", 1, 424))),
-            names=("band", "instrument", "physical_filter", "visit_system", "visit"),
+            array((("R", "DummyCamComp", "d-r", 423), ("R", "DummyCamComp", "d-r", 424))),
+            names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
 
@@ -118,8 +117,8 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             repo=self.root, dimensions=("visit",), collections=("foo",), datasets="test_metric_comp"
         )
         expected = AstropyTable(
-            array((("R", "DummyCamComp", "d-r", 1, 425),)),
-            names=("band", "instrument", "physical_filter", "visit_system", "visit"),
+            array((("R", "DummyCamComp", "d-r", 425),)),
+            names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
 

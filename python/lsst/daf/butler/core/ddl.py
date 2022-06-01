@@ -294,7 +294,8 @@ class FieldSpec:
     """
 
     nullable: bool = True
-    """Whether this field is allowed to be NULL."""
+    """Whether this field is allowed to be NULL. If ``primaryKey`` is
+    `True`, during construction this value will be forced to `False`."""
 
     default: Any = None
     """A server-side default value for this field.
@@ -307,6 +308,11 @@ class FieldSpec:
 
     doc: Optional[str] = None
     """Documentation for this field."""
+
+    def __post_init__(self) -> None:
+        if self.primaryKey:
+            # Change the default to match primaryKey.
+            self.nullable = False
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, FieldSpec):

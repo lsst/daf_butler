@@ -8,10 +8,7 @@ on:
 
 jobs:
   build_and_test:
-    # runs-on: ubuntu-latest
-    # Need >= 20.04 for modern sqlite. Can switch to latest when
-    # github change
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
@@ -36,7 +33,9 @@ jobs:
           conda install -y -q sqlite
 
       - name: Install postgresql (server)
-        run: sudo apt install postgresql
+        run: |
+          sudo apt-get update
+          sudo apt-get install postgresql
 
       - name: Install postgresql Python packages
         shell: bash -l {0}

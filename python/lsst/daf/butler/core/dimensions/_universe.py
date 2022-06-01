@@ -27,6 +27,7 @@ import math
 import pickle
 from typing import (
     TYPE_CHECKING,
+    Any,
     ClassVar,
     Dict,
     FrozenSet,
@@ -181,11 +182,38 @@ class DimensionUniverse:
 
         return self
 
+    @property
+    def version(self) -> int:
+        """The version number of this universe.
+
+        Returns
+        -------
+        version : `int`
+            An integer representing the version number of this universe.
+            Uniquely defined when combined with the `namespace`.
+        """
+        return self._version
+
+    @property
+    def namespace(self) -> str:
+        """The namespace associated with this universe.
+
+        Returns
+        -------
+        namespace : `str`
+            The namespace. When combined with the `version` can uniquely
+            define this universe.
+        """
+        return self._namespace
+
     def __repr__(self) -> str:
         return f"DimensionUniverse({self._version}, {self._namespace})"
 
     def __getitem__(self, name: str) -> DimensionElement:
         return self._elements[name]
+
+    def __contains__(self, name: Any) -> bool:
+        return name in self._elements
 
     def get(self, name: str, default: Optional[DimensionElement] = None) -> Optional[DimensionElement]:
         """Return the `DimensionElement` with the given name or a default.
@@ -491,4 +519,4 @@ class DimensionUniverse:
 
     _version: int
 
-    _namespace: Optional[str]
+    _namespace: str

@@ -1,0 +1,1 @@
+Added ``has_simulated`` to the ``exposure`` record to indicate that some content of this exposure was simulated.
