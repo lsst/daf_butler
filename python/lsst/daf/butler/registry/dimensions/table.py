@@ -32,6 +32,7 @@ import sqlalchemy
 from lsst.utils.sets.ellipsis import Ellipsis, EllipsisType
 
 from ...core import (
+    ColumnTypeInfo,
     DatabaseDimensionElement,
     DataCoordinate,
     DataCoordinateIterable,
@@ -118,6 +119,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        column_types: ColumnTypeInfo,
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         spec = element.RecordClass.fields.makeTableSpec(

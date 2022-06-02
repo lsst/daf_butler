@@ -27,6 +27,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import sqlalchemy
 
 from ...core import (
+    ColumnTypeInfo,
     DatabaseDimensionElement,
     DatabaseTopologicalFamily,
     DimensionElement,
@@ -56,10 +57,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     """An implementation of `DimensionRecordStorageManager` for single-layer
     `Registry` and the base layers of multi-layer `Registry`.
 
-    This manager creates `DimensionRecordStorage` instances for all elements
-    in the `DimensionUniverse` in its own `initialize` method, as part of
-    static table creation, so it never needs to manage any dynamic registry
-    tables.
+    This manager creates `DimensionRecordStorage` instances for all elements in
+    the `DimensionUniverse` in its own `initialize` method, as part of static
+    table creation, so it never needs to manage any dynamic registry tables.
 
     Parameters
     ----------
@@ -73,8 +73,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         dimensions.
     dimensionGraphStorage : `_DimensionGraphStorage`
         Object that manages saved `DimensionGraph` definitions.
-    universe : `DimensionUniverse`
-        All known dimensions.
+    column_types : `ColumnTypeInfo`
+        Information about column types that can differ between data
+        repositories and registry instances, including the dimension universe.
     """
 
     def __init__(
@@ -86,26 +87,32 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             Tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
         ],
         dimensionGraphStorage: _DimensionGraphStorage,
-        universe: DimensionUniverse,
+        column_types: ColumnTypeInfo,
     ):
-        super().__init__(universe=universe)
+        super().__init__(universe=column_types.universe)
         self._db = db
         self._records = records
         self._overlaps = overlaps
         self._dimensionGraphStorage = dimensionGraphStorage
+        self._column_types = column_types
 
     @classmethod
     def initialize(
-        cls, db: Database, context: StaticTablesContext, *, universe: DimensionUniverse
+        cls,
+        db: Database,
+        context: StaticTablesContext,
+        *,
+        column_types: ColumnTypeInfo,
     ) -> DimensionRecordStorageManager:
         # Docstring inherited from DimensionRecordStorageManager.
+        universe = column_types.universe
         # Start by initializing governor dimensions; those go both in the main
         # 'records' mapping we'll pass to init, and a local dictionary that we
         # can pass in when initializing storage for DatabaseDimensionElements.
         governors = NamedKeyDict[GovernorDimension, GovernorDimensionRecordStorage]()
         records = NamedKeyDict[DimensionElement, DimensionRecordStorage]()
         for dimension in universe.getGovernorDimensions():
-            governorStorage = dimension.makeStorage(db, context=context)
+            governorStorage = dimension.makeStorage(db, context=context, column_types=column_types)
             governors[dimension] = governorStorage
             records[dimension] = governorStorage
         # Next we initialize storage for DatabaseDimensionElements.
@@ -113,7 +120,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # and initialize overlap storage for them later.
         spatial = NamedKeyDict[DatabaseTopologicalFamily, List[DatabaseDimensionRecordStorage]]()
         for element in universe.getDatabaseElements():
-            elementStorage = element.makeStorage(db, context=context, governors=governors)
+            elementStorage = element.makeStorage(
+                db, context=context, governors=governors, column_types=column_types
+            )
             records[element] = elementStorage
             if element.spatial is not None:
                 spatial.setdefault(element.spatial, []).append(elementStorage)
@@ -147,9 +156,9 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         return cls(
             db=db,
             records=records,
-            universe=universe,
             overlaps=overlaps,
             dimensionGraphStorage=dimensionGraphStorage,
+            column_types=column_types,
         )
 
     def refresh(self) -> None:

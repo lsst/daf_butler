@@ -27,6 +27,7 @@ from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Op
 import sqlalchemy
 
 from ...core import (
+    ColumnTypeInfo,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
@@ -68,6 +69,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         *,
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
+        column_types: ColumnTypeInfo,
     ) -> GovernorDimensionRecordStorage:
         # Docstring inherited from GovernorDimensionRecordStorage.
         spec = element.RecordClass.fields.makeTableSpec(

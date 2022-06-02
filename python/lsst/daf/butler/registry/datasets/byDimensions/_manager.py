@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
-from ....core import DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
+from ....core import ColumnTypeInfo, DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
 from ....core.named import NamedKeyDict, NamedValueAbstractSet
 from ..._collection_summary import CollectionSummary
 from ..._exceptions import ConflictingDefinitionError, OrphanedRecordError
@@ -54,9 +54,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     """A manager class for datasets that uses one dataset-collection table for
     each group of dataset types that share the same dimensions.
 
-    In addition to the table organization, this class makes a number of
-    other design choices that would have been cumbersome (to say the least) to
-    try to pack into its name:
+    In addition to the table organization, this class makes a number of other
+    design choices that would have been cumbersome (to say the least) to try to
+    pack into its name:
 
      - It uses a private surrogate integer autoincrement field to identify
        dataset types, instead of using the name as the primary and foreign key
@@ -86,6 +86,9 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         tables used by this class.
     summaries : `CollectionSummaryManager`
         Structure containing tables that summarize the contents of collections.
+    column_types : `ColumnTypeInfo`
+        Information about column types that can differ between data
+        repositories and registry instances.
     """
 
     def __init__(
@@ -96,6 +99,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
+        column_types: ColumnTypeInfo,
     ):
         self._db = db
         self._collections = collections
@@ -104,6 +108,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         self._summaries = summaries
         self._byDatasetType = NamedKeyDict[DatasetType, ByDimensionsDatasetRecordStorage]()
         self._byId: dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
+        self._column_types = column_types
 
     @classmethod
     def initialize(
@@ -113,6 +118,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
+        column_types: ColumnTypeInfo,
     ) -> DatasetRecordStorageManager:
         # Docstring inherited from DatasetRecordStorageManager.
         specs = cls.makeStaticTableSpecs(type(collections), universe=dimensions.universe)
@@ -123,7 +129,14 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             collections=collections,
             dimensions=dimensions,
         )
-        return cls(db=db, collections=collections, dimensions=dimensions, static=static, summaries=summaries)
+        return cls(
+            db=db,
+            collections=collections,
+            dimensions=dimensions,
+            static=static,
+            summaries=summaries,
+            column_types=column_types,
+        )
 
     @classmethod
     def currentVersion(cls) -> VersionTuple | None:

@@ -28,6 +28,7 @@ import sqlalchemy
 from lsst.utils import doImportType
 
 from ...core import (
+    ColumnTypeInfo,
     DatabaseDimensionElement,
     DataCoordinate,
     DataCoordinateIterable,
@@ -73,13 +74,16 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        column_types: ColumnTypeInfo,
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         config = config["nested"]
         NestedClass = doImportType(config["cls"])
         if not hasattr(NestedClass, "initialize"):
             raise TypeError(f"Nested class {config['cls']} does not have an initialize() method.")
-        nested = NestedClass.initialize(db, element, context=context, config=config, governors=governors)
+        nested = NestedClass.initialize(
+            db, element, context=context, config=config, governors=governors, column_types=column_types
+        )
         return cls(nested)
 
     @property

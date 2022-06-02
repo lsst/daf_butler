@@ -36,6 +36,7 @@ from .construction import DimensionConstructionBuilder, DimensionConstructionVis
 
 if TYPE_CHECKING:
     from ...registry.interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
+    from .._column_type_info import ColumnTypeInfo
 
 
 class GovernorDimension(Dimension):
@@ -145,6 +146,7 @@ class GovernorDimension(Dimension):
         db: Database,
         *,
         context: Optional[StaticTablesContext] = None,
+        column_types: ColumnTypeInfo,
     ) -> GovernorDimensionRecordStorage:
         """Make storage record.
 
@@ -158,6 +160,9 @@ class GovernorDimension(Dimension):
         context : `StaticTablesContext`, optional
             If provided, an object to use to create any new tables.  If not
             provided, ``db.ensureTableExists`` should be used instead.
+        column_types : `ColumnTypeInfo`
+            Information about column types that can differ between data
+            repositories and registry instances.
 
         Returns
         -------
@@ -168,7 +173,7 @@ class GovernorDimension(Dimension):
 
         cls = doImportType(self._storage["cls"])
         assert issubclass(cls, GovernorDimensionRecordStorage)
-        return cls.initialize(db, self, context=context, config=self._storage)
+        return cls.initialize(db, self, context=context, config=self._storage, column_types=column_types)
 
 
 class GovernorDimensionConstructionVisitor(DimensionConstructionVisitor):
