@@ -33,6 +33,7 @@ from ...core import (
     GovernorDimension,
     NamedKeyDict,
     TimespanDatabaseRepresentation,
+    sql,
 )
 from ..interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
@@ -68,6 +69,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         *,
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
+        column_types: sql.ColumnTypeInfo,
     ) -> GovernorDimensionRecordStorage:
         # Docstring inherited from GovernorDimensionRecordStorage.
         spec = element.RecordClass.fields.makeTableSpec(

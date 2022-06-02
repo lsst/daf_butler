@@ -37,6 +37,7 @@ from ...core import (
     NamedKeyMapping,
     SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
+    sql,
 )
 from ..interfaces import (
     Database,
@@ -99,6 +100,7 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        column_types: sql.ColumnTypeInfo,
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         viewOf = config["view_of"]

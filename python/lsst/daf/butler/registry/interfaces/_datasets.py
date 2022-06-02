@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Tuple
 
 import sqlalchemy.sql
 
-from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl
+from ...core import DataCoordinate, DatasetId, DatasetRef, DatasetType, SimpleQuery, Timespan, ddl, sql
 from ...core.named import NamedValueAbstractSet
 from ._versioning import VersionedExtension
 
@@ -400,6 +400,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
+        column_types: sql.ColumnTypeInfo,
     ) -> DatasetRecordStorageManager:
         """Construct an instance of the manager.
 
@@ -414,6 +415,9 @@ class DatasetRecordStorageManager(VersionedExtension):
             Manager object for the collections in this `Registry`.
         dimensions : `DimensionRecordStorageManager`
             Manager object for the dimensions in this `Registry`.
+        column_types : `sql.ColumnTypeInfo`
+            Information about column types that can differ between data
+            repositories and registry instances.
 
         Returns
         -------

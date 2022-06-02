@@ -46,6 +46,7 @@ if TYPE_CHECKING:
         NamedKeyDict,
         NamedKeyMapping,
         TimespanDatabaseRepresentation,
+        sql,
     )
     from ..queries import QueryBuilder
     from ._database import Database, StaticTablesContext
@@ -244,6 +245,7 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         *,
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
+        column_types: sql.ColumnTypeInfo,
     ) -> GovernorDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
@@ -256,8 +258,15 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         context : `StaticTablesContext`, optional
             If provided, an object to use to create any new tables.  If not
             provided, ``db.ensureTableExists`` should be used instead.
+        column_types : `sql.ColumnTypeInfo`
+            Information about column types that can differ between data
+            repositories and registry instances.
         config : `Mapping`
             Extra configuration options specific to the implementation.
+        column_types : `sql.ColumnTypeInfo`
+            Information about column types that can differ between data
+            repositories and registry instances, including the dimension
+            universe.
 
         Returns
         -------
@@ -341,6 +350,7 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        column_types: sql.ColumnTypeInfo,
     ) -> DatabaseDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
@@ -357,6 +367,10 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
             Extra configuration options specific to the implementation.
         governors : `NamedKeyMapping`
             Mapping containing all governor dimension storage implementations.
+        column_types : `sql.ColumnTypeInfo`
+            Information about column types that can differ between data
+            repositories and registry instances, including the dimension
+            universe.
 
         Returns
         -------
@@ -474,7 +488,7 @@ class DimensionRecordStorageManager(VersionedExtension):
     @classmethod
     @abstractmethod
     def initialize(
-        cls, db: Database, context: StaticTablesContext, *, universe: DimensionUniverse
+        cls, db: Database, context: StaticTablesContext, *, column_types: sql.ColumnTypeInfo
     ) -> DimensionRecordStorageManager:
         """Construct an instance of the manager.
 
@@ -486,8 +500,10 @@ class DimensionRecordStorageManager(VersionedExtension):
             Context object obtained from `Database.declareStaticTables`; used
             to declare any tables that should always be present in a layer
             implemented with this manager.
-        universe : `DimensionUniverse`
-            Universe graph containing dimensions known to this `Registry`.
+        column_types : `sql.ColumnTypeInfo`
+            Information about column types that can differ between data
+            repositories and registry instances, including the dimension
+            universe.
 
         Returns
         -------

@@ -48,6 +48,7 @@ from ...core import (
     TimespanDatabaseRepresentation,
     addDimensionForeignKey,
     ddl,
+    sql,
 )
 from ..interfaces import (
     Database,
@@ -118,6 +119,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        column_types: sql.ColumnTypeInfo,
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         spec = element.RecordClass.fields.makeTableSpec(

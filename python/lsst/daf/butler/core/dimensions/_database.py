@@ -47,6 +47,7 @@ if TYPE_CHECKING:
         GovernorDimensionRecordStorage,
         StaticTablesContext,
     )
+    from ..sql import ColumnTypeInfo
     from ._governor import GovernorDimension
 
 
@@ -235,6 +236,7 @@ class DatabaseDimensionElement(DimensionElement):
         *,
         context: Optional[StaticTablesContext] = None,
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        column_types: ColumnTypeInfo,
     ) -> DatabaseDimensionRecordStorage:
         """Make the dimension record storage instance for this database.
 
@@ -251,6 +253,9 @@ class DatabaseDimensionElement(DimensionElement):
         governors : `NamedKeyMapping`
             Mapping from `GovernorDimension` to the record storage backend for
             that dimension, containing all governor dimensions.
+        column_types : `sql.ColumnTypeInfo`
+            Information about column types that can differ between data
+            repositories and registry instances.
 
         Returns
         -------
@@ -261,7 +266,9 @@ class DatabaseDimensionElement(DimensionElement):
 
         cls = doImportType(self._storage["cls"])
         assert issubclass(cls, DatabaseDimensionRecordStorage)
-        return cls.initialize(db, self, context=context, config=self._storage, governors=governors)
+        return cls.initialize(
+            db, self, context=context, config=self._storage, governors=governors, column_types=column_types
+        )
 
 
 class DatabaseDimension(Dimension, DatabaseDimensionElement):
