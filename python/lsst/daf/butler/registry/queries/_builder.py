@@ -31,9 +31,10 @@ from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._collectionType import CollectionType
 from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, DatasetRecordStorage, GovernorDimensionRecordStorage
+from ..managers import RegistryManagerInstances
 from ..wildcards import CollectionSearch, CollectionWildcard
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
-from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryManagers
+from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
 from .expressions import convertExpressionToSql
 
 
@@ -45,7 +46,7 @@ class QueryBuilder:
     ----------
     summary : `QuerySummary`
         Struct organizing the dimensions involved in the query.
-    managers : `RegistryManagers`
+    managers : `RegistryManagerInstances`
         A struct containing the registry manager instances used by the query
         system.
     doomed_by : `Iterable` [ `str` ], optional
@@ -54,7 +55,12 @@ class QueryBuilder:
         executed.  Queries with a non-empty list will never be executed.
     """
 
-    def __init__(self, summary: QuerySummary, managers: RegistryManagers, doomed_by: Iterable[str] = ()):
+    def __init__(
+        self,
+        summary: QuerySummary,
+        managers: RegistryManagerInstances,
+        doomed_by: Iterable[str] = (),
+    ):
         self.summary = summary
         self._simpleQuery = SimpleQuery()
         self._elements: NamedKeyDict[DimensionElement, sqlalchemy.sql.FromClause] = NamedKeyDict()
@@ -588,7 +594,7 @@ class QueryBuilder:
                     columns=self._columns,
                     elements=self._elements,
                     bind=self.summary.where.bind,
-                    TimespanReprClass=self._managers.TimespanReprClass,
+                    TimespanReprClass=self._managers.column_types.timespan_cls,
                 )
             )
         for dimension, columnsInQuery in self._columns.keys.items():
@@ -622,7 +628,9 @@ class QueryBuilder:
             for element, intervalInQuery in self._columns.timespans.items():
                 assert element not in self.summary.where.dataId.graph.elements
                 self._simpleQuery.where.append(
-                    intervalInQuery.overlaps(self._managers.TimespanReprClass.fromLiteral(givenInterval))
+                    intervalInQuery.overlaps(
+                        self._managers.column_types.timespan_cls.fromLiteral(givenInterval)
+                    )
                 )
 
     def finish(self, joinMissing: bool = True) -> Query:
@@ -687,7 +695,7 @@ class QueryBuilder:
                 table = self._elements[order_by_column.element]
 
                 if order_by_column.column in ("timespan.begin", "timespan.end"):
-                    TimespanReprClass = self._managers.TimespanReprClass
+                    TimespanReprClass = self._managers.column_types.timespan_cls
                     timespan_repr = TimespanReprClass.from_columns(table.columns)
                     if order_by_column.column == "timespan.begin":
                         column = timespan_repr.lower()

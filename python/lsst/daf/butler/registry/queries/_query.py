@@ -47,7 +47,8 @@ from ...core import (
     ddl,
 )
 from ..interfaces import Database
-from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary, RegistryManagers
+from ..managers import RegistryManagerInstances
+from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
 
 if TYPE_CHECKING:
     from ._builder import QueryBuilder
@@ -81,7 +82,7 @@ class Query(ABC):
         Object describing the dimensions included in the query.
     spatial_constraint : `SpatialConstraint`, optional
         Constraint that all region columns in all returned rows must overlap.
-    managers : `RegistryManagers`
+    managers : `RegistryManagerInstances`
         A struct containing the registry manager instances used by the query
         system.
     doomed_by : `Iterable` [ `str` ], optional
@@ -102,7 +103,7 @@ class Query(ABC):
         *,
         graph: DimensionGraph,
         spatial_constraint: Optional[SpatialConstraint],
-        managers: RegistryManagers,
+        managers: RegistryManagerInstances,
         doomed_by: Iterable[str] = (),
     ):
         self.graph = graph
@@ -671,8 +672,9 @@ class Query(ABC):
     must overlap (`SpatialConstraint` or `None`).
     """
 
-    managers: RegistryManagers
-    """A struct containing `Registry` helper object (`RegistryManagers`).
+    managers: RegistryManagerInstances
+    """A struct containing `Registry` helper objects
+    (`RegistryManagerInstances`).
     """
 
 
@@ -717,7 +719,7 @@ class DirectQuery(Query):
         Object describing the dimensions included in the query.
     spatial_constraint : `SpatialConstraint`, optional
         Constraint that all region columns in all returned rows must overlap.
-    managers : `RegistryManagers`
+    managers : `RegistryManagerInstances`
         Struct containing the `Registry` manager helper objects, to be
         forwarded to the `Query` constructor.
     doomed_by : `Iterable` [ `str` ], optional
@@ -734,7 +736,7 @@ class DirectQuery(Query):
         uniqueness: DirectQueryUniqueness,
         graph: DimensionGraph,
         spatial_constraint: Optional[SpatialConstraint],
-        managers: RegistryManagers,
+        managers: RegistryManagerInstances,
         order_by_columns: Iterable[OrderByColumn] = (),
         limit: Optional[Tuple[int, Optional[int]]] = None,
         doomed_by: Iterable[str] = (),
@@ -958,7 +960,7 @@ class MaterializedQuery(Query):
     spatial_constraint : `SpatialConstraint` or `None`
         A spatial constraint all result-row regions must overlap to be valid
         (which may reject some rows that are in the table).
-    managers : `RegistryManagers`
+    managers : `RegistryManagerInstances`
         A struct containing `Registry` manager helper objects, forwarded to
         the `Query` constructor.
     doomed_by : `Iterable` [ `str` ], optional
@@ -976,7 +978,7 @@ class MaterializedQuery(Query):
         isUnique: bool,
         graph: DimensionGraph,
         spatial_constraint: Optional[SpatialConstraint],
-        managers: RegistryManagers,
+        managers: RegistryManagerInstances,
         doomed_by: Iterable[str] = (),
     ):
         super().__init__(
@@ -1078,7 +1080,7 @@ class EmptyQuery(Query):
     ----------
     universe : `DimensionUniverse`
         Set of all dimensions from which the null set is extracted.
-    managers : `RegistryManagers`
+    managers : `RegistryManagerInstances`
         A struct containing the registry manager instances used by the query
         system.
     doomed_by : `Iterable` [ `str` ], optional
@@ -1090,7 +1092,7 @@ class EmptyQuery(Query):
     def __init__(
         self,
         universe: DimensionUniverse,
-        managers: RegistryManagers,
+        managers: RegistryManagerInstances,
         doomed_by: Iterable[str] = (),
     ):
         super().__init__(
