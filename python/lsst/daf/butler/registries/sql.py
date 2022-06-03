@@ -865,12 +865,7 @@ class SqlRegistry(Registry):
         """
         return queries.QueryBuilder(
             summary,
-            queries.RegistryManagers(
-                collections=self._managers.collections,
-                dimensions=self._managers.dimensions,
-                datasets=self._managers.datasets,
-                TimespanReprClass=self._db.getTimespanRepresentation(),
-            ),
+            managers=self._managers,
             doomed_by=doomed_by,
         )
 

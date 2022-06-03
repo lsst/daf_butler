@@ -20,11 +20,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["QuerySummary", "RegistryManagers"]  # other classes here are local to subpackage
+__all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Type, Union
+from typing import AbstractSet, Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Union
 
 from lsst.utils.classes import cached_getter, immutable
 from lsst.utils.sets.unboundable import FrozenUnboundableSet, UnboundableSet
@@ -48,7 +48,6 @@ from ...core import (
     TimespanDatabaseRepresentation,
 )
 from .._exceptions import UserExpressionSyntaxError
-from ..interfaces import CollectionManager, DatasetRecordStorageManager, DimensionRecordStorageManager
 
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
@@ -621,27 +620,3 @@ class QueryColumns:
         # database's perspective this is entirely arbitrary, because the query
         # guarantees they all have equal values.
         return self.keys[dimension][-1]
-
-
-@dataclass
-class RegistryManagers:
-    """Struct used to pass around the manager objects that back a `Registry`
-    and are used internally by the query system.
-    """
-
-    collections: CollectionManager
-    """Manager for collections (`CollectionManager`).
-    """
-
-    datasets: DatasetRecordStorageManager
-    """Manager for datasets and dataset types (`DatasetRecordStorageManager`).
-    """
-
-    dimensions: DimensionRecordStorageManager
-    """Manager for dimensions (`DimensionRecordStorageManager`).
-    """
-
-    TimespanReprClass: Type[TimespanDatabaseRepresentation]
-    """Type that encapsulates how timespans are represented in this database
-    (`type`; subclass of `TimespanDatabaseRepresentation`).
-    """
