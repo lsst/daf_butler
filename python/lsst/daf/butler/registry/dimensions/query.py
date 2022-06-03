@@ -29,6 +29,7 @@ import sqlalchemy
 from ...core import (
     DatabaseDimension,
     DatabaseDimensionElement,
+    DataCoordinate,
     DataCoordinateIterable,
     DimensionRecord,
     GovernorDimension,
@@ -166,6 +167,12 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
             # Given the restrictions imposed at construction, we know there's
             # nothing to actually fetch: everything we need is in the data ID.
             yield RecordClass(**dataId.byName())
+
+    def fetch_one(self, data_id: DataCoordinate) -> Optional[DimensionRecord]:
+        # Docstring inherited from DimensionRecordStorage.
+        # Given the restrictions imposed at construction, we know there's
+        # nothing to actually fetch: everything we need is in the data ID.
+        return self.element.RecordClass(**data_id.byName())
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.

@@ -160,6 +160,18 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
             for dataId in missing:
                 self._cache[dataId] = None
 
+    def fetch_one(self, data_id: DataCoordinate) -> Optional[DimensionRecord]:
+        # Docstring inherited from DimensionRecordStorage.
+        # Use ... as sentinal value so we can also cache None == "no such
+        # record exists".
+        record = self._cache.get(data_id, ...)
+        if record is ...:
+            record = self._nested.fetch_one(data_id)
+            self._cache[data_id] = record
+        # Unclear why MyPy can't tell that this isn't ..., but it thinks it's
+        # still a possibility.
+        return record  # type: ignore
+
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return self._nested.digestTables()

@@ -26,7 +26,7 @@ from typing import AbstractSet, Iterable
 
 import sqlalchemy
 
-from ...core import DataCoordinateIterable, DimensionRecord, SkyPixDimension, sql
+from ...core import DataCoordinate, DataCoordinateIterable, DimensionRecord, SkyPixDimension, sql
 from ..interfaces import SkyPixDimensionRecordStorage
 
 
@@ -95,6 +95,11 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
         for dataId in dataIds:
             index = dataId[self._dimension.name]
             yield RecordClass(id=index, region=self._dimension.pixelization.pixel(index))
+
+    def fetch_one(self, data_id: DataCoordinate) -> DimensionRecord:
+        # Docstring inherited from DimensionRecordStorage.
+        index = data_id[self._dimension.name]
+        return self._dimension.RecordClass(id=index, region=self._dimension.pixelization.pixel(index))
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.

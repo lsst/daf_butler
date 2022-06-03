@@ -22,11 +22,11 @@ from __future__ import annotations
 
 __all__ = ["BasicGovernorDimensionRecordStorage"]
 
-from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Optional, Union
+from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Optional, Union, cast
 
 import sqlalchemy
 
-from ...core import DataCoordinateIterable, DimensionRecord, GovernorDimension, sql
+from ...core import DataCoordinate, DataCoordinateIterable, DimensionRecord, GovernorDimension, sql
 from ..interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
 
 
@@ -218,6 +218,16 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         # we use dict.get to return None if we don't find something.
         self.refresh()
         return [self._cache.get(dataId[self.element]) for dataId in dataIds]  # type: ignore
+
+    def fetch_one(self, data_id: DataCoordinate) -> Optional[DimensionRecord]:
+        try:
+            return self._cache[cast(str, data_id[self.element])]
+        except KeyError:
+            pass
+        # If at first we don't succeed, refresh and try again.  But this
+        # time we use dict.get to return None if we don't find something.
+        self.refresh()
+        return self._cache.get(cast(str, data_id[self.element]))
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.

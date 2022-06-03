@@ -35,7 +35,6 @@ from lsst.utils.iteration import ensure_iterable
 from ..core import (
     Config,
     DataCoordinate,
-    DataCoordinateIterable,
     DataId,
     DatasetAssociation,
     DatasetId,
@@ -725,14 +724,7 @@ class SqlRegistry(Registry):
                     record = None
                 else:
                     storage = self._managers.dimensions[element]
-                    dataIdSet = DataCoordinateIterable.fromScalar(
-                        DataCoordinate.standardize(keys, graph=element.graph)
-                    )
-                    fetched = tuple(storage.fetch(dataIdSet))
-                    try:
-                        (record,) = fetched
-                    except ValueError:
-                        record = None
+                    record = storage.fetch_one(DataCoordinate.standardize(keys, graph=element.graph))
                 records[element.name] = record
             if record is not None:
                 for d in element.implied:

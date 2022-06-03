@@ -62,6 +62,7 @@ from ...core import (
     ddl,
     sql,
 )
+from .._sql_query_context import SqlQueryContext
 from ..interfaces import (
     Database,
     DatabaseDimensionOverlapStorage,
@@ -193,7 +194,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def join(
         self,
-        relation: sql.Relation,
+        relation: sql.Relation | None,
         sql_columns: AbstractSet[str],
         *,
         constraints: sql.LocalConstraints | None = None,
@@ -207,16 +208,18 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         if result_records:
             full_columns.update(self.element.RecordClass.fields.names)
             full_columns.difference_update(self.element.RecordClass.fields.dimensions.names)
-        return relation.join(
-            self._build_leaf_relation(
-                self._table,
-                self._column_types,
-                full_columns,
-                constraints=(
-                    None if self._governor_storage is None else self._governor_storage.get_local_constraints()
-                ),
-            )
+        new_relation = self._build_leaf_relation(
+            self._table,
+            self._column_types,
+            full_columns,
+            constraints=(
+                None if self._governor_storage is None else self._governor_storage.get_local_constraints()
+            ),
         )
+        if relation is None:
+            return new_relation
+        else:
+            return relation.join(new_relation)
 
     def fetch(self, dataIds: DataCoordinateIterable) -> Iterable[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
@@ -244,6 +247,18 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                 if self.element.temporal is not None:
                     values[TimespanDatabaseRepresentation.NAME] = TimespanReprClass.extract(values)
                 yield RecordClass(**values)
+
+    def fetch_one(self, data_id: DataCoordinate) -> Optional[DimensionRecord]:
+        # Docstring inherited from DimensionRecordStorage.
+        with SqlQueryContext(self._db, self._column_types) as context:
+            relation = self.join(None, frozenset(), result_records=True).selected(
+                sql.Predicate.from_data_coordinate(data_id, full=False)
+            )
+            rows = list(context.fetch(relation, limit=1))
+        if not rows:
+            return None
+        reader = sql.DimensionRecordReader(self._element)
+        return reader.read(rows[0])
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

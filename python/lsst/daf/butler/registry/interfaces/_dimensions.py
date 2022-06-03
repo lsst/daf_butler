@@ -35,7 +35,14 @@ from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, Iterable, Ma
 import sqlalchemy
 from lsst.utils.classes import cached_getter
 
-from ...core import DatabaseDimensionElement, DimensionGraph, GovernorDimension, SkyPixDimension, sql
+from ...core import (
+    DatabaseDimensionElement,
+    DataCoordinate,
+    DimensionGraph,
+    GovernorDimension,
+    SkyPixDimension,
+    sql,
+)
 from ._versioning import VersionedExtension
 
 if TYPE_CHECKING:
@@ -286,6 +293,24 @@ class DimensionRecordStorage(ABC):
             Record retrieved from storage.  Not all data IDs may have
             corresponding records (if there are no records that match a data
             ID), and even if they are, the order of inputs is not preserved.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def fetch_one(self, data_id: DataCoordinate) -> Optional[DimensionRecord]:
+        """Retrieve a single record from storage.
+
+        Parameters
+        ----------
+        data_id : `DataCoordinate`
+            Data ID of the record to fetch.  Implied dimensions do not need to
+            be present.
+
+        Returns
+        -------
+        record : `DimensionRecord` or `None`
+            Fetched record, or *possibly* `None` if there was no match for the
+            given data ID.
         """
         raise NotImplementedError()
 
