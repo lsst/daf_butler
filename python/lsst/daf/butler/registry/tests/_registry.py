@@ -1378,7 +1378,7 @@ class RegistryTests(ABC):
         )
         # - the flat datasets we expect to find from those data IDs, in just
         #   one collection (so deduplication is irrelevant):
-        expectedFlats = [
+        expectedFlats = {
             registry.findDataset(
                 flat, instrument="Cam1", detector=1, physical_filter="Cam1-R1", collections="imported_r"
             ),
@@ -1388,24 +1388,25 @@ class RegistryTests(ABC):
             registry.findDataset(
                 flat, instrument="Cam1", detector=3, physical_filter="Cam1-R2", collections="imported_r"
             ),
-        ]
+        }
         # - the data IDs we expect to extract from that:
         expectedSubsetDataIds = expectedDataIds.subset(expectedSubsetGraph)
         # - the bias datasets we expect to find from those data IDs, after we
-        #   subset-out the physical_filter dimension, both with duplicates:
-        expectedAllBiases = [
+        #   subset-out the physical_filter dimension, both with data ID
+        #   duplicates:
+        expectedAllBiases = {
             registry.findDataset(bias, instrument="Cam1", detector=1, collections="imported_g"),
             registry.findDataset(bias, instrument="Cam1", detector=2, collections="imported_g"),
             registry.findDataset(bias, instrument="Cam1", detector=3, collections="imported_g"),
             registry.findDataset(bias, instrument="Cam1", detector=2, collections="imported_r"),
             registry.findDataset(bias, instrument="Cam1", detector=3, collections="imported_r"),
-        ]
+        }
         # - ...and without duplicates:
-        expectedDeduplicatedBiases = [
+        expectedDeduplicatedBiases = {
             registry.findDataset(bias, instrument="Cam1", detector=1, collections="imported_g"),
             registry.findDataset(bias, instrument="Cam1", detector=2, collections="imported_r"),
             registry.findDataset(bias, instrument="Cam1", detector=3, collections="imported_r"),
-        ]
+        }
         # Test against those expected results, using a "lazy" query for the
         # data IDs (which re-executes that query each time we use it to do
         # something new).
@@ -1416,8 +1417,8 @@ class RegistryTests(ABC):
         )
         self.assertEqual(dataIds.graph, expectedGraph)
         self.assertEqual(dataIds.toSet(), expectedDataIds)
-        self.assertCountEqual(
-            list(
+        self.assertEqual(
+            set(
                 dataIds.findDatasets(
                     flat,
                     collections=["imported_r"],
@@ -1428,12 +1429,12 @@ class RegistryTests(ABC):
         subsetDataIds = dataIds.subset(expectedSubsetGraph, unique=True)
         self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
         self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
-        self.assertCountEqual(
-            list(subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=False)),
+        self.assertEqual(
+            set(subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=False)),
             expectedAllBiases,
         )
-        self.assertCountEqual(
-            list(subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=True)),
+        self.assertEqual(
+            set(subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=True)),
             expectedDeduplicatedBiases,
         )
         # Materialize the bias dataset queries (only) by putting the results
@@ -1441,17 +1442,17 @@ class RegistryTests(ABC):
         with subsetDataIds.findDatasets(
             bias, collections=["imported_r", "imported_g"], findFirst=False
         ).materialize() as biases:
-            self.assertCountEqual(list(biases), expectedAllBiases)
+            self.assertEqual(set(biases), expectedAllBiases)
         with subsetDataIds.findDatasets(
             bias, collections=["imported_r", "imported_g"], findFirst=True
         ).materialize() as biases:
-            self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+            self.assertEqual(set(biases), expectedDeduplicatedBiases)
         # Materialize the data ID subset query, but not the dataset queries.
         with subsetDataIds.materialize() as subsetDataIds:
             self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
             self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
-            self.assertCountEqual(
-                list(
+            self.assertEqual(
+                set(
                     subsetDataIds.findDatasets(
                         bias, collections=["imported_r", "imported_g"], findFirst=False
                     )
@@ -1459,7 +1460,7 @@ class RegistryTests(ABC):
                 expectedAllBiases,
             )
             self.assertCountEqual(
-                list(
+                set(
                     subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=True)
                 ),
                 expectedDeduplicatedBiases,
@@ -1468,17 +1469,17 @@ class RegistryTests(ABC):
             with subsetDataIds.findDatasets(
                 bias, collections=["imported_r", "imported_g"], findFirst=False
             ).materialize() as biases:
-                self.assertCountEqual(list(biases), expectedAllBiases)
+                self.assertEqual(set(biases), expectedAllBiases)
             with subsetDataIds.findDatasets(
                 bias, collections=["imported_r", "imported_g"], findFirst=True
             ).materialize() as biases:
-                self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+                self.assertEqual(set(biases), expectedDeduplicatedBiases)
         # Materialize the original query, but none of the follow-up queries.
         with dataIds.materialize() as dataIds:
             self.assertEqual(dataIds.graph, expectedGraph)
             self.assertEqual(dataIds.toSet(), expectedDataIds)
-            self.assertCountEqual(
-                list(
+            self.assertEqual(
+                set(
                     dataIds.findDatasets(
                         flat,
                         collections=["imported_r"],
@@ -1489,16 +1490,16 @@ class RegistryTests(ABC):
             subsetDataIds = dataIds.subset(expectedSubsetGraph, unique=True)
             self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
             self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
-            self.assertCountEqual(
-                list(
+            self.assertEqual(
+                set(
                     subsetDataIds.findDatasets(
                         bias, collections=["imported_r", "imported_g"], findFirst=False
                     )
                 ),
                 expectedAllBiases,
             )
-            self.assertCountEqual(
-                list(
+            self.assertEqual(
+                set(
                     subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=True)
                 ),
                 expectedDeduplicatedBiases,
@@ -1507,26 +1508,26 @@ class RegistryTests(ABC):
             with subsetDataIds.findDatasets(
                 bias, collections=["imported_r", "imported_g"], findFirst=False
             ).materialize() as biases:
-                self.assertCountEqual(list(biases), expectedAllBiases)
+                self.assertEqual(set(biases), expectedAllBiases)
             with subsetDataIds.findDatasets(
                 bias, collections=["imported_r", "imported_g"], findFirst=True
             ).materialize() as biases:
-                self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+                self.assertEqual(set(biases), expectedDeduplicatedBiases)
             # Materialize the subset data ID query, but not the dataset
             # queries.
             with subsetDataIds.materialize() as subsetDataIds:
                 self.assertEqual(subsetDataIds.graph, expectedSubsetGraph)
                 self.assertEqual(subsetDataIds.toSet(), expectedSubsetDataIds)
-                self.assertCountEqual(
-                    list(
+                self.assertEqual(
+                    set(
                         subsetDataIds.findDatasets(
                             bias, collections=["imported_r", "imported_g"], findFirst=False
                         )
                     ),
                     expectedAllBiases,
                 )
-                self.assertCountEqual(
-                    list(
+                self.assertEqual(
+                    set(
                         subsetDataIds.findDatasets(
                             bias, collections=["imported_r", "imported_g"], findFirst=True
                         )
@@ -1542,7 +1543,7 @@ class RegistryTests(ABC):
                 with subsetDataIds.findDatasets(
                     bias, collections=["imported_r", "imported_g"], findFirst=True
                 ).materialize() as biases:
-                    self.assertCountEqual(list(biases), expectedDeduplicatedBiases)
+                    self.assertEqual(set(biases), expectedDeduplicatedBiases)
 
     def testEmptyDimensionsQueries(self):
         """Test Query and QueryResults objects in the case where there are no
