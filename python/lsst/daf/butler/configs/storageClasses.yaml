@@ -190,6 +190,7 @@ storageClasses:
       coaddInputs: CoaddInputs
       transmissionCurve: TransmissionCurve
       metadata: PropertyList
+      filter: FilterLabel
       # TODO: for consistency with Exposure.getFilterLabel(). Deprecate in DM-27177, remove in DM-27811.
       filterLabel: FilterLabel
       detector: Detector
