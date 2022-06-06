@@ -191,8 +191,6 @@ storageClasses:
       transmissionCurve: TransmissionCurve
       metadata: PropertyList
       filter: FilterLabel
-      # TODO: for consistency with Exposure.getFilterLabel(). Deprecate in DM-27177, remove in DM-27811.
-      filterLabel: FilterLabel
       detector: Detector
       validPolygon: Polygon
       summaryStats: ExposureSummaryStats
@@ -201,6 +199,8 @@ storageClasses:
       bbox: Box2I
       dimensions: Extent2I
       xy0: Point2I
+      # TODO: deprecated; remove in DM-27811.
+      filterLabel: FilterLabel
   ExposureF:
     inheritsFrom: Exposure
     pytype: lsst.afw.image.ExposureF
