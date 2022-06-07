@@ -318,10 +318,7 @@ class QuantumBackedButler(LimitedButler):
         if purge:
             for ref in refs:
                 # We only care about removing them from actual output refs,
-                try:
-                    self._actual_output_refs.remove(ref)
-                except KeyError:
-                    pass
+                self._actual_output_refs.discard(ref)
 
         if unstore:
             # Point of no return for removing artifacts
