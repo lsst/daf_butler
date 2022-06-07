@@ -135,7 +135,9 @@ def pruneDatasets(
     unstore : `bool`
         Same as the unstore argument to ``Butler.pruneDatasets``.
     purge_run : `str`
-        Completely remove the dataset from this run in the ``Registry``.
+        Completely remove datasets from the ``Registry``. Note that current
+        implementation accepts any RUN-type collection, but will remove
+        datasets from all collections.
     dry_run : `bool`
         Get results for what would be removed but do not remove.
     confirm : `bool`
@@ -184,8 +186,7 @@ def pruneDatasets(
 
     butler = Butler(repo)
 
-    # If purging, verify that all the collections to purge are RUN type
-    # collections:
+    # If purging, verify that the collection to purge is RUN type collection.
     if purge_run:
         collectionType = butler.registry.getCollectionType(purge_run)
         if collectionType is not CollectionType.RUN:
@@ -224,7 +225,6 @@ def pruneDatasets(
             disassociate=disassociate,
             tags=disassociate_tags or (),
             purge=purge,
-            run=purge_run or None,
             unstore=unstore,
         )
         result.state = PruneDatasetsResult.State.FINISHED

@@ -90,7 +90,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
 
     @staticmethod
     def makePruneDatasetsArgs(**kwargs):
-        expectedArgs = dict(refs=tuple(), disassociate=False, tags=(), purge=False, run=None, unstore=False)
+        expectedArgs = dict(refs=tuple(), disassociate=False, tags=(), purge=False, unstore=False)
         expectedArgs.update(kwargs)
         return expectedArgs
 
@@ -390,7 +390,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
         """Verify the arguments implied by --purge.
 
         --purge <run> implies the following arguments to butler.pruneDatasets:
-        purge=True, run=<run>, disassociate=True, unstore=True
+        purge=True, disassociate=True, unstore=True
         And for QueryDatasets, if COLLECTIONS is not passed then <run> gets
         used as the value of COLLECTIONS (and when there is a COLLECTIONS
         value then find_first gets set to True)
@@ -399,7 +399,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
             cliArgs=["--purge", "run"],
             invokeInput="yes",
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
-                purge=True, run="run", refs=getDatasets(), disassociate=True, unstore=True
+                purge=True, refs=getDatasets(), disassociate=True, unstore=True
             ),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
                 repo=self.repo, collections=("run",), find_first=True
@@ -424,7 +424,7 @@ class PruneDatasetsTestCase(unittest.TestCase):
             cliArgs=["myCollection", "--purge", "run"],
             invokeInput="yes",
             exPruneDatasetsCallArgs=self.makePruneDatasetsArgs(
-                purge=True, run="run", disassociate=True, unstore=True, refs=getDatasets()
+                purge=True, disassociate=True, unstore=True, refs=getDatasets()
             ),
             exQueryDatasetsCallArgs=self.makeQueryDatasetsArgs(
                 repo=self.repo, collections=("myCollection",), find_first=True
