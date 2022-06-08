@@ -1,0 +1,3 @@
+All support for reading and writing `~lsst.afw.image.Filter` objects has been removed.
+The old ``filter`` component for exposures has been removed, and replaced with a new ``filter`` component backed by `~lsst.afw.image.FilterLabel`.
+It functions identically to the ``filterLabel`` component, which has been deprecated.

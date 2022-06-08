@@ -132,13 +132,8 @@ storageClasses:
     pytype: lsst.ip.isr.StrayLightData
   BrighterFatterKernel:
     pytype: lsst.ip.isr.BrighterFatterKernel
-  # TODO: remove Filter in DM-27177
-  Filter:
-    pytype: lsst.afw.image.Filter
   FilterLabel:
     pytype: lsst.afw.image.FilterLabel
-    # To support exposure.filter; remove in DM-27177
-    delegate: lsst.obs.base.formatters.filter.FilterTranslator
   Exposure:
     pytype: lsst.afw.image.Exposure
     delegate: lsst.obs.base.exposureAssembler.ExposureAssembler
@@ -195,8 +190,7 @@ storageClasses:
       coaddInputs: CoaddInputs
       transmissionCurve: TransmissionCurve
       metadata: PropertyList
-      # TODO: for consistency with Exposure.getFilterLabel(). Deprecate in DM-27177, remove in DM-27811.
-      filterLabel: FilterLabel
+      filter: FilterLabel
       detector: Detector
       validPolygon: Polygon
       summaryStats: ExposureSummaryStats
@@ -205,8 +199,8 @@ storageClasses:
       bbox: Box2I
       dimensions: Extent2I
       xy0: Point2I
-      # TODO: change filter to FilterLabel and make non-derived in DM-27177. This is a breaking change.
-      filter: Filter
+      # TODO: deprecated; remove in DM-27811.
+      filterLabel: FilterLabel
   ExposureF:
     inheritsFrom: Exposure
     pytype: lsst.afw.image.ExposureF
