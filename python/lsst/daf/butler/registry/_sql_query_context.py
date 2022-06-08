@@ -23,9 +23,11 @@ from __future__ import annotations
 __all__ = ("SqlQueryContext",)
 
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any, Iterable, Iterator, Mapping, Optional
 
-from ..core import sql
+import sqlalchemy
+
+from ..core import SpatialConstraint, TemporalConstraint, ddl, sql
 
 if TYPE_CHECKING:
     from .interfaces import Database, Session
@@ -89,3 +91,113 @@ class SqlQueryContext(sql.QueryContext):
                     break
             else:
                 yield logical_row
+
+    def upload(
+        self,
+        columns: AbstractSet[sql.ColumnTag],
+        *logical_rows: sql.ResultRow,
+        is_unique: bool = False,
+        name: Optional[str] = None,
+    ) -> sql.Relation:
+        """Make external tabular data available to a ``SELECT`` query.
+
+        Parameters
+        ----------
+        TODO
+        *logical_rows : `Mapping`
+            Values for the rows.  Keys are `sql.ColumnTag` instances, and
+            `Timespan` values should be `Timespan` instances; these will be
+            converted to the raw form used by the database as necessary.
+        name : `str`, optional
+            If provided, the name of the SQL construct.  If not provided, an
+            opaque but unique identifier is generated.
+
+        Returns
+        -------
+        TODO
+        """
+        if self._session is None:
+            # TODO: improve this error message once we have a better idea of
+            # what to tell the caller to do about this.
+            raise RuntimeError("Cannot execute this query without a temporary table context.")
+        assert self._exit_stack is not None, "Should be None iff self._session is None."
+        spec = sql.ColumnTag.make_table_spec(columns, self._column_types)
+        transformer = sql.RowTransformer(columns, self._column_types)
+        raw_rows = [transformer.logical_to_raw(row) for row in logical_rows]
+        builder = sql.Relation.build(
+            self._exit_stack.enter_context(self._session.upload(spec, *raw_rows, name=name)),
+            self._column_types,
+        )
+        builder.columns.update(
+            sql.ColumnTag.extract_logical_column_mapping(
+                columns, builder.sql_from.columns, self._column_types
+            )
+        )
+        return builder.finish(is_materialized=True, is_unique=is_unique)
+
+    def _make_temporary_table(
+        self, spec: ddl.TableSpec, name: Optional[str] = None
+    ) -> sqlalchemy.schema.Table:
+        """Create a temporary table.
+
+        Parameters
+        ----------
+        spec : `TableSpec`
+            Specification for the table.
+        name : `str`, optional
+            A unique (within this session/connetion) name for the table.
+            Subclasses may override to modify the actual name used.  If not
+            provided, a unique name will be generated.
+
+        Returns
+        -------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy representation of the table.
+
+        Notes
+        -----
+        This is a simple forwarder for `Session.temporary_table` that takes
+        ownership of the context manager it returns.
+        """
+        if self._session is None:
+            # TODO: improve this error message once we have a better idea of
+            # what to tell the caller to do about this.
+            raise RuntimeError("Cannot execute this query without a temporary table context.")
+        assert self._exit_stack is not None, "Should be None iff self._session is None."
+        return self._exit_stack.enter_context(self._session.temporary_table(spec, name=name))
+
+    def materialize(
+        self, relation: sql.Relation, doomed: bool = False, name: Optional[str] = None
+    ) -> sql.Relation:
+        # TODO: add autoincrement field for better order by preservation.
+        # TODO: consider fetching and applying postprocessors instead of
+        # forwarding them.
+        spec = sql.ColumnTag.make_table_spec(relation.columns, self._column_types)
+        table = self._make_temporary_table(spec, name=name)
+        if not doomed:
+            self._db.insert(table, select=relation.to_sql_executable())
+        builder = sql.Relation.build(table, self._column_types)
+        builder.columns.update(
+            sql.ColumnTag.extract_logical_column_mapping(relation.columns, table.columns, self._column_types)
+        )
+        result = builder.finish(relation.constraints, is_materialized=True, is_unique=relation.is_unique)
+        if relation.postprocessors:
+            return result.postprocessed(*relation.postprocessors)
+        else:
+            return result
+
+    def add_spatial_constraint(
+        self,
+        relation: sql.Relation,
+        constraint: SpatialConstraint,
+        dimensions: AbstractSet[str] = frozenset(),
+    ) -> sql.Relation:
+        raise NotImplementedError("TODO")
+
+    def add_temporal_constraint(
+        self,
+        relation: sql.Relation,
+        constraint: TemporalConstraint,
+        columns: AbstractSet[sql.ColumnTag] = frozenset(),
+    ) -> sql.Relation:
+        raise NotImplementedError("TODO")
