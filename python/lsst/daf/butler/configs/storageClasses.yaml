@@ -286,3 +286,5 @@ storageClasses:
     pytype: spectractor.extractor.images.Image
   Spectraction:
     pytype: lsst.atmospec.spectraction.Spectraction
+  ScarletModelData:
+    pytype: lsst.meas.extensions.scarlet.ScarletModelData
