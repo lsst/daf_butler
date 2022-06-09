@@ -72,6 +72,7 @@ from ..registry import (
     Registry,
     RegistryConfig,
     RegistryDefaults,
+    SqlQueryBackend,
     queries,
 )
 from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
@@ -865,7 +866,7 @@ class SqlRegistry(Registry):
         """
         return queries.QueryBuilder(
             summary,
-            managers=self._managers,
+            backend=SqlQueryBackend(self._db, self._managers),
             doomed_by=doomed_by,
         )
 

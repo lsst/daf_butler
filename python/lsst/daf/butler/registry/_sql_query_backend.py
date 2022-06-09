@@ -56,6 +56,11 @@ class SqlQueryBackend(QueryBackend):
         self._db = db
         self._managers = managers
 
+    @property
+    def managers(self) -> RegistryManagerInstances:
+        # Docstring inherited.
+        return self._managers
+
     def context(self) -> SqlQueryContext:
         # Docstring inherited.
         return SqlQueryContext(self._db, self._managers.column_types)

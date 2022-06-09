@@ -23,16 +23,30 @@ from __future__ import annotations
 __all__ = ("QueryBackend",)
 
 from abc import ABC, abstractmethod
-from typing import AbstractSet, TYPE_CHECKING
+from typing import TYPE_CHECKING, AbstractSet
 
 if TYPE_CHECKING:
     from ..core import DimensionUniverse, sql
+    from .managers import RegistryManagerInstances
 
 
 class QueryBackend(ABC):
     """An interface for `sql.Relation` and `sql.QueryContext` creation to be
     specialized for different `Registry` implementations.
     """
+
+    @property
+    @abstractmethod
+    def managers(self) -> RegistryManagerInstances:
+        """A struct containing the manager instances that back a SQL registry.
+
+        Notes
+        -----
+        This property is a temporary interface that will be removed in favor of
+        new methods once the manager and storage classes have been integrated
+        with `sql.Relation`.
+        """
+        raise NotImplementedError()
 
     @abstractmethod
     def context(self) -> sql.QueryContext:
