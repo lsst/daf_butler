@@ -25,6 +25,7 @@ __all__ = [
     "ReadOnlyDatabaseError",
     "DatabaseConflictError",
     "SchemaAlreadyDefinedError",
+    "Session",
     "StaticTablesContext",
 ]
 
