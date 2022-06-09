@@ -26,7 +26,10 @@ from ._config import *
 from ._dbAuth import *
 from ._defaults import *
 from ._exceptions import *
+from ._query_backend import *
 from ._registry import *
+from ._sql_query_backend import *
+from ._sql_query_context import *
 from .interfaces import DatasetIdGenEnum
 from .wildcards import CollectionSearch
 
