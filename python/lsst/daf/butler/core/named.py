@@ -47,6 +47,7 @@ from typing import (
     TypeVar,
     Union,
     ValuesView,
+    cast,
 )
 
 
@@ -350,10 +351,7 @@ class NameMappingSetView(NamedValueAbstractSet[K_co]):
         return self._mapping
 
     def __getitem__(self, key: Union[str, K_co]) -> K_co:
-        if isinstance(key, str):
-            return self._mapping[key]
-        else:
-            return self._mapping[key.name]
+        return self._mapping[getattr(key, "name", cast(str, key))]
 
     def __contains__(self, key: Any) -> bool:
         return getattr(key, "name", key) in self._mapping
@@ -519,8 +517,7 @@ class NamedValueSet(NameMappingSetView[K], NamedValueMutableSet[K]):
 
     def remove(self, element: Union[str, K]) -> Any:
         # Docstring inherited.
-        k = getattr(element, "name") if not isinstance(element, str) else element
-        del self._mapping[k]
+        del self._mapping[getattr(element, "name", cast(str, element))]
 
     def discard(self, element: Union[str, K]) -> Any:
         # Docstring inherited.

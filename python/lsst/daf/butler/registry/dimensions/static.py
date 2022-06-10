@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import itertools
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, cast
 
 import sqlalchemy
 
@@ -168,11 +168,13 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             assert isinstance(storage, GovernorDimensionRecordStorage)
             storage.refresh()
 
-    def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
+    def get(self, element: DimensionElement | str) -> Optional[DimensionRecordStorage]:
         # Docstring inherited from DimensionRecordStorageManager.
         r = self._records.get(element)
-        if r is None and isinstance(element, SkyPixDimension):
-            return self.universe.skypix[element.system][element.level].makeStorage()
+        if r is None:
+            element = self.universe[cast(str, getattr(element, "name", element))]
+            if isinstance(element, SkyPixDimension):
+                return element.makeStorage()
         return r
 
     def register(self, element: DimensionElement) -> DimensionRecordStorage:

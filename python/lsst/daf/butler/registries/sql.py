@@ -776,7 +776,7 @@ class SqlRegistry(Registry):
         else:
             # Ignore typing since caller said to trust them with conform=False.
             records = data  # type: ignore
-        storage = self._managers.dimensions[element]  # type: ignore
+        storage = self._managers.dimensions[element]
         storage.insert(*records, replace=replace, skip_existing=skip_existing)
 
     def syncDimensionData(
@@ -794,7 +794,7 @@ class SqlRegistry(Registry):
         else:
             # Ignore typing since caller said to trust them with conform=False.
             record = row  # type: ignore
-        storage = self._managers.dimensions[element]  # type: ignore
+        storage = self._managers.dimensions[element]
         return storage.sync(record, update=update)
 
     def queryDatasetTypes(

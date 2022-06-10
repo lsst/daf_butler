@@ -30,7 +30,7 @@ __all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue", "SerializedDa
 
 import numbers
 from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Any, Dict, Iterator, Mapping, Optional, Tuple, Union
+from typing import TYPE_CHECKING, AbstractSet, Any, Dict, Iterator, Mapping, Optional, Tuple, Union, cast
 
 from lsst.sphgeom import IntersectionRegion, Region
 from pydantic import BaseModel
@@ -798,9 +798,8 @@ class _DataCoordinateRecordsView(NamedKeyMapping[DimensionElement, Optional[Dime
         return "\n".join(str(v) for v in self.values())
 
     def __getitem__(self, key: Union[DimensionElement, str]) -> Optional[DimensionRecord]:
-        if isinstance(key, DimensionElement):
-            key = key.name
-        return self._target._record(key)
+        key = getattr(key, "name", key)
+        return self._target._record(cast(str, key))
 
     def __iter__(self) -> Iterator[DimensionElement]:
         return iter(self.keys())
@@ -849,8 +848,7 @@ class _BasicTupleDataCoordinate(DataCoordinate):
 
     def __getitem__(self, key: DataIdKey) -> DataIdValue:
         # Docstring inherited from DataCoordinate.
-        if isinstance(key, Dimension):
-            key = key.name
+        key = cast(str, getattr(key, "name", key))
         index = self._graph._dataCoordinateIndices[key]
         try:
             return self._values[index]

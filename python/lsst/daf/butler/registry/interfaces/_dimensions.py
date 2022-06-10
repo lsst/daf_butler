@@ -604,23 +604,23 @@ class DimensionRecordStorageManager(VersionedExtension):
         """
         raise NotImplementedError()
 
-    def __getitem__(self, element: DimensionElement) -> DimensionRecordStorage:
+    def __getitem__(self, element: DimensionElement | str) -> DimensionRecordStorage:
         """Interface to `get` that raises `LookupError` instead of returning
         `None` on failure.
         """
         r = self.get(element)
         if r is None:
-            raise LookupError(f"No dimension element '{element.name}' found in this registry layer.")
+            raise LookupError(f"No dimension element '{element}' found in this registry layer.")
         return r
 
     @abstractmethod
-    def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
+    def get(self, element: DimensionElement | str) -> Optional[DimensionRecordStorage]:
         """Return an object that provides access to the records associated with
         the given element, if one exists in this layer.
 
         Parameters
         ----------
-        element : `DimensionElement`
+        element : `DimensionElement` or `str`
             Element for which records should be returned.
 
         Returns
