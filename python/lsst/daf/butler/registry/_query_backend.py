@@ -22,8 +22,8 @@ from __future__ import annotations
 
 __all__ = ("QueryBackend",)
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Iterable, Sequence
+from abc import abstractmethod
+from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, Sequence, TypeVar
 
 from ..core import DatasetType, DimensionUniverse, sql
 from ._collectionType import CollectionType
@@ -35,7 +35,10 @@ if TYPE_CHECKING:
     from .wildcards import CollectionSearch, CollectionWildcard
 
 
-class QueryBackend(ABC):
+_C = TypeVar("_C", bound=sql.QueryContext, covariant=True)
+
+
+class QueryBackend(Generic[_C]):
     """An interface for `sql.Relation` and `sql.QueryContext` creation to be
     specialized for different `Registry` implementations.
     """
@@ -54,7 +57,7 @@ class QueryBackend(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def context(self) -> sql.QueryContext:
+    def make_context(self) -> _C:
         """Return a context manager for relation query execution and other
         operations that involve an active database connection.
 
@@ -62,6 +65,19 @@ class QueryBackend(ABC):
         ------
         context : `QueryContext`
             Context manager.
+
+        Notes
+        -----
+        A ``with`` block must still be used to actually begin the context and
+        clean up after it, so the usual pattern is::
+
+            with backend.make_context() as context:
+                # use context
+
+        For backwards compatibility with older query interfaces that did not
+        use a context manager, an un-entered `QueryContext` may still sometimes
+        be passed to relation-creation methods, but this will result in
+        exceptions for relations that require temporary tables.
         """
         raise NotImplementedError()
 

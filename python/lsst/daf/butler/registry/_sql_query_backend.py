@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from .managers import RegistryManagerInstances
 
 
-class SqlQueryBackend(QueryBackend):
+class SqlQueryBackend(QueryBackend[SqlQueryContext]):
     """An implementation of `QueryBackend` for `SqlRegistry`.
 
     Parameters
@@ -63,7 +63,7 @@ class SqlQueryBackend(QueryBackend):
         # Docstring inherited.
         return self._managers
 
-    def context(self) -> SqlQueryContext:
+    def make_context(self) -> SqlQueryContext:
         # Docstring inherited.
         return SqlQueryContext(self._db, self._managers.column_types)
 

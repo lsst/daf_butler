@@ -1138,7 +1138,7 @@ class SqlRegistry(Registry):
                 full=False,
             )
             timespan_tag = sql.DatasetColumnTag(datasetType.name, "timespan")
-            with backend.context() as context:
+            with backend.make_context() as context:
                 for row in context.fetch(relation):
                     ref = reader.read(row)
                     yield DatasetAssociation(
