@@ -58,6 +58,7 @@ class _JoinRelation(Relation):
         self,
         *relations: Relation,
         conditions: Iterable[JoinCondition] = (),
+        extra_connections: Iterable[frozenset[str]] = (),
     ):
         assert (
             len(relations) > 1
@@ -65,6 +66,7 @@ class _JoinRelation(Relation):
         self._relations = {_RelationIndex(index): relation for index, relation in enumerate(relations)}
         self._conditions = {_ConditionIndex(index): condition for index, condition in enumerate(conditions)}
         self._matches: defaultdict[_RelationIndex, dict[_ConditionIndex, _MatchSide]] = defaultdict(dict)
+        self._extra_connections = frozenset(extra_connections)
         for condition_index, condition in self._conditions.items():
             matched_lhs = False
             matched_rhs = False
@@ -99,7 +101,7 @@ class _JoinRelation(Relation):
     @property  # type: ignore
     @cached_getter
     def connections(self) -> AbstractSet[frozenset[str]]:
-        result: set[frozenset[str]] = set()
+        result: set[frozenset[str]] = set(self._extra_connections)
         for relation in self._relations.values():
             result.update(relation.connections)
         return result
@@ -168,6 +170,9 @@ class _JoinRelation(Relation):
 
     def _flatten_join_conditions(self) -> Iterable[JoinCondition]:
         return self._conditions.values()
+
+    def _flatten_join_extra_connections(self) -> Iterable[frozenset[str]]:
+        return self._extra_connections
 
     def _sorted_terms(self) -> Iterator[tuple[Relation, Iterable[JoinCondition]]]:
         # Sort terms by the number of columns they provide, in reverse, and put

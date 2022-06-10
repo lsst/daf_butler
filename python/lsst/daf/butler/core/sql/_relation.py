@@ -238,6 +238,7 @@ class Relation(ABC):
         self: Relation,
         *others: Relation,
         conditions: Iterable[JoinCondition] = (),
+        extra_connections: Iterable[frozenset[str]] = (),
     ) -> Relation:  # noqa: N805
         from ._join_relation import _JoinRelation
 
@@ -249,17 +250,19 @@ class Relation(ABC):
         fallback = self
         terms = list(self._flatten_join_terms())
         conditions = list(conditions)
+        extra_connections = list(extra_connections)
         for other in others:
             new_terms = list(other._flatten_join_terms())
             if new_terms:
                 fallback = other
             terms.extend(new_terms)
             conditions.extend(other._flatten_join_conditions())
+            extra_connections.extend(other._flatten_join_extra_connections())
         if len(terms) < 2:
             if conditions:
                 raise RuntimeError("Cannot add join conditions with only one relation.")
             return fallback
-        return _JoinRelation(*terms, conditions=conditions)
+        return _JoinRelation(*terms, conditions=conditions, extra_connections=extra_connections)
 
     def union(self: Relation, *others: Relation) -> Relation:  # noqa: N805
         from ._union_relation import _UnionRelation
@@ -285,6 +288,9 @@ class Relation(ABC):
         return (self,)
 
     def _flatten_join_conditions(self) -> Iterable[JoinCondition]:
+        return ()
+
+    def _flatten_join_extra_connections(self) -> Iterable[frozenset[str]]:
         return ()
 
     def _flatten_unions(self) -> Iterable[Relation]:
