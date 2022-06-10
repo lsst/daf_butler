@@ -1,0 +1,2 @@
+Added ``DatasetType.storageClass_name`` property to allow the name of the storage class to be retrieved without requiring that the storage class exists.
+This is possible if people have used local storage class definitions or a test ``DatasetType`` was created temporarily.
