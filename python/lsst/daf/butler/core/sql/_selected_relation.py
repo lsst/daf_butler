@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ()
 
-from typing import Mapping, Optional, Sequence
+from typing import AbstractSet, Mapping, Optional, Sequence
 
 import sqlalchemy
 from lsst.utils.classes import cached_getter
@@ -59,6 +59,10 @@ class _SelectedRelation(Relation):
     @property
     def postprocessors(self) -> Sequence[Postprocessor]:
         return self._base.postprocessors
+
+    @property
+    def connections(self) -> AbstractSet[frozenset[str]]:
+        return self._base.connections
 
     @property
     def column_types(self) -> ColumnTypeInfo:

@@ -63,6 +63,15 @@ class _UnionRelation(Relation):
             p.extend(term.postprocessors)
         return Postprocessor.sort_and_assert(p, self.columns)
 
+    @property  # type: ignore
+    @cached_getter
+    def connections(self) -> AbstractSet[frozenset[str]]:
+        first, *rest = self._terms
+        result = set(first.connections)
+        for term in rest:
+            result.intersection_update(term.connections)
+        return result
+
     @property
     def column_types(self) -> ColumnTypeInfo:
         return self._terms[0].column_types

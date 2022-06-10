@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ()
 
-from typing import Mapping, Sequence
+from typing import AbstractSet, Mapping, Sequence
 
 import sqlalchemy
 from lsst.utils.classes import cached_getter
@@ -42,6 +42,7 @@ class _LeafRelation(Relation):
         sql_from: sqlalchemy.sql.FromClause,
         columns: Mapping[ColumnTag, LogicalColumn],
         *,
+        connections: AbstractSet[frozenset[str]],
         constraints: LocalConstraints,
         column_types: ColumnTypeInfo,
         is_materialized: bool,
@@ -51,6 +52,7 @@ class _LeafRelation(Relation):
         self._sql_from = sql_from
         self._columns = columns
         self._constraints = constraints
+        self._connections = connections
         self._where = tuple(where)
         self._column_types = column_types
         self._is_materialized = is_materialized
@@ -68,6 +70,10 @@ class _LeafRelation(Relation):
     @property
     def postprocessors(self) -> Sequence[Postprocessor]:
         return ()
+
+    @property
+    def connections(self) -> AbstractSet[frozenset[str]]:
+        return self._connections
 
     @property
     def column_types(self) -> ColumnTypeInfo:

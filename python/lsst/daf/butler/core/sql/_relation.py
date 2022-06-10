@@ -58,6 +58,11 @@ class Relation(ABC):
 
     @property
     @abstractmethod
+    def connections(self) -> AbstractSet[frozenset[str]]:
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
     def column_types(self) -> ColumnTypeInfo:
         raise NotImplementedError()
 
@@ -221,12 +226,13 @@ class Relation(ABC):
         constant_row: sqlalchemy.sql.FromClause,
         columns: ColumnTagSet,
         column_types: ColumnTypeInfo,
+        connections: AbstractSet[frozenset[str]] = frozenset(),
     ) -> Relation:
         from ._doomed_relation import _DoomedRelation
 
         doomed_by = {first_message}
         doomed_by.update(other_messages)
-        return _DoomedRelation(constant_row, columns, doomed_by, column_types)
+        return _DoomedRelation(constant_row, columns, doomed_by, column_types, connections)
 
     def join(
         self: Relation,
@@ -315,6 +321,7 @@ class RelationBuilder:
         constraints: Optional[LocalConstraints] = None,
         is_materialized: bool = False,
         is_unique: bool = False,
+        connections: Iterable[frozenset[str]] = frozenset(),
     ) -> Relation:
         from ._leaf_relation import _LeafRelation
 
@@ -323,6 +330,7 @@ class RelationBuilder:
         return _LeafRelation(
             self.sql_from,
             self.columns,
+            connections=frozenset(connections),
             constraints=constraints,
             where=tuple(self.where),
             column_types=self.column_types,

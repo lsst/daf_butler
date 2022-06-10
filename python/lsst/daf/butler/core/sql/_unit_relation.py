@@ -53,6 +53,10 @@ class _UnitRelation(Relation):
         return ()
 
     @property
+    def connections(self) -> AbstractSet[frozenset[str]]:
+        return frozenset()
+
+    @property
     def column_types(self) -> ColumnTypeInfo:
         return self._column_types
 

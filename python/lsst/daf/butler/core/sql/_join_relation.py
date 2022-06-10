@@ -96,6 +96,14 @@ class _JoinRelation(Relation):
             p.extend(relation.postprocessors)
         return Postprocessor.sort_and_assert(p, self.columns)
 
+    @property  # type: ignore
+    @cached_getter
+    def connections(self) -> AbstractSet[frozenset[str]]:
+        result: set[frozenset[str]] = set()
+        for relation in self._relations.values():
+            result.update(relation.connections)
+        return result
+
     @property
     def column_types(self) -> ColumnTypeInfo:
         return next(iter(self._relations.values())).column_types

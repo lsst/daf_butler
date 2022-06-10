@@ -42,11 +42,13 @@ class _DoomedRelation(Relation):
         columns: ColumnTagSet,
         doomed_by: AbstractSet[str],
         column_types: ColumnTypeInfo,
+        connections: AbstractSet[frozenset[str]],
     ):
         self._constant_row = constant_row
         self._columns = columns
         self._doomed_by = doomed_by
         self._column_types = column_types
+        self._connections = connections
 
     @property
     def columns(self) -> ColumnTagSet:
@@ -59,6 +61,10 @@ class _DoomedRelation(Relation):
     @property
     def postprocessors(self) -> Sequence[Postprocessor]:
         return ()
+
+    @property
+    def connections(self) -> AbstractSet[frozenset[str]]:
+        return self._connections
 
     @property
     def column_types(self) -> ColumnTypeInfo:

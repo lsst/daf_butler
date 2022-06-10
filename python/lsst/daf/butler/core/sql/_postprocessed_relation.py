@@ -55,6 +55,10 @@ class _PostprocessedRelation(Relation):
         return self._postprocessors
 
     @property
+    def connections(self) -> AbstractSet[frozenset[str]]:
+        return self._base.connections
+
+    @property
     def column_types(self) -> ColumnTypeInfo:
         return self._base.column_types
 
