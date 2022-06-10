@@ -135,7 +135,7 @@ class YamlRepoExportBackend(RepoExportBackend):
                 "type": "dataset_type",
                 "name": datasetType.name,
                 "dimensions": [d.name for d in datasetType.dimensions],
-                "storage_class": datasetType.storageClass.name,
+                "storage_class": datasetType.storageClass_name,
                 "is_calibration": datasetType.isCalibration(),
             }
         )
