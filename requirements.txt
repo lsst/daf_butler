@@ -2,13 +2,12 @@ pyyaml >= 5.1
 astropy >= 4.0
 click >7.0
 sqlalchemy >= 1.3
-git+https://github.com/lsst/sphgeom@main#egg=lsst_sphgeom
-git+https://github.com/lsst/utils@main#egg=lsst_utils
-git+https://github.com/lsst/resources@main#egg=lsst_resources
 pydantic
 httpx
 deprecated >=1.2
-
+lsst-sphgeom
+lsst-utils
+lsst-resources
 # optional
 backoff >= 1.10
 boto3 >= 1.13
