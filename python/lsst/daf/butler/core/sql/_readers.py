@@ -34,7 +34,13 @@ from typing import Any, Callable, Iterable, Mapping, Optional
 from .._topology import TopologicalExtentDatabaseRepresentation
 from ..datasets import DatasetRef, DatasetType
 from ..dimensions import DataCoordinate, DataIdValue, DimensionElement, DimensionGraph, DimensionRecord
-from ._column_tags import ColumnTag, DatasetColumnTag, DimensionKeyColumnTag, DimensionRecordColumnTag
+from ._column_tags import (
+    ColumnTag,
+    DatasetColumnTag,
+    DimensionKeyColumnTag,
+    DimensionRecordColumnTag,
+    ResultRow,
+)
 from ._column_type_info import ColumnTypeInfo
 
 
@@ -50,13 +56,13 @@ class RowTransformer:
 
     __slots__ = ("_scalar_columns", "_special_columns")
 
-    def raw_to_logical(self, raw_row: Mapping[str, Any]) -> dict[ColumnTag, Any]:
-        logical_row = {tag: raw_row[str(tag)] for tag in self._scalar_columns}
+    def raw_to_logical(self, raw_row: Mapping[str, Any]) -> ResultRow:
+        logical_row: ResultRow = {tag: raw_row[str(tag)] for tag in self._scalar_columns}
         for tag, db_repr_cls in self._special_columns.items():
             logical_row[tag] = db_repr_cls.extract(raw_row, name=str(tag))
         return logical_row
 
-    def logical_to_raw(self, logical_row: Mapping[ColumnTag, Any]) -> dict[str, Any]:
+    def logical_to_raw(self, logical_row: ResultRow) -> dict[str, Any]:
         raw_row = {str(tag): logical_row[tag] for tag in self._scalar_columns}
         for tag, db_repr_cls in self._special_columns.items():
             db_repr_cls.update(logical_row[tag], result=raw_row, name=str(tag))
@@ -80,7 +86,7 @@ class DataCoordinateReader(ABC):
     __slots__ = ()
 
     @abstractmethod
-    def read(self, row: Mapping[ColumnTag, Any]) -> DataCoordinate:
+    def read(self, row: ResultRow) -> DataCoordinate:
         raise NotImplementedError()
 
 
@@ -91,7 +97,7 @@ class _BasicDataCoordinateReader(DataCoordinateReader):
 
     __slots__ = ("_dimensions", "_tags")
 
-    def read(self, row: Mapping[ColumnTag, Any]) -> DataCoordinate:
+    def read(self, row: ResultRow) -> DataCoordinate:
         return DataCoordinate.fromRequiredValues(
             self._dimensions,
             tuple(row[tag] for tag in self._tags),
@@ -105,7 +111,7 @@ class _FullDataCoordinateReader(DataCoordinateReader):
 
     __slots__ = ("_dimensions", "_tags")
 
-    def read(self, row: Mapping[ColumnTag, Any]) -> DataCoordinate:
+    def read(self, row: ResultRow) -> DataCoordinate:
         return DataCoordinate.fromFullValues(
             self._dimensions,
             tuple(row[tag] for tag in self._tags),
@@ -130,7 +136,7 @@ class _ExpandedDataCoordinateReader(DataCoordinateReader):
 
     __slots__ = ("_full_reader", "_records", "subset_indices")
 
-    def read(self, row: Mapping[ColumnTag, Any]) -> DataCoordinate:
+    def read(self, row: ResultRow) -> DataCoordinate:
         full = self._full_reader.read(row)
         values = tuple(full.values())
         records_for_row: dict[str, DimensionRecord] = {}
@@ -161,7 +167,7 @@ class DatasetRefReader:
 
     def read(
         self,
-        row: Mapping[ColumnTag, Any],
+        row: ResultRow,
         *,
         run: Optional[str] = None,
         data_id: Optional[DataCoordinate] = None,
@@ -197,5 +203,7 @@ class DimensionRecordReader:
 
     __slots__ = ("_cls", "_tags")
 
-    def read(self, row: Mapping[ColumnTag, Any]) -> DimensionRecord:
+    def read(self, row: ResultRow) -> DimensionRecord:
+        if (result := row.get(self._cls)) is not None:
+            return result
         return self._cls(**{key: row[tag] for key, tag in self._tags.items()})

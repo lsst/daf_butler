@@ -23,9 +23,9 @@ from __future__ import annotations
 __all__ = ("QueryContext",)
 
 from abc import abstractmethod
-from typing import Any, ContextManager, Iterable, Iterator, Mapping, Optional
+from typing import ContextManager, Iterable, Iterator, Optional
 
-from ._column_tags import ColumnTag
+from ._column_tags import ResultRow
 from ._order_by import OrderByTerm
 from ._relation import Relation
 
@@ -43,7 +43,7 @@ class QueryContext(ContextManager["QueryContext"]):
         order_by: Iterable[OrderByTerm] = (),
         offset: int = 0,
         limit: Optional[int] = None,
-    ) -> Iterator[Mapping[ColumnTag, Any]]:
+    ) -> Iterator[ResultRow]:
         """Execute the SQL query represented by a relation and return the
         results, applying any postprocessors held by the relation.
 

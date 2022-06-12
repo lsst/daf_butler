@@ -23,12 +23,12 @@ from __future__ import annotations
 
 __all__ = ()
 
-from typing import AbstractSet, Iterable, Mapping, Optional, Sequence
+from typing import AbstractSet, Iterable, Mapping, Optional, Sequence, cast
 
 import sqlalchemy
 
 from ._column_tag_set import ColumnTagSet
-from ._column_tags import ColumnTag, LogicalColumn
+from ._column_tags import ColumnTag, LogicalColumn, ResultTag
 from ._column_type_info import ColumnTypeInfo
 from ._local_constraints import LocalConstraints
 from ._postprocessor import Postprocessor
@@ -42,10 +42,14 @@ class _ProjectedRelation(Relation):
         self._postprocessors, todo, missing = Postprocessor.sort_and_check(self._base.postprocessors, columns)
         if missing:
             if keep_missing:
-                new_columns = set(columns)
+                new_columns: set[ResultTag] = set(columns)
                 new_columns.update(missing)
-                self._postprocessors = Postprocessor.sort_and_assert(self._base.postprocessors, new_columns)
-                self._columns = ColumnTagSet._from_iterable(new_columns)
+                if not all(isinstance(tag, ColumnTag) for tag in new_columns):
+                    raise RuntimeError(f"Missing dimension record columns for postprocessor(s) {todo}.")
+                self._postprocessors = Postprocessor.sort_and_assert(
+                    self._base.postprocessors, cast(AbstractSet[ColumnTag], new_columns)
+                )
+                self._columns = ColumnTagSet._from_iterable(cast(AbstractSet[ColumnTag], new_columns))
             else:
                 raise RuntimeError(f"Missing column(s) {missing} needed to satisfy postprocessor(s) {todo}.")
 

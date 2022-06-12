@@ -24,21 +24,24 @@ from __future__ import annotations
 __all__ = ("Postprocessor",)
 
 from abc import ABC, abstractmethod
-from typing import AbstractSet, Any, Iterable, Optional
+from typing import TYPE_CHECKING, AbstractSet, Any, Iterable, Optional
 
-from .._spatial_regions import SpatialConstraint
-from ._column_tags import ColumnTag
+from ._column_tags import ColumnTag, DimensionRecordColumnTag, ResultRow, ResultTag
+
+if TYPE_CHECKING:
+    from .._spatial_regions import SpatialConstraint
+    from ..dimensions import DimensionRecord
 
 
 class Postprocessor(ABC):
     @property
     @abstractmethod
-    def columns_required(self) -> AbstractSet[ColumnTag]:
+    def columns_required(self) -> AbstractSet[ResultTag]:
         raise NotImplementedError()
 
     @property
     @abstractmethod
-    def columns_provided(self) -> AbstractSet[ColumnTag]:
+    def columns_provided(self) -> AbstractSet[ResultTag]:
         raise NotImplementedError()
 
     @property
@@ -47,7 +50,7 @@ class Postprocessor(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def apply(self, row: dict[ColumnTag, Any]) -> Optional[dict[ColumnTag, Any]]:
+    def apply(self, row: ResultRow) -> Optional[ResultRow]:
         raise NotImplementedError()
 
     def __eq__(self, rhs: Any) -> bool:
@@ -66,6 +69,12 @@ class Postprocessor(ABC):
     def from_spatial_constraint(constraint: SpatialConstraint, tag: ColumnTag) -> Postprocessor:
         return _SpatialConstraintPostprocessor(constraint, tag)
 
+    @staticmethod
+    def make_dimension_column_extractor(
+        record_cls: type[DimensionRecord], columns: AbstractSet[str]
+    ) -> Postprocessor:
+        return _ExtractDimensionRecordPostprocessor(record_cls, columns)
+
     def _tiebreaker_sort_key(self) -> float:
         return self.row_multiplier
 
@@ -73,26 +82,26 @@ class Postprocessor(ABC):
     def sort_and_check(
         postprocessors: Iterable[Postprocessor],
         columns_provided: AbstractSet[ColumnTag],
-    ) -> tuple[list[Postprocessor], AbstractSet[Postprocessor], AbstractSet[ColumnTag]]:
+    ) -> tuple[list[Postprocessor], AbstractSet[Postprocessor], AbstractSet[ResultTag]]:
         todo = set(postprocessors)
         done: list[Postprocessor] = []
-        columns_provided = set(columns_provided)
+        full_columns_provided: set[ResultTag] = set(columns_provided)
         while todo:
             candidates_to_include: set[Postprocessor] = set()
-            columns_to_provide: set[ColumnTag] = set()
+            columns_to_provide: set[ResultTag] = set()
             for candidate in todo:
-                if columns_provided.issuperset(candidate.columns_required):
+                if full_columns_provided.issuperset(candidate.columns_required):
                     candidates_to_include.add(candidate)
                     columns_to_provide.update(candidate.columns_provided)
             if not candidates_to_include:
-                missing: set[ColumnTag] = set()
+                missing: set[ResultTag] = set()
                 for failed in todo:
                     missing.update(failed.columns_required)
                     missing.difference_update(failed.columns_provided)
                 return done, todo, missing
             todo.difference_update(candidates_to_include)
             done.extend(sorted(candidates_to_include, key=Postprocessor._tiebreaker_sort_key))
-            columns_provided.update(columns_to_provide)
+            full_columns_provided.update(columns_to_provide)
         return done, frozenset(), frozenset()
 
     @staticmethod
@@ -124,7 +133,7 @@ class _SpatialJoinPostprocessor(Postprocessor):
     def row_multiplier(self) -> float:
         return 0.5
 
-    def apply(self, row: dict[ColumnTag, Any]) -> Optional[dict[ColumnTag, Any]]:
+    def apply(self, row: ResultRow) -> Optional[ResultRow]:
         return None if row[self._a].isDisjointFrom(row[self._b]) else row
 
 
@@ -147,5 +156,31 @@ class _SpatialConstraintPostprocessor(Postprocessor):
     def row_multiplier(self) -> float:
         return 0.5
 
-    def apply(self, row: dict[ColumnTag, Any]) -> Optional[dict[ColumnTag, Any]]:
+    def apply(self, row: ResultRow) -> Optional[ResultRow]:
         return None if self._constraint.region.isDisjointWith(row[self._tag]) else row
+
+
+class _ExtractDimensionRecordPostprocessor(Postprocessor):
+    def __init__(self, record_cls: type[DimensionRecord], columns: AbstractSet[str]):
+        self._record_cls = record_cls
+        self._column_tags = frozenset(DimensionRecordColumnTag.generate(record_cls.definition.name, columns))
+
+    __slots__ = ("_record_cls", "_column_tags")
+
+    @property
+    def columns_provided(self) -> AbstractSet[ResultTag]:
+        return self._column_tags
+
+    @property
+    def columns_required(self) -> AbstractSet[ResultTag]:
+        return {self._record_cls}
+
+    @property
+    def row_multiplier(self) -> float:
+        return 1.0
+
+    def apply(self, row: ResultRow) -> ResultRow:
+        record = row[self._record_cls]
+        for tag in self._column_tags:
+            row[tag] = getattr(record, tag.column)
+        return row

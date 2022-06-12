@@ -27,20 +27,22 @@ __all__ = (
     "DimensionRecordColumnTag",
     "DatasetColumnTag",
     "LogicalColumn",
+    "ResultRow",
+    "ResultTag",
 )
 
 import dataclasses
 import itertools
 import re
 from abc import ABC, abstractmethod
-from typing import ClassVar, Iterable, Iterator, Mapping, Union, cast, final
+from typing import Any, ClassVar, Dict, Iterable, Iterator, Mapping, Type, Union, cast, final
 
 import sqlalchemy
 
 from .._spatial_regions import SpatialRegionDatabaseRepresentation
 from .._topology import TopologicalExtentDatabaseRepresentation
 from ..ddl import FieldSpec, TableSpec
-from ..dimensions import Dimension
+from ..dimensions import Dimension, DimensionRecord
 from ..timespan import TimespanDatabaseRepresentation
 from ._column_type_info import ColumnTypeInfo
 
@@ -300,3 +302,8 @@ class DatasetColumnTag(ColumnTag):
     @classmethod
     def generate(cls, dataset_type: str, columns: Iterable[str]) -> Iterator[DatasetColumnTag]:
         return (cls(dataset_type, column) for column in columns)
+
+
+ResultTag = Union[ColumnTag, Type[DimensionRecord]]
+
+ResultRow = Dict[ResultTag, Any]
