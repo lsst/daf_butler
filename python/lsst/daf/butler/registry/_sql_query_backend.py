@@ -22,12 +22,12 @@ from __future__ import annotations
 
 __all__ = ("SqlQueryBackend",)
 
-from typing import TYPE_CHECKING, AbstractSet, Sequence
+from typing import TYPE_CHECKING, AbstractSet, Iterable, Mapping, Sequence
 
 import sqlalchemy
 from lsst.utils.classes import cached_getter
 
-from ..core import DatasetType, DimensionUniverse, ddl, sql
+from ..core import DatasetType, DimensionGraph, DimensionUniverse, ddl, sql
 from ..core.named import NamedValueAbstractSet, NamedValueSet
 from ._collectionType import CollectionType
 from ._query_backend import QueryBackend
@@ -35,7 +35,7 @@ from ._sql_query_context import SqlQueryContext
 from .wildcards import CollectionSearch, CollectionWildcard
 
 if TYPE_CHECKING:
-    from .interfaces import CollectionRecord, Database
+    from .interfaces import CollectionRecord, Database, DimensionRecordStorage
     from .managers import RegistryManagerInstances
 
 
@@ -310,3 +310,156 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         builder.columns.update(window_columns)
         builder.where.append(window_subquery.columns["rownum"] == 1)
         return builder.finish()
+
+    def make_dimension_relation(
+        self,
+        dimensions: DimensionGraph,
+        sql_columns: Mapping[str, AbstractSet[str]],
+        result_columns: Mapping[str, AbstractSet[str]],
+        result_records: AbstractSet[str] = frozenset(),
+        *,
+        spatial_joins: Iterable[tuple[str, str]] = (),
+        join_relation: sql.Relation | None = None,
+        constraints: sql.LocalConstraints | None = None,
+    ) -> sql.Relation:
+        # Docstring inherited.
+
+        # Start by gathering up all of the arguments to each call to
+        # DimensionRecordStorage.join for each element in given dimensions.  We
+        # won't actually call that method yet for any, because we'll have to
+        # tweak some arguments later.  Tuples below are (storage, sql_columns,
+        # result_columns).
+        todo: dict[str, tuple[DimensionRecordStorage, set[str], set[str]]] = {}
+        for element_name in dimensions.elements.names:
+            storage = self._managers.dimensions[element_name]
+            # Convert column arguments for this element to concrete sets (maybe
+            # an empty one).
+            element_sql_columns = set(sql_columns.get(element_name, frozenset()))
+            element_result_columns = set(result_columns.get(element_name, frozenset()))
+            # Remove result columns that have also been requested as sql
+            # columns.
+            element_result_columns.difference_update(element_sql_columns)
+            # Remove columns that were already provided by the join relation.
+            # We know other dimension relations we join here can't provide
+            # these (an element's relation can only provide record columns for
+            # that element), so we don't need to repeat this check as we join
+            # more relations in, but we can't say the same for the relation we
+            # were given, which could be e.g. a materialized subset of some of
+            # the same relations we're considering joining in here.
+            if element_sql_columns and join_relation is not None:
+                element_sql_columns.difference_update(join_relation.columns.dimensions)
+            if element_result_columns and join_relation is not None:
+                element_result_columns.difference_update(join_relation.columns.dimensions)
+                for postprocessor in join_relation.postprocessors:
+                    for result_tag in postprocessor.columns_provided:
+                        match result_tag:
+                            case sql.DimensionRecordColumnTag(
+                                element=tag_element, column=column_name
+                            ) if tag_element == element_name:
+                                element_result_columns.discard(column_name)
+            # Finally we add this element and its updated column-request sets
+            # to the 'todo' dict.
+            todo[element_name] = (storage, element_sql_columns, element_result_columns)
+
+        # Set up the relation variable we'll update as we join more in, as
+        # well as the set of connections already present in the given relation.
+        if join_relation is not None:
+            relation = join_relation
+            existing_connections = join_relation.connections
+        else:
+            relation = self.unit_relation
+            existing_connections = frozenset()
+
+        # Next we'll handle spatial joins, because those may require some
+        # additional region result columns for postprocessors.
+        postprocessors: list[sql.Postprocessor] = []
+        for element1, element2 in spatial_joins:
+            overlaps, needs_refinement = self._managers.dimensions.get_spatial_join_relation(
+                element1, element2, constraints=constraints
+            )
+            if needs_refinement:
+                postprocessors.append(
+                    sql.Postprocessor.from_spatial_join(
+                        sql.DimensionRecordColumnTag(element1, "region"),
+                        sql.DimensionRecordColumnTag(element2, "region"),
+                    )
+                )
+                _, _, element1_result_columns = todo[element1]
+                element1_result_columns.add("region")
+                _, _, element2_result_columns = todo[element2]
+                element2_result_columns.add("region")
+            relation = relation.join(overlaps)
+
+        # Return to the dictionary of elements to process; we either join to
+        # 'relation' now, move it to the new 'deferred' set below, or decide
+        # that we don't necessarily need that element's relation at all.
+        deferred: set[str] = set()
+        for element_name, (storage, element_sql_columns, element_result_columns) in todo.items():
+            if (
+                # We may need to join this relation now, because we need
+                # non-key columns or connections from it in sql.
+                element_sql_columns
+                or not (storage.join_connections <= existing_connections)
+                # Or there's no downside to joining this relation now, because
+                # we need result columns from it and it's going to provide them
+                # as sql columns anyway.
+                or (
+                    not storage.join_results_postprocessed
+                    and (element_result_columns or element_name in result_records)
+                )
+            ):
+                relation = storage.join(
+                    relation,
+                    element_sql_columns,
+                    constraints=constraints,
+                    result_records=(element_name in result_records),
+                    result_columns=element_result_columns,
+                )
+            elif element_result_columns or element_name in result_records:
+                # We'll need to join this relation in at some point, but it may
+                # better to do it later, in the sense that it may make the
+                # sql query simpler by doing postprocessing instead.
+                deferred.add(element_name)
+            # If none of those conditions are satisfied, we don't necessarily
+            # need to join this element in at all, so we just ignore it.  It
+            # may be that we'll join it in later just to fill out the dimension
+            # key columns.
+
+        # At this point we've joined in all of the element relations that
+        # definitely need to be included in the sql side, but we may not have
+        # all of the dimension key columns in the query that we want.  To fill
+        # out that set, we iterate over the given DimensionGraph's dimensions
+        # (not all dimension elements) in reverse topological order.  That
+        # order should reduce the total number of tables we bring in, since
+        # each dimension will bring in keys for its required dependencies
+        # before we get to those required dependencies.  This will probably
+        # include some of the elements we deferred earlier.
+        for dimension in self.universe.sorted(dimensions, reverse=True):
+            if dimension.name not in relation.columns.dimensions:
+                storage, _, element_result_columns = todo[dimension.name]
+                relation = storage.join(
+                    relation,
+                    frozenset(),
+                    constraints=constraints,
+                    result_records=(element_name in result_records),
+                    result_columns=element_result_columns,
+                )
+                deferred.discard(dimension.name)
+
+        # At this point we should have keys for all dimensions in the query,
+        # but there may still be some elements we deferred before that could
+        # add postprocessors.
+        for element_name in deferred:
+            storage, _, element_result_columns = todo[element_name]
+            relation = storage.join(
+                relation,
+                frozenset(),
+                constraints=constraints,
+                result_records=(element_name in result_records),
+                result_columns=element_result_columns,
+            )
+
+        # Finally we can add the postprocessors from the spatial joins, since
+        # we should have included (either in sql or via postprocessors) any
+        # region columns they rely on.
+        return relation.postprocessed(*postprocessors)

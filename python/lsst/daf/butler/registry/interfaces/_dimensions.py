@@ -33,6 +33,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, Iterable, Mapping, Optional, Tuple, Union
 
 import sqlalchemy
+from lsst.utils.classes import cached_getter
 
 from ...core import DatabaseDimensionElement, DimensionGraph, GovernorDimension, SkyPixDimension, sql
 from ._versioning import VersionedExtension
@@ -84,29 +85,121 @@ class DimensionRecordStorage(ABC):
         """
         raise NotImplementedError()
 
+    def defer_joins(self) -> bool:
+        """Whether the relation for this dimension element should be joined
+        into a query only after other relations have been included.
+
+        This is `True` for record storage implementation that do not have a
+        complete enumeration of their keys in the database (such as those for
+        skypix dimensions).  For these we want to rely on other tables such
+        as those for datasets or spatial joins to be given an opportunity to
+        include these keys in the query before falling back to solutions that
+        involve uploads to temporary tables from the client.
+        """
+        return False
+
+    @property
+    def join_results_postprocessed(self) -> bool:
+        """Whether "result" columns and requested of the `join` method are
+        included via a postprocessor instead of directly in the SQL query.
+        """
+        return False
+
+    @property  # type: ignore
+    @cached_getter
+    def join_connections(self) -> AbstractSet[frozenset[str]]:
+        """The set of connections provided by this dimension element's
+        relation.
+
+        Notes
+        -----
+        In this context, each connection is a `frozenset` containing the names
+        of the element's required dimensions and possibly one one of its
+        implied dimensions.  To ensure queries include the correct dimension
+        relationships, it is important to consider when relations provide these
+        connections, not just a flat set of columns.  For example, a relation
+        that joins two dataset relations, one with dimensions ``{instrument,
+        physical_filter}`` and another with dimensions ``{band}`` together
+        provide the key columns ``{instrument, physical_filter, band}``, but
+        not the *connection* ``{instrument, physical_filter, band}``, and would
+        hence do a cartesian product join that associates all ``band`` values
+        with all ``physical_filter`` values, which would be incorrect if
+        ``physical_filter`` implies ``band``.  The dimension relation for
+        ``physical_filter`` *would* include the ``{instrument, physical_filter,
+        band}``, and including it in the query as well replace the cartesian
+        product with the correct relationship.
+        """
+        connections: set[frozenset[str]] = set()
+        for implied_name in self.element.implied.names:
+            connections.add(frozenset(self.element.required.names | {implied_name}))
+        if self.element.alwaysJoin:
+            connections.add(frozenset(self.element.required.names))
+        return connections
+
     @abstractmethod
     def join(
         self,
         relation: sql.Relation,
-        columns: Optional[AbstractSet[str]] = None,
+        sql_columns: AbstractSet[str],
+        *,
+        constraints: sql.LocalConstraints | None = None,
+        result_records: bool = False,
+        result_columns: AbstractSet[str] = frozenset(),
     ) -> sql.Relation:
-        """Return a relation that includes columns or constraints from this
+        """Return a relation that includes columns and/or constraints from this
         element.
 
         Parameters
         ----------
         relation : `sql.Relation`
             Input relation to join to or otherwise return a modification of.
-        columns : `AbstractSet` [ `str` ], optional
-            Fact columns that should be provided by the relation.  Does not
-            include dimension key fields, which are always provided, but may
-            include "region" and/or "timespan".  If `None`, all fields are
-            included.
+            If this already includes all of the columns and connections this
+            storage would usually provide, implementations may satisfy
+            ``result_records`` and ``result_columns`` by attaching
+            `sql.Postprocessor` instances to the returned relation instead of
+            actually performing a join, or return this relation as-is if they
+            have nothing to add.
+        sql_columns : `AbstractSet` [ `str` ]
+            Fact columns that should be provided by the relation directly (not
+            via a `sql.Postprocessor`).  Does not include dimension key fields,
+            which are always provided, but may include "region" and/or
+            "timespan".
+        constraints : `sql.LocalConstraints`, optional
+            Constraints imposed by other aspects of the query (e.g. a WHERE
+            clause).
+        result_records : `bool`, optional
+            If `True`, the query under construction will return
+            `DimensionRecord` instances for this element.  Implementations can
+            satisfy this request in one of several ways:
+
+            - by including all columns for the element in the relation itself;
+            - by including all columns for the element via one or more
+              `sql.Postprocessor` instances;
+            - by including `DimensionRecord` instances directly in result rows
+              via one or more `sql.Preprocessor` instances.
+
+        result_columns : `AbstractSet` [ `str` ], optional
+            Additional fact columns that must be included in result rows.
+            These may be satisfied by a `sql.Postprocessor`, but may not be
+            satisfied by attaching `DimensionRecord` instances directly to
+            result rows.
 
         Returns
         -------
         joined_relation : `sql.Relation`
-            New relation.
+            Relation that meets the given requirements (may be the given
+            ``relation`` if requirements are already met).
+
+        Notes
+        -----
+        While implementations *may* use postprocessors to satisfy result-only
+        requests or return the given ``relation`` as-is when they have nothing
+        to add, they are not required to do so, and calling this method when
+        a ``relation`` has nothing to add may result in poor query construction
+        (e.g. unnecessary or duplicate tables in the FROM clause).
+        `QueryBackend.make_dimension_relation` should always be used by
+        higher-level code to ensure dimension relations are joined in the right
+        order with the right arguments.
         """
         raise NotImplementedError()
 
@@ -211,7 +304,7 @@ class DimensionRecordStorage(ABC):
         self,
         sql_from: sqlalchemy.sql.FromClause,
         column_types: sql.ColumnTypeInfo,
-        columns: Optional[AbstractSet[str]] = None,
+        columns: AbstractSet[str],
         constraints: Optional[sql.LocalConstraints] = None,
     ) -> sql.Relation:
         """Construct a `sql.Relation` object for a dimension element whose
@@ -227,10 +320,10 @@ class DimensionRecordStorage(ABC):
         column_types : `sql.ColumnTypeInfo`
             Information about column types that can vary with registry
             configuration.
-        columns : `Iterable` [ `str` ], optional
+        columns : `AbstractSet` [ `str` ]
             Fact columns that should be provided by the relation.  Does not
-            include dimension key fields, which are always provided.  If `None`
-            all columns should be provided.
+            include dimension key fields, which are always provided, but may
+            include "region" and/or "timespan".
         constraints : `sql.LocalConstraints`, optional
             Constraints to include in the result.
 
@@ -245,18 +338,12 @@ class DimensionRecordStorage(ABC):
             self.element.RecordClass.fields.dimensions.names,
         ):
             builder.columns[sql.DimensionKeyColumnTag(dimension_name)] = builder.sql_from.columns[field_name]
-        if columns is None:
-            columns = set(self.element.RecordClass.fields.facts.names)
-            if self.element.spatial:
-                columns.add("region")
-            if self.element.temporal:
-                columns.add("timespan")
         for field_name in columns:
             tag = sql.DimensionRecordColumnTag(self.element.name, field_name)
             builder.columns[tag] = tag.extract_logical_column(
                 builder.sql_from.columns, column_types, name=field_name
             )
-        return builder.finish(constraints=constraints)
+        return builder.finish(constraints=constraints, connections=self.join_connections)
 
 
 class GovernorDimensionRecordStorage(DimensionRecordStorage):
@@ -717,6 +804,35 @@ class DimensionRecordStorageManager(VersionedExtension):
         This is called by `Registry` when transactions are rolled back, to
         avoid in-memory caches from ever containing records that are not
         present in persistent storage.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_spatial_join_relation(
+        self, element1: str, element2: str, constraints: sql.LocalConstraints | None = None
+    ) -> tuple[sql.Relation, bool]:
+        """Add a spatial join to an existing relation.
+
+        Parameters
+        ----------
+        element1 : `str`
+            Name of one of the elements participating in the join.
+        element2 : `str`
+            Name of the other element participating in the join.
+        constraints: `sql.LocalConstraints`, optional
+            Constraints imposed by other aspects of the query (e.g. a WHERE
+            clause).
+
+        Returns
+        -------
+        relation : `sql.Relation`
+            New relation that represents a spatial join between the two given
+            elements.  Guaranteed to have key columns for all required
+            dimensions of both elements.
+        needs_refinement : `bool`
+            If `True`, the relation provides only conservative overlaps.  These
+            can be refined by creating a refinement postprocessor via
+            `sql.Postprocessor.from_spatial_join`.
         """
         raise NotImplementedError()
 

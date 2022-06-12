@@ -22,14 +22,14 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import Any, Iterable
+from typing import Any, Iterable, Tuple, cast
 
 import sqlalchemy.sql
 
 from ...core import DatasetType, DimensionElement, SimpleQuery, SkyPixDimension, sql
-from .._exceptions import DataIdValueError, MissingSpatialOverlapError
+from .._exceptions import DataIdValueError
 from .._query_backend import QueryBackend
-from ..interfaces import DatabaseDimensionRecordStorage, GovernorDimensionRecordStorage
+from ..interfaces import GovernorDimensionRecordStorage
 from ..wildcards import CollectionSearch, CollectionWildcard
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, Query
 from ._structs import QueryColumns, QuerySummary
@@ -179,7 +179,7 @@ class QueryBuilder:
             constraints=self.summary.where.constraints,
             rejections=rejections,
             allow_calibration_collections=(
-                not findFirst and not (self.summary.temporal or self.summary.mustHaveKeysJoined.temporal)
+                not findFirst and not (self.summary.temporal or self.summary.dimensions.temporal)
             ),
         )
         columns_requested = {"dataset_id", "run", "ingest_date"} if isResult else frozenset()
@@ -202,83 +202,7 @@ class QueryBuilder:
         self.relation = self.relation.join(relation)
         return not relation.doomed_by
 
-    def _joinMissingDimensionElements(self) -> None:
-        """Join all dimension element tables that were identified as necessary
-        by `QuerySummary` and have not yet been joined.
-
-        For internal use by `QueryBuilder` only; will be called (and should
-        only by called) by `finish`.
-        """
-        # Join all DimensionElement tables that we need for spatial/temporal
-        # joins/filters or a nontrivial WHERE expression.
-        # We iterate over these in *reverse* topological order to minimize the
-        # number of tables joined.  For example, the "visit" table provides
-        # the primary key value for the "instrument" table it depends on, so we
-        # don't need to join "instrument" as well unless we had a nontrivial
-        # expression on it (and hence included it already above).
-        for element in self.summary.universe.sorted(self.summary.mustHaveTableJoined, reverse=True):
-            self.joinDimensionElement(element)
-        # Join in any requested Dimension tables that don't already have their
-        # primary keys identified by the query.
-        for dimension in self.summary.universe.sorted(self.summary.mustHaveKeysJoined, reverse=True):
-            if dimension.name not in self.relation.columns.dimensions:
-                self.joinDimensionElement(dimension)
-
-    def _addSpatialJoins(self) -> list[sql.Postprocessor]:
-        if len(self.summary.spatial) > 2:
-            # This flat set isn't even the right data structure for capturing
-            # more than one spatial join; we'd need a set of pairs (and get
-            # those pairs from the user).
-            raise NotImplementedError("Multiple spatial joins are not supported.")
-        if len(self.summary.spatial) < 2:
-            # Nothing to do; this isn't a join, and spatial constraints are
-            # handled in _addWhereClause.
-            return []
-        (element1, element2) = self.summary.spatial
-        storage1 = self._backend.managers.dimensions[element1]
-        storage2 = self._backend.managers.dimensions[element2]
-        overlaps: sql.Relation | None = None
-        postprocessors: list[sql.Postprocessor] = []
-        match (storage1, storage2):
-            case [
-                DatabaseDimensionRecordStorage() as db_storage1,
-                DatabaseDimensionRecordStorage() as db_storage2,
-            ]:
-                # Manager classes guarantee that we only need to try this in
-                # one direction; both storage objects know about the other or
-                # neither do.
-                overlaps = db_storage1.get_spatial_join_relation(
-                    db_storage2.element, self.relation.constraints
-                )
-                if overlaps is None:
-                    common_skypix_overlap1 = db_storage1.get_spatial_join_relation(
-                        self._backend.managers.dimensions.universe.commonSkyPix, self.relation.constraints
-                    )
-                    common_skypix_overlap2 = db_storage2.get_spatial_join_relation(
-                        self._backend.managers.dimensions.universe.commonSkyPix, self.relation.constraints
-                    )
-                    assert (
-                        common_skypix_overlap1 is not None and common_skypix_overlap2 is not None
-                    ), "Overlaps with the common skypix dimension should always be available,"
-                    overlaps = common_skypix_overlap1.join(common_skypix_overlap2)
-                    postprocessors.append(
-                        sql.Postprocessor.from_spatial_join(
-                            sql.DimensionRecordColumnTag(element1.name, "region"),
-                            sql.DimensionRecordColumnTag(element2.name, "region"),
-                        )
-                    )
-            case [DatabaseDimensionRecordStorage() as db_storage, other]:
-                overlaps = db_storage.get_spatial_join_relation(other.element, self.relation.constraints)
-            case [other, DatabaseDimensionRecordStorage() as db_storage]:
-                overlaps = db_storage.get_spatial_join_relation(other.element, self.relation.constraints)
-        if overlaps is None:
-            raise MissingSpatialOverlapError(
-                f"No materialized overlaps for spatial join {self.summary.spatial}."
-            )
-        self.relation = self.relation.join(overlaps)
-        return postprocessors
-
-    def _addWhereClause(self) -> list[sql.Postprocessor]:
+    def _addWhereClause(self) -> None:
         """Add a WHERE clause to the query under construction, connecting all
         joined dimensions to the expression and data ID dimensions from
         `QuerySummary`.
@@ -292,7 +216,7 @@ class QueryBuilder:
         if self.summary.where.expression_predicate is not None:
             predicates.append(self.summary.where.expression_predicate)
         if self.summary.where.data_id:
-            known_dimensions = self.summary.where.data_id.graph.intersection(self.summary.mustHaveKeysJoined)
+            known_dimensions = self.summary.where.data_id.graph.intersection(self.summary.dimensions)
             known_data_id = self.summary.where.data_id.subset(known_dimensions)
             predicates.append(sql.Predicate.from_data_coordinate(known_data_id))
         if self.summary.where.spatial_constraint is not None:
@@ -321,8 +245,7 @@ class QueryBuilder:
                             sql.DimensionRecordColumnTag(element_name, "timespan"),
                         )
                     )
-        self.relation = self.relation.selected(*predicates)
-        return postprocessors
+        self.relation = self.relation.selected(*predicates).postprocessed(*postprocessors)
 
     def finish(self, joinMissing: bool = True) -> Query:
         """Finish query constructing, returning a new `Query` instance.
@@ -343,12 +266,21 @@ class QueryBuilder:
             A `Query` object that can be executed and used to interpret result
             rows.
         """
-        postprocessors: list[sql.Postprocessor] = []
         if joinMissing:
-            postprocessors.extend(self._addSpatialJoins())
-            self._joinMissingDimensionElements()
-        postprocessors.extend(self._addWhereClause())
-        self.relation = self.relation.postprocessed(*postprocessors)
+            self.relation = self._backend.make_dimension_relation(
+                self.summary.dimensions,
+                sql_columns=self.summary.columns_required.dimension_records,
+                result_columns={},
+                result_records=frozenset(),
+                spatial_joins=(
+                    [cast(Tuple[str, str], tuple(self.summary.spatial.names))]
+                    if len(self.summary.spatial) == 2
+                    else []
+                ),
+                join_relation=self.relation,
+                constraints=self.summary.where.constraints,
+            )
+        self._addWhereClause()
         if not self.relation.columns:
             return EmptyQuery(
                 self.summary.requested.universe,

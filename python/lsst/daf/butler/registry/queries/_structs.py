@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
-from dataclasses import dataclass
+import dataclasses
 from typing import Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Union, cast
 
 from lsst.utils.classes import cached_getter, immutable
@@ -52,7 +52,7 @@ from .expressions import ExpressionPredicate
 from .expressions.categorize import categorizeElementOrderByName, categorizeOrderByName
 
 
-@dataclass(frozen=True, eq=False)
+@dataclasses.dataclass(frozen=True, eq=False)
 class QueryWhereClause:
     """Structure holding various contributions to a query's WHERE clause.
 
@@ -178,7 +178,7 @@ class QueryWhereClause:
             return base
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class OrderByClauseColumn:
     """Information about single column in ORDER BY clause."""
 
@@ -192,7 +192,7 @@ class OrderByClauseColumn:
     """True for ascending order, False for descending (`bool`)."""
 
 
-@dataclass(frozen=True, eq=False)
+@dataclasses.dataclass(frozen=True, eq=False)
 class OrderByClause:
     """Class for information about columns in ORDER BY clause"""
 
@@ -411,6 +411,7 @@ class QuerySummary:
         )
         self.order_by = None if order_by is None else OrderByClause.parse_general(order_by, requested)
         self.limit = limit
+        self.columns_required, self.dimensions = self._compute_columns_required()
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
@@ -425,6 +426,27 @@ class QuerySummary:
     datasets: NamedValueAbstractSet[DatasetType]
     """Dataset types whose searches may be joined into the query
     (`NamedValueAbstractSet` [ `DatasetType` ]).
+    """
+
+    order_by: OrderByClause | None
+    """Object that manages how the query results should be sorted
+    (`OrderByClause` or `None`).
+    """
+
+    limit: tuple[int, int | None] | None
+    """Integer offset and maximum number of rows returned (prior to
+    postprocessing filters), respectively.
+    """
+
+    dimensions: DimensionGraph
+    """All dimensions in the query in any form (`DimensionGraph`).
+    """
+
+    columns_required: sql.ColumnTagSet
+    """All columns that must be included directly in the query.
+
+    This does not include columns that only need to be included in the result
+    rows, and hence could be provided by postprocessors.
     """
 
     @property
@@ -443,8 +465,8 @@ class QuerySummary:
         #   requested dimensions (i.e. in `self.requested.spatial`);
         # - it isn't also given at query construction time.
         result: NamedValueSet[DimensionElement] = NamedValueSet()
-        for family in self.mustHaveKeysJoined.spatial:
-            element = family.choose(self.mustHaveKeysJoined.elements)
+        for family in self.dimensions.spatial:
+            element = family.choose(self.dimensions.elements)
             assert isinstance(element, DimensionElement)
             if element not in self.where.data_id.graph.elements:
                 result.add(element)
@@ -471,7 +493,7 @@ class QuerySummary:
         """Dimension elements whose timespans should be included in the
         query (`NamedValueSet` of `DimensionElement`).
         """
-        if len(self.mustHaveKeysJoined.temporal) > 1:
+        if len(self.dimensions.temporal) > 1:
             # We don't actually have multiple temporal families in our current
             # dimension configuration, so this limitation should be harmless.
             raise NotImplementedError("Queries that should involve temporal joins are not yet supported.")
@@ -486,46 +508,31 @@ class QuerySummary:
 
         return result.freeze()
 
-    @property  # type: ignore
-    @cached_getter
-    def mustHaveKeysJoined(self) -> DimensionGraph:
-        """Dimensions whose primary keys must be used in the JOIN ON clauses
-        of the query, even if their tables do not appear (`DimensionGraph`).
+    def _compute_columns_required(self) -> tuple[sql.ColumnTagSet, DimensionGraph]:
+        """Columns that must be provided by the relations joined into this
+        query in order to obtain the right set of result rows in the right
+        order.
 
-        A `Dimension` primary key can appear in a join clause without its table
-        via a foreign key column in table of a dependent dimension element or
-        dataset.
+        This does not include columns that only need to be included in the
+        result rows, and hence could be provided by postprocessors.
         """
-        names = set(self.requested.names)
-        if self.where.expression_predicate is not None:
-            names.update(self.where.expression_predicate.columns_required.dimensions)
+        tags_flat: set[sql.ColumnTag] = set(sql.DimensionKeyColumnTag.generate(self.requested.names))
+        tags_flat.update(sql.DimensionKeyColumnTag.generate(self.where.data_id.graph.names))
         for dataset_type in self.datasets:
-            names.update(dataset_type.dimensions.names)
-        return DimensionGraph(self.universe, names=names)
-
-    @property  # type: ignore
-    @cached_getter
-    def mustHaveTableJoined(self) -> NamedValueAbstractSet[DimensionElement]:
-        """Dimension elements whose associated tables must appear in the
-        query's FROM clause (`NamedValueSet` of `DimensionElement`).
-        """
-        result = NamedValueSet(self.spatial | self.temporal)
+            tags_flat.update(sql.DimensionKeyColumnTag.generate(dataset_type.dimensions.names))
         if self.where.expression_predicate is not None:
-            for element_name in self.where.expression_predicate.columns_required.dimension_records.keys():
-                result.add(self.requested.universe[element_name])
+            tags_flat.update(self.where.expression_predicate.columns_required)
         if self.order_by is not None:
-            for element_name in self.order_by.columns_required.dimension_records.keys():
-                result.add(self.requested.universe[element_name])
-        for dimension in self.mustHaveKeysJoined:
-            if dimension.implied:
-                result.add(dimension)
-        for element in self.mustHaveKeysJoined.union(self.where.data_id.graph).elements:
-            if element.alwaysJoin:
-                result.add(element)
-        return result.freeze()
+            tags_flat.update(self.order_by.columns_required)
+        # Make an initial categorized ColumnTagSet from the flat set of tags.
+        tags = sql.ColumnTagSet._from_iterable(tags_flat)
+        # Make sure the dimension keys are expanded self-consistently in what
+        # we return by passing them through DimensionGraph.
+        dimensions = DimensionGraph(self.universe, names=tags.dimensions)
+        return (dataclasses.replace(tags, dimensions=dimensions.names), dimensions)
 
 
-@dataclass
+@dataclasses.dataclass
 class DatasetQueryColumns:
     """A struct containing the columns used to reconstruct `DatasetRef`
     instances from query results.
@@ -554,7 +561,7 @@ class DatasetQueryColumns:
         yield self.runKey
 
 
-@dataclass
+@dataclasses.dataclass
 class QueryColumns:
     """A struct organizing the columns in an under-construction or currently-
     executing query.

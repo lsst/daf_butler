@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["BasicSkyPixDimensionRecordStorage"]
 
-from typing import AbstractSet, Any, Iterable, Optional
+from typing import AbstractSet, Iterable
 
 import sqlalchemy
 
@@ -54,20 +54,32 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
+    def join_results_postprocessed(self) -> bool:
+        # Docstring inherited.
+        return True
+
     def join(
         self,
         relation: sql.Relation,
-        columns: Optional[AbstractSet[str]] = None,
+        sql_columns: AbstractSet[str],
+        *,
+        constraints: sql.LocalConstraints | None = None,
+        result_records: bool = False,
+        result_columns: AbstractSet[str] = frozenset(),
     ) -> sql.Relation:
-        if self._dimension.name in relation.columns.dimensions:
-            # If joining some other element or dataset type already brought in
-            # the key for this dimension, we just add the region via a
-            # postprocessor if requested.
-            if columns is None or "region" in columns:
-                return relation.postprocessed(_SkyPixRegionPostprocessor(self.element))
-            else:
-                return relation
-        raise NotImplementedError(f"Cannot includeSkyPix dimension {self.element.name} directly in query.")
+        if sql_columns or self._dimension.name not in relation.columns.dimensions:
+            raise NotImplementedError(
+                "SkyPix indices and/or regions cannot be included in queries "
+                "except via postprocessing.  Use `lsst.sphgeom.Pixelization` "
+                "directly to obtain SkyPix indices that overlap a region."
+            )
+        # If joining some other element or dataset type already brought in
+        # the key for this dimension, we just add the region via a
+        # postprocessor if requested.
+        if result_records or result_columns:
+            return relation.postprocessed(_SkyPixRegionPostprocessor(self.element))
+        else:
+            return relation
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
@@ -109,6 +121,6 @@ class _SkyPixRegionPostprocessor(sql.Postprocessor):
     def row_multiplier(self) -> float:
         return 1.0
 
-    def apply(self, row: dict[sql.ColumnTag, Any]) -> Optional[dict[sql.ColumnTag, Any]]:
+    def apply(self, row: sql.ResultRow) -> sql.ResultRow:
         row[self._region_tag] = self._pixelization.pixel(row[self._index_tag])
         return row

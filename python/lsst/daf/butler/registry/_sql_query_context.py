@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ("SqlQueryContext",)
 
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional
 
 from ..core import sql
 
@@ -73,7 +73,7 @@ class SqlQueryContext(sql.QueryContext):
         order_by: Iterable[sql.OrderByTerm] = (),
         offset: int = 0,
         limit: Optional[int] = None,
-    ) -> Iterator[Mapping[sql.ColumnTag, Any]]:
+    ) -> Iterator[sql.ResultRow]:
         # Docstring inherited.
         sql_executable = relation.to_sql_executable(
             force_unique=force_unique, order_by=order_by, offset=offset, limit=limit

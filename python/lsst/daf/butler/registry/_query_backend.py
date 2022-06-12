@@ -23,9 +23,9 @@ from __future__ import annotations
 __all__ = ("QueryBackend",)
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, Sequence, TypeVar
+from typing import TYPE_CHECKING, AbstractSet, Generic, Iterable, Mapping, Sequence, TypeVar
 
-from ..core import DatasetType, DimensionUniverse, sql
+from ..core import DatasetType, DimensionGraph, DimensionUniverse, sql
 from ._collectionType import CollectionType
 
 if TYPE_CHECKING:
@@ -306,3 +306,17 @@ class QueryBackend(Generic[_C]):
             return dataset_relation
         else:
             return join_relation.join(dataset_relation)
+
+    @abstractmethod
+    def make_dimension_relation(
+        self,
+        dimensions: DimensionGraph,
+        sql_columns: Mapping[str, AbstractSet[str]],
+        result_columns: Mapping[str, AbstractSet[str]],
+        result_records: AbstractSet[str] = frozenset(),
+        *,
+        spatial_joins: Iterable[tuple[str, str]] = (),
+        join_relation: sql.Relation | None = None,
+        constraints: sql.LocalConstraints | None = None,
+    ) -> sql.Relation:
+        raise NotImplementedError()

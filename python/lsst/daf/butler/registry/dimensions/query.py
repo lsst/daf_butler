@@ -124,7 +124,11 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def join(
         self,
         relation: sql.Relation,
-        columns: Optional[AbstractSet[str]] = None,
+        sql_columns: AbstractSet[str],
+        *,
+        constraints: sql.LocalConstraints | None = None,
+        result_records: bool = False,
+        result_columns: AbstractSet[str] = frozenset(),
     ) -> sql.Relation:
         # Docstring inherited from DimensionRecordStorage.
         target_table = self._db.getExistingTable(self._target.name, self._targetSpec)
@@ -140,6 +144,7 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         # The only columns for this dimension are ones for its required
         # dependencies and its own primary key (guaranteed by the checks in
         # the ctor).
+        assert not (sql_columns or result_columns), "No record columns expected for this element."
         for name in self.element.required.names:
             builder.columns[sql.DimensionKeyColumnTag(name)] = builder.sql_from.columns[name]
         return relation.join(builder.finish().forced_unique())

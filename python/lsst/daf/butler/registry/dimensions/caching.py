@@ -94,9 +94,29 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def join(
         self,
         relation: sql.Relation,
-        columns: Optional[AbstractSet[str]] = None,
+        sql_columns: AbstractSet[str],
+        *,
+        constraints: sql.LocalConstraints | None = None,
+        result_records: bool = False,
+        result_columns: AbstractSet[str] = frozenset(),
     ) -> sql.Relation:
-        return self._nested.join(relation, columns)
+        # Docstring inherited.
+        # It would be nice to use the cache to satisfy requests for result
+        # columns and records via Postprocessors, as we do with governor
+        # dimension storage.  But this cache is lazy and per-record, so we
+        # can't guarantee everything we'll want is in the cache yet, and we
+        # don't want to do per-row lookups on cache misses.  My long-term plan
+        # is to switch the caching here to fetch all rows for a particular
+        # governor dimension value at once, and then we'll be able to use
+        # constraints.dimensions to make sure we fully populate the cache up
+        # front.
+        return self._nested.join(
+            relation,
+            sql_columns,
+            constraints=constraints,
+            result_records=result_records,
+            result_columns=result_columns,
+        )
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

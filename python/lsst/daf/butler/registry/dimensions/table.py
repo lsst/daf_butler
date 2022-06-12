@@ -42,7 +42,8 @@ from typing import (
 )
 
 import sqlalchemy
-from lsst.utils.sets.ellipsis import Ellipsis, EllipsisType
+from lsst.utils.sets.ellipsis import Ellipsis
+from lsst.utils.sets.unboundable import FrozenUnboundableSet, UnboundableSet
 
 from ...core import (
     DatabaseDimensionElement,
@@ -193,14 +194,24 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
     def join(
         self,
         relation: sql.Relation,
-        columns: Optional[AbstractSet[str]] = None,
+        sql_columns: AbstractSet[str],
+        *,
+        constraints: sql.LocalConstraints | None = None,
+        result_records: bool = False,
+        result_columns: AbstractSet[str] = frozenset(),
     ) -> sql.Relation:
         # Docstring inherited from DimensionRecordStorage.
+        full_columns = set(sql_columns)
+        if result_columns:
+            full_columns.update(result_columns)
+        if result_records:
+            full_columns.update(self.element.RecordClass.fields.names)
+            full_columns.difference_update(self.element.RecordClass.fields.dimensions.names)
         return relation.join(
             self._build_leaf_relation(
                 self._table,
                 self._column_types,
-                columns,
+                full_columns,
                 constraints=(
                     None if self._governor_storage is None else self._governor_storage.get_local_constraints()
                 ),
@@ -309,11 +320,11 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
                     skypix,
                     self._column_types,
                     (
-                        Ellipsis
+                        FrozenUnboundableSet[str].full
                         if constraints is None
                         else cast(
-                            Union[AbstractSet[str], EllipsisType],
-                            constraints.dimensions[self.element.governor.name].values,
+                            UnboundableSet[str],
+                            constraints.dimensions[self.element.governor.name],
                         )
                     ),
                 )
@@ -823,7 +834,7 @@ class _SkyPixOverlapStorage:
                         for index in indices[level]
                     )
 
-    def check(self, skypix: SkyPixDimension, governor_values: AbstractSet[str] | EllipsisType) -> bool:
+    def check(self, skypix: SkyPixDimension, governor_values: UnboundableSet[str]) -> bool:
         """Check whether materialized overlaps exist for this skypix dimension
         and governor value constraint.
 
@@ -832,9 +843,8 @@ class _SkyPixOverlapStorage:
         skypix : `SkyPixDimension`
             The skypix dimension (system and level) for which overlaps should
             be materialized.
-        governor_values : `AbstractSet` [ `str` ] or ``...```
-            Values that the governor dimension may take, or ``...`` if this is
-            unconstrained.
+        governor_values : `UnboundableSet` [ `str` ]
+            Values that the governor dimension may take.
         """
         if skypix != self.element.universe.commonSkyPix:
             # We guarantee elsewhere that we always materialize all overlaps
@@ -846,18 +856,18 @@ class _SkyPixOverlapStorage:
                 self._summaryTable.columns.skypix_level == skypix.level,
             ]
             gvCol = self._summaryTable.columns[self._governor.element.name]
-            if governor_values is not Ellipsis:
-                summaryWhere.append(gvCol.in_(list(governor_values)))
+            if governor_values.values is not Ellipsis:
+                summaryWhere.append(gvCol.in_(list(governor_values.values)))
             summaryQuery = (
                 sqlalchemy.sql.select(gvCol)
                 .select_from(self._summaryTable)
                 .where(sqlalchemy.sql.and_(*summaryWhere))
             )
             materializedGovernorValues = {row._mapping[gvCol] for row in self._db.query(summaryQuery)}
-            if governor_values is Ellipsis:
+            if governor_values.values is Ellipsis:
                 missingGovernorValues = self._governor.values - materializedGovernorValues
             else:
-                missingGovernorValues = governor_values - materializedGovernorValues
+                missingGovernorValues = governor_values.values - materializedGovernorValues
             if missingGovernorValues:
                 return False
         return True
@@ -866,7 +876,7 @@ class _SkyPixOverlapStorage:
         self,
         skypix: SkyPixDimension,
         column_types: sql.ColumnTypeInfo,
-        governor_values: AbstractSet[str] | EllipsisType,
+        governor_values: UnboundableSet[str],
     ) -> Optional[sql.Relation]:
         """Construct a subquery expression containing overlaps between the
         given skypix dimension and governor values.
@@ -879,9 +889,8 @@ class _SkyPixOverlapStorage:
         column_types : `sql.ColumnTypeInfo`
             Information about column types that can vary with registry
             configuration.
-        governor_values : `AbstractSet` [ `str` ] or ``...```
-            Values that the governor dimension may take, or ``...`` if this is
-            unconstrained.
+        governor_values : `UnboundableSet` [ `str` ]
+            Values that the governor dimension may take.
 
         Returns
         -------
@@ -895,11 +904,12 @@ class _SkyPixOverlapStorage:
         builder.add(*self.element.graph.required.names)
         builder.where.append(builder.sql_from.columns.skypix_system == skypix.system.name)
         builder.where.append(builder.sql_from.columns.skypix_level == skypix.level)
-        if governor_values is not Ellipsis:
+        if governor_values.values is not Ellipsis:
             builder.where.append(
-                self._overlapTable.columns[self._governor.element.name].in_(list(governor_values))
+                self._overlapTable.columns[self._governor.element.name].in_(list(governor_values.values))
             )
-        return builder.finish()
+        connections = {frozenset(self.element.graph.required.names | {skypix.name})}
+        return builder.finish(connections=connections)
 
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         """Return tables used for schema digest.

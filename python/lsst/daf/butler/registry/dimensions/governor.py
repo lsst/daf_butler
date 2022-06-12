@@ -118,17 +118,54 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         self._cache.clear()
         self.refresh()
 
+    def join_results_postprocessed(self) -> bool:
+        # Docstring inherited.
+        return True
+
     def join(
         self,
         relation: sql.Relation,
-        columns: Optional[AbstractSet[str]] = None,
+        sql_columns: AbstractSet[str],
+        *,
+        constraints: sql.LocalConstraints | None = None,
+        result_records: bool = False,
+        result_columns: AbstractSet[str] = frozenset(),
     ) -> sql.Relation:
         # Docstring inherited from DimensionRecordStorage.
-        return relation.join(
-            self._build_leaf_relation(
-                self.table, self._column_types, columns, constraints=self.get_local_constraints()
+        if result_records or result_columns:
+            # Caller wants at least some columns in result records, which we
+            # could satisfy via a postprocessor based on the cache of all
+            # records.
+            postprocessors: list[sql.Postprocessor] = [
+                _GovernorDimensionRecordPostprocessor(self._dimension, self._cache)
+            ]
+            if result_columns:
+                postprocessors.append(
+                    sql.Postprocessor.make_dimension_column_extractor(
+                        self._dimension.RecordClass, result_columns
+                    )
+                )
+            if not sql_columns and self._dimension.dimensions.names <= relation.columns.dimensions:
+                # All keys are already present, so we don't need to join in
+                # this dimension's table at all.
+                return relation.postprocessed(*postprocessors)
+            else:
+                # We need to join in this table, but we'll still use
+                # postprocessors to provide result records and/or columns, to
+                # keep the result row as narrow as possible.
+                return relation.join(
+                    self._build_leaf_relation(
+                        self.table, self._column_types, sql_columns, constraints=self.get_local_constraints()
+                    ).postprocessed(*postprocessors)
+                )
+        else:
+            # All requested columns are for use in the query (e.g. WHERE
+            # clause), so no postprocessors in play.
+            return relation.join(
+                self._build_leaf_relation(
+                    self.table, self._column_types, sql_columns, constraints=self.get_local_constraints()
+                )
             )
-        )
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
@@ -185,3 +222,29 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return [self._table]
+
+
+class _GovernorDimensionRecordPostprocessor(sql.Postprocessor):
+    def __init__(self, dimension: GovernorDimension, cache: dict[str, DimensionRecord]):
+        self._cache = cache
+        self._lookup_tag = sql.DimensionKeyColumnTag(dimension.name)
+        self._cls = dimension.RecordClass
+
+    __slots__ = ("_cache",)
+
+    @property
+    def columns_provided(self) -> AbstractSet[sql.ResultTag]:
+        return {self._cls}
+
+    @property
+    def columns_required(self) -> AbstractSet[sql.ResultTag]:
+        return {self._lookup_tag}
+
+    @property
+    def row_multiplier(self) -> float:
+        return 1.0
+
+    def apply(self, row: sql.ResultRow) -> sql.ResultRow:
+        record = self._cache[row[self._lookup_tag]]
+        row[self._cls] = record
+        return row
