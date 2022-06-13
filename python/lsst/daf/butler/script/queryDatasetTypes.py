@@ -63,7 +63,7 @@ def queryDatasetTypes(repo, verbose, glob, components):
     if verbose:
         table = Table(
             array(
-                [(d.name, str(list(d.dimensions.names)) or "None", d.storageClass.name) for d in datasetTypes]
+                [(d.name, str(list(d.dimensions.names)) or "None", d.storageClass_name) for d in datasetTypes]
             ),
             names=("name", "dimensions", "storage class"),
         )

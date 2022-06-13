@@ -216,7 +216,7 @@ class DatasetRef:
             return f"DatasetRef({self.datasetType!r}, {self.dataId!s})"
 
     def __str__(self) -> str:
-        s = f"{self.datasetType.name}@{self.dataId!s}, sc={self.datasetType.storageClass.name}]"
+        s = f"{self.datasetType.name}@{self.dataId!s}, sc={self.datasetType.storageClass_name}]"
         if self.id is not None:
             s += f" (id={self.id})"
         return s

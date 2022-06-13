@@ -359,6 +359,14 @@ class DatasetType:
         return self._storageClass
 
     @property
+    def storageClass_name(self) -> str:
+        """Return the storage class name.
+
+        This will never force the storage class to be imported.
+        """
+        return self._storageClassName
+
+    @property
     def parentStorageClass(self) -> Optional[StorageClass]:
         """Return the storage class of the composite containing this component.
 

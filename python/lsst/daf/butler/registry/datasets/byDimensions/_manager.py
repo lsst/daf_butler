@@ -300,6 +300,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
                 keys={"name": datasetType.name},
                 compared={
                     "dimensions_key": dimensionsKey,
+                    # Force the storage class to be loaded to ensure it
+                    # exists and there is no typo in the name.
                     "storage_class": datasetType.storageClass.name,
                 },
                 extra={
