@@ -48,6 +48,7 @@ from lsst.daf.butler import (
     Config,
     DatasetId,
     DatasetRef,
+    DatasetRefURIs,
     DatasetType,
     DatasetTypeNotSupportedError,
     Datastore,
@@ -1635,7 +1636,7 @@ class FileDatastore(GenericBaseDatastore):
 
     def getURIs(
         self, ref: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
+    ) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 
         Parameters
@@ -1648,17 +1649,14 @@ class FileDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        primary : `lsst.resources.ResourcePath`
-            The URI to the primary artifact associated with this dataset.
-            If the dataset was disassembled within the datastore this
-            may be `None`.
-        components : `dict`
-            URIs to any components associated with the dataset artifact.
-            Can be empty if there are no components.
+        uris : `DatasetRefURIs`
+            The URI to the primary artifact associated with this dataset (if
+            the dataset was disassembled within the datastore this may be
+            `None`), and the URIs to any components associated with the dataset
+            artifact. (can be empty if there are no components).
         """
 
-        primary: Optional[ResourcePath] = None
-        components: Dict[str, ResourcePath] = {}
+        uris = DatasetRefURIs()
 
         # if this has never been written then we have to guess
         if not self.exists(ref):
@@ -1674,16 +1672,16 @@ class FileDatastore(GenericBaseDatastore):
                     compLocation, _ = self._determine_put_formatter_location(compRef)
 
                     # Add a URI fragment to indicate this is a guess
-                    components[component] = ResourcePath(compLocation.uri.geturl() + "#predicted")
+                    uris.componentURIs[component] = ResourcePath(compLocation.uri.geturl() + "#predicted")
 
             else:
 
                 location, _ = self._determine_put_formatter_location(ref)
 
                 # Add a URI fragment to indicate this is a guess
-                primary = ResourcePath(location.uri.geturl() + "#predicted")
+                uris.primaryURI = ResourcePath(location.uri.geturl() + "#predicted")
 
-            return primary, components
+            return uris
 
         # If this is a ref that we have written we can get the path.
         # Get file metadata and internal metadata
@@ -1701,7 +1699,7 @@ class FileDatastore(GenericBaseDatastore):
             uri = fileLocations[0][0].uri
             if guessing and not uri.exists():
                 raise FileNotFoundError(f"Expected URI ({uri}) does not exist")
-            primary = uri
+            uris.primaryURI = uri
 
         else:
             for location, storedFileInfo in fileLocations:
@@ -1715,9 +1713,9 @@ class FileDatastore(GenericBaseDatastore):
                     if self.trustGetRequest:
                         continue
                     raise FileNotFoundError(f"Expected URI ({uri}) does not exist")
-                components[storedFileInfo.component] = uri
+                uris.componentURIs[storedFileInfo.component] = uri
 
-        return primary, components
+        return uris
 
     def getURI(self, ref: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.

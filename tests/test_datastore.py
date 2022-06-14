@@ -30,6 +30,7 @@ import lsst.utils.tests
 import yaml
 from lsst.daf.butler import (
     Config,
+    DatasetRefURIs,
     DatasetTypeNotSupportedError,
     DatastoreCacheManager,
     DatastoreCacheManagerConfig,
@@ -1480,6 +1481,46 @@ cached:
             self.assertIsNone(found)
         with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
             self.assertIsInstance(found, ResourcePath)
+
+
+class DatasetRefURIsTestCase(unittest.TestCase):
+    """Tests for DatasetRefURIs."""
+
+    def testSequenceAccess(self):
+        """Verify that DatasetRefURIs can be treated like a two-item tuple."""
+        uris = DatasetRefURIs()
+
+        self.assertEqual(len(uris), 2)
+        self.assertEqual(uris[0], None)
+        self.assertEqual(uris[1], {})
+
+        primaryURI = ResourcePath("1/2/3")
+        componentURI = ResourcePath("a/b/c")
+
+        # affirm that DatasetRefURIs does not support MutableSequence functions
+        with self.assertRaises(TypeError):
+            uris[0] = primaryURI
+        with self.assertRaises(TypeError):
+            uris[1] = {"foo": componentURI}
+
+        # but DatasetRefURIs can be set by property name:
+        uris.primaryURI = primaryURI
+        uris.componentURIs = {"foo": componentURI}
+        self.assertEqual(uris.primaryURI, primaryURI)
+        self.assertEqual(uris[0], primaryURI)
+
+        primary, components = uris
+        self.assertEqual(primary, primaryURI)
+        self.assertEqual(components, {"foo": componentURI})
+
+    def testRepr(self):
+        """Verify __repr__ output."""
+        uris = DatasetRefURIs(ResourcePath("1/2/3"), {"comp": ResourcePath("a/b/c")})
+        self.assertEqual(
+            repr(uris),
+            f'DatasetRefURIs(ResourcePath("{os.getcwd()}/1/2/3"), '
+            "{'comp': ResourcePath(\"" + os.getcwd() + '/a/b/c")})',
+        )
 
 
 if __name__ == "__main__":

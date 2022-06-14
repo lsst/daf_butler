@@ -31,7 +31,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple, Union
 from urllib.parse import urlencode
 
-from lsst.daf.butler import DatasetId, DatasetRef, DatastoreRecordData, StorageClass, StoredDatastoreItemInfo
+from lsst.daf.butler import (
+    DatasetId,
+    DatasetRef,
+    DatasetRefURIs,
+    DatastoreRecordData,
+    StorageClass,
+    StoredDatastoreItemInfo,
+)
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from lsst.resources import ResourcePath
 
@@ -402,7 +409,7 @@ class InMemoryDatastore(GenericBaseDatastore):
 
     def getURIs(
         self, ref: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
+    ) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 
         Parameters
@@ -415,13 +422,11 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        primary : `lsst.resources.ResourcePath`
-            The URI to the primary artifact associated with this dataset.
-            If the dataset was disassembled within the datastore this
-            may be `None`.
-        components : `dict`
-            URIs to any components associated with the dataset artifact.
-            Can be empty if there are no components.
+        uris : `DatasetRefURIs`
+            The URI to the primary artifact associated with this dataset (if
+            the dataset was disassembled within the datastore this may be
+            `None`), and the URIs to any components associated with the dataset
+            artifact. (can be empty if there are no components).
 
         Notes
         -----
@@ -443,7 +448,7 @@ class InMemoryDatastore(GenericBaseDatastore):
             name = f"{id(self.datasets[realID])}?{query}"
             fragment = ""
 
-        return ResourcePath(f"mem://{name}?{query}{fragment}"), {}
+        return DatasetRefURIs(ResourcePath(f"mem://{name}?{query}{fragment}"), {})
 
     def getURI(self, ref: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.

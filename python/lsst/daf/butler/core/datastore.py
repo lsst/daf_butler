@@ -23,13 +23,13 @@
 
 from __future__ import annotations
 
-__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
+__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError", "DatasetRefURIs")
 
 import contextlib
 import dataclasses
 import logging
 from abc import ABCMeta, abstractmethod
-from collections import defaultdict
+from collections import abc, defaultdict
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -192,6 +192,56 @@ class DatastoreTransaction:
             # We may still want to events from this transaction as part of
             # the parent.
             self.parent._log.extend(self._log)
+
+
+@dataclasses.dataclass
+class DatasetRefURIs(abc.Sequence):
+    """Represents the primary and component ResourcePath(s) associated with a
+    DatasetRef.
+
+    This is used in places where its members used to be represented as a tuple
+    `(primaryURI, componentURIs)`. To maintain backward compatibility this
+    inherits from Sequence and so instances can be treated as a two-item
+    tuple.
+    """
+
+    def __init__(
+        self,
+        primaryURI: Optional[ResourcePath] = None,
+        componentURIs: Optional[Dict[str, ResourcePath]] = None,
+    ):
+
+        self.primaryURI = primaryURI
+        """The URI to the primary artifact associated with this dataset. If the
+        dataset was disassembled within the datastore this may be `None`.
+        """
+
+        self.componentURIs = componentURIs or {}
+        """The URIs to any components associated with the dataset artifact
+        indexed by component name. This can be empty if there are no
+        components.
+        """
+
+    def __getitem__(self, index: Any) -> Any:
+        """Get primaryURI and componentURIs by index.
+
+        Provides support for tuple-like access.
+        """
+        if index == 0:
+            return self.primaryURI
+        elif index == 1:
+            return self.componentURIs
+        raise IndexError("list index out of range")
+
+    def __len__(self) -> int:
+        """Get the number of data members.
+
+        Provides support for tuple-like access.
+        """
+        return 2
+
+    def __repr__(self) -> str:
+        return f"DatasetRefURIs({repr(self.primaryURI)}, {repr(self.componentURIs)})"
 
 
 class Datastore(metaclass=ABCMeta):
@@ -710,7 +760,7 @@ class Datastore(metaclass=ABCMeta):
     @abstractmethod
     def getURIs(
         self, datasetRef: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
+    ) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 
         Parameters
@@ -723,13 +773,11 @@ class Datastore(metaclass=ABCMeta):
 
         Returns
         -------
-        primary : `lsst.resources.ResourcePath`
-            The URI to the primary artifact associated with this dataset.
-            If the dataset was disassembled within the datastore this
-            may be `None`.
-        components : `dict`
-            URIs to any components associated with the dataset artifact.
-            Can be empty if there are no components.
+        uris : `DatasetRefURIs`
+            The URI to the primary artifact associated with this dataset (if
+            the dataset was disassembled within the datastore this may be
+            `None`), and the URIs to any components associated with the dataset
+            artifact. (can be empty if there are no components).
         """
         raise NotImplementedError()
 

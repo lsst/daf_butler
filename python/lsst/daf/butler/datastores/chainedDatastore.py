@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, 
 from lsst.daf.butler import (
     Constraints,
     DatasetRef,
+    DatasetRefURIs,
     DatasetTypeNotSupportedError,
     Datastore,
     DatastoreConfig,
@@ -503,7 +504,7 @@ class ChainedDatastore(Datastore):
 
     def getURIs(
         self, ref: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
+    ) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 
         Parameters
@@ -516,13 +517,11 @@ class ChainedDatastore(Datastore):
 
         Returns
         -------
-        primary : `lsst.resources.ResourcePath`
-            The URI to the primary artifact associated with this dataset.
-            If the dataset was disassembled within the datastore this
-            may be `None`.
-        components : `dict`
-            URIs to any components associated with the dataset artifact.
-            Can be empty if there are no components.
+        uris : `DatasetRefURIs`
+            The URI to the primary artifact associated with this dataset (if
+            the dataset was disassembled within the datastore this may be
+            `None`), and the URIs to any components associated with the dataset
+            artifact. (can be empty if there are no components).
 
         Notes
         -----
@@ -532,11 +531,10 @@ class ChainedDatastore(Datastore):
         is allowed, the predicted URI for the first datastore in the list will
         be returned.
         """
-        DatastoreURIs = Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]
         log.debug("Requesting URIs for %s", ref)
-        predictedUri: Optional[DatastoreURIs] = None
-        predictedEphemeralUri: Optional[DatastoreURIs] = None
-        firstEphemeralUri: Optional[DatastoreURIs] = None
+        predictedUri: Optional[DatasetRefURIs] = None
+        predictedEphemeralUri: Optional[DatasetRefURIs] = None
+        firstEphemeralUri: Optional[DatasetRefURIs] = None
         for datastore in self.datastores:
             if datastore.exists(ref):
                 if not datastore.isEphemeral:
