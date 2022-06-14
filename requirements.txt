@@ -5,9 +5,9 @@ sqlalchemy >= 1.3
 pydantic
 httpx
 deprecated >=1.2
-lsst-sphgeom
-lsst-utils
-lsst-resources
+git+https://github.com/lsst/sphgeom@main#egg=lsst-sphgeom
+git+https://github.com/lsst/utils@main#egg=lsst-utils
+git+https://github.com/lsst/resources@main#egg=lsst-resources
 # optional
 backoff >= 1.10
 boto3 >= 1.13
