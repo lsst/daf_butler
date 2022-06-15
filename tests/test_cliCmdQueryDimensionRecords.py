@@ -22,7 +22,9 @@
 """Unit tests for daf_butler CLI query-collections command.
 """
 
+import astropy
 from astropy.table import Table as AstropyTable
+from astropy.utils.introspection import minversion
 from numpy import array
 import os
 import unittest
@@ -42,6 +44,10 @@ from lsst.daf.butler.tests.utils import (
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
+# Astropy changed the handling of numpy columns in v5.1 so anything
+# greater than 5.0 (two digit version) does not need the annotated column.
+timespan_columns = "" if minversion(astropy, "5.1") else " [2]"
+
 
 class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
 
@@ -52,7 +58,7 @@ class QueryDimensionRecordsTest(unittest.TestCase, ButlerTestHelper):
 
     expectedColumnNames = ("instrument", "id", "physical_filter", "visit_system", "name", "day_obs",
                            "exposure_time", "target_name", "observation_reason", "science_program",
-                           "zenith_angle", "region", "timespan [2]")
+                           "zenith_angle", "region", f"timespan{timespan_columns}")
 
     def setUp(self):
         self.root = makeTestTempDir(TESTDIR)

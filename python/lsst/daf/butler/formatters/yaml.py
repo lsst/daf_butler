@@ -170,7 +170,7 @@ class YamlFormatter(FileFormatter):
             serialized = yaml.dump(inMemoryDataset)
         else:
             serialized = yaml.safe_dump(inMemoryDataset)
-        return serialized.encode()
+        return serialized.encode()  # type: ignore
 
     def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
                     pytype: Optional[Type[Any]] = None) -> Any:
