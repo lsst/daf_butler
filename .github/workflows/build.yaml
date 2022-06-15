@@ -81,7 +81,7 @@ jobs:
       - name: Build and install
         shell: bash -l {0}
         run: |
-          pip install -v -e .
+          pip install -v --no-deps -e .
 
       - name: Run tests
         shell: bash -l {0}
@@ -120,8 +120,7 @@ jobs:
 
       - name: Build and create distribution
         run: |
-          pip install -v -e .
-          python -m build --sdist --wheel
+          python -m build --skip-dependency-check --sdist --wheel
 
       - name: Upload
         uses: pypa/gh-action-pypi-publish@release/v1
