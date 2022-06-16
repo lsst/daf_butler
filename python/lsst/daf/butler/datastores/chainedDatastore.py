@@ -863,7 +863,9 @@ class ChainedDatastore(Datastore):
         return keys
 
     def needs_expanded_data_ids(
-        self, transfer: Optional[str], entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
+        self,
+        transfer: Optional[str],
+        entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
     ) -> bool:
         # Docstring inherited.
         # We can't safely use `self.datastoreConstraints` with `entity` to
