@@ -757,10 +757,60 @@ class Datastore(metaclass=ABCMeta):
 
         raise NotImplementedError(f"Datastore {type(self)} must implement a transfer_from method.")
 
+    def getManyURIs(
+        self,
+        refs: Iterable[DatasetRef],
+        predict: bool = False,
+        allow_missing: bool = False,
+    ) -> Dict[DatasetRef, DatasetRefURIs]:
+        """Return URIs associated with many datasets.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetIdRef`
+            References to the required datasets.
+        predict : `bool`, optional
+            If the datastore does not know about a dataset, should it
+            return a predicted URI or not?
+        allow_missing : `bool`
+            If `False`, and `predict` is `False`, will raise if a `DatasetRef`
+            does not exist.
+
+        Returns
+        -------
+        URIs : `dict` of [`DatasetRef`, `DatasetRefUris`]
+            A dict of primary and component URIs, indexed by the passed-in
+            refs.
+
+        Raises
+        ------
+        FileNotFoundError
+            A URI has been requested for a dataset that does not exist and
+            guessing is not allowed.
+
+        Notes
+        -----
+        In file-based datastores, getManuURIs does not check that the file is
+        really there, it's assuming it is if datastore is aware of the file
+        then it actually exists.
+        """
+        uris: Dict[DatasetRef, DatasetRefURIs] = {}
+        missing_refs = []
+        for ref in refs:
+            try:
+                uris[ref] = self.getURIs(ref, predict=predict)
+            except FileNotFoundError:
+                missing_refs.append(ref)
+        if missing_refs and not allow_missing:
+            raise FileNotFoundError(
+                "Missing {} refs from datastore out of {} and predict=False.".format(
+                    num_missing := len(missing_refs), num_missing + len(uris)
+                )
+            )
+        return uris
+
     @abstractmethod
-    def getURIs(
-        self, datasetRef: DatasetRef, predict: bool = False
-    ) -> DatasetRefURIs:
+    def getURIs(self, datasetRef: DatasetRef, predict: bool = False) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 
         Parameters

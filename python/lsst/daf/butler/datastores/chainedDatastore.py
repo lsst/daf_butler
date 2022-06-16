@@ -502,9 +502,37 @@ class ChainedDatastore(Datastore):
                 prepDataForChild, transfer=transfer, record_validation_info=record_validation_info
             )
 
-    def getURIs(
-        self, ref: DatasetRef, predict: bool = False
-    ) -> DatasetRefURIs:
+    def getManyURIs(
+        self,
+        refs: Iterable[DatasetRef],
+        predict: bool = False,
+        allow_missing: bool = False,
+    ) -> Dict[DatasetRef, DatasetRefURIs]:
+        # Docstring inherited
+
+        uris: Dict[DatasetRef, DatasetRefURIs] = {}
+        missing_refs = set(refs)
+
+        # If predict is True we don't want to predict a dataset in the first
+        # datastore if it actually exists in a later datastore, so in that
+        # case check all datastores with predict=False first, and then try
+        # again with predict=True.
+        for p in (False, True) if predict else (False,):
+            if not missing_refs:
+                break
+            for datastore in self.datastores:
+                got_uris = datastore.getManyURIs(missing_refs, p, allow_missing=True)
+                missing_refs -= got_uris.keys()
+                uris.update(got_uris)
+                if not missing_refs:
+                    break
+
+        if missing_refs and not allow_missing:
+            raise FileNotFoundError(f"Dataset(s) {missing_refs} not in this datastore.")
+
+        return uris
+
+    def getURIs(self, ref: DatasetRef, predict: bool = False) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 
         Parameters
@@ -835,9 +863,7 @@ class ChainedDatastore(Datastore):
         return keys
 
     def needs_expanded_data_ids(
-        self,
-        transfer: Optional[str],
-        entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
+        self, transfer: Optional[str], entity: Optional[Union[DatasetRef, DatasetType, StorageClass]] = None,
     ) -> bool:
         # Docstring inherited.
         # We can't safely use `self.datastoreConstraints` with `entity` to

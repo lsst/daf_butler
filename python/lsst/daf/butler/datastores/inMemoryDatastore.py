@@ -407,9 +407,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
 
-    def getURIs(
-        self, ref: DatasetRef, predict: bool = False
-    ) -> DatasetRefURIs:
+    def getURIs(self, ref: DatasetRef, predict: bool = False) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 
         Parameters
