@@ -209,7 +209,7 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
             exists = qbb.datasetExistsDirect(ref)
             self.assertFalse(exists)
 
-        # _avalable_inputs is not
+        # _available_inputs is not
         self.assertEqual(qbb._available_inputs, set(ref.id for ref in input_refs))
         self.assertEqual(qbb._actual_inputs, set())
         self.assertEqual(qbb._unavailable_inputs, set())  # this is not consistent with getDirect?
@@ -233,6 +233,49 @@ class QuantumBackedButlerTestCase(unittest.TestCase):
 
         qbb.markInputUnused(self.input_refs[0])
         self.assertEqual(qbb._actual_inputs, set(ref.id for ref in self.input_refs[1:]))
+
+    def test_pruneDatasets(self):
+        """Test for pruneDatasets methods"""
+
+        quantum = self.make_quantum()
+        qbb = QuantumBackedButler.initialize(config=self.config, quantum=quantum, dimensions=self.universe)
+
+        # Write all expected outputs.
+        for ref in self.output_refs:
+            qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
+
+        # Must be able to read them back
+        for ref in self.output_refs:
+            data = qbb.getDirect(ref)
+            self.assertEqual(data, {"data": ref.dataId["detector"] ** 2})
+
+        # Check for invalid arguments.
+        with self.assertRaisesRegex(TypeError, "Cannot pass purge=True without disassociate=True"):
+            qbb.pruneDatasets(self.output_refs, disassociate=False, unstore=True, purge=True)
+        with self.assertRaisesRegex(TypeError, "Cannot pass purge=True without unstore=True"):
+            qbb.pruneDatasets(self.output_refs, disassociate=True, unstore=False, purge=True)
+        with self.assertRaisesRegex(TypeError, "Cannot pass disassociate=True without purge=True"):
+            qbb.pruneDatasets(self.output_refs, disassociate=True, unstore=True, purge=False)
+
+        # Disassociate only.
+        ref = self.output_refs[0]
+        qbb.pruneDatasets([ref], disassociate=False, unstore=True, purge=False)
+        self.assertFalse(qbb.datasetExistsDirect(ref))
+        with self.assertRaises(FileNotFoundError):
+            data = qbb.getDirect(ref)
+
+        # can store it again
+        qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
+        self.assertTrue(qbb.datasetExistsDirect(ref))
+
+        # Purge completely.
+        ref = self.output_refs[1]
+        qbb.pruneDatasets([ref], disassociate=True, unstore=True, purge=True)
+        self.assertFalse(qbb.datasetExistsDirect(ref))
+        with self.assertRaises(FileNotFoundError):
+            data = qbb.getDirect(ref)
+        qbb.putDirect({"data": ref.dataId["detector"] ** 2}, ref)
+        self.assertTrue(qbb.datasetExistsDirect(ref))
 
     def test_extract_provenance_data(self):
         """Test for extract_provenance_data method"""

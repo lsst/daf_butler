@@ -1,0 +1,2 @@
+The `run` parameter has been removed from Butler method `lsst.daf.butler.Butler.pruneDatasets`.
+It was never used in Butler implementation, client code should simply remove it.

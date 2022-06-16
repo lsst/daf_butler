@@ -57,7 +57,7 @@ if TYPE_CHECKING:
 _LOG = logging.getLogger(__name__)
 
 
-class _DatasetRecordStorageManagerDatastoreContructionMimic:
+class _DatasetRecordStorageManagerDatastoreConstructionMimic:
     """A partial implementation of `DatasetRecordStorageManager` that exists
     only to allow a `DatastoreRegistryBridgeManager` (and hence a `Datastore`)
     to be constructed without a full `Registry`.
@@ -217,7 +217,7 @@ class QuantumBackedButler(LimitedButler):
                 context,
                 opaque=opaque_manager,
                 # MyPy can tell it's a fake, but we know it shouldn't care.
-                datasets=_DatasetRecordStorageManagerDatastoreContructionMimic,  # type: ignore
+                datasets=_DatasetRecordStorageManagerDatastoreConstructionMimic,  # type: ignore
                 universe=dimensions,
             )
         # TODO: We need to inform `Datastore` here that it needs to support
@@ -285,6 +285,44 @@ class QuantumBackedButler(LimitedButler):
         self.datastore.put(obj, ref)
         self._actual_output_refs.add(ref)
         return ref
+
+    def pruneDatasets(
+        self,
+        refs: Iterable[DatasetRef],
+        *,
+        disassociate: bool = True,
+        unstore: bool = False,
+        tags: Iterable[str] = (),
+        purge: bool = False,
+    ) -> None:
+        # docstring inherited from LimitedButler
+
+        if purge:
+            if not disassociate:
+                raise TypeError("Cannot pass purge=True without disassociate=True.")
+            if not unstore:
+                raise TypeError("Cannot pass purge=True without unstore=True.")
+        elif disassociate:
+            # No tagged collections for this butler.
+            raise TypeError("Cannot pass disassociate=True without purge=True.")
+
+        refs = list(refs)
+
+        # Pruning a component of a DatasetRef makes no sense.
+        for ref in refs:
+            if ref.datasetType.component():
+                raise ValueError(f"Can not prune a component of a dataset (ref={ref})")
+
+        if unstore:
+            self.datastore.trash(refs)
+        if purge:
+            for ref in refs:
+                # We only care about removing them from actual output refs,
+                self._actual_output_refs.discard(ref)
+
+        if unstore:
+            # Point of no return for removing artifacts
+            self.datastore.emptyTrash()
 
     def extract_provenance_data(self) -> QuantumProvenanceData:
         """Extract provenance information and datastore records from this
