@@ -1659,7 +1659,7 @@ class FileDatastore(GenericBaseDatastore):
             if not predict:
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
 
-            return self._predict_URIs(ref, allow_missing=False)
+            return self._predict_URIs(ref)
 
         # If this is a ref that we have written we can get the path.
         # Get file metadata and internal metadata
@@ -1713,7 +1713,6 @@ class FileDatastore(GenericBaseDatastore):
     def _predict_URIs(
         self,
         ref: DatasetRef,
-        allow_missing: bool,
     ) -> DatasetRefURIs:
         """Predict the URIs of a dataset ref.
 
@@ -1721,8 +1720,6 @@ class FileDatastore(GenericBaseDatastore):
         ----------
         ref : `DatasetRef`
             Reference to the required Dataset.
-        allow_missing: `bool`
-            If `False` and a ref is not able to be predicted then raise.
 
         Returns
         -------
@@ -1736,11 +1733,7 @@ class FileDatastore(GenericBaseDatastore):
 
             for component, _ in ref.datasetType.storageClass.components.items():
                 comp_ref = ref.makeComponentRef(component)
-                try:
-                    comp_location, _ = self._determine_put_formatter_location(comp_ref)
-                except DatasetTypeNotSupportedError:
-                    if not allow_missing:
-                        raise
+                comp_location, _ = self._determine_put_formatter_location(comp_ref)
 
                 # Add the "#predicted" URI fragment to indicate this is a
                 # guess
@@ -1748,11 +1741,7 @@ class FileDatastore(GenericBaseDatastore):
 
         else:
 
-            try:
-                location, _ = self._determine_put_formatter_location(ref)
-            except DatasetTypeNotSupportedError:
-                if not allow_missing:
-                    raise
+            location, _ = self._determine_put_formatter_location(ref)
 
             # Add the "#predicted" URI fragment to indicate this is a guess
             uris.primaryURI = ResourcePath(location.uri.geturl() + "#predicted")
@@ -1782,7 +1771,7 @@ class FileDatastore(GenericBaseDatastore):
                 if not allow_missing:
                     raise FileNotFoundError("Dataset {} not in this datastore.".format(ref))
             else:
-                uris[ref] = self._predict_URIs(ref, allow_missing)
+                uris[ref] = self._predict_URIs(ref)
 
         for ref in existing_refs:
             file_infos = records[ref.getCheckedId()]
