@@ -282,3 +282,5 @@ storageClasses:
     pytype: lsst.atmospec.spectraction.Spectraction
   ScarletModelData:
     pytype: lsst.meas.extensions.scarlet.ScarletModelData
+  MetricMeasurementBundle:
+    pytype: lsst.analysis.tools.analysisMetrics.MetricMeasurementBundle
