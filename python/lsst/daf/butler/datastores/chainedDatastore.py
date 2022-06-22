@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, 
 from lsst.daf.butler import (
     Constraints,
     DatasetRef,
+    DatasetRefURIs,
     DatasetTypeNotSupportedError,
     Datastore,
     DatastoreConfig,
@@ -501,9 +502,37 @@ class ChainedDatastore(Datastore):
                 prepDataForChild, transfer=transfer, record_validation_info=record_validation_info
             )
 
-    def getURIs(
-        self, ref: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
+    def getManyURIs(
+        self,
+        refs: Iterable[DatasetRef],
+        predict: bool = False,
+        allow_missing: bool = False,
+    ) -> Dict[DatasetRef, DatasetRefURIs]:
+        # Docstring inherited
+
+        uris: Dict[DatasetRef, DatasetRefURIs] = {}
+        missing_refs = set(refs)
+
+        # If predict is True we don't want to predict a dataset in the first
+        # datastore if it actually exists in a later datastore, so in that
+        # case check all datastores with predict=False first, and then try
+        # again with predict=True.
+        for p in (False, True) if predict else (False,):
+            if not missing_refs:
+                break
+            for datastore in self.datastores:
+                got_uris = datastore.getManyURIs(missing_refs, p, allow_missing=True)
+                missing_refs -= got_uris.keys()
+                uris.update(got_uris)
+                if not missing_refs:
+                    break
+
+        if missing_refs and not allow_missing:
+            raise FileNotFoundError(f"Dataset(s) {missing_refs} not in this datastore.")
+
+        return uris
+
+    def getURIs(self, ref: DatasetRef, predict: bool = False) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 
         Parameters
@@ -516,13 +545,11 @@ class ChainedDatastore(Datastore):
 
         Returns
         -------
-        primary : `lsst.resources.ResourcePath`
-            The URI to the primary artifact associated with this dataset.
-            If the dataset was disassembled within the datastore this
-            may be `None`.
-        components : `dict`
-            URIs to any components associated with the dataset artifact.
-            Can be empty if there are no components.
+        uris : `DatasetRefURIs`
+            The URI to the primary artifact associated with this dataset (if
+            the dataset was disassembled within the datastore this may be
+            `None`), and the URIs to any components associated with the dataset
+            artifact. (can be empty if there are no components).
 
         Notes
         -----
@@ -532,11 +559,10 @@ class ChainedDatastore(Datastore):
         is allowed, the predicted URI for the first datastore in the list will
         be returned.
         """
-        DatastoreURIs = Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]
         log.debug("Requesting URIs for %s", ref)
-        predictedUri: Optional[DatastoreURIs] = None
-        predictedEphemeralUri: Optional[DatastoreURIs] = None
-        firstEphemeralUri: Optional[DatastoreURIs] = None
+        predictedUri: Optional[DatasetRefURIs] = None
+        predictedEphemeralUri: Optional[DatasetRefURIs] = None
+        firstEphemeralUri: Optional[DatasetRefURIs] = None
         for datastore in self.datastores:
             if datastore.exists(ref):
                 if not datastore.isEphemeral:

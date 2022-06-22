@@ -73,6 +73,7 @@ from .core import (
     DataId,
     DataIdValue,
     DatasetRef,
+    DatasetRefURIs,
     DatasetType,
     Datastore,
     Dimension,
@@ -1393,7 +1394,7 @@ class Butler(LimitedButler):
         collections: Any = None,
         run: Optional[str] = None,
         **kwargs: Any,
-    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
+    ) -> DatasetRefURIs:
         """Returns the URIs associated with the dataset.
 
         Parameters
@@ -1421,13 +1422,11 @@ class Butler(LimitedButler):
 
         Returns
         -------
-        primary : `lsst.resources.ResourcePath`
-            The URI to the primary artifact associated with this dataset.
-            If the dataset was disassembled within the datastore this
-            may be `None`.
-        components : `dict`
-            URIs to any components associated with the dataset artifact.
-            Can be empty if there are no components.
+        uris : `DatasetRefURIs`
+            The URI to the primary artifact associated with this dataset (if
+            the dataset was disassembled within the datastore this may be
+            `None`), and the URIs to any components associated with the dataset
+            artifact. (can be empty if there are no components).
         """
         ref = self._findDatasetRef(
             datasetRefOrType, dataId, allowUnresolved=predict, collections=collections, **kwargs

@@ -176,17 +176,17 @@ class QueryDatasets:
             A list of astropy tables, one for each dataset type.
         """
         tables: Dict[str, _Table] = defaultdict(_Table)
-        for datasetRef in self.datasets:
-            if not self.showUri:
-                tables[datasetRef.datasetType.name].add(datasetRef)
-            else:
-                primaryURI, componentURIs = self.butler.getURIs(
-                    datasetRef, collections=datasetRef.run, predict=True
-                )
-                if primaryURI:
-                    tables[datasetRef.datasetType.name].add(datasetRef, primaryURI)
-                for name, uri in componentURIs.items():
-                    tables[datasetRef.datasetType.componentTypeName(name)].add(datasetRef, uri)
+        if not self.showUri:
+            for dataset_ref in self.datasets:
+                tables[dataset_ref.datasetType.name].add(dataset_ref)
+        else:
+            d = list(self.datasets)
+            ref_uris = self.butler.datastore.getManyURIs(d, predict=True)
+            for ref, uris in ref_uris.items():
+                if uris.primaryURI:
+                    tables[ref.datasetType.name].add(ref, uris.primaryURI)
+                for name, uri in uris.componentURIs.items():
+                    tables[ref.datasetType.componentTypeName(name)].add(ref, uri)
 
         return [table.getAstropyTable(datasetTypeName) for datasetTypeName, table in tables.items()]
 

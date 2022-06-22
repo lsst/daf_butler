@@ -21,15 +21,18 @@
 
 import os
 import shutil
+import sys
 import tempfile
 import time
 import unittest
+from collections import UserDict
 from dataclasses import dataclass
 
 import lsst.utils.tests
 import yaml
 from lsst.daf.butler import (
     Config,
+    DatasetRefURIs,
     DatasetTypeNotSupportedError,
     DatastoreCacheManager,
     DatastoreCacheManagerConfig,
@@ -55,6 +58,57 @@ from lsst.resources import ResourcePath
 from lsst.utils import doImport
 
 TESTDIR = os.path.dirname(__file__)
+
+
+class DataIdForTest(UserDict):
+
+    """A dict-like class that can be used for a DataId dict that is hashable.
+
+    By default the class is immutable ("frozen"). The `frozen`
+    attribute can be set to `False` to change values (but note that
+    the hash values before and after mutation will be different!).
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.frozen = False
+        super().__init__(*args, **kwargs)
+        self.frozen = True
+
+    def __hash__(self):
+        return hash(str(self.data))
+
+    def __setitem__(self, k, v):
+        if self.frozen:
+            raise RuntimeError("DataIdForTest is frozen.")
+        return super().__setitem__(k, v)
+
+    def __delitem__(self, k):
+        if self.frozen:
+            raise RuntimeError("DataIdForTest is frozen.")
+        return super().__delitem__(k)
+
+    def __ior__(self, other):
+        assert sys.version_info[0] == 3
+        if sys.version_info[1] < 9:
+            raise NotImplementedError("operator |= (ior) is not supported before version 3.9")
+        if self.frozen:
+            raise RuntimeError("DataIdForTest is frozen.")
+        return super().__ior__(other)
+
+    def pop(self, k):
+        if self.frozen:
+            raise RuntimeError("DataIdForTest is frozen.")
+        return super().pop(k)
+
+    def popitem(self):
+        if self.frozen:
+            raise RuntimeError("DataIdForTest is frozen.")
+        return super().popitem()
+
+    def update(self, *args, **kwargs):
+        if self.frozen:
+            raise RuntimeError("DataIdForTest is frozen.")
+        super().update(*args, **kwargs)
 
 
 def makeExampleMetrics(use_none=False):
@@ -182,11 +236,26 @@ class DatastoreTests(DatastoreTestsBase):
         ]
 
         dimensions = self.universe.extract(("visit", "physical_filter"))
-        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V"}
+        dataId = DataIdForTest({"instrument": "dummy", "visit": 52, "physical_filter": "V"})
+        dataId2 = DataIdForTest({"instrument": "dummy", "visit": 53, "physical_filter": "V"})
 
         for sc in storageClasses:
             ref = self.makeDatasetRef("metric", dimensions, sc, dataId, conform=False)
-            print("Using storageClass: {}".format(sc.name))
+            ref2 = self.makeDatasetRef("metric", dimensions, sc, dataId2, conform=False)
+
+            # Make sure that using getManyURIs without predicting before the
+            # dataset has been put raises.
+            with self.assertRaises(FileNotFoundError):
+                datastore.getManyURIs([ref], predict=False)
+
+            # Make sure that using getManyURIs with predicting before the
+            # dataset has been put predicts the URI.
+            uris = datastore.getManyURIs([ref, ref2], predict=True)
+            self.assertIn("52", uris[ref].primaryURI.geturl())
+            self.assertIn("#predicted", uris[ref].primaryURI.geturl())
+            self.assertIn("53", uris[ref2].primaryURI.geturl())
+            self.assertIn("#predicted", uris[ref2].primaryURI.geturl())
+
             datastore.put(metrics, ref)
 
             # Does it exist?
@@ -199,6 +268,12 @@ class DatastoreTests(DatastoreTestsBase):
             uri = datastore.getURI(ref)
             self.assertEqual(uri.scheme, self.uriScheme)
 
+            uris = datastore.getManyURIs([ref])
+            self.assertEqual(len(uris), 1)
+            ref, uri = uris.popitem()
+            self.assertTrue(uri.primaryURI.exists())
+            self.assertFalse(uri.componentURIs)
+
             # Get a component -- we need to construct new refs for them
             # with derived storage classes but with parent ID
             for comp in ("data", "output"):
@@ -208,6 +283,9 @@ class DatastoreTests(DatastoreTestsBase):
 
                 uri = datastore.getURI(compRef)
                 self.assertEqual(uri.scheme, self.uriScheme)
+
+                uris = datastore.getManyURIs([compRef])
+                self.assertEqual(len(uris), 1)
 
         storageClass = sc
 
@@ -272,7 +350,8 @@ class DatastoreTests(DatastoreTestsBase):
             # disassembly
             sc = self.storageClassFactory.getStorageClass(sc_name)
             dimensions = self.universe.extract(("visit", "physical_filter"))
-            dataId = {"instrument": "dummy", "visit": 52 + i, "physical_filter": "V"}
+
+            dataId = DataIdForTest({"instrument": "dummy", "visit": 52 + i, "physical_filter": "V"})
 
             ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId, conform=False)
             datastore.put(metrics, ref)
@@ -838,6 +917,43 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
         # Override the working directory before calling the base class
         self.root = tempfile.mkdtemp(dir=TESTDIR)
         super().setUp()
+
+    def testCanNotDeterminePutFormatterLocation(self):
+        """Verify that the expected exception is raised if the FileDatastore
+        can not determine the put formatter location."""
+
+        _ = makeExampleMetrics()
+        datastore = self.makeDatastore()
+
+        # Create multiple storage classes for testing different formulations
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+
+        sccomp = StorageClass("Dummy")
+        compositeStorageClass = StorageClass(
+            "StructuredComposite", components={"dummy": sccomp, "dummy2": sccomp}
+        )
+
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = DataIdForTest({"instrument": "dummy", "visit": 52, "physical_filter": "V"})
+
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+        compRef = self.makeDatasetRef("metric", dimensions, compositeStorageClass, dataId, conform=False)
+
+        def raiser(ref):
+            raise DatasetTypeNotSupportedError()
+
+        with unittest.mock.patch.object(
+            lsst.daf.butler.datastores.fileDatastore.FileDatastore,
+            "_determine_put_formatter_location",
+            side_effect=raiser,
+        ):
+            # verify the non-composite ref execution path:
+            with self.assertRaises(DatasetTypeNotSupportedError):
+                datastore.getURIs(ref, predict=True)
+
+            # verify the composite-ref execution path:
+            with self.assertRaises(DatasetTypeNotSupportedError):
+                datastore.getURIs(compRef, predict=True)
 
 
 class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
@@ -1480,6 +1596,117 @@ cached:
             self.assertIsNone(found)
         with cache_manager.find_in_cache(self.refs[2], ".txt") as found:
             self.assertIsInstance(found, ResourcePath)
+
+
+class DatasetRefURIsTestCase(unittest.TestCase):
+    """Tests for DatasetRefURIs."""
+
+    def testSequenceAccess(self):
+        """Verify that DatasetRefURIs can be treated like a two-item tuple."""
+        uris = DatasetRefURIs()
+
+        self.assertEqual(len(uris), 2)
+        self.assertEqual(uris[0], None)
+        self.assertEqual(uris[1], {})
+
+        primaryURI = ResourcePath("1/2/3")
+        componentURI = ResourcePath("a/b/c")
+
+        # affirm that DatasetRefURIs does not support MutableSequence functions
+        with self.assertRaises(TypeError):
+            uris[0] = primaryURI
+        with self.assertRaises(TypeError):
+            uris[1] = {"foo": componentURI}
+
+        # but DatasetRefURIs can be set by property name:
+        uris.primaryURI = primaryURI
+        uris.componentURIs = {"foo": componentURI}
+        self.assertEqual(uris.primaryURI, primaryURI)
+        self.assertEqual(uris[0], primaryURI)
+
+        primary, components = uris
+        self.assertEqual(primary, primaryURI)
+        self.assertEqual(components, {"foo": componentURI})
+
+    def testRepr(self):
+        """Verify __repr__ output."""
+        uris = DatasetRefURIs(ResourcePath("1/2/3"), {"comp": ResourcePath("a/b/c")})
+        self.assertEqual(
+            repr(uris),
+            f'DatasetRefURIs(ResourcePath("{os.getcwd()}/1/2/3"), '
+            "{'comp': ResourcePath(\"" + os.getcwd() + '/a/b/c")})',
+        )
+
+
+class DataIdForTestTestCase(unittest.TestCase):
+    """Tests for the DataIdForTest class."""
+
+    def testImmutable(self):
+        """Verify that an instance is immutable by default."""
+        dataId = DataIdForTest({"instrument": "dummy", "visit": 52, "physical_filter": "V"})
+        initial_hash = hash(dataId)
+
+        with self.assertRaises(RuntimeError):
+            dataId["instrument"] = "foo"
+
+        with self.assertRaises(RuntimeError):
+            del dataId["instrument"]
+
+        assert sys.version_info[0] == 3
+        if sys.version_info[1] >= 9:
+            with self.assertRaises(RuntimeError):
+                dataId |= dict(foo="bar")
+
+        with self.assertRaises(RuntimeError):
+            dataId.pop("instrument")
+
+        with self.assertRaises(RuntimeError):
+            dataId.popitem()
+
+        with self.assertRaises(RuntimeError):
+            dataId.update(dict(instrument="foo"))
+
+        # verify that the hash value has not changed.
+        self.assertEqual(initial_hash, hash(dataId))
+
+    def testMutable(self):
+        """Verify that an instance can be made mutable (unfrozen)."""
+        dataId = DataIdForTest({"instrument": "dummy", "visit": 52, "physical_filter": "V"})
+        initial_hash = hash(dataId)
+        dataId.frozen = False
+        self.assertEqual(initial_hash, hash(dataId))
+
+        dataId["instrument"] = "foo"
+        self.assertEqual(dataId["instrument"], "foo")
+        self.assertNotEqual(initial_hash, hash(dataId))
+        initial_hash = hash(dataId)
+
+        del dataId["instrument"]
+        self.assertTrue("instrument" not in dataId)
+        self.assertNotEqual(initial_hash, hash(dataId))
+        initial_hash = hash(dataId)
+
+        assert sys.version_info[0] == 3
+        if sys.version_info[1] >= 9:
+            dataId |= dict(foo="bar")
+            self.assertEqual(dataId["foo"], "bar")
+            self.assertNotEqual(initial_hash, hash(dataId))
+            initial_hash = hash(dataId)
+
+        dataId.pop("visit")
+        self.assertTrue("visit" not in dataId)
+        self.assertNotEqual(initial_hash, hash(dataId))
+        initial_hash = hash(dataId)
+
+        dataId.popitem()
+        self.assertTrue("physical_filter" not in dataId)
+        self.assertNotEqual(initial_hash, hash(dataId))
+        initial_hash = hash(dataId)
+
+        dataId.update(dict(instrument="foo"))
+        self.assertEqual(dataId["instrument"], "foo")
+        self.assertNotEqual(initial_hash, hash(dataId))
+        initial_hash = hash(dataId)
 
 
 if __name__ == "__main__":

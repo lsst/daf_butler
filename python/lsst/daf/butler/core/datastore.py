@@ -23,13 +23,13 @@
 
 from __future__ import annotations
 
-__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
+__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError", "DatasetRefURIs")
 
 import contextlib
 import dataclasses
 import logging
 from abc import ABCMeta, abstractmethod
-from collections import defaultdict
+from collections import abc, defaultdict
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -192,6 +192,56 @@ class DatastoreTransaction:
             # We may still want to events from this transaction as part of
             # the parent.
             self.parent._log.extend(self._log)
+
+
+@dataclasses.dataclass
+class DatasetRefURIs(abc.Sequence):
+    """Represents the primary and component ResourcePath(s) associated with a
+    DatasetRef.
+
+    This is used in places where its members used to be represented as a tuple
+    `(primaryURI, componentURIs)`. To maintain backward compatibility this
+    inherits from Sequence and so instances can be treated as a two-item
+    tuple.
+    """
+
+    def __init__(
+        self,
+        primaryURI: Optional[ResourcePath] = None,
+        componentURIs: Optional[Dict[str, ResourcePath]] = None,
+    ):
+
+        self.primaryURI = primaryURI
+        """The URI to the primary artifact associated with this dataset. If the
+        dataset was disassembled within the datastore this may be `None`.
+        """
+
+        self.componentURIs = componentURIs or {}
+        """The URIs to any components associated with the dataset artifact
+        indexed by component name. This can be empty if there are no
+        components.
+        """
+
+    def __getitem__(self, index: Any) -> Any:
+        """Get primaryURI and componentURIs by index.
+
+        Provides support for tuple-like access.
+        """
+        if index == 0:
+            return self.primaryURI
+        elif index == 1:
+            return self.componentURIs
+        raise IndexError("list index out of range")
+
+    def __len__(self) -> int:
+        """Get the number of data members.
+
+        Provides support for tuple-like access.
+        """
+        return 2
+
+    def __repr__(self) -> str:
+        return f"DatasetRefURIs({repr(self.primaryURI)}, {repr(self.componentURIs)})"
 
 
 class Datastore(metaclass=ABCMeta):
@@ -707,10 +757,60 @@ class Datastore(metaclass=ABCMeta):
 
         raise NotImplementedError(f"Datastore {type(self)} must implement a transfer_from method.")
 
+    def getManyURIs(
+        self,
+        refs: Iterable[DatasetRef],
+        predict: bool = False,
+        allow_missing: bool = False,
+    ) -> Dict[DatasetRef, DatasetRefURIs]:
+        """Return URIs associated with many datasets.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetIdRef`
+            References to the required datasets.
+        predict : `bool`, optional
+            If the datastore does not know about a dataset, should it
+            return a predicted URI or not?
+        allow_missing : `bool`
+            If `False`, and `predict` is `False`, will raise if a `DatasetRef`
+            does not exist.
+
+        Returns
+        -------
+        URIs : `dict` of [`DatasetRef`, `DatasetRefUris`]
+            A dict of primary and component URIs, indexed by the passed-in
+            refs.
+
+        Raises
+        ------
+        FileNotFoundError
+            A URI has been requested for a dataset that does not exist and
+            guessing is not allowed.
+
+        Notes
+        -----
+        In file-based datastores, getManuURIs does not check that the file is
+        really there, it's assuming it is if datastore is aware of the file
+        then it actually exists.
+        """
+        uris: Dict[DatasetRef, DatasetRefURIs] = {}
+        missing_refs = []
+        for ref in refs:
+            try:
+                uris[ref] = self.getURIs(ref, predict=predict)
+            except FileNotFoundError:
+                missing_refs.append(ref)
+        if missing_refs and not allow_missing:
+            raise FileNotFoundError(
+                "Missing {} refs from datastore out of {} and predict=False.".format(
+                    num_missing := len(missing_refs), num_missing + len(uris)
+                )
+            )
+        return uris
+
     @abstractmethod
-    def getURIs(
-        self, datasetRef: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
+    def getURIs(self, datasetRef: DatasetRef, predict: bool = False) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 
         Parameters
@@ -723,13 +823,11 @@ class Datastore(metaclass=ABCMeta):
 
         Returns
         -------
-        primary : `lsst.resources.ResourcePath`
-            The URI to the primary artifact associated with this dataset.
-            If the dataset was disassembled within the datastore this
-            may be `None`.
-        components : `dict`
-            URIs to any components associated with the dataset artifact.
-            Can be empty if there are no components.
+        uris : `DatasetRefURIs`
+            The URI to the primary artifact associated with this dataset (if
+            the dataset was disassembled within the datastore this may be
+            `None`), and the URIs to any components associated with the dataset
+            artifact. (can be empty if there are no components).
         """
         raise NotImplementedError()
 

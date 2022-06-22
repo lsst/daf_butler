@@ -37,6 +37,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Type,
@@ -48,6 +49,7 @@ from lsst.daf.butler import (
     Config,
     DatasetId,
     DatasetRef,
+    DatasetRefURIs,
     DatasetType,
     DatasetTypeNotSupportedError,
     Datastore,
@@ -1633,9 +1635,7 @@ class FileDatastore(GenericBaseDatastore):
 
         return True
 
-    def getURIs(
-        self, ref: DatasetRef, predict: bool = False
-    ) -> Tuple[Optional[ResourcePath], Dict[str, ResourcePath]]:
+    def getURIs(self, ref: DatasetRef, predict: bool = False) -> DatasetRefURIs:
         """Return URIs associated with dataset.
 
         Parameters
@@ -1648,76 +1648,24 @@ class FileDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        primary : `lsst.resources.ResourcePath`
-            The URI to the primary artifact associated with this dataset.
-            If the dataset was disassembled within the datastore this
-            may be `None`.
-        components : `dict`
-            URIs to any components associated with the dataset artifact.
-            Can be empty if there are no components.
+        uris : `DatasetRefURIs`
+            The URI to the primary artifact associated with this dataset (if
+            the dataset was disassembled within the datastore this may be
+            `None`), and the URIs to any components associated with the dataset
+            artifact. (can be empty if there are no components).
         """
-
-        primary: Optional[ResourcePath] = None
-        components: Dict[str, ResourcePath] = {}
-
         # if this has never been written then we have to guess
         if not self.exists(ref):
             if not predict:
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
 
-            doDisassembly = self.composites.shouldBeDisassembled(ref)
-
-            if doDisassembly:
-
-                for component, componentStorage in ref.datasetType.storageClass.components.items():
-                    compRef = ref.makeComponentRef(component)
-                    compLocation, _ = self._determine_put_formatter_location(compRef)
-
-                    # Add a URI fragment to indicate this is a guess
-                    components[component] = ResourcePath(compLocation.uri.geturl() + "#predicted")
-
-            else:
-
-                location, _ = self._determine_put_formatter_location(ref)
-
-                # Add a URI fragment to indicate this is a guess
-                primary = ResourcePath(location.uri.geturl() + "#predicted")
-
-            return primary, components
+            return self._predict_URIs(ref)
 
         # If this is a ref that we have written we can get the path.
         # Get file metadata and internal metadata
         fileLocations = self._get_dataset_locations_info(ref)
 
-        guessing = False
-        if not fileLocations:
-            if not self.trustGetRequest:
-                raise RuntimeError(f"Unexpectedly got no artifacts for dataset {ref}")
-            fileLocations = self._get_expected_dataset_locations_info(ref)
-            guessing = True
-
-        if len(fileLocations) == 1:
-            # No disassembly so this is the primary URI
-            uri = fileLocations[0][0].uri
-            if guessing and not uri.exists():
-                raise FileNotFoundError(f"Expected URI ({uri}) does not exist")
-            primary = uri
-
-        else:
-            for location, storedFileInfo in fileLocations:
-                if storedFileInfo.component is None:
-                    raise RuntimeError(f"Unexpectedly got no component name for a component at {location}")
-                uri = location.uri
-                if guessing and not uri.exists():
-                    # If we are trusting then it is entirely possible for
-                    # some components to be missing. In that case we skip
-                    # to the next component.
-                    if self.trustGetRequest:
-                        continue
-                    raise FileNotFoundError(f"Expected URI ({uri}) does not exist")
-                components[storedFileInfo.component] = uri
-
-        return primary, components
+        return self._locations_to_URI(ref, fileLocations)
 
     def getURI(self, ref: DatasetRef, predict: bool = False) -> ResourcePath:
         """URI to the Dataset.
@@ -1761,6 +1709,144 @@ class FileDatastore(GenericBaseDatastore):
                 f"Dataset ({ref}) includes distinct URIs for components. Use Datastore.getURIs() instead."
             )
         return primary
+
+    def _predict_URIs(
+        self,
+        ref: DatasetRef,
+    ) -> DatasetRefURIs:
+        """Predict the URIs of a dataset ref.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required Dataset.
+
+        Returns
+        -------
+        URI : DatasetRefUris
+            Primary and component URIs. URIs will contain a URI fragment
+            "#predicted".
+        """
+        uris = DatasetRefURIs()
+
+        if self.composites.shouldBeDisassembled(ref):
+
+            for component, _ in ref.datasetType.storageClass.components.items():
+                comp_ref = ref.makeComponentRef(component)
+                comp_location, _ = self._determine_put_formatter_location(comp_ref)
+
+                # Add the "#predicted" URI fragment to indicate this is a
+                # guess
+                uris.componentURIs[component] = ResourcePath(comp_location.uri.geturl() + "#predicted")
+
+        else:
+
+            location, _ = self._determine_put_formatter_location(ref)
+
+            # Add the "#predicted" URI fragment to indicate this is a guess
+            uris.primaryURI = ResourcePath(location.uri.geturl() + "#predicted")
+
+        return uris
+
+    def getManyURIs(
+        self,
+        refs: Iterable[DatasetRef],
+        predict: bool = False,
+        allow_missing: bool = False,
+    ) -> Dict[DatasetRef, DatasetRefURIs]:
+        # Docstring inherited
+
+        uris: Dict[DatasetRef, DatasetRefURIs] = {}
+
+        records = self._get_stored_records_associated_with_refs(refs)
+        records_keys = records.keys()
+
+        existing_refs = (ref for ref in refs if ref.id in records_keys)
+        missing_refs = (ref for ref in refs if ref.id not in records_keys)
+
+        for ref in missing_refs:
+
+            # if this has never been written then we have to guess
+            if not predict:
+                if not allow_missing:
+                    raise FileNotFoundError("Dataset {} not in this datastore.".format(ref))
+            else:
+                uris[ref] = self._predict_URIs(ref)
+
+        for ref in existing_refs:
+            file_infos = records[ref.getCheckedId()]
+            file_locations = [(i.file_location(self.locationFactory), i) for i in file_infos]
+            uris[ref] = self._locations_to_URI(ref, file_locations)
+
+        return uris
+
+    def _locations_to_URI(
+        self,
+        ref: DatasetRef,
+        file_locations: Sequence[Tuple[Location, StoredFileInfo]],
+    ) -> DatasetRefURIs:
+        """Convert one or more file locations associated with a DatasetRef
+        to a DatasetRefURIs.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the dataset.
+        file_locations : Sequence[Tuple[Location, StoredFileInfo]]
+            Each item in the sequence is the location of the dataset within the
+            datastore and stored information about the file and its formatter.
+            If there is only one item in the sequence then it is treated as the
+            primary URI. If there is more than one item then they are treated
+            as component URIs. If there are no items then an error is raised
+            unless ``self.trustGetRequest`` is `True`.
+
+        Returns
+        -------
+        uris: DatasetRefURIs
+            Represents the primary URI or component URIs described by the
+            inputs.
+
+        Raises
+        ------
+        RuntimeError
+            If no file locations are passed in and ``self.trustGetRequest`` is
+            `False`.
+        FileNotFoundError
+            If the a passed-in URI does not exist, and ``self.trustGetRequest``
+            is `False`.
+        RuntimeError
+            If a passed in `StoredFileInfo`'s ``component`` is `None` (this is
+            unexpected).
+        """
+
+        guessing = False
+        uris = DatasetRefURIs()
+
+        if not file_locations:
+            if not self.trustGetRequest:
+                raise RuntimeError(f"Unexpectedly got no artifacts for dataset {ref}")
+            file_locations = self._get_expected_dataset_locations_info(ref)
+            guessing = True
+
+        if len(file_locations) == 1:
+            # No disassembly so this is the primary URI
+            uris.primaryURI = file_locations[0][0].uri
+            if guessing and not uris.primaryURI.exists():
+                raise FileNotFoundError(f"Expected URI ({uris.primaryURI}) does not exist")
+        else:
+            for location, file_info in file_locations:
+                if file_info.component is None:
+                    raise RuntimeError(f"Unexpectedly got no component name for a component at {location}")
+                if guessing and not location.uri.exists():
+                    # If we are trusting then it is entirely possible for
+                    # some components to be missing. In that case we skip
+                    # to the next component.
+                    if self.trustGetRequest:
+                        continue
+                    raise FileNotFoundError(f"Expected URI ({location.uri}) does not exist")
+                uris.componentURIs[file_info.component] = location.uri
+
+        return uris
 
     def retrieveArtifacts(
         self,
