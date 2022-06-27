@@ -921,6 +921,7 @@ class ButlerTests(ButlerPutGetTests):
             ignore=[
                 "test_metric_comp",
                 "metric3",
+                "metric5",
                 "calexp",
                 "DummySC",
                 "datasetType.component",
@@ -943,6 +944,7 @@ class ButlerTests(ButlerPutGetTests):
             ignore=[
                 "test_metric_comp",
                 "metric3",
+                "metric5",
                 "calexp",
                 "DummySC",
                 "datasetType.component",
