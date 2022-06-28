@@ -1,7 +1,7 @@
 pyyaml >= 5.1
 astropy >= 4.0
 click >7.0
-sqlalchemy >= 1.3
+sqlalchemy >= 1.4
 pydantic
 httpx
 deprecated >=1.2
