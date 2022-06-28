@@ -65,8 +65,12 @@ def parseCalibrationCollection(registry, collection, datasetTypes):
             calibType, collections=collection, collectionTypes=[CollectionType.CALIBRATION]
         )
         for result in associations:
-            exportDatasets.append(result.ref)
-            exportCollections.append(result.ref.run)
+            # Need an expanded dataId in case file templates will be used
+            # in the transfer.
+            dataId = registry.expandDataId(result.ref.dataId)
+            ref = result.ref.expanded(dataId)
+            exportDatasets.append(ref)
+            exportCollections.append(ref.run)
     return exportCollections, exportDatasets
 
 
