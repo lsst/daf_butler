@@ -2680,6 +2680,15 @@ class FileDatastore(GenericBaseDatastore):
         if transfer is not None and directory is None:
             raise RuntimeError(f"Cannot export using transfer mode {transfer} with no export directory given")
 
+        if transfer == "move":
+            raise RuntimeError("Can not export by moving files out of datastore.")
+        elif transfer == "direct":
+            # For an export, treat this as equivalent to None. We do not
+            # want an import to risk using absolute URIs to datasets owned
+            # by another datastore.
+            log.info("Treating 'direct' transfer mode as in-place export.")
+            transfer = None
+
         # Force the directory to be a URI object
         directoryUri: Optional[ResourcePath] = None
         if directory is not None:
