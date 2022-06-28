@@ -21,11 +21,12 @@
 
 from __future__ import annotations
 
-__all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage", "DatasetIdGenEnum")
+__all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage", "DatasetIdFactory", "DatasetIdGenEnum")
 
 import enum
+import uuid
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, List, Optional, Tuple
 
 import sqlalchemy.sql
 
@@ -58,6 +59,73 @@ class DatasetIdGenEnum(enum.Enum):
     """In this mode ID is computed deterministically from a combination of
     dataset type, dataId, and run collection name.
     """
+
+
+class DatasetIdFactory:
+    """Factory for dataset IDs (UUIDs).
+
+    For now the logic is hard-coded and is controlled by the user-provided
+    value of `DatasetIdGenEnum`. In the future we may implement a configurable
+    logic that can guess `DatasetIdGenEnum` value from other parameters.
+    """
+
+    NS_UUID = uuid.UUID("840b31d9-05cd-5161-b2c8-00d32b280d0f")
+    """Namespace UUID used for UUID5 generation. Do not change. This was
+    produced by `uuid.uuid5(uuid.NAMESPACE_DNS, "lsst.org")`.
+    """
+
+    def makeDatasetId(
+        self,
+        run: str,
+        datasetType: DatasetType,
+        dataId: DataCoordinate,
+        idGenerationMode: DatasetIdGenEnum,
+    ) -> uuid.UUID:
+        """Generate dataset ID for a dataset.
+
+        Parameters
+        ----------
+        run : `str`
+            Name of the RUN collection for the dataset.
+        datasetType : `DatasetType`
+            Dataset type.
+        dataId : `DataCoordinate`
+            Expanded data ID for the dataset.
+        idGenerationMode : `DatasetIdGenEnum`
+            ID generation option. `~DatasetIdGenEnum.UNIQUE` makes a random
+            UUID4-type ID. `~DatasetIdGenEnum.DATAID_TYPE` makes a
+            deterministic UUID5-type ID based on a dataset type name and
+            ``dataId``.  `~DatasetIdGenEnum.DATAID_TYPE_RUN` makes a
+            deterministic UUID5-type ID based on a dataset type name, run
+            collection name, and ``dataId``.
+
+        Returns
+        -------
+        datasetId : `uuid.UUID`
+            Dataset identifier.
+        """
+        if idGenerationMode is DatasetIdGenEnum.UNIQUE:
+            return uuid.uuid4()
+        else:
+            # WARNING: If you modify this code make sure that the order of
+            # items in the `items` list below never changes.
+            items: List[Tuple[str, str]] = []
+            if idGenerationMode is DatasetIdGenEnum.DATAID_TYPE:
+                items = [
+                    ("dataset_type", datasetType.name),
+                ]
+            elif idGenerationMode is DatasetIdGenEnum.DATAID_TYPE_RUN:
+                items = [
+                    ("dataset_type", datasetType.name),
+                    ("run", run),
+                ]
+            else:
+                raise ValueError(f"Unexpected ID generation mode: {idGenerationMode}")
+
+            for name, value in sorted(dataId.byName().items()):
+                items.append((name, str(value)))
+            data = ",".join(f"{key}={value}" for key, value in items)
+            return uuid.uuid5(self.NS_UUID, data)
 
 
 class DatasetRecordStorage(ABC):

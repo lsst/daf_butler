@@ -65,7 +65,7 @@ from ..core import (
 from ._collectionType import CollectionType
 from ._config import RegistryConfig
 from ._defaults import RegistryDefaults
-from .interfaces import DatasetIdGenEnum
+from .interfaces import DatasetIdFactory, DatasetIdGenEnum
 from .queries import DataCoordinateQueryResults, DatasetQueryResults, DimensionRecordQueryResults
 from .summaries import CollectionSummary
 from .wildcards import CollectionSearch
@@ -1640,3 +1640,6 @@ class Registry(ABC):
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).
     """
+
+    datasetIdFactory: DatasetIdFactory
+    """Factory for dataset IDs."""

@@ -74,7 +74,7 @@ from ..registry import (
     RegistryDefaults,
     queries,
 )
-from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
+from ..registry.interfaces import ChainedCollectionRecord, DatasetIdFactory, DatasetIdGenEnum, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
 from ..registry.queries import Query
 from ..registry.summaries import CollectionSummary
@@ -205,6 +205,9 @@ class SqlRegistry(Registry):
         # can only be done after most of the rest of Registry has already been
         # initialized, and must be done before the property getter is used.
         self.defaults = defaults
+        # In the future DatasetIdFactory may become configurable and this
+        # instance will need to be shared with datasets manager.
+        self.datasetIdFactory = DatasetIdFactory()
 
     def __str__(self) -> str:
         return str(self._db)

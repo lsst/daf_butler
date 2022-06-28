@@ -64,7 +64,7 @@ from ..core.serverModels import (
     QueryDimensionRecordsModel,
 )
 from ..registry import CollectionSearch, CollectionType, Registry, RegistryConfig, RegistryDefaults
-from ..registry.interfaces import DatasetIdGenEnum
+from ..registry.interfaces import DatasetIdFactory, DatasetIdGenEnum
 from ..registry.summaries import CollectionSummary
 
 if TYPE_CHECKING:
@@ -119,6 +119,10 @@ class RemoteRegistry(Registry):
     def __init__(self, server_uri: ResourcePath, defaults: RegistryDefaults, writeable: bool):
         self._db = server_uri
         self._defaults = defaults
+
+        # In the future DatasetIdFactory may become configurable and this
+        # instance will need to be shared with datasets manager.
+        self.datasetIdFactory = DatasetIdFactory()
 
         # All PUT calls should be short-circuited if not writeable.
         self._writeable = writeable
