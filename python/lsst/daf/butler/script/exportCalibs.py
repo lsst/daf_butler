@@ -107,6 +107,8 @@ def exportCalibs(repo, directory, collections, dataset_type):
 
     if not dataset_type:
         dataset_type = ...
+    if not collections:
+        collections = ...
 
     calibTypes = [
         datasetType
