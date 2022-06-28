@@ -74,7 +74,7 @@ def parseCalibrationCollection(registry, collection, datasetTypes):
     return exportCollections, exportDatasets
 
 
-def exportCalibs(repo, directory, collections, dataset_type):
+def exportCalibs(repo, directory, collections, dataset_type, transfer):
     """Certify a set of calibrations with a validity range.
 
     Parameters
@@ -91,6 +91,8 @@ def exportCalibs(repo, directory, collections, dataset_type):
        `~CollectionType.CALIBRATION` collection.
     dataset_type : `tuple` [`str`]
        The dataset types to export. Default is to export all.
+    transfer : `str`
+        The transfer mode to use for exporting.
 
     Returns
     -------
@@ -140,7 +142,7 @@ def exportCalibs(repo, directory, collections, dataset_type):
     if os.path.exists(directory):
         raise RuntimeError(f"Export directory exists: {directory}")
     os.makedirs(directory)
-    with butler.export(directory=directory, format="yaml", transfer="auto") as export:
+    with butler.export(directory=directory, format="yaml", transfer=transfer) as export:
         collectionsToExport = list(set(collectionsToExport))
         datasetsToExport = list(set(datasetsToExport))
 
