@@ -74,7 +74,7 @@ def parseCalibrationCollection(registry, collection, datasetTypes):
     return exportCollections, exportDatasets
 
 
-def exportCalibs(repo, directory, collections):
+def exportCalibs(repo, directory, collections, dataset_type):
     """Certify a set of calibrations with a validity range.
 
     Parameters
@@ -89,6 +89,8 @@ def exportCalibs(repo, directory, collections):
        Data collections to pull calibrations from.  Must be an
        existing `~CollectionType.CHAINED` or
        `~CollectionType.CALIBRATION` collection.
+    dataset_type : `tuple` [`str`]
+       The dataset types to export. Default is to export all.
 
     Returns
     -------
@@ -103,8 +105,13 @@ def exportCalibs(repo, directory, collections):
     """
     butler = Butler(repo, writeable=False)
 
+    if not dataset_type:
+        dataset_type = ...
+
     calibTypes = [
-        datasetType for datasetType in butler.registry.queryDatasetTypes(...) if datasetType.isCalibration()
+        datasetType
+        for datasetType in butler.registry.queryDatasetTypes(dataset_type)
+        if datasetType.isCalibration()
     ]
 
     collectionsToExport = []
