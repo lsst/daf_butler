@@ -431,6 +431,9 @@ class FileTemplate:
             Raised if the requested field is not defined and the field is
             not optional.  Or, `component` is specified but "component" was
             not part of the template.
+        RuntimeError
+            Raised if a template uses dimension record metadata but no
+            records are attached to the `DatasetRef`.
         """
         # Extract defined non-None dimensions from the dataId.
         # This guards against Nones being explicitly present in the data ID
@@ -492,9 +495,30 @@ class FileTemplate:
                 if primary in extras:
                     record = extras[primary]
                     # Only fill in the fields if we have a value, the
-                    # KeyError will trigger below if the attribute is missing.
+                    # KeyError will trigger below if the attribute is missing,
+                    # but only if it is not optional. This is most likely
+                    # a typo in the metadata field and so should be reported
+                    # even if optional.
                     if hasattr(record, secondary):
                         fields[field_name] = getattr(record, secondary)
+                    else:
+                        # Is a log message sufficient?
+                        log.info(
+                            "Template field %s could not be resolved because metadata field %s"
+                            " is not understood for dimension %s. Template entry will be ignored",
+                            field_name,
+                            secondary,
+                            primary,
+                        )
+                elif primary in fields:
+                    # We do have an entry for the primary but do not have any
+                    # secondary entries. This is likely a problem with the
+                    # code failing to attach a record to the DatasetRef.
+                    raise RuntimeError(
+                        f"No metadata records attached to dataset {ref}"
+                        f" when attempting to expand field {field_name}."
+                        " Either expand the DatasetRef or change the template."
+                    )
 
             if field_name in fields:
                 value = fields[field_name]

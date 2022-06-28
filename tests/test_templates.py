@@ -148,6 +148,15 @@ class TestFileTemplates(unittest.TestCase):
         with self.assertRaises(FileTemplateValidationError):
             self.assertTemplate(tmplstr, "run2/calexp/00052/U", self.makeDatasetRef("calexp"))
 
+    def testNoRecord(self):
+        # Attaching records is not possible in this test code but we can check
+        # that a missing record when a metadata entry has been requested
+        # does fail.
+        tmplstr = "{run}/{datasetType}/{visit.name}/{physical_filter}"
+        with self.assertRaises(RuntimeError) as cm:
+            self.assertTemplate(tmplstr, "", self.makeDatasetRef("calexp"))
+        self.assertIn("No metadata", str(cm.exception))
+
     def testOptional(self):
         """Optional units in templates."""
         ref = self.makeDatasetRef("calexp", conform=False)
