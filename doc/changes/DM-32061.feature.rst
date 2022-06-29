@@ -1,0 +1,2 @@
+``butler export-calibs`` now takes a ``--transfer`` option to control how data are exported (use ``direct`` to do in-place export) and a ``--datasets`` option to limit the dataset types to be exported.
+It also now takes a default collections parameter (all calibration collections).

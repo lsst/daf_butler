@@ -825,8 +825,10 @@ def register_dataset_type(**kwargs):
 
 @click.command(cls=ButlerCommand)
 @repo_argument(required=True)
-@directory_argument(required=True)
+@directory_argument(required=True, help="DIRECTORY is the folder to receive the exported calibrations.")
 @collections_argument(help="COLLECTIONS are the collection to export calibrations from.")
+@dataset_type_option(help="Specific DatasetType(s) to export.", multiple=True)
+@transfer_option()
 def export_calibs(*args, **kwargs):
     """Export calibrations from the butler for import elsewhere."""
     table = script.exportCalibs(*args, **kwargs)

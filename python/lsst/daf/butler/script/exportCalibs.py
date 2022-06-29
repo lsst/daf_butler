@@ -65,12 +65,16 @@ def parseCalibrationCollection(registry, collection, datasetTypes):
             calibType, collections=collection, collectionTypes=[CollectionType.CALIBRATION]
         )
         for result in associations:
-            exportDatasets.append(result.ref)
-            exportCollections.append(result.ref.run)
+            # Need an expanded dataId in case file templates will be used
+            # in the transfer.
+            dataId = registry.expandDataId(result.ref.dataId)
+            ref = result.ref.expanded(dataId)
+            exportDatasets.append(ref)
+            exportCollections.append(ref.run)
     return exportCollections, exportDatasets
 
 
-def exportCalibs(repo, directory, collections):
+def exportCalibs(repo, directory, collections, dataset_type, transfer):
     """Certify a set of calibrations with a validity range.
 
     Parameters
@@ -85,6 +89,10 @@ def exportCalibs(repo, directory, collections):
        Data collections to pull calibrations from.  Must be an
        existing `~CollectionType.CHAINED` or
        `~CollectionType.CALIBRATION` collection.
+    dataset_type : `tuple` [`str`]
+       The dataset types to export. Default is to export all.
+    transfer : `str`
+        The transfer mode to use for exporting.
 
     Returns
     -------
@@ -99,8 +107,15 @@ def exportCalibs(repo, directory, collections):
     """
     butler = Butler(repo, writeable=False)
 
+    if not dataset_type:
+        dataset_type = ...
+    if not collections:
+        collections = ...
+
     calibTypes = [
-        datasetType for datasetType in butler.registry.queryDatasetTypes(...) if datasetType.isCalibration()
+        datasetType
+        for datasetType in butler.registry.queryDatasetTypes(dataset_type)
+        if datasetType.isCalibration()
     ]
 
     collectionsToExport = []
@@ -127,7 +142,7 @@ def exportCalibs(repo, directory, collections):
     if os.path.exists(directory):
         raise RuntimeError(f"Export directory exists: {directory}")
     os.makedirs(directory)
-    with butler.export(directory=directory, format="yaml", transfer="auto") as export:
+    with butler.export(directory=directory, format="yaml", transfer=transfer) as export:
         collectionsToExport = list(set(collectionsToExport))
         datasetsToExport = list(set(datasetsToExport))
 

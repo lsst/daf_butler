@@ -336,7 +336,7 @@ class DatastoreTests(DatastoreTestsBase):
         i = 0
         for sc_name in ("StructuredData", "StructuredComposite"):
             i += 1
-            datasetTypeName = f"metric{i}"
+            datasetTypeName = f"test_metric{i}"  # Different dataset type name each time.
 
             if sc_name == "StructuredComposite":
                 disassembled = True
@@ -1135,9 +1135,9 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
         testfile_j = tempfile.NamedTemporaryFile(suffix=".json")
         for datasetTypeName, sc, accepted in (
             ("metric", sc1, True),
-            ("metric2", sc1, False),
+            ("metric5", sc1, False),
             ("metric33", sc1, True),
-            ("metric2", sc2, True),
+            ("metric5", sc2, True),
         ):
             # Choose different temp file depending on StorageClass
             testfile = testfile_j if sc.name.endswith("Json") else testfile_y
@@ -1233,10 +1233,10 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
 
         for typeName, dataId, sc, accept, ingest in (
             ("metric", dataId1, sc1, (False, True, False), True),
-            ("metric2", dataId1, sc1, (False, False, False), False),
-            ("metric2", dataId2, sc1, (True, False, False), False),
+            ("metric5", dataId1, sc1, (False, False, False), False),
+            ("metric5", dataId2, sc1, (True, False, False), False),
             ("metric33", dataId2, sc2, (True, True, False), True),
-            ("metric2", dataId1, sc2, (False, True, False), True),
+            ("metric5", dataId1, sc2, (False, True, False), True),
         ):
 
             # Choose different temp file depending on StorageClass

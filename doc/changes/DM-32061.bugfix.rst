@@ -1,0 +1,2 @@
+``butler export-calibs`` can now copy files that require the use of a file template (for example if a direct URI was stored in datastore) with metadata records.
+File templates that use metadata records now complain if the record is not attached to the ``DatasetRef``.
