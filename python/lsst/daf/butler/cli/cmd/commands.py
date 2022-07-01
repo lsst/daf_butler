@@ -573,10 +573,12 @@ def certify_calibrations(*args, **kwargs):
 @options_file_option()
 def query_data_ids(**kwargs):
     """List the data IDs in a repository."""
-    table = script.queryDataIds(**kwargs)
+    table, reason = script.queryDataIds(**kwargs)
     if table:
         table.pprint_all()
     else:
+        if reason:
+            print(reason)
         if not kwargs.get("dimensions") and not kwargs.get("datasets"):
             print("No results. Try requesting some dimensions or datasets, see --help for more information.")
         else:

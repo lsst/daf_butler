@@ -63,21 +63,23 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
     def testDimensions(self):
         """Test getting a dimension."""
-        res = self._queryDataIds(self.root, dimensions=("visit",))
+        res, msg = self._queryDataIds(self.root, dimensions=("visit",))
         expected = AstropyTable(
             array((("R", "DummyCamComp", "d-r", 423), ("R", "DummyCamComp", "d-r", 424))),
             names=("band", "instrument", "physical_filter", "visit"),
         )
+        self.assertFalse(msg)
         self.assertAstropyTablesEqual(res, expected)
 
     def testNull(self):
         "Test asking for nothing."
-        res = self._queryDataIds(self.root)
-        self.assertEqual(res, None)
+        res, msg = self._queryDataIds(self.root)
+        self.assertEqual(res, None, msg)
+        self.assertFalse(msg)
 
     def testWhere(self):
         """Test with a WHERE constraint."""
-        res = self._queryDataIds(
+        res, msg = self._queryDataIds(
             self.root, dimensions=("visit",), where="instrument='DummyCamComp' AND visit=423"
         )
         expected = AstropyTable(
@@ -85,6 +87,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
+        self.assertFalse(msg)
 
     def testDatasetsAndCollections(self):
         """Test constraining via datasets and collections."""
@@ -103,7 +106,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         self.repo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425}, run="foo")
 
         # Verify the new dataset is not found in the "ingest/run" collection.
-        res = self._queryDataIds(
+        res, msg = self._queryDataIds(
             repo=self.root, dimensions=("visit",), collections=("ingest/run",), datasets="test_metric_comp"
         )
         expected = AstropyTable(
@@ -111,9 +114,10 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
+        self.assertFalse(msg)
 
         # Verify the new dataset is found in the "foo" collection.
-        res = self._queryDataIds(
+        res, msg = self._queryDataIds(
             repo=self.root, dimensions=("visit",), collections=("foo",), datasets="test_metric_comp"
         )
         expected = AstropyTable(
@@ -121,6 +125,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
+        self.assertFalse(msg)
 
 
 if __name__ == "__main__":
