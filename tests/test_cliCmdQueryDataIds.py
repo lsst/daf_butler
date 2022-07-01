@@ -26,7 +26,7 @@ import os
 import unittest
 
 from astropy.table import Table as AstropyTable
-from lsst.daf.butler import Butler, script
+from lsst.daf.butler import Butler, DatasetType, script
 from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
 from numpy import array
 
@@ -126,6 +126,45 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         )
         self.assertAstropyTablesEqual(res, expected)
         self.assertFalse(msg)
+
+        # Verify the new dataset is found in the "foo" collection and the
+        # dimensions are determined automatically.
+        with self.assertLogs("lsst.daf.butler.script.queryDataIds", "INFO") as cm:
+            res, msg = self._queryDataIds(repo=self.root, collections=("foo",), datasets="test_metric_comp")
+        self.assertIn("Determined dimensions", "\n".join(cm.output))
+        expected = AstropyTable(
+            array((("R", "DummyCamComp", "d-r", 425),)),
+            names=("band", "instrument", "physical_filter", "visit"),
+        )
+        self.assertAstropyTablesEqual(res, expected)
+        self.assertFalse(msg)
+
+        # Check that we get a reason if no dimensions can be inferred.
+        new_dataset_type = DatasetType(
+            "test_metric_dimensionless",
+            (),
+            "StructuredDataDict",
+            universe=self.repo.butler.registry.dimensions,
+        )
+        self.repo.butler.registry.registerDatasetType(new_dataset_type)
+        res, msg = self._queryDataIds(repo=self.root, collections=("foo",), datasets=...)
+        self.assertIsNone(res)
+        self.assertIn("No dimensions in common", msg)
+
+        # Check that we get a reason returned if no dataset type is found.
+        res, msg = self._queryDataIds(
+            repo=self.root, dimensions=("visit",), collections=("foo",), datasets="raw"
+        )
+        self.assertIsNone(res)
+        self.assertEqual(msg, "Dataset type raw is not registered.")
+
+        # Check that we get a reason returned if no dataset is found in
+        # collection.
+        res, msg = self._queryDataIds(
+            repo=self.root, dimensions=("visit",), collections=("ingest",), datasets="test_metric_comp"
+        )
+        self.assertIsNone(res)
+        self.assertIn("No datasets of type test_metric_comp", msg)
 
 
 if __name__ == "__main__":
