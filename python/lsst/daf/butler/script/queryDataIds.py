@@ -121,8 +121,8 @@ def queryDataIds(repo, dimensions, datasets, where, collections, order_by, limit
             offset = None
         results.limit(limit, offset)
 
-    if len(results.graph) > 0:
+    if results.count() > 0 and len(results.graph) > 0:
         table = _Table(results)
         return table.getAstropyTable(not order_by), None
     else:
-        return None, None
+        return None, "\n".join(results.explain_no_results())
