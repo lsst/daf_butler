@@ -26,6 +26,7 @@ __all__ = ("FileDatastore",)
 
 import hashlib
 import logging
+import os
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import (
@@ -1124,12 +1125,25 @@ class FileDatastore(GenericBaseDatastore):
 
         # For a local file, simply use the formatter directly
         if uri.isLocal:
-            try:
-                formatter.write(inMemoryDataset)
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to location {uri}"
-                ) from e
+            # To allow atomic writes, write to a temporary location
+            # in the same working directory.
+            with ResourcePath.temporary_uri(suffix=uri.getExtension(), prefix=uri.dirname()) as temporary_uri:
+                # Need to configure the formatter to write to a different
+                # location and that needs us to overwrite internals
+                log.debug("Writing dataset to temporary location at %s", temporary_uri)
+                with formatter._updateLocation(Location(None, temporary_uri)):
+                    try:
+                        formatter.write(inMemoryDataset)
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Failed to serialize dataset {ref} of type"
+                            f" {type(inMemoryDataset)} to "
+                            f"to {uri} via temporary location {temporary_uri}."
+                        ) from e
+                # We know we have a local file and we must rename it to the
+                # final destination. There is no ResourcePath support for this.
+                os.rename(temporary_uri.ospath, uri.ospath)
+
             log.debug("Successfully wrote python object to local file at %s", uri)
         else:
             # This is a remote URI. Some datasets can be serialized directly
