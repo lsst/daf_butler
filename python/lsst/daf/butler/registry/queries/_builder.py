@@ -31,9 +31,9 @@ from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._collectionType import CollectionType
 from .._exceptions import DataIdValueError
 from ..interfaces import CollectionRecord, DatasetRecordStorage, GovernorDimensionRecordStorage
-from ..managers import RegistryManagerInstances
 from ..wildcards import CollectionSearch, CollectionWildcard
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
+from ._query_backend import QueryBackend
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
 from .expressions import convertExpressionToSql
 
@@ -46,9 +46,8 @@ class QueryBuilder:
     ----------
     summary : `QuerySummary`
         Struct organizing the dimensions involved in the query.
-    managers : `RegistryManagerInstances`
-        A struct containing the registry manager instances used by the query
-        system.
+    backend : `QueryBackend`
+        Backend object that represents the `Registry` implementation.
     doomed_by : `Iterable` [ `str` ], optional
         A list of messages (appropriate for e.g. logging or exceptions) that
         explain why the query is known to return no results even before it is
@@ -58,14 +57,14 @@ class QueryBuilder:
     def __init__(
         self,
         summary: QuerySummary,
-        managers: RegistryManagerInstances,
+        backend: QueryBackend,
         doomed_by: Iterable[str] = (),
     ):
         self.summary = summary
+        self._backend = backend
         self._simpleQuery = SimpleQuery()
         self._elements: NamedKeyDict[DimensionElement, sqlalchemy.sql.FromClause] = NamedKeyDict()
         self._columns = QueryColumns()
-        self._managers = managers
         self._doomed_by = list(doomed_by)
 
         self._validateGovernors()
@@ -83,7 +82,7 @@ class QueryBuilder:
             Raised when governor dimension values are not found.
         """
         for dimension, bounds in self.summary.where.dimension_constraint.items():
-            storage = self._managers.dimensions[self.summary.requested.universe[dimension]]
+            storage = self._backend.managers.dimensions[self.summary.requested.universe[dimension]]
             if isinstance(storage, GovernorDimensionRecordStorage):
                 try:
                     bounds.with_concrete_bounds(storage.values)
@@ -117,7 +116,7 @@ class QueryBuilder:
             associated with a database table (see `DimensionElement.hasTable`).
         """
         assert element not in self._elements, "Element already included in query."
-        storage = self._managers.dimensions[element]
+        storage = self._backend.managers.dimensions[element]
         fromClause = storage.join(
             self,
             regions=self._columns.regions if element in self.summary.spatial else None,
@@ -182,7 +181,7 @@ class QueryBuilder:
             collectionTypes = {CollectionType.RUN}
         else:
             collectionTypes = CollectionType.all()
-        datasetRecordStorage = self._managers.datasets.find(datasetType.name)
+        datasetRecordStorage = self._backend.managers.datasets.find(datasetType.name)
         if datasetRecordStorage is None:
             # Unrecognized dataset type means no results.  It might be better
             # to raise here, but this is consistent with previous behavior,
@@ -195,12 +194,12 @@ class QueryBuilder:
         collectionRecords: List[CollectionRecord] = []
         rejections: List[str] = []
         for collectionRecord in collections.iter(
-            self._managers.collections.records, collectionTypes=collectionTypes
+            self._backend.managers.collections.records, collectionTypes=collectionTypes
         ):
             # Only include collections that (according to collection summaries)
             # might have datasets of this type and governor dimensions
             # consistent with the query's WHERE clause.
-            collection_summary = self._managers.datasets.getCollectionSummary(collectionRecord)
+            collection_summary = self._backend.managers.datasets.getCollectionSummary(collectionRecord)
             if not collection_summary.is_compatible_with(
                 datasetType,
                 self.summary.where.dimension_constraint,
@@ -269,7 +268,7 @@ class QueryBuilder:
             columns = DatasetQueryColumns(
                 datasetType=datasetType,
                 id=subquery.columns["id"],
-                runKey=subquery.columns[self._managers.collections.getRunForeignKeyName()],
+                runKey=subquery.columns[self._backend.managers.collections.getRunForeignKeyName()],
                 ingestDate=subquery.columns["ingest_date"],
             )
         else:
@@ -427,7 +426,7 @@ class QueryBuilder:
         # Now we fill out the SELECT from the CTE, and the subquery it contains
         # (at the same time, since they have the same columns, aside from the
         # OVER clause).
-        run_key_name = self._managers.collections.getRunForeignKeyName()
+        run_key_name = self._backend.managers.collections.getRunForeignKeyName()
         window_data_id_cols = [
             search.columns[name].label(name) for name in storage.datasetType.dimensions.required.names
         ]
@@ -594,7 +593,7 @@ class QueryBuilder:
                     columns=self._columns,
                     elements=self._elements,
                     bind=self.summary.where.bind,
-                    TimespanReprClass=self._managers.column_types.timespan_cls,
+                    TimespanReprClass=self._backend.managers.column_types.timespan_cls,
                 )
             )
         for dimension, columnsInQuery in self._columns.keys.items():
@@ -629,7 +628,7 @@ class QueryBuilder:
                 assert element not in self.summary.where.dataId.graph.elements
                 self._simpleQuery.where.append(
                     intervalInQuery.overlaps(
-                        self._managers.column_types.timespan_cls.fromLiteral(givenInterval)
+                        self._backend.managers.column_types.timespan_cls.fromLiteral(givenInterval)
                     )
                 )
 
@@ -657,7 +656,9 @@ class QueryBuilder:
         self._addWhereClause()
         if self._columns.isEmpty():
             return EmptyQuery(
-                self.summary.requested.universe, managers=self._managers, doomed_by=self._doomed_by
+                self.summary.requested.universe,
+                backend=self._backend,
+                doomed_by=self._doomed_by,
             )
         return DirectQuery(
             graph=self.summary.requested,
@@ -667,7 +668,7 @@ class QueryBuilder:
             columns=self._columns,
             order_by_columns=self._order_by_columns(),
             limit=self.summary.limit,
-            managers=self._managers,
+            backend=self._backend,
             doomed_by=self._doomed_by,
         )
 
@@ -695,7 +696,7 @@ class QueryBuilder:
                 table = self._elements[order_by_column.element]
 
                 if order_by_column.column in ("timespan.begin", "timespan.end"):
-                    TimespanReprClass = self._managers.column_types.timespan_cls
+                    TimespanReprClass = self._backend.managers.column_types.timespan_cls
                     timespan_repr = TimespanReprClass.from_columns(table.columns)
                     if order_by_column.column == "timespan.begin":
                         column = timespan_repr.lower()

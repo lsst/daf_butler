@@ -47,7 +47,7 @@ from ...core import (
     ddl,
 )
 from ..interfaces import Database
-from ..managers import RegistryManagerInstances
+from ._query_backend import QueryBackend
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
 
 if TYPE_CHECKING:
@@ -82,9 +82,8 @@ class Query(ABC):
         Object describing the dimensions included in the query.
     spatial_constraint : `SpatialConstraint`, optional
         Constraint that all region columns in all returned rows must overlap.
-    managers : `RegistryManagerInstances`
-        A struct containing the registry manager instances used by the query
-        system.
+    backend : `QueryBackend`
+        Backend object that represents the `Registry` implementation.
     doomed_by : `Iterable` [ `str` ], optional
         A list of messages (appropriate for e.g. logging or exceptions) that
         explain why the query is known to return no results even before it is
@@ -103,12 +102,12 @@ class Query(ABC):
         *,
         graph: DimensionGraph,
         spatial_constraint: Optional[SpatialConstraint],
-        managers: RegistryManagerInstances,
+        backend: QueryBackend,
         doomed_by: Iterable[str] = (),
     ):
         self.graph = graph
         self.spatial_constraint = spatial_constraint
-        self.managers = managers
+        self.backend = backend
         self._doomed_by = tuple(doomed_by)
         self._filtered_by_join: Optional[int] = None
         self._filtered_by_where: Optional[int] = None
@@ -333,7 +332,7 @@ class Query(ABC):
         # involved.
         for element in self.graph.elements:
             summary = QuerySummary(element.graph)
-            builder = QueryBuilder(summary, self.managers)
+            builder = QueryBuilder(summary, self.backend)
             followup_query = builder.finish()
             if not followup_query.any(db, exact=False):
                 yield f"No dimension records for element '{element.name}' found."
@@ -504,7 +503,7 @@ class Query(ABC):
         assert datasetColumns is not None
         if dataId is None:
             dataId = self.extractDataId(row, graph=datasetColumns.datasetType.dimensions, records=records)
-        runRecord = self.managers.collections[row._mapping[datasetColumns.runKey]]
+        runRecord = self.backend.managers.collections[row._mapping[datasetColumns.runKey]]
         return DatasetRef(
             datasetColumns.datasetType, dataId, id=row._mapping[datasetColumns.id], run=runRecord.name
         )
@@ -672,9 +671,8 @@ class Query(ABC):
     must overlap (`SpatialConstraint` or `None`).
     """
 
-    managers: RegistryManagerInstances
-    """A struct containing `Registry` helper objects
-    (`RegistryManagerInstances`).
+    backend: QueryBackend
+    """Backend object that represents the `Registry` implementation.
     """
 
 
@@ -719,9 +717,8 @@ class DirectQuery(Query):
         Object describing the dimensions included in the query.
     spatial_constraint : `SpatialConstraint`, optional
         Constraint that all region columns in all returned rows must overlap.
-    managers : `RegistryManagerInstances`
-        Struct containing the `Registry` manager helper objects, to be
-        forwarded to the `Query` constructor.
+    backend : `QueryBackend`
+        Backend object that represents the `Registry` implementation.
     doomed_by : `Iterable` [ `str` ], optional
         A list of messages (appropriate for e.g. logging or exceptions) that
         explain why the query is known to return no results even before it is
@@ -736,7 +733,7 @@ class DirectQuery(Query):
         uniqueness: DirectQueryUniqueness,
         graph: DimensionGraph,
         spatial_constraint: Optional[SpatialConstraint],
-        managers: RegistryManagerInstances,
+        backend: QueryBackend,
         order_by_columns: Iterable[OrderByColumn] = (),
         limit: Optional[Tuple[int, Optional[int]]] = None,
         doomed_by: Iterable[str] = (),
@@ -744,7 +741,7 @@ class DirectQuery(Query):
         super().__init__(
             graph=graph,
             spatial_constraint=spatial_constraint,
-            managers=managers,
+            backend=backend,
             doomed_by=doomed_by,
         )
         assert not simpleQuery.columns, "Columns should always be set on a copy in .sql"
@@ -795,7 +792,7 @@ class DirectQuery(Query):
             self._datasetQueryColumns = DatasetQueryColumns(
                 datasetType=base.datasetType,
                 id=base.id.label("dataset_id"),
-                runKey=base.runKey.label(self.managers.collections.getRunForeignKeyName()),
+                runKey=base.runKey.label(self.backend.managers.collections.getRunForeignKeyName()),
                 ingestDate=ingestDate,
             )
         return self._datasetQueryColumns
@@ -861,8 +858,10 @@ class DirectQuery(Query):
             )
         datasetColumns = self.getDatasetColumns()
         if datasetColumns is not None:
-            self.managers.datasets.addDatasetForeignKey(spec, primaryKey=unique, constraint=constraints)
-            self.managers.collections.addRunForeignKey(spec, nullable=False, constraint=constraints)
+            self.backend.managers.datasets.addDatasetForeignKey(
+                spec, primaryKey=unique, constraint=constraints
+            )
+            self.backend.managers.collections.addRunForeignKey(spec, nullable=False, constraint=constraints)
 
         # Need a column for ORDER BY if ordering is requested
         if self._order_by_columns:
@@ -892,7 +891,7 @@ class DirectQuery(Query):
                 isUnique=self.isUnique(),
                 graph=self.graph,
                 spatial_constraint=self.spatial_constraint,
-                managers=self.managers,
+                backend=self.backend,
                 doomed_by=self._doomed_by,
             )
             session.dropTemporaryTable(table)
@@ -905,14 +904,14 @@ class DirectQuery(Query):
         if columns is None:
             return self
         if columns.isEmpty():
-            return EmptyQuery(self.graph.universe, self.managers)
+            return EmptyQuery(self.graph.universe, self.backend)
         return DirectQuery(
             simpleQuery=self._simpleQuery.copy(),
             columns=columns,
             uniqueness=DirectQueryUniqueness.NEEDS_DISTINCT if unique else DirectQueryUniqueness.NOT_UNIQUE,
             graph=graph,
             spatial_constraint=self.spatial_constraint if not unique else None,
-            managers=self.managers,
+            backend=self.backend,
             doomed_by=self._doomed_by,
         )
 
@@ -928,7 +927,7 @@ class DirectQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        builder = QueryBuilder(summary, managers=self.managers, doomed_by=self._doomed_by)
+        builder = QueryBuilder(summary, backend=self.backend, doomed_by=self._doomed_by)
         builder.joinTable(
             self.sql.alias(), dimensions=self.graph.dimensions, datasets=self.getDatasetColumns()
         )
@@ -960,9 +959,8 @@ class MaterializedQuery(Query):
     spatial_constraint : `SpatialConstraint` or `None`
         A spatial constraint all result-row regions must overlap to be valid
         (which may reject some rows that are in the table).
-    managers : `RegistryManagerInstances`
-        A struct containing `Registry` manager helper objects, forwarded to
-        the `Query` constructor.
+    backend : `QueryBackend`
+        Backend object that represents the `Registry` implementation.
     doomed_by : `Iterable` [ `str` ], optional
         A list of messages (appropriate for e.g. logging or exceptions) that
         explain why the query is known to return no results even before it is
@@ -978,14 +976,11 @@ class MaterializedQuery(Query):
         isUnique: bool,
         graph: DimensionGraph,
         spatial_constraint: Optional[SpatialConstraint],
-        managers: RegistryManagerInstances,
+        backend: QueryBackend,
         doomed_by: Iterable[str] = (),
     ):
         super().__init__(
-            graph=graph,
-            spatial_constraint=spatial_constraint,
-            managers=managers,
-            doomed_by=doomed_by,
+            graph=graph, spatial_constraint=spatial_constraint, backend=backend, doomed_by=doomed_by
         )
         self._table = table
         self._spatial = tuple(spatial)
@@ -1015,7 +1010,7 @@ class MaterializedQuery(Query):
             return DatasetQueryColumns(
                 datasetType=self._datasetType,
                 id=self._table.columns["dataset_id"],
-                runKey=self._table.columns[self.managers.collections.getRunForeignKeyName()],
+                runKey=self._table.columns[self.backend.managers.collections.getRunForeignKeyName()],
                 ingestDate=None,
             )
         else:
@@ -1042,7 +1037,7 @@ class MaterializedQuery(Query):
         if columns is None:
             return self
         if columns.isEmpty():
-            return EmptyQuery(self.graph.universe, managers=self.managers)
+            return EmptyQuery(self.graph.universe, self.backend)
         simpleQuery = SimpleQuery()
         simpleQuery.join(self._table)
         return DirectQuery(
@@ -1051,7 +1046,7 @@ class MaterializedQuery(Query):
             uniqueness=DirectQueryUniqueness.NEEDS_DISTINCT if unique else DirectQueryUniqueness.NOT_UNIQUE,
             graph=graph,
             spatial_constraint=self.spatial_constraint if not unique else None,
-            managers=self.managers,
+            backend=self.backend,
             doomed_by=self._doomed_by,
         )
 
@@ -1067,7 +1062,7 @@ class MaterializedQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        builder = QueryBuilder(summary, managers=self.managers, doomed_by=self._doomed_by)
+        builder = QueryBuilder(summary, backend=self.backend, doomed_by=self._doomed_by)
         builder.joinTable(self._table, dimensions=self.graph.dimensions, datasets=self.getDatasetColumns())
         return builder
 
@@ -1080,9 +1075,8 @@ class EmptyQuery(Query):
     ----------
     universe : `DimensionUniverse`
         Set of all dimensions from which the null set is extracted.
-    managers : `RegistryManagerInstances`
-        A struct containing the registry manager instances used by the query
-        system.
+    backend : `QueryBackend`
+        Backend object that represents the `Registry` implementation.
     doomed_by : `Iterable` [ `str` ], optional
         A list of messages (appropriate for e.g. logging or exceptions) that
         explain why the query is known to return no results even before it is
@@ -1092,13 +1086,13 @@ class EmptyQuery(Query):
     def __init__(
         self,
         universe: DimensionUniverse,
-        managers: RegistryManagerInstances,
+        backend: QueryBackend,
         doomed_by: Iterable[str] = (),
     ):
         super().__init__(
             graph=universe.empty,
             spatial_constraint=None,
-            managers=managers,
+            backend=backend,
             doomed_by=doomed_by,
         )
 
@@ -1156,4 +1150,4 @@ class EmptyQuery(Query):
                 f"({summary.requested.dimensions}) beyond those originally included in the query "
                 f"({self.graph.dimensions})."
             )
-        return QueryBuilder(summary, managers=self.managers, doomed_by=self._doomed_by)
+        return QueryBuilder(summary, backend=self.backend, doomed_by=self._doomed_by)

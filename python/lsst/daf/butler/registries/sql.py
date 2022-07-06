@@ -76,7 +76,6 @@ from ..registry import (
 )
 from ..registry.interfaces import ChainedCollectionRecord, DatasetIdGenEnum, RunRecord
 from ..registry.managers import RegistryManagerInstances, RegistryManagerTypes
-from ..registry.queries import Query
 from ..registry.wildcards import CollectionWildcard, DatasetTypeWildcard
 
 if TYPE_CHECKING:
@@ -865,7 +864,7 @@ class SqlRegistry(Registry):
         """
         return queries.QueryBuilder(
             summary,
-            managers=self._managers,
+            backend=queries.SqlQueryBackend(self._db, self._managers),
             doomed_by=doomed_by,
         )
 
@@ -1029,7 +1028,7 @@ class SqlRegistry(Registry):
 
         def query_factory(
             order_by: Optional[Iterable[str]] = None, limit: Optional[Tuple[int, Optional[int]]] = None
-        ) -> Query:
+        ) -> queries.Query:
             """Construct the Query object that generates query results."""
             summary = queries.QuerySummary(
                 requested=requestedDimensions,

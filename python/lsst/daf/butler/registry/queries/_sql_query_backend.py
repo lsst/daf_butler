@@ -52,6 +52,11 @@ class SqlQueryBackend(QueryBackend):
         self._managers = managers
 
     @property
+    def managers(self) -> RegistryManagerInstances:
+        # Docstring inherited.
+        return self._managers
+
+    @property
     def universe(self) -> DimensionUniverse:
         # Docstring inherited.
         return self._managers.dimensions.universe
