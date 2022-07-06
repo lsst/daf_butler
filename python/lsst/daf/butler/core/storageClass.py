@@ -799,8 +799,8 @@ StorageClasses
             existing = self.getStorageClass(storageClass.name)
             if existing != storageClass:
                 raise ValueError(
-                    f"New definition for StorageClass {storageClass.name} ({storageClass}) "
-                    f"differs from current definition ({existing})"
+                    f"New definition for StorageClass {storageClass.name} ({storageClass!r}) "
+                    f"differs from current definition ({existing!r})"
                 )
         else:
             self._storageClasses[storageClass.name] = storageClass
