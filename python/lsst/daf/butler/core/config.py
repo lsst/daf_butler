@@ -1190,6 +1190,8 @@ class ConfigSubset(Config):
         # Now update this object with the external values so that the external
         # values always override the defaults
         self.update(externalConfig)
+        if not self.configFile:
+            self.configFile = externalConfig.configFile
 
         # If this configuration has child configurations of the same
         # config class, we need to expand those defaults as well.
