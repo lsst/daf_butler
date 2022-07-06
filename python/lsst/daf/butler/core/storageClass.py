@@ -27,6 +27,7 @@ __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
 import builtins
 import copy
+import itertools
 import logging
 from typing import Any, Collection, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union
 
@@ -660,7 +661,7 @@ StorageClasses
         # components or parents before their classes are defined
         # we have a helper function that we can call recursively
         # to extract definitions from the configuration.
-        def processStorageClass(name: str, sconfig: StorageClassConfig) -> None:
+        def processStorageClass(name: str, sconfig: StorageClassConfig, msg: str = "") -> None:
             # Maybe we've already processed this through recursion
             if name not in sconfig:
                 return
@@ -683,7 +684,7 @@ StorageClasses
                 components = {}
                 for cname, ctype in info[compName].items():
                     if ctype not in self:
-                        processStorageClass(ctype, sconfig)
+                        processStorageClass(ctype, sconfig, msg)
                     components[cname] = self.getStorageClass(ctype)
 
                 # Fill in other items
@@ -694,15 +695,21 @@ StorageClasses
             if "inheritsFrom" in info:
                 baseName = info["inheritsFrom"]
                 if baseName not in self:
-                    processStorageClass(baseName, sconfig)
+                    processStorageClass(baseName, sconfig, msg)
                 baseClass = type(self.getStorageClass(baseName))
 
             newStorageClassType = self.makeNewStorageClass(name, baseClass, **storageClassKwargs)
             newStorageClass = newStorageClassType()
-            self.registerStorageClass(newStorageClass)
+            self.registerStorageClass(newStorageClass, msg=msg)
+
+        # In case there is a problem, construct a context message for any
+        # error reporting.
+        files = [str(f) for f in itertools.chain([sconfig.configFile], sconfig.filesRead) if f]
+        context = f"when adding definitions from {', '.join(files)}" if files else ""
+        log.debug("Adding definitions from config %s", ", ".join(files))
 
         for name in list(sconfig.keys()):
-            processStorageClass(name, sconfig)
+            processStorageClass(name, sconfig, context)
 
     @staticmethod
     def makeNewStorageClass(
@@ -778,7 +785,7 @@ StorageClasses
         """
         return self._storageClasses[storageClassName]
 
-    def registerStorageClass(self, storageClass: StorageClass) -> None:
+    def registerStorageClass(self, storageClass: StorageClass, msg: Optional[str] = None) -> None:
         """Store the `StorageClass` in the factory.
 
         Will be indexed by `StorageClass.name` and will return instances
@@ -788,19 +795,22 @@ StorageClasses
         ----------
         storageClass : `StorageClass`
             Type of the Python `StorageClass` to register.
+        msg : `str`, optional
+            Additional message string to be included in any error message.
 
         Raises
         ------
         ValueError
             If a storage class has already been registered with
-            storageClassName and the previous definition differs.
+            that storage class name and the previous definition differs.
         """
         if storageClass.name in self._storageClasses:
             existing = self.getStorageClass(storageClass.name)
             if existing != storageClass:
+                errmsg = f" {msg}" if msg else ""
                 raise ValueError(
-                    f"New definition for StorageClass {storageClass.name} ({storageClass}) "
-                    f"differs from current definition ({existing})"
+                    f"New definition for StorageClass {storageClass.name} ({storageClass!r}) "
+                    f"differs from current definition ({existing!r}){errmsg}"
                 )
         else:
             self._storageClasses[storageClass.name] = storageClass
