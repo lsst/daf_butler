@@ -170,6 +170,9 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             factory.registerStorageClass(newclass3)
         self.assertIn("pytype='dict'", str(cm.exception))
+        with self.assertRaises(ValueError) as cm:
+            factory.registerStorageClass(newclass3, msg="error string")
+        self.assertIn("error string", str(cm.exception))
 
         factory._unregisterStorageClass(newclass3.name)
         self.assertNotIn(newclass3, factory)
