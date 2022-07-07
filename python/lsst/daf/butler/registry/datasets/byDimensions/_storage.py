@@ -25,11 +25,12 @@ from __future__ import annotations
 __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 import uuid
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
+from collections.abc import Iterable, Iterator, Sequence
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
-from lsst.daf.butler import (
-    CollectionType,
+
+from ....core import (
     DataCoordinate,
     DataCoordinateSet,
     DatasetId,
@@ -39,14 +40,10 @@ from lsst.daf.butler import (
     Timespan,
     ddl,
 )
-from lsst.daf.butler.registry import (
-    CollectionSummary,
-    CollectionTypeError,
-    ConflictingDefinitionError,
-    UnsupportedIdGeneratorError,
-)
-from lsst.daf.butler.registry.interfaces import DatasetIdGenEnum, DatasetRecordStorage
-
+from ..._collection_summary import CollectionSummary
+from ..._collectionType import CollectionType
+from ..._exceptions import CollectionTypeError, ConflictingDefinitionError, UnsupportedIdGeneratorError
+from ...interfaces import DatasetIdGenEnum, DatasetRecordStorage
 from .tables import makeTagTableSpec
 
 if TYPE_CHECKING:
@@ -74,7 +71,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
         tags: sqlalchemy.schema.Table,
-        calibs: Optional[sqlalchemy.schema.Table],
+        calibs: sqlalchemy.schema.Table | None,
     ):
         super().__init__(datasetType=datasetType)
         self._dataset_type_id = dataset_type_id
@@ -87,8 +84,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._runKeyColumn = collections.getRunForeignKeyName()
 
     def find(
-        self, collection: CollectionRecord, dataId: DataCoordinate, timespan: Optional[Timespan] = None
-    ) -> Optional[DatasetRef]:
+        self, collection: CollectionRecord, dataId: DataCoordinate, timespan: Timespan | None = None
+    ) -> DatasetRef | None:
         # Docstring inherited from DatasetRecordStorage.
         assert dataId.graph == self.datasetType.dimensions
         if collection.type is CollectionType.CALIBRATION and timespan is None:
@@ -178,7 +175,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._db.delete(self._tags, ["dataset_id", self._collections.getCollectionForeignKeyName()], *rows)
 
     def _buildCalibOverlapQuery(
-        self, collection: CollectionRecord, dataIds: Optional[DataCoordinateSet], timespan: Timespan
+        self, collection: CollectionRecord, dataIds: DataCoordinateSet | None, timespan: Timespan
     ) -> SimpleQuery:
         assert self._calibs is not None
         # Start by building a SELECT query for any rows that would overlap
@@ -225,7 +222,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             "dataset_type_id": self._dataset_type_id,
         }
         rows = []
-        dataIds: Optional[Set[DataCoordinate]] = (
+        dataIds: set[DataCoordinate] | None = (
             set() if not TimespanReprClass.hasExclusionConstraint() else None
         )
         summary = CollectionSummary()
@@ -284,7 +281,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         collection: CollectionRecord,
         timespan: Timespan,
         *,
-        dataIds: Optional[Iterable[DataCoordinate]] = None,
+        dataIds: Iterable[DataCoordinate] | None = None,
     ) -> None:
         # Docstring inherited from DatasetRecordStorage.
         if self._calibs is None:
@@ -299,7 +296,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             )
         TimespanReprClass = self._db.getTimespanRepresentation()
         # Construct a SELECT query to find all rows that overlap our inputs.
-        dataIdSet: Optional[DataCoordinateSet]
+        dataIdSet: DataCoordinateSet | None
         if dataIds is not None:
             dataIdSet = DataCoordinateSet(set(dataIds), graph=self.datasetType.dimensions)
         else:
@@ -341,10 +338,10 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self,
         *collections: CollectionRecord,
         dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
-        id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
+        id: SimpleQuery.Select.Or[int | None] = SimpleQuery.Select,
         run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
-        timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
-        ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
+        timespan: SimpleQuery.Select.Or[Timespan | None] = SimpleQuery.Select,
+        ingestDate: SimpleQuery.Select.Or[Timespan | None] = None,
         rank: SimpleQuery.Select.Or[None] = None,
     ) -> sqlalchemy.sql.Selectable:
         # Docstring inherited from DatasetRecordStorage.
@@ -381,7 +378,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # it in the tags/calibs table(s), but that's multiple columns, not one,
         # so we need to transform the one Select.Or argument into a dictionary
         # of them.
-        kwargs: Dict[str, Any]
+        kwargs: dict[str, Any]
         if dataId is SimpleQuery.Select:
             kwargs = {dim.name: SimpleQuery.Select for dim in self.datasetType.dimensions.required}
         else:
@@ -461,9 +458,9 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         query: SimpleQuery,
         table: sqlalchemy.schema.Table,
         collections: Sequence[CollectionRecord],
-        id: SimpleQuery.Select.Or[Optional[int]],
+        id: SimpleQuery.Select.Or[int | None],
         run: SimpleQuery.Select.Or[None],
-        ingestDate: SimpleQuery.Select.Or[Optional[Timespan]],
+        ingestDate: SimpleQuery.Select.Or[Timespan | None],
         rank: SimpleQuery.Select.Or[None],
     ) -> None:
         dataset_id_col = table.columns.dataset_id
@@ -503,7 +500,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # tags/calibs table.  The things we might need to get from the static
         # dataset table are the run key and the ingest date.
         need_static_table = False
-        static_kwargs: Dict[str, Any] = {}
+        static_kwargs: dict[str, Any] = {}
         if run is not None:
             assert run is SimpleQuery.Select, "To constrain the run name, pass a RunRecord as a collection."
             if len(collections) == 1 and collections[0].type is CollectionType.RUN:
@@ -616,8 +613,8 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
             raise UnsupportedIdGeneratorError("Only UNIQUE mode can be used with integer dataset IDs.")
 
         # Make a list of dataIds and optionally dataset IDs.
-        dataIdList: List[DataCoordinate] = []
-        datasetIdList: List[int] = []
+        dataIdList: list[DataCoordinate] = []
+        datasetIdList: list[int] = []
         for dataset in datasets:
             dataIdList.append(dataset.dataId)
 
@@ -636,7 +633,7 @@ class ByDimensionsDatasetRecordStorageInt(ByDimensionsDatasetRecordStorage):
         yield from self._insert(run, dataIdList, datasetIdList)
 
     def _insert(
-        self, run: RunRecord, dataIdList: List[DataCoordinate], datasetIdList: Optional[List[int]] = None
+        self, run: RunRecord, dataIdList: list[DataCoordinate], datasetIdList: list[int] | None = None
     ) -> Iterator[DatasetRef]:
         """Common part of implementation of `insert` and `import_` methods."""
 
@@ -967,7 +964,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
         else:
             # WARNING: If you modify this code make sure that the order of
             # items in the `items` list below never changes.
-            items: List[Tuple[str, str]] = []
+            items: list[tuple[str, str]] = []
             if idGenerationMode is DatasetIdGenEnum.DATAID_TYPE:
                 items = [
                     ("dataset_type", self.datasetType.name),

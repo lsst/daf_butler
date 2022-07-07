@@ -32,10 +32,11 @@ __all__ = (
 )
 
 from collections import namedtuple
-from typing import Any, List, Optional, Type, Union
+from typing import Any
 
 import sqlalchemy
-from lsst.daf.butler import (
+
+from ....core import (
     DatasetType,
     DimensionUniverse,
     GovernorDimension,
@@ -43,7 +44,7 @@ from lsst.daf.butler import (
     addDimensionForeignKey,
     ddl,
 )
-from lsst.daf.butler.registry.interfaces import CollectionManager
+from ...interfaces import CollectionManager
 
 DATASET_TYPE_NAME_LENGTH = 128
 
@@ -62,9 +63,9 @@ def addDatasetForeignKey(
     dtype: type,
     *,
     prefix: str = "dataset",
-    onDelete: Optional[str] = None,
+    onDelete: str | None = None,
     constraint: bool = True,
-    exact_name: Optional[str] = None,
+    exact_name: str | None = None,
     **kwargs: Any,
 ) -> ddl.FieldSpec:
     """Add a foreign key column for datasets and (optionally) a constraint to
@@ -115,7 +116,7 @@ def addDatasetForeignKey(
 
 
 def makeStaticTableSpecs(
-    collections: Type[CollectionManager],
+    collections: type[CollectionManager],
     universe: DimensionUniverse,
     dtype: type,
     autoincrement: bool,
@@ -282,7 +283,7 @@ def makeCalibTableName(datasetType: DatasetType, dimensionsKey: int) -> str:
 
 
 def makeTagTableSpec(
-    datasetType: DatasetType, collections: Type[CollectionManager], dtype: type, *, constraints: bool = True
+    datasetType: DatasetType, collections: type[CollectionManager], dtype: type, *, constraints: bool = True
 ) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag
     table used by the classes in this package.
@@ -363,8 +364,8 @@ def makeTagTableSpec(
 
 def makeCalibTableSpec(
     datasetType: DatasetType,
-    collections: Type[CollectionManager],
-    TimespanReprClass: Type[TimespanDatabaseRepresentation],
+    collections: type[CollectionManager],
+    TimespanReprClass: type[TimespanDatabaseRepresentation],
     dtype: type,
 ) -> ddl.TableSpec:
     """Construct the specification for a dynamic (DatasetType-dependent) tag +
@@ -407,7 +408,7 @@ def makeCalibTableSpec(
     )
     # Record fields that should go in the temporal lookup index/constraint,
     # starting with the dataset type.
-    index: List[Union[str, Type[TimespanDatabaseRepresentation]]] = ["dataset_type_id"]
+    index: list[str | type[TimespanDatabaseRepresentation]] = ["dataset_type_id"]
     # Add foreign key fields to dataset table (not part of the temporal
     # lookup/constraint).
     addDatasetForeignKey(tableSpec, dtype, nullable=False, onDelete="CASCADE")

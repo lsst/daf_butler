@@ -23,10 +23,12 @@ from __future__ import annotations
 
 __all__ = ("CollectionSummaryManager",)
 
-from typing import Any, Callable, Dict, Generic, Iterable, TypeVar
+from collections.abc import Callable, Iterable
+from typing import Any, Generic, TypeVar
 
 import sqlalchemy
-from lsst.daf.butler import (
+
+from ....core import (
     DatasetType,
     GovernorDimension,
     NamedKeyDict,
@@ -34,7 +36,9 @@ from lsst.daf.butler import (
     addDimensionForeignKey,
     ddl,
 )
-from lsst.daf.butler.registry.interfaces import (
+from ..._collection_summary import CollectionSummary
+from ..._collectionType import CollectionType
+from ...interfaces import (
     ChainedCollectionRecord,
     CollectionManager,
     CollectionRecord,
@@ -42,9 +46,6 @@ from lsst.daf.butler.registry.interfaces import (
     DimensionRecordStorageManager,
     StaticTablesContext,
 )
-
-from ..._collection_summary import CollectionSummary
-from ..._collectionType import CollectionType
 
 _T = TypeVar("_T")
 
@@ -144,7 +145,7 @@ class CollectionSummaryManager:
         self._collectionKeyName = collections.getCollectionForeignKeyName()
         self._dimensions = dimensions
         self._tables = tables
-        self._cache: Dict[Any, CollectionSummary] = {}
+        self._cache: dict[Any, CollectionSummary] = {}
 
     @classmethod
     def initialize(
@@ -279,7 +280,7 @@ class CollectionSummaryManager:
         # Run the query and construct CollectionSummary objects from the result
         # rows.  This will never include CHAINED collections or collections
         # with no datasets.
-        summaries: Dict[Any, CollectionSummary] = {}
+        summaries: dict[Any, CollectionSummary] = {}
         for row in self._db.query(sql).mappings():
             # Collection key should never be None/NULL; it's what we join on.
             # Extract that and then turn it into a collection name.

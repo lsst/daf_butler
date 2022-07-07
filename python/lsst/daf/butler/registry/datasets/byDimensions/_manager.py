@@ -6,20 +6,15 @@ __all__ = (
 )
 
 import copy
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
-from lsst.daf.butler import DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
-from lsst.daf.butler.core.named import NamedKeyDict, NamedValueAbstractSet
-from lsst.daf.butler.registry import ConflictingDefinitionError, OrphanedRecordError
-from lsst.daf.butler.registry.interfaces import (
-    DatasetIdGenEnum,
-    DatasetRecordStorage,
-    DatasetRecordStorageManager,
-    VersionTuple,
-)
 
+from ....core import DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
+from ....core.named import NamedKeyDict, NamedValueAbstractSet
 from ..._collection_summary import CollectionSummary
+from ..._exceptions import ConflictingDefinitionError, OrphanedRecordError
+from ...interfaces import DatasetIdGenEnum, DatasetRecordStorage, DatasetRecordStorageManager, VersionTuple
 from ._storage import (
     ByDimensionsDatasetRecordStorage,
     ByDimensionsDatasetRecordStorageInt,
@@ -36,14 +31,13 @@ from .tables import (
 )
 
 if TYPE_CHECKING:
-    from lsst.daf.butler.registry.interfaces import (
+    from ...interfaces import (
         CollectionManager,
         CollectionRecord,
         Database,
         DimensionRecordStorageManager,
         StaticTablesContext,
     )
-
     from .tables import StaticDatasetTablesTuple
 
 
@@ -109,7 +103,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         self._static = static
         self._summaries = summaries
         self._byDatasetType = NamedKeyDict[DatasetType, ByDimensionsDatasetRecordStorage]()
-        self._byId: Dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
+        self._byId: dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
 
     @classmethod
     def initialize(
@@ -132,13 +126,13 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         return cls(db=db, collections=collections, dimensions=dimensions, static=static, summaries=summaries)
 
     @classmethod
-    def currentVersion(cls) -> Optional[VersionTuple]:
+    def currentVersion(cls) -> VersionTuple | None:
         # Docstring inherited from VersionedExtension.
         return cls._version
 
     @classmethod
     def makeStaticTableSpecs(
-        cls, collections: Type[CollectionManager], universe: DimensionUniverse
+        cls, collections: type[CollectionManager], universe: DimensionUniverse
     ) -> StaticDatasetTablesTuple:
         """Construct all static tables used by the classes in this package.
 
@@ -173,8 +167,8 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         *,
         prefix: str = "dataset",
         constraint: bool = True,
-        onDelete: Optional[str] = None,
-        exact_name: Optional[str] = None,
+        onDelete: str | None = None,
+        exact_name: str | None = None,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         # Docstring inherited from DatasetRecordStorageManager.
@@ -191,7 +185,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
     def refresh(self) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         byDatasetType = NamedKeyDict[DatasetType, ByDimensionsDatasetRecordStorage]()
-        byId: Dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
+        byId: dict[DatasetId, ByDimensionsDatasetRecordStorage] = {}
         c = self._static.dataset_type.columns
         for row in self._db.query(self._static.dataset_type.select()).mappings():
             name = row[c.name]
@@ -264,7 +258,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         return self._byDatasetType.keys()
 
-    def find(self, name: str) -> Optional[DatasetRecordStorage]:
+    def find(self, name: str) -> DatasetRecordStorage | None:
         # Docstring inherited from DatasetRecordStorageManager.
         compositeName, componentName = DatasetType.splitDatasetTypeName(name)
         storage = self._byDatasetType.get(compositeName)
@@ -275,7 +269,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         else:
             return storage
 
-    def register(self, datasetType: DatasetType) -> Tuple[DatasetRecordStorage, bool]:
+    def register(self, datasetType: DatasetType) -> tuple[DatasetRecordStorage, bool]:
         # Docstring inherited from DatasetRecordStorageManager.
         if datasetType.isComponent():
             raise ValueError(
@@ -345,7 +339,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
             inserted = False
         return storage, bool(inserted)
 
-    def getDatasetRef(self, id: DatasetId) -> Optional[DatasetRef]:
+    def getDatasetRef(self, id: DatasetId) -> DatasetRef | None:
         # Docstring inherited from DatasetRecordStorageManager.
         sql = (
             sqlalchemy.sql.select(
@@ -374,14 +368,14 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         # Docstring inherited from DatasetRecordStorageManager.
         return self._summaries.get(collection)
 
-    def schemaDigest(self) -> Optional[str]:
+    def schemaDigest(self) -> str | None:
         # Docstring inherited from VersionedExtension.
         return self._defaultSchemaDigest(self._static, self._db.dialect)
 
     _version: VersionTuple
     """Schema version for this class."""
 
-    _recordStorageType: Type[ByDimensionsDatasetRecordStorage]
+    _recordStorageType: type[ByDimensionsDatasetRecordStorage]
     """Type of the storage class returned by this manager."""
 
     _autoincrement: bool
@@ -397,7 +391,7 @@ class ByDimensionsDatasetRecordStorageManager(ByDimensionsDatasetRecordStorageMa
     """
 
     _version: VersionTuple = _VERSION_INT
-    _recordStorageType: Type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageInt
+    _recordStorageType: type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageInt
     _autoincrement: bool = True
     _idColumnType: type = sqlalchemy.BigInteger
 
@@ -414,7 +408,7 @@ class ByDimensionsDatasetRecordStorageManagerUUID(ByDimensionsDatasetRecordStora
     """
 
     _version: VersionTuple = _VERSION_UUID
-    _recordStorageType: Type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageUUID
+    _recordStorageType: type[ByDimensionsDatasetRecordStorage] = ByDimensionsDatasetRecordStorageUUID
     _autoincrement: bool = False
     _idColumnType: type = ddl.GUID
 
