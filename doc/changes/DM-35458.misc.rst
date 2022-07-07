@@ -1,0 +1,2 @@
+File datastore now always writes a temporary file and renames it even for local file system datastores.
+This minimizes the risk of a corrupt file being written if the process writing the file is killed at the wrong time.

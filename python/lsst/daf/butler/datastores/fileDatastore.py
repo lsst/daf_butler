@@ -1122,22 +1122,13 @@ class FileDatastore(GenericBaseDatastore):
         # something fails below
         self._transaction.registerUndo("artifactWrite", _removeFileExists, uri)
 
-        # For a local file, simply use the formatter directly
-        if uri.isLocal:
-            try:
-                formatter.write(inMemoryDataset)
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to serialize dataset {ref} of type {type(inMemoryDataset)} to location {uri}"
-                ) from e
-            log.debug("Successfully wrote python object to local file at %s", uri)
-        else:
+        data_written = False
+        if not uri.isLocal:
             # This is a remote URI. Some datasets can be serialized directly
             # to bytes and sent to the remote datastore without writing a
             # file. If the dataset is intended to be saved to the cache
             # a file is always written and direct write to the remote
             # datastore is bypassed.
-            data_written = False
             if not self.cacheManager.should_be_cached(ref):
                 try:
                     serializedDataset = formatter.toBytes(inMemoryDataset)
@@ -1154,28 +1145,40 @@ class FileDatastore(GenericBaseDatastore):
                     log.debug("Successfully wrote bytes directly to %s", uri)
                     data_written = True
 
-            if not data_written:
-                # Did not write the bytes directly to object store so instead
-                # write to temporary file.
-                with ResourcePath.temporary_uri(suffix=uri.getExtension()) as temporary_uri:
-                    # Need to configure the formatter to write to a different
-                    # location and that needs us to overwrite internals
-                    log.debug("Writing dataset to temporary location at %s", temporary_uri)
-                    with formatter._updateLocation(Location(None, temporary_uri)):
-                        try:
-                            formatter.write(inMemoryDataset)
-                        except Exception as e:
-                            raise RuntimeError(
-                                f"Failed to serialize dataset {ref} of type"
-                                f" {type(inMemoryDataset)} to "
-                                f"temporary location {temporary_uri}"
-                            ) from e
-                    uri.transfer_from(temporary_uri, transfer="copy", overwrite=True)
+        if not data_written:
+            # Did not write the bytes directly to object store so instead
+            # write to temporary file. Always write to a temporary even if
+            # using a local file system -- that gives us atomic writes.
+            # If a process is killed as the file is being written we do not
+            # want it to remain in the correct place but in corrupt state.
+            # For local files write to the output directory not temporary dir.
+            prefix = uri.dirname() if uri.isLocal else None
+            with ResourcePath.temporary_uri(suffix=uri.getExtension(), prefix=prefix) as temporary_uri:
+                # Need to configure the formatter to write to a different
+                # location and that needs us to overwrite internals
+                log.debug("Writing dataset to temporary location at %s", temporary_uri)
+                with formatter._updateLocation(Location(None, temporary_uri)):
+                    try:
+                        formatter.write(inMemoryDataset)
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Failed to serialize dataset {ref} of type"
+                            f" {type(inMemoryDataset)} to "
+                            f"temporary location {temporary_uri}"
+                        ) from e
 
+                # Use move for a local file since that becomes an efficient
+                # os.rename. For remote resources we use copy to allow the
+                # file to be cached afterwards.
+                transfer = "move" if uri.isLocal else "copy"
+
+                uri.transfer_from(temporary_uri, transfer=transfer, overwrite=True)
+
+                if transfer == "copy":
                     # Cache if required
                     self.cacheManager.move_to_cache(temporary_uri, ref)
 
-                log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
+            log.debug("Successfully wrote dataset to %s via a temporary file.", uri)
 
         # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(uri, ref, formatter=formatter)
