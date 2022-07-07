@@ -26,7 +26,8 @@ __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage", "DatasetIdFact
 import enum
 import uuid
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, List, Optional, Tuple
+from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING, Any
 
 import sqlalchemy.sql
 
@@ -109,7 +110,7 @@ class DatasetIdFactory:
         else:
             # WARNING: If you modify this code make sure that the order of
             # items in the `items` list below never changes.
-            items: List[Tuple[str, str]] = []
+            items: list[tuple[str, str]] = []
             if idGenerationMode is DatasetIdGenEnum.DATAID_TYPE:
                 items = [
                     ("dataset_type", datasetType.name),
@@ -222,8 +223,8 @@ class DatasetRecordStorage(ABC):
 
     @abstractmethod
     def find(
-        self, collection: CollectionRecord, dataId: DataCoordinate, timespan: Optional[Timespan] = None
-    ) -> Optional[DatasetRef]:
+        self, collection: CollectionRecord, dataId: DataCoordinate, timespan: Timespan | None = None
+    ) -> DatasetRef | None:
         """Search a collection for a dataset with the given data ID.
 
         Parameters
@@ -352,7 +353,7 @@ class DatasetRecordStorage(ABC):
         collection: CollectionRecord,
         timespan: Timespan,
         *,
-        dataIds: Optional[Iterable[DataCoordinate]] = None,
+        dataIds: Iterable[DataCoordinate] | None = None,
     ) -> None:
         """Remove or adjust datasets to clear a validity range within a
         calibration collection.
@@ -384,10 +385,10 @@ class DatasetRecordStorage(ABC):
         self,
         *collections: CollectionRecord,
         dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
-        id: SimpleQuery.Select.Or[Optional[DatasetId]] = SimpleQuery.Select,
+        id: SimpleQuery.Select.Or[DatasetId | None] = SimpleQuery.Select,
         run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
-        timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
-        ingestDate: SimpleQuery.Select.Or[Optional[Timespan]] = None,
+        timespan: SimpleQuery.Select.Or[Timespan | None] = SimpleQuery.Select,
+        ingestDate: SimpleQuery.Select.Or[Timespan | None] = None,
         rank: SimpleQuery.Select.Or[None] = None,
     ) -> sqlalchemy.sql.Selectable:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
@@ -530,7 +531,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         *,
         name: str = "dataset",
         constraint: bool = True,
-        onDelete: Optional[str] = None,
+        onDelete: str | None = None,
         **kwargs: Any,
     ) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the dataset
@@ -599,7 +600,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         return result
 
     @abstractmethod
-    def find(self, name: str) -> Optional[DatasetRecordStorage]:
+    def find(self, name: str) -> DatasetRecordStorage | None:
         """Return an object that provides access to the records associated with
         the given `DatasetType` name, if one exists.
 
@@ -622,7 +623,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def register(self, datasetType: DatasetType) -> Tuple[DatasetRecordStorage, bool]:
+    def register(self, datasetType: DatasetType) -> tuple[DatasetRecordStorage, bool]:
         """Ensure that this `Registry` can hold records for the given
         `DatasetType`, creating new tables as necessary.
 
@@ -669,7 +670,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         raise NotImplementedError()
 
     @abstractmethod
-    def getDatasetRef(self, id: DatasetId) -> Optional[DatasetRef]:
+    def getDatasetRef(self, id: DatasetId) -> DatasetRef | None:
         """Return a `DatasetRef` for the given dataset primary key
         value.
 
