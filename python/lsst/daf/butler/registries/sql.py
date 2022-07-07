@@ -38,6 +38,7 @@ from ..core import (
     DataCoordinateIterable,
     DataId,
     DatasetAssociation,
+    DatasetColumnTag,
     DatasetId,
     DatasetRef,
     DatasetType,
@@ -1106,29 +1107,41 @@ class SqlRegistry(Registry):
             collections = self.defaults.collections
         else:
             collections = CollectionWildcard.fromExpression(collections)
-        TimespanReprClass = self._db.getTimespanRepresentation()
+        backend = queries.SqlQueryBackend(self._db, self._managers)
         if isinstance(datasetType, str):
-            storage = self._managers.datasets[datasetType]
-        else:
-            storage = self._managers.datasets[datasetType.name]
-        for collectionRecord in collections.iter(
-            self._managers.collections.records,
+            datasetType = backend.parent_dataset_types[datasetType]
+        for collection_record in collections.iter(
+            backend.collection_records,
             collectionTypes=frozenset(collectionTypes),
             flattenChains=flattenChains,
         ):
-            query = storage.select(collectionRecord)
-            for row in self._db.query(query).mappings():
-                dataId = DataCoordinate.fromRequiredValues(
-                    storage.datasetType.dimensions,
-                    tuple(row[name] for name in storage.datasetType.dimensions.required.names),
-                )
-                runRecord = self._managers.collections[row[self._managers.collections.getRunForeignKeyName()]]
-                ref = DatasetRef(storage.datasetType, dataId, id=row["id"], run=runRecord.name, conform=False)
-                if collectionRecord.type is CollectionType.CALIBRATION:
-                    timespan = TimespanReprClass.extract(row)
-                else:
-                    timespan = None
-                yield DatasetAssociation(ref=ref, collection=collectionRecord.name, timespan=timespan)
+            # Resolve this possible-chained collection into a list of
+            # non-CHAINED collections that actually hold datasets of this
+            # type.
+            candidate_collection_records = backend.resolve_dataset_collections(
+                datasetType,
+                CollectionSearch.fromExpression(collection_record.name),
+                allow_calibration_collections=True,
+            )
+            if not candidate_collection_records:
+                continue
+            relation = backend.make_dataset_query_relation(
+                datasetType,
+                candidate_collection_records,
+                columns={"dataset_id", "run", "timespan"},
+            )
+            reader = queries.DatasetRefReader(
+                datasetType,
+                translate_collection=lambda k: self._managers.collections[k].name,
+                full=False,
+            )
+            timespan_tag = DatasetColumnTag(datasetType.name, "timespan")
+            with backend.context() as context:
+                for row in context.fetch_iterable(relation):
+                    ref = reader.read(row)
+                    yield DatasetAssociation(
+                        ref=ref, collection=collection_record.name, timespan=row[timespan_tag]
+                    )
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).
