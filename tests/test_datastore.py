@@ -918,6 +918,24 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
         self.root = tempfile.mkdtemp(dir=TESTDIR)
         super().setUp()
 
+    def testAtomicWrite(self):
+        """Test that we write to a temporary and then rename"""
+        datastore = self.makeDatastore()
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        metrics = makeExampleMetrics()
+
+        dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V"}
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+
+        with self.assertLogs("lsst.resources", "DEBUG") as cm:
+            datastore.put(metrics, ref)
+        move_logs = [ll for ll in cm.output if "transfer=" in ll]
+        self.assertIn("transfer=move", move_logs[0])
+
+        # And the transfer should be file to file.
+        self.assertEqual(move_logs[0].count("file://"), 2)
+
     def testCanNotDeterminePutFormatterLocation(self):
         """Verify that the expected exception is raised if the FileDatastore
         can not determine the put formatter location."""
