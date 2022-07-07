@@ -24,7 +24,10 @@ __all__ = ("SqlQueryBackend",)
 
 from typing import TYPE_CHECKING
 
+from lsst.daf.relation import sql
+
 from ._query_backend import QueryBackend
+from ._sql_query_context import SqlQueryContext
 
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
@@ -50,11 +53,16 @@ class SqlQueryBackend(QueryBackend):
     ):
         self._db = db
         self._managers = managers
+        self._engine = sql.Engine("db")
 
     @property
     def managers(self) -> RegistryManagerInstances:
         # Docstring inherited.
         return self._managers
+
+    def context(self) -> SqlQueryContext:
+        # Docstring inherited.
+        return SqlQueryContext(self._db, self._managers.column_types, self._engine)
 
     @property
     def universe(self) -> DimensionUniverse:

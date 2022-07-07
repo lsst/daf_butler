@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
     from ..managers import RegistryManagerInstances
+    from ._query_context import QueryContext
 
 
 class QueryBackend(ABC):
@@ -48,6 +49,19 @@ class QueryBackend(ABC):
         This property is a temporary interface that will be removed in favor of
         new methods once the manager and storage classes have been integrated
         with `~lsst.daf.relation.Relation`.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def context(self) -> QueryContext:
+        """Return a context manager that can be used to execute queries with
+        this backend.
+
+        Returns
+        -------
+        context : `QueryContext`
+            Context manager that manages state and connections needed to
+            execute queries.
         """
         raise NotImplementedError()
 
