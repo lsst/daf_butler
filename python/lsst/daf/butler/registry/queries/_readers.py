@@ -42,8 +42,28 @@ from ...core import (
 
 
 class DataCoordinateReader(ABC):
+    """Base class and factory for reader objects that extract `DataCoordinate`
+    instances from query result rows.
+    """
+
     @staticmethod
     def make(dimensions: DimensionGraph, full: bool = True) -> DataCoordinateReader:
+        """Construct a concrete reader for a set of dimensions.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGraph`
+            Dimensions of the `DataCoordinate` instances the new reader will
+            read.
+        full : `bool`, optional
+            Whether to expect and extract implied dimensions as well as
+            required dimensions.
+
+        Returns
+        -------
+        reader : `DataCoordinateReader`
+            Concrete reader instance.
+        """
         if full:
             return _FullDataCoordinateReader(dimensions)
         else:
@@ -53,10 +73,30 @@ class DataCoordinateReader(ABC):
 
     @abstractmethod
     def read(self, row: Mapping[ColumnTag, Any]) -> DataCoordinate:
+        """Read a `DataCoordinate` from a query result row.
+
+        Parameters
+        ----------
+        row : `Mapping`
+            Mapping with `ColumnTag` keys representing a query result row.
+
+        Returns
+        -------
+        data_coordinate : `DataCoordinate`
+            New data ID.
+        """
         raise NotImplementedError()
 
 
 class _BasicDataCoordinateReader(DataCoordinateReader):
+    """Private subclass of `DataCoordinateReader` for the ``full=False`` case.
+
+    Parameters
+    ----------
+    dimensions : `DimensionGraph`
+        Dimensions of the `DataCoordinate` instances read.
+    """
+
     def __init__(self, dimensions: DimensionGraph):
         self._dimensions = dimensions
         self._tags = tuple(DimensionKeyColumnTag(name) for name in self._dimensions.required.names)
@@ -64,6 +104,7 @@ class _BasicDataCoordinateReader(DataCoordinateReader):
     __slots__ = ("_dimensions", "_tags")
 
     def read(self, row: Mapping[ColumnTag, Any]) -> DataCoordinate:
+        # Docstring inherited.
         return DataCoordinate.fromRequiredValues(
             self._dimensions,
             tuple(row[tag] for tag in self._tags),
@@ -71,6 +112,14 @@ class _BasicDataCoordinateReader(DataCoordinateReader):
 
 
 class _FullDataCoordinateReader(DataCoordinateReader):
+    """Private subclass of `DataCoordinateReader` for the ``full=True`` case.
+
+    Parameters
+    ----------
+    dimensions : `DimensionGraph`
+        Dimensions of the `DataCoordinate` instances read.
+    """
+
     def __init__(self, dimensions: DimensionGraph):
         self._dimensions = dimensions
         self._tags = tuple(DimensionKeyColumnTag(name) for name in self._dimensions._dataCoordinateIndices)
@@ -78,6 +127,7 @@ class _FullDataCoordinateReader(DataCoordinateReader):
     __slots__ = ("_dimensions", "_tags")
 
     def read(self, row: Mapping[ColumnTag, Any]) -> DataCoordinate:
+        # Docstring inherited.
         return DataCoordinate.fromFullValues(
             self._dimensions,
             tuple(row[tag] for tag in self._tags),
@@ -85,6 +135,21 @@ class _FullDataCoordinateReader(DataCoordinateReader):
 
 
 class DatasetRefReader:
+    """Reader class that extracts `DatasetRef` objects from query result rows.
+
+    Parameters
+    ----------
+    dataset_type : `DatasetType`
+        Dataset type for extracted references.
+    full : `bool`, optional
+        Whether to expect and extract implied dimensions as well as required
+        dimensions.
+    translate_collection : `Callable`, optional
+        Callable that returns `str` collection names given collection primary
+        key values.  Optional only for registries that use names as primary
+        keys, or if ``run`` is always passed to `read`.
+    """
+
     def __init__(
         self,
         dataset_type: DatasetType,
@@ -107,6 +172,21 @@ class DatasetRefReader:
         run: str | None = None,
         data_id: DataCoordinate | None = None,
     ) -> DatasetRef:
+        """Read a `DatasetRef` from a query result row.
+
+        Parameters
+        ----------
+        row : `Mapping`
+            Mapping with `ColumnTag` keys representing a query result row.
+        run : `str`, optional
+            Name of the `~CollectionType.RUN` collection; when provided the run
+            key does not need to be present in the result row, and
+            ``translate_collection` does not need to be provided at
+            construction.
+        data_id : `DataCoordinate`, optional
+            Data ID; when provided the dimensions do not need to be present in
+            the result row.
+        """
         if data_id is None:
             data_id = self._data_coordinate_reader.read(row)
         if run is None:
