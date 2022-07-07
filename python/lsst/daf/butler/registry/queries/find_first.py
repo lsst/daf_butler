@@ -32,7 +32,26 @@ from lsst.utils.classes import cached_getter
 from ...core import ColumnTag, LogicalColumn
 
 
-class FindFirst(Extension[ColumnTag]):
+class FindFirst(Extension[ColumnTag], sql.ExtensionInterface):
+    """A relation extension operation that selects the row with the lowest
+    value of a "rank" column after partitioning on another set of columns.
+
+    Parameters
+    ----------
+    base : `Relation`
+        Base relation to operate on.  Must provide both the rank column and
+        all partition columns.
+    rank : `ColumnTag`
+        Column whose lowest values should be selected.  When using this
+        operation to search for datasets in collections, this should be a
+        calculated column equal to the index of the collection in the ordered
+        list to be searched.
+    partition : `~collections.abc.Set` [ `ColumnTag` ]
+        Set of columns to partition on before selection.  When using this
+        operation to search for datasets in collections, these are typically
+        dimension columns.
+    """
+
     def __init__(
         self,
         base: Relation[ColumnTag],
@@ -67,6 +86,7 @@ class FindFirst(Extension[ColumnTag]):
         return "find_first"
 
     def checked_and_simplified(self, *, recursive: bool = True) -> Relation[ColumnTag]:
+        # Docstring inherited.
         if self._rank not in self._base.columns:
             raise ColumnError(
                 f"Rank column {self._rank} for find-first search not in base relation {self._base}."
@@ -92,53 +112,35 @@ class FindFirst(Extension[ColumnTag]):
     def to_select_parts(
         self, column_types: sql.ColumnTypeInfo[ColumnTag, LogicalColumn]
     ) -> sql.SelectParts[ColumnTag, LogicalColumn]:
-        # In the more general case, we build a subquery of the form below to
-        # search the collections in order.
+        # Docstring inherited.
+        # We're building a subquery of the form below:
         #
-        # WITH {dst}_search AS (
-        #     SELECT {data-id-cols}, id, run_id, 1 AS rank
-        #         FROM <collection1>
-        #     UNION ALL
-        #     SELECT {data-id-cols}, id, run_id, 2 AS rank
-        #         FROM <collection2>
-        #     UNION ALL
-        #     ...
-        # )
+        # WITH {base} AS (...)
         # SELECT
-        #     {dst}_window.{data-id-cols},
-        #     {dst}_window.id,
-        #     {dst}_window.run_id
+        #     window.{base.columns - rank}...
         # FROM (
         #     SELECT
-        #         {dst}_search.{data-id-cols},
-        #         {dst}_search.id,
-        #         {dst}_search.run_id,
+        #         search.{base.columns - rank},
         #         ROW_NUMBER() OVER (
-        #             PARTITION BY {dst_search}.{data-id-cols}
-        #             ORDER BY rank
+        #             PARTITION BY search.{partition}
+        #             ORDER BY {rank}
         #         ) AS rownum
-        #     ) {dst}_window
+        #     ) window
         # WHERE
-        #     {dst}_window.rownum = 1;
+        #     window.rownum = 1;
         #
         # We'll start with the Common Table Expression (CTE) at the top.
-        # We get that by delegating to join_dataset_query, which also takes
-        # care of any relation or constraints the caller may have passed.
+        # We get that from the base relation.
         search_cte = self.base.visit(sql.ToExecutable(column_types)).cte()
         # Create a columns object that holds the SQLAlchemy objects for the
-        # columns that are SELECT'd in the CTE, and hence available downstream.
+        # columns that are SELECTed in the CTE, and hence available downstream.
         search_columns = column_types.extract_mapping(self._base.columns, search_cte.columns)
 
         # Now we fill out the inner SELECT subquery from the CTE.  We replace
         # the rank column with the window-function 'rownum' calculated from it;
-        # which is like the rank in that it orders datasets by the collection
-        # in which they are found (separately for each data ID), but critically
-        # it doesn't have gaps where the dataset wasn't found in one the input
-        # collections, and hence ``rownum=1`` reliably picks out the find-first
-        # result.  We use SQLAlchemy objects directly here instead of Relation,
-        # because it involves some advanced SQL constructs we don't want
-        # Relation to try to wrap.  We still use our columns classes to let
-        # them encapsulate actual column names.
+        # which is like the rank in that it orders rows by their rank, but
+        # critically it can't have gaps between integer values, and hence
+        # ``rownum=1`` reliably picks out the find-first result.
         rownum_column = (
             sqlalchemy.sql.func.row_number()
             .over(
@@ -147,6 +149,8 @@ class FindFirst(Extension[ColumnTag]):
             )
             .label("rownum")
         )
+        # Delete the rank column from the search columns mapping, since we'll
+        # now be wanting the set that doesn't include that.
         del search_columns[self._rank]
         window_subquery = column_types.select_items(
             search_columns.items(), search_cte, rownum_column
@@ -156,9 +160,6 @@ class FindFirst(Extension[ColumnTag]):
         # which we'll handle separately; this works out well because we only
         # want it in the WHERE clause anyway.
         window_columns = column_types.extract_mapping(search_columns.keys(), window_subquery.columns)
-        # We'll want to package up the full query as Relation instance, so we
-        # build one from SQL parts instead of using SQLAlchemy to make a SELECT
-        # directly.
         return sql.SelectParts[ColumnTag, LogicalColumn](
             window_subquery, where=[window_subquery.columns["rownum"] == 1], columns_available=window_columns
         )
@@ -172,6 +173,7 @@ class FindFirst(Extension[ColumnTag]):
         offset: int = 0,
         limit: int | None = None,
     ) -> sqlalchemy.sql.expression.SelectBase:
+        # Docstring inherited.
         return self.to_select_parts(column_types).to_executable(
             self, column_types, distinct=distinct, order_by=order_by, offset=offset, limit=limit
         )
