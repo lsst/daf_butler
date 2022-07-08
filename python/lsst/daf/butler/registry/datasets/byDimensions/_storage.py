@@ -54,8 +54,8 @@ from ...interfaces import DatasetIdGenEnum, DatasetRecordStorage
 from ...queries import (
     DatasetRefReader,
     SqlQueryContext,
+    TemporalConstraintOverlap,
     make_data_coordinate_predicates,
-    make_temporal_constraint_predicate,
 )
 from .tables import makeTagTableSpec
 
@@ -110,17 +110,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             )
         requested_columns = {"dataset_id", "run"}
         engine = sql.Engine("db")
-        predicates = make_data_coordinate_predicates(
-            {engine}, dataId.subset(self.datasetType.dimensions), full=False
-        )
+        predicates = make_data_coordinate_predicates(dataId.subset(self.datasetType.dimensions), full=False)
         if timespan is not None:
             requested_columns.add("timespan")
             predicates.add(
-                make_temporal_constraint_predicate(
-                    {engine},
+                TemporalConstraintOverlap(
                     DatasetColumnTag(self.datasetType.name, "timespan"),
                     TemporalConstraint.from_timespan(timespan),
-                    self._column_types.timespan_cls,
                 )
             )
         relation = self.make_relation(collection, columns=requested_columns, engine=engine).selection(
@@ -557,7 +553,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                 UniqueKey(DimensionKeyColumnTag.generate(self.datasetType.dimensions.required.names))
             )
             unique_keys.add(UniqueKey({DatasetColumnTag(self.datasetType.name, "dataset_id")}))
-        return sql.SelectPartsLeaf(self.datasetType.name, engine, select_parts, unique_keys=unique_keys)
+        return sql.SelectPartsLeaf(engine, select_parts, unique_keys=unique_keys)
 
     def getDataId(self, id: DatasetId) -> DataCoordinate:
         """Return DataId for a dataset.

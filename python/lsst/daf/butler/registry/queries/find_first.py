@@ -22,11 +22,20 @@ from __future__ import annotations
 
 __all__ = ("FindFirst",)
 
-from collections.abc import Mapping, Sequence, Set
+from collections.abc import Sequence, Set
 from typing import Any
 
 import sqlalchemy
-from lsst.daf.relation import ColumnError, Extension, OrderByTerm, Relation, UniqueKey, sql
+from lsst.daf.relation import (
+    ColumnError,
+    DictWriter,
+    EngineTag,
+    Extension,
+    OrderByTerm,
+    Relation,
+    UniqueKey,
+    sql,
+)
 from lsst.utils.classes import cached_getter
 
 from ...core import ColumnTag, LogicalColumn
@@ -80,10 +89,8 @@ class FindFirst(Extension[ColumnTag], sql.ExtensionInterface):
         # Docstring inherited.
         return self._base
 
-    @property
-    def name(self) -> str:
-        # Docstring inherited.
-        return "find_first"
+    def supports_engine(self, engine: EngineTag) -> bool:
+        return isinstance(engine, sql.Engine)
 
     def checked_and_simplified(self, *, recursive: bool = True) -> Relation[ColumnTag]:
         # Docstring inherited.
@@ -105,11 +112,15 @@ class FindFirst(Extension[ColumnTag], sql.ExtensionInterface):
         else:
             return FindFirst(base, self._rank, self._partition).checked_and_simplified()
 
-    def write_extra_to_mapping(self) -> Mapping[str, Any]:
+    def serialize(self, writer: DictWriter[ColumnTag]) -> dict[str, Any]:
         # Docstring inherited.
-        return {"rank": str(self._rank)}
+        return {
+            "type": "find_first",
+            "rank": str(self._rank),
+            "partition": writer.write_column_set(self._partition),
+        }
 
-    def to_select_parts(
+    def to_sql_select_parts(
         self, column_types: sql.ColumnTypeInfo[ColumnTag, LogicalColumn]
     ) -> sql.SelectParts[ColumnTag, LogicalColumn]:
         # Docstring inherited.
@@ -164,7 +175,7 @@ class FindFirst(Extension[ColumnTag], sql.ExtensionInterface):
             window_subquery, where=[window_subquery.columns["rownum"] == 1], columns_available=window_columns
         )
 
-    def to_executable(
+    def to_sql_executable(
         self,
         column_types: sql.ColumnTypeInfo[ColumnTag, LogicalColumn],
         *,
@@ -174,6 +185,6 @@ class FindFirst(Extension[ColumnTag], sql.ExtensionInterface):
         limit: int | None = None,
     ) -> sqlalchemy.sql.expression.SelectBase:
         # Docstring inherited.
-        return self.to_select_parts(column_types).to_executable(
+        return self.to_sql_select_parts(column_types).to_executable(
             self, column_types, distinct=distinct, order_by=order_by, offset=offset, limit=limit
         )

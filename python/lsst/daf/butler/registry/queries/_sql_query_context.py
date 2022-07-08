@@ -105,7 +105,7 @@ class SqlQueryContext(QueryContext):
             self._db, sql_executable, _SqlRowTransformer(source.columns, self._column_types)
         )
         return iteration.RowIterableLeaf(
-            str(source), iteration.engine, source.columns, unique_keys=source.unique_keys, rows=rows
+            iteration.engine, source.columns, unique_keys=source.unique_keys, rows=rows
         )
 
 
