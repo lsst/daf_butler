@@ -74,8 +74,8 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
     def testNull(self):
         "Test asking for nothing."
         res, msg = self._queryDataIds(self.root)
-        self.assertEqual(res, None, msg)
-        self.assertFalse(msg)
+        self.assertIsNone(res, msg)
+        self.assertEqual(msg, "")
 
     def testWhere(self):
         """Test with a WHERE constraint."""
@@ -87,7 +87,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
-        self.assertFalse(msg)
+        self.assertIsNone(msg)
 
     def testDatasetsAndCollections(self):
         """Test constraining via datasets and collections."""
@@ -114,7 +114,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
-        self.assertFalse(msg)
+        self.assertIsNone(msg)
 
         # Verify the new dataset is found in the "foo" collection.
         res, msg = self._queryDataIds(
@@ -125,7 +125,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
-        self.assertFalse(msg)
+        self.assertIsNone(msg)
 
         # Verify the new dataset is found in the "foo" collection and the
         # dimensions are determined automatically.
@@ -137,7 +137,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
-        self.assertFalse(msg)
+        self.assertIsNone(msg)
 
         # Check that we get a reason if no dimensions can be inferred.
         new_dataset_type = DatasetType(
