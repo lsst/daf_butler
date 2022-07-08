@@ -22,17 +22,17 @@ from __future__ import annotations
 
 __all__ = ("FindFirst",)
 
-from collections.abc import Sequence, Set
-from typing import Any
+from collections.abc import Set
+from typing import Any, Callable, ClassVar
 
 import sqlalchemy
 from lsst.daf.relation import (
     ColumnError,
     DictWriter,
-    EngineTag,
-    Extension,
-    OrderByTerm,
+    EngineTree,
     Relation,
+    RelationVisitor,
+    TransferVisitor,
     UniqueKey,
     sql,
 )
@@ -41,7 +41,7 @@ from lsst.utils.classes import cached_getter
 from ...core import ColumnTag, LogicalColumn
 
 
-class FindFirst(Extension[ColumnTag], sql.ExtensionInterface):
+class FindFirst(Relation[ColumnTag]):
     """A relation extension operation that selects the row with the lowest
     value of a "rank" column after partitioning on another set of columns.
 
@@ -80,17 +80,14 @@ class FindFirst(Extension[ColumnTag], sql.ExtensionInterface):
         return columns
 
     @property
+    def engine(self) -> EngineTree:
+        # Docstring inherited.
+        return self._base.engine
+
+    @property
     def unique_keys(self) -> Set[UniqueKey[ColumnTag]]:
         # Docstring inherited.
         return frozenset()
-
-    @property
-    def base(self) -> Relation[ColumnTag]:
-        # Docstring inherited.
-        return self._base
-
-    def supports_engine(self, engine: EngineTag) -> bool:
-        return isinstance(engine, sql.Engine)
 
     def checked_and_simplified(self, *, recursive: bool = True) -> Relation[ColumnTag]:
         # Docstring inherited.
@@ -103,27 +100,64 @@ class FindFirst(Extension[ColumnTag], sql.ExtensionInterface):
                 f"Partition column(s) {set(self._partition - self._base.columns)} for find-first search "
                 f"not in base relation {self._base}."
             )
-        return super().checked_and_simplified(recursive=recursive)
-
-    def rebased(self, base: Relation[ColumnTag], *, equivalent: bool) -> Relation[ColumnTag]:
-        # Docstring inherited.
-        if equivalent:
-            return FindFirst(base, self._rank, self._partition).assert_checked_and_simplified()
+        if recursive:
+            base = self._base.checked_and_simplified(recursive=True)
         else:
-            return FindFirst(base, self._rank, self._partition).checked_and_simplified()
+            base = self._base
+        if base != self._base:
+            return FindFirst(base, self._rank, self._partition)
+        else:
+            return self
 
-    def serialize(self, writer: DictWriter[ColumnTag]) -> dict[str, Any]:
+    def visit(self, visitor: RelationVisitor[ColumnTag, Any]) -> Any:
         # Docstring inherited.
+        return self._VISITOR_DISPATCH_TABLE[type(visitor)](self, visitor)
+
+    def _write_dict(self, visitor: DictWriter[ColumnTag]) -> dict[str, Any]:
+        """Implementation for `visit` with the
+        `lsst.daf.relation.DictWriter` visitor.
+
+        Because this is an extension relation, it is responsible for
+        implementing `visit` for all of the concrete visitors it cares about;
+        this is one of them.
+
+        Parameters
+        ----------
+        visitor : `lsst.daf.relation.DictWriter`
+            Visitor to handle.
+
+        Returns
+        -------
+        serialized : `dict`
+            Dictionary serialization for this object.
+        """
         return {
             "type": "find_first",
             "rank": str(self._rank),
-            "partition": writer.write_column_set(self._partition),
+            "partition": visitor.write_column_set(self._partition),
         }
 
-    def to_sql_select_parts(
-        self, column_types: sql.ColumnTypeInfo[ColumnTag, LogicalColumn]
+    def _to_sql_select_parts(
+        self,
+        visitor: sql.ToSelectParts[ColumnTag, LogicalColumn],
     ) -> sql.SelectParts[ColumnTag, LogicalColumn]:
-        # Docstring inherited.
+        """Implementation for `visit` with the
+        `lsst.daf.relation.sql.ToSelectParts` visitor.
+
+        Because this is an extension relation, it is responsible for
+        implementing `visit` for all of the concrete visitors it cares about;
+        this is one of them.
+
+        Parameters
+        ----------
+        visitor : `lsst.daf.relation.sql.ToSelectParts`
+            Visitor to handle.
+
+        Returns
+        -------
+        select_parts : `lsst.daf.relation.sql.SelectParts`
+            Struct representing a simple SELECT query.
+        """
         # We're building a subquery of the form below:
         #
         # WITH {base} AS (...)
@@ -142,10 +176,10 @@ class FindFirst(Extension[ColumnTag], sql.ExtensionInterface):
         #
         # We'll start with the Common Table Expression (CTE) at the top.
         # We get that from the base relation.
-        search_cte = self.base.visit(sql.ToExecutable(column_types)).cte()
+        search_cte = self._base.visit(sql.ToExecutable(visitor.column_types)).cte()
         # Create a columns object that holds the SQLAlchemy objects for the
         # columns that are SELECTed in the CTE, and hence available downstream.
-        search_columns = column_types.extract_mapping(self._base.columns, search_cte.columns)
+        search_columns = visitor.column_types.extract_mapping(self._base.columns, search_cte.columns)
 
         # Now we fill out the inner SELECT subquery from the CTE.  We replace
         # the rank column with the window-function 'rownum' calculated from it;
@@ -163,28 +197,75 @@ class FindFirst(Extension[ColumnTag], sql.ExtensionInterface):
         # Delete the rank column from the search columns mapping, since we'll
         # now be wanting the set that doesn't include that.
         del search_columns[self._rank]
-        window_subquery = column_types.select_items(
+        window_subquery = visitor.column_types.select_items(
             search_columns.items(), search_cte, rownum_column
         ).subquery()
         # Create a new columns mapping to hold the columns SELECTed by the
         # subquery.  This does not include the calculated 'rownum' column,
         # which we'll handle separately; this works out well because we only
         # want it in the WHERE clause anyway.
-        window_columns = column_types.extract_mapping(search_columns.keys(), window_subquery.columns)
+        window_columns = visitor.column_types.extract_mapping(search_columns.keys(), window_subquery.columns)
         return sql.SelectParts[ColumnTag, LogicalColumn](
             window_subquery, where=[window_subquery.columns["rownum"] == 1], columns_available=window_columns
         )
 
-    def to_sql_executable(
+    def _to_sql_executable(
         self,
-        column_types: sql.ColumnTypeInfo[ColumnTag, LogicalColumn],
-        *,
-        distinct: bool = False,
-        order_by: Sequence[OrderByTerm[ColumnTag]] = (),
-        offset: int = 0,
-        limit: int | None = None,
+        visitor: sql.ToExecutable[ColumnTag, LogicalColumn],
     ) -> sqlalchemy.sql.expression.SelectBase:
-        # Docstring inherited.
-        return self.to_sql_select_parts(column_types).to_executable(
-            self, column_types, distinct=distinct, order_by=order_by, offset=offset, limit=limit
+        """Implementation for `visit` with the
+        `lsst.daf.relation.sql.ToExecutable` visitor.
+
+        Because this is an extension relation, it is responsible for
+        implementing `visit` for all of the concrete visitors it cares about;
+        this is one of them.
+
+        Parameters
+        ----------
+        visitor : `lsst.daf.relation.sql.ToExecutable`
+            Visitor to handle.
+
+        Returns
+        -------
+        sql_executable : `sqlalchemy.sql.expression.SelectBase`
+            SQL SELECT or compound SELECT query.
+        """
+        return self._to_sql_select_parts(sql.ToSelectParts(visitor.column_types)).to_executable(
+            self,
+            visitor.column_types,
+            distinct=visitor.distinct,
+            order_by=visitor.order_by,
+            offset=visitor.offset,
+            limit=visitor.limit,
         )
+
+    def _transfer(self, visitor: TransferVisitor[ColumnTag]) -> Relation[ColumnTag]:
+        """Implementation for `visit` with the
+        `lsst.daf.relation.TransferVisitor` visitor.
+
+        Because this is an extension relation, it is responsible for
+        implementing `visit` for all of the concrete visitors it cares about;
+        this is one of them.
+
+        Parameters
+        ----------
+        visitor : `lsst.daf.relation.TransferVisitor`
+            Visitor to handle.
+
+        Returns
+        -------
+        select_parts : `lsst.daf.relation.Relation`
+            `FindFirst` relation with the visitor applied to its base relation.
+        """
+        if (base := self._base.visit(visitor)) is not self._base:
+            return FindFirst(base, rank=self._rank, partition=self._partition).assert_checked_and_simplified()
+        return self
+
+    # `visit` looks up the right method by visitor type in this dictionary
+    # and calls it.
+    _VISITOR_DISPATCH_TABLE: ClassVar[dict[type, Callable[[FindFirst, Any], Any]]] = {
+        DictWriter: _write_dict,
+        sql.ToExecutable: _to_sql_executable,
+        sql.ToSelectParts: _to_sql_select_parts,
+        TransferVisitor: _transfer,
+    }
