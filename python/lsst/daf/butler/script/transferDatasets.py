@@ -81,6 +81,10 @@ def transferDatasets(
     source_refs_set = set(source_refs)
 
     transferred = dest_butler.transfer_from(
-        source_butler, source_refs_set, transfer=transfer, register_dataset_types=register_dataset_types
+        source_butler,
+        source_refs_set,
+        transfer=transfer,
+        register_dataset_types=register_dataset_types,
+        transfer_dimension_data=True,
     )
     return len(transferred)
