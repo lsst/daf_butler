@@ -30,20 +30,7 @@ import operator
 import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple, Type, TypeVar, Union, cast
 
 import astropy.utils.exceptions
 import sqlalchemy
@@ -54,10 +41,13 @@ from sqlalchemy.sql.expression import func
 from sqlalchemy.sql.visitors import InternalTraversal
 
 from ....core import (
+    ColumnTag,
+    ColumnTypeInfo,
+    DatasetColumnTag,
     Dimension,
-    DimensionElement,
-    DimensionUniverse,
-    NamedKeyMapping,
+    DimensionKeyColumnTag,
+    DimensionRecordColumnTag,
+    LogicalColumn,
     Timespan,
     TimespanDatabaseRepresentation,
     ddl,
@@ -72,17 +62,13 @@ try:
 except ImportError:
     erfa = None
 
-if TYPE_CHECKING:
-    from .._structs import QueryColumns
-
 
 def convertExpressionToSql(
     tree: Node,
-    universe: DimensionUniverse,
-    columns: QueryColumns,
-    elements: NamedKeyMapping[DimensionElement, sqlalchemy.sql.FromClause],
+    columns: Mapping[ColumnTag, LogicalColumn],
     bind: Mapping[str, Any],
-    TimespanReprClass: Type[TimespanDatabaseRepresentation],
+    column_types: ColumnTypeInfo,
+    dataset_type_name: Optional[str],
 ) -> sqlalchemy.sql.ColumnElement:
     """Convert a query expression tree into a SQLAlchemy expression object.
 
@@ -90,19 +76,16 @@ def convertExpressionToSql(
     ----------
     tree : `Node`
         Root node of the query expression tree.
-    universe : `DimensionUniverse`
-        All known dimensions.
-    columns : `QueryColumns`
-        Struct that organizes the special columns known to the query
-        under construction.
-    elements : `NamedKeyMapping`
-        `DimensionElement` instances and their associated tables.
+    columns : `Mapping` [ `ColumnTag`, `LogicalColumn` ]
+        Mapping of all columns available to the expression.
     bind : `Mapping`
         Mapping from string names to literal values that should be subsituted
         for those names when they appear (as identifiers) in the expression.
-    TimespanReprClass : `type`; subclass of `TimespanDatabaseRepresentation`
-        Class that encapsulates the representation of `Timespan` objects in
-        the database.
+    column_types : `sql.ColumnTypeInfo`
+        Struct containing registry- and database-specific column type
+        information.
+    dataset_type_name : `str` or `None`
+        Name of the dataset type to assume for unqualified dataset columns.
 
     Returns
     -------
@@ -115,7 +98,7 @@ def convertExpressionToSql(
         Raised if the operands in a query expression operation are incompatible
         with the operator, or if the expression does not evaluate to a boolean.
     """
-    visitor = WhereClauseConverterVisitor(universe, columns, elements, bind, TimespanReprClass)
+    visitor = WhereClauseConverterVisitor(columns, bind, column_types, dataset_type_name)
     converter = tree.visit(visitor)
     return converter.finish(tree)
 
@@ -998,35 +981,30 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
 
     Parameters
     ----------
-    universe : `DimensionUniverse`
-        All known dimensions.
-    columns: `QueryColumns`
-        Struct that organizes the special columns known to the query
-        under construction.
-    elements: `NamedKeyMapping`
-        `DimensionElement` instances and their associated tables.
+    columns : `Mapping` [ `ColumnTag`, `LogicalColumn` ]
+        Mapping of all columns available to the expression.
     bind: `Mapping`
         Mapping from string names to literal values that should be subsituted
         for those names when they appear (as identifiers) in the expression.
-    TimespanReprClass: `type`; subclass of `TimespanDatabaseRepresentation`
-        Class that encapsulates the representation of `Timespan` objects in
-        the database.
+    column_types : `ColumnTypeInfo`
+        Struct containing registry- and database-specific column type
+        information.
+    dataset_type_name : `str` or `None`
+        Name of the dataset type to assume for unqualified dataset columns.
     """
 
     def __init__(
         self,
-        universe: DimensionUniverse,
-        columns: QueryColumns,
-        elements: NamedKeyMapping[DimensionElement, sqlalchemy.sql.FromClause],
+        columns: Mapping[ColumnTag, LogicalColumn],
         bind: Mapping[str, Any],
-        TimespanReprClass: Type[TimespanDatabaseRepresentation],
+        column_types: ColumnTypeInfo,
+        dataset_type_name: Optional[str],
     ):
-        self.universe = universe
         self.columns = columns
-        self.elements = elements
         self.bind = bind
-        self._TimespanReprClass = TimespanReprClass
-        self._dispatch = DispatchTable.build(TimespanReprClass)
+        self._dataset_type_name = dataset_type_name
+        self._column_types = column_types
+        self._dispatch = DispatchTable.build(self._column_types.timespan_cls)
 
     def visitNumericLiteral(self, value: str, node: Node) -> WhereClauseConverter:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
@@ -1051,38 +1029,35 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
         if name in self.bind:
             value = self.bind[name]
             if isinstance(value, Timespan):
-                return TimespanWhereClauseConverter(self._TimespanReprClass.fromLiteral(value))
+                return TimespanWhereClauseConverter(self._column_types.timespan_cls.fromLiteral(value))
             return ScalarWhereClauseConverter.fromLiteral(value)
         constant = categorizeConstant(name)
+        tag: ColumnTag
         if constant is ExpressionConstant.INGEST_DATE:
-            assert self.columns.datasets is not None
-            assert self.columns.datasets.ingestDate is not None, "dataset.ingest_date is not in the query"
+            assert self._dataset_type_name is not None
+            tag = DatasetColumnTag(self._dataset_type_name, "ingest_date")
             return ScalarWhereClauseConverter.fromExpression(
-                _TimestampColumnElement(self.columns.datasets.ingestDate),
+                _TimestampColumnElement(cast(sqlalchemy.sql.ColumnElement, self.columns[tag])),
                 datetime,
             )
         elif constant is ExpressionConstant.NULL:
             return ScalarWhereClauseConverter.fromLiteral(None)
         assert constant is None, "Check for enum values should be exhaustive."
-        element, column = categorizeElementId(self.universe, name)
+        element, column = categorizeElementId(self._column_types.universe, name)
         if column is not None:
+            tag = DimensionRecordColumnTag(element.name, column)
             if column == TimespanDatabaseRepresentation.NAME:
-                if element.temporal is None:
-                    raise ExpressionTypeError(
-                        f"No timespan column exists for non-temporal element '{element.name}'."
-                    )
-                return TimespanWhereClauseConverter(self.columns.timespans[element])
+                return TimespanWhereClauseConverter(cast(TimespanDatabaseRepresentation, self.columns[tag]))
             else:
-                if column not in element.RecordClass.fields.standard.names:
-                    raise ExpressionTypeError(f"No column '{column}' in dimension table '{element.name}'.")
                 return ScalarWhereClauseConverter.fromExpression(
-                    self.elements[element].columns[column],
+                    cast(sqlalchemy.sql.ColumnElement, self.columns[tag]),
                     element.RecordClass.fields.standard[column].getPythonType(),
                 )
         else:
+            tag = DimensionKeyColumnTag(element.name)
             assert isinstance(element, Dimension)
             return ScalarWhereClauseConverter.fromExpression(
-                self.columns.getKeyColumn(element), element.primaryKey.getPythonType()
+                cast(sqlalchemy.sql.ColumnElement, self.columns[tag]), element.primaryKey.getPythonType()
             )
 
     def visitUnaryOp(self, operator: str, operand: WhereClauseConverter, node: Node) -> WhereClauseConverter:

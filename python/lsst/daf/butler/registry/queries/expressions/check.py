@@ -28,14 +28,19 @@ __all__ = (
 )
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, List, Mapping, Optional, Sequence, Set, Tuple
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Any
 
 from ....core import (
+    ColumnTag,
     DataCoordinate,
     DataIdValue,
+    DatasetColumnTag,
     Dimension,
     DimensionElement,
     DimensionGraph,
+    DimensionKeyColumnTag,
+    DimensionRecordColumnTag,
     DimensionUniverse,
     NamedKeyDict,
     NamedValueSet,
@@ -73,7 +78,7 @@ class InspectionSummary:
     in this branch (`NamedValueSet` [ `Dimension` ]).
     """
 
-    columns: NamedKeyDict[DimensionElement, Set[str]] = dataclasses.field(default_factory=NamedKeyDict)
+    columns: NamedKeyDict[DimensionElement, set[str]] = dataclasses.field(default_factory=NamedKeyDict)
     """Dimension element tables whose columns were referenced anywhere in this
     branch (`NamedKeyDict` [ `DimensionElement`, `set` [ `str` ] ]).
     """
@@ -82,6 +87,33 @@ class InspectionSummary:
     """Whether this expression includes the special dataset ingest date
     identifier (`bool`).
     """
+
+    def make_column_tag_set(self, dataset_type_name: str | None) -> set[ColumnTag]:
+        """Transforms the columns captured here into a set of `ColumnTag`
+        objects.
+
+        Parameters
+        ----------
+        dataset_type_name : `str` or `None`
+            Name of the dataset type to assume for unqualified dataset columns,
+            or `None` to reject any such identifiers.
+
+        Returns
+        -------
+        tag_set : `set` [ `ColumnTag` ]
+            Set of categorized column tags.
+        """
+        result: set[ColumnTag] = set()
+        if self.hasIngestDate:
+            if dataset_type_name is None:
+                raise UserExpressionError(
+                    "Expression requires an ingest data, which requires " "exactly one dataset type."
+                )
+            result.add(DatasetColumnTag(dataset_type_name, "ingest_date"))
+        result.update(DimensionKeyColumnTag.generate(self.dimensions.names))
+        for dimension_element, columns in self.columns.items():
+            result.update(DimensionRecordColumnTag.generate(dimension_element.name, columns))
+        return result
 
 
 @dataclasses.dataclass
@@ -137,13 +169,13 @@ class TreeSummary(InspectionSummary):
         """
         return self.dataIdKey is None and self.dataIdValue is not None
 
-    dataIdKey: Optional[Dimension] = None
+    dataIdKey: Dimension | None = None
     """A `Dimension` that is (if `dataIdValue` is not `None`) or may be
     (if `dataIdValue` is `None`) fully identified by a literal value in this
     branch.
     """
 
-    dataIdValue: Optional[str] = None
+    dataIdValue: str | None = None
     """A literal value that constrains (if `dataIdKey` is not `None`) or may
     constrain (if `dataIdKey` is `None`) a dimension in this branch.
 
@@ -212,7 +244,7 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         # Docstring inherited from TreeVisitor.visitBinaryOp
         return lhs.merge(rhs, isEq=(operator == "="))
 
-    def visitIsIn(self, lhs: TreeSummary, values: List[TreeSummary], not_in: bool, node: Node) -> TreeSummary:
+    def visitIsIn(self, lhs: TreeSummary, values: list[TreeSummary], not_in: bool, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitIsIn
         for v in values:
             lhs.merge(v)
@@ -222,14 +254,14 @@ class InspectionVisitor(TreeVisitor[TreeSummary]):
         # Docstring inherited from TreeVisitor.visitParens
         return expression
 
-    def visitTupleNode(self, items: Tuple[TreeSummary, ...], node: Node) -> TreeSummary:
+    def visitTupleNode(self, items: tuple[TreeSummary, ...], node: Node) -> TreeSummary:
         # Docstring inherited from base class
         result = TreeSummary()
         for i in items:
             result.merge(i)
         return result
 
-    def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node) -> TreeSummary:
+    def visitRangeLiteral(self, start: int, stop: int, stride: int | None, node: Node) -> TreeSummary:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
         return TreeSummary()
 
@@ -299,6 +331,11 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         query expression, keyed by the identifiers they replace.
     defaults : `DataCoordinate`
         A data ID containing default for governor dimensions.
+    allow_orphans : `bool`, optional
+        If `True`, permit expressions to refer to dimensions without providing
+        a value for their governor dimensions (e.g. referring to a visit
+        without an instrument).  Should be left to default to `False` in
+        essentially all new code.
     """
 
     def __init__(
@@ -307,11 +344,13 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         graph: DimensionGraph,
         bind: Mapping[str, Any],
         defaults: DataCoordinate,
+        allow_orphans: bool = False,
     ):
         self.dataId = dataId
         self.graph = graph
         self.defaults = defaults
         self._branchVisitor = InspectionVisitor(dataId.universe, bind)
+        self._allow_orphans = allow_orphans
 
     def visitBranch(self, node: Node) -> TreeSummary:
         # Docstring inherited from NormalFormVisitor.
@@ -389,7 +428,7 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
             missing = governorsNeededInBranch - summary.dimension_values.keys()
             if missing <= self.defaults.names:
                 summary.defaultsNeeded.update(missing)
-            else:
+            elif not self._allow_orphans:
                 still_missing = missing - self.defaults.names
                 raise UserExpressionError(
                     f"No value(s) for governor dimensions {still_missing} in expression "

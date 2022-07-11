@@ -22,19 +22,35 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import Any, Iterable, List, Optional
+from typing import Any, Iterable, List, Optional, cast
 
 import sqlalchemy.sql
+from lsst.daf.relation import Predicate, sql
 
-from ...core import DatasetColumnTag, DatasetType, Dimension, DimensionElement, SimpleQuery, SkyPixDimension
+from ...core import (
+    ColumnTag,
+    DatasetColumnTag,
+    DatasetType,
+    Dimension,
+    DimensionElement,
+    DimensionKeyColumnTag,
+    DimensionRecordColumnTag,
+    LogicalColumn,
+    SimpleQuery,
+    SkyPixDimension,
+)
 from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._exceptions import DataIdValueError
 from ..interfaces import GovernorDimensionRecordStorage
 from ..wildcards import CollectionSearch, CollectionWildcard
+from ._predicates import (
+    SpatialConstraintSkyPixOverlap,
+    TemporalConstraintOverlap,
+    make_data_coordinate_predicates,
+)
 from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColumn, Query
 from ._query_backend import QueryBackend
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
-from .expressions import convertExpressionToSql
 
 
 class QueryBuilder:
@@ -80,7 +96,7 @@ class QueryBuilder:
         DataIdValueError
             Raised when governor dimension values are not found.
         """
-        for dimension, bounds in self.summary.where.dimension_constraint.items():
+        for dimension, bounds in self.summary.where.dimension_constraints.items():
             storage = self._backend.managers.dimensions[self.summary.requested.universe[dimension]]
             if isinstance(storage, GovernorDimensionRecordStorage):
                 try:
@@ -176,7 +192,7 @@ class QueryBuilder:
         collection_records = self._backend.resolve_dataset_collections(
             datasetType,
             collections,
-            governors=self.summary.where.dimension_constraint,
+            governors=self.summary.where.dimension_constraints,
             rejections=rejections,
             allow_calibration_collections=(
                 not findFirst and not (self.summary.temporal or self.summary.mustHaveKeysJoined.temporal)
@@ -190,14 +206,14 @@ class QueryBuilder:
                 datasetType,
                 collection_records,
                 columns_requested,
-                governors=self.summary.where.dimension_constraint,
+                governors=self.summary.where.dimension_constraints,
             )
         else:
             relation = self._backend.make_dataset_query_relation(
                 datasetType,
                 collection_records,
                 columns_requested,
-                governors=self.summary.where.dimension_constraint,
+                governors=self.summary.where.dimension_constraints,
             )
         subquery = self._backend.to_sql_subquery(relation)
         if isResult:
@@ -344,52 +360,57 @@ class QueryBuilder:
         For internal use by `QueryBuilder` only; will be called (and should
         only by called) by `finish`.
         """
-        if self.summary.where.tree is not None:
-            self._simpleQuery.where.append(
-                convertExpressionToSql(
-                    self.summary.where.tree,
-                    self.summary.universe,
-                    columns=self._columns,
-                    elements=self._elements,
-                    bind=self.summary.where.bind,
-                    TimespanReprClass=self._backend.managers.column_types.timespan_cls,
-                )
-            )
-        for dimension, columnsInQuery in self._columns.keys.items():
-            if dimension in self.summary.where.dataId.graph:
-                givenKey = self.summary.where.dataId[dimension]
-                # Add a WHERE term for each column that corresponds to each
-                # key.  This is redundant with the JOIN ON clauses that make
-                # them equal to each other, but more constraints have a chance
-                # of making things easier on the DB's query optimizer.
-                for columnInQuery in columnsInQuery:
-                    self._simpleQuery.where.append(columnInQuery == givenKey)
-            else:
-                # Dimension is not fully identified, but it might be a skypix
-                # dimension that's constrained by a given region.
-                if self.summary.where.spatial_constraint is not None and isinstance(
+        # Make a new-style column mapping to feed to predicates.  After
+        # Relation is fully integrated into query builder this will be created
+        # automatically.
+        logical_columns = self._columns.make_logical_column_mapping()
+        if self.summary.where.expression_predicate is not None:
+            # Most column types are tracked in self._columns, and handled above
+            # this block; we only need to worry about scalar dimension record
+            # fact columns referenced by the expression here.
+            for tag in self.summary.where.expression_predicate.columns_required:
+                match tag:
+                    case DimensionRecordColumnTag(element=element_name, column=column_name):
+                        table = self._elements[element_name]
+                        if not tag.is_timespan and not tag.is_spatial_region:
+                            logical_columns[tag] = table.columns[column_name]
+                    case _:
+                        pass
+        # Append WHERE clause terms from predicates.
+        predicates: list[Predicate[ColumnTag]] = []
+        if self.summary.where.expression_predicate is not None:
+            predicates.append(self.summary.where.expression_predicate)
+        if self.summary.where.data_id:
+            known_dimensions = self.summary.where.data_id.graph.intersection(self.summary.mustHaveKeysJoined)
+            known_data_id = self.summary.where.data_id.subset(known_dimensions)
+            predicates.extend(make_data_coordinate_predicates(known_data_id))
+        if self.summary.where.spatial_constraint is not None:
+            for tag in DimensionKeyColumnTag.filter_from(logical_columns):
+                dimension = self._backend.managers.column_types.universe[tag.dimension]
+                if tag.dimension not in self.summary.where.data_id.graph.names and isinstance(
                     dimension, SkyPixDimension
                 ):
-                    # We know the region now.
-                    givenSkyPixIds: List[int] = []
-                    for begin, end in self.summary.where.spatial_constraint.ranges(dimension):
-                        givenSkyPixIds.extend(range(begin, end))
-                    for columnInQuery in columnsInQuery:
-                        self._simpleQuery.where.append(columnInQuery.in_(givenSkyPixIds))
-        # If we are given an dataId with a timespan, and there are one or more
-        # timespans in the query that aren't given, add a WHERE expression for
-        # each of them.
-        if self.summary.where.dataId.graph.temporal and self.summary.temporal:
-            # Timespan is known now.
-            givenInterval = self.summary.where.dataId.timespan
-            assert givenInterval is not None
-            for element, intervalInQuery in self._columns.timespans.items():
-                assert element not in self.summary.where.dataId.graph.elements
-                self._simpleQuery.where.append(
-                    intervalInQuery.overlaps(
-                        self._backend.managers.column_types.timespan_cls.fromLiteral(givenInterval)
+                    predicates.append(
+                        SpatialConstraintSkyPixOverlap(
+                            dimension,
+                            self.summary.where.spatial_constraint,
+                        )
                     )
+        if self.summary.where.temporal_constraint is not None:
+            for tag in DimensionRecordColumnTag.filter_from(logical_columns):
+                if tag.element not in self.summary.where.data_id.graph.names and tag.column == "timespan":
+                    predicates.append(
+                        TemporalConstraintOverlap(
+                            tag,
+                            self.summary.where.temporal_constraint,
+                        )
+                    )
+        for predicate in predicates:
+            self._simpleQuery.where.append(
+                cast(sql.PredicateInterface[ColumnTag, LogicalColumn], predicate).to_sql_boolean(
+                    logical_columns, self._backend.managers.column_types
                 )
+            )
 
     def finish(self, joinMissing: bool = True) -> Query:
         """Finish query constructing, returning a new `Query` instance.

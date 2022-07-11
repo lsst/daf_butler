@@ -876,7 +876,7 @@ class SqlRegistry(Registry):
         collections: Any = None,
         dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
         dataId: Optional[DataId] = None,
-        where: Optional[str] = None,
+        where: str = "",
         findFirst: bool = False,
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
@@ -967,7 +967,7 @@ class SqlRegistry(Registry):
         # Construct the summary structure needed to construct a QueryBuilder.
         summary = queries.QuerySummary(
             requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
-            dataId=standardizedDataId,
+            data_id=standardizedDataId,
             expression=where,
             bind=bind,
             defaults=self.defaults.dataId,
@@ -991,7 +991,7 @@ class SqlRegistry(Registry):
         dataId: Optional[DataId] = None,
         datasets: Any = None,
         collections: Any = None,
-        where: Optional[str] = None,
+        where: str = "",
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
         check: bool = True,
@@ -1033,7 +1033,7 @@ class SqlRegistry(Registry):
             """Construct the Query object that generates query results."""
             summary = queries.QuerySummary(
                 requested=requestedDimensions,
-                dataId=standardizedDataId,
+                data_id=standardizedDataId,
                 expression=where,
                 bind=bind,
                 defaults=self.defaults.dataId,
@@ -1062,7 +1062,7 @@ class SqlRegistry(Registry):
         dataId: Optional[DataId] = None,
         datasets: Any = None,
         collections: Any = None,
-        where: Optional[str] = None,
+        where: str = "",
         components: Optional[bool] = None,
         bind: Optional[Mapping[str, Any]] = None,
         check: bool = True,

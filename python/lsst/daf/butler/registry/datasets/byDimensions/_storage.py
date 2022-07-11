@@ -113,7 +113,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         predicates = make_data_coordinate_predicates(dataId.subset(self.datasetType.dimensions), full=False)
         if timespan is not None:
             requested_columns.add("timespan")
-            predicates.add(
+            predicates.append(
                 TemporalConstraintOverlap(
                     DatasetColumnTag(self.datasetType.name, "timespan"),
                     TemporalConstraint.from_timespan(timespan),
