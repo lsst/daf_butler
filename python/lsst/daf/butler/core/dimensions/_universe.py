@@ -206,6 +206,22 @@ class DimensionUniverse:
         """
         return self._namespace
 
+    def checkCompatibility(self, other: DimensionUniverse) -> bool:
+        """Check compatibility between this `DimensionUniverse` and another
+
+        Parameters
+        ----------
+        other : `DimensionUniverse`
+            The other `DimensionUniverse` to check for compatibility
+
+        Returns
+        -------
+        results : `bool`
+            If the other `DimensionUniverse` is compatible with this one return
+            `True`, else `False`
+        """
+        return self.namespace == other.namespace
+
     def __repr__(self) -> str:
         return f"DimensionUniverse({self._version}, {self._namespace})"
 
