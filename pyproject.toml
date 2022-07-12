@@ -36,7 +36,9 @@ dependencies = [
 dynamic = ["version"]
 [project.urls]
 "Homepage" = "https://github.com/lsst/daf_butler"
+
 [project.optional-dependencies]
+postgres = ["psycopg2"]
 test = [
     "pytest >= 3.2",
     "flake8 >= 3.7.5",
