@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ["DimensionUniverse"]
 
+import logging
 import math
 import pickle
 from typing import (
@@ -60,6 +61,7 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
 
 
 E = TypeVar("E", bound=DimensionElement)
+_LOG = logging.getLogger(__name__)
 
 
 @immutable
@@ -220,7 +222,20 @@ class DimensionUniverse:
             If the other `DimensionUniverse` is compatible with this one return
             `True`, else `False`
         """
-        return self.namespace == other.namespace
+        # Different namespaces mean that these universes cannot be compatible.
+        if self.namespace != other.namespace:
+            return False
+        if self.version != other.version:
+            _LOG.info(
+                "Universes share a namespace %r but have differing versions (%d != %d). "
+                " This could be okay but may be responsible for dimension errors later.",
+                self.namespace,
+                self.version,
+                other.version,
+            )
+
+        # For now assume compatibility if versions differ.
+        return True
 
     def __repr__(self) -> str:
         return f"DimensionUniverse({self._version}, {self._namespace})"
