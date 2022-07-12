@@ -133,6 +133,16 @@ class DimensionTestCase(unittest.TestCase):
         # Simple check that should always be true.
         self.assertTrue(self.universe.checkCompatibility(self.universe))
 
+        # Create a universe like the default universe but with a different
+        # version number.
+        clone = self.universe.dimensionConfig.copy()
+        clone["version"] = clone["version"] + 1_000_000  # High version number
+        universe_clone = DimensionUniverse(config=clone)
+        with self.assertLogs("lsst.daf.butler.core.dimensions", "INFO") as cm:
+            self.assertTrue(self.universe.checkCompatibility(universe_clone))
+        self.assertIn("differing versions", "\n".join(cm.output))
+
+        # Create completely incompatible universe.
         config = Config(
             {
                 "version": 1,
