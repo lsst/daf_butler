@@ -107,7 +107,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: 3.8
           cache: "pip"
@@ -120,7 +120,7 @@ jobs:
 
       - name: Build and create distribution
         run: |
-          python -m build --skip-dependency-check --sdist --wheel
+          python -m build --skip-dependency-check
 
       - name: Upload
         uses: pypa/gh-action-pypi-publish@release/v1
