@@ -287,3 +287,5 @@ storageClasses:
     pytype: lsst.meas.extensions.scarlet.ScarletModelData
   MetricMeasurementBundle:
     pytype: lsst.analysis.tools.analysisMetrics.MetricMeasurementBundle
+  MultipleCellCoadd:
+    pytype: lsst.cell_coadds.MultipleCellCoadd
