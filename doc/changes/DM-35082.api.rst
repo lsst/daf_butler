@@ -1,0 +1,2 @@
+``DimensionUniverse`` now has a ``isCompatibleWith()`` method to check if two universes are compatible with each other.
+The initial test is very basic but can be improved later.
