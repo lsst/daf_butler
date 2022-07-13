@@ -29,6 +29,7 @@ from random import Random
 from typing import Iterator, Optional
 
 from lsst.daf.butler import (
+    Config,
     DataCoordinate,
     DataCoordinateSequence,
     DataCoordinateSet,
@@ -127,6 +128,61 @@ class DimensionTestCase(unittest.TestCase):
     def testConfigPresent(self):
         config = self.universe.dimensionConfig
         self.assertIsInstance(config, DimensionConfig)
+
+    def testCompatibility(self):
+        # Simple check that should always be true.
+        self.assertTrue(self.universe.isCompatibleWith(self.universe))
+
+        # Create a universe like the default universe but with a different
+        # version number.
+        clone = self.universe.dimensionConfig.copy()
+        clone["version"] = clone["version"] + 1_000_000  # High version number
+        universe_clone = DimensionUniverse(config=clone)
+        with self.assertLogs("lsst.daf.butler.core.dimensions", "INFO") as cm:
+            self.assertTrue(self.universe.isCompatibleWith(universe_clone))
+        self.assertIn("differing versions", "\n".join(cm.output))
+
+        # Create completely incompatible universe.
+        config = Config(
+            {
+                "version": 1,
+                "namespace": "compat_test",
+                "skypix": {
+                    "common": "htm7",
+                    "htm": {
+                        "class": "lsst.sphgeom.HtmPixelization",
+                        "max_level": 24,
+                    },
+                },
+                "elements": {
+                    "A": {
+                        "keys": [
+                            {
+                                "name": "id",
+                                "type": "int",
+                            }
+                        ],
+                        "storage": {
+                            "cls": "lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage",
+                        },
+                    },
+                    "B": {
+                        "keys": [
+                            {
+                                "name": "id",
+                                "type": "int",
+                            }
+                        ],
+                        "storage": {
+                            "cls": "lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage",
+                        },
+                    },
+                },
+                "packers": {},
+            }
+        )
+        universe2 = DimensionUniverse(config=config)
+        self.assertFalse(universe2.isCompatibleWith(self.universe))
 
     def testVersion(self):
         self.assertEqual(self.universe.namespace, "daf_butler")
