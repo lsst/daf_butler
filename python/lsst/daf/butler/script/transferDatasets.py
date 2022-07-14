@@ -39,6 +39,7 @@ def transferDatasets(
     find_first: bool,
     transfer: str,
     register_dataset_types: bool,
+    transfer_dimensions: bool = True,
 ) -> int:
     """Transfer datasets from run in source to dest.
 
@@ -61,6 +62,10 @@ def transferDatasets(
         Transfer mode to use when placing artifacts in the destination.
     register_dataset_types : `bool`
         Indicate whether missing dataset types should be registered.
+    transfer_dimensions : `bool`
+        Indicate whether dimensions should be transferred along with
+        datasets. It can be more efficient to disable this if it is known
+        that all dimensions exist.
     """
     source_butler = Butler(source, writeable=False)
     dest_butler = Butler(dest, writeable=True)
@@ -85,6 +90,6 @@ def transferDatasets(
         source_refs_set,
         transfer=transfer,
         register_dataset_types=register_dataset_types,
-        transfer_dimensions=True,
+        transfer_dimensions=transfer_dimensions,
     )
     return len(transferred)
