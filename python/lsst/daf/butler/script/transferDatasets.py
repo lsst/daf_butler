@@ -85,6 +85,6 @@ def transferDatasets(
         source_refs_set,
         transfer=transfer,
         register_dataset_types=register_dataset_types,
-        transfer_dimension_data=True,
+        transfer_dimensions=True,
     )
     return len(transferred)

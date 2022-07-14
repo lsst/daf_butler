@@ -2201,7 +2201,7 @@ class PosixDatastoreTransfers(unittest.TestCase):
                 source_refs,
                 id_gen_map=id_gen_map,
                 register_dataset_types=True,
-                transfer_dimension_data=True,
+                transfer_dimensions=True,
             )
         self.assertEqual(len(transferred), n_expected)
         log_output = ";".join(cm.output)

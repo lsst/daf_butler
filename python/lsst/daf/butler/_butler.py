@@ -2117,7 +2117,7 @@ class Butler(LimitedButler):
         id_gen_map: Dict[str, DatasetIdGenEnum] = None,
         skip_missing: bool = True,
         register_dataset_types: bool = False,
-        transfer_dimension_data: bool = False,
+        transfer_dimensions: bool = False,
     ) -> List[DatasetRef]:
         """Transfer datasets to this Butler from a run in another Butler.
 
@@ -2143,7 +2143,7 @@ class Butler(LimitedButler):
         register_dataset_types : `bool`
             If `True` any missing dataset types are registered. Otherwise
             an exception is raised.
-        transfer_dimension_data : `bool`, optional
+        transfer_dimensions : `bool`, optional
             If `True`, dimension record data associated with the new datasets
             will be transferred.
 
@@ -2242,7 +2242,7 @@ class Butler(LimitedButler):
             log.log(VERBOSE, "All required dataset types are known to the target Butler")
 
         dimension_records: Dict[DimensionElement, Dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
-        if transfer_dimension_data:
+        if transfer_dimensions:
             # Collect all the dimension records for these refs.
             # All dimensions are to be copied but the list of valid dimensions
             # come from this butler's universe.
