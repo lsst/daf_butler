@@ -235,7 +235,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             else:
                 self._db.insert(self._table, *elementRows)
             if self._skyPixOverlap is not None:
-                self._skyPixOverlap.insert(records, replace=replace)
+                self._skyPixOverlap.insert(records, replace=replace, skip_existing=skip_existing)
 
     def sync(self, record: DimensionRecord, update: bool = False) -> Union[bool, Dict[str, Any]]:
         # Docstring inherited from DimensionRecordStorage.sync.
@@ -629,7 +629,9 @@ class _SkyPixOverlapStorage:
         )
         self._db.insert(self._overlapTable, *overlapRecords)
 
-    def insert(self, records: Sequence[DimensionRecord], replace: bool = False) -> None:
+    def insert(
+        self, records: Sequence[DimensionRecord], replace: bool = False, skip_existing: bool = False
+    ) -> None:
         """Insert overlaps for a sequence of ``self.element`` records that
         have just been inserted.
 
@@ -646,6 +648,9 @@ class _SkyPixOverlapStorage:
             If `True` (`False` is default) one or more of the given records may
             already exist and is being updated, so we need to delete any
             existing overlap records first.
+        skip_existing : `bool`, optional
+            If `True` (`False` is default), skip insertion if a record with
+            the same primary key values already exists.
         """
         # Group records by family.governor value.
         grouped: Dict[str, List[DimensionRecord]] = defaultdict(list)
@@ -716,7 +721,10 @@ class _SkyPixOverlapStorage:
                 self._governor.element.name,
                 grouped.keys(),
             )
-            self._db.insert(self._overlapTable, *overlapRecords)
+            if skip_existing:
+                self._db.ensure(self._overlapTable, *overlapRecords, primary_key_only=True)
+            else:
+                self._db.insert(self._overlapTable, *overlapRecords)
 
     def _compute(
         self,
