@@ -1,0 +1,3 @@
+Now ``Butler.transfer_from()`` can copy dimension records as well as datasets.
+This significantly enhances the usability of this method when transferring between disconnected Butlers.
+The ``butler transfer-datasets`` command will transfer dimension records by default but this can be disabled with the ``--no-transfer-dimensions`` option (which can be more efficient if you know that the destination Butler contains all the records).

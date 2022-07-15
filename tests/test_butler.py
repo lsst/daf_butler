@@ -2077,25 +2077,24 @@ class PosixDatastoreTransfers(unittest.TestCase):
         for run in runs:
             self.source_butler.registry.registerCollection(run, CollectionType.RUN)
 
-        # Create dimensions in both butlers (transfer will not create them).
+        # Create dimensions in source butler.
         n_exposures = 30
-        for butler in (self.source_butler, self.target_butler):
-            butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
-            butler.registry.insertDimensionData(
-                "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
-            )
-            butler.registry.insertDimensionData(
-                "detector", {"instrument": "DummyCamComp", "id": 1, "full_name": "det1"}
-            )
+        self.source_butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
+        self.source_butler.registry.insertDimensionData(
+            "physical_filter", {"instrument": "DummyCamComp", "name": "d-r", "band": "R"}
+        )
+        self.source_butler.registry.insertDimensionData(
+            "detector", {"instrument": "DummyCamComp", "id": 1, "full_name": "det1"}
+        )
 
-            for i in range(n_exposures):
-                butler.registry.insertDimensionData(
-                    "exposure",
-                    {"instrument": "DummyCamComp", "id": i, "obs_id": f"exp{i}", "physical_filter": "d-r"},
-                )
+        for i in range(n_exposures):
+            self.source_butler.registry.insertDimensionData(
+                "exposure",
+                {"instrument": "DummyCamComp", "id": i, "obs_id": f"exp{i}", "physical_filter": "d-r"},
+            )
 
         # Create dataset types in the source butler.
-        dimensions = butler.registry.dimensions.extract(["instrument", "exposure"])
+        dimensions = self.source_butler.registry.dimensions.extract(["instrument", "exposure"])
         for datasetTypeName in datasetTypeNames:
             datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
             self.source_butler.registry.registerDatasetType(datasetType)
@@ -2170,8 +2169,10 @@ class PosixDatastoreTransfers(unittest.TestCase):
         for datasetTypeName in datasetTypeNames:
             datasetType = DatasetType(datasetTypeName, dimensions, badStorageClass)
             self.target_butler.registry.registerDatasetType(datasetType)
-        with self.assertRaises(ConflictingDefinitionError):
+        with self.assertRaises(ConflictingDefinitionError) as cm:
             self.target_butler.transfer_from(self.source_butler, source_refs, id_gen_map=id_gen_map)
+        self.assertIn("dataset type differs", str(cm.exception))
+
         # And remove the bad definitions.
         for datasetTypeName in datasetTypeNames:
             self.target_butler.registry.removeDatasetType(datasetTypeName)
@@ -2180,10 +2181,27 @@ class PosixDatastoreTransfers(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.target_butler.transfer_from(self.source_butler, source_refs, id_gen_map=id_gen_map)
 
-        # Now transfer them to the second butler
+        # Transfer without creating dimensions should fail.
+        with self.assertRaises(ConflictingDefinitionError) as cm:
+            self.target_butler.transfer_from(
+                self.source_butler, source_refs, id_gen_map=id_gen_map, register_dataset_types=True
+            )
+        self.assertIn("dimension", str(cm.exception))
+
+        # The failed transfer above leaves registry in an inconsistent
+        # state because the run is created but then rolled back without
+        # the collection cache being cleared. For now force a refresh.
+        # Can remove with DM-35498.
+        self.target_butler.registry.refresh()
+
+        # Now transfer them to the second butler, including dimensions.
         with self.assertLogs(level=logging.DEBUG) as cm:
             transferred = self.target_butler.transfer_from(
-                self.source_butler, source_refs, id_gen_map=id_gen_map, register_dataset_types=True
+                self.source_butler,
+                source_refs,
+                id_gen_map=id_gen_map,
+                register_dataset_types=True,
+                transfer_dimensions=True,
             )
         self.assertEqual(len(transferred), n_expected)
         log_output = ";".join(cm.output)

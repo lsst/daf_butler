@@ -78,6 +78,8 @@ from .core import (
     Datastore,
     Dimension,
     DimensionConfig,
+    DimensionElement,
+    DimensionRecord,
     DimensionUniverse,
     FileDataset,
     Progress,
@@ -2115,6 +2117,7 @@ class Butler(LimitedButler):
         id_gen_map: Dict[str, DatasetIdGenEnum] = None,
         skip_missing: bool = True,
         register_dataset_types: bool = False,
+        transfer_dimensions: bool = False,
     ) -> List[DatasetRef]:
         """Transfer datasets to this Butler from a run in another Butler.
 
@@ -2140,6 +2143,9 @@ class Butler(LimitedButler):
         register_dataset_types : `bool`
             If `True` any missing dataset types are registered. Otherwise
             an exception is raised.
+        transfer_dimensions : `bool`, optional
+            If `True`, dimension record data associated with the new datasets
+            will be transferred.
 
         Returns
         -------
@@ -2235,6 +2241,27 @@ class Butler(LimitedButler):
         else:
             log.log(VERBOSE, "All required dataset types are known to the target Butler")
 
+        dimension_records: Dict[DimensionElement, Dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
+        if transfer_dimensions:
+            # Collect all the dimension records for these refs.
+            # All dimensions are to be copied but the list of valid dimensions
+            # come from this butler's universe.
+            elements = frozenset(
+                element
+                for element in self.registry.dimensions.getStaticElements()
+                if element.hasTable() and element.viewOf is None
+            )
+            dataIds = set(ref.dataId for ref in source_refs)
+            # This logic comes from saveDataIds.
+            for dataId in dataIds:
+                # Should be a no-op if the ref has already been expanded.
+                dataId = source_butler.registry.expandDataId(dataId)
+                # If this butler doesn't know about a dimension in the source
+                # butler things will break later.
+                for record in dataId.records.values():
+                    if record is not None and record.definition in elements:
+                        dimension_records[record.definition].setdefault(record.dataId, record)
+
         # The returned refs should be identical for UUIDs.
         # For now must also support integers and so need to retain the
         # newly-created refs from this registry.
@@ -2246,6 +2273,15 @@ class Butler(LimitedButler):
 
         # Do all the importing in a single transaction.
         with self.transaction():
+            if dimension_records:
+                log.verbose("Ensuring that dimension records exist for transferred datasets.")
+                for element, r in dimension_records.items():
+                    records = [r[dataId] for dataId in r]
+                    # Assume that if the record is already present that we can
+                    # use it without having to check that the record metadata
+                    # is consistent.
+                    self.registry.insertDimensionData(element, *records, skip_existing=True)
+
             for (datasetType, run), refs_to_import in progress.iter_item_chunks(
                 grouped_refs.items(), desc="Importing to registry by run and dataset type"
             ):
