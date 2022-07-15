@@ -26,7 +26,7 @@ import os
 import unittest
 
 from astropy.table import Table as AstropyTable
-from lsst.daf.butler import Butler, script
+from lsst.daf.butler import Butler, DatasetType, script
 from lsst.daf.butler.tests.utils import ButlerTestHelper, MetricTestRepo, makeTestTempDir, removeTestTempDir
 from numpy import array
 
@@ -63,21 +63,23 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
 
     def testDimensions(self):
         """Test getting a dimension."""
-        res = self._queryDataIds(self.root, dimensions=("visit",))
+        res, msg = self._queryDataIds(self.root, dimensions=("visit",))
         expected = AstropyTable(
             array((("R", "DummyCamComp", "d-r", 423), ("R", "DummyCamComp", "d-r", 424))),
             names=("band", "instrument", "physical_filter", "visit"),
         )
+        self.assertFalse(msg)
         self.assertAstropyTablesEqual(res, expected)
 
     def testNull(self):
         "Test asking for nothing."
-        res = self._queryDataIds(self.root)
-        self.assertEqual(res, None)
+        res, msg = self._queryDataIds(self.root)
+        self.assertIsNone(res, msg)
+        self.assertEqual(msg, "")
 
     def testWhere(self):
         """Test with a WHERE constraint."""
-        res = self._queryDataIds(
+        res, msg = self._queryDataIds(
             self.root, dimensions=("visit",), where="instrument='DummyCamComp' AND visit=423"
         )
         expected = AstropyTable(
@@ -85,6 +87,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
+        self.assertIsNone(msg)
 
     def testDatasetsAndCollections(self):
         """Test constraining via datasets and collections."""
@@ -103,7 +106,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
         self.repo.addDataset(dataId={"instrument": "DummyCamComp", "visit": 425}, run="foo")
 
         # Verify the new dataset is not found in the "ingest/run" collection.
-        res = self._queryDataIds(
+        res, msg = self._queryDataIds(
             repo=self.root, dimensions=("visit",), collections=("ingest/run",), datasets="test_metric_comp"
         )
         expected = AstropyTable(
@@ -111,9 +114,10 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
+        self.assertIsNone(msg)
 
         # Verify the new dataset is found in the "foo" collection.
-        res = self._queryDataIds(
+        res, msg = self._queryDataIds(
             repo=self.root, dimensions=("visit",), collections=("foo",), datasets="test_metric_comp"
         )
         expected = AstropyTable(
@@ -121,6 +125,46 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
             names=("band", "instrument", "physical_filter", "visit"),
         )
         self.assertAstropyTablesEqual(res, expected)
+        self.assertIsNone(msg)
+
+        # Verify the new dataset is found in the "foo" collection and the
+        # dimensions are determined automatically.
+        with self.assertLogs("lsst.daf.butler.script.queryDataIds", "INFO") as cm:
+            res, msg = self._queryDataIds(repo=self.root, collections=("foo",), datasets="test_metric_comp")
+        self.assertIn("Determined dimensions", "\n".join(cm.output))
+        expected = AstropyTable(
+            array((("R", "DummyCamComp", "d-r", 425),)),
+            names=("band", "instrument", "physical_filter", "visit"),
+        )
+        self.assertAstropyTablesEqual(res, expected)
+        self.assertIsNone(msg)
+
+        # Check that we get a reason if no dimensions can be inferred.
+        new_dataset_type = DatasetType(
+            "test_metric_dimensionless",
+            (),
+            "StructuredDataDict",
+            universe=self.repo.butler.registry.dimensions,
+        )
+        self.repo.butler.registry.registerDatasetType(new_dataset_type)
+        res, msg = self._queryDataIds(repo=self.root, collections=("foo",), datasets=...)
+        self.assertIsNone(res)
+        self.assertIn("No dimensions in common", msg)
+
+        # Check that we get a reason returned if no dataset type is found.
+        res, msg = self._queryDataIds(
+            repo=self.root, dimensions=("visit",), collections=("foo",), datasets="raw"
+        )
+        self.assertIsNone(res)
+        self.assertEqual(msg, "Dataset type raw is not registered.")
+
+        # Check that we get a reason returned if no dataset is found in
+        # collection.
+        res, msg = self._queryDataIds(
+            repo=self.root, dimensions=("visit",), collections=("ingest",), datasets="test_metric_comp"
+        )
+        self.assertIsNone(res)
+        self.assertIn("No datasets of type test_metric_comp", msg)
 
 
 if __name__ == "__main__":

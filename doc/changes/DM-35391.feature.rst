@@ -1,0 +1,3 @@
+``butler query-data-ids`` will now determine default dimensions to use if a dataset type and collection is specified.
+The logical AND of all supplied dataset types will be used.
+Additionally, if no results are returned a reason will now be given in many cases.
