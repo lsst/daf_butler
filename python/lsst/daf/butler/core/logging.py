@@ -138,7 +138,7 @@ class ButlerMDC:
         def record_factory(*args: Any, **kwargs: Any) -> LogRecord:
             record = old_factory(*args, **kwargs)
             # Make sure we send a copy of the global dict in the record.
-            record.MDC = MDCDict(cls._MDC)  # type: ignore
+            record.MDC = MDCDict(cls._MDC)
             return record
 
         cls._old_factory = old_factory
