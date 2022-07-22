@@ -21,13 +21,23 @@
 
 from __future__ import annotations
 
-__all__ = ("ColumnTypeInfo",)
+__all__ = ("ColumnTypeInfo", "LogicalColumn")
 
 import dataclasses
+from typing import Union
+
+import sqlalchemy
 
 from .ddl import FieldSpec
 from .dimensions import DimensionUniverse
 from .timespan import TimespanDatabaseRepresentation
+
+LogicalColumn = Union[sqlalchemy.sql.ColumnElement, TimespanDatabaseRepresentation]
+"""A type alias for the types used to represent columns in SQL relations.
+
+This is the butler specialization of the `lsst.daf.relation.sql.LogicalColumn`
+concept.
+"""
 
 
 @dataclasses.dataclass(frozen=True, eq=False)

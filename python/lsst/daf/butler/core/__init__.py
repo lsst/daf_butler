@@ -5,6 +5,8 @@
 from . import progress  # most symbols are only used by handler implementors
 from . import ddl, time_utils
 from ._butlerUri import *
+from ._column_categorization import *
+from ._column_tags import *
 from ._column_type_info import *
 from ._topology import *
 from .composites import *
