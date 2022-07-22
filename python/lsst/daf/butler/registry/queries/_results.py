@@ -267,7 +267,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                 subset = self.subset(graph=element.graph, unique=True)
                 records[element.name] = {
                     tuple(record.dataId.values()): record
-                    for record in self._query.managers.dimensions[element].fetch(subset)
+                    for record in self._query.backend.managers.dimensions[element].fetch(subset)
                 }
 
             return self._clone(query=self._query, records=records)
@@ -395,7 +395,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             Raised if ``datasetType.dimensions.issubset(self.graph) is False``.
         """
         if not isinstance(datasetType, DatasetType):
-            storage = self._query.managers.datasets.find(datasetType)
+            storage = self._query.backend.managers.datasets.find(datasetType)
             if storage is None:
                 return ChainedDatasetQueryResults(
                     [],

@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
+    from ..managers import RegistryManagerInstances
 
 
 class QueryBackend(ABC):
@@ -36,6 +37,19 @@ class QueryBackend(ABC):
     This ABC is expected to have a concrete subclass for each concrete registry
     type.
     """
+
+    @property
+    @abstractmethod
+    def managers(self) -> RegistryManagerInstances:
+        """A struct containing the manager instances that back a SQL registry.
+
+        Notes
+        -----
+        This property is a temporary interface that will be removed in favor of
+        new methods once the manager and storage classes have been integrated
+        with `~lsst.daf.relation.Relation`.
+        """
+        raise NotImplementedError()
 
     @property
     @abstractmethod
