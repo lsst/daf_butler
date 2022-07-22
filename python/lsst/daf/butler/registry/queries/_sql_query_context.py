@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, cast
 import sqlalchemy
 from lsst.daf.relation import Relation, TransferVisitor, iteration, sql
 
-from ...core import ColumnTag, ColumnTypeInfo, TopologicalExtentDatabaseRepresentation
+from ...core import ColumnTag, ButlerSqlEngine, TopologicalExtentDatabaseRepresentation
 from ._query_context import QueryContext
 
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ class SqlQueryContext(QueryContext):
     def __init__(
         self,
         db: Database,
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
         engine: sql.Engine,
     ):
         self._db = db
@@ -75,7 +75,7 @@ class SqlQueryContext(QueryContext):
 
     def fetch_iterable(self, relation: Relation[ColumnTag]) -> iteration.RowIterable[ColumnTag]:
         # Docstring inherited.
-        if relation.engine.tag is not iteration.engine:
+        if relation.engine is not iteration.engine:
             iteration_relation = self._sql_to_iteration(relation)
         else:
             visitor = TransferVisitor[ColumnTag]({(self._engine, iteration.engine): self._sql_to_iteration})
@@ -100,7 +100,7 @@ class SqlQueryContext(QueryContext):
             Relation equivalent to ``source``, but in the native iteration
             engine as a leaf relation.
         """
-        sql_executable = cast(sql.Engine, source.engine.tag).to_executable(source, self._column_types)
+        sql_executable = cast(sql.Engine, source.engine).to_executable(source, self._column_types)
         rows = _SqlRowIterable(
             self._db, sql_executable, _SqlRowTransformer(source.columns, self._column_types)
         )
@@ -155,7 +155,7 @@ class _SqlRowTransformer:
         configuration.
     """
 
-    def __init__(self, columns: Iterable[ColumnTag], column_types: ColumnTypeInfo):
+    def __init__(self, columns: Iterable[ColumnTag], column_types: ButlerSqlEngine):
         self._scalar_columns = set(columns)
         self._special_columns: dict[ColumnTag, type[TopologicalExtentDatabaseRepresentation]] = {}
         self._special_columns.update({tag: column_types.timespan_cls for tag in columns if tag.is_timespan})

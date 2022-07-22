@@ -21,14 +21,14 @@
 
 from __future__ import annotations
 
-__all__ = ("ColumnTypeInfo", "LogicalColumn")
+__all__ = ("ButlerSqlEngine", "LogicalColumn")
 
 import dataclasses
 from collections.abc import Iterable, Set
 from typing import Union, cast
 
 import sqlalchemy
-from lsst.daf.relation.sql import ColumnTypeInfo as BaseColumnTypeInfo
+from lsst.daf.relation import sql
 
 from ._column_tags import ColumnTag
 from ._spatial_regions import SpatialRegionDatabaseRepresentation
@@ -47,7 +47,7 @@ concept.
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
-class ColumnTypeInfo(BaseColumnTypeInfo[ColumnTag, LogicalColumn]):
+class ButlerSqlEngine(sql.Engine[ColumnTag, LogicalColumn]):
     """A struct that aggregates information about column types that can differ
     across data repositories due to `Registry` and dimension configuration.
     """

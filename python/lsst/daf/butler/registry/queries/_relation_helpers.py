@@ -26,20 +26,22 @@ __all__ = (
     "make_data_coordinate_predicates",
     "SpatialConstraintSkyPixOverlap",
     "SpatialConstraintRegionOverlap",
+    "SpatialJoinRefinement",
     "TemporalConstraintOverlap",
+    "TimespanBoundOrderByTerm",
 )
 
 from collections.abc import Mapping, Set
 from typing import Any, cast
 
 import sqlalchemy
-from lsst.daf.relation import DictWriter, EngineTag, Predicate, iteration, sql
-from lsst.daf.relation.expressions import ConstantComparisonPredicate
+from lsst.daf.relation import DictWriter, EngineTag, Predicate, iteration, sql, OrderByTerm
+from lsst.daf.relation.expressions import ConstantComparisonPredicate, DescendingOrderByTerm
 from lsst.sphgeom import DISJOINT
 
 from ...core import (
     ColumnTag,
-    ColumnTypeInfo,
+    ButlerSqlEngine,
     DataCoordinate,
     DimensionKeyColumnTag,
     LogicalColumn,
@@ -99,7 +101,7 @@ class SpatialConstraintSkyPixOverlap(Predicate):
         column_types: sql.ColumnTypeInfo[ColumnTag, LogicalColumn],
     ) -> sqlalchemy.sql.ColumnElement:
         sql_column = cast(sqlalchemy.sql.ColumnElement, logical_columns[self._column])
-        column_types = cast(ColumnTypeInfo, column_types)
+        column_types = cast(ButlerSqlEngine, column_types)
         overlaps = [
             sql_column.between(begin, end - 1) if begin != end - 1 else sql_column == begin
             for begin, end in self._constraint.ranges(self._dimension)
@@ -197,7 +199,7 @@ class TemporalConstraintOverlap(Predicate):
         column_types: sql.ColumnTypeInfo[ColumnTag, LogicalColumn],
     ) -> sqlalchemy.sql.ColumnElement:
         logical_column = cast(TimespanDatabaseRepresentation, logical_columns[self._column])
-        column_types = cast(ColumnTypeInfo, column_types)
+        column_types = cast(ButlerSqlEngine, column_types)
         overlaps = [
             logical_column.overlaps(constraint_logical_column)
             for constraint_logical_column in column_types.timespan_cls.from_constraint(self._constraint)
@@ -233,3 +235,63 @@ def make_data_coordinate_predicates(
         ConstantComparisonPredicate(DimensionKeyColumnTag(dimension_name), data_coordinate[dimension_name])
         for dimension_name in dimension_names
     ]
+
+
+class TimespanBoundOrderByTerm(OrderByTerm[ColumnTag]):
+    def __init__(self, column: ColumnTag, subfield: str):
+        self._column = column
+        self._subfield = subfield
+
+    @property
+    def columns_required(self) -> Set[ColumnTag]:
+        return {self._column}
+
+    def supports_engine(self, engine: EngineTag) -> bool:
+        return engine is iteration.engine or isinstance(engine, sql.Engine)
+
+    def serialize(self, writer: DictWriter[ColumnTag]) -> dict[str, Any]:
+        return {
+            "type": "timespan_bound",
+            "column": writer.write_column(self._column),
+            "subfield": self._subfield,
+        }
+
+    def get_iteration_row_sort_key(self, row: iteration.typing.Row[ColumnTag]) -> iteration.typing.Sortable:
+        return getattr(row[self._column], self._subfield)
+
+    def get_iteration_row_sort_reverse(self) -> bool:
+        return False
+
+    def to_sql_sort_column(
+        self, logical_columns: Mapping[ColumnTag, Any], column_types: sql.ColumnTypeInfo[ColumnTag, Any]
+    ) -> sqlalchemy.sql.ColumnElement:
+        return (
+            logical_columns[self._column].lower()
+            if self._subfield == "begin"
+            else logical_columns[self._column].upper()
+        )
+
+    def reversed(self) -> DescendingOrderByTerm[ColumnTag]:
+        return DescendingOrderByTerm(self)
+
+
+class SpatialJoinRefinement(Predicate[ColumnTag]):
+    def __init__(self, lhs: ColumnTag, rhs: ColumnTag):
+        self._lhs = lhs
+        self._rhs = rhs
+
+    @property
+    def columns_required(self) -> Set[ColumnTag]:
+        return {self._lhs, self._rhs}
+
+    def supports_engine(self, engine: EngineTag) -> bool:
+        return isinstance(engine, iteration.Engine)
+
+    def serialize(self, writer: DictWriter[ColumnTag]) -> dict[str, Any]:
+        return {
+            "type": "spatial_join_refinement",
+            "columns": writer.write_column_set(self.columns_required),
+        }
+
+    def test_iteration_row(self, row: iteration.typing.Row[ColumnTag]) -> bool:
+        return not (row[self._lhs].relate(row[self._rhs]) & DISJOINT)

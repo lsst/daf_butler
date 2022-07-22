@@ -47,7 +47,7 @@ if TYPE_CHECKING:
         GovernorDimensionRecordStorage,
         StaticTablesContext,
     )
-    from .._column_type_info import ColumnTypeInfo
+    from .._butler_sql_engine import ButlerSqlEngine
     from ._governor import GovernorDimension
 
 
@@ -236,7 +236,7 @@ class DatabaseDimensionElement(DimensionElement):
         *,
         context: Optional[StaticTablesContext] = None,
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
     ) -> DatabaseDimensionRecordStorage:
         """Make the dimension record storage instance for this database.
 

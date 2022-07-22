@@ -22,20 +22,25 @@ from __future__ import annotations
 
 __all__ = ("SqlQueryBackend",)
 
+from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING
 
-import sqlalchemy
-from lsst.daf.relation import Relation, sql
+from lsst.daf.relation import Identity, Relation, sql, Zero, Predicate, iteration
 from lsst.utils.sets.unboundable import UnboundableSet
 
 from ...core import (
     ColumnTag,
+    ColumnCategorization,
     DataIdValue,
+    DimensionGraph,
     DatasetColumnTag,
+    DimensionRecordColumnTag,
     DatasetType,
     DimensionKeyColumnTag,
     DimensionUniverse,
+    LogicalColumn,
+    SkyPixDimension,
 )
 from ...core.named import NamedValueAbstractSet
 from .._collectionType import CollectionType
@@ -43,6 +48,7 @@ from ..wildcards import CollectionSearch, CollectionWildcard
 from ._query_backend import QueryBackend
 from ._sql_query_context import SqlQueryContext
 from .find_first import FindFirst
+from ._relation_helpers import SpatialJoinRefinement
 
 if TYPE_CHECKING:
     from ..interfaces import CollectionRecord, Database
@@ -74,9 +80,9 @@ class SqlQueryBackend(QueryBackend):
         # Docstring inherited.
         return self._managers
 
-    def to_sql_subquery(self, relation: Relation[ColumnTag]) -> sqlalchemy.sql.FromClause:
+    def to_sql_select_parts(self, relation: Relation[ColumnTag]) -> sql.SelectParts[ColumnTag, LogicalColumn]:
         # Docstring inherited.
-        return self._engine.to_executable(relation, self._managers.column_types).subquery()
+        return relation.visit(sql.ToSelectParts(self._managers.column_types))
 
     def context(self) -> SqlQueryContext:
         # Docstring inherited.
@@ -96,6 +102,14 @@ class SqlQueryBackend(QueryBackend):
     def collection_records(self) -> NamedValueAbstractSet[CollectionRecord]:
         # Docstring inherited.
         return self._managers.collections.records
+
+    def make_identity_relation(self) -> Relation[ColumnTag]:
+        # Docstring inherited.
+        return Identity(self._engine)
+
+    def make_zero_relation(self, columns: Set[ColumnTag], doomed_by: Iterable[str]) -> Relation[ColumnTag]:
+        # Docstring inherited.
+        return Zero(self._engine, columns)  # TODO: doomed_by
 
     def resolve_dataset_collections(
         self,
@@ -216,7 +230,7 @@ class SqlQueryBackend(QueryBackend):
             base,
             DatasetColumnTag(dataset_type.name, "rank"),
             DimensionKeyColumnTag.filter_from(base.columns),
-        ).assert_checked_and_simplified()
+        )
 
     def make_doomed_dataset_relation(
         self,
@@ -229,4 +243,127 @@ class SqlQueryBackend(QueryBackend):
             DimensionKeyColumnTag.generate(dataset_type.dimensions.required.names)
         )
         column_tags.update(DatasetColumnTag.generate(dataset_type.name, columns))
-        return Relation.make_zero(self._engine, columns=column_tags, doomed_by=frozenset(messages))
+        return Zero(self._engine, columns=column_tags)  # TODO: messages
+
+    def make_dimension_relation(
+        self,
+        dimensions: DimensionGraph,
+        columns: Mapping[str, Set[str]],
+        *,
+        initial_relation: Relation[ColumnTag] | None = None,
+        initial_key_relationships: Set[frozenset[str]] = frozenset(),
+        spatial_joins: Iterable[tuple[str, str]] = (),
+        governors: Mapping[str, UnboundableSet[DataIdValue]] | None = None,
+    ) -> Relation[ColumnTag]:
+        # Docstring inherited.
+
+        # Set up the relation variable we'll update as we join more in, as
+        # well as the set of connections already present in the given relation.
+        if initial_relation is not None:
+            relation = initial_relation
+        else:
+            relation = self.make_identity_relation()
+
+        # Make a mutable copy of the columns argument.  Note that the values of
+        # this mapping are not copied, but because they're annotated as a
+        # non-mutable type (collections.abc.Set`), mypy will make sure we don't
+        # modify them in-place and hence surprise the caller.  Any
+        # modifications will *replace* those value-sets instead.
+        columns = defaultdict(set, columns)
+
+        # Next we'll handle spatial joins, since those can require refinement
+        # predicates that will need region columns to be included in the
+        # relations we'll join.
+        predicates: list[Predicate[ColumnTag]] = []
+        for element1, element2 in spatial_joins:
+            overlaps, needs_refinement = self._managers.dimensions.make_spatial_join_relation(
+                element1, element2, engine=self._engine, governors=governors
+            )
+            if needs_refinement:
+                predicates.append(
+                    SpatialJoinRefinement(
+                        DimensionRecordColumnTag(element1, "region"),
+                        DimensionRecordColumnTag(element2, "region"),
+                    )
+                )
+                columns[element1] |= {"region"}
+                columns[element2] |= {"region"}
+            relation = relation.join(overlaps)
+
+        # All skypix columns need to come from either the initial_relation or
+        # a spatial join, since we need all dimension key columns present in
+        # the SQL engine and skypix relations (which just provide regions) are
+        # added by postprocessing in the native iteration engine.
+        for dimension in dimensions:
+            if DimensionKeyColumnTag(dimension.name) not in relation.columns and isinstance(
+                dimension, SkyPixDimension
+            ):
+                raise NotImplementedError(
+                    f"Cannot construct query involving skypix dimension {dimension.name} unless "
+                    "it is part of a dataset subquery, spatial join, or other initial relation."
+                )
+
+        # Categorize all of the initial columns to identify joins we don't need
+        # to also include later.
+        initial_columns = ColumnCategorization.from_iterable(relation.columns)
+
+        # Iterate over all dimension elements whose relations definitely have
+        # to be joined in.  The order doesn't matter as long as we can assume
+        # the database query optimizer is going to try to reorder them anyway.
+        for element in dimensions.elements:
+            columns_still_needed = columns[element.name] - initial_columns.dimension_records[element.name]
+            # Two separate conditions in play here:
+            # - if we need a record column (not just key columns) from this
+            #   element, we have to join in its relation;
+            # - if the element establishes a relationship between key columns
+            #   that wasn't already established by the initial relation, we
+            #   always join that element's relation.  Any element with
+            #   implied dependencies or the alwaysJoin flag establishes such a
+            #   relationship.
+            if columns_still_needed or (
+                (element.alwaysJoin or element.implied)
+                and not element.dimensions.names <= initial_key_relationships
+            ):
+                storage = self._managers.dimensions[element]
+                element_relation = storage.make_relation(columns_still_needed, self._engine)
+                if element_relation.engine is iteration.engine:
+                    # Most of these element relations will be in the SQL
+                    # engine, while at least those for skypix dimensions will
+                    # be in the native iteration, representing relations whose
+                    # rows are computed on-the-fly in Python, not stored in the
+                    # SQL database.
+                    #
+                    # If we haven't seen any such relations so far, and the
+                    # initial_relation didn't already include a transfer to the
+                    # native iteration, add it now.
+                    if relation.engine is not iteration.engine:
+                        relation = relation.transfer(iteration.engine)
+                # Relation.join is capable of inserting a join to a SQL
+                # element_relation prior to the transfer from the SQL engine to
+                # the native iteration engine if that transfer already exists
+                # in LHS relation, as long as any operations between the LHS
+                # root relation and that transfer commute with join.
+                relation = relation.join(element_relation)
+
+        # At this point we've joined in all of the element relations that
+        # definitely need to be included, but we may not have all of the
+        # dimension key columns in the query that we want.  To fill out that
+        # set, we iterate over just the given DimensionGraph's dimensions (not
+        # all dimension *elements*) in reverse topological order.  That order
+        # should reduce the total number of tables we bring in, since each
+        # dimension will bring in keys for its required dependencies before we
+        # get to those required dependencies.
+        for dimension in self.universe.sorted(dimensions, reverse=True):
+            if DimensionKeyColumnTag(dimension.name) not in relation.columns:
+                storage = self._managers.dimensions[dimension]
+                dimension_relation = storage.make_relation(frozenset(), self._engine)
+                relation = relation.join(dimension_relation)
+
+        # Add the predicates we constructed earlier, with a transfer to native
+        # iteration first if necessary.
+        if predicates and relation.engine is not iteration.engine:
+            relation = relation.transfer(iteration.engine)
+        for predicate in predicates:
+            relation = relation.selection(predicate)
+
+        return relation

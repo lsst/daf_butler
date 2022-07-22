@@ -23,7 +23,7 @@ import unittest
 
 import sqlalchemy
 from lsst.daf.butler import (
-    ColumnTypeInfo,
+    ButlerSqlEngine,
     DataCoordinate,
     DatasetColumnTag,
     DimensionUniverse,
@@ -47,7 +47,7 @@ class ConvertExpressionToSqlTestCase(unittest.TestCase):
     """A test case for convertExpressionToSql method"""
 
     def setUp(self):
-        self.column_types = ColumnTypeInfo(
+        self.column_types = ButlerSqlEngine(
             spatial_region_cls=SpatialRegionDatabaseRepresentation,
             timespan_cls=TimespanDatabaseRepresentation.Compound,
             universe=DimensionUniverse(),

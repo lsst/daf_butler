@@ -42,7 +42,7 @@ from sqlalchemy.sql.visitors import InternalTraversal
 
 from ....core import (
     ColumnTag,
-    ColumnTypeInfo,
+    ButlerSqlEngine,
     DatasetColumnTag,
     Dimension,
     DimensionKeyColumnTag,
@@ -67,7 +67,7 @@ def convertExpressionToSql(
     tree: Node,
     columns: Mapping[ColumnTag, LogicalColumn],
     bind: Mapping[str, Any],
-    column_types: ColumnTypeInfo,
+    column_types: ButlerSqlEngine,
     dataset_type_name: Optional[str],
 ) -> sqlalchemy.sql.ColumnElement:
     """Convert a query expression tree into a SQLAlchemy expression object.
@@ -997,7 +997,7 @@ class WhereClauseConverterVisitor(TreeVisitor[WhereClauseConverter]):
         self,
         columns: Mapping[ColumnTag, LogicalColumn],
         bind: Mapping[str, Any],
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
         dataset_type_name: Optional[str],
     ):
         self.columns = columns

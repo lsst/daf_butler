@@ -34,7 +34,7 @@ from typing import Any, Dict, Generic, Type, TypeVar
 import sqlalchemy
 from lsst.utils import doImportType
 
-from ..core import ColumnTypeInfo, Config, DimensionConfig, DimensionUniverse, ddl
+from ..core import ButlerSqlEngine, Config, DimensionConfig, DimensionUniverse, ddl
 from ._config import RegistryConfig
 from .interfaces import (
     ButlerAttributeManager,
@@ -230,7 +230,7 @@ class RegistryManagerInstances(
     `Registry`.
     """
 
-    column_types: ColumnTypeInfo
+    column_types: ButlerSqlEngine
     """Information about column types that can differ between data repositories
     and registry instances, including the dimension universe.
     """
@@ -267,7 +267,7 @@ class RegistryManagerInstances(
         """
         dummy_table = ddl.TableSpec(fields=())
         kwargs: Dict[str, Any] = {}
-        kwargs["column_types"] = ColumnTypeInfo(
+        kwargs["column_types"] = ButlerSqlEngine(
             database.getSpatialRegionRepresentation(),
             database.getTimespanRepresentation(),
             universe,

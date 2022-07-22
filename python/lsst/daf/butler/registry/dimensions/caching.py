@@ -22,21 +22,19 @@ from __future__ import annotations
 
 __all__ = ["CachingDimensionRecordStorage"]
 
-from typing import Any, Dict, Iterable, Mapping, Optional, Set, Union
+from typing import AbstractSet, Any, Dict, Iterable, Mapping, Optional, Set, Union
 
 import sqlalchemy
 from lsst.utils import doImportType
 
 from ...core import (
-    ColumnTypeInfo,
+    ButlerSqlEngine,
     DatabaseDimensionElement,
     DataCoordinate,
     DataCoordinateIterable,
     DataCoordinateSet,
-    DimensionElement,
     DimensionRecord,
     GovernorDimension,
-    NamedKeyDict,
     NamedKeyMapping,
     SpatialRegionDatabaseRepresentation,
     TimespanDatabaseRepresentation,
@@ -47,7 +45,6 @@ from ..interfaces import (
     GovernorDimensionRecordStorage,
     StaticTablesContext,
 )
-from ..queries import QueryBuilder
 
 
 class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
@@ -74,7 +71,7 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         config = config["nested"]
@@ -98,13 +95,30 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
 
     def join(
         self,
-        builder: QueryBuilder,
+        relation: sql.Relation,
+        sql_columns: AbstractSet[str],
         *,
-        regions: Optional[NamedKeyDict[DimensionElement, SpatialRegionDatabaseRepresentation]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
-    ) -> None:
-        # Docstring inherited from DimensionRecordStorage.
-        return self._nested.join(builder, regions=regions, timespans=timespans)
+        constraints: sql.LocalConstraints | None = None,
+        result_records: bool = False,
+        result_columns: AbstractSet[str] = frozenset(),
+    ) -> sql.Relation:
+        # Docstring inherited.
+        # It would be nice to use the cache to satisfy requests for result
+        # columns and records via Postprocessors, as we do with governor
+        # dimension storage.  But this cache is lazy and per-record, so we
+        # can't guarantee everything we'll want is in the cache yet, and we
+        # don't want to do per-row lookups on cache misses.  My long-term plan
+        # is to switch the caching here to fetch all rows for a particular
+        # governor dimension value at once, and then we'll be able to use
+        # constraints.dimensions to make sure we fully populate the cache up
+        # front.
+        return self._nested.join(
+            relation,
+            sql_columns,
+            constraints=constraints,
+            result_records=result_records,
+            result_columns=result_columns,
+        )
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.

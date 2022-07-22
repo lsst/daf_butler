@@ -27,7 +27,7 @@ from typing import AbstractSet, Any, Callable, Dict, Iterable, List, Mapping, Op
 import sqlalchemy
 
 from ...core import (
-    ColumnTypeInfo,
+    ButlerSqlEngine,
     DataCoordinateIterable,
     DimensionElement,
     DimensionRecord,
@@ -36,7 +36,6 @@ from ...core import (
     TimespanDatabaseRepresentation,
 )
 from ..interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
-from ..queries import QueryBuilder
 
 
 class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
@@ -52,14 +51,24 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         The dimension whose records this storage will manage.
     table : `sqlalchemy.schema.Table`
         The logical table for the dimension.
+    column_types : `sql.ColumnTypeInfo`
+        Information about column types that can vary with registry
+        configuration.
     """
 
-    def __init__(self, db: Database, dimension: GovernorDimension, table: sqlalchemy.schema.Table):
+    def __init__(
+        self,
+        db: Database,
+        dimension: GovernorDimension,
+        table: sqlalchemy.schema.Table,
+        column_types: sql.ColumnTypeInfo,
+    ):
         self._db = db
         self._dimension = dimension
         self._table = table
         self._cache: Dict[str, DimensionRecord] = {}
         self._callbacks: List[Callable[[DimensionRecord], None]] = []
+        self._column_types = column_types
 
     @classmethod
     def initialize(
@@ -69,7 +78,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
         *,
         context: Optional[StaticTablesContext] = None,
         config: Mapping[str, Any],
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
     ) -> GovernorDimensionRecordStorage:
         # Docstring inherited from GovernorDimensionRecordStorage.
         spec = element.RecordClass.fields.makeTableSpec(
@@ -80,7 +89,7 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
             table = context.addTable(element.name, spec)
         else:
             table = db.ensureTableExists(element.name, spec)
-        return cls(db, element, table)
+        return cls(db, element, table, column_types)
 
     @property
     def element(self) -> GovernorDimension:
@@ -115,20 +124,56 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
     def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         self._cache.clear()
+        self.refresh()
+
+    def join_results_postprocessed(self) -> bool:
+        # Docstring inherited.
+        return True
 
     def join(
         self,
-        builder: QueryBuilder,
+        relation: sql.Relation,
+        sql_columns: AbstractSet[str],
         *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
-    ) -> None:
+        constraints: sql.LocalConstraints | None = None,
+        result_records: bool = False,
+        result_columns: AbstractSet[str] = frozenset(),
+    ) -> sql.Relation:
         # Docstring inherited from DimensionRecordStorage.
-        joinOn = builder.startJoin(
-            self._table, self.element.dimensions, self.element.RecordClass.fields.dimensions.names
-        )
-        builder.finishJoin(self._table, joinOn)
-        return self._table
+        if result_records or result_columns:
+            # Caller wants at least some columns in result records, which we
+            # could satisfy via a postprocessor based on the cache of all
+            # records.
+            postprocessors: list[sql.Postprocessor] = [
+                _GovernorDimensionRecordPostprocessor(self._dimension, self._cache)
+            ]
+            if result_columns:
+                postprocessors.append(
+                    sql.Postprocessor.make_dimension_column_extractor(
+                        self._dimension.RecordClass, result_columns
+                    )
+                )
+            if not sql_columns and self._dimension.dimensions.names <= relation.columns.dimensions:
+                # All keys are already present, so we don't need to join in
+                # this dimension's table at all.
+                return relation.postprocessed(*postprocessors)
+            else:
+                # We need to join in this table, but we'll still use
+                # postprocessors to provide result records and/or columns, to
+                # keep the result row as narrow as possible.
+                return relation.join(
+                    self._build_leaf_relation(
+                        self.table, self._column_types, sql_columns, constraints=self.get_local_constraints()
+                    ).postprocessed(*postprocessors)
+                )
+        else:
+            # All requested columns are for use in the query (e.g. WHERE
+            # clause), so no postprocessors in play.
+            return relation.join(
+                self._build_leaf_relation(
+                    self.table, self._column_types, sql_columns, constraints=self.get_local_constraints()
+                )
+            )
 
     def insert(self, *records: DimensionRecord, replace: bool = False, skip_existing: bool = False) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
@@ -185,3 +230,29 @@ class BasicGovernorDimensionRecordStorage(GovernorDimensionRecordStorage):
     def digestTables(self) -> Iterable[sqlalchemy.schema.Table]:
         # Docstring inherited from DimensionRecordStorage.digestTables.
         return [self._table]
+
+
+class _GovernorDimensionRecordPostprocessor(sql.Postprocessor):
+    def __init__(self, dimension: GovernorDimension, cache: dict[str, DimensionRecord]):
+        self._cache = cache
+        self._lookup_tag = sql.DimensionKeyColumnTag(dimension.name)
+        self._cls = dimension.RecordClass
+
+    __slots__ = ("_cache",)
+
+    @property
+    def columns_provided(self) -> AbstractSet[sql.ResultTag]:
+        return {self._cls}
+
+    @property
+    def columns_required(self) -> AbstractSet[sql.ResultTag]:
+        return {self._lookup_tag}
+
+    @property
+    def row_multiplier(self) -> float:
+        return 1.0
+
+    def apply(self, row: sql.ResultRow) -> sql.ResultRow:
+        record = self._cache[row[self._lookup_tag]]
+        row[self._cls] = record
+        return row

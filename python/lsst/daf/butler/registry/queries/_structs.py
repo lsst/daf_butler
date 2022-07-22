@@ -23,15 +23,20 @@ from __future__ import annotations
 __all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
 from collections import defaultdict
-from dataclasses import dataclass
-from typing import Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Union
+import dataclasses
+from collections.abc import Set
+from typing import Any, Iterable, Iterator, List, Mapping, Optional, Tuple, Union, cast
 
+from sqlalchemy.sql import ColumnElement
+
+from lsst.daf.relation import OrderByTerm, sql
+from lsst.daf.relation.expressions import SingleColumnOrderByTerm
 from lsst.utils.classes import cached_getter, immutable
 from lsst.utils.sets.unboundable import MutableUnboundableSet, UnboundableSet
-from sqlalchemy.sql import ColumnElement
 
 from ...core import (
     ColumnTag,
+    ButlerSqlEngine,
     DataCoordinate,
     DataIdValue,
     DatasetColumnTag,
@@ -57,9 +62,10 @@ from ...core import (
 # doesn't know about some of these imports.
 from .expressions import ExpressionPredicate
 from .expressions.categorize import categorizeElementOrderByName, categorizeOrderByName
+from ._relation_helpers import TimespanBoundOrderByTerm
 
 
-@dataclass(frozen=True, eq=False)
+@dataclasses.dataclass(frozen=True, eq=False)
 class QueryWhereClause:
     """Structure holding various contributions to a query's WHERE clause.
 
@@ -187,7 +193,7 @@ class QueryWhereClause:
         return result
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class OrderByClauseColumn:
     """Information about single column in ORDER BY clause."""
 
@@ -201,21 +207,28 @@ class OrderByClauseColumn:
     """True for ascending order, False for descending (`bool`)."""
 
 
-@immutable
+@dataclasses.dataclass(frozen=True, eq=False)
 class OrderByClause:
-    """Class for information about columns in ORDER BY clause
+    """Class for information about columns in ORDER BY clause"""
 
-    Parameters
-    ----------
-    order_by : `Iterable` [ `str` ]
-        Sequence of names to use for ordering with optional "-" prefix.
-    graph : `DimensionGraph`
-        Dimensions used by a query.
-    """
+    @classmethod
+    def parse_general(cls, order_by: Iterable[str], graph: DimensionGraph) -> OrderByClause:
+        """Parse an iterable of strings in the context of a multi-dimension
+        query.
 
-    def __init__(self, order_by: Iterable[str], graph: DimensionGraph):
+        Parameters
+        ----------
+        order_by : `Iterable` [ `str` ]
+            Sequence of names to use for ordering with optional "-" prefix.
+        graph : `DimensionGraph`
+            Dimensions used by a query.
 
-        self.order_by_columns = []
+        Returns
+        -------
+        clause : `OrderByClause`
+            New order-by clause representing the given string columns.
+        """
+        terms = []
         for name in order_by:
             if not name or name == "-":
                 raise ValueError("Empty dimension name in ORDER BY")
@@ -224,23 +237,81 @@ class OrderByClause:
                 ascending = False
                 name = name[1:]
             element, column = categorizeOrderByName(graph, name)
-            self.order_by_columns.append(
-                OrderByClauseColumn(element=element, column=column, ordering=ascending)
-            )
+            term = cls._make_term(element, column, ascending)
+            terms.append(term)
+        return cls(terms)
 
-        self.elements = NamedValueSet(
-            column.element for column in self.order_by_columns if column.column is not None
-        )
+    @classmethod
+    def parse_element(cls, order_by: Iterable[str], element: DimensionElement) -> OrderByClause:
+        """Parse an iterable of strings in the context of a single dimension
+        element query.
 
-    order_by_columns: Iterable[OrderByClauseColumn]
+        Parameters
+        ----------
+        order_by : `Iterable` [ `str` ]
+            Sequence of names to use for ordering with optional "-" prefix.
+        element : `DimensionElement`
+            Single or primary dimension element in the query
+
+        Returns
+        -------
+        clause : `OrderByClause`
+            New order-by clause representing the given string columns.
+        """
+        terms = []
+        for name in order_by:
+            if not name or name == "-":
+                raise ValueError("Empty dimension name in ORDER BY")
+            ascending = True
+            if name[0] == "-":
+                ascending = False
+                name = name[1:]
+            column = categorizeElementOrderByName(element, name)
+            term = cls._make_term(element, column, ascending)
+            terms.append(term)
+        return cls(terms)
+
+    @classmethod
+    def _make_term(cls, element: DimensionElement, column: Optional[str], ascending: bool) -> OrderByTerm:
+        tag: ColumnTag
+        term: OrderByTerm
+        if column is None:
+            tag = DimensionKeyColumnTag(element.name)
+            term = SingleColumnOrderByTerm(tag)
+        elif column in ("timespan.begin", "timespan.end"):
+            base_column, _, subfield = column.partition(".")
+            tag = DimensionRecordColumnTag(element.name, base_column)
+            term = TimespanBoundOrderByTerm(tag, subfield)
+        else:
+            tag = DimensionRecordColumnTag(element.name, column)
+            term = SingleColumnOrderByTerm(tag)
+        if not ascending:
+            term = term.reversed()
+        return term
+
+    terms: Iterable[OrderByTerm]
     """Columns that appear in the ORDER BY
     (`Iterable` [ `OrderByClauseColumn` ]).
     """
 
-    elements: NamedValueSet[DimensionElement]
-    """Dimension elements whose non-key columns were referenced by order_by
-    (`NamedValueSet` [ `DimensionElement` ]).
-    """
+    @property  # type: ignore
+    @cached_getter
+    def columns_required(self) -> Set[ColumnTag]:
+        """Set of column tags for all columns referenced by the ORDER BY clause
+        (`~collections.abc.Set` [ `ColumnTag` ]).
+        """
+        tags: set[ColumnTag] = set()
+        for term in self.terms:
+            tags.update(term.columns_required)
+        return tags
+
+    def to_sql_columns(
+        self, logical_columns: Mapping[ColumnTag, LogicalColumn], column_types: ButlerSqlEngine
+    ) -> Iterable[ColumnElement]:
+        return [
+            cast(sql.OrderByTermInterface, term).to_sql_sort_column(logical_columns, column_types)
+            for term in self.terms
+        ]
 
 
 @immutable
@@ -357,8 +428,9 @@ class QuerySummary:
             dataset_type_name=dataset_type_name,
             allow_orphans=not check,
         )
-        self.order_by = None if order_by is None else OrderByClause(order_by, requested)
+        self.order_by = None if order_by is None else OrderByClause.parse_general(order_by, requested)
         self.limit = limit
+        self.columns_required, self.dimensions = self._compute_columns_required()
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
@@ -373,6 +445,27 @@ class QuerySummary:
     datasets: NamedValueAbstractSet[DatasetType]
     """Dataset types whose searches may be joined into the query
     (`NamedValueAbstractSet` [ `DatasetType` ]).
+    """
+
+    order_by: OrderByClause | None
+    """Object that manages how the query results should be sorted
+    (`OrderByClause` or `None`).
+    """
+
+    limit: tuple[int, int | None] | None
+    """Integer offset and maximum number of rows returned (prior to
+    postprocessing filters), respectively.
+    """
+
+    dimensions: DimensionGraph
+    """All dimensions in the query in any form (`DimensionGraph`).
+    """
+
+    columns_required: Set[ColumnTag]
+    """All columns that must be included directly in the query.
+
+    This does not include columns that only need to be included in the result
+    rows, and hence could be provided by postprocessors.
     """
 
     @property
@@ -391,8 +484,8 @@ class QuerySummary:
         #   requested dimensions (i.e. in `self.requested.spatial`);
         # - it isn't also given at query construction time.
         result: NamedValueSet[DimensionElement] = NamedValueSet()
-        for family in self.mustHaveKeysJoined.spatial:
-            element = family.choose(self.mustHaveKeysJoined.elements)
+        for family in self.dimensions.spatial:
+            element = family.choose(self.dimensions.elements)
             assert isinstance(element, DimensionElement)
             if element not in self.where.data_id.graph.elements:
                 result.add(element)
@@ -411,10 +504,6 @@ class QuerySummary:
                 # if this element might be associated with spatial
                 # information, we don't need it for this query.
                 return NamedValueSet().freeze()
-        elif len(result) > 1:
-            # There's a spatial join.  Those require the common SkyPix
-            # system to be included in the query in order to connect them.
-            result.add(self.universe.commonSkyPix)
         return result.freeze()
 
     @property  # type: ignore
@@ -423,7 +512,7 @@ class QuerySummary:
         """Dimension elements whose timespans should be included in the
         query (`NamedValueSet` of `DimensionElement`).
         """
-        if len(self.mustHaveKeysJoined.temporal) > 1:
+        if len(self.dimensions.temporal) > 1:
             # We don't actually have multiple temporal families in our current
             # dimension configuration, so this limitation should be harmless.
             raise NotImplementedError("Queries that should involve temporal joins are not yet supported.")
@@ -434,48 +523,31 @@ class QuerySummary:
                     result.add(self.requested.universe[tag.element])
         return result.freeze()
 
-    @property  # type: ignore
-    @cached_getter
-    def mustHaveKeysJoined(self) -> DimensionGraph:
-        """Dimensions whose primary keys must be used in the JOIN ON clauses
-        of the query, even if their tables do not appear (`DimensionGraph`).
+    def _compute_columns_required(self) -> tuple[set[ColumnTag], DimensionGraph]:
+        """Columns that must be provided by the relations joined into this
+        query in order to obtain the right set of result rows in the right
+        order.
 
-        A `Dimension` primary key can appear in a join clause without its table
-        via a foreign key column in table of a dependent dimension element or
-        dataset.
+        This does not include columns that only need to be included in the
+        result rows, and hence could be provided by postprocessors.
         """
-        names = set(self.requested.names)
-        if self.where.expression_predicate is not None:
-            names.update(
-                tag.dimension
-                for tag in DimensionKeyColumnTag.filter_from(self.where.expression_predicate.columns_required)
-            )
+        tags: set[ColumnTag] = set(DimensionKeyColumnTag.generate(self.requested.names))
+        tags.update(DimensionKeyColumnTag.generate(self.where.data_id.graph.names))
         for dataset_type in self.datasets:
-            names.update(dataset_type.dimensions.names)
-        return DimensionGraph(self.universe, names=names)
-
-    @property  # type: ignore
-    @cached_getter
-    def mustHaveTableJoined(self) -> NamedValueAbstractSet[DimensionElement]:
-        """Dimension elements whose associated tables must appear in the
-        query's FROM clause (`NamedValueSet` of `DimensionElement`).
-        """
-        result = NamedValueSet(self.spatial | self.temporal)
+            tags.update(DimensionKeyColumnTag.generate(dataset_type.dimensions.names))
         if self.where.expression_predicate is not None:
-            for tag in DimensionRecordColumnTag.filter_from(self.where.expression_predicate.columns_required):
-                result.add(self.requested.universe[tag.element])
+            tags.update(self.where.expression_predicate.columns_required)
         if self.order_by is not None:
-            result.update(self.order_by.elements)
-        for dimension in self.mustHaveKeysJoined:
-            if dimension.implied:
-                result.add(dimension)
-        for element in self.mustHaveKeysJoined.union(self.where.data_id.graph).elements:
-            if element.alwaysJoin:
-                result.add(element)
-        return result.freeze()
+            tags.update(self.order_by.columns_required)
+        # Make sure the dimension keys are expanded self-consistently in what
+        # we return by passing them through DimensionGraph.
+        dimensions = DimensionGraph(
+            self.universe, names={tag.dimension for tag in DimensionKeyColumnTag.filter_from(tags)}
+        )
+        return (dataclasses.replace(tags, dimensions=dimensions.names), dimensions)
 
 
-@dataclass
+@dataclasses.dataclass
 class DatasetQueryColumns:
     """A struct containing the columns used to reconstruct `DatasetRef`
     instances from query results.
@@ -504,7 +576,7 @@ class DatasetQueryColumns:
         yield self.runKey
 
 
-@dataclass
+@dataclasses.dataclass
 class QueryColumns:
     """A struct organizing the columns in an under-construction or currently-
     executing query.
@@ -605,4 +677,59 @@ class QueryColumns:
             result[DatasetColumnTag(dataset_type_name, "run")] = self.datasets.runKey
             if self.datasets.ingestDate is not None:
                 result[DatasetColumnTag(dataset_type_name, "ingest_date")] = self.datasets.ingestDate
+        return result
+
+    @staticmethod
+    def from_logical_columns(
+        logical_columns: Mapping[ColumnTag, LogicalColumn],
+        dataset_types: NamedValueAbstractSet[DatasetType],
+        column_types: ButlerSqlEngine,
+    ) -> QueryColumns:
+        """Create a `QueryColumns` instance from a mapping keyed by
+        `sql.ColumnTag`.
+
+        This is a transitional method that converts from the new way of
+        representing columns in queries to this old one.
+
+        Parameters
+        ----------
+        logical_columns : `Mapping` [ `ColumnTag`, `LogicalColumn` ]
+            Mapping of columns to convert.
+        dataset_types : `NamedValueAbstractSet` [ `DatasetType` ]
+            Set of all dataset types participating in the query.
+        column_types : `ColumnTypeInfo`
+            Information about column types that can vary between data
+            repositories.
+
+        Returns
+        -------
+        columns : `QueryColumns`
+            Translated `QueryColumns` instance.
+        """
+        result = QueryColumns()
+        dataset_kwargs: dict[str, Any] = {}
+        for tag in logical_columns.keys():
+            match tag:
+                case DimensionKeyColumnTag(dimension=dimension_name):
+                    dimension = cast(Dimension, column_types.universe[dimension_name])
+                    result.keys[dimension] = [cast(ColumnElement, logical_columns[tag])]
+                case DimensionRecordColumnTag(element=element_name, column="timespan"):
+                    element = column_types.universe[element_name]
+                    result.timespans[element] = cast(TimespanDatabaseRepresentation, logical_columns[tag])
+                case DimensionRecordColumnTag(element=element_name, column="region"):
+                    element = column_types.universe[element_name]
+                    result.regions[element] = cast(SpatialRegionDatabaseRepresentation, logical_columns[tag])
+                case DatasetColumnTag(dataset_type=dataset_type_name, column=column_name):
+                    dataset_type = dataset_types[dataset_type_name]
+                    old_dataset_type = dataset_kwargs.setdefault("datasetType", dataset_type)
+                    assert old_dataset_type == dataset_type, "Queries can only have one result dataset type."
+                    match column_name:
+                        case "dataset_id":
+                            dataset_kwargs["id"] = cast(ColumnElement, logical_columns[tag])
+                        case "run":
+                            dataset_kwargs["runKey"] = cast(ColumnElement, logical_columns[tag])
+                        case "ingest_date":
+                            dataset_kwargs["ingestDate"] = cast(ColumnElement, logical_columns[tag])
+        if dataset_kwargs:
+            result.datasets = DatasetQueryColumns(**dataset_kwargs)
         return result

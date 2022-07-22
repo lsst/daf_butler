@@ -32,7 +32,7 @@ from lsst.daf.relation import Relation, sql
 
 from ...core import (
     ColumnTag,
-    ColumnTypeInfo,
+    ButlerSqlEngine,
     DataCoordinate,
     DatasetId,
     DatasetRef,
@@ -349,7 +349,7 @@ class DatasetRecordStorage(ABC):
               collection the dataset was found in, within the ``collections``
               sequence given.
         engine : `lsst.daf.relation.sql.Engine`
-            Identifier the engine that will evaluate this relation.
+            Identifier for the engine that will evaluate this relation.
 
         Returns
         ------
@@ -380,7 +380,7 @@ class DatasetRecordStorageManager(VersionedExtension):
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
     ) -> DatasetRecordStorageManager:
         """Construct an instance of the manager.
 

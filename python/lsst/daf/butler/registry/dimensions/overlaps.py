@@ -28,7 +28,7 @@ from typing import Iterable, Optional, Tuple
 
 import sqlalchemy
 
-from ...core import DatabaseDimensionElement, addDimensionForeignKey, ddl
+from ...core import DatabaseDimensionElement, addDimensionForeignKey, ddl, sql
 from ..interfaces import (
     Database,
     DatabaseDimensionOverlapStorage,
@@ -104,7 +104,7 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
             cls._OVERLAP_TABLE_NAME_SPEC.format(*elements),
             cls._makeOverlapTableSpec(elements),
         )
-        return CrossFamilyDimensionOverlapStorage(
+        return cls(
             db,
             elementStorage,
             governorStorage,
@@ -181,3 +181,11 @@ class CrossFamilyDimensionOverlapStorage(DatabaseDimensionOverlapStorage):
                 if dimension != element.spatial.governor:
                     addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
         return tableSpec
+
+    def clearCaches(self) -> None:
+        # Docstring inherited from DatabaseDimensionOverlapStorage.
+        pass
+
+    def get_relation(self, constraints: Optional[sql.LocalConstraints] = None) -> Optional[sql.Relation]:
+        # Docstring inherited from DatabaseDimensionOverlapStorage.
+        return None

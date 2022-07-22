@@ -26,11 +26,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING
 
-import sqlalchemy
-from lsst.daf.relation import Relation
+from lsst.daf.relation import Relation, sql
 from lsst.utils.sets.unboundable import UnboundableSet
 
-from ...core import ColumnTag, DataIdValue, DatasetType, DimensionUniverse
+from ...core import ColumnTag, DataIdValue, DimensionGraph, DatasetType, DimensionUniverse, LogicalColumn
 from .._collectionType import CollectionType
 
 if TYPE_CHECKING:
@@ -62,18 +61,18 @@ class QueryBackend(ABC):
         """
         raise NotImplementedError()
 
-    def to_sql_subquery(self, relation: Relation[ColumnTag]) -> sqlalchemy.sql.FromClause:
-        """Convert a relation into a SQLAlchemy subquery.
+    def to_sql_select_parts(self, relation: Relation[ColumnTag]) -> sql.SelectParts[ColumnTag, LogicalColumn]:
+        """Convert a relation into a decomposed SQLAlchemy SELECT query.
 
         Parameters
         ----------
-        relation : `~lsst.daf.relation.Relation`
+        relation : `lsst.daf.relation.Relation`
             Relation to convert.
 
         Returns
         -------
-        subquery : sqlalchemy.sql.FromClause
-            Object that can be used in a SQLAlchemy FROM clause.
+        select_parts : `lsst.daf.relation.sql.SelectParts`
+            Struct representing a simple SELECT query.
 
         Notes
         -----
@@ -118,6 +117,14 @@ class QueryBackend(ABC):
         """A set-like object (which may be lazily evaluated) containing all
         collections known to the registry.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_identity_relation(self) -> Relation[ColumnTag]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_zero_relation(self, columns: Set[ColumnTag], doomed_by: Iterable[str]) -> Relation[ColumnTag]:
         raise NotImplementedError()
 
     @abstractmethod
@@ -281,4 +288,17 @@ class QueryBackend(ABC):
         relation : `sql.Relation`
             Relation with the requested columns and no rows.
         """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def make_dimension_relation(
+        self,
+        dimensions: DimensionGraph,
+        columns: Mapping[str, Set[str]],
+        *,
+        initial_relation: Relation[ColumnTag] | None = None,
+        initial_key_relationships: Set[frozenset[str]] = frozenset(),
+        spatial_joins: Iterable[tuple[str, str]] = (),
+        governors: Mapping[str, UnboundableSet[DataIdValue]] | None = None,
+    ) -> Relation[ColumnTag]:
         raise NotImplementedError()

@@ -20,27 +20,24 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("ExpressionPredicate",)
+__all__ = ("PredicateFactory",)
 
 from collections import defaultdict
 from collections.abc import Mapping, Set
-from typing import Any, cast
+from typing import Any
 
-import sqlalchemy
-from lsst.daf.relation import DictWriter, EngineTag, Predicate, sql
-from lsst.utils.sets.ellipsis import Ellipsis
+from lsst.daf.relation import column_expressions
 from lsst.utils.sets.unboundable import FrozenUnboundableSet, UnboundableSet
 
-from ....core import ColumnTag, ColumnTypeInfo, DataCoordinate, DataIdValue, DimensionGraph, LogicalColumn
+from ....core import ColumnTag, ButlerSqlEngine, DataCoordinate, DataIdValue, DimensionGraph
 from ..._exceptions import UserExpressionError, UserExpressionSyntaxError
 from .check import CheckVisitor
-from .convert import convertExpressionToSql
 from .normalForm import NormalForm, NormalFormExpression
 from .parser import Node, ParserYacc  # type: ignore
 
 
-class ExpressionPredicate(Predicate[ColumnTag]):
-    """A predicate that represents a parsed string expression tree.
+class PredicateFactory:
+    """TODO
 
     Parameters
     ----------
@@ -94,8 +91,9 @@ class ExpressionPredicate(Predicate[ColumnTag]):
         defaults: DataCoordinate | None = None,
         dataset_type_name: str | None = None,
         allow_orphans: bool = False,
-    ) -> ExpressionPredicate | None:
-        """Create a predicate by parsing and analyzing a string expression.
+    ) -> PredicateFactory | None:
+        """Create a predicate manager by parsing and analyzing a string
+        expression.
 
         Parameters
         ----------
@@ -175,7 +173,7 @@ class ExpressionPredicate(Predicate[ColumnTag]):
         )
         for dimension, values in summary.dimension_constraint.items():
             dimension_constraints[dimension] = FrozenUnboundableSet.coerce(values)
-        return ExpressionPredicate(
+        return PredicateFactory(
             string,
             tree,
             bind,
@@ -194,33 +192,6 @@ class ExpressionPredicate(Predicate[ColumnTag]):
         # Docstring inherited.
         return self._dimension_constraints
 
-    def supports_engine(self, engine: EngineTag) -> bool:
-        return isinstance(engine, sql.Engine)
-
-    def serialize(self, writer: DictWriter[ColumnTag]) -> dict[str, Any]:
-        return {
-            "type": "expression",
-            "string": self._string,
-            "bind": dict(self._bind),
-            "columns_required": writer.write_column_set(self._columns_required),
-            "dimension_constraints": {
-                dimension_name: sorted(values)
-                for dimension_name, unboundable_set in self._dimension_constraints.items()
-                if (values := unboundable_set.values) is not Ellipsis
-            },
-            "dataset_type_name": self._dataset_type_name,
-        }
-
-    def to_sql_boolean(
-        self,
-        columns: Mapping[ColumnTag, LogicalColumn],
-        column_types: sql.ColumnTypeInfo[ColumnTag, LogicalColumn],
-    ) -> sqlalchemy.sql.ColumnElement:
-        # Docstring inherited.
-        return convertExpressionToSql(
-            self._tree,
-            columns=columns,
-            bind=self._bind,
-            column_types=cast(ColumnTypeInfo, column_types),
-            dataset_type_name=self._dataset_type_name,
-        )
+    def make_predicate(self, engine: ButlerSqlEngine) -> column_expressions.Predicate[ColumnTag]:
+        # TODO docs
+        raise NotImplementedError("TODO")

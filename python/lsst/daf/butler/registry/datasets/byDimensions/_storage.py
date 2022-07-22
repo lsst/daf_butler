@@ -33,7 +33,7 @@ from lsst.daf.relation import Relation, UniqueKey, sql
 
 from ....core import (
     ColumnTag,
-    ColumnTypeInfo,
+    ButlerSqlEngine,
     DataCoordinate,
     DataCoordinateSet,
     DatasetColumnTag,
@@ -85,7 +85,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         summaries: CollectionSummaryManager,
         tags: sqlalchemy.schema.Table,
         calibs: sqlalchemy.schema.Table | None,
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
     ):
         super().__init__(datasetType=datasetType)
         self._dataset_type_id = dataset_type_id

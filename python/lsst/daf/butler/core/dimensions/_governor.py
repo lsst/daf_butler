@@ -36,7 +36,7 @@ from .construction import DimensionConstructionBuilder, DimensionConstructionVis
 
 if TYPE_CHECKING:
     from ...registry.interfaces import Database, GovernorDimensionRecordStorage, StaticTablesContext
-    from .._column_type_info import ColumnTypeInfo
+    from .._butler_sql_engine import ButlerSqlEngine
 
 
 class GovernorDimension(Dimension):
@@ -146,7 +146,7 @@ class GovernorDimension(Dimension):
         db: Database,
         *,
         context: Optional[StaticTablesContext] = None,
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
     ) -> GovernorDimensionRecordStorage:
         """Make storage record.
 

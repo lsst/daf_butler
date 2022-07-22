@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import sqlalchemy
 
 from ...core import (
-    ColumnTypeInfo,
+    ButlerSqlEngine,
     DatabaseDimensionElement,
     DatabaseTopologicalFamily,
     DimensionElement,
@@ -38,6 +38,7 @@ from ...core import (
     SkyPixDimension,
     ddl,
 )
+from .._exceptions import MissingSpatialOverlapError
 from ..interfaces import (
     Database,
     DatabaseDimensionOverlapStorage,
@@ -87,7 +88,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             Tuple[DatabaseDimensionElement, DatabaseDimensionElement], DatabaseDimensionOverlapStorage
         ],
         dimensionGraphStorage: _DimensionGraphStorage,
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
     ):
         super().__init__(universe=column_types.universe)
         self._db = db
@@ -102,7 +103,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         db: Database,
         context: StaticTablesContext,
         *,
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
     ) -> DimensionRecordStorageManager:
         # Docstring inherited from DimensionRecordStorageManager.
         universe = column_types.universe
@@ -193,6 +194,65 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         # Docstring inherited from DimensionRecordStorageManager.
         for storage in self._records.values():
             storage.clearCaches()
+
+    def get_spatial_join_relation(
+        self, element1: str, element2: str, constraints: sql.LocalConstraints | None = None
+    ) -> tuple[sql.Relation, bool]:
+        # Docstring inherited.
+        storage1 = self[element1]
+        storage2 = self[element2]
+        overlaps: sql.Relation | None = None
+        needs_refinement: bool = False
+        match (storage1, storage2):
+            case [
+                DatabaseDimensionRecordStorage() as db_storage1,
+                DatabaseDimensionRecordStorage() as db_storage2,
+            ]:
+                # Construction guarantees that we only need to try this in one
+                # direction; either both storage objects know about the other
+                # or neither do.
+                overlaps = db_storage1.get_spatial_join_relation(db_storage2.element, constraints)
+                if overlaps is None:
+                    # No direct materialized overlaps; use commonSkyPix as an
+                    # intermediary.
+                    common_skypix_overlap1 = db_storage1.get_spatial_join_relation(
+                        self.universe.commonSkyPix, constraints
+                    )
+                    common_skypix_overlap2 = db_storage2.get_spatial_join_relation(
+                        self.universe.commonSkyPix, constraints
+                    )
+                    assert (
+                        common_skypix_overlap1 is not None and common_skypix_overlap2 is not None
+                    ), "Overlaps with the common skypix dimension should always be available,"
+                    overlaps = common_skypix_overlap1.join(
+                        common_skypix_overlap2,
+                        extra_connections={
+                            frozenset(storage1.element.required.names | storage2.element.required.names)
+                        },
+                    )
+                    needs_refinement = True
+            case [DatabaseDimensionRecordStorage() as db_storage, other]:
+                overlaps = db_storage.get_spatial_join_relation(other.element, constraints)
+            case [other, DatabaseDimensionRecordStorage() as db_storage]:
+                overlaps = db_storage.get_spatial_join_relation(other.element, constraints)
+        if overlaps is None:
+            # In the future, there's a lot more we could try here:
+            #
+            # - for skypix dimensions, looking for materialized overlaps at
+            #   smaller spatial scales (higher-levels) and using bit-shifting;
+            #
+            # - for non-skypix dimensions, looking for materialized overlaps
+            #   for more finer-grained members of the same family, and then
+            #   doing SELECT DISTINCT (or even tolerating duplicates) on the
+            #   columns we care about (e.g. use patch overlaps to satisfy a
+            #   request for tract overlaps).
+            #
+            # It's not obvious that's better than just telling the user to
+            # materialize more overlaps, though.
+            raise MissingSpatialOverlapError(
+                f"No materialized overlaps for spatial join between {element1!r} and {element2!r}."
+            )
+        return overlaps, needs_refinement
 
     @classmethod
     def currentVersion(cls) -> Optional[VersionTuple]:

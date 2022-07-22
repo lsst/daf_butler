@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import sqlalchemy
 
-from ....core import ColumnTypeInfo, DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
+from ....core import ButlerSqlEngine, DatasetId, DatasetRef, DatasetType, DimensionUniverse, ddl
 from ....core.named import NamedKeyDict, NamedValueAbstractSet
 from ..._collection_summary import CollectionSummary
 from ..._exceptions import ConflictingDefinitionError, OrphanedRecordError
@@ -99,7 +99,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         dimensions: DimensionRecordStorageManager,
         static: StaticDatasetTablesTuple,
         summaries: CollectionSummaryManager,
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
     ):
         self._db = db
         self._collections = collections
@@ -118,7 +118,7 @@ class ByDimensionsDatasetRecordStorageManagerBase(DatasetRecordStorageManager):
         *,
         collections: CollectionManager,
         dimensions: DimensionRecordStorageManager,
-        column_types: ColumnTypeInfo,
+        column_types: ButlerSqlEngine,
     ) -> DatasetRecordStorageManager:
         # Docstring inherited from DatasetRecordStorageManager.
         specs = cls.makeStaticTableSpecs(type(collections), universe=dimensions.universe)
