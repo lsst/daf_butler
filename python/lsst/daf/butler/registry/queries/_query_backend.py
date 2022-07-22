@@ -18,13 +18,29 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
-from ._builder import *
-from ._query import *
-from ._query_backend import *
-from ._results import *
-from ._sql_query_backend import *
-from ._structs import *
+__all__ = ("QueryBackend",)
 
-# Symbols from other modules intentionally not lifted to package scope,
-# as they're all internal.
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...core import DimensionUniverse
+
+
+class QueryBackend(ABC):
+    """An interface for constructing and evaluating the
+    `~lsst.daf.relation.Relation` objects that comprise registry queries.
+
+    This ABC is expected to have a concrete subclass for each concrete registry
+    type.
+    """
+
+    @property
+    @abstractmethod
+    def universe(self) -> DimensionUniverse:
+        """Definition of all dimensions and dimension elements for this
+        registry.
+        """
+        raise NotImplementedError()
