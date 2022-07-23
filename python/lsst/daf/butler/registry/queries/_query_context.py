@@ -25,7 +25,19 @@ __all__ = ("QueryContext",)
 from contextlib import AbstractContextManager
 from typing import Any
 
-from lsst.daf.relation import Engine, EngineError, Processor, Relation, iteration
+import lsst.sphgeom
+from lsst.daf.relation import (
+    ColumnExpression,
+    ColumnTag,
+    Engine,
+    EngineError,
+    Predicate,
+    Processor,
+    Relation,
+    iteration,
+)
+
+from ...core import DataCoordinate, DimensionKeyColumnTag, SkyPixDimension, Timespan
 
 
 class QueryContext(Processor, AbstractContextManager["QueryContext"]):
@@ -63,6 +75,7 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
 
     def __init__(self) -> None:
         self.iteration_engine = iteration.Engine()
+        self.iteration_engine.functions[regions_overlap.__name__] = regions_overlap
 
     iteration_engine: iteration.Engine
     """The relation engine that all relations must ultimately be transferred
@@ -119,3 +132,145 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         if base.engine == self.iteration_engine:
             return self.iteration_engine.execute(base).materialized()
         raise EngineError(f"Unexpected engine {base.engine} for base QueryContext implementation.")
+
+    def make_data_coordinate_predicate(
+        self,
+        data_coordinate: DataCoordinate,
+        full: bool | None = None,
+    ) -> Predicate:
+        """Return a `~lsst.daf.relation.column_expressions.Predicate` that
+        represents a data ID constraint.
+
+        Parameters
+        ----------
+        data_coordinate : `DataCoordinate`
+            Data ID whose keys and values should be transformed to predicate
+            equality constraints.
+        full : `bool`, optional
+            Whether to include constraints on implied dimensions (default is to
+            include implied dimensions if ``data_coordinate`` has them).
+
+        Returns
+        -------
+        predicate : `lsst.daf.relation.column_expressions.Predicate`
+            New predicate
+        """
+        if full is None:
+            full = data_coordinate.hasFull()
+        dimensions = data_coordinate.graph.required if not full else data_coordinate.graph.dimensions
+        terms: list[Predicate] = []
+        for dimension in dimensions:
+            dtype = dimension.primaryKey.getPythonType()
+            terms.append(
+                ColumnExpression.reference(DimensionKeyColumnTag(dimension.name), dtype=dtype).eq(
+                    ColumnExpression.literal(data_coordinate[dimension.name], dtype=dtype)
+                )
+            )
+        return Predicate.logical_and(*terms)
+
+    def make_spatial_region_skypix_predicate(
+        self,
+        dimension: SkyPixDimension,
+        region: lsst.sphgeom.Region,
+    ) -> Predicate:
+        """Return a `~lsst.daf.relation.column_expressions.Predicate` that
+        tests whether two region columns overlap
+
+        This operation only works with `iteration engines
+        <lsst.daf.relation.iteration.Engine>`; it is usually used to refine the
+        result of a join on `SkyPixDimension` columns in SQL.
+
+        Parameters
+        ---------
+        dimension : `SkyPixDimension`
+            Dimension whose key column is being constrained.
+        region : `lsst.sphgeom.Region`
+            Spatial region constraint to test against.
+
+        Returns
+        -------
+        predicate : `lsst.daf.relation.column_expressions.Predicate`
+            New predicate with the `DimensionKeyColumn` associated with
+            ``dimension`` as its only required column.
+        """
+        ref = ColumnExpression.reference(DimensionKeyColumnTag(dimension.name), dtype=int)
+        terms: list[Predicate] = []
+        for begin, end in dimension.pixelization.envelope(region):
+            if begin + 1 == end:
+                terms.append(ref.eq(ColumnExpression.literal(begin, dtype=int)))
+            else:
+                terms.append(
+                    ref.ge(ColumnExpression.literal(begin, dtype=int)).logical_and(
+                        ref.lt(ColumnExpression.literal(end, dtype=int))
+                    )
+                )
+        return Predicate.logical_or(*terms)
+
+    def make_spatial_region_overlap_predicate(
+        self,
+        lhs: ColumnExpression,
+        rhs: ColumnExpression,
+    ) -> Predicate:
+        """Return a `~lsst.daf.relation.column_expressions.Predicate` that
+        tests whether two regions overlap
+
+        This operation only works with
+        `iteration engines <lsst.daf.relation.iteration.Engine>`; it is usually
+        used to refine the result of a join or constraint on `SkyPixDimension`
+        columns in SQL.
+
+        Parameters
+        ---------
+        lhs : `lsst.daf.relation.column_expressions.ColumnExpression`
+            Expression for one spatial region.
+        rhs : `lsst.daf.relation.column_expressions.ColumnExpression`
+            Expression for the other spatial region.
+
+        Returns
+        -------
+        predicate : `lsst.daf.relation.column_expressions.Predicate`
+            New predicate with ``lhs`` and ``rhs`` as its required columns.
+        """
+        return lhs.predicate_method(regions_overlap.__name__, rhs, supporting_engine_types={iteration.Engine})
+
+    def make_timespan_overlap_predicate(
+        self,
+        tag: ColumnTag,
+        timespan: Timespan,
+    ) -> Predicate:
+        """Return a `~lsst.daf.relation.column_expressions.Predicate` that
+        tests whether a timespan column overlaps a timespan literal.
+
+        Parameters
+        ----------
+        tag : `ColumnTag`
+            Identifier for a timespan column.
+        timespan : `Timespan`
+            Timespan literal selected rows must overlap.
+
+        Returns
+        -------
+        predicate : `lsst.daf.relation.column_expressions.Predicate`
+            New predicate.
+        """
+        return ColumnExpression.reference(tag, dtype=Timespan).predicate_method(
+            "overlaps", ColumnExpression.literal(timespan)
+        )
+
+
+def regions_overlap(a: lsst.sphgeom.Region, b: lsst.sphgeom.Region) -> bool:
+    """Test whether a pair of regions overlap.
+
+    Parameters
+    ----------
+    a : `lsst.sphgeom.Region`
+        One region.
+    b : `lsst.sphgeom.Region`
+        The other region.
+
+    Returns
+    -------
+    overlap : `bool`
+        Whether the regions overlap.
+    """
+    return not (a.relate(b) & lsst.sphgeom.DISJOINT)
