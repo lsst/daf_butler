@@ -23,6 +23,7 @@ from ._builder import *
 from ._query import *
 from ._query_backend import *
 from ._query_context import *
+from ._readers import *
 from ._results import *
 from ._sql_query_backend import *
 from ._sql_query_context import *
