@@ -30,7 +30,19 @@ __all__ = ("DataCoordinate", "DataId", "DataIdKey", "DataIdValue", "SerializedDa
 
 import numbers
 from abc import abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Any, Dict, Iterator, Mapping, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    AbstractSet,
+    Any,
+    Dict,
+    Iterator,
+    Literal,
+    Mapping,
+    Optional,
+    Tuple,
+    Union,
+    overload,
+)
 
 from lsst.sphgeom import Region
 from pydantic import BaseModel
@@ -629,6 +641,14 @@ class DataCoordinate(NamedKeyMapping[Dimension, DataIdValue]):
             return timespans[0]
         else:
             return Timespan.intersection(*timespans)
+
+    @overload
+    def pack(self, name: str, *, returnMaxBits: Literal[True]) -> Tuple[int, int]:
+        ...
+
+    @overload
+    def pack(self, name: str, *, returnMaxBits: Literal[False]) -> int:
+        ...
 
     def pack(self, name: str, *, returnMaxBits: bool = False) -> Union[Tuple[int, int], int]:
         """Pack this data ID into an integer.
