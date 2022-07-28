@@ -1,0 +1,2 @@
+* Add ``StorageClass.is_type`` method to compare a type with that of the storage class itelf.
+* Add keys, values, items, and iterator for ``StorageClassFactory``.
