@@ -143,6 +143,14 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         )
         self.assertNotEqual(sc5, sc9)
 
+    def testTypeEquality(self):
+        sc1 = StorageClass("Something", pytype=dict)
+        self.assertTrue(sc1.is_type(dict), repr(sc1))
+        self.assertFalse(sc1.is_type(str), repr(sc1))
+
+        sc2 = StorageClass("TestImage2", "lsst.daf.butler.core.storageClass.StorageClassFactory")
+        self.assertTrue(sc2.is_type(StorageClassFactory), repr(sc2))
+
     def testRegistry(self):
         """Check that storage classes can be created on the fly and stored
         in a registry."""

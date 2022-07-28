@@ -439,6 +439,32 @@ class StorageClass:
         """
         return isinstance(instance, self.pytype)
 
+    def is_type(self, other: Type) -> bool:
+        """Return Boolean indicating whether the supplied type matches
+        the type in this `StorageClass`.
+
+        Parameters
+        ----------
+        other : `Type`
+            The type to be checked.
+
+        Returns
+        -------
+        match : `bool`
+            `True` if the types are equal.
+
+        Notes
+        -----
+        If this `StorageClass` has not yet imported the Python type the
+        check is done against the full type name, this prevents an attempt
+        to import the type when it will likely not match.
+        """
+        if self._pytype:
+            return self._pytype is other
+
+        other_name = get_full_type_name(other)
+        return self._pytypeName == other_name
+
     def can_convert(self, other: StorageClass) -> bool:
         """Return `True` if this storage class can convert python types
         in the other storage class.
