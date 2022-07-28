@@ -29,7 +29,23 @@ import builtins
 import copy
 import itertools
 import logging
-from typing import Any, Collection, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union
+from typing import (
+    Any,
+    Collection,
+    Dict,
+    ItemsView,
+    Iterator,
+    KeysView,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    ValuesView,
+)
 
 from lsst.utils import doImportType
 from lsst.utils.classes import Singleton
@@ -644,6 +660,21 @@ StorageClasses
             if storageClassOrName.name in self._storageClasses:
                 return storageClassOrName == self._storageClasses[storageClassOrName.name]
         return False
+
+    def __len__(self) -> int:
+        return len(self._storageClasses)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._storageClasses)
+
+    def values(self) -> ValuesView[StorageClass]:
+        return self._storageClasses.values()
+
+    def keys(self) -> KeysView[str]:
+        return self._storageClasses.keys()
+
+    def items(self) -> ItemsView[str, StorageClass]:
+        return self._storageClasses.items()
 
     def addFromConfig(self, config: Union[StorageClassConfig, Config, str]) -> None:
         """Add more `StorageClass` definitions from a config file.

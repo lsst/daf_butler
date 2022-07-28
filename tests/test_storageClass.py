@@ -164,6 +164,20 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertNotIn("Temporary3", factory)
         self.assertNotIn({}, factory)
 
+        # Make sure iterators work.
+        keys = set(factory.keys())
+        self.assertIn("Temporary2", keys)
+
+        iterkeys = {k for k in factory}
+        self.assertEqual(keys, iterkeys)
+
+        values = set(factory.values())
+        self.assertIn(sc, values)
+        self.assertEqual(len(factory), len(values))
+
+        external = {k: v for k, v in factory.items()}
+        self.assertIn("Temporary2", external)
+
         # Make sure we can't register a storage class with the same name
         # but different values
         newclass3 = StorageClass("Temporary2", pytype=dict)
