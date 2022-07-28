@@ -225,7 +225,9 @@ storageClasses:
   Background:
     pytype: lsst.afw.math.BackgroundList
   FocalPlaneBackground:
-    pytype: lsst.pipe.drivers.background.FocalPlaneBackground
+    pytype: lsst.pipe.tasks.background.FocalPlaneBackground
+    converters:
+      lsst.pipe.drivers.background.FocalPlaneBackground: lsst.pipe.tasks.background.FocalPlaneBackground.fromSimilar
   Config:
     pytype: lsst.pex.config.Config
   Packages:
