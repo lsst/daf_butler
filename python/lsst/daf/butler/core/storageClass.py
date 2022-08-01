@@ -29,7 +29,23 @@ import builtins
 import copy
 import itertools
 import logging
-from typing import Any, Collection, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Type, Union
+from typing import (
+    Any,
+    Collection,
+    Dict,
+    ItemsView,
+    Iterator,
+    KeysView,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    ValuesView,
+)
 
 from lsst.utils import doImportType
 from lsst.utils.classes import Singleton
@@ -423,6 +439,32 @@ class StorageClass:
         """
         return isinstance(instance, self.pytype)
 
+    def is_type(self, other: Type) -> bool:
+        """Return Boolean indicating whether the supplied type matches
+        the type in this `StorageClass`.
+
+        Parameters
+        ----------
+        other : `Type`
+            The type to be checked.
+
+        Returns
+        -------
+        match : `bool`
+            `True` if the types are equal.
+
+        Notes
+        -----
+        If this `StorageClass` has not yet imported the Python type the
+        check is done against the full type name, this prevents an attempt
+        to import the type when it will likely not match.
+        """
+        if self._pytype:
+            return self._pytype is other
+
+        other_name = get_full_type_name(other)
+        return self._pytypeName == other_name
+
     def can_convert(self, other: StorageClass) -> bool:
         """Return `True` if this storage class can convert python types
         in the other storage class.
@@ -644,6 +686,21 @@ StorageClasses
             if storageClassOrName.name in self._storageClasses:
                 return storageClassOrName == self._storageClasses[storageClassOrName.name]
         return False
+
+    def __len__(self) -> int:
+        return len(self._storageClasses)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._storageClasses)
+
+    def values(self) -> ValuesView[StorageClass]:
+        return self._storageClasses.values()
+
+    def keys(self) -> KeysView[str]:
+        return self._storageClasses.keys()
+
+    def items(self) -> ItemsView[str, StorageClass]:
+        return self._storageClasses.items()
 
     def addFromConfig(self, config: Union[StorageClassConfig, Config, str]) -> None:
         """Add more `StorageClass` definitions from a config file.

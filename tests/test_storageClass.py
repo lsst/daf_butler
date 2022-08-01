@@ -143,6 +143,14 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         )
         self.assertNotEqual(sc5, sc9)
 
+    def testTypeEquality(self):
+        sc1 = StorageClass("Something", pytype=dict)
+        self.assertTrue(sc1.is_type(dict), repr(sc1))
+        self.assertFalse(sc1.is_type(str), repr(sc1))
+
+        sc2 = StorageClass("TestImage2", "lsst.daf.butler.core.storageClass.StorageClassFactory")
+        self.assertTrue(sc2.is_type(StorageClassFactory), repr(sc2))
+
     def testRegistry(self):
         """Check that storage classes can be created on the fly and stored
         in a registry."""
@@ -163,6 +171,20 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         self.assertIn("Temporary2", factory)
         self.assertNotIn("Temporary3", factory)
         self.assertNotIn({}, factory)
+
+        # Make sure iterators work.
+        keys = set(factory.keys())
+        self.assertIn("Temporary2", keys)
+
+        iterkeys = {k for k in factory}
+        self.assertEqual(keys, iterkeys)
+
+        values = set(factory.values())
+        self.assertIn(sc, values)
+        self.assertEqual(len(factory), len(values))
+
+        external = {k: v for k, v in factory.items()}
+        self.assertIn("Temporary2", external)
 
         # Make sure we can't register a storage class with the same name
         # but different values
