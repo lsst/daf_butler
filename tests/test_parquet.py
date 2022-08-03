@@ -60,23 +60,35 @@ class ParquetFormatterTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testSingleIndexDataFrame(self):
-        columns1 = pd.Index(["a", "b", "c"])
-        df1 = pd.DataFrame(np.random.randn(5, 3), index=np.arange(5, dtype=int), columns=columns1)
+        data = np.zeros(5, dtype=[("index", "i4"), ("a", "f8"), ("b", "f8"), ("c", "f8"), ("ddd", "f8")])
+        data["index"][:] = np.arange(5)
+        data["a"] = np.random.randn(5)
+        data["b"] = np.random.randn(5)
+        data["c"] = np.random.randn(5)
+        data["ddd"] = np.random.randn(5)
+        df1 = pd.DataFrame(data)
+        df1 = df1.set_index("index")
+        allColumns = df1.columns.append(pd.Index(df1.index.names))
+
         self.butler.put(df1, self.datasetType, dataId={})
         # Read the whole DataFrame.
         df2 = self.butler.get(self.datasetType, dataId={})
         self.assertTrue(df1.equals(df2))
         # Read just the column descriptions.
         columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
-        self.assertTrue(df1.columns.equals(columns2))
+        self.assertTrue(allColumns.equals(columns2))
         # Read just some columns a few different ways.
         df3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
         self.assertTrue(df1.loc[:, ["a", "c"]].equals(df3))
         df4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
         self.assertTrue(df1.loc[:, ["a"]].equals(df4))
+        df5 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["index", "a"]})
+        self.assertTrue(df1.loc[:, ["a"]].equals(df5))
+        df6 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "ddd"})
+        self.assertTrue(df1.loc[:, ["ddd"]].equals(df6))
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
-            self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d"]})
+            self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
 
     def testMultiIndexDataFrame(self):
         columns1 = pd.MultiIndex.from_tuples(
