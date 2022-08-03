@@ -30,25 +30,81 @@ import unittest
 try:
     import numpy as np
     import pandas as pd
+except ImportError:
+    pd = None
+
+try:
     import pyarrow.parquet
 except ImportError:
     pyarrow = None
 
-from lsst.daf.butler import Butler, DatasetType
+from lsst.daf.butler import Butler, Config, DatasetType, StorageClassConfig, StorageClassFactory
+from lsst.daf.butler.delegates.dataframe import DataFrameDelegate
 from lsst.daf.butler.tests.utils import makeTestTempDir, removeTestTempDir
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
+def _makeSingleIndexDataFrame():
+    """Make a single index data frame for testing.
+
+    Returns
+    -------
+    dataFrame : `~pandas.DataFrame`
+        The test dataframe.
+    allColumns : `list` [`str`]
+        List of all the columns (including index columns).
+    """
+    nrow = 5
+    data = np.zeros(nrow, dtype=[("index", "i4"), ("a", "f8"), ("b", "f8"), ("c", "f8"), ("ddd", "f8")])
+    data["index"][:] = np.arange(nrow)
+    data["a"] = np.random.randn(nrow)
+    data["b"] = np.random.randn(nrow)
+    data["c"] = np.random.randn(nrow)
+    data["ddd"] = np.random.randn(nrow)
+    df = pd.DataFrame(data)
+    df = df.set_index("index")
+    allColumns = df.columns.append(pd.Index(df.index.names))
+
+    return df, allColumns
+
+
+def _makeMultiIndexDataFrame():
+    """Make a multi-index data frame for testing.
+
+    Returns
+    -------
+    dataFrame : `~pandas.DataFrame`
+        The test dataframe.
+    """
+    columns = pd.MultiIndex.from_tuples(
+        [
+            ("g", "a"),
+            ("g", "b"),
+            ("g", "c"),
+            ("r", "a"),
+            ("r", "b"),
+            ("r", "c"),
+        ],
+        names=["filter", "column"],
+    )
+    df = pd.DataFrame(np.random.randn(5, 6), index=np.arange(5, dtype=int), columns=columns)
+
+    return df
+
+
+@unittest.skipUnless(pd is not None, "Cannot test ParquetFormatter without pandas.")
 @unittest.skipUnless(pyarrow is not None, "Cannot test ParquetFormatter without pyarrow.")
 class ParquetFormatterTestCase(unittest.TestCase):
     """Tests for ParquetFormatter, using local file datastore."""
 
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
     def setUp(self):
         """Create a new butler root for each test."""
         self.root = makeTestTempDir(TESTDIR)
-        Butler.makeRepo(self.root)
-        self.butler = Butler(self.root, run="test_run")
+        config = Config(self.configFile)
+        self.butler = Butler(Butler.makeRepo(self.root, config=config), writeable=True, run="test_run")
         # No dimensions in dataset type so we don't have to worry about
         # inserting dimension data or defining data IDs.
         self.datasetType = DatasetType(
@@ -60,15 +116,7 @@ class ParquetFormatterTestCase(unittest.TestCase):
         removeTestTempDir(self.root)
 
     def testSingleIndexDataFrame(self):
-        data = np.zeros(5, dtype=[("index", "i4"), ("a", "f8"), ("b", "f8"), ("c", "f8"), ("ddd", "f8")])
-        data["index"][:] = np.arange(5)
-        data["a"] = np.random.randn(5)
-        data["b"] = np.random.randn(5)
-        data["c"] = np.random.randn(5)
-        data["ddd"] = np.random.randn(5)
-        df1 = pd.DataFrame(data)
-        df1 = df1.set_index("index")
-        allColumns = df1.columns.append(pd.Index(df1.index.names))
+        df1, allColumns = _makeSingleIndexDataFrame()
 
         self.butler.put(df1, self.datasetType, dataId={})
         # Read the whole DataFrame.
@@ -91,18 +139,8 @@ class ParquetFormatterTestCase(unittest.TestCase):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["e"]})
 
     def testMultiIndexDataFrame(self):
-        columns1 = pd.MultiIndex.from_tuples(
-            [
-                ("g", "a"),
-                ("g", "b"),
-                ("g", "c"),
-                ("r", "a"),
-                ("r", "b"),
-                ("r", "c"),
-            ],
-            names=["filter", "column"],
-        )
-        df1 = pd.DataFrame(np.random.randn(5, 6), index=np.arange(5, dtype=int), columns=columns1)
+        df1 = _makeMultiIndexDataFrame()
+
         self.butler.put(df1, self.datasetType, dataId={})
         # Read the whole DataFrame.
         df2 = self.butler.get(self.datasetType, dataId={})
@@ -123,6 +161,57 @@ class ParquetFormatterTestCase(unittest.TestCase):
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
             self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d"]})
+
+
+@unittest.skipUnless(pd is not None, "Cannot test parquet InMemoryDatastore without pandas.")
+class InMemoryParquetFormatterTestCase(ParquetFormatterTestCase):
+    """Tests for InMemoryDatastore, using DataFrameDelegate"""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
+
+    def testMultiIndexDataFrame(self):
+        df1 = _makeMultiIndexDataFrame()
+
+        delegate = DataFrameDelegate("DataFrame")
+
+        # Read the whole DataFrame.
+        df2 = delegate.handleParameters(inMemoryDataset=df1)
+        self.assertTrue(df1.equals(df2))
+        # Read just the column descriptions.
+        columns2 = delegate.getComponent(composite=df1, componentName="columns")
+        self.assertTrue(df1.columns.equals(columns2))
+
+        # Read just some columns a few different ways.
+        with self.assertRaises(NotImplementedError) as cm:
+            delegate.handleParameters(inMemoryDataset=df1, parameters={"columns": {"filter": "g"}})
+        self.assertIn("only supports string column names", str(cm.exception))
+        with self.assertRaises(NotImplementedError) as cm:
+            delegate.handleParameters(
+                inMemoryDataset=df1, parameters={"columns": {"filter": ["r"], "column": "a"}}
+            )
+        self.assertIn("only supports string column names", str(cm.exception))
+
+    def testBadInput(self):
+        delegate = DataFrameDelegate("DataFrame")
+
+        with self.assertRaises(ValueError):
+            delegate.handleParameters(inMemoryDataset="not_a_dataframe")
+
+    def testStorageClass(self):
+        df1, allColumns = _makeSingleIndexDataFrame()
+
+        factory = StorageClassFactory()
+        factory.addFromConfig(StorageClassConfig())
+
+        storageClass = factory.findStorageClass(type(df1), compare_types=False)
+        # Force the name lookup to do name matching
+        storageClass._pytype = None
+        self.assertEqual(storageClass.name, "DataFrame")
+
+        storageClass = factory.findStorageClass(type(df1), compare_types=True)
+        # Force the name lookup to do name matching
+        storageClass._pytype = None
+        self.assertEqual(storageClass.name, "DataFrame")
 
 
 if __name__ == "__main__":

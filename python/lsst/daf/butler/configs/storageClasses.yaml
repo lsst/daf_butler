@@ -101,7 +101,8 @@ storageClasses:
   ExposureCatalog:
     pytype: lsst.afw.table.ExposureCatalog
   DataFrame:
-    pytype: pandas.DataFrame
+    pytype: pandas.core.frame.DataFrame
+    delegate: lsst.daf.butler.delegates.dataframe.DataFrameDelegate
     derivedComponents:
       columns: DataFrameIndex
     parameters:
