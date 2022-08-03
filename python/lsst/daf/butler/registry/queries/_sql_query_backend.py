@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._collectionType import CollectionType
 from ._query_backend import QueryBackend
+from ._sql_query_context import SqlQueryContext
 
 if TYPE_CHECKING:
     from ...core import DatasetType, DimensionUniverse
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
     from ..managers import RegistryManagerInstances
 
 
-class SqlQueryBackend(QueryBackend):
+class SqlQueryBackend(QueryBackend[SqlQueryContext]):
     """An implementation of `QueryBackend` for `SqlRegistry`.
 
     Parameters
@@ -62,6 +63,10 @@ class SqlQueryBackend(QueryBackend):
     def universe(self) -> DimensionUniverse:
         # Docstring inherited.
         return self._managers.dimensions.universe
+
+    def context(self) -> SqlQueryContext:
+        # Docstring inherited.
+        return SqlQueryContext(self._db, self._managers.column_types)
 
     def resolve_collection_wildcard(
         self,

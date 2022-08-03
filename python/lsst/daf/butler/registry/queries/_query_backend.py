@@ -22,12 +22,13 @@ from __future__ import annotations
 
 __all__ = ("QueryBackend",)
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections.abc import Set
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from .._collectionType import CollectionType
 from .._exceptions import DatasetTypeError, MissingDatasetTypeError
+from ._query_context import QueryContext
 
 if TYPE_CHECKING:
     from ...core import DatasetType, DimensionUniverse
@@ -35,12 +36,17 @@ if TYPE_CHECKING:
     from ..managers import RegistryManagerInstances
 
 
-class QueryBackend(ABC):
+_C = TypeVar("_C", bound=QueryContext)
+
+
+class QueryBackend(Generic[_C]):
     """An interface for constructing and evaluating the
     `~lsst.daf.relation.Relation` objects that comprise registry queries.
 
     This ABC is expected to have a concrete subclass for each concrete registry
-    type.
+    type, and most subclasses will be paired with a `QueryContext` subclass.
+    See `QueryContext` for the division of responsibilities between these two
+    interfaces.
     """
 
     @property
@@ -60,7 +66,20 @@ class QueryBackend(ABC):
     @abstractmethod
     def universe(self) -> DimensionUniverse:
         """Definition of all dimensions and dimension elements for this
-        registry.
+        registry (`DimensionUniverse`).
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def context(self) -> _C:
+        """Return a context manager that can be used to execute queries with
+        this backend.
+
+        Returns
+        -------
+        context : `QueryContext`
+            Context manager that manages state and connections needed to
+            execute queries.
         """
         raise NotImplementedError()
 
