@@ -1,0 +1,1 @@
+Add ``StorageClass.findStorageClass`` method to find a storage class from a python type.

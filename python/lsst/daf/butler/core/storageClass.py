@@ -439,7 +439,7 @@ class StorageClass:
         """
         return isinstance(instance, self.pytype)
 
-    def is_type(self, other: Type) -> bool:
+    def is_type(self, other: Type, compare_types: bool = False) -> bool:
         """Return Boolean indicating whether the supplied type matches
         the type in this `StorageClass`.
 
@@ -447,6 +447,10 @@ class StorageClass:
         ----------
         other : `Type`
             The type to be checked.
+        compare_types : `bool`, optional
+            If `True` the python type will be used in the comparison
+            if the type names do not match. This may trigger an import
+            of code and so can be slower.
 
         Returns
         -------
@@ -463,7 +467,17 @@ class StorageClass:
             return self._pytype is other
 
         other_name = get_full_type_name(other)
-        return self._pytypeName == other_name
+        if self._pytypeName == other_name:
+            return True
+
+        if compare_types:
+            # Must protect against the import failing.
+            try:
+                return self.pytype is other
+            except Exception:
+                pass
+
+        return False
 
     def can_convert(self, other: StorageClass) -> bool:
         """Return `True` if this storage class can convert python types
@@ -841,6 +855,73 @@ StorageClasses
             The requested storage class name is not registered.
         """
         return self._storageClasses[storageClassName]
+
+    def findStorageClass(self, pytype: Type, compare_types: bool = False) -> StorageClass:
+        """Find the storage class associated with this python type.
+
+        Parameters
+        ----------
+        pytype : `type`
+            The Python type to be matched.
+        compare_types : `bool`, optional
+            If `False`, the type will be checked against name of the python
+            type. This comparison is always done first. If `True` and the
+            string comparison failed, each candidate storage class will be
+            forced to have its type imported. This can be significantly slower.
+
+        Returns
+        -------
+        storageClass : `StorageClass`
+            The matching storage class.
+
+        Raises
+        ------
+        KeyError
+            Raised if no match could be found.
+
+        Notes
+        -----
+        It is possible for a python type to be associated with multiple
+        storage classes. This method will currently return the first that
+        matches.
+        """
+        result = self._find_storage_class(pytype, False)
+        if result:
+            return result
+
+        if compare_types:
+            # The fast comparison failed and we were asked to try the
+            # variant that might involve code imports.
+            result = self._find_storage_class(pytype, True)
+            if result:
+                return result
+
+        raise KeyError(f"Unable to find a StorageClass associated with type {get_full_type_name(pytype)!r}")
+
+    def _find_storage_class(self, pytype: Type, compare_types: bool) -> Optional[StorageClass]:
+        """Iterate through all storage classes to find a match.
+
+        Parameters
+        ----------
+        pytype : `type`
+            The Python type to be matched.
+        compare_types : `bool`, optional
+            Whether to use type name matching or explicit type matching.
+            The latter can be slower.
+
+        Returns
+        -------
+        storageClass : `StorageClass` or `None`
+            The matching storage class, or `None` if no match was found.
+
+        Notes
+        -----
+        Helper method for ``findStorageClass``.
+        """
+        for storageClass in self.values():
+            if storageClass.is_type(pytype, compare_types=compare_types):
+                return storageClass
+        return None
 
     def registerStorageClass(self, storageClass: StorageClass, msg: Optional[str] = None) -> None:
         """Store the `StorageClass` in the factory.

@@ -40,6 +40,18 @@ class PythonType:
     pass
 
 
+class PythonType2:
+    """A dummy class to test the registry of Python types."""
+
+    pass
+
+
+class PythonType3:
+    """A dummy class to test the registry of Python types."""
+
+    pass
+
+
 class StorageClassFactoryTestCase(unittest.TestCase):
     """Tests of the storage class infrastructure."""
 
@@ -205,6 +217,30 @@ class StorageClassFactoryTestCase(unittest.TestCase):
 
         # Check you can silently insert something that is already there
         factory.registerStorageClass(newclass3)
+
+    def testFactoryFind(self):
+        # Finding a storage class can involve doing lots of slow imports so
+        # this is a separate test.
+        factory = StorageClassFactory()
+        className = "PythonType3"
+        newclass = StorageClass(className, pytype=PythonType3)
+        factory.registerStorageClass(newclass)
+        sc = factory.getStorageClass(className)
+
+        # Can we find a storage class from a type.
+        new_sc = factory.findStorageClass(PythonType3)
+        self.assertEqual(new_sc, sc)
+
+        # Now with slow mode
+        new_sc = factory.findStorageClass(PythonType3, compare_types=True)
+        self.assertEqual(new_sc, sc)
+
+        # This class will never match.
+        with self.assertRaises(KeyError):
+            factory.findStorageClass(PythonType2, compare_types=True)
+
+        # Check builtins.
+        self.assertEqual(factory.findStorageClass(dict), factory.getStorageClass("StructuredDataDict"))
 
     def testFactoryConfig(self):
         factory = StorageClassFactory()
