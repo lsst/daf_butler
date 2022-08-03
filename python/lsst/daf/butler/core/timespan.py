@@ -382,13 +382,14 @@ class Timespan:
         else:
             return self._nsec[0] >= other._nsec[1] and self._nsec[1] > other._nsec[0]
 
-    def overlaps(self, other: Timespan) -> bool:
+    def overlaps(self, other: Timespan | astropy.time.Time) -> bool:
         """Test if the intersection of this Timespan with another is empty.
 
         Parameters
         ----------
-        other : `Timespan`
-            Timespan to relate to ``self``.
+        other : `Timespan` or `astropy.time.Time`
+            Timespan or time to relate to ``self``.  If a single time, this is
+            a synonym for `contains`.
 
         Returns
         -------
@@ -401,6 +402,8 @@ class Timespan:
         In all other cases, ``self.contains(other)`` being `True` implies that
         ``self.overlaps(other)`` is also `True`.
         """
+        if isinstance(other, astropy.time.Time):
+            return self.contains(other)
         return self._nsec[1] > other._nsec[0] and other._nsec[1] > self._nsec[0]
 
     def contains(self, other: Union[astropy.time.Time, Timespan]) -> bool:
@@ -887,13 +890,14 @@ class TimespanDatabaseRepresentation(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def overlaps(self: _S, other: _S) -> sqlalchemy.sql.ColumnElement:
+    def overlaps(self: _S, other: _S | sqlalchemy.sql.ColumnElement) -> sqlalchemy.sql.ColumnElement:
         """Return a SQLAlchemy expression representing timespan overlaps.
 
         Parameters
         ----------
         other : ``type(self)``
-            The timespan to overlap ``self`` with.
+            The timespan or time to overlap ``self`` with.  If a single time,
+            this is a synonym for `contains`.
 
         Returns
         -------
@@ -1131,8 +1135,12 @@ class _CompoundTimespanDatabaseRepresentation(TimespanDatabaseRepresentation):
         else:
             return sqlalchemy.sql.and_(self._nsec[0] >= other._nsec[1], self._nsec[1] > other._nsec[0])
 
-    def overlaps(self, other: _CompoundTimespanDatabaseRepresentation) -> sqlalchemy.sql.ColumnElement:
+    def overlaps(
+        self, other: _CompoundTimespanDatabaseRepresentation | sqlalchemy.sql.ColumnElement
+    ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
+        if isinstance(other, sqlalchemy.sql.ColumnElement):
+            return self.contains(other)
         return sqlalchemy.sql.and_(self._nsec[1] > other._nsec[0], other._nsec[1] > self._nsec[0])
 
     def contains(

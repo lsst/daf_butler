@@ -1061,10 +1061,11 @@ class DatabaseTests(ABC):
                 expected = {}
                 for lhsRow in aRows:
                     if lhsRow[TimespanReprClass.NAME] is None:
-                        expected[lhsRow["id"]] = (None, None, None)
+                        expected[lhsRow["id"]] = (None, None, None, None)
                     else:
                         expected[lhsRow["id"]] = (
                             lhsRow[TimespanReprClass.NAME].contains(t),
+                            lhsRow[TimespanReprClass.NAME].overlaps(t),
                             lhsRow[TimespanReprClass.NAME] < t,
                             lhsRow[TimespanReprClass.NAME] > t,
                         )
@@ -1072,10 +1073,14 @@ class DatabaseTests(ABC):
                 sql = sqlalchemy.sql.select(
                     aTable.columns.id.label("lhs"),
                     aRepr.contains(rhs).label("contains"),
+                    aRepr.overlaps(rhs).label("overlaps_point"),
                     (aRepr < rhs).label("less_than"),
                     (aRepr > rhs).label("greater_than"),
                 ).select_from(aTable)
-                queried = {row.lhs: (row.contains, row.less_than, row.greater_than) for row in db.query(sql)}
+                queried = {
+                    row.lhs: (row.contains, row.overlaps_point, row.less_than, row.greater_than)
+                    for row in db.query(sql)
+                }
                 self.assertEqual(expected, queried)
 
     def testConstantRows(self):

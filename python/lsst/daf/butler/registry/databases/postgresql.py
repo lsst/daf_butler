@@ -438,8 +438,12 @@ class _RangeTimespanRepresentation(TimespanDatabaseRepresentation):
         else:
             return self.column >> other.column
 
-    def overlaps(self, other: _RangeTimespanRepresentation) -> sqlalchemy.sql.ColumnElement:
+    def overlaps(
+        self, other: _RangeTimespanRepresentation | sqlalchemy.sql.ColumnElement
+    ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited.
+        if not isinstance(other, _RangeTimespanRepresentation):
+            return self.contains(other)
         return self.column.overlaps(other.column)
 
     def contains(
