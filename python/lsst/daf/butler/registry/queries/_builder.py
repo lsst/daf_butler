@@ -22,7 +22,8 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import AbstractSet, Any, Iterable, List, Optional
+from collections.abc import Iterable, Set
+from typing import Any
 
 import sqlalchemy.sql
 
@@ -170,7 +171,7 @@ class QueryBuilder:
         explicitCollections = frozenset(collections.explicitNames())
         # If we are searching all collections with no constraints, loop over
         # RUN collections only, because that will include all datasets.
-        collectionTypes: AbstractSet[CollectionType]
+        collectionTypes: Set[CollectionType]
         if collections == CollectionQuery():
             collectionTypes = {CollectionType.RUN}
         else:
@@ -185,8 +186,8 @@ class QueryBuilder:
                 "any collection."
             )
             return False
-        collectionRecords: List[CollectionRecord] = []
-        rejections: List[str] = []
+        collectionRecords: list[CollectionRecord] = []
+        rejections: list[str] = []
         for collectionRecord in collections.iter(self._managers.collections, collectionTypes=collectionTypes):
             # Only include collections that (according to collection summaries)
             # might have datasets of this type and governor dimensions
@@ -276,7 +277,7 @@ class QueryBuilder:
         return not self._doomed_by
 
     def _build_dataset_constraint_subquery(
-        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
+        self, storage: DatasetRecordStorage, collections: list[CollectionRecord]
     ) -> sqlalchemy.sql.FromClause:
         """Internal helper method to build a dataset subquery for a parent
         query that does not return dataset results.
@@ -313,7 +314,7 @@ class QueryBuilder:
         ).alias(storage.datasetType.name)
 
     def _build_dataset_query_subquery(
-        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
+        self, storage: DatasetRecordStorage, collections: list[CollectionRecord]
     ) -> sqlalchemy.sql.FromClause:
         """Internal helper method to build a dataset subquery for a parent
         query that returns all matching dataset results.
@@ -347,7 +348,7 @@ class QueryBuilder:
         return sql
 
     def _build_dataset_search_subquery(
-        self, storage: DatasetRecordStorage, collections: List[CollectionRecord]
+        self, storage: DatasetRecordStorage, collections: list[CollectionRecord]
     ) -> sqlalchemy.sql.FromClause:
         """Internal helper method to build a dataset subquery for a parent
         query that returns the first matching dataset for each data ID and
@@ -451,7 +452,7 @@ class QueryBuilder:
         table: sqlalchemy.sql.FromClause,
         dimensions: NamedValueAbstractSet[Dimension],
         *,
-        datasets: Optional[DatasetQueryColumns] = None,
+        datasets: DatasetQueryColumns | None = None,
     ) -> None:
         """Join an arbitrary table to the query via dimension relationships.
 
@@ -487,7 +488,7 @@ class QueryBuilder:
 
     def startJoin(
         self, table: sqlalchemy.sql.FromClause, dimensions: Iterable[Dimension], columnNames: Iterable[str]
-    ) -> List[sqlalchemy.sql.ColumnElement]:
+    ) -> list[sqlalchemy.sql.ColumnElement]:
         """Begin a join on dimensions.
 
         Must be followed by call to `finishJoin`.
@@ -521,7 +522,7 @@ class QueryBuilder:
         return joinOn
 
     def finishJoin(
-        self, table: sqlalchemy.sql.FromClause, joinOn: List[sqlalchemy.sql.ColumnElement]
+        self, table: sqlalchemy.sql.FromClause, joinOn: list[sqlalchemy.sql.ColumnElement]
     ) -> None:
         """Complete a join on dimensions.
 
@@ -538,7 +539,7 @@ class QueryBuilder:
             to form (part of) the ON expression for this JOIN.  Should include
             at least the elements of the list returned by `startJoin`.
         """
-        onclause: Optional[sqlalchemy.sql.ColumnElement]
+        onclause: sqlalchemy.sql.ColumnElement | None
         if len(joinOn) == 0:
             onclause = None
         elif len(joinOn) == 1:
@@ -602,7 +603,7 @@ class QueryBuilder:
                 # dimension that's constrained by a given region.
                 if self.summary.where.region is not None and isinstance(dimension, SkyPixDimension):
                     # We know the region now.
-                    givenSkyPixIds: List[int] = []
+                    givenSkyPixIds: list[int] = []
                     for begin, end in dimension.pixelization.envelope(self.summary.where.region):
                         givenSkyPixIds.extend(range(begin, end))
                     for columnInQuery in columnsInQuery:
@@ -666,7 +667,7 @@ class QueryBuilder:
         order_by_columns : `Iterable` [ `ColumnIterable` ]
             Sequence of columns to appear in ORDER BY clause.
         """
-        order_by_columns: List[OrderByColumn] = []
+        order_by_columns: list[OrderByColumn] = []
         if not self.summary.order_by:
             return order_by_columns
 

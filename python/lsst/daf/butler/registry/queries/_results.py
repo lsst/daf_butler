@@ -32,20 +32,9 @@ __all__ = (
 import itertools
 import operator
 from abc import abstractmethod
-from contextlib import ExitStack, contextmanager
-from typing import (
-    Any,
-    Callable,
-    ContextManager,
-    Iterable,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import AbstractContextManager, ExitStack, contextmanager
+from typing import Any, Optional
 
 import sqlalchemy
 
@@ -63,7 +52,7 @@ from ..interfaces import Database, DimensionRecordStorage
 from ._query import Query
 from ._structs import ElementOrderByClause, QuerySummary
 
-QueryFactoryMethod = Callable[[Optional[Iterable[str]], Optional[Tuple[int, Optional[int]]]], Query]
+QueryFactoryMethod = Callable[[Optional[Iterable[str]], Optional[tuple[int, Optional[int]]]], Query]
 """Type of a query factory method type used by DataCoordinateQueryResults.
 """
 
@@ -108,9 +97,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         query_factory: QueryFactoryMethod,
         graph: DimensionGraph,
         *,
-        order_by: Optional[Iterable[str]] = None,
-        limit: Optional[Tuple[int, Optional[int]]] = None,
-        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+        order_by: Iterable[str] | None = None,
+        limit: tuple[int, int | None] | None = None,
+        records: Mapping[str, Mapping[tuple, DimensionRecord]] | None = None,
     ):
         self._db = db
         self._query_factory = query_factory
@@ -118,7 +107,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         self._order_by = order_by
         self._limit = limit
         self._records = records
-        self._cached_query: Optional[Query] = None
+        self._cached_query: Query | None = None
 
     __slots__ = ("_db", "_query_factory", "_graph", "_order_by", "_limit", "_records", "_cached_query")
 
@@ -129,9 +118,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         query: Query,
         graph: DimensionGraph,
         *,
-        order_by: Optional[Iterable[str]] = None,
-        limit: Optional[Tuple[int, Optional[int]]] = None,
-        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+        order_by: Iterable[str] | None = None,
+        limit: tuple[int, int | None] | None = None,
+        records: Mapping[str, Mapping[tuple, DimensionRecord]] | None = None,
     ) -> DataCoordinateQueryResults:
         """Make an instance from a pre-existing query instead of a factory.
 
@@ -158,7 +147,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             values.
         """
 
-        def factory(order_by: Optional[Iterable[str]], limit: Optional[Tuple[int, Optional[int]]]) -> Query:
+        def factory(order_by: Iterable[str] | None, limit: tuple[int, int | None] | None) -> Query:
             return query
 
         return DataCoordinateQueryResults(db, factory, graph, order_by=order_by, limit=limit, records=records)
@@ -172,12 +161,12 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
     def _clone(
         self,
         *,
-        query_factory: Optional[QueryFactoryMethod] = None,
-        query: Optional[Query] = None,
-        graph: Optional[DimensionGraph] = None,
-        order_by: Optional[Iterable[str]] = None,
-        limit: Optional[Tuple[int, Optional[int]]] = None,
-        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
+        query_factory: QueryFactoryMethod | None = None,
+        query: Query | None = None,
+        graph: DimensionGraph | None = None,
+        order_by: Iterable[str] | None = None,
+        limit: tuple[int, int | None] | None = None,
+        records: Mapping[str, Mapping[tuple, DimensionRecord]] | None = None,
     ) -> DataCoordinateQueryResults:
         """Clone this instance potentially updating some attributes."""
         graph = graph if graph is not None else self._graph
@@ -286,7 +275,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             return self
 
     def subset(
-        self, graph: Optional[DimensionGraph] = None, *, unique: bool = False
+        self, graph: DimensionGraph | None = None, *, unique: bool = False
     ) -> DataCoordinateQueryResults:
         """Return a results object containing a subset of the dimensions of
         this one, and/or a unique near-subset of its rows.
@@ -346,7 +335,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             raise ValueError(f"{graph} is not a subset of {self.graph}")
         if graph == self.graph and (not unique or self._query.isUnique()):
             return self
-        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]]
+        records: Mapping[str, Mapping[tuple, DimensionRecord]] | None
         if self._records is not None:
             records = {element.name: self._records[element.name] for element in graph.elements}
         else:
@@ -371,7 +360,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             )
 
     def findDatasets(
-        self, datasetType: Union[DatasetType, str], collections: Any, *, findFirst: bool = True
+        self, datasetType: DatasetType | str, collections: Any, *, findFirst: bool = True
     ) -> DatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
@@ -535,7 +524,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         """
         return self._clone(order_by=args)
 
-    def limit(self, limit: int, offset: Optional[int] = None) -> DataCoordinateQueryResults:
+    def limit(self, limit: int, offset: int | None = None) -> DataCoordinateQueryResults:
         """Make the iterator return limited number of records.
 
         Parameters
@@ -580,7 +569,7 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         raise NotImplementedError()
 
     @abstractmethod
-    def materialize(self) -> ContextManager[DatasetQueryResults]:
+    def materialize(self) -> AbstractContextManager[DatasetQueryResults]:
         """Insert this query's results into a temporary table.
 
         Returns
@@ -727,9 +716,9 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         db: Database,
         query: Query,
         *,
-        components: Sequence[Optional[str]],
-        records: Optional[Mapping[str, Mapping[tuple, DimensionRecord]]] = None,
-        datasetType: Optional[DatasetType] = None,
+        components: Sequence[str | None],
+        records: Mapping[str, Mapping[tuple, DimensionRecord]] | None = None,
+        datasetType: DatasetType | None = None,
     ):
         self._db = db
         self._query = query
@@ -793,7 +782,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
             records=self._records,
         )
 
-    def withComponents(self, components: Sequence[Optional[str]]) -> ParentDatasetQueryResults:
+    def withComponents(self, components: Sequence[str | None]) -> ParentDatasetQueryResults:
         """Return a new query results object for the same parent datasets but
         different components.
 
@@ -976,7 +965,7 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
         raise NotImplementedError()
 
     @abstractmethod
-    def limit(self, limit: int, offset: Optional[int] = None) -> DimensionRecordQueryResults:
+    def limit(self, limit: int, offset: int | None = None) -> DimensionRecordQueryResults:
         """Make the iterator return limited number of records.
 
         Parameters
@@ -1118,8 +1107,8 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
         # attributes of the element, and not other elements from the dimension
         # graph.
         orderBy = ElementOrderByClause(self._order_by, self._recordStorage.element)
-        attributes: List[str] = []
-        ordering: List[bool] = []
+        attributes: list[str] = []
+        ordering: list[bool] = []
         for column in orderBy.order_by_columns:
             if column.column is None:
                 assert isinstance(column.element, Dimension), "Element must be a Dimension"
