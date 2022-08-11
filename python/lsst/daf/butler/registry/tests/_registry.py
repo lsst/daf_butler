@@ -2932,3 +2932,30 @@ class RegistryTests(ABC):
             {data_id},
         )
         self.assertEqual(set(registry.queryDatasets(dataset_type, collections=run)), {ref})
+
+    def testDatasetIdFactory(self):
+        """Simple test for DatasetIdFactory, mostly to catch potential changes
+        in its API.
+        """
+        registry = self.makeRegistry()
+        factory = registry.datasetIdFactory
+        dataset_type = DatasetType(
+            "datasetType",
+            dimensions=["detector", "instrument"],
+            universe=registry.dimensions,
+            storageClass="int",
+        )
+        run = "run"
+        data_id = DataCoordinate.standardize(instrument="Cam1", detector=1, graph=dataset_type.dimensions)
+
+        datasetId = factory.makeDatasetId(run, dataset_type, data_id, DatasetIdGenEnum.UNIQUE)
+        self.assertIsInstance(datasetId, uuid.UUID)
+        self.assertEquals(datasetId.version, 4)
+
+        datasetId = factory.makeDatasetId(run, dataset_type, data_id, DatasetIdGenEnum.DATAID_TYPE)
+        self.assertIsInstance(datasetId, uuid.UUID)
+        self.assertEquals(datasetId.version, 5)
+
+        datasetId = factory.makeDatasetId(run, dataset_type, data_id, DatasetIdGenEnum.DATAID_TYPE_RUN)
+        self.assertIsInstance(datasetId, uuid.UUID)
+        self.assertEquals(datasetId.version, 5)

@@ -3,7 +3,7 @@ from __future__ import annotations
 __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 import uuid
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set
 
 import sqlalchemy
 from lsst.daf.butler import (
@@ -22,7 +22,7 @@ from lsst.daf.butler.registry import (
     ConflictingDefinitionError,
     UnsupportedIdGeneratorError,
 )
-from lsst.daf.butler.registry.interfaces import DatasetIdGenEnum, DatasetRecordStorage
+from lsst.daf.butler.registry.interfaces import DatasetIdFactory, DatasetIdGenEnum, DatasetRecordStorage
 
 from ...summaries import GovernorDimensionRestriction
 from .tables import makeTagTableSpec
@@ -645,10 +645,9 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
     dataset IDs.
     """
 
-    NS_UUID = uuid.UUID("840b31d9-05cd-5161-b2c8-00d32b280d0f")
-    """Namespace UUID used for UUID5 generation. Do not change. This was
-    produced by `uuid.uuid5(uuid.NAMESPACE_DNS, "lsst.org")`.
-    """
+    idMaker = DatasetIdFactory()
+    """Factory for dataset IDs. In the future this factory may be shared with
+    other classes (e.g. Registry)."""
 
     def insert(
         self,
@@ -669,7 +668,7 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             dataIdList.append(dataId)
             rows.append(
                 {
-                    "id": self._makeDatasetId(run, dataId, idMode),
+                    "id": self.idMaker.makeDatasetId(run.name, self.datasetType, dataId, idMode),
                     "dataset_type_id": self._dataset_type_id,
                     self._runKeyColumn: run.key,
                 }
@@ -724,7 +723,9 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             # this code supports mixed types or missing IDs.
             datasetId = dataset.id if isinstance(dataset.id, uuid.UUID) else None
             if datasetId is None:
-                datasetId = self._makeDatasetId(run, dataset.dataId, idGenerationMode)
+                datasetId = self.idMaker.makeDatasetId(
+                    run.name, self.datasetType, dataset.dataId, idGenerationMode
+                )
             dataIds[datasetId] = dataset.dataId
             governorValues.update_extract(dataset.dataId)
 
@@ -895,50 +896,3 @@ class ByDimensionsDatasetRecordStorageUUID(ByDimensionsDatasetRecordStorage):
             raise ConflictingDefinitionError(
                 f"Existing dataset type and dataId does not match new dataset: {row._asdict()}"
             )
-
-    def _makeDatasetId(
-        self, run: RunRecord, dataId: DataCoordinate, idGenerationMode: DatasetIdGenEnum
-    ) -> uuid.UUID:
-        """Generate dataset ID for a dataset.
-
-        Parameters
-        ----------
-        run : `RunRecord`
-            The record object describing the RUN collection for the dataset.
-        dataId : `DataCoordinate`
-            Expanded data ID for the dataset.
-        idGenerationMode : `DatasetIdGenEnum`
-            ID generation option. `~DatasetIdGenEnum.UNIQUE` make a random
-            UUID4-type ID. `~DatasetIdGenEnum.DATAID_TYPE` makes a
-            deterministic UUID5-type ID based on a dataset type name and
-            ``dataId``.  `~DatasetIdGenEnum.DATAID_TYPE_RUN` makes a
-            deterministic UUID5-type ID based on a dataset type name, run
-            collection name, and ``dataId``.
-
-        Returns
-        -------
-        datasetId : `uuid.UUID`
-            Dataset identifier.
-        """
-        if idGenerationMode is DatasetIdGenEnum.UNIQUE:
-            return uuid.uuid4()
-        else:
-            # WARNING: If you modify this code make sure that the order of
-            # items in the `items` list below never changes.
-            items: List[Tuple[str, str]] = []
-            if idGenerationMode is DatasetIdGenEnum.DATAID_TYPE:
-                items = [
-                    ("dataset_type", self.datasetType.name),
-                ]
-            elif idGenerationMode is DatasetIdGenEnum.DATAID_TYPE_RUN:
-                items = [
-                    ("dataset_type", self.datasetType.name),
-                    ("run", run.name),
-                ]
-            else:
-                raise ValueError(f"Unexpected ID generation mode: {idGenerationMode}")
-
-            for name, value in sorted(dataId.byName().items()):
-                items.append((name, str(value)))
-            data = ",".join(f"{key}={value}" for key, value in items)
-            return uuid.uuid5(self.NS_UUID, data)

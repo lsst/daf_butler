@@ -13,6 +13,13 @@ from ._quantum_backed import *
 from .core import *
 
 # Import the registry subpackage directly for other symbols.
-from .registry import CollectionSearch, CollectionType, DatasetIdGenEnum, Registry, RegistryConfig
+from .registry import (
+    CollectionSearch,
+    CollectionType,
+    DatasetIdFactory,
+    DatasetIdGenEnum,
+    Registry,
+    RegistryConfig,
+)
 from .transfers import YamlRepoExportBackend, YamlRepoImportBackend
 from .version import *
