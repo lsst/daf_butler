@@ -10,5 +10,5 @@ jobs:
   call-workflow:
     uses: lsst/rubin_workflows/.github/workflows/build_docs.yaml@tickets/DM-35133
     with:
-      - ubuntu_deps: "postgresql sqlite libyaml-dev"
-      - pip_deps: "psycopg2 testing.postgresql"
+      ubuntu_deps: "postgresql sqlite libyaml-dev"
+      pip_deps: "psycopg2 testing.postgresql"
