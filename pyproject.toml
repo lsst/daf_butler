@@ -49,6 +49,15 @@ test = [
     "pyarrow >= 0.16",
     "pandas >= 1.0",
 ]
+# Also expose the optional dependencies of lsst-resources as optional
+# dependencies of lsst-daf-butler.  lsst-daf-butler itself doesn't care what
+# resource methods are available, but the client of lsst-daf-butler may view
+# it as a black box and lsst-resources as an internal implementation detail,
+# and therefore may find it more logical to specify optional dependencies
+# here.
+s3 = ["lsst-resources[s3]"]
+https = ["lsst-resources[https]"]
+gs = ["lsst-resources[gs]"]
 
 [tool.setuptools.packages.find]
 where = ["python"]
