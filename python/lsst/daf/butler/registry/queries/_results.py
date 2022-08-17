@@ -426,10 +426,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             )
         if datasetType.isComponent():
             # We were given a true DatasetType instance, but it's a component.
-            parentName, componentName = datasetType.nameAndComponent()
-            storage = self._query.managers.datasets[parentName]
-            datasetType = storage.datasetType
-            components = [componentName]
+            components = [datasetType.component()]
+            datasetType = datasetType.makeCompositeDatasetType()
         else:
             components = [None]
         summary = QuerySummary(self.graph, whereRegion=self._query.whereRegion, datasets=[datasetType])
