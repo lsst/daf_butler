@@ -411,8 +411,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                 return ChainedDatasetQueryResults(
                     [],
                     doomed_by=[
-                        f"No registered dataset type {datasetType!r} found, so no instances can "
-                        "exist in any collection."
+                        f"Dataset type {datasetType!r} is not registered, so no instances of it can exist in "
+                        "any collection."
                     ],
                 )
             else:
@@ -426,10 +426,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             )
         if datasetType.isComponent():
             # We were given a true DatasetType instance, but it's a component.
-            parentName, componentName = datasetType.nameAndComponent()
-            storage = self._query.managers.datasets[parentName]
-            datasetType = storage.datasetType
-            components = [componentName]
+            components = [datasetType.component()]
+            datasetType = datasetType.makeCompositeDatasetType()
         else:
             components = [None]
         summary = QuerySummary(self.graph, whereRegion=self._query.whereRegion, datasets=[datasetType])
