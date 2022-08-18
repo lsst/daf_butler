@@ -411,8 +411,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                 return ChainedDatasetQueryResults(
                     [],
                     doomed_by=[
-                        f"No registered dataset type {datasetType!r} found, so no instances can "
-                        "exist in any collection."
+                        f"Dataset type {datasetType!r} is not registered, so no instances of it can exist in "
+                        "any collection."
                     ],
                 )
             else:
