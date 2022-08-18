@@ -2081,7 +2081,7 @@ class RegistryTests(ABC):
             expected result.
             """
             if expected is Ambiguous:
-                with self.assertRaises(RuntimeError):
+                with self.assertRaises((DatasetTypeError, LookupError)):
                     registry.findDataset(
                         "bias",
                         collections=collection,
