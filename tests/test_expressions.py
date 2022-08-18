@@ -19,20 +19,25 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import datetime
 import unittest
 
-from lsst.daf.butler import DataCoordinate, DimensionUniverse
-from lsst.daf.butler.core import NamedKeyDict, TimespanDatabaseRepresentation
-from lsst.daf.butler.registry.queries._structs import QueryColumns
-from lsst.daf.butler.registry.queries.expressions import (
-    CheckVisitor,
-    InspectionVisitor,
-    NormalForm,
-    NormalFormExpression,
-    ParserYacc,
-    convertExpressionToSql,
+import astropy.time
+import sqlalchemy
+from lsst.daf.butler import (
+    ColumnTypeInfo,
+    DataCoordinate,
+    DatasetColumnTag,
+    DimensionUniverse,
+    TimespanDatabaseRepresentation,
+    ddl,
+    time_utils,
 )
-from sqlalchemy.dialects import postgresql, sqlite
+from lsst.daf.butler.registry.queries.expressions import make_string_expression_predicate
+from lsst.daf.butler.registry.queries.expressions.check import CheckVisitor, InspectionVisitor
+from lsst.daf.butler.registry.queries.expressions.normalForm import NormalForm, NormalFormExpression
+from lsst.daf.butler.registry.queries.expressions.parser import ParserYacc
+from lsst.daf.relation import ColumnContainer, ColumnExpression
 from sqlalchemy.schema import Column
 
 
@@ -40,171 +45,159 @@ class FakeDatasetRecordStorageManager:
     ingestDate = Column("ingest_date")
 
 
-class ConvertExpressionToSqlTestCase(unittest.TestCase):
-    """A test case for convertExpressionToSql method"""
+class ConvertExpressionToPredicateTestCase(unittest.TestCase):
+    """A test case for the make_string_expression_predicate function"""
 
     def setUp(self):
-        self.universe = DimensionUniverse()
+        self.column_types = ColumnTypeInfo(
+            timespan_cls=TimespanDatabaseRepresentation.Compound,
+            universe=DimensionUniverse(),
+            dataset_id_spec=ddl.FieldSpec("dataset_id", dtype=ddl.GUID),
+            run_key_spec=ddl.FieldSpec("run_id", dtype=sqlalchemy.BigInteger),
+        )
 
     def test_simple(self):
         """Test with a trivial expression"""
-
-        parser = ParserYacc()
-        tree = parser.parse("1 > 0")
-        self.assertIsNotNone(tree)
-
-        columns = QueryColumns()
-        elements = NamedKeyDict()
-        column_element = convertExpressionToSql(
-            tree, self.universe, columns, elements, {}, TimespanDatabaseRepresentation.Compound
+        self.assertEqual(
+            make_string_expression_predicate("1 > 0", self.column_types.universe.empty)[0],
+            ColumnExpression.literal(1, dtype=int).gt(ColumnExpression.literal(0, dtype=int)),
         )
-        self.assertEqual(str(column_element.compile()), ":param_1 > :param_2")
-        self.assertEqual(str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 0")
 
     def test_time(self):
         """Test with a trivial expression including times"""
-
-        parser = ParserYacc()
-        tree = parser.parse("T'1970-01-01 00:00/tai' < T'2020-01-01 00:00/tai'")
-        self.assertIsNotNone(tree)
-
-        columns = QueryColumns()
-        elements = NamedKeyDict()
-        column_element = convertExpressionToSql(
-            tree, self.universe, columns, elements, {}, TimespanDatabaseRepresentation.Compound
-        )
-        self.assertEqual(str(column_element.compile()), ":param_1 < :param_2")
+        time_converter = time_utils.TimeConverter()
         self.assertEqual(
-            str(column_element.compile(compile_kwargs={"literal_binds": True})), "0 < 1577836800000000000"
+            make_string_expression_predicate(
+                "T'1970-01-01 00:00/tai' < T'2020-01-01 00:00/tai'", self.column_types.universe.empty
+            )[0],
+            ColumnExpression.literal(time_converter.nsec_to_astropy(0), dtype=astropy.time.Time).lt(
+                ColumnExpression.literal(
+                    time_converter.nsec_to_astropy(1577836800000000000), dtype=astropy.time.Time
+                )
+            ),
         )
 
     def test_ingest_date(self):
         """Test with an expression including ingest_date which is native UTC"""
-
-        parser = ParserYacc()
-        tree = parser.parse("ingest_date < T'2020-01-01 00:00/utc'")
-        self.assertIsNotNone(tree)
-
-        columns = QueryColumns()
-        columns.datasets = FakeDatasetRecordStorageManager()
-        elements = NamedKeyDict()
-        column_element = convertExpressionToSql(
-            tree, self.universe, columns, elements, {}, TimespanDatabaseRepresentation.Compound
-        )
-
-        # render it, needs specific dialect to convert column to expression
-        dialect = postgresql.dialect()
-        self.assertEqual(str(column_element.compile(dialect=dialect)), "ingest_date < TIMESTAMP %(param_1)s")
         self.assertEqual(
-            str(column_element.compile(dialect=dialect, compile_kwargs={"literal_binds": True})),
-            "ingest_date < TIMESTAMP '2020-01-01 00:00:00.000000'",
-        )
-
-        dialect = sqlite.dialect()
-        self.assertEqual(str(column_element.compile(dialect=dialect)), "datetime(ingest_date) < datetime(?)")
-        self.assertEqual(
-            str(column_element.compile(dialect=dialect, compile_kwargs={"literal_binds": True})),
-            "datetime(ingest_date) < datetime('2020-01-01 00:00:00.000000')",
+            make_string_expression_predicate(
+                "ingest_date < T'2020-01-01 00:00/utc'",
+                self.column_types.universe.empty,
+                dataset_type_name="fake",
+            )[0],
+            ColumnExpression.reference(DatasetColumnTag("fake", "ingest_date"), dtype=datetime.datetime).lt(
+                ColumnExpression.literal(datetime.datetime(2020, 1, 1), dtype=datetime.datetime)
+            ),
         )
 
     def test_bind(self):
         """Test with bind parameters"""
 
-        parser = ParserYacc()
-        tree = parser.parse("a > b OR t in (x, y, z)")
-        self.assertIsNotNone(tree)
-
-        columns = QueryColumns()
-        elements = NamedKeyDict()
-        column_element = convertExpressionToSql(
-            tree,
-            self.universe,
-            columns,
-            elements,
-            {"a": 1, "b": 2, "t": 0, "x": 10, "y": 20, "z": 30},
-            TimespanDatabaseRepresentation.Compound,
-        )
         self.assertEqual(
-            str(column_element.compile()), ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5, :param_6)"
-        )
-        self.assertEqual(
-            str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 2 OR 0 IN (10, 20, 30)"
+            make_string_expression_predicate(
+                "a > b OR t in (x, y, z)",
+                self.column_types.universe.empty,
+                bind={"a": 1, "b": 2, "t": 0, "x": 10, "y": 20, "z": 30},
+            )[0],
+            ColumnExpression.literal(1, dtype=int)
+            .gt(ColumnExpression.literal(2, dtype=int))
+            .logical_or(
+                ColumnContainer.sequence(
+                    [
+                        ColumnExpression.literal(10, dtype=int),
+                        ColumnExpression.literal(20, dtype=int),
+                        ColumnExpression.literal(30, dtype=int),
+                    ],
+                    dtype=int,
+                ).contains(ColumnExpression.literal(0, dtype=int))
+            ),
         )
 
     def test_bind_list(self):
         """Test with bind parameter which is list/tuple/set inside IN rhs."""
 
-        parser = ParserYacc()
-        columns = QueryColumns()
-        elements = NamedKeyDict()
-
-        # Single bound variable inside IN()
-        tree = parser.parse("a > b OR t in (x)")
-        self.assertIsNotNone(tree)
-        column_element = convertExpressionToSql(
-            tree,
-            self.universe,
-            columns,
-            elements,
-            {"a": 1, "b": 2, "t": 0, "x": (10, 20, 30)},
-            TimespanDatabaseRepresentation.Compound,
-        )
         self.assertEqual(
-            str(column_element.compile()), ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5, :param_6)"
+            make_string_expression_predicate(
+                "a > b OR t in (x)",
+                self.column_types.universe.empty,
+                bind={"a": 1, "b": 2, "t": 0, "x": (10, 20, 30)},
+            )[0],
+            ColumnExpression.literal(1, dtype=int)
+            .gt(ColumnExpression.literal(2, dtype=int))
+            .logical_or(
+                ColumnContainer.sequence(
+                    [
+                        ColumnExpression.literal(10, dtype=int),
+                        ColumnExpression.literal(20, dtype=int),
+                        ColumnExpression.literal(30, dtype=int),
+                    ],
+                    dtype=int,
+                ).contains(
+                    ColumnExpression.literal(0, dtype=int),
+                )
+            ),
         )
-        self.assertEqual(
-            str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 2 OR 0 IN (10, 20, 30)"
-        )
-
         # Couple of bound variables inside IN() with different combinations
         # of scalars and list.
-        tree = parser.parse("a > b OR t in (x, y)")
-        self.assertIsNotNone(tree)
-        column_element = convertExpressionToSql(
-            tree,
-            self.universe,
-            columns,
-            elements,
-            {"a": 1, "b": 2, "t": 0, "x": 10, "y": 20},
-            TimespanDatabaseRepresentation.Compound,
+        self.assertEqual(
+            make_string_expression_predicate(
+                "a > b OR t in (x, y)",
+                self.column_types.universe.empty,
+                bind={"a": 1, "b": 2, "t": 0, "x": 10, "y": 20},
+            )[0],
+            ColumnExpression.literal(1, dtype=int)
+            .gt(ColumnExpression.literal(2, dtype=int))
+            .logical_or(
+                ColumnContainer.sequence(
+                    [
+                        ColumnExpression.literal(10, dtype=int),
+                        ColumnExpression.literal(20, dtype=int),
+                    ],
+                    dtype=int,
+                ).contains(
+                    ColumnExpression.literal(0, dtype=int),
+                )
+            ),
         )
         self.assertEqual(
-            str(column_element.compile()), ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5)"
+            make_string_expression_predicate(
+                "a > b OR t in (x, y)",
+                self.column_types.universe.empty,
+                bind={"a": 1, "b": 2, "t": 0, "x": [10, 30], "y": 20},
+            )[0],
+            ColumnExpression.literal(1, dtype=int)
+            .gt(ColumnExpression.literal(2, dtype=int))
+            .logical_or(
+                ColumnContainer.sequence(
+                    [
+                        ColumnExpression.literal(10, dtype=int),
+                        ColumnExpression.literal(30, dtype=int),
+                        ColumnExpression.literal(20, dtype=int),
+                    ],
+                    dtype=int,
+                ).contains(
+                    ColumnExpression.literal(0, dtype=int),
+                )
+            ),
         )
         self.assertEqual(
-            str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 2 OR 0 IN (10, 20)"
-        )
-
-        column_element = convertExpressionToSql(
-            tree,
-            self.universe,
-            columns,
-            elements,
-            {"a": 1, "b": 2, "t": 0, "x": [10, 30], "y": 20},
-            TimespanDatabaseRepresentation.Compound,
-        )
-        self.assertEqual(
-            str(column_element.compile()), ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5, :param_6)"
-        )
-        self.assertEqual(
-            str(column_element.compile(compile_kwargs={"literal_binds": True})), "1 > 2 OR 0 IN (10, 30, 20)"
-        )
-
-        column_element = convertExpressionToSql(
-            tree,
-            self.universe,
-            columns,
-            elements,
-            {"a": 1, "b": 2, "t": 0, "x": (10, 30), "y": {20}},
-            TimespanDatabaseRepresentation.Compound,
-        )
-        self.assertEqual(
-            str(column_element.compile()),
-            ":param_1 > :param_2 OR :param_3 IN (:param_4, :param_5, :param_6)",
-        )
-        self.assertEqual(
-            str(column_element.compile(compile_kwargs={"literal_binds": True})),
-            "1 > 2 OR 0 IN (10, 30, 20)",
+            make_string_expression_predicate(
+                "a > b OR t in (x, y)",
+                self.column_types.universe.empty,
+                bind={"a": 1, "b": 2, "t": 0, "x": (10, 30), "y": {20}},
+            )[0],
+            ColumnExpression.literal(1, dtype=int)
+            .gt(ColumnExpression.literal(2, dtype=int))
+            .logical_or(
+                ColumnContainer.sequence(
+                    [
+                        ColumnExpression.literal(10, dtype=int),
+                        ColumnExpression.literal(30, dtype=int),
+                        ColumnExpression.literal(20, dtype=int),
+                    ],
+                    dtype=int,
+                ).contains(ColumnExpression.literal(0, dtype=int))
+            ),
         )
 
 

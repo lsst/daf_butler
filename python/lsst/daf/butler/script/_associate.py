@@ -32,7 +32,7 @@ def associate(
     collection: str,
     dataset_type: Iterable[str],
     collections: Iterable[str],
-    where: str | None,
+    where: str,
     find_first: bool,
 ) -> None:
     """Add existing datasets to a CHAINED collection."""

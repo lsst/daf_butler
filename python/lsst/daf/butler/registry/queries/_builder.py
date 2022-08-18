@@ -26,9 +26,19 @@ from collections.abc import Iterable
 from typing import Any
 
 import sqlalchemy.sql
-from lsst.daf.relation import Diagnostics
+from lsst.daf.relation import Diagnostics, Predicate
 
-from ...core import DatasetColumnTag, DatasetType, Dimension, DimensionElement, SimpleQuery, SkyPixDimension
+from ...core import (
+    DatasetColumnTag,
+    DatasetType,
+    Dimension,
+    DimensionElement,
+    DimensionKeyColumnTag,
+    DimensionRecordColumnTag,
+    SimpleQuery,
+    SkyPixDimension,
+    is_timespan_column,
+)
 from ...core.named import NamedKeyDict, NamedValueAbstractSet, NamedValueSet
 from .._exceptions import DataIdValueError
 from ..interfaces import GovernorDimensionRecordStorage
@@ -37,7 +47,6 @@ from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, OrderByColum
 from ._query_backend import QueryBackend
 from ._sql_query_context import SqlQueryContext
 from ._structs import DatasetQueryColumns, QueryColumns, QuerySummary
-from .expressions import convertExpressionToSql
 
 
 class QueryBuilder:
@@ -350,50 +359,51 @@ class QueryBuilder:
         For internal use by `QueryBuilder` only; will be called (and should
         only by called) by `finish`.
         """
-        if self.summary.where.tree is not None:
-            self._simpleQuery.where.append(
-                convertExpressionToSql(
-                    self.summary.where.tree,
-                    self._backend.universe,
-                    columns=self._columns,
-                    elements=self._elements,
-                    bind=self.summary.where.bind,
-                    TimespanReprClass=self._backend.managers.column_types.timespan_cls,
-                )
-            )
-        for dimension, columnsInQuery in self._columns.keys.items():
-            if dimension in self.summary.where.dataId.graph:
-                givenKey = self.summary.where.dataId[dimension]
-                # Add a WHERE term for each column that corresponds to each
-                # key.  This is redundant with the JOIN ON clauses that make
-                # them equal to each other, but more constraints have a chance
-                # of making things easier on the DB's query optimizer.
-                for columnInQuery in columnsInQuery:
-                    self._simpleQuery.where.append(columnInQuery == givenKey)
-            else:
-                # Dimension is not fully identified, but it might be a skypix
-                # dimension that's constrained by a given region.
-                if self.summary.where.region is not None and isinstance(dimension, SkyPixDimension):
-                    # We know the region now.
-                    givenSkyPixIds: list[int] = []
-                    for begin, end in dimension.pixelization.envelope(self.summary.where.region):
-                        givenSkyPixIds.extend(range(begin, end))
-                    for columnInQuery in columnsInQuery:
-                        self._simpleQuery.where.append(columnInQuery.in_(givenSkyPixIds))
-        # If we are given an dataId with a timespan, and there are one or more
-        # timespans in the query that aren't given, add a WHERE expression for
-        # each of them.
-        if self.summary.where.dataId.graph.temporal and self.summary.temporal:
-            # Timespan is known now.
-            givenInterval = self.summary.where.dataId.timespan
-            assert givenInterval is not None
-            for element, intervalInQuery in self._columns.timespans.items():
-                assert element not in self.summary.where.dataId.graph.elements
-                self._simpleQuery.where.append(
-                    intervalInQuery.overlaps(
-                        self._backend.managers.column_types.timespan_cls.fromLiteral(givenInterval)
+        # Make a new-style column mapping to feed to predicates.  After
+        # Relation is fully integrated into query builder this will be created
+        # automatically.
+        logical_columns = self._columns.make_logical_column_mapping()
+        if self.summary.where.expression_predicate is not None:
+            # Most column types are tracked in self._columns, and handled above
+            # this block; we only need to worry about scalar dimension record
+            # fact columns referenced by the expression here.
+            for tag in self.summary.where.expression_predicate.columns_required:
+                match tag:
+                    case DimensionRecordColumnTag(element=element_name, column=column_name):
+                        table = self._elements[element_name]
+                        if not is_timespan_column(tag):
+                            logical_columns[tag] = table.columns[column_name]
+                    case _:
+                        pass
+        # Append WHERE clause terms from predicates.
+        predicate: Predicate = Predicate.literal(True)
+        if self.summary.where.expression_predicate is not None:
+            predicate = predicate.logical_and(self.summary.where.expression_predicate)
+        if self.summary.where.data_id:
+            known_dimensions = self.summary.where.data_id.graph.intersection(self.summary.mustHaveKeysJoined)
+            known_data_id = self.summary.where.data_id.subset(known_dimensions)
+            predicate = predicate.logical_and(self._context.make_data_coordinate_predicate(known_data_id))
+        if self.summary.where.region is not None:
+            for tag in DimensionKeyColumnTag.filter_from(logical_columns):
+                dimension = self._backend.universe[tag.dimension]
+                if tag.dimension not in self.summary.where.data_id.graph.names and isinstance(
+                    dimension, SkyPixDimension
+                ):
+                    predicate = predicate.logical_and(
+                        self._context.make_spatial_region_skypix_predicate(
+                            dimension,
+                            self.summary.where.region,
+                        )
                     )
-                )
+        if self.summary.where.timespan is not None:
+            for tag in DimensionRecordColumnTag.filter_from(logical_columns):
+                if tag.element not in self.summary.where.data_id.graph.names and tag.column == "timespan":
+                    predicate = predicate.logical_and(
+                        self._context.make_timespan_overlap_predicate(tag, self.summary.where.timespan)
+                    )
+        self._simpleQuery.where.extend(
+            self._context.sql_engine.convert_flattened_predicate(predicate, logical_columns)
+        )
 
     def finish(self, joinMissing: bool = True) -> Query:
         """Finish query constructing, returning a new `Query` instance.

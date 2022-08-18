@@ -121,7 +121,7 @@ def pruneDatasets(
     repo: str,
     collections: Iterable[str],
     datasets: Iterable[str],
-    where: str | None,
+    where: str,
     disassociate_tags: Iterable[str],
     unstore: bool,
     purge_run: str,

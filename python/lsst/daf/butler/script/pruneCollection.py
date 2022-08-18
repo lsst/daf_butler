@@ -123,7 +123,7 @@ def pruneCollection(
             repo=repo,
             glob=[],
             collections=[collection],
-            where=None,
+            where="",
             find_first=True,
             show_uri=False,
         )

@@ -38,7 +38,7 @@ class QueryDataIdsTest(unittest.TestCase, ButlerTestHelper):
     mockFuncName = "lsst.daf.butler.cli.cmd.commands.script.queryDataIds"
 
     @staticmethod
-    def _queryDataIds(repo, dimensions=(), collections=(), datasets=None, where=None):
+    def _queryDataIds(repo, dimensions=(), collections=(), datasets=None, where=""):
         """Helper to populate the call to script.queryDataIds with default
         values."""
         return script.queryDataIds(

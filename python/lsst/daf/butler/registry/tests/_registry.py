@@ -2476,6 +2476,26 @@ class RegistryTests(ABC):
             set(registry.queryDatasets("flat", where="band=my_band", bind={"my_band": "r"}, collections=...)),
         )
 
+    def testQueryIntRangeExpressions(self):
+        """Test integer range expressions in ``where`` arguments.
+
+        Note that our expressions use inclusive stop values, unlike Python's.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.assertEqual(
+            set(registry.queryDataIds(["detector"], instrument="Cam1", where="detector IN (1..2)")),
+            {registry.expandDataId(instrument="Cam1", detector=n) for n in [1, 2]},
+        )
+        self.assertEqual(
+            set(registry.queryDataIds(["detector"], instrument="Cam1", where="detector IN (1..4:2)")),
+            {registry.expandDataId(instrument="Cam1", detector=n) for n in [1, 3]},
+        )
+        self.assertEqual(
+            set(registry.queryDataIds(["detector"], instrument="Cam1", where="detector IN (2..4:2)")),
+            {registry.expandDataId(instrument="Cam1", detector=n) for n in [2, 4]},
+        )
+
     def testQueryResultSummaries(self):
         """Test summary methods like `count`, `any`, and `explain_no_results`
         on `DataCoordinateQueryResults` and `DatasetQueryResults`
@@ -2801,7 +2821,7 @@ class RegistryTests(ABC):
         self.loadData(registry, "datasets.yaml")
         self.loadData(registry, "spatial.yaml")
 
-        def do_query(dimensions, dataId=None, where=None, bind=None, **kwargs):
+        def do_query(dimensions, dataId=None, where="", bind=None, **kwargs):
             return registry.queryDataIds(dimensions, dataId=dataId, where=where, bind=bind, **kwargs)
 
         Test = namedtuple(

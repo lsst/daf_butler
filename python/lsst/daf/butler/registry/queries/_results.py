@@ -422,9 +422,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                 f"{parent_dataset_type.name} has dimensions {parent_dataset_type.dimensions}, "
                 f"while the input dimensions are {self.graph}."
             )
-        summary = QuerySummary(
-            self.graph, whereRegion=self._query.whereRegion, datasets=[parent_dataset_type]
-        )
+        summary = QuerySummary(self.graph, region=self._query.whereRegion, datasets=[parent_dataset_type])
         builder = self._query.makeBuilder(summary)
         builder.joinDataset(parent_dataset_type, collections=collections, findFirst=findFirst)
         query = builder.finish(joinMissing=False)

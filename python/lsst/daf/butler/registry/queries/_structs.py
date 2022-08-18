@@ -24,204 +24,144 @@ __all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
 from collections.abc import Iterable, Iterator, Mapping, Set
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
+from lsst.daf.relation import ColumnTag, Predicate
 from lsst.sphgeom import Region
 from lsst.utils.classes import cached_getter, immutable
 from sqlalchemy.sql import ColumnElement
 
 from ...core import (
     DataCoordinate,
+    DatasetColumnTag,
     DatasetType,
     Dimension,
     DimensionElement,
     DimensionGraph,
+    DimensionKeyColumnTag,
+    DimensionRecordColumnTag,
     DimensionUniverse,
+    LogicalColumn,
     NamedKeyDict,
-    NamedKeyMapping,
     NamedValueAbstractSet,
     NamedValueSet,
     SkyPixDimension,
+    Timespan,
     TimespanDatabaseRepresentation,
 )
-from .._exceptions import UserExpressionSyntaxError
 
 # We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
-from .expressions import Node, NormalForm, NormalFormExpression, ParserYacc  # type: ignore
+from .expressions import make_string_expression_predicate
 from .expressions.categorize import categorizeElementOrderByName, categorizeOrderByName
 
 
-@immutable
-class QueryWhereExpression:
-    """A struct representing a parsed user-provided WHERE expression.
-
-    Parameters
-    ----------
-    expression : `str`, optional
-        The string expression to parse.  If `None`, a where expression that
-        always evaluates to `True` is implied.
-    bind : `Mapping` [ `str`, `object` ], optional
-        Mapping containing literal values that should be injected into the
-        query expression, keyed by the identifiers they replace.
-    """
-
-    def __init__(self, expression: str | None = None, bind: Mapping[str, Any] | None = None):
-        if expression:
-            try:
-                parser = ParserYacc()
-                self._tree = parser.parse(expression)
-            except Exception as exc:
-                raise UserExpressionSyntaxError(f"Failed to parse user expression `{expression}'.") from exc
-            assert self._tree is not None
-        else:
-            self._tree = None
-        if bind is None:
-            bind = {}
-        self._bind = bind
-
-    def attach(
-        self,
-        graph: DimensionGraph,
-        dataId: DataCoordinate | None = None,
-        region: Region | None = None,
-        defaults: DataCoordinate | None = None,
-        check: bool = True,
-    ) -> QueryWhereClause:
-        """Allow this expression to be attached to a `QuerySummary` by
-        transforming it into a `QueryWhereClause`, while checking it for both
-        internal consistency and consistency with the rest of the query.
-
-        Parameters
-        ----------
-        graph : `DimensionGraph`
-            The dimensions the query would include in the absence of this
-            WHERE expression.
-        dataId : `DataCoordinate`, optional
-            A fully-expanded data ID identifying dimensions known in advance.
-            If not provided, will be set to an empty data ID.
-        region : `lsst.sphgeom.Region`, optional
-            A spatial constraint that all rows must overlap.  If `None` and
-            ``dataId`` is an expanded data ID, ``dataId.region`` will be used
-            to construct one.
-        defaults : `DataCoordinate`, optional
-            A data ID containing default for governor dimensions.  Ignored
-            unless ``check=True``.
-        check : `bool`
-            If `True` (default) check the query for consistency and inject
-            default values into the data ID when needed.  This may
-            reject some valid queries that resemble common mistakes (e.g.
-            queries for visits without specifying an instrument).
-        """
-        if dataId is not None and dataId.hasRecords():
-            if region is None and dataId.region is not None:
-                region = dataId.region
-        if dataId is None:
-            dataId = DataCoordinate.makeEmpty(graph.universe)
-        if defaults is None:
-            defaults = DataCoordinate.makeEmpty(graph.universe)
-        if self._bind and check:
-            for identifier in self._bind:
-                if identifier in graph.universe.getStaticElements().names:
-                    raise RuntimeError(
-                        f"Bind parameter key {identifier!r} conflicts with a dimension element."
-                    )
-                table, sep, column = identifier.partition(".")
-                if column and table in graph.universe.getStaticElements().names:
-                    raise RuntimeError(f"Bind parameter key {identifier!r} looks like a dimension column.")
-        governor_constraints: dict[str, Set[str]] = {}
-        summary: InspectionSummary
-        if self._tree is not None:
-            if check:
-                # Convert the expression to disjunctive normal form (ORs of
-                # ANDs).  That's potentially super expensive in the general
-                # case (where there's a ton of nesting of ANDs and ORs).  That
-                # won't be the case for the expressions we expect, and we
-                # actually use disjunctive normal instead of conjunctive (i.e.
-                # ANDs of ORs) because I think the worst-case is a long list
-                # of OR'd-together data IDs, which is already in or very close
-                # to disjunctive normal form.
-                expr = NormalFormExpression.fromTree(self._tree, NormalForm.DISJUNCTIVE)
-                from .expressions import CheckVisitor
-
-                # Check the expression for consistency and completeness.
-                visitor = CheckVisitor(dataId, graph, self._bind, defaults)
-                try:
-                    summary = expr.visit(visitor)
-                except RuntimeError as err:
-                    exprOriginal = str(self._tree)
-                    exprNormal = str(expr.toTree())
-                    if exprNormal == exprOriginal:
-                        msg = f'Error in query expression "{exprOriginal}": {err}'
-                    else:
-                        msg = (
-                            f'Error in query expression "{exprOriginal}" '
-                            f'(normalized to "{exprNormal}"): {err}'
-                        )
-                    raise RuntimeError(msg) from None
-                for dimension_name, values in summary.dimension_constraints.items():
-                    if dimension_name in graph.universe.getGovernorDimensions().names:
-                        governor_constraints[dimension_name] = cast(Set[str], values)
-                dataId = visitor.dataId
-            else:
-                from .expressions import InspectionVisitor
-
-                summary = self._tree.visit(InspectionVisitor(graph.universe, self._bind))
-        else:
-            from .expressions import InspectionSummary
-
-            summary = InspectionSummary()
-        return QueryWhereClause(
-            self._tree,
-            dataId,
-            dimensions=summary.dimensions,
-            columns=summary.columns,
-            bind=self._bind,
-            governor_constraints=governor_constraints,
-            region=region,
-        )
-
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class QueryWhereClause:
     """Structure holding various contributions to a query's WHERE clause.
 
     Instances of this class should only be created by
-    `QueryWhereExpression.attach`, which guarantees the consistency of its
+    `QueryWhereExpression.combine`, which guarantees the consistency of its
     attributes.
     """
 
-    tree: Node | None
-    """A parsed string expression tree., or `None` if there was no string
-    expression.
+    @classmethod
+    def combine(
+        cls,
+        dimensions: DimensionGraph,
+        expression: str = "",
+        *,
+        bind: Mapping[str, Any] | None = None,
+        data_id: DataCoordinate | None = None,
+        region: Region | None = None,
+        timespan: Timespan | None = None,
+        defaults: DataCoordinate | None = None,
+        dataset_type_name: str | None = None,
+        allow_orphans: bool = False,
+    ) -> QueryWhereClause:
+        """Construct from various components.
+
+        Parameters
+        ----------
+        dimensions : `DimensionGraph`
+            The dimensions that would be included in the query in the absence
+            of the WHERE clause.
+        expression : `str`, optional
+            A user-provided string expression.
+        bind : `Mapping` [ `str`, `object` ], optional
+            Mapping containing literal values that should be injected into the
+            query expression, keyed by the identifiers they replace.
+        data_id : `DataCoordinate`, optional
+            A data ID identifying dimensions known in advance.  If not
+            provided, will be set to an empty data ID.
+        region : `lsst.sphgeom.Region`, optional
+            A spatial constraint that all rows must overlap.  If `None` and
+            ``data_id`` is an expanded data ID, ``data_id.region`` will be used
+            to construct one.
+        timespan : `Timespan`, optional
+            A temporal constraint that all rows must overlap.  If `None` and
+            ``data_id`` is an expanded data ID, ``data_id.timespan`` will be
+            used to construct one.
+        defaults : `DataCoordinate`, optional
+            A data ID containing default for governor dimensions.
+        dataset_type_name : `str` or `None`, optional
+            The name of the dataset type to assume for unqualified dataset
+            columns, or `None` if there are no such identifiers.
+        allow_orphans : `bool`, optional
+            If `True`, permit expressions to refer to dimensions without
+            providing a value for their governor dimensions (e.g. referring to
+            a visit without an instrument).  Should be left to default to
+            `False` in essentially all new code.
+
+        Returns
+        -------
+        where : `QueryWhereClause`
+            An object representing the WHERE clause for a query.
+        """
+        if data_id is not None and data_id.hasRecords():
+            if region is None and data_id.region is not None:
+                region = data_id.region
+            if timespan is None and data_id.timespan is not None:
+                timespan = data_id.timespan
+        if data_id is None:
+            data_id = DataCoordinate.makeEmpty(dimensions.universe)
+        if defaults is None:
+            defaults = DataCoordinate.makeEmpty(dimensions.universe)
+        expression_predicate, governor_constraints = make_string_expression_predicate(
+            expression,
+            dimensions,
+            bind=bind,
+            data_id=data_id,
+            defaults=defaults,
+            dataset_type_name=dataset_type_name,
+            allow_orphans=allow_orphans,
+        )
+        return QueryWhereClause(
+            expression_predicate,
+            data_id,
+            region=region,
+            timespan=timespan,
+            governor_constraints=governor_constraints,
+        )
+
+    expression_predicate: Predicate | None
+    """A predicate that evaluates a string expression from the user
+    (`expressions.Predicate` or `None`).
     """
 
-    dataId: DataCoordinate
+    data_id: DataCoordinate
     """A data ID identifying dimensions known before query construction
     (`DataCoordinate`).
-
-    ``dataId.hasRecords()`` is guaranteed to return `True`.
-    """
-
-    dimensions: NamedValueAbstractSet[Dimension]
-    """Dimensions whose primary keys or dependencies were referenced anywhere
-    in the string expression (`NamedValueAbstractSet` [ `Dimension` ]).
-    """
-
-    columns: NamedKeyMapping[DimensionElement, Set[str]]
-    """Dimension element tables whose non-key columns were referenced anywhere
-    in the string expression
-    (`NamedKeyMapping` [ `DimensionElement`, `Set` [ `str` ] ]).
-    """
-
-    bind: Mapping[str, Any]
-    """Mapping containing literal values that should be injected into the
-    query expression, keyed by the identifiers they replace (`Mapping`).
     """
 
     region: Region | None
     """A spatial region that all result rows must overlap
     (`lsst.sphgeom.Region` or `None`).
+    """
+
+    timespan: Timespan | None
+    """A temporal constraint that all result rows must overlap
+    (`Timespan` or `None`).
     """
 
     governor_constraints: Mapping[str, Set[str]]
@@ -231,16 +171,6 @@ class QueryWhereClause:
 
     Governor dimensions not present in this mapping are not constrained at all.
     """
-
-    @property
-    @cached_getter
-    def temporal(self) -> NamedValueAbstractSet[DimensionElement]:
-        """Dimension elements whose timespans are referenced by this
-        expression (`NamedValueAbstractSet` [ `DimensionElement` ])
-        """
-        return NamedValueSet(
-            e for e, c in self.columns.items() if TimespanDatabaseRepresentation.NAME in c
-        ).freeze()
 
 
 @dataclass(frozen=True)
@@ -345,14 +275,18 @@ class QuerySummary:
     requested : `DimensionGraph`
         The dimensions whose primary keys should be included in the result rows
         of the query.
-    dataId : `DataCoordinate`, optional
+    data_id : `DataCoordinate`, optional
         A fully-expanded data ID identifying dimensions known in advance.  If
         not provided, will be set to an empty data ID.
-    expression : `str` or `QueryWhereExpression`, optional
+    expression : `str`, optional
         A user-provided string WHERE expression.
-    whereRegion : `lsst.sphgeom.Region`, optional
-        If `None` and ``dataId`` is an expanded data ID, ``dataId.region`` will
-        be used to construct one.
+    region : `lsst.sphgeom.Region`, optional
+        If `None` and ``data_id`` is an expanded data ID, ``data_id.region``
+        will be used to construct one.
+    timespan : `Timespan`, optional
+        A temporal constraint that all rows must overlap.  If `None` and
+        ``data_id`` is an expanded data ID, ``data_id.timespan`` will be used
+        to construct one.
     bind : `Mapping` [ `str`, `object` ], optional
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.
@@ -368,19 +302,21 @@ class QuerySummary:
         Sequence of names to use for ordering with optional "-" prefix.
     limit : `Tuple`, optional
         Limit on the number of returned rows and optional offset.
-    check : `bool`
-        If `True` (default) check the query for consistency.  This may reject
-        some valid queries that resemble common mistakes (e.g. queries for
-        visits without specifying an instrument).
+    check : `bool`, optional
+        If `False`, permit expressions to refer to dimensions without providing
+        a value for their governor dimensions (e.g. referring to a visit
+        without an instrument).  Should be left to default to `True` in
+        essentially all new code.
     """
 
     def __init__(
         self,
         requested: DimensionGraph,
         *,
-        dataId: DataCoordinate | None = None,
-        expression: str | QueryWhereExpression | None = None,
-        whereRegion: Region | None = None,
+        data_id: DataCoordinate | None = None,
+        expression: str = "",
+        region: Region | None = None,
+        timespan: Timespan | None = None,
         bind: Mapping[str, Any] | None = None,
         defaults: DataCoordinate | None = None,
         datasets: Iterable[DatasetType] = (),
@@ -389,16 +325,22 @@ class QuerySummary:
         check: bool = True,
     ):
         self.requested = requested
-        if expression is None:
-            expression = QueryWhereExpression(None, bind)
-        elif isinstance(expression, str):
-            expression = QueryWhereExpression(expression, bind)
-        elif bind is not None:
-            raise TypeError("New bind parameters passed, but expression is already a QueryWhereExpression.")
-        self.where = expression.attach(
-            self.requested, dataId=dataId, region=whereRegion, defaults=defaults, check=check
-        )
         self.datasets = NamedValueSet(datasets).freeze()
+        if len(self.datasets) == 1:
+            (dataset_type_name,) = self.datasets.names
+        else:
+            dataset_type_name = None
+        self.where = QueryWhereClause.combine(
+            self.requested,
+            expression=expression,
+            bind=bind,
+            data_id=data_id,
+            region=region,
+            timespan=timespan,
+            defaults=defaults,
+            dataset_type_name=dataset_type_name,
+            allow_orphans=not check,
+        )
         self.order_by = None if order_by is None else OrderByClause(order_by, requested)
         self.limit = limit
 
@@ -436,12 +378,12 @@ class QuerySummary:
         for family in self.mustHaveKeysJoined.spatial:
             element = family.choose(self.mustHaveKeysJoined.elements)
             assert isinstance(element, DimensionElement)
-            if element not in self.where.dataId.graph.elements:
+            if element not in self.where.data_id.graph.elements:
                 result.add(element)
         if len(result) == 1:
             # There's no spatial join, but there might be a WHERE filter based
             # on a given region.
-            if self.where.dataId.graph.spatial:
+            if self.where.data_id.graph.spatial:
                 # We can only perform those filters against SkyPix dimensions,
                 # so if what we have isn't one, add the common SkyPix dimension
                 # to the query; the element we have will be joined to that.
@@ -469,7 +411,12 @@ class QuerySummary:
             # We don't actually have multiple temporal families in our current
             # dimension configuration, so this limitation should be harmless.
             raise NotImplementedError("Queries that should involve temporal joins are not yet supported.")
-        return self.where.temporal
+        result = NamedValueSet[DimensionElement]()
+        if self.where.expression_predicate is not None:
+            for tag in DimensionRecordColumnTag.filter_from(self.where.expression_predicate.columns_required):
+                if tag.column == "timespan":
+                    result.add(self.requested.universe[tag.element])
+        return result.freeze()
 
     @property
     @cached_getter
@@ -481,7 +428,12 @@ class QuerySummary:
         via a foreign key column in table of a dependent dimension element or
         dataset.
         """
-        names = set(self.requested.names | self.where.dimensions.names)
+        names = set(self.requested.names)
+        if self.where.expression_predicate is not None:
+            names.update(
+                tag.dimension
+                for tag in DimensionKeyColumnTag.filter_from(self.where.expression_predicate.columns_required)
+            )
         for dataset_type in self.datasets:
             names.update(dataset_type.dimensions.names)
         return DimensionGraph(self.universe, names=names)
@@ -492,13 +444,16 @@ class QuerySummary:
         """Dimension elements whose associated tables must appear in the
         query's FROM clause (`NamedValueSet` of `DimensionElement`).
         """
-        result = NamedValueSet(self.spatial | self.temporal | self.where.columns.keys())
+        result = NamedValueSet(self.spatial | self.temporal)
+        if self.where.expression_predicate is not None:
+            for tag in DimensionRecordColumnTag.filter_from(self.where.expression_predicate.columns_required):
+                result.add(self.requested.universe[tag.element])
         if self.order_by is not None:
             result.update(self.order_by.elements)
         for dimension in self.mustHaveKeysJoined:
             if dimension.implied:
                 result.add(dimension)
-        for element in self.mustHaveKeysJoined.union(self.where.dataId.graph).elements:
+        for element in self.mustHaveKeysJoined.union(self.where.data_id.graph).elements:
             if element.alwaysJoin:
                 result.add(element)
         return result.freeze()
@@ -557,7 +512,7 @@ class QueryColumns:
     to be the same.
 
     In a `Query`, the keys of this dictionary must include at least the
-    dimensions in `QuerySummary.requested` and `QuerySummary.dataId.graph`.
+    dimensions in `QuerySummary.requested` and `QuerySummary.data_id.graph`.
     """
 
     timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]
@@ -612,3 +567,26 @@ class QueryColumns:
         # database's perspective this is entirely arbitrary, because the query
         # guarantees they all have equal values.
         return self.keys[dimension][-1]
+
+    def make_logical_column_mapping(self) -> dict[ColumnTag, LogicalColumn]:
+        """Create a dictionary with `ColumnTag` keys for the columns
+        tracked by this object.
+
+        This is a transitional method that converts from the old way of
+        representing columns in queries (this class) to the new one (containers
+        involving `ColumnTag`).
+        """
+        result: dict[ColumnTag, LogicalColumn] = {}
+        for dimension in self.keys:
+            result[DimensionKeyColumnTag(dimension.name)] = self.getKeyColumn(dimension)
+        for element, region_column in self.regions.items():
+            result[DimensionRecordColumnTag(element.name, "region")] = region_column
+        for element, timespan_column in self.timespans.items():
+            result[DimensionRecordColumnTag(element.name, "timespan")] = timespan_column
+        if self.datasets is not None:
+            dataset_type_name = self.datasets.datasetType.name
+            result[DatasetColumnTag(dataset_type_name, "dataset_id")] = self.datasets.id
+            result[DatasetColumnTag(dataset_type_name, "run")] = self.datasets.runKey
+            if self.datasets.ingestDate is not None:
+                result[DatasetColumnTag(dataset_type_name, "ingest_date")] = self.datasets.ingestDate
+        return result

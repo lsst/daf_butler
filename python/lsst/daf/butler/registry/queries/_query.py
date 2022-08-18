@@ -909,7 +909,7 @@ class DirectQuery(Query):
         from ._builder import QueryBuilder
 
         if summary is None:
-            summary = QuerySummary(self.graph, whereRegion=self.whereRegion)
+            summary = QuerySummary(self.graph, region=self.whereRegion)
         if not summary.requested.issubset(self.graph):
             raise NotImplementedError(
                 f"Query.makeBuilder does not yet support augmenting dimensions "
@@ -1042,7 +1042,7 @@ class MaterializedQuery(Query):
         from ._builder import QueryBuilder
 
         if summary is None:
-            summary = QuerySummary(self.graph, whereRegion=self.whereRegion)
+            summary = QuerySummary(self.graph, region=self.whereRegion)
         if not summary.requested.issubset(self.graph):
             raise NotImplementedError(
                 f"Query.makeBuilder does not yet support augmenting dimensions "

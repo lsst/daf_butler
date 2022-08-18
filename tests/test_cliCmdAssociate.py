@@ -50,7 +50,7 @@ class AssociateTestCase(unittest.TestCase):
             collection="myCollection",
             dataset_type=tuple(),
             collections=tuple(),
-            where=None,
+            where="",
             find_first=False,
         )
 
