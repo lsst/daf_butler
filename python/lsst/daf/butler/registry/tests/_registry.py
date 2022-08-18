@@ -1433,6 +1433,45 @@ class RegistryTests(ABC):
             list(subsetDataIds.findDatasets(bias, collections=["imported_r", "imported_g"], findFirst=True)),
             expectedDeduplicatedBiases,
         )
+
+        # Check dimensions match.
+        with self.assertRaises(ValueError):
+            subsetDataIds.findDatasets("flat", collections=["imported_r", "imported_g"], findFirst=True)
+
+        # Use a component dataset type.
+        self.assertCountEqual(
+            list(
+                subsetDataIds.findDatasets(
+                    bias.makeComponentDatasetType("image"),
+                    collections=["imported_r", "imported_g"],
+                    findFirst=False,
+                )
+            ),
+            [ref.makeComponentRef("image") for ref in expectedAllBiases],
+        )
+
+        # Use a named dataset type that does not exist and a dataset type
+        # object that does not exist.
+        unknown_type = DatasetType("not_known", dimensions=bias.dimensions, storageClass="Exposure")
+        unknown_component_type = unknown_type.makeComponentDatasetType("image")
+
+        # Four combinations of unknown dataset type need to be tested.
+        # Composite and component and string name vs dataset type object.
+        test_type: Union[str, DatasetType]
+        for test_type, test_type_name in (
+            (unknown_type, unknown_type.name),
+            (unknown_type.name, unknown_type.name),
+            (unknown_component_type, unknown_type.name),
+            (unknown_component_type.name, unknown_component_type.name),
+        ):
+            result = subsetDataIds.findDatasets(
+                test_type, collections=["imported_r", "imported_g"], findFirst=True
+            )
+            self.assertEqual(result.count(), 0)
+            self.assertIn(
+                f"Dataset type '{test_type_name}' is not registered", "\n".join(result.explain_no_results())
+            )
+
         # Materialize the bias dataset queries (only) by putting the results
         # into temporary tables, then repeat those tests.
         with subsetDataIds.findDatasets(
