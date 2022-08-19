@@ -374,9 +374,8 @@ class DatasetRecordStorage(ABC):
             order, and all collections must have the same type.  Must include
             at least one collection.
         columns : `~collections.abc.Set` [ `str` ]
-            Columns to include in the relation.  See
-            `QueryBackend.make_dataset_query_relation` for most options, but
-            this method supports one more:
+            Columns to include in the relation.  See `Query.find_datasets` for
+            most options, but this method supports one more:
 
             - ``rank``: a calculated integer column holding the index of the
               collection the dataset was found in, within the ``collections``

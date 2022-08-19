@@ -22,6 +22,8 @@ from __future__ import annotations
 
 __all__ = ("QueryContext",)
 
+from abc import abstractmethod
+from collections.abc import Set
 from contextlib import AbstractContextManager
 from typing import Any
 
@@ -31,10 +33,10 @@ from lsst.daf.relation import (
     ColumnTag,
     Engine,
     EngineError,
-    LeafRelation,
     Predicate,
     Processor,
     Relation,
+    UnaryOperation,
     iteration,
 )
 
@@ -90,6 +92,12 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         """
         return self.iteration_engine
 
+    @property
+    @abstractmethod
+    def is_open(self) -> bool:
+        """Whether the context manager has been entered (`bool`)."""
+        raise NotImplementedError()
+
     def make_initial_relation(self, relation: Relation | None = None) -> Relation:
         """Construct an initial relation suitable for this context.
 
@@ -100,10 +108,9 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
             implementations when provided, but may be modified (e.g. by adding
             a transfer to a new engine) when need to satisfy the context's
             invariants.
-
         """
         if relation is None:
-            return LeafRelation.make_join_identity(self.preferred_engine)
+            return self.preferred_engine.make_join_identity_relation()
         return relation
 
     def fetch_iterable(self, relation: Relation) -> iteration.RowIterable:
@@ -127,8 +134,8 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         relation tree if the root is not already in the iteration engine.
 
         Any transfers from other engines or persistent materializations will be
-        handled by delegating to `process_relation` before execution in the
-        iteration engine.
+        handled by delegating to `process` before execution in the iteration
+        engine.
 
         To ensure the result is a multi-pass Python collection in memory,
         ensure the given tree ends with a materialization operation in the
@@ -140,6 +147,73 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         relation = self.process(relation)
         return self.iteration_engine.execute(relation)
 
+    @abstractmethod
+    def count(self, relation: Relation, *, exact: bool = True, discard: bool = False) -> int:
+        """Count the number of rows in the given relation.
+
+        Parameters
+        ----------
+        relation : `Relation`
+            Relation whose rows are to be counted.
+        exact : `bool`, optional
+            If `True` (default), return the exact number of rows.  If `False`,
+            returning an upper bound is permitted if it can be done much more
+            efficiently, e.g. by running a SQL ``SELECT COUNT(*)`` query but
+            ignoring client-side filtering that would otherwise take place.
+        discard : `bool`, optional
+            If `True`, compute the exact count even if it would require running
+            the full query and then throwing away the result rows after
+            counting them.  If `False`, this is an error, as the user would
+            usually be better off executing the query first to fetch its rows
+            into a new query (or passing ``exact=False``).  Ignored if
+            ``exact=False``.
+
+        Returns
+        -------
+        n_rows : `int`
+            Number of rows in the relation, or an upper bound.  This includes
+            duplicates, if there are any.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if an exact count was requested and could not be obtained
+            without fetching and discarding rows.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def any(self, relation: Relation, *, execute: bool = True, exact: bool = True) -> bool:
+        """Check whether this relation has any result rows at all.
+
+        Parameters
+        ----------
+        relation : `Relation`
+            Relation to be checked.
+        execute : `bool`, optional
+            If `True`, execute at least a ``LIMIT 1`` query if it cannot be
+            determined prior to execution that the query would return no rows.
+        exact : `bool`, optional
+            If `True`, run the full query and perform post-query filtering if
+            needed, until at least one result row is found.  If `False`, the
+            returned result does not account for post-query filtering, and
+            hence may be `True` even when all result rows would be filtered
+            out.
+
+        Returns
+        -------
+        any_rows : `bool`
+            Whether the relation has any rows, or if it may have any rows if
+            ``exact=False``.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if an exact check was requested and could not be obtained
+            without executing the query.
+        """
+        raise NotImplementedError()
+
     def transfer(self, source: Relation, destination: Engine, materialize_as: str | None) -> Any:
         # Docstring inherited from lsst.daf.relation.Processor.
         raise NotImplementedError("No transfers expected by base QueryContext implementation.")
@@ -149,6 +223,78 @@ class QueryContext(Processor, AbstractContextManager["QueryContext"]):
         if base.engine == self.iteration_engine:
             return self.iteration_engine.execute(base).materialized()
         raise EngineError(f"Unexpected engine {base.engine} for base QueryContext implementation.")
+
+    @abstractmethod
+    def restore_columns(
+        self,
+        relation: Relation,
+        columns_required: Set[ColumnTag],
+    ) -> tuple[Relation, set[ColumnTag]]:
+        """Return a modified relation tree that attempts to restore columns
+        that were dropped by a projection operation.
+
+        Parameters
+        ----------
+        relation : `Relation`
+            Original relation tree.
+        columns_required : `~collections.abc.Set` [ `ColumnTag` ]
+            Columns to attempt to restore.  May include columns already
+            present in the relation.
+
+        Returns
+        -------
+        modified : `Relation`
+            Possibly-modified tree with any projections that had dropped
+            requested columns replaced by projections that do not drop these
+            columns.  Care is taken to ensure that join common columns and
+            deduplication behavior is preserved, even if that means some
+            columns are not restored.
+        columns_found : `set` [ `ColumnTag` ]
+            Columns from those requested that are present in ``modified``.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def strip_postprocessing(self, relation: Relation) -> tuple[Relation, list[UnaryOperation]]:
+        """Return a modified relation tree without any iteration-engine
+        operations and any transfer to the iteration engine at the end.
+
+        Parameters
+        ----------
+        relation : `Relation`
+            Original relation tree.
+
+        Returns
+        -------
+        modified : `Relation`
+            Stripped relation tree, with engine != `iteration_engine`.
+        stripped : `UnaryOperation`
+            Operations that were stripped, in the same order they should be
+            reapplied (with ``transfer=True,
+            preferred_engine=iteration_engine``) to recover the original tree.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def drop_invalidated_postprocessing(self, relation: Relation, new_columns: Set[ColumnTag]) -> Relation:
+        """Return a modified relation tree without iteration-engine operations
+        that require columns that are not in the given set.
+
+        Parameters
+        ----------
+        relation : `Relation`
+            Original relation tree.
+        new_columns : `~collections.abc.Set` [ `ColumnTag` ]
+            The only columns that postprocessing operations may require if they
+            are to be retained in the returned relation tree.
+
+        Returns
+        -------
+        modified : `Relation`
+            Modified relation tree with postprocessing operations incompatible
+            with ``new_columns`` removed.
+        """
+        raise NotImplementedError()
 
     def make_data_coordinate_predicate(
         self,

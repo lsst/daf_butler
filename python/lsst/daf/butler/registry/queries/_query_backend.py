@@ -35,7 +35,15 @@ from lsst.daf.relation import (
     UnaryOperationRelation,
 )
 
-from ...core import DatasetColumnTag, DatasetType, DimensionGraph, DimensionKeyColumnTag, DimensionUniverse
+from ...core import (
+    DataCoordinate,
+    DatasetColumnTag,
+    DatasetType,
+    DimensionGraph,
+    DimensionKeyColumnTag,
+    DimensionRecord,
+    DimensionUniverse,
+)
 from .._collectionType import CollectionType
 from .._exceptions import DatasetTypeError, MissingDatasetTypeError
 from ..wildcards import CollectionWildcard
@@ -44,7 +52,6 @@ from .find_first_dataset import FindFirstDataset
 
 if TYPE_CHECKING:
     from ..interfaces import CollectionRecord
-    from ..managers import RegistryManagerInstances
 
 
 _C = TypeVar("_C", bound=QueryContext)
@@ -62,26 +69,12 @@ class QueryBackend(Generic[_C]):
 
     @property
     @abstractmethod
-    def managers(self) -> RegistryManagerInstances:
-        """A struct containing the manager instances that back a SQL registry.
-
-        Notes
-        -----
-        This property is a temporary interface that will be removed in favor of
-        new methods once the manager and storage classes have been integrated
-        with `~lsst.daf.relation.Relation`.
-        """
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
     def universe(self) -> DimensionUniverse:
         """Definition of all dimensions and dimension elements for this
         registry (`DimensionUniverse`).
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def context(self) -> _C:
         """Return a context manager that can be used to execute queries with
         this backend.
@@ -91,6 +84,23 @@ class QueryBackend(Generic[_C]):
         context : `QueryContext`
             Context manager that manages state and connections needed to
             execute queries.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_collection_name(self, key: Any) -> str:
+        """Return the collection name associated with a collection primary key
+        value.
+
+        Parameters
+        ----------
+        key
+            Collection primary key value.
+
+        Returns
+        -------
+        name : `str`
+            Collection name.
         """
         raise NotImplementedError()
 
@@ -421,23 +431,8 @@ class QueryBackend(Generic[_C]):
         context : `QueryContext`
             Context that manages per-query state.
         columns : `~collections.abc.Set` [ `str` ]
-            Columns to include in the `relation.  Valid columns are:
-
-            - ``dataset_id``: the unique identifier of the dataset.  The type
-              is implementation-dependent.  Never nullable.
-
-            - ``ingest_date``: the date and time the dataset was added to the
-              data repository.
-
-            - ``run``: the foreign key column to the `~CollectionType.RUN`
-              collection holding the dataset (not necessarily the collection
-              name).  The type is dependent on the collection manager
-              implementation.
-
-            - ``timespan``: the validity range for datasets found in a
-              `~CollectionType.CALIBRATION` collection, or ``NULL`` for other
-              collection types.
-
+            Columns to include in the relation.  See `Query.find_datasets` for
+            details.
         Results
         -------
         relation : `lsst.daf.relation.Relation`
@@ -595,7 +590,7 @@ class QueryBackend(Generic[_C]):
             Constraints on governor dimensions that are provided by other parts
             of the query that either have been included in ``initial_relation``
             or are guaranteed to be added in the future. This is a mapping from
-            governor dimension name to sets of values that dimension may tke.
+            governor dimension name to sets of values that dimension may take.
 
         Results
         -------
@@ -637,6 +632,29 @@ class QueryBackend(Generic[_C]):
         DataIdValueError
             Raised if ``constraints`` includes governor dimension values that
             are not present in the `Registry`.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_dimension_record_cache(
+        self, element_name: str, context: _C
+    ) -> Mapping[DataCoordinate, DimensionRecord] | None:
+        """Return a local cache of all `DimensionRecord` objects for a
+        dimension element, fetching it if necessary.
+
+        Parameters
+        ----------
+        element_name : `str`
+            Name of the dimension element.
+        context : `.queries.SqlQueryContext`
+            Context to be used to execute queries when no cached result is
+            available.
+
+        Returns
+        -------
+        cache : `Mapping` [ `DataCoordinate`, `DimensionRecord` ] or `None`
+            Mapping from data ID to dimension record, or `None` if this
+            element's records are never cached.
         """
         raise NotImplementedError()
 

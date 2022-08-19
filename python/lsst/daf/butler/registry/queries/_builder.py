@@ -22,23 +22,22 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import Any, Tuple, cast
+from typing import Any, cast
 
-import sqlalchemy.sql
-from lsst.daf.relation import ColumnTag, Diagnostics, Predicate, Relation
+from lsst.daf.relation import ColumnExpression, ColumnTag, Diagnostics, Predicate, Relation
 
 from ...core import (
     ColumnCategorization,
+    DatasetColumnTag,
     DatasetType,
     DimensionKeyColumnTag,
     DimensionRecordColumnTag,
-    SimpleQuery,
 )
 from ..wildcards import CollectionWildcard
-from ._query import DirectQuery, DirectQueryUniqueness, EmptyQuery, Query
+from ._query import Query
 from ._query_backend import QueryBackend
-from ._sql_query_context import SqlQueryContext
-from ._structs import QueryColumns, QuerySummary
+from ._query_context import QueryContext
+from ._structs import QuerySummary
 
 
 class QueryBuilder:
@@ -51,9 +50,10 @@ class QueryBuilder:
         Struct organizing the dimensions involved in the query.
     backend : `QueryBackend`
         Backend object that represents the `Registry` implementation.
-    context : `.queries.SqlQueryContext`
-        Object that manages relation engines and database-side state
-        (e.g. temporary tables) for the query.
+    context : `QueryContext`, optional
+        Object that manages relation engines and database-side state (e.g.
+        temporary tables) for the query.  Must have been created by
+        ``backend.context()``, which is used if ``context`` is not provided.
     relation : `~lsst.daf.relation.Relation`, optional
         Initial relation for the query.
     """
@@ -61,8 +61,8 @@ class QueryBuilder:
     def __init__(
         self,
         summary: QuerySummary,
-        backend: QueryBackend[SqlQueryContext],
-        context: SqlQueryContext | None = None,
+        backend: QueryBackend,
+        context: QueryContext | None = None,
         relation: Relation | None = None,
     ):
         self.summary = summary
@@ -184,6 +184,14 @@ class QueryBuilder:
                             self.summary.where.region,
                         )
                     )
+            for element in categorized_columns.filter_spatial_region_dimension_elements():
+                if element not in self.summary.where.data_id.graph.names:
+                    predicate = predicate.logical_and(
+                        self._context.make_spatial_region_overlap_predicate(
+                            ColumnExpression.reference(DimensionRecordColumnTag(element, "region")),
+                            ColumnExpression.literal(self.summary.where.region),
+                        )
+                    )
         if self.summary.where.timespan is not None:
             for element in categorized_columns.filter_timespan_dimension_elements():
                 if element not in self.summary.where.data_id.graph.names:
@@ -227,7 +235,7 @@ class QueryBuilder:
                 columns=columns_required,
                 context=self._context,
                 spatial_joins=(
-                    [cast(Tuple[str, str], tuple(self.summary.spatial.names))]
+                    [cast(tuple[str, str], tuple(self.summary.spatial.names))]
                     if len(self.summary.spatial) == 2
                     else []
                 ),
@@ -236,34 +244,34 @@ class QueryBuilder:
             )
         categorized_columns = ColumnCategorization.from_iterable(columns_required)
         self._addWhereClause(categorized_columns)
-        diagnostics = Diagnostics.run(self.relation)
-        if not self.relation.columns:
-            return EmptyQuery(
-                self._backend.universe,
-                backend=self._backend,
-                doomed_by=diagnostics.messages if diagnostics.is_doomed else [],
-            )
-        payload = self._context.sql_engine.to_payload(self.relation)
-        simple_query = SimpleQuery()
-        simple_query.join(payload.from_clause)
-        simple_query.where.extend(payload.where)
-        old_columns = QueryColumns.from_logical_columns(
-            payload.columns_available, self.summary.datasets, self._backend.managers.column_types
+        query = Query(
+            self.summary.dimensions,
+            self._backend,
+            context=self._context,
+            relation=self.relation,
+            governor_constraints=self._governor_constraints,
+            is_deferred=True,
+            has_record_columns=False,
         )
-        order_by: list[sqlalchemy.sql.ColumnElement] = []
         if self.summary.order_by is not None:
-            order_by.extend(
-                self._context.sql_engine.convert_sort_term(term, payload.columns_available)
-                for term in self.summary.order_by.terms
+            query = query.sorted(self.summary.order_by.terms)
+        if self.summary.limit is not None:
+            query = query.sliced(
+                start=self.summary.limit[0],
+                stop=self.summary.limit[0] + self.summary.limit[1]
+                if self.summary.limit[1] is not None
+                else None,
             )
-        return DirectQuery(
-            graph=self.summary.requested,
-            uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
-            whereRegion=self.summary.where.region,
-            simpleQuery=simple_query,
-            columns=old_columns,
-            order_by_columns=order_by,
-            limit=self.summary.limit,
-            backend=self._backend,
-            doomed_by=diagnostics.messages if diagnostics.is_doomed else [],
+        projected_columns: set[ColumnTag] = set()
+        projected_columns.update(DimensionKeyColumnTag.generate(self.summary.requested.names))
+        for dataset_type in self.summary.datasets:
+            for dataset_column_name in ("dataset_id", "run"):
+                tag = DatasetColumnTag(dataset_type.name, dataset_column_name)
+                if tag in self.relation.columns:
+                    projected_columns.add(tag)
+        return query.projected(
+            dimensions=self.summary.requested,
+            columns=projected_columns,
+            drop_postprocessing=False,
+            unique=False,
         )

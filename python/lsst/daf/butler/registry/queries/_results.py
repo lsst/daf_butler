@@ -30,32 +30,22 @@ __all__ = (
 )
 
 import itertools
-import operator
 from abc import abstractmethod
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager
-from typing import Any, Optional
-
-import sqlalchemy
+from typing import Any
 
 from ...core import (
     DataCoordinate,
     DataCoordinateIterable,
     DatasetRef,
     DatasetType,
-    Dimension,
+    DimensionElement,
     DimensionGraph,
     DimensionRecord,
-    SimpleQuery,
 )
-from ..interfaces import Database, DimensionRecordStorage
 from ._query import Query
-from ._sql_query_context import SqlQueryContext
-from ._structs import ElementOrderByClause, QuerySummary
-
-QueryFactoryMethod = Callable[[Optional[Iterable[str]], Optional[tuple[int, Optional[int]]]], Query]
-"""Type of a query factory method type used by DataCoordinateQueryResults.
-"""
+from ._structs import OrderByClause
 
 
 class DataCoordinateQueryResults(DataCoordinateIterable):
@@ -64,140 +54,32 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     Parameters
     ----------
-    db : `Database`
-        Database engine used to execute queries.
-    query_factory : `QueryFactoryMethod`
-        Method which creates an instance of `Query` class.
-    graph : `DimensionGraph`
-        Dimensions used by query.
-    order_by : `Iterable` [ `str` ], optional
-        Optional sequence of column names used for result ordering.
-    limit : `Tuple` [ `int`, `int` ], optional
-        Limit for the number of returned records and optional offset.
-    records : `Mapping`, optional
-        A nested mapping containing `DimensionRecord` objects for all
-        dimensions and all data IDs this query will yield.  If `None`
-        (default), `DataCoordinateIterable.hasRecords` will return `False`.
-        The outer mapping has `str` keys (the names of dimension elements).
-        The inner mapping has `tuple` keys representing data IDs (tuple
-        conversions of `DataCoordinate.values()`) and `DimensionRecord` values.
+    query : `Query`
+        Query object that backs this class.
 
     Notes
     -----
-    Constructing an instance of this does nothing; the query is not executed
-    until it is iterated over (or some other operation is performed that
-    involves iteration).
-
-    Instances should generally only be constructed by `Registry` methods or the
-    methods of other query result objects.
+    The `Query` class now implements essentially all of this class's
+    functionality; "QueryResult" classes like this one now exist only to
+    provide interface backwards compatibility and more specific iterator
+    types.
     """
 
-    def __init__(
-        self,
-        db: Database,
-        query_factory: QueryFactoryMethod,
-        graph: DimensionGraph,
-        *,
-        order_by: Iterable[str] | None = None,
-        limit: tuple[int, int | None] | None = None,
-        records: Mapping[str, Mapping[tuple, DimensionRecord]] | None = None,
-    ):
-        self._db = db
-        self._query_factory = query_factory
-        self._graph = graph
-        self._order_by = order_by
-        self._limit = limit
-        self._records = records
-        self._cached_query: Query | None = None
+    def __init__(self, query: Query):
+        self._query = query
 
-    __slots__ = ("_db", "_query_factory", "_graph", "_order_by", "_limit", "_records", "_cached_query")
-
-    @classmethod
-    def from_query(
-        cls,
-        db: Database,
-        query: Query,
-        graph: DimensionGraph,
-        *,
-        order_by: Iterable[str] | None = None,
-        limit: tuple[int, int | None] | None = None,
-        records: Mapping[str, Mapping[tuple, DimensionRecord]] | None = None,
-    ) -> DataCoordinateQueryResults:
-        """Make an instance from a pre-existing query instead of a factory.
-
-        Parameters
-        ----------
-        db : `Database`
-            Database engine used to execute queries.
-        query : `Query`
-            Low-level representation of the query that backs this result
-            object.
-        graph : `DimensionGraph`
-            Dimensions used by query.
-        order_by : `Iterable` [ `str` ], optional
-            Optional sequence of column names used for result ordering.
-        limit : `Tuple` [ `int`, `int` ], optional
-            Limit for the number of returned records and optional offset.
-        records : `Mapping`, optional
-            A nested mapping containing `DimensionRecord` objects for all
-            dimensions and all data IDs this query will yield.  If `None`
-            (default), `DataCoordinateIterable.hasRecords` will return `False`.
-            The outer mapping has `str` keys (the names of dimension elements).
-            The inner mapping has `tuple` keys representing data IDs (tuple
-            conversions of `DataCoordinate.values()`) and `DimensionRecord`
-            values.
-        """
-
-        def factory(order_by: Iterable[str] | None, limit: tuple[int, int | None] | None) -> Query:
-            return query
-
-        return DataCoordinateQueryResults(db, factory, graph, order_by=order_by, limit=limit, records=records)
+    __slots__ = ("_query",)
 
     def __iter__(self) -> Iterator[DataCoordinate]:
-        return (self._query.extractDataId(row, records=self._records) for row in self._query.rows(self._db))
+        return self._query.iter_data_ids()
 
     def __repr__(self) -> str:
-        return f"<DataCoordinate iterator with dimensions={self._graph}>"
-
-    def _clone(
-        self,
-        *,
-        query_factory: QueryFactoryMethod | None = None,
-        query: Query | None = None,
-        graph: DimensionGraph | None = None,
-        order_by: Iterable[str] | None = None,
-        limit: tuple[int, int | None] | None = None,
-        records: Mapping[str, Mapping[tuple, DimensionRecord]] | None = None,
-    ) -> DataCoordinateQueryResults:
-        """Clone this instance potentially updating some attributes."""
-        graph = graph if graph is not None else self._graph
-        order_by = order_by if order_by is not None else self._order_by
-        limit = limit if limit is not None else self._limit
-        records = records if records is not None else self._records
-        if query is None:
-            query_factory = query_factory or self._query_factory
-            return DataCoordinateQueryResults(
-                self._db, query_factory, graph, order_by=order_by, limit=limit, records=records
-            )
-        else:
-            return DataCoordinateQueryResults.from_query(
-                self._db, query, graph, order_by=order_by, limit=limit, records=records
-            )
-
-    @property
-    def _query(self) -> Query:
-        """Query representation instance (`Query`)"""
-        if self._cached_query is None:
-            self._cached_query = self._query_factory(self._order_by, self._limit)
-            assert (
-                self._cached_query.datasetType is None
-            ), "Query used to initialize data coordinate results should not have any datasets."
-        return self._cached_query
+        return f"<DataCoordinate iterator with dimensions={self.graph}>"
 
     @property
     def graph(self) -> DimensionGraph:
         # Docstring inherited from DataCoordinateIterable.
-        return self._graph
+        return self._query.dimensions
 
     def hasFull(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
@@ -205,7 +87,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
 
     def hasRecords(self) -> bool:
         # Docstring inherited from DataCoordinateIterable.
-        return self._records is not None or not self._graph
+        return self._query.has_record_columns is True or not self.graph
 
     @contextmanager
     def materialize(self) -> Iterator[DataCoordinateQueryResults]:
@@ -233,10 +115,8 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         explicitly inserted into a temporary table.  See `expanded` and
         `subset` for examples.
         """
-        with self._query.materialize(self._db) as materialized:
-            # Note that we depend on order_by columns to be passes from Query
-            # to MaterializedQuery, so order_by and limit are not used.
-            yield self._clone(query=materialized)
+        with self._query.open_context():
+            yield DataCoordinateQueryResults(self._query.materialized())
 
     def expanded(self) -> DataCoordinateQueryResults:
         """Return a results object for which `hasRecords` returns `True`.
@@ -262,19 +142,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
                 for dataId in dataIdsWithRecords:
                     ...
         """
-        context = SqlQueryContext(self._db, self._query.backend.managers.column_types)
-        if self._records is None:
-            records = {}
-            for element in self.graph.elements:
-                subset = self.subset(graph=element.graph, unique=True)
-                records[element.name] = {
-                    tuple(record.dataId.values()): record
-                    for record in self._query.backend.managers.dimensions[element].fetch(subset, context)
-                }
-
-            return self._clone(query=self._query, records=records)
-        else:
-            return self
+        return DataCoordinateQueryResults(self._query.with_record_columns(defer=True))
 
     def subset(
         self, graph: DimensionGraph | None = None, *, unique: bool = False
@@ -313,7 +181,7 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         -----
         This method can only return a "near-subset" of the original result rows
         in general because of subtleties in how spatial overlaps are
-        implemented; see `Query.subset` for more information.
+        implemented; see `Query.projected` for more information.
 
         When calling `subset` multiple times on the same very large result set,
         it may be much more efficient to call `materialize` first.  For
@@ -335,40 +203,17 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             graph = self.graph
         if not graph.issubset(self.graph):
             raise ValueError(f"{graph} is not a subset of {self.graph}")
-        if graph == self.graph and (not unique or self._query.isUnique()):
-            return self
-        records: Mapping[str, Mapping[tuple, DimensionRecord]] | None
-        if self._records is not None:
-            records = {element.name: self._records[element.name] for element in graph.elements}
-        else:
-            records = None
-        query = self._query.subset(graph=graph, datasets=False, unique=unique)
-
-        return self._clone(graph=graph, query=query, records=records)
-
-    def constrain(self, query: SimpleQuery, columns: Callable[[str], sqlalchemy.sql.ColumnElement]) -> None:
-        # Docstring inherited from DataCoordinateIterable.
-        sql = self._query.sql
-        if sql is not None:
-            fromClause = sql.alias("c")
-            query.join(
-                fromClause,
-                onclause=sqlalchemy.sql.and_(
-                    *[
-                        columns(dimension.name) == fromClause.columns[dimension.name]
-                        for dimension in self.graph.required
-                    ]
-                ),
-            )
+        query = self._query.projected(graph, unique=unique, defer=True, drop_postprocessing=True)
+        return DataCoordinateQueryResults(query)
 
     def findDatasets(
         self,
-        datasetType: DatasetType | str,
+        datasetType: Any,
         collections: Any,
         *,
         findFirst: bool = True,
         components: bool | None = None,
-    ) -> ParentDatasetQueryResults:
+    ) -> DatasetQueryResults:
         """Find datasets using the data IDs identified by this query.
 
         Parameters
@@ -417,26 +262,13 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         parent_dataset_type, components_found = self._query.backend.resolve_single_dataset_type_wildcard(
             datasetType, components=components, explicit_only=True
         )
-        if not parent_dataset_type.dimensions.issubset(self.graph):
-            raise ValueError(
-                f"findDatasets requires that the dataset type have only dimensions in "
-                f"the DataCoordinateQueryResult used as input to the search, but "
-                f"{parent_dataset_type.name} has dimensions {parent_dataset_type.dimensions}, "
-                f"while the input dimensions are {self.graph}."
-            )
-        summary = QuerySummary(self.graph, region=self._query.whereRegion, datasets=[parent_dataset_type])
-        builder = self._query.makeBuilder(summary)
-        builder.joinDataset(parent_dataset_type, collections=collections, findFirst=findFirst)
-        query = builder.finish(joinMissing=False)
         return ParentDatasetQueryResults(
-            db=self._db,
-            query=query,
-            components=components_found,
-            records=self._records,
-            datasetType=parent_dataset_type,
+            self._query.find_datasets(parent_dataset_type, collections, find_first=findFirst, defer=True),
+            parent_dataset_type,
+            components_found,
         )
 
-    def count(self, *, exact: bool = True) -> int:
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
         """Count the number of rows this query would return.
 
         Parameters
@@ -445,6 +277,13 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             If `True`, run the full query and perform post-query filtering if
             needed to account for that filtering in the count.  If `False`, the
             result may be an upper bound.
+        discard : `bool`, optional
+            If `True`, compute the exact count even if it would require running
+            the full query and then throwing away the result rows after
+            counting them.  If `False`, this is an error, as the user would
+            usually be better off executing the query first to fetch its rows
+            into a new query (or passing ``exact=False``).  Ignored if
+            ``exact=False``.
 
         Returns
         -------
@@ -458,14 +297,9 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         returned, so even with ``exact=True`` it may provide only an upper
         bound on the number of *deduplicated* result rows.
         """
-        return self._query.count(self._db, exact=exact)
+        return self._query.count(exact=exact, discard=discard)
 
-    def any(
-        self,
-        *,
-        execute: bool = True,
-        exact: bool = True,
-    ) -> bool:
+    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         """Test whether this query returns any results.
 
         Parameters
@@ -486,33 +320,29 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
             `True` if the query would (or might, depending on arguments) yield
             result rows.  `False` if it definitely would not.
         """
-        return self._query.any(self._db, execute=execute, exact=exact)
+        return self._query.any(execute=execute, exact=exact)
 
-    def explain_no_results(self) -> Iterable[str]:
+    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
+
+        Parameters
+        ----------
+        execute : `bool`, optional
+            If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
+            of aspects of the tree to more precisely determine where rows were
+            filtered out.
 
         Returns
         -------
         messages : `Iterable` [ `str` ]
             String messages that describe reasons the query might not yield any
             results.
-
-        Notes
-        -----
-        Messages related to post-query filtering are only available if the
-        iterator has been exhausted, or if `any` or `count` was already called
-        (with ``exact=True`` for the latter two).
-
-        This method first yields messages that are generated while the query is
-        being built or filtered, but may then proceed to diagnostics generated
-        by performing what should be inexpensive follow-up queries.  Callers
-        can short-circuit this at any time by simplying not iterating further.
         """
-        return self._query.explain_no_results(self._db)
+        return self._query.explain_no_results(execute=execute)
 
     def order_by(self, *args: str) -> DataCoordinateQueryResults:
-        """Make the iterator return ordered result.
+        """Make the iterator return ordered results.
 
         Parameters
         ----------
@@ -531,18 +361,21 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         This method modifies the iterator in place and returns the same
         instance to support method chaining.
         """
-        return self._clone(order_by=args)
+        clause = OrderByClause.parse_general(args, self._query.dimensions)
+        self._query = self._query.sorted(clause.terms, defer=True)
+        return self
 
-    def limit(self, limit: int, offset: int | None = None) -> DataCoordinateQueryResults:
+    def limit(self, limit: int, offset: int | None = 0) -> DataCoordinateQueryResults:
         """Make the iterator return limited number of records.
 
         Parameters
         ----------
         limit : `int`
             Upper limit on the number of returned records.
-        offset : `int` or `None`
-            If not `None` then the number of records to skip before returning
-            ``limit`` records.
+        offset : `int` or `None`, optional
+            The number of records to skip before returning at most ``limit``
+            records.  `None` is interpreted the same as zero for backwards
+            compatibility.
 
         Returns
         -------
@@ -556,7 +389,10 @@ class DataCoordinateQueryResults(DataCoordinateIterable):
         instance to support method chaining. Normally this method is used
         together with `order_by` method.
         """
-        return self._clone(limit=(limit, offset))
+        if offset is None:
+            offset = 0
+        self._query = self._query.sliced(offset, offset + limit, defer=True)
+        return self
 
 
 class DatasetQueryResults(Iterable[DatasetRef]):
@@ -613,7 +449,7 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         raise NotImplementedError()
 
     @abstractmethod
-    def count(self, *, exact: bool = True) -> int:
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
         """Count the number of rows this query would return.
 
         Parameters
@@ -622,6 +458,13 @@ class DatasetQueryResults(Iterable[DatasetRef]):
             If `True`, run the full query and perform post-query filtering if
             needed to account for that filtering in the count.  If `False`, the
             result may be an upper bound.
+        discard : `bool`, optional
+            If `True`, compute the exact count even if it would require running
+            the full query and then throwing away the result rows after
+            counting them.  If `False`, this is an error, as the user would
+            usually be better off executing the query first to fetch its rows
+            into a new query (or passing ``exact=False``).  Ignored if
+            ``exact=False``.
 
         Returns
         -------
@@ -667,26 +510,22 @@ class DatasetQueryResults(Iterable[DatasetRef]):
         raise NotImplementedError()
 
     @abstractmethod
-    def explain_no_results(self) -> Iterable[str]:
+    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
+
+        Parameters
+        ----------
+        execute : `bool`, optional
+            If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
+            of aspects of the tree to more precisely determine where rows were
+            filtered out.
 
         Returns
         -------
         messages : `Iterable` [ `str` ]
             String messages that describe reasons the query might not yield any
             results.
-
-        Notes
-        -----
-        Messages related to post-query filtering are only available if the
-        iterator has been exhausted, or if `any` or `count` was already called
-        (with ``exact=True`` for the latter two).
-
-        This method first yields messages that are generated while the query is
-        being built or filtered, but may then proceed to diagnostics generated
-        by performing what should be inexpensive follow-up queries.  Callers
-        can short-circuit this at any time by simplying not iterating further.
         """
         raise NotImplementedError()
 
@@ -697,63 +536,39 @@ class ParentDatasetQueryResults(DatasetQueryResults):
 
     Parameters
     ----------
-    db : `Database`
-        Database engine to execute queries against.
     query : `Query`
-        Low-level query object that backs these results.  ``query.datasetType``
-        will be the parent dataset type for this object, and may not be `None`.
-    components : `Sequence` [ `str` or `None` ]
+        Low-level query object that backs these results.
+    dataset_type : `DatasetType`
+        Parent dataset type for all datasets returned by this query.
+    components : `Sequence` [ `str` or `None` ], optional
         Names of components to include in iteration.  `None` may be included
         (at most once) to include the parent dataset type.
-    records : `Mapping`, optional
-        Mapping containing `DimensionRecord` objects for all dimensions and
-        all data IDs this query will yield.  If `None` (default),
-        `DataCoordinate.hasRecords` will return `False` for all nested data
-        IDs.  This is a nested mapping with `str` names of dimension elements
-        as outer keys, `DimensionRecord` instances as inner values, and
-        ``tuple(record.dataId.values())`` for the inner keys / outer values
-        (where ``record`` is the innermost `DimensionRecord` instance).
-    datasetType : `DatasetType`, optional
-        Parent dataset type for all datasets returned by this query.  If not
-        provided, ``query.datasetType`` be used, and must not be `None` (as it
-        is in the case where the query is known to yield no results prior to
-        execution).
+
+    Notes
+    -----
+    The `Query` class now implements essentially all of this class's
+    functionality; "QueryResult" classes like this one now exist only to
+    provide interface backwards compatibility and more specific iterator
+    types.
     """
 
     def __init__(
         self,
-        db: Database,
         query: Query,
-        *,
-        components: Sequence[str | None],
-        records: Mapping[str, Mapping[tuple, DimensionRecord]] | None = None,
-        datasetType: DatasetType | None = None,
+        dataset_type: DatasetType,
+        components: Sequence[str | None] = (None,),
     ):
-        self._db = db
         self._query = query
+        self._dataset_type = dataset_type
         self._components = components
-        self._records = records
-        if datasetType is None:
-            datasetType = query.datasetType
-        assert datasetType is not None, "Query used to initialize dataset results must have a dataset."
-        assert datasetType.dimensions.issubset(
-            query.graph
-        ), f"Query dimensions {query.graph} do not match dataset type dimensions {datasetType.dimensions}."
-        self._datasetType = datasetType
 
-    __slots__ = ("_db", "_query", "_dimensions", "_components", "_records")
+    __slots__ = ("_query", "_dataset_type", "_components")
 
     def __iter__(self) -> Iterator[DatasetRef]:
-        for row in self._query.rows(self._db):
-            parentRef = self._query.extractDatasetRef(row, records=self._records)
-            for component in self._components:
-                if component is None:
-                    yield parentRef
-                else:
-                    yield parentRef.makeComponentRef(component)
+        return self._query.iter_dataset_refs(self._dataset_type, self._components)
 
     def __repr__(self) -> str:
-        return f"<DatasetRef iterator for [components of] {self._datasetType.name}>"
+        return f"<DatasetRef iterator for [components of] {self._dataset_type.name}>"
 
     def byParentDatasetType(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
@@ -762,17 +577,15 @@ class ParentDatasetQueryResults(DatasetQueryResults):
     @contextmanager
     def materialize(self) -> Iterator[ParentDatasetQueryResults]:
         # Docstring inherited from DatasetQueryResults.
-        with self._query.materialize(self._db) as materialized:
-            yield ParentDatasetQueryResults(
-                self._db, materialized, components=self._components, records=self._records
-            )
+        with self._query.open_context():
+            yield ParentDatasetQueryResults(self._query.materialized(), self._dataset_type, self._components)
 
     @property
     def parentDatasetType(self) -> DatasetType:
         """The parent dataset type for all datasets in this iterable
         (`DatasetType`).
         """
-        return self._datasetType
+        return self._dataset_type
 
     @property
     def dataIds(self) -> DataCoordinateQueryResults:
@@ -783,13 +596,7 @@ class ParentDatasetQueryResults(DatasetQueryResults):
         The returned object is not in general `zip`-iterable with ``self``;
         it may be in a different order or have (or not have) duplicates.
         """
-        query = self._query.subset(graph=self.parentDatasetType.dimensions, datasets=False, unique=False)
-        return DataCoordinateQueryResults.from_query(
-            self._db,
-            query,
-            self.parentDatasetType.dimensions,
-            records=self._records,
-        )
+        return DataCoordinateQueryResults(self._query.projected(defer=True))
 
     def withComponents(self, components: Sequence[str | None]) -> ParentDatasetQueryResults:
         """Return a new query results object for the same parent datasets but
@@ -799,40 +606,25 @@ class ParentDatasetQueryResults(DatasetQueryResults):
             Names of components to include in iteration.  `None` may be
             included (at most once) to include the parent dataset type.
         """
-        return ParentDatasetQueryResults(
-            self._db, self._query, records=self._records, components=components, datasetType=self._datasetType
-        )
+        return ParentDatasetQueryResults(self._query, self._dataset_type, components)
 
     def expanded(self) -> ParentDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
-        if self._records is None:
-            records = self.dataIds.expanded()._records
-            return ParentDatasetQueryResults(
-                self._db,
-                self._query,
-                records=records,
-                components=self._components,
-                datasetType=self._datasetType,
-            )
-        else:
-            return self
+        return ParentDatasetQueryResults(
+            self._query.with_record_columns(defer=True), self._dataset_type, self._components
+        )
 
-    def count(self, *, exact: bool = True) -> int:
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.
-        return len(self._components) * self._query.count(self._db, exact=exact)
+        return len(self._components) * self._query.count(exact=exact, discard=discard)
 
-    def any(
-        self,
-        *,
-        execute: bool = True,
-        exact: bool = True,
-    ) -> bool:
+    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         # Docstring inherited.
-        return self._query.any(self._db, execute=execute, exact=exact)
+        return self._query.any(execute=execute, exact=exact)
 
-    def explain_no_results(self) -> Iterable[str]:
+    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         # Docstring inherited.
-        return self._query.explain_no_results(self._db)
+        return self._query.explain_no_results(execute=execute)
 
 
 class ChainedDatasetQueryResults(DatasetQueryResults):
@@ -874,26 +666,22 @@ class ChainedDatasetQueryResults(DatasetQueryResults):
 
     def expanded(self) -> ChainedDatasetQueryResults:
         # Docstring inherited from DatasetQueryResults.
-        return ChainedDatasetQueryResults([r.expanded() for r in self._chain])
+        return ChainedDatasetQueryResults([r.expanded() for r in self._chain], self._doomed_by)
 
-    def count(self, *, exact: bool = True) -> int:
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited.
-        return sum(r.count(exact=exact) for r in self._chain)
+        return sum(r.count(exact=exact, discard=discard) for r in self._chain)
 
-    def any(
-        self,
-        *,
-        execute: bool = True,
-        exact: bool = True,
-    ) -> bool:
+    def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         # Docstring inherited.
         return any(r.any(execute=execute, exact=exact) for r in self._chain)
 
-    def explain_no_results(self) -> Iterable[str]:
+    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         # Docstring inherited.
+        result = list(self._doomed_by)
         for r in self._chain:
-            yield from r.explain_no_results()
-        yield from self._doomed_by
+            result.extend(r.explain_no_results(execute=execute))
+        return result
 
 
 class DimensionRecordQueryResults(Iterable[DimensionRecord]):
@@ -901,8 +689,17 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
     dimension records.
     """
 
+    @property
     @abstractmethod
-    def count(self, *, exact: bool = True) -> int:
+    def element(self) -> DimensionElement:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def run(self) -> DimensionRecordQueryResults:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
         """Count the number of rows this query would return.
 
         Parameters
@@ -911,6 +708,13 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
             If `True`, run the full query and perform post-query filtering if
             needed to account for that filtering in the count.  If `False`, the
             result may be an upper bound.
+        discard : `bool`, optional
+            If `True`, compute the exact count even if it would require running
+            the full query and then throwing away the result rows after
+            counting them.  If `False`, this is an error, as the user would
+            usually be better off executing the query first to fetch its rows
+            into a new query (or passing ``exact=False``).  Ignored if
+            ``exact=False``.
 
         Returns
         -------
@@ -974,7 +778,7 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
         raise NotImplementedError()
 
     @abstractmethod
-    def limit(self, limit: int, offset: int | None = None) -> DimensionRecordQueryResults:
+    def limit(self, limit: int, offset: int | None = 0) -> DimensionRecordQueryResults:
         """Make the iterator return limited number of records.
 
         Parameters
@@ -982,108 +786,42 @@ class DimensionRecordQueryResults(Iterable[DimensionRecord]):
         limit : `int`
             Upper limit on the number of returned records.
         offset : `int` or `None`
-            If not `None` then the number of records to skip before returning
-            ``limit`` records.
+            The number of records to skip before returning at most ``limit``
+            records.  `None` is interpreted the same as zero for backwards
+            compatibility.
 
         Returns
         -------
         result : `DimensionRecordQueryResults`
-            Returns ``self`` instance which is updated to return limited set
-            of records.
+            Returns ``self`` instance which is updated to return limited set of
+            records.
 
         Notes
         -----
         This method can modify the iterator in place and return the same
-        instance. Normally this method is used together with `order_by`
-        method.
+        instance. Normally this method is used together with `order_by` method.
         """
         raise NotImplementedError()
 
     @abstractmethod
-    def explain_no_results(self) -> Iterable[str]:
+    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         """Return human-readable messages that may help explain why the query
         yields no results.
+
+        Parameters
+        ----------
+        execute : `bool`, optional
+            If `True` (default) execute simplified versions (e.g. ``LIMIT 1``)
+            of aspects of the tree to more precisely determine where rows were
+            filtered out.
 
         Returns
         -------
         messages : `Iterable` [ `str` ]
             String messages that describe reasons the query might not yield any
             results.
-
-        Notes
-        -----
-        Messages related to post-query filtering are only available if the
-        iterator has been exhausted, or if `any` or `count` was already called
-        (with ``exact=True`` for the latter two).
-
-        This method first yields messages that are generated while the query is
-        being built or filtered, but may then proceed to diagnostics generated
-        by performing what should be inexpensive follow-up queries.  Callers
-        can short-circuit this at any time by simply not iterating further.
         """
         raise NotImplementedError()
-
-
-class _DimensionRecordKey:
-    """Class for objects used as keys in ordering `DimensionRecord` instances.
-
-    Parameters
-    ----------
-    attributes : `Sequence` [ `str` ]
-        Sequence of attribute names to use for comparison.
-    ordering : `Sequence` [ `bool` ]
-        Matching sequence of ordering flags, `False` for descending ordering,
-        `True` for ascending ordering.
-    record : `DimensionRecord`
-        `DimensionRecord` to compare to other records.
-    """
-
-    def __init__(self, attributes: Sequence[str], ordering: Sequence[bool], record: DimensionRecord):
-        self.attributes = attributes
-        self.ordering = ordering
-        self.rec = record
-
-    def _cmp(self, other: _DimensionRecordKey) -> int:
-        """Compare two records using provided comparison operator.
-
-        Parameters
-        ----------
-        other : `_DimensionRecordKey`
-            Key for other record.
-
-        Returns
-        -------
-        result : `int`
-            0 if keys are identical, negative if ``self`` is ordered before
-            ``other``, positive otherwise.
-        """
-        for attribute, ordering in zip(self.attributes, self.ordering):
-            # timespan.begin/end cannot use getattr
-            attrgetter = operator.attrgetter(attribute)
-            lhs = attrgetter(self.rec)
-            rhs = attrgetter(other.rec)
-            if not ordering:
-                lhs, rhs = rhs, lhs
-            if lhs != rhs:
-                return 1 if lhs > rhs else -1
-        return 0
-
-    def __lt__(self, other: _DimensionRecordKey) -> bool:
-        return self._cmp(other) < 0
-
-    def __gt__(self, other: _DimensionRecordKey) -> bool:
-        return self._cmp(other) > 0
-
-    def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, _DimensionRecordKey):
-            return NotImplemented
-        return self._cmp(other) == 0
-
-    def __le__(self, other: _DimensionRecordKey) -> bool:
-        return self._cmp(other) <= 0
-
-    def __ge__(self, other: _DimensionRecordKey) -> bool:
-        return self._cmp(other) >= 0
 
 
 class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
@@ -1091,75 +829,54 @@ class DatabaseDimensionRecordQueryResults(DimensionRecordQueryResults):
 
     Parameters
     ----------
-    dataIds : `DataCoordinateQueryResults`
-        Iterator for DataIds.
-    recordStorage : `DimensionRecordStorage`
-        Instance of storage class for dimension records.
-    context : `.queries.SqlQueryContext`
-        Context to be used to execute queries when no cached result is
-        available.
+    query : `Query`
+        Query object that backs this class.
+    element : `DimensionElement`
+        Element whose records this object returns.
+
+    Notes
+    -----
+    The `Query` class now implements essentially all of this class's
+    functionality; "QueryResult" classes like this one now exist only to
+    provide interface backwards compatibility and more specific iterator
+    types.
     """
 
-    def __init__(
-        self,
-        dataIds: DataCoordinateQueryResults,
-        recordStorage: DimensionRecordStorage,
-        context: SqlQueryContext,
-    ):
-        self._dataIds = dataIds
-        self._recordStorage = recordStorage
-        self._order_by: Iterable[str] = ()
-        self._context = context
+    def __init__(self, query: Query, element: DimensionElement):
+        self._query = query
+        self._element = element
+
+    @property
+    def element(self) -> DimensionElement:
+        return self._element
 
     def __iter__(self) -> Iterator[DimensionRecord]:
-        # LIMIT is already applied at DataCoordinateQueryResults level
-        # (assumption here is that if DataId exists then dimension record
-        # exists too and their counts must be equal). fetch() does not
-        # guarantee ordering, so we need to sort records in memory below.
-        recordIter = self._recordStorage.fetch(self._dataIds, self._context)
-        if not self._order_by:
-            return iter(recordIter)
+        return self._query.iter_dimension_records(self._element)
 
-        # Parse list of column names and build a list of attribute name for
-        # ordering. Note that here we only support ordering by direct
-        # attributes of the element, and not other elements from the dimension
-        # graph.
-        orderBy = ElementOrderByClause(self._order_by, self._recordStorage.element)
-        attributes: list[str] = []
-        ordering: list[bool] = []
-        for column in orderBy.order_by_columns:
-            if column.column is None:
-                assert isinstance(column.element, Dimension), "Element must be a Dimension"
-                attributes.append(column.element.primaryKey.name)
-            else:
-                attributes.append(column.column)
-            ordering.append(column.ordering)
+    def run(self) -> DimensionRecordQueryResults:
+        return DatabaseDimensionRecordQueryResults(self._query.run(), self._element)
 
-        def _key(record: DimensionRecord) -> _DimensionRecordKey:
-            return _DimensionRecordKey(attributes, ordering, record)
-
-        records = sorted(recordIter, key=_key)
-        return iter(records)
-
-    def count(self, *, exact: bool = True) -> int:
+    def count(self, *, exact: bool = True, discard: bool = False) -> int:
         # Docstring inherited from base class.
-        return self._dataIds.count(exact=exact)
+        return self._query.count(exact=exact)
 
     def any(self, *, execute: bool = True, exact: bool = True) -> bool:
         # Docstring inherited from base class.
-        return self._dataIds.any(execute=execute, exact=exact)
+        return self._query.any(execute=execute, exact=exact)
 
     def order_by(self, *args: str) -> DimensionRecordQueryResults:
         # Docstring inherited from base class.
-        self._dataIds = self._dataIds.order_by(*args)
-        self._order_by = args
+        clause = OrderByClause.parse_element(args, self._element)
+        self._query = self._query.sorted(clause.terms, defer=True)
         return self
 
-    def limit(self, limit: int, offset: Optional[int] = None) -> DimensionRecordQueryResults:
+    def limit(self, limit: int, offset: int | None = 0) -> DimensionRecordQueryResults:
         # Docstring inherited from base class.
-        self._dataIds = self._dataIds.limit(limit, offset)
+        if offset is None:
+            offset = 0
+        self._query = self._query.sliced(offset, offset + limit, defer=True)
         return self
 
-    def explain_no_results(self) -> Iterable[str]:
+    def explain_no_results(self, execute: bool = True) -> Iterable[str]:
         # Docstring inherited.
-        return self._dataIds.explain_no_results()
+        return self._query.explain_no_results(execute=execute)

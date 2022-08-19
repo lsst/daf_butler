@@ -25,13 +25,15 @@ __all__ = ("SqlQueryBackend",)
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING, Any, cast
 
-from lsst.daf.relation import ColumnError, ColumnTag, Join, Relation
+from lsst.daf.relation import ColumnError, ColumnExpression, ColumnTag, Join, Predicate, Relation
 
 from ...core import (
     ColumnCategorization,
+    DataCoordinate,
     DatasetType,
     DimensionGraph,
     DimensionKeyColumnTag,
+    DimensionRecord,
     DimensionRecordColumnTag,
     DimensionUniverse,
     SkyPixDimension,
@@ -66,11 +68,6 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         self._managers = managers
 
     @property
-    def managers(self) -> RegistryManagerInstances:
-        # Docstring inherited.
-        return self._managers
-
-    @property
     def universe(self) -> DimensionUniverse:
         # Docstring inherited.
         return self._managers.dimensions.universe
@@ -78,6 +75,9 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
     def context(self) -> SqlQueryContext:
         # Docstring inherited.
         return SqlQueryContext(self._db, self._managers.column_types)
+
+    def get_collection_name(self, key: Any) -> str:
+        return self._managers.collections[key].name
 
     def resolve_collection_wildcard(
         self,
@@ -201,11 +201,18 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
         # Next we'll handle spatial joins, since those can require refinement
         # predicates that will need region columns to be included in the
         # relations we'll join.
+        predicate: Predicate = Predicate.literal(True)
         for element1, element2 in spatial_joins:
             overlaps, needs_refinement = self._managers.dimensions.make_spatial_join_relation(
                 element1, element2, context=context, governor_constraints=governor_constraints
             )
             if needs_refinement:
+                predicate = predicate.logical_and(
+                    context.make_spatial_region_overlap_predicate(
+                        ColumnExpression.reference(DimensionRecordColumnTag(element1, "region")),
+                        ColumnExpression.reference(DimensionRecordColumnTag(element2, "region")),
+                    )
+                )
                 columns_required.add(DimensionRecordColumnTag(element1, "region"))
                 columns_required.add(DimensionRecordColumnTag(element2, "region"))
             relation = relation.join(overlaps)
@@ -277,6 +284,22 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
                 storage = self._managers.dimensions[dimension]
                 relation = storage.join(relation, default_join, context)
 
+        # Add the predicates we constructed earlier, with a transfer to native
+        # iteration first if necessary.
+        if not predicate.as_trivial():
+            relation = relation.with_rows_satisfying(
+                predicate, preferred_engine=context.iteration_engine, transfer=True
+            )
+
+        # Finally project the new relation down to just the columns in the
+        # initial relation, the dimension key columns, and the new columns
+        # requested.
+        columns_kept = set(columns)
+        if initial_relation is not None:
+            columns_kept.update(initial_relation.columns)
+        columns_kept.update(DimensionKeyColumnTag.generate(dimensions.names))
+        relation = relation.with_only_columns(columns_kept, preferred_engine=context.preferred_engine)
+
         return relation
 
     def resolve_governor_constraints(
@@ -299,3 +322,10 @@ class SqlQueryBackend(QueryBackend[SqlQueryContext]):
             else:
                 result[dimension.name] = all_values
         return result
+
+    def get_dimension_record_cache(
+        self,
+        element_name: str,
+        context: SqlQueryContext,
+    ) -> Mapping[DataCoordinate, DimensionRecord] | None:
+        return self._managers.dimensions[element_name].get_record_cache(context)

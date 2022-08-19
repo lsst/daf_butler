@@ -42,6 +42,7 @@ except ImportError:
     np = None
 
 import lsst.sphgeom
+from lsst.daf.relation import RelationalAlgebraError
 
 from ...core import (
     DataCoordinate,
@@ -913,6 +914,13 @@ class RegistryTests(ABC):
             dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r", visit_system=1),
             dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r", visit_system=1),
         )
+        for i in range(1, 6):
+            registry.insertDimensionData(
+                "visit_detector_region",
+                dict(instrument="DummyCam", visit=10, detector=i),
+                dict(instrument="DummyCam", visit=11, detector=i),
+                dict(instrument="DummyCam", visit=20, detector=i),
+            )
         registry.insertDimensionData(
             "exposure",
             dict(instrument="DummyCam", id=100, obs_id="100", physical_filter="dummy_i"),
@@ -2611,12 +2619,12 @@ class RegistryTests(ABC):
             (
                 # No records for one of the involved dimensions.
                 registry.queryDataIds(["subfilter"]),
-                ["dimension records", "subfilter"],
+                ["no rows", "subfilter"],
             ),
             (
                 # No records for one of the involved dimensions.
                 registry.queryDimensionRecords("subfilter"),
-                ["dimension records", "subfilter"],
+                ["no rows", "subfilter"],
             ),
         ]:
             self.assertFalse(query.any(execute=True, exact=False))
@@ -2654,7 +2662,7 @@ class RegistryTests(ABC):
         self.assertTrue(query3.any(execute=True, exact=False))
         self.assertTrue(query3.any(execute=True, exact=True))
         self.assertGreaterEqual(query3.count(exact=False), 4)
-        self.assertGreaterEqual(query3.count(exact=True), 3)
+        self.assertGreaterEqual(query3.count(exact=True, discard=True), 3)
         self.assertFalse(list(query3.explain_no_results()))
         # This query yields overlaps in the database, but all are filtered
         # out in postprocessing.  The count queries again aren't very useful.
@@ -2673,8 +2681,8 @@ class RegistryTests(ABC):
         self.assertTrue(query4.any(execute=True, exact=False))
         self.assertFalse(query4.any(execute=True, exact=True))
         self.assertGreaterEqual(query4.count(exact=False), 1)
-        self.assertEqual(query4.count(exact=True), 0)
-        messages = list(query4.explain_no_results())
+        self.assertEqual(query4.count(exact=True, discard=True), 0)
+        messages = query4.explain_no_results()
         self.assertTrue(messages)
         self.assertTrue(any("overlap" in message for message in messages))
         # This query should yield results from one dataset type but not the
@@ -2695,8 +2703,9 @@ class RegistryTests(ABC):
             "detector", where="detector.purpose = 'no-purpose'", instrument="Cam1"
         )
         self.assertEqual(query6.count(exact=True), 0)
-        messages = list(query6.explain_no_results())
-        self.assertFalse(messages)
+        messages = query6.explain_no_results()
+        self.assertTrue(messages)
+        self.assertTrue(any("no-purpose" in message for message in messages))
 
     def testQueryDataIdsOrderBy(self):
         """Test order_by and limit on result returned by queryDataIds()."""
@@ -2781,9 +2790,9 @@ class RegistryTests(ABC):
             query = do_query(keys).order_by(*order_by)
             if test.limit is not None:
                 query = query.limit(*test.limit)
-            with query.materialize() as materialized:
-                dataIds = tuple(tuple(dataId[k] for k in keys) for dataId in materialized)
-                self.assertEqual(dataIds, test.result)
+            with self.assertRaises(RelationalAlgebraError):
+                with query.materialize():
+                    pass
 
         # errors in a name
         for order_by in ("", "-"):
@@ -2864,18 +2873,18 @@ class RegistryTests(ABC):
                     do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs).count()
             else:
                 query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
-                self.assertEqual(query.count(), test.count)
+                self.assertEqual(query.count(discard=True), test.count)
 
             # and materialize
             if test.exception:
                 with self.assertRaises(test.exception):
                     query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
                     with query.materialize() as materialized:
-                        materialized.count()
+                        materialized.count(discard=True)
             else:
                 query = do_query(dimensions, test.dataId, test.where, bind=test.bind, **test.kwargs)
                 with query.materialize() as materialized:
-                    self.assertEqual(materialized.count(), test.count)
+                    self.assertEqual(materialized.count(discard=True), test.count)
 
     def testQueryDimensionRecordsOrderBy(self):
         """Test order_by and limit on result returned by

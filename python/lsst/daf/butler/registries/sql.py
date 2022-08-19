@@ -38,7 +38,6 @@ from typing import (
     Optional,
     Sequence,
     Set,
-    Tuple,
     Union,
     cast,
 )
@@ -945,7 +944,9 @@ class SqlRegistry(Registry):
         ]
 
     def _makeQueryBuilder(
-        self, summary: queries.QuerySummary, doomed_by: Iterable[str] = ()
+        self,
+        summary: queries.QuerySummary,
+        doomed_by: Iterable[str] = (),
     ) -> queries.QueryBuilder:
         """Return a `QueryBuilder` instance capable of constructing and
         managing more complex queries than those obtainable via `Registry`
@@ -1152,7 +1153,7 @@ class SqlRegistry(Registry):
             query = builder.finish()
             parent_results.append(
                 queries.ParentDatasetQueryResults(
-                    self._db, query, datasetType=parent_dataset_type, components=components_for_parent
+                    query, parent_dataset_type, components=components_for_parent
                 )
             )
         if not parent_results:
@@ -1188,28 +1189,21 @@ class SqlRegistry(Registry):
         dataset_composition, collections = self._standardize_query_dataset_args(
             datasets, collections, components, doomed_by=doomed_by
         )
+        summary = queries.QuerySummary(
+            requested=requestedDimensions,
+            data_id=data_id,
+            expression=where,
+            bind=bind,
+            defaults=self.defaults.dataId,
+            check=check,
+            datasets=dataset_composition.keys(),
+        )
+        builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
+        for datasetType in dataset_composition.keys():
+            builder.joinDataset(datasetType, collections, isResult=False)
+        query = builder.finish()
 
-        def query_factory(
-            order_by: Optional[Iterable[str]] = None, limit: Optional[Tuple[int, Optional[int]]] = None
-        ) -> queries.Query:
-            """Construct the Query object that generates query results."""
-            summary = queries.QuerySummary(
-                requested=requestedDimensions,
-                data_id=data_id,
-                expression=where,
-                bind=bind,
-                defaults=self.defaults.dataId,
-                check=check,
-                datasets=dataset_composition.keys(),
-                order_by=order_by,
-                limit=limit,
-            )
-            builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
-            for datasetType in dataset_composition:
-                builder.joinDataset(datasetType, collections, isResult=False)
-            return builder.finish()
-
-        return queries.DataCoordinateQueryResults(self._db, query_factory, requestedDimensions)
+        return queries.DataCoordinateQueryResults(query)
 
     def queryDimensionRecords(
         self,
@@ -1233,22 +1227,25 @@ class SqlRegistry(Registry):
                     f"No such dimension '{element}', available dimensions: "
                     + str(self.dimensions.getStaticElements())
                 ) from e
-        dataIds = self.queryDataIds(
-            element.graph,
-            dataId=dataId,
-            datasets=datasets,
-            collections=collections,
-            where=where,
-            components=components,
+        doomed_by: list[str] = []
+        data_id = self._standardize_query_data_id_args(dataId, doomed_by=doomed_by, **kwargs)
+        dataset_composition, collections = self._standardize_query_dataset_args(
+            datasets, collections, components, doomed_by=doomed_by
+        )
+        summary = queries.QuerySummary(
+            requested=element.graph,
+            data_id=data_id,
+            expression=where,
             bind=bind,
+            defaults=self.defaults.dataId,
             check=check,
-            **kwargs,
+            datasets=dataset_composition.keys(),
         )
-        return queries.DatabaseDimensionRecordQueryResults(
-            dataIds,
-            self._managers.dimensions[element],
-            context=queries.SqlQueryContext(self._db, self._managers.column_types),
-        )
+        builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
+        for datasetType in dataset_composition.keys():
+            builder.joinDataset(datasetType, collections, isResult=False)
+        query = builder.finish().with_record_columns(element)
+        return queries.DatabaseDimensionRecordQueryResults(query, element)
 
     def queryDatasetAssociations(
         self,
