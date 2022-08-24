@@ -22,7 +22,8 @@ from __future__ import annotations
 
 __all__ = ["QueryDimensionRecordStorage"]
 
-from typing import Any, Iterable, Mapping, Optional
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 import sqlalchemy
 
@@ -94,7 +95,7 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         db: Database,
         element: DatabaseDimensionElement,
         *,
-        context: Optional[StaticTablesContext] = None,
+        context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
@@ -136,8 +137,8 @@ class QueryDimensionRecordStorage(DatabaseDimensionRecordStorage):
         self,
         builder: QueryBuilder,
         *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
+        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
+        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         assert regions is None, "Should be guaranteed by constructor checks."

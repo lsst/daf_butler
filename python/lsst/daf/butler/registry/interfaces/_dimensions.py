@@ -30,7 +30,8 @@ __all__ = (
 )
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, AbstractSet, Any, Callable, Dict, Iterable, Mapping, Optional, Tuple, Union
+from collections.abc import Callable, Iterable, Mapping, Set
+from typing import TYPE_CHECKING, Any, Tuple, Union
 
 import sqlalchemy
 
@@ -92,8 +93,8 @@ class DimensionRecordStorage(ABC):
         self,
         builder: QueryBuilder,
         *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
+        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
+        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
     ) -> sqlalchemy.sql.FromClause:
         """Add the dimension element's logical table to a query under
         construction.
@@ -166,7 +167,7 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def sync(self, record: DimensionRecord, update: bool = False) -> Union[bool, Dict[str, Any]]:
+    def sync(self, record: DimensionRecord, update: bool = False) -> bool | dict[str, Any]:
         """Synchronize a record with the database, inserting it only if it does
         not exist and comparing values if it does.
 
@@ -242,7 +243,7 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
         db: Database,
         dimension: GovernorDimension,
         *,
-        context: Optional[StaticTablesContext] = None,
+        context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
     ) -> GovernorDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
@@ -282,7 +283,7 @@ class GovernorDimensionRecordStorage(DimensionRecordStorage):
 
     @property
     @abstractmethod
-    def values(self) -> AbstractSet[str]:
+    def values(self) -> Set[str]:
         """All primary key values for this dimension (`set` [ `str` ]).
 
         This may rely on an in-memory cache and hence not reflect changes to
@@ -338,7 +339,7 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         db: Database,
         element: DatabaseDimensionElement,
         *,
-        context: Optional[StaticTablesContext] = None,
+        context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
@@ -400,9 +401,9 @@ class DatabaseDimensionOverlapStorage(ABC):
     def initialize(
         cls,
         db: Database,
-        elementStorage: Tuple[DatabaseDimensionRecordStorage, DatabaseDimensionRecordStorage],
-        governorStorage: Tuple[GovernorDimensionRecordStorage, GovernorDimensionRecordStorage],
-        context: Optional[StaticTablesContext] = None,
+        elementStorage: tuple[DatabaseDimensionRecordStorage, DatabaseDimensionRecordStorage],
+        governorStorage: tuple[GovernorDimensionRecordStorage, GovernorDimensionRecordStorage],
+        context: StaticTablesContext | None = None,
     ) -> DatabaseDimensionOverlapStorage:
         """Construct an instance of this class using a standardized interface.
 
@@ -428,7 +429,7 @@ class DatabaseDimensionOverlapStorage(ABC):
 
     @property
     @abstractmethod
-    def elements(self) -> Tuple[DatabaseDimensionElement, DatabaseDimensionElement]:
+    def elements(self) -> tuple[DatabaseDimensionElement, DatabaseDimensionElement]:
         """The pair of elements whose overlaps this object manages.
 
         The order of elements is the same as their ordering within the
@@ -514,7 +515,7 @@ class DimensionRecordStorageManager(VersionedExtension):
         return r
 
     @abstractmethod
-    def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
+    def get(self, element: DimensionElement) -> DimensionRecordStorage | None:
         """Return an object that provides access to the records associated with
         the given element, if one exists in this layer.
 

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["BasicSkyPixDimensionRecordStorage"]
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 import sqlalchemy
 
@@ -66,8 +66,8 @@ class BasicSkyPixDimensionRecordStorage(SkyPixDimensionRecordStorage):
         self,
         builder: QueryBuilder,
         *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
+        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
+        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
     ) -> None:
         if builder.hasDimensionKey(self._dimension):
             # If joining some other element or dataset type already brought in

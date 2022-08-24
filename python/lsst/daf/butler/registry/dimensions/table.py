@@ -26,7 +26,8 @@ import itertools
 import logging
 import warnings
 from collections import defaultdict
-from typing import AbstractSet, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Set, Union
+from collections.abc import Iterable, Iterator, Mapping, Sequence, Set
+from typing import Any
 
 import sqlalchemy
 from lsst.utils.ellipsis import Ellipsis, EllipsisType
@@ -94,19 +95,19 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         element: DatabaseDimensionElement,
         *,
         table: sqlalchemy.schema.Table,
-        skyPixOverlap: Optional[_SkyPixOverlapStorage] = None,
+        skyPixOverlap: _SkyPixOverlapStorage | None = None,
     ):
         self._db = db
         self._table = table
         self._element = element
-        self._fetchColumns: Dict[str, sqlalchemy.sql.ColumnElement] = {
+        self._fetchColumns: dict[str, sqlalchemy.sql.ColumnElement] = {
             dimension.name: self._table.columns[name]
             for dimension, name in zip(
                 self._element.dimensions, self._element.RecordClass.fields.dimensions.names
             )
         }
         self._skyPixOverlap = skyPixOverlap
-        self._otherOverlaps: List[DatabaseDimensionOverlapStorage] = []
+        self._otherOverlaps: list[DatabaseDimensionOverlapStorage] = []
 
     @classmethod
     def initialize(
@@ -114,7 +115,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         db: Database,
         element: DatabaseDimensionElement,
         *,
-        context: Optional[StaticTablesContext] = None,
+        context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
     ) -> DatabaseDimensionRecordStorage:
@@ -124,7 +125,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             table = context.addTable(element.name, spec)
         else:
             table = db.ensureTableExists(element.name, spec)
-        skyPixOverlap: Optional[_SkyPixOverlapStorage]
+        skyPixOverlap: _SkyPixOverlapStorage | None
         if element.spatial is not None:
             governor = governors[element.spatial.governor]
             skyPixOverlap = _SkyPixOverlapStorage.initialize(
@@ -163,8 +164,8 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         self,
         builder: QueryBuilder,
         *,
-        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
-        timespans: Optional[NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation]] = None,
+        regions: NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement] | None = None,
+        timespans: NamedKeyDict[DimensionElement, TimespanDatabaseRepresentation] | None = None,
     ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         if regions is not None:
@@ -233,7 +234,7 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
             if self._skyPixOverlap is not None:
                 self._skyPixOverlap.insert(records, replace=replace, skip_existing=skip_existing)
 
-    def sync(self, record: DimensionRecord, update: bool = False) -> Union[bool, Dict[str, Any]]:
+    def sync(self, record: DimensionRecord, update: bool = False) -> bool | dict[str, Any]:
         # Docstring inherited from DimensionRecordStorage.sync.
         compared = record.toDict()
         keys = {}
@@ -343,7 +344,7 @@ class _SkyPixOverlapStorage:
         db: Database,
         element: DatabaseDimensionElement,
         *,
-        context: Optional[StaticTablesContext],
+        context: StaticTablesContext | None,
         governor: GovernorDimensionRecordStorage,
     ) -> _SkyPixOverlapStorage:
         """Construct a new instance, creating tables as needed.
@@ -595,7 +596,7 @@ class _SkyPixOverlapStorage:
             ``visit``, this is an instrument name; if ``self.element`` is
             ``patch``, this is a skymap name.
         """
-        overlapRecords: List[dict] = []
+        overlapRecords: list[dict] = []
         # `DimensionRecordStorage.fetch` as defined by the ABC expects to be
         # given iterables of data IDs that correspond to that element's graph
         # (e.g. {instrument, visit, detector}), not just some subset of it
@@ -649,7 +650,7 @@ class _SkyPixOverlapStorage:
             the same primary key values already exists.
         """
         # Group records by family.governor value.
-        grouped: Dict[str, List[DimensionRecord]] = defaultdict(list)
+        grouped: dict[str, list[DimensionRecord]] = defaultdict(list)
         for record in records:
             grouped[getattr(record, self._governor.element.name)].append(record)
         _LOG.debug(
@@ -679,7 +680,7 @@ class _SkyPixOverlapStorage:
                 .where(gvCol.in_(list(grouped.keys())))
             )
             # Group results by governor value, then skypix system.
-            skypix: Dict[str, NamedKeyDict[SkyPixSystem, List[int]]] = {
+            skypix: dict[str, NamedKeyDict[SkyPixSystem, list[int]]] = {
                 gv: NamedKeyDict() for gv in grouped.keys()
             }
             for summaryRow in self._db.query(query).mappings():
@@ -693,7 +694,7 @@ class _SkyPixOverlapStorage:
                 # first columns in the primary key, and hence searching with
                 # them will be way faster (and we don't want to add a new index
                 # just for this operation).
-                to_delete: List[Dict[str, Any]] = []
+                to_delete: list[dict[str, Any]] = []
                 for gv, skypix_systems in skypix.items():
                     for system, skypix_levels in skypix_systems.items():
                         to_delete.extend(
@@ -705,7 +706,7 @@ class _SkyPixOverlapStorage:
                     ["skypix_system", "skypix_level"] + list(self.element.graph.required.names),
                     *to_delete,
                 )
-            overlapRecords: List[dict] = []
+            overlapRecords: list[dict] = []
             # Compute overlaps for one governor value at a time, but gather
             # them all up for one insert.
             for gv, group in grouped.items():
@@ -725,7 +726,7 @@ class _SkyPixOverlapStorage:
     def _compute(
         self,
         records: Sequence[DimensionRecord],
-        skypix: NamedKeyDict[SkyPixSystem, List[int]],
+        skypix: NamedKeyDict[SkyPixSystem, list[int]],
         governorValue: str,
     ) -> Iterator[dict]:
         """Compute all overlap rows for a particular governor dimension value
@@ -766,7 +767,7 @@ class _SkyPixOverlapStorage:
                 levels.sort(reverse=True)
                 # Start with the first level, which is the finest-grained one.
                 # Compute skypix envelope indices directly for that.
-                indices: Dict[int, Set[int]] = {levels[0]: set()}
+                indices: dict[int, set[int]] = {levels[0]: set()}
                 for begin, end in system[levels[0]].pixelization.envelope(record.region):
                     indices[levels[0]].update(range(begin, end))
                 # Divide those indices by powers of 4 (and remove duplicates)
@@ -787,7 +788,7 @@ class _SkyPixOverlapStorage:
     def select(
         self,
         skypix: SkyPixDimension,
-        governorValues: Union[AbstractSet[str], EllipsisType],
+        governorValues: Set[str] | EllipsisType,
     ) -> sqlalchemy.sql.FromClause:
         """Construct a subquery expression containing overlaps between the
         given skypix dimension and governor values.
@@ -797,7 +798,7 @@ class _SkyPixOverlapStorage:
         skypix : `SkyPixDimension`
             The skypix dimension (system and level) for which overlaps should
             be materialized.
-        governorValues : `str`
+        governorValues : `~collections.abc.Set` [ `str` ]
             Values of this element's governor dimension for which overlaps
             should be returned.  For example, if ``self.element`` is ``visit``,
             this is a set of instrument names; if ``self.element`` is
