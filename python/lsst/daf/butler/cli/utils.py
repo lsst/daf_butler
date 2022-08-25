@@ -464,10 +464,10 @@ def split_kv(
                 k, v = val.split(separator)
                 if choice is not None:
                     choice(v)  # will raise if val is an invalid choice
-            except ValueError:
+            except ValueError as e:
                 raise click.ClickException(
                     message=f"Could not parse key-value pair '{val}' using separator '{separator}', "
-                    f"with multiple values {'allowed' if multiple else 'not allowed'}."
+                    f"with multiple values {'allowed' if multiple else 'not allowed'}: {e}"
                 )
             ret.add(k, norm(v))
     return ret.get()
