@@ -1,0 +1,1 @@
+For command-line options that split on commas, it is now possible to specify parts of the string not to split by using ``[]`` to indicate comma-separated list content.
