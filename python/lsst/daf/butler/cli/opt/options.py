@@ -113,10 +113,15 @@ components_option = MWOptionDecorator(
 )
 
 
+def _config_split(*args):
+    # Config values might include commas so disable comma-splitting.
+    return split_kv(*args, multiple=False)
+
+
 config_option = MWOptionDecorator(
     "-c",
     "--config",
-    callback=split_kv,
+    callback=_config_split,
     help="Config override, as a key-value pair.",
     metavar="TEXT=TEXT",
     multiple=True,
