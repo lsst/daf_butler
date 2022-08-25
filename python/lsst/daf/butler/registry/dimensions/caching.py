@@ -70,13 +70,16 @@ class CachingDimensionRecordStorage(DatabaseDimensionRecordStorage):
         context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        view_target: DatabaseDimensionRecordStorage | None = None,
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
         config = config["nested"]
         NestedClass = doImportType(config["cls"])
         if not hasattr(NestedClass, "initialize"):
             raise TypeError(f"Nested class {config['cls']} does not have an initialize() method.")
-        nested = NestedClass.initialize(db, element, context=context, config=config, governors=governors)
+        nested = NestedClass.initialize(
+            db, element, context=context, config=config, governors=governors, view_target=view_target
+        )
         return cls(nested)
 
     @property

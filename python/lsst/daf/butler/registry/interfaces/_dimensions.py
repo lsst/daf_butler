@@ -441,6 +441,7 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        view_target: DatabaseDimensionRecordStorage | None = None,
     ) -> DatabaseDimensionRecordStorage:
         """Construct an instance of this class using a standardized interface.
 
@@ -457,6 +458,9 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
             Extra configuration options specific to the implementation.
         governors : `NamedKeyMapping`
             Mapping containing all governor dimension storage implementations.
+        view_target : `DatabaseDimensionRecordStorage`, optional
+            Storage object for the element this target's storage is a view of
+            (i.e. when `viewOf` is not `None`).
 
         Returns
         -------

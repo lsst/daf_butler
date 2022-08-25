@@ -116,8 +116,10 @@ class TableDimensionRecordStorage(DatabaseDimensionRecordStorage):
         context: StaticTablesContext | None = None,
         config: Mapping[str, Any],
         governors: NamedKeyMapping[GovernorDimension, GovernorDimensionRecordStorage],
+        view_target: DatabaseDimensionRecordStorage | None = None,
     ) -> DatabaseDimensionRecordStorage:
         # Docstring inherited from DatabaseDimensionRecordStorage.
+        assert view_target is None, f"Storage for {element} is not a view."
         spec = element.RecordClass.fields.makeTableSpec(TimespanReprClass=db.getTimespanRepresentation())
         if context is not None:
             table = context.addTable(element.name, spec)

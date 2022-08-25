@@ -115,15 +115,38 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
             governorStorage = dimension.makeStorage(db, context=context)
             governors[dimension] = governorStorage
             records[dimension] = governorStorage
-        # Next we initialize storage for DatabaseDimensionElements.
+        # Next we initialize storage for DatabaseDimensionElements.  Some
+        # elements' storage may be views into anothers; we'll do a first pass
+        # to gather a mapping from the names of those targets back to their
+        # views.
+        view_targets = {
+            element.viewOf: element
+            for element in universe.getDatabaseElements()
+            if element.viewOf is not None
+        }
         # We remember the spatial ones (grouped by family) so we can go back
         # and initialize overlap storage for them later.
         spatial = NamedKeyDict[DatabaseTopologicalFamily, list[DatabaseDimensionRecordStorage]]()
         for element in universe.getDatabaseElements():
+            if element.viewOf is not None:
+                # We'll initialize this storage when the view's target is
+                # initialized.
+                continue
             elementStorage = element.makeStorage(db, context=context, governors=governors)
             records[element] = elementStorage
             if element.spatial is not None:
                 spatial.setdefault(element.spatial, []).append(elementStorage)
+            if (view_element := view_targets.get(element.name)) is not None:
+                view_element_storage = view_element.makeStorage(
+                    db,
+                    context=context,
+                    governors=governors,
+                    view_target=elementStorage,
+                )
+                records[view_element] = view_element_storage
+                if view_element.spatial is not None:
+                    spatial.setdefault(view_element.spatial, []).append(view_element_storage)
+
         # Finally we initialize overlap storage.  The implementation class for
         # this is currently hard-coded (it's not obvious there will ever be
         # others).  Note that overlaps between database-backed dimensions and
