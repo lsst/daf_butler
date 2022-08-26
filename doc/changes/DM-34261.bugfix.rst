@@ -1,1 +1,0 @@
-The `click.Path` API changed, change from ordered arguments to keyword arguments when calling it.
