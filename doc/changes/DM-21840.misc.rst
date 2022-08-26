@@ -1,3 +1,0 @@
-Add a `NOT NULL` constraint to dimension implied dependency columns.
-
-`NULL` values in these columns already cause the query system to misbehave.
