@@ -1,1 +1,0 @@
-Added an optimization that speeds up "butler query-datasets" when using "--show-uri".
