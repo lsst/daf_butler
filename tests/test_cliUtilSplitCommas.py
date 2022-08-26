@@ -84,6 +84,28 @@ class SplitCommasTestCase(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
         mock.assert_called_with(())
 
+    def test_parens(self):
+        """Test that split commas understands [a,b]"""
+        for test, expected in (
+            ("single", ("single",)),
+            ("a,b", ("a", "b")),
+            ("[a,b]", ("[a,b]",)),
+            ("a[1,2],b", ("a[1,2]", "b")),
+        ):
+            result = split_commas(None, None, test)
+            self.assertEqual(result, expected)
+
+        # These should warn because it's likely a typo.
+        for test, expected in (
+            ("a[1,b[2,3],c", ("a[1,b[2,3]", "c")),
+            ("a[1,b,c", ("a[1,b,c",)),
+            ("a[1,b", ("a[1,b",)),
+            ("a1,b]", ("a1", "b]")),
+        ):
+            with self.assertWarns(UserWarning, msg=f"Testing {test!r}"):
+                result = split_commas(None, None, test)
+            self.assertEqual(result, expected)
+
 
 if __name__ == "__main__":
     unittest.main()

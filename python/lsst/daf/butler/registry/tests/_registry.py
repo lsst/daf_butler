@@ -2989,12 +2989,12 @@ class RegistryTests(ABC):
 
         datasetId = factory.makeDatasetId(run, dataset_type, data_id, DatasetIdGenEnum.UNIQUE)
         self.assertIsInstance(datasetId, uuid.UUID)
-        self.assertEquals(datasetId.version, 4)
+        self.assertEqual(datasetId.version, 4)
 
         datasetId = factory.makeDatasetId(run, dataset_type, data_id, DatasetIdGenEnum.DATAID_TYPE)
         self.assertIsInstance(datasetId, uuid.UUID)
-        self.assertEquals(datasetId.version, 5)
+        self.assertEqual(datasetId.version, 5)
 
         datasetId = factory.makeDatasetId(run, dataset_type, data_id, DatasetIdGenEnum.DATAID_TYPE_RUN)
         self.assertIsInstance(datasetId, uuid.UUID)
-        self.assertEquals(datasetId.version, 5)
+        self.assertEqual(datasetId.version, 5)

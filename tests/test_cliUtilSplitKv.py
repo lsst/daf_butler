@@ -166,7 +166,7 @@ class SplitKvCmdTestCase(unittest.TestCase):
         self.assertEqual(
             result.output,
             "Error: Could not parse key-value pair 'first==1' using separator '=', with "
-            "multiple values allowed.\n",
+            "multiple values allowed: too many values to unpack (expected 2)\n",
         )
 
     def test_choice(self):

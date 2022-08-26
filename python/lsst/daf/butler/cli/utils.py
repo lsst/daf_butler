@@ -52,10 +52,12 @@ __all__ = (
 import itertools
 import logging
 import os
+import re
 import sys
 import textwrap
 import traceback
 import uuid
+import warnings
 from collections import Counter
 from contextlib import contextmanager
 from functools import partial, wraps
@@ -240,7 +242,8 @@ def split_commas(context, param, values):
     values, and return a single list of all the passed-in values.
 
     This function can be passed to the 'callback' argument of a click.option to
-    allow it to process comma-separated values (e.g. "--my-opt a,b,c").
+    allow it to process comma-separated values (e.g. "--my-opt a,b,c"). If
+    the comma is inside ``[]`` there will be no splitting.
 
     Parameters
     ----------
@@ -250,21 +253,62 @@ def split_commas(context, param, values):
     param : `click.core.Option` or `None`
         The parameter being handled. Unused, but Click always passes it to
         callbacks.
-    values : [`str`]
+    values : iterable of `str` or `str`
         All the values passed for this option. Strings may contain commas,
-        which will be treated as delimiters for separate values.
+        which will be treated as delimiters for separate values unless they
+        are within ``[]``.
 
     Returns
     -------
-    list of string
-        The passed in values separated by commas and combined into a single
-        list.
+    results : `tuple` [`str`]
+        The passed in values separated by commas where appropriate and
+        combined into a single tuple.
     """
     if values is None:
         return values
     valueList = []
     for value in ensure_iterable(values):
-        valueList.extend(value.split(","))
+        # If we have [, or ,] we do the slow split. If square brackets
+        # are not matching then that is likely a typo that should result
+        # in a warning.
+        opens = "["
+        closes = "]"
+        if re.search(rf"\{opens}.*,|,.*\{closes}", value):
+            in_parens = False
+            current = ""
+            for c in value:
+                if c == opens:
+                    if in_parens:
+                        warnings.warn(
+                            f"Found second opening {opens} without corresponding closing {closes}"
+                            f" in {value!r}",
+                            stacklevel=2,
+                        )
+                    in_parens = True
+                elif c == closes:
+                    if not in_parens:
+                        warnings.warn(
+                            f"Found second closing {closes} without corresponding open {opens} in {value!r}",
+                            stacklevel=2,
+                        )
+                    in_parens = False
+                elif c == ",":
+                    if not in_parens:
+                        # Split on this comma.
+                        valueList.append(current)
+                        current = ""
+                        continue
+                current += c
+            if in_parens:
+                warnings.warn(
+                    f"Found opening {opens} that was never closed in {value!r}",
+                    stacklevel=2,
+                )
+            if current:
+                valueList.append(current)
+        else:
+            # Use efficient split since no parens.
+            valueList.extend(value.split(","))
     return tuple(valueList)
 
 
@@ -420,10 +464,10 @@ def split_kv(
                 k, v = val.split(separator)
                 if choice is not None:
                     choice(v)  # will raise if val is an invalid choice
-            except ValueError:
+            except ValueError as e:
                 raise click.ClickException(
                     message=f"Could not parse key-value pair '{val}' using separator '{separator}', "
-                    f"with multiple values {'allowed' if multiple else 'not allowed'}."
+                    f"with multiple values {'allowed' if multiple else 'not allowed'}: {e}"
                 )
             ret.add(k, norm(v))
     return ret.get()
