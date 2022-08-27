@@ -2925,14 +2925,6 @@ class RegistryTests(ABC):
             with self.assertRaisesRegex(ValueError, "Empty dimension name in ORDER BY"):
                 list(do_query("detector").order_by(order_by))
 
-        for order_by in ("undimension.name", "-undimension.name"):
-            with self.assertRaisesRegex(ValueError, "Element name mismatch: 'undimension'"):
-                list(do_query("detector").order_by(order_by))
-
-        for order_by in ("attract", "-attract"):
-            with self.assertRaisesRegex(ValueError, "Field 'attract' does not exist in 'detector'."):
-                list(do_query("detector").order_by(order_by))
-
     def testQueryDimensionRecordsExceptions(self):
         """Test exceptions raised by queryDimensionRecords()."""
         registry = self.makeRegistry()
