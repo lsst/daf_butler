@@ -1,7 +1,7 @@
-# daf_butler
+# lsst-daf-butler
 
 [![pypi](https://img.shields.io/pypi/v/lsst-daf-butler.svg)](https://pypi.org/project/lsst-daf-butler/)
-[![codecov](https://codecov.io/gh/lsst/daf_butler/branch/master/graph/badge.svg?token=2BUBL8R9RH)](https://codecov.io/gh/lsst/daf_butler)
+[![codecov](https://codecov.io/gh/lsst/daf_butler/branch/main/graph/badge.svg?token=2BUBL8R9RH)](https://codecov.io/gh/lsst/daf_butler)
 
 LSST Data Access framework described in [arXiv:2206.14941](https://arxiv.org/abs/2206.14941).
 
