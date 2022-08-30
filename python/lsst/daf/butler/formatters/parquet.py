@@ -158,10 +158,10 @@ class _ParquetLoader:
             assert isinstance(columns, dict) or isinstance(columns, list)
             columns = list(self._standardizeColumnParameter(columns))
         else:
-            for column in columns:
+            for column in ensure_iterable(columns):
                 if column not in self.columns:
                     raise ValueError(f"Unrecognized column name {column!r}.")
-        return self.file.read(columns=columns, use_pandas_metadata=True).to_pandas()
+        return self.file.read(columns=ensure_iterable(columns), use_pandas_metadata=True).to_pandas()
 
 
 def _writeParquet(path: str, inMemoryDataset: pd.DataFrame) -> None:
