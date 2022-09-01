@@ -114,8 +114,11 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
 
     cache_ok = True
 
-    def __init__(self, nbytes: int, *args: Any, **kwargs: Any):
-        length = 4 * ceil(nbytes / 3) if self.impl == sqlalchemy.String else None
+    def __init__(self, nbytes: int | None = None, *args: Any, **kwargs: Any):
+        if nbytes is not None:
+            length = 4 * ceil(nbytes / 3) if self.impl == sqlalchemy.String else None
+        else:
+            length = None
         super().__init__(*args, length=length, **kwargs)
         self.nbytes = nbytes
 
