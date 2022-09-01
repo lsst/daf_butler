@@ -268,11 +268,11 @@ class SqliteDatabase(Database):
             name = self.shrinkDatabaseEntityName("_".join([table, "len", spec.name]))
             constraints.append(
                 sqlalchemy.CheckConstraint(
-                    f"length({spec.name})<={spec.length}"
+                    f'length("{spec.name}")<={spec.length}'
                     # Oracle converts
                     # empty strings to
                     # NULL so check
-                    f" AND length({spec.name})>=1",
+                    f' AND length("{spec.name}")>=1',
                     name=name,
                 )
             )
@@ -352,7 +352,9 @@ class SqliteDatabase(Database):
         #    SELECT ? AS a, ? AS b
         #
         selects = [
-            sqlalchemy.sql.select(*[sqlalchemy.sql.literal(row[name]).label(name) for name in fields.names])
+            sqlalchemy.sql.select(
+                *[sqlalchemy.sql.literal(row[field.name], field.dtype).label(field.name) for field in fields]
+            )
             for row in rows
         ]
         return sqlalchemy.sql.union_all(*selects).alias(name)
