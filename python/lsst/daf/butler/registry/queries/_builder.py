@@ -658,7 +658,7 @@ class QueryBuilder:
         return DirectQuery(
             graph=self.summary.requested,
             uniqueness=DirectQueryUniqueness.NOT_UNIQUE,
-            whereRegion=self.summary.where.dataId.region,
+            whereRegion=self.summary.where.region,
             simpleQuery=self._simpleQuery,
             columns=self._columns,
             order_by_columns=self._order_by_columns(),
