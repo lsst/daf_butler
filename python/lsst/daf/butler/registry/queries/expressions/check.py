@@ -333,7 +333,10 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         # branches.  To take care of that, we add any governor values it
         # contains to the summary in advance.
         summary = InnerSummary()
-        summary.dimension_values.update((k, self.dataId[k]) for k in self.dataId.graph.names)
+        summary.dimension_values.update(
+            (k, self.dataId[k])
+            for k in (self.dataId.graph.names if self.dataId.hasFull() else self.dataId.graph.required.names)
+        )
         # Finally, we loop over those branches.
         for branch in branches:
             # Update the sets of dimensions and columns we've seen anywhere in
@@ -451,10 +454,6 @@ class CheckVisitor(NormalFormVisitor[TreeSummary, InnerSummary, OuterSummary]):
         if summary.defaultsNeeded:
             defaultsNeededGraph = DimensionGraph(self.graph.universe, names=summary.defaultsNeeded)
             self.dataId = self.dataId.union(self.defaults.subset(defaultsNeededGraph))
-            assert self.dataId.hasRecords(), (
-                "Should be a union of two data IDs with records, "
-                "in which one only adds governor dimension values."
-            )
             for dimension in summary.defaultsNeeded:
                 summary.dimension_constraints[dimension] = {self.defaults[dimension]}
 

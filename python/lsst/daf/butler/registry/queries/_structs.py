@@ -100,10 +100,10 @@ class QueryWhereExpression:
         dataId : `DataCoordinate`, optional
             A fully-expanded data ID identifying dimensions known in advance.
             If not provided, will be set to an empty data ID.
-            ``dataId.hasRecords()`` must return `True`.
         region : `lsst.sphgeom.Region`, optional
-            A spatial region that all rows must overlap.  If `None` and
-            ``dataId`` is not `None`, ``dataId.region`` will be used.
+            A spatial constraint that all rows must overlap.  If `None` and
+            ``dataId`` is an expanded data ID, ``dataId.region`` will be used
+            to construct one.
         defaults : `DataCoordinate`, optional
             A data ID containing default for governor dimensions.  Ignored
             unless ``check=True``.
@@ -113,8 +113,9 @@ class QueryWhereExpression:
             reject some valid queries that resemble common mistakes (e.g.
             queries for visits without specifying an instrument).
         """
-        if region is None and dataId is not None:
-            region = dataId.region
+        if dataId is not None and dataId.hasRecords():
+            if region is None and dataId.region is not None:
+                region = dataId.region
         if dataId is None:
             dataId = DataCoordinate.makeEmpty(graph.universe)
         if defaults is None:
@@ -346,13 +347,12 @@ class QuerySummary:
         of the query.
     dataId : `DataCoordinate`, optional
         A fully-expanded data ID identifying dimensions known in advance.  If
-        not provided, will be set to an empty data ID.  ``dataId.hasRecords()``
-        must return `True`.
+        not provided, will be set to an empty data ID.
     expression : `str` or `QueryWhereExpression`, optional
         A user-provided string WHERE expression.
     whereRegion : `lsst.sphgeom.Region`, optional
-        A spatial region that all rows must overlap.  If `None` and ``dataId``
-        is not `None`, ``dataId.region`` will be used.
+        If `None` and ``dataId`` is an expanded data ID, ``dataId.region`` will
+        be used to construct one.
     bind : `Mapping` [ `str`, `object` ], optional
         Mapping containing literal values that should be injected into the
         query expression, keyed by the identifiers they replace.
