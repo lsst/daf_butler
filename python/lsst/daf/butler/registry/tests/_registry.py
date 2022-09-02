@@ -2943,6 +2943,9 @@ class RegistryTests(ABC):
             collections="imported_r",
         )
         self.assertEqual({record.name for record in records}, {"Cam1-R1", "Cam1-R2"})
+        # Trying to constrain by all dataset types is an error.
+        with self.assertRaises(TypeError):
+            list(registry.queryDimensionRecords("physical_filter", datasets=..., collections="imported_r"))
 
     def testSkyPixDatasetQueries(self):
         """Test that we can build queries involving skypix dimensions as long

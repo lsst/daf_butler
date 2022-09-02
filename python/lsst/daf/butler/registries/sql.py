@@ -26,7 +26,20 @@ __all__ = ("SqlRegistry",)
 import contextlib
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping, Optional, Set, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 import sqlalchemy
 from lsst.resources import ResourcePathExpression
@@ -933,6 +946,81 @@ class SqlRegistry(Registry):
             doomed_by=doomed_by,
         )
 
+    def _standardize_query_dataset_args(
+        self,
+        datasets: Any,
+        collections: Any,
+        components: bool | None,
+        mode: Literal["find_first"] | Literal["find_all"] | Literal["constrain"] = "constrain",
+        *,
+        doomed_by: list[str],
+    ) -> tuple[defaultdict[DatasetType, list[str | None]], CollectionQuery | CollectionSearch | None]:
+        """Preprocess dataset arguments passed to query* methods.
+
+        Parameters
+        ----------
+        datasets : `DatasetType`, `str`, `re.Pattern`, or iterable of these
+            Expression identifying dataset types.  See `queryDatasetTypes` for
+            details.
+        collections : `str`, `re.Pattern`, or iterable of these
+            Expression identifying collections to be searched.  See
+            `queryCollections` for details.
+        components : `bool`, optional
+            If `True`, apply all expression patterns to component dataset type
+            names as well.  If `False`, never apply patterns to components.
+            If `None` (default), apply patterns to components only if their
+            parent datasets were not matched by the expression.
+            Fully-specified component datasets (`str` or `DatasetType`
+            instances) are always included.
+        mode : `str`, optional
+            The way in which datasets are being used in this query; one of:
+
+            - "find_first": this is a query for the first dataset in an
+              ordered list of collections.  Prohibits collection wildcards,
+              but permits dataset type wildcards.
+
+            - "find_all": this is a query for all datasets in all matched
+              collections.  Permits collection and dataset type wildcards.
+
+            - "constrain": this is a query for something other than datasets,
+              with results constrained by dataset existence.  Permits
+              collection wildcards and prohibits ``...`` as a dataset type
+              wildcard.
+        doomed_by : `list` [ `str` ]
+            List to append messages indicating why the query is doomed to
+            yield no results.
+
+        Returns
+        -------
+        composition : `defaultdict` [ `DatasetType`, `list` [ `str` ] ]
+            Dictionary mapping parent dataset type to `list` of components
+            matched for that dataset type (or `None` for the parent itself).
+        collections : `CollectionSearch` or `CollectionQuery`
+            Processed collection expression.
+        """
+        composition: defaultdict[DatasetType, list[str | None]] = defaultdict(list)
+        if datasets is not None:
+            if not collections:
+                if not self.defaults.collections:
+                    raise NoDefaultCollectionError("No collections, and no registry default collections.")
+                collections = self.defaults.collections
+            elif mode == "find_first":
+                collections = CollectionSearch.fromExpression(collections)
+            else:
+                collections = CollectionQuery.fromExpression(collections)
+            missing: list[str] = []
+            if mode == "constrain" and datasets is Ellipsis:
+                raise TypeError("Cannot pass the universal wildcard '...' for dataset types in this context.")
+            for dataset_type in self.queryDatasetTypes(datasets, components=components, missing=missing):
+                if dataset_type.isComponent():
+                    composition[dataset_type.makeCompositeDatasetType()].append(dataset_type.component())
+                else:
+                    composition[dataset_type].append(None)
+            doomed_by.extend(f"Dataset type {name} is not registered." for name in missing)
+        elif collections:
+            raise ArgumentError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
+        return composition, collections
+
     def queryDatasets(
         self,
         datasetType: Any,
@@ -948,105 +1036,58 @@ class SqlRegistry(Registry):
         **kwargs: Any,
     ) -> queries.DatasetQueryResults:
         # Docstring inherited from lsst.daf.butler.registry.Registry
-
-        # Standardize the collections expression.
-        if collections is None:
-            if not self.defaults.collections:
-                raise NoDefaultCollectionError(
-                    "No collections provided to findDataset, and no defaults from registry construction."
-                )
-            collections = self.defaults.collections
-        elif findFirst:
-            collections = CollectionSearch.fromExpression(collections)
-        else:
-            collections = CollectionQuery.fromExpression(collections)
-        # Standardize and expand the data ID provided as a constraint.
-        standardizedDataId = self.expandDataId(dataId, **kwargs)
-
-        # We can only query directly if given a non-component DatasetType
-        # instance.  If we were given an expression or str or a component
-        # DatasetType instance, we'll populate this dict, recurse, and return.
-        # If we already have a non-component DatasetType, it will remain None
-        # and we'll run the query directly.
-        composition: Optional[
-            Dict[
-                DatasetType, List[Optional[str]]  # parent dataset type  # component name, or None for parent
-            ]
-        ] = None
-        if not isinstance(datasetType, DatasetType):
-            # We were given a dataset type expression (which may be as simple
-            # as a str).  Loop over all matching datasets, delegating handling
-            # of the `components` argument to queryDatasetTypes, as we populate
-            # the composition dict.
-            composition = defaultdict(list)
-            for trueDatasetType in self.queryDatasetTypes(datasetType, components=components):
-                parentName, componentName = trueDatasetType.nameAndComponent()
-                if componentName is not None:
-                    parentDatasetType = self.getDatasetType(parentName)
-                    composition.setdefault(parentDatasetType, []).append(componentName)
-                else:
-                    composition.setdefault(trueDatasetType, []).append(None)
-            if not composition:
-                return queries.ChainedDatasetQueryResults(
-                    [],
-                    doomed_by=[
-                        f"No registered dataset type matching {t!r} found, so no matching datasets can "
-                        "exist in any collection."
-                        for t in ensure_iterable(datasetType)
-                    ],
-                )
-        elif datasetType.isComponent():
-            # We were given a true DatasetType instance, but it's a component.
-            # the composition dict will have exactly one item.
-            parentName, componentName = datasetType.nameAndComponent()
-            parentDatasetType = self.getDatasetType(parentName)
-            composition = {parentDatasetType: [componentName]}
-        if composition is not None:
-            # We need to recurse.  Do that once for each parent dataset type.
-            chain = []
-            for parentDatasetType, componentNames in composition.items():
-                parentResults = self.queryDatasets(
-                    parentDatasetType,
-                    collections=collections,
-                    dimensions=dimensions,
-                    dataId=standardizedDataId,
-                    where=where,
-                    bind=bind,
-                    findFirst=findFirst,
-                    check=check,
-                )
-                assert isinstance(
-                    parentResults, queries.ParentDatasetQueryResults
-                ), "Should always be true if passing in a DatasetType instance, and we are."
-                chain.append(parentResults.withComponents(componentNames))
-            return queries.ChainedDatasetQueryResults(chain)
-        # If we get here, there's no need to recurse (or we are already
-        # recursing; there can only ever be one level of recursion).
-
-        # The full set of dimensions in the query is the combination of those
-        # needed for the DatasetType and those explicitly requested, if any.
-        requestedDimensionNames = set(datasetType.dimensions.names)
-        if dimensions is not None:
-            requestedDimensionNames.update(self.dimensions.extract(dimensions).names)
-        # Construct the summary structure needed to construct a QueryBuilder.
-        summary = queries.QuerySummary(
-            requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
-            dataId=standardizedDataId,
-            expression=where,
-            bind=bind,
-            defaults=self.defaults.dataId,
-            check=check,
-            datasets=[datasetType],
+        doomed_by: list[str] = []
+        data_id = self.expandDataId(dataId, **kwargs)
+        dataset_composition, collections = self._standardize_query_dataset_args(
+            datasetType,
+            collections,
+            components,
+            mode="find_first" if findFirst else "find_all",
+            doomed_by=doomed_by,
         )
-        builder = self._makeQueryBuilder(summary)
-        # Add the dataset subquery to the query, telling the QueryBuilder to
-        # include the rank of the selected collection in the results only if we
-        # need to findFirst.  Note that if any of the collections are
-        # actually wildcard expressions, and we've asked for deduplication,
-        # this will raise TypeError for us.
-        builder.joinDataset(datasetType, collections, isResult=True, findFirst=findFirst)
-        query = builder.finish()
-        return queries.ParentDatasetQueryResults(self._db, query, components=[None], datasetType=datasetType)
+        parent_results: list[queries.ParentDatasetQueryResults] = []
+        for parent_dataset_type, components_for_parent in dataset_composition.items():
+            # The full set of dimensions in the query is the combination of
+            # those needed for the DatasetType and those explicitly requested,
+            # if any.
+            dimension_names = set(parent_dataset_type.dimensions.names)
+            if dimensions is not None:
+                dimension_names.update(self.dimensions.extract(dimensions).names)
+            # Construct the summary structure needed to construct a
+            # QueryBuilder.
+            summary = queries.QuerySummary(
+                requested=DimensionGraph(self.dimensions, names=dimension_names),
+                dataId=data_id,
+                expression=where,
+                bind=bind,
+                defaults=self.defaults.dataId,
+                check=check,
+                datasets=[parent_dataset_type],
+            )
+            builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
+            # Add the dataset subquery to the query, telling the QueryBuilder
+            # to include the rank of the selected collection in the results
+            # only if we need to findFirst.  Note that if any of the
+            # collections are actually wildcard expressions, and
+            # findFirst=True, this will raise TypeError for us.
+            builder.joinDataset(parent_dataset_type, collections, isResult=True, findFirst=findFirst)
+            query = builder.finish()
+            parent_results.append(
+                queries.ParentDatasetQueryResults(
+                    self._db, query, datasetType=parent_dataset_type, components=components_for_parent
+                )
+            )
+        if not parent_results:
+            doomed_by.extend(
+                f"No registered dataset type matching {t!r} found, so no matching datasets can "
+                "exist in any collection."
+                for t in ensure_iterable(datasetType)
+            )
+            return queries.ChainedDatasetQueryResults([], doomed_by=doomed_by)
+        elif len(parent_results) == 1:
+            return parent_results[0]
+        else:
+            return queries.ChainedDatasetQueryResults(parent_results)
 
     def queryDataIds(
         self,
@@ -1063,33 +1104,12 @@ class SqlRegistry(Registry):
     ) -> queries.DataCoordinateQueryResults:
         # Docstring inherited from lsst.daf.butler.registry.Registry
         dimensions = ensure_iterable(dimensions)
-        standardizedDataId = self.expandDataId(dataId, **kwargs)
-        standardizedDatasetTypes = set()
         requestedDimensions = self.dimensions.extract(dimensions)
-        missing: List[str] = []
-        if datasets is not None:
-            if not collections:
-                if not self.defaults.collections:
-                    raise NoDefaultCollectionError(
-                        f"Cannot pass 'datasets' (='{datasets}') without 'collections'."
-                    )
-                collections = self.defaults.collections
-            else:
-                # Preprocess collections expression in case the original
-                # included single-pass iterators (we'll want to use it multiple
-                # times below).
-                collections = CollectionQuery.fromExpression(collections)
-            for datasetType in self.queryDatasetTypes(datasets, components=components, missing=missing):
-                # If any matched dataset type is a component, just operate on
-                # its parent instead, because Registry doesn't know anything
-                # about what components exist, and here (unlike queryDatasets)
-                # we don't care about returning them.
-                parentDatasetTypeName, componentName = datasetType.nameAndComponent()
-                if componentName is not None:
-                    datasetType = self.getDatasetType(parentDatasetTypeName)
-                standardizedDatasetTypes.add(datasetType)
-        elif collections:
-            raise ArgumentError(f"Cannot pass 'collections' (='{collections}') without 'datasets'.")
+        doomed_by: list[str] = []
+        data_id = self.expandDataId(dataId, **kwargs)
+        dataset_composition, collections = self._standardize_query_dataset_args(
+            datasets, collections, components, doomed_by=doomed_by
+        )
 
         def query_factory(
             order_by: Optional[Iterable[str]] = None, limit: Optional[Tuple[int, Optional[int]]] = None
@@ -1097,24 +1117,18 @@ class SqlRegistry(Registry):
             """Construct the Query object that generates query results."""
             summary = queries.QuerySummary(
                 requested=requestedDimensions,
-                dataId=standardizedDataId,
+                dataId=data_id,
                 expression=where,
                 bind=bind,
                 defaults=self.defaults.dataId,
                 check=check,
-                datasets=standardizedDatasetTypes,
+                datasets=dataset_composition.keys(),
                 order_by=order_by,
                 limit=limit,
             )
-            builder = self._makeQueryBuilder(
-                summary, doomed_by=[f"Dataset type {name} is not registered." for name in missing]
-            )
-            for datasetType in standardizedDatasetTypes:
-                builder.joinDataset(
-                    datasetType,
-                    collections,
-                    isResult=False,
-                )
+            builder = self._makeQueryBuilder(summary, doomed_by=doomed_by)
+            for datasetType in dataset_composition:
+                builder.joinDataset(datasetType, collections, isResult=False)
             return builder.finish()
 
         return queries.DataCoordinateQueryResults(self._db, query_factory, requestedDimensions)
