@@ -2908,12 +2908,14 @@ class RegistryTests(ABC):
         with self.assertRaisesRegex(
             DataIdValueError, "Could not fetch record for required dimension instrument"
         ):
-            registry.queryDimensionRecords("detector", instrument="NotCam1")
+            result = registry.queryDimensionRecords("detector", instrument="NotCam1")
+            result.count()
 
         with self.assertRaisesRegex(
             DataIdValueError, "Could not fetch record for required dimension instrument"
         ):
             result = registry.queryDimensionRecords("detector", dataId={"instrument": "NotCam1"})
+            result.count()
 
         with self.assertRaisesRegex(DataIdValueError, "Unknown values specified for governor dimension"):
             result = registry.queryDimensionRecords("detector", where="instrument='NotCam1'")
