@@ -19,12 +19,5 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ._attributes import *
-from ._bridge import *
-from ._collections import *
-from ._database import *
-from ._datasets import *
-from ._dimensions import *
-from ._obscore import *
-from ._opaque import *
-from ._versioning import *
+from ._config import *
+from ._manager import *

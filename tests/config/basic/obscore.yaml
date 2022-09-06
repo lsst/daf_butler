@@ -1,0 +1,60 @@
+namespace: "daf_butler_obscore"
+version: 0
+table_name: obscore
+facility_name: daf_butler_test
+obs_collection: daf_butler_obs_collection
+collections: []
+use_butler_uri: false
+dataset_types:
+  raw:
+    dataproduct_type: image
+    dataproduct_subtype: lsst.raw
+    calib_level: 1
+    obs_id_fmt: "{records[exposure].obs_id}-{records[detector].full_name}"
+    o_ucd: phot.count
+    access_format: image/fits
+    datalink_url_fmt: "https://data.lsst.cloud/api/datalink/links?ID=butler%3A//dp02/{id}"
+  calexp:
+    dataproduct_type: image
+    dataproduct_subtype: lsst.calexp
+    calib_level: 2
+    obs_id_fmt: "{records[visit].name}-{records[detector].full_name}"
+    o_ucd: phot.count
+    access_format: image/fits
+    datalink_url_fmt: "https://data.lsst.cloud/api/datalink/links?ID=butler%3A//dp02/{id}"
+extra_columns:
+  lsst_visit:
+    template: "{visit}"
+    type: "int"
+  lsst_detector:
+    template: "{detector}"
+    type: "int"
+  lsst_tract:
+    template: "{tract}"
+    type: "int"
+  lsst_patch:
+    template: "{patch}"
+    type: "int"
+  lsst_band:
+    template: "{band}"
+    type: "string"
+    length: 32
+  lsst_filter:
+    template: "{physical_filter}"
+    type: "string"
+    length: 32
+  lsst_dataset_type:
+    template: "{dataset_type}"
+    type: "string"
+    length: 64
+  lsst_run:
+    template: "{run}"
+    type: "string"
+    length: 255
+spectral_ranges:
+  "u": [330.0e-9, 400.0e-9]
+  "g": [402.0e-9, 552.0e-9]
+  "r": [552.0e-9, 691.0e-9]
+  "i": [691.0e-9, 818.0e-9]
+  "z": [818.0e-9, 922.0e-9]
+  "y": [970.0e-9, 1060.0e-9]

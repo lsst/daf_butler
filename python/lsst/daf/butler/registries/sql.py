@@ -507,6 +507,8 @@ class SqlRegistry(Registry):
             ]
         try:
             refs = list(storage.insert(runRecord, expandedDataIds, idGenerationMode))
+            if self._managers.obscore:
+                self._managers.obscore.add_datasets(refs)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 f"A database constraint failure was triggered by inserting "
@@ -577,6 +579,8 @@ class SqlRegistry(Registry):
 
         try:
             refs = list(storage.import_(runRecord, expandedDatasets, idGenerationMode, reuseIds))
+            if self._managers.obscore:
+                self._managers.obscore.add_datasets(refs)
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(
                 f"A database constraint failure was triggered by inserting "
